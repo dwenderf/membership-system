@@ -21,11 +21,10 @@ export default async function SeasonsPage() {
     redirect('/dashboard')
   }
 
-  // Get all seasons
+  // Get all seasons, sorted by start date descending (newest first)
   const { data: seasons, error } = await supabase
     .from('seasons')
     .select('*')
-    .order('fiscal_year', { ascending: false })
     .order('start_date', { ascending: false })
 
   if (error) {
@@ -75,11 +74,26 @@ export default async function SeasonsPage() {
                             <p className="text-lg font-medium text-gray-900 truncate">
                               {season.name}
                             </p>
-                            {season.is_active && (
-                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Active
-                              </span>
-                            )}
+                            {(() => {
+                              const now = new Date()
+                              const endDate = new Date(season.end_date)
+                              const isEnded = endDate < now
+                              
+                              if (isEnded) {
+                                return (
+                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                    Ended
+                                  </span>
+                                )
+                              } else if (season.is_active) {
+                                return (
+                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Active
+                                  </span>
+                                )
+                              }
+                              return null
+                            })()}
                           </div>
                           <div className="mt-1 flex items-center text-sm text-gray-500">
                             <span className="capitalize">{season.type.replace('_', '/')}</span>
@@ -87,24 +101,13 @@ export default async function SeasonsPage() {
                             <span>
                               {new Date(season.start_date).toLocaleDateString()} - {new Date(season.end_date).toLocaleDateString()}
                             </span>
-                            <span className="mx-2">•</span>
-                            <span>FY {season.fiscal_year}</span>
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Link
-                          href={`/admin/seasons/${season.id}/edit`}
-                          className="text-blue-600 hover:text-blue-900 text-sm font-medium"
-                        >
-                          Edit
-                        </Link>
-                        <Link
-                          href={`/admin/seasons/${season.id}`}
-                          className="text-gray-600 hover:text-gray-900 text-sm font-medium"
-                        >
-                          View Details
-                        </Link>
+                        <span className="text-xs text-gray-400">
+                          Created {new Date(season.created_at).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
                   </li>

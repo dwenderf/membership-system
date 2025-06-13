@@ -1,0 +1,386 @@
+-- Hockey Association Membership System Database Schema
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Users table (extends Supabase auth.users)
+CREATE TABLE users (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT UNIQUE NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    phone TEXT,
+    is_admin BOOLEAN DEFAULT FALSE,
+    tags TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Login attempts table
+CREATE TABLE login_attempts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id),
+    email TEXT NOT NULL,
+    method TEXT NOT NULL CHECK (method IN ('magic_link', 'google', 'apple')),
+    ip_address INET NOT NULL,
+    user_agent TEXT,
+    success BOOLEAN NOT NULL,
+    failure_reason TEXT,
+    attempted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Magic link tokens table
+CREATE TABLE magic_link_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    ip_address INET NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Seasons table
+CREATE TABLE seasons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('fall_winter', 'spring_summer')),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    fiscal_year INTEGER NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Memberships table
+CREATE TABLE memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    price INTEGER NOT NULL, -- in cents
+    accounting_code TEXT,
+    allow_discounts BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- User memberships table
+CREATE TABLE user_memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    membership_id UUID NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
+    stripe_payment_intent_id TEXT,
+    amount_paid INTEGER, -- in cents
+    purchased_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, membership_id)
+);
+
+-- Registrations table
+CREATE TABLE registrations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    required_membership_id UUID REFERENCES memberships(id), -- NULL for free events
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('team', 'scrimmage', 'event')),
+    max_capacity INTEGER,
+    current_count INTEGER DEFAULT 0,
+    accounting_code TEXT,
+    allow_discounts BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- User registrations table
+CREATE TABLE user_registrations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    user_membership_id UUID REFERENCES user_memberships(id), -- NULL for free events
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
+    registration_fee INTEGER, -- in cents
+    amount_paid INTEGER, -- in cents (after discounts)
+    registered_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, registration_id)
+);
+
+-- Registration pricing tiers table
+CREATE TABLE registration_pricing_tiers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    tier_name TEXT NOT NULL,
+    price INTEGER NOT NULL, -- in cents
+    starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    requires_code BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(registration_id, tier_name)
+);
+
+-- Discount codes table
+CREATE TABLE discount_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    percentage DECIMAL(5,2) NOT NULL,
+    max_discount_per_user_per_season INTEGER NOT NULL, -- in cents
+    accounting_code TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    valid_from TIMESTAMP WITH TIME ZONE,
+    valid_until TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Discount usage tracking table
+CREATE TABLE discount_usage (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    discount_code_id UUID NOT NULL REFERENCES discount_codes(id) ON DELETE CASCADE,
+    season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    amount_saved INTEGER NOT NULL, -- in cents
+    used_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    transaction_id UUID -- links to payment record
+);
+
+-- Access codes table
+CREATE TABLE access_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('pre_sale', 'waitlist_bypass')),
+    registration_id UUID REFERENCES registrations(id), -- NULL for pre-sale codes
+    generated_by UUID NOT NULL REFERENCES users(id),
+    is_single_use BOOLEAN NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Access code usage table
+CREATE TABLE access_code_usage (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    access_code_id UUID NOT NULL REFERENCES access_codes(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    used_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    UNIQUE(access_code_id, user_id, registration_id)
+);
+
+-- Waitlists table
+CREATE TABLE waitlists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    bypass_code_generated BOOLEAN DEFAULT FALSE,
+    bypass_code_id UUID REFERENCES access_codes(id),
+    removed_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(user_id, registration_id)
+);
+
+-- Payments table
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    total_amount INTEGER NOT NULL, -- in cents
+    discount_amount INTEGER DEFAULT 0, -- in cents
+    final_amount INTEGER NOT NULL, -- in cents
+    stripe_payment_intent_id TEXT,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+    payment_method TEXT DEFAULT 'stripe',
+    refund_reason TEXT,
+    refunded_by UUID REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Payment items table
+CREATE TABLE payment_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    item_type TEXT NOT NULL CHECK (item_type IN ('membership', 'registration')),
+    item_id UUID NOT NULL,
+    amount INTEGER NOT NULL, -- in cents
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Payment configurations table
+CREATE TABLE payment_configurations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT FALSE,
+    is_primary BOOLEAN DEFAULT FALSE,
+    configuration JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Email logs table
+CREATE TABLE email_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email_address TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    template_id TEXT,
+    loops_event_id TEXT,
+    status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'bounced', 'spam')),
+    sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    delivered_at TIMESTAMP WITH TIME ZONE,
+    opened_at TIMESTAMP WITH TIME ZONE,
+    first_clicked_at TIMESTAMP WITH TIME ZONE,
+    bounced_at TIMESTAMP WITH TIME ZONE,
+    bounce_reason TEXT,
+    email_data JSONB,
+    triggered_by TEXT CHECK (triggered_by IN ('user_action', 'admin_send', 'automated')),
+    triggered_by_user_id UUID REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_login_attempts_user_id_time ON login_attempts(user_id, attempted_at);
+CREATE INDEX idx_login_attempts_email_time ON login_attempts(email, attempted_at);
+CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at);
+CREATE INDEX idx_magic_link_tokens_token ON magic_link_tokens(token);
+CREATE INDEX idx_magic_link_tokens_email_expires ON magic_link_tokens(email, expires_at);
+CREATE INDEX idx_registration_pricing_tiers_reg_starts ON registration_pricing_tiers(registration_id, starts_at);
+CREATE INDEX idx_access_codes_code_type_active ON access_codes(code, type, is_active);
+CREATE INDEX idx_discount_usage_user_season ON discount_usage(user_id, season_id);
+CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, used_at);
+CREATE INDEX idx_waitlists_registration_position ON waitlists(registration_id, position);
+CREATE INDEX idx_waitlists_registration_time ON waitlists(registration_id, joined_at);
+CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
+CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
+CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);
+CREATE INDEX idx_email_logs_event_time ON email_logs(event_type, sent_at);
+CREATE INDEX idx_email_logs_status_time ON email_logs(status, sent_at);
+
+-- Enable Row Level Security
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE login_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE magic_link_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE seasons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE registration_pricing_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discount_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discount_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_code_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE waitlists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_configurations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create basic RLS policies (users can see their own data, admins can see everything)
+
+-- Users policies
+CREATE POLICY "Users can view their own profile" ON users
+    FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update their own profile" ON users
+    FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Admins can view all users" ON users
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- User memberships policies
+CREATE POLICY "Users can view their own memberships" ON user_memberships
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all memberships" ON user_memberships
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- User registrations policies
+CREATE POLICY "Users can view their own registrations" ON user_registrations
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all registrations" ON user_registrations
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Public read access for seasons, memberships, registrations
+CREATE POLICY "Anyone can view seasons" ON seasons FOR SELECT USING (TRUE);
+CREATE POLICY "Anyone can view memberships" ON memberships FOR SELECT USING (TRUE);
+CREATE POLICY "Anyone can view registrations" ON registrations FOR SELECT USING (TRUE);
+CREATE POLICY "Anyone can view registration pricing tiers" ON registration_pricing_tiers FOR SELECT USING (TRUE);
+
+-- Admin-only write access for core data
+CREATE POLICY "Only admins can modify seasons" ON seasons
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+CREATE POLICY "Only admins can modify memberships" ON memberships
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+CREATE POLICY "Only admins can modify registrations" ON registrations
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Functions to automatically update timestamps
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add trigger for users table
+CREATE TRIGGER update_users_updated_at 
+    BEFORE UPDATE ON users 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to automatically update registration count
+CREATE OR REPLACE FUNCTION update_registration_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        UPDATE registrations 
+        SET current_count = current_count + 1 
+        WHERE id = NEW.registration_id;
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE registrations 
+        SET current_count = current_count - 1 
+        WHERE id = OLD.registration_id;
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add trigger for user registrations
+CREATE TRIGGER update_registration_count_trigger
+    AFTER INSERT OR DELETE ON user_registrations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_registration_count();

@@ -26,9 +26,11 @@ export default async function AdminDashboard() {
     .from('users')
     .select('*', { count: 'exact', head: true })
 
+  // Only count seasons that are current or future (end_date >= today)
   const { count: totalSeasons } = await supabase
     .from('seasons')
     .select('*', { count: 'exact', head: true })
+    .gte('end_date', new Date().toISOString().split('T')[0])
 
   const { count: totalMemberships } = await supabase
     .from('memberships')
@@ -79,7 +81,7 @@ export default async function AdminDashboard() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Seasons</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Active/Future Seasons</dt>
                       <dd className="text-lg font-medium text-gray-900">{totalSeasons || 0}</dd>
                     </dl>
                   </div>

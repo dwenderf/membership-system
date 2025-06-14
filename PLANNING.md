@@ -444,12 +444,34 @@ email_logs (
   - [x] Season relationship display
   - [x] Consistent UI styling with season management
 
+- [x] **Registration System with Category Management**
+  - [x] Registration creation with season and membership integration
+  - [x] Registration types (team, scrimmage, event)
+  - [x] Registration listing with clickable detail links
+  - [x] Real-time duplicate name validation
+  - [x] **Registration Categories System**
+    - [x] Category creation with individual capacity limits
+    - [x] Per-category accounting code support
+    - [x] Smart preset suggestions by registration type
+    - [x] Bulk category creation ("Add All" presets)
+    - [x] Category-specific capacity tracking and progress bars
+    - [x] Sort order management for display control
+  - [x] **Enhanced Admin Workflow**
+    - [x] Registration detail pages with category overview
+    - [x] Guided workflow: Registration → Categories → Pricing
+    - [x] Visual capacity management with status indicators
+    - [x] Clean separation of registration vs category concerns
+  - [x] **Database Architecture Improvements**
+    - [x] Moved capacity management from registrations to categories
+    - [x] Moved accounting codes from registrations to categories
+    - [x] Created utility functions for capacity calculations
+    - [x] Eliminated redundant fields and data duplication
+
 ### 🚧 In Progress
-- [ ] Registration system with capacity management
 
 ### 📋 Next Steps
 - [ ] Add membership editing functionality (pricing, accounting codes)
-- [ ] Registration system with capacity management
+- [ ] Add registration category editing functionality
 - [ ] Stripe payment integration
 - [ ] Loops.so email integration
 - [ ] Pricing tiers and discount codes
@@ -462,4 +484,4 @@ email_logs (
 ---
 
 *Last updated: December 14, 2025*
-*Status: Season & Membership Management Complete*
+*Status: Registration Categories System Complete*

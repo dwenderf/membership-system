@@ -83,11 +83,23 @@ CREATE TABLE registrations (
     required_membership_id UUID REFERENCES memberships(id), -- NULL for free events
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('team', 'scrimmage', 'event')),
-    max_capacity INTEGER,
-    current_count INTEGER DEFAULT 0,
-    accounting_code TEXT,
     allow_discounts BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Registration categories table
+CREATE TABLE registration_categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, -- "Player", "Goalie", "Alternate", "Guest"
+    max_capacity INTEGER,
+    current_count INTEGER DEFAULT 0,
+    accounting_code TEXT, -- accounting code for this category
+    sort_order INTEGER DEFAULT 0, -- for display ordering
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure no duplicate category names within a registration
+    UNIQUE(registration_id, name)
 );
 
 -- User registrations table
@@ -95,6 +107,7 @@ CREATE TABLE user_registrations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    registration_category_id UUID REFERENCES registration_categories(id),
     user_membership_id UUID REFERENCES user_memberships(id), -- NULL for free events
     payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
     registration_fee INTEGER, -- in cents
@@ -108,6 +121,7 @@ CREATE TABLE user_registrations (
 CREATE TABLE registration_pricing_tiers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    registration_category_id UUID REFERENCES registration_categories(id), -- NULL = applies to all categories
     tier_name TEXT NOT NULL,
     price INTEGER NOT NULL, -- in cents
     starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -241,7 +255,9 @@ CREATE INDEX idx_login_attempts_email_time ON login_attempts(email, attempted_at
 CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at);
 CREATE INDEX idx_magic_link_tokens_token ON magic_link_tokens(token);
 CREATE INDEX idx_magic_link_tokens_email_expires ON magic_link_tokens(email, expires_at);
+CREATE INDEX idx_registration_categories_registration ON registration_categories(registration_id);
 CREATE INDEX idx_registration_pricing_tiers_reg_starts ON registration_pricing_tiers(registration_id, starts_at);
+CREATE INDEX idx_registration_pricing_tiers_category ON registration_pricing_tiers(registration_category_id);
 CREATE INDEX idx_access_codes_code_type_active ON access_codes(code, type, is_active);
 CREATE INDEX idx_discount_usage_user_season ON discount_usage(user_id, season_id);
 CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, used_at);
@@ -261,6 +277,7 @@ ALTER TABLE seasons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE registration_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registration_pricing_tiers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discount_codes ENABLE ROW LEVEL SECURITY;
@@ -318,6 +335,7 @@ CREATE POLICY "Admins can view all registrations" ON user_registrations
 CREATE POLICY "Anyone can view seasons" ON seasons FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view memberships" ON memberships FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view registrations" ON registrations FOR SELECT USING (TRUE);
+CREATE POLICY "Anyone can view registration categories" ON registration_categories FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view registration pricing tiers" ON registration_pricing_tiers FOR SELECT USING (TRUE);
 
 -- Admin-only write access for core data
@@ -338,6 +356,14 @@ CREATE POLICY "Only admins can modify memberships" ON memberships
     );
 
 CREATE POLICY "Only admins can modify registrations" ON registrations
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+CREATE POLICY "Only admins can modify registration categories" ON registration_categories
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM users 

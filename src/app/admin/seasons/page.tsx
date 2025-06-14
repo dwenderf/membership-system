@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { formatDateString } from '@/lib/date-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
 export default async function SeasonsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -99,7 +100,7 @@ export default async function SeasonsPage() {
                             <span className="capitalize">{season.type.replace('_', '/')}</span>
                             <span className="mx-2">•</span>
                             <span>
-                              {new Date(season.start_date).toLocaleDateString()} - {new Date(season.end_date).toLocaleDateString()}
+                              {formatDateString(season.start_date)} - {formatDateString(season.end_date)}
                             </span>
                           </div>
                         </div>

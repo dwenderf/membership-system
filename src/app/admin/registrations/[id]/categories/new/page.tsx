@@ -67,7 +67,8 @@ export default function NewRegistrationCategoryPage() {
   const [availableMemberships, setAvailableMemberships] = useState<{
     id: string
     name: string
-    price: number
+    price_monthly: number
+    price_annual: number
   }[]>([])
   const [isCustom, setIsCustom] = useState(false)
   
@@ -93,20 +94,17 @@ export default function NewRegistrationCategoryPage() {
       if (!regError && regData) {
         setRegistration(regData)
         
-        // Fetch memberships for this season
-        if (regData.seasons?.id) {
-          const { data: membershipsData, error: membershipsError } = await supabase
-            .from('memberships')
-            .select('id, name, price')
-            .eq('season_id', regData.seasons.id)
-            .order('name')
-          
-          if (!membershipsError && membershipsData) {
-            setAvailableMemberships(membershipsData)
-          } else {
-            // If no memberships available, default to "none"
-            setFormData(prev => ({ ...prev, required_membership_id: 'none' }))
-          }
+        // Fetch all membership types (no longer season-specific)
+        const { data: membershipsData, error: membershipsError } = await supabase
+          .from('memberships')
+          .select('id, name, price_monthly, price_annual')
+          .order('name')
+        
+        if (!membershipsError && membershipsData) {
+          setAvailableMemberships(membershipsData)
+        } else {
+          // If no memberships available, default to "none"
+          setFormData(prev => ({ ...prev, required_membership_id: 'none' }))
         }
       }
 
@@ -480,21 +478,21 @@ export default function NewRegistrationCategoryPage() {
                           </svg>
                         </div>
                         <div className="ml-3">
-                          <h3 className="text-sm font-medium text-yellow-800">No Memberships Available</h3>
+                          <h3 className="text-sm font-medium text-yellow-800">No Membership Types Available</h3>
                           <div className="mt-2 text-sm text-yellow-700">
-                            <p>This season has no memberships created yet. You can either:</p>
+                            <p>No membership types have been created yet. You can either:</p>
                             <ul className="mt-1 list-disc list-inside">
                               <li>Set this category to require no membership</li>
-                              <li>Create a membership for this season first</li>
+                              <li>Create a membership type first</li>
                             </ul>
                           </div>
                           <div className="mt-4">
                             <button
                               type="button"
                               className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm px-3 py-1 rounded border border-yellow-300"
-                              onClick={() => window.open(`/admin/memberships/new?season_id=${registration?.seasons?.id}`, '_blank')}
+                              onClick={() => window.open('/admin/memberships/new', '_blank')}
                             >
-                              Create Membership for This Season
+                              Create Membership Type
                             </button>
                           </div>
                         </div>
@@ -520,7 +518,7 @@ export default function NewRegistrationCategoryPage() {
                     <option value="">Select a membership</option>
                     {availableMemberships.map((membership) => (
                       <option key={membership.id} value={membership.id}>
-                        {membership.name} - ${(membership.price / 100).toFixed(2)}
+                        {membership.name} - ${(membership.price_monthly / 100).toFixed(2)}/mo or ${(membership.price_annual / 100).toFixed(2)}/yr
                       </option>
                     ))}
                     <option value="none">No membership required</option>
@@ -528,8 +526,8 @@ export default function NewRegistrationCategoryPage() {
                 )}
                 <p className="mt-1 text-sm text-gray-500">
                   {availableMemberships.length === 0 
-                    ? 'No memberships available for this season'
-                    : 'Choose a membership that users must have to register for this category'
+                    ? 'No membership types available'
+                    : 'Choose a membership type that users must have to register for this category'
                   }
                 </p>
               </div>

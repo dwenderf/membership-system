@@ -19,7 +19,6 @@ export default function NewRegistrationPage() {
   
   const [seasons, setSeasons] = useState<any[]>([])
   const [existingRegistrations, setExistingRegistrations] = useState<any[]>([])
-  const [seasonMemberships, setSeasonMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -49,27 +48,7 @@ export default function NewRegistrationPage() {
     fetchData()
   }, [])
 
-  // Fetch memberships for selected season
-  useEffect(() => {
-    const fetchSeasonMemberships = async () => {
-      if (formData.season_id) {
-        const { data: memberships, error: membershipsError } = await supabase
-          .from('memberships')
-          .select('*')
-          .eq('season_id', formData.season_id)
-        
-        if (!membershipsError && memberships) {
-          setSeasonMemberships(memberships)
-        } else {
-          setSeasonMemberships([])
-        }
-      } else {
-        setSeasonMemberships([])
-      }
-    }
-    
-    fetchSeasonMemberships()
-  }, [formData.season_id])
+  // Removed season membership fetching - no longer needed
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,44 +155,7 @@ export default function NewRegistrationPage() {
                 </p>
               </div>
 
-              {/* No Memberships Warning */}
-              {formData.season_id && seasonMemberships.length === 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">No Memberships for This Season</h3>
-                      <div className="mt-2 text-sm text-yellow-700">
-                        <p>The selected season has no memberships assigned. Registration categories won't have membership options unless you:</p>
-                        <ul className="mt-1 list-disc list-inside">
-                          <li>Set up memberships for this season now</li>
-                          <li>Or plan to use "No membership required" for all categories</li>
-                        </ul>
-                      </div>
-                      <div className="mt-4 flex space-x-3">
-                        <button
-                          type="button"
-                          onClick={() => window.open(`/admin/seasons/${formData.season_id}/setup-membership`, '_blank')}
-                          className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm px-3 py-1 rounded border border-yellow-300"
-                        >
-                          Set Up Memberships
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => window.open(`/admin/memberships/new?season_id=${formData.season_id}`, '_blank')}
-                          className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm px-3 py-1 rounded border border-yellow-300"
-                        >
-                          Create New Membership
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Removed membership warning - no longer season-specific */}
 
               {/* Registration Type */}
               <div>

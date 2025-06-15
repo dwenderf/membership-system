@@ -73,19 +73,7 @@ export default function NewSeasonPage() {
       if (insertError) {
         setError(insertError.message)
       } else {
-        // Get the created season ID for membership assignment
-        const { data: createdSeason } = await supabase
-          .from('seasons')
-          .select('id')
-          .eq('name', seasonName)
-          .single()
-        
-        if (createdSeason) {
-          // Redirect to membership assignment for the new season
-          router.push(`/admin/seasons/${createdSeason.id}/setup-membership`)
-        } else {
-          router.push('/admin/seasons')
-        }
+        router.push('/admin/seasons')
       }
     } catch (err) {
       setError('An unexpected error occurred')

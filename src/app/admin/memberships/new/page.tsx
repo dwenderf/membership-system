@@ -1,44 +1,31 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { formatDateString } from '@/lib/date-utils'
 import Link from 'next/link'
 
 export default function NewMembershipPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const preSelectedSeasonId = searchParams.get('season_id')
   const supabase = createClient()
   
   const [formData, setFormData] = useState({
-    season_id: preSelectedSeasonId || '',
     name: '',
-    price: '', // in dollars, will convert to cents
+    description: '',
+    price_monthly: '', // in dollars, will convert to cents
+    price_annual: '', // in dollars, will convert to cents
     accounting_code: '',
     allow_discounts: true,
   })
   
-  const [seasons, setSeasons] = useState<any[]>([])
+  // Removed seasons state - no longer needed
   const [existingMemberships, setExistingMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Fetch available seasons and existing memberships
+  // Fetch existing memberships to check for duplicates
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch seasons
-      const { data: seasonsData, error: seasonsError } = await supabase
-        .from('seasons')
-        .select('*')
-        .order('start_date', { ascending: false })
-      
-      if (!seasonsError && seasonsData) {
-        setSeasons(seasonsData)
-      }
-
-      // Fetch existing memberships to check for duplicates
       const { data: membershipsData, error: membershipsError } = await supabase
         .from('memberships')
         .select('name')
@@ -51,18 +38,7 @@ export default function NewMembershipPage() {
     fetchData()
   }, [])
 
-  // Auto-generate membership name based on selected season
-  useEffect(() => {
-    if (formData.season_id) {
-      const selectedSeason = seasons.find(s => s.id === formData.season_id)
-      if (selectedSeason) {
-        setFormData(prev => ({ 
-          ...prev, 
-          name: `${selectedSeason.name} Membership`
-        }))
-      }
-    }
-  }, [formData.season_id, seasons])
+  // Removed auto-generation - user will create membership types manually
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,19 +51,33 @@ export default function NewMembershipPage() {
     setError('')
 
     try {
-      // Convert price from dollars to cents
-      const priceInCents = Math.round(parseFloat(formData.price) * 100)
+      // Convert prices from dollars to cents
+      const monthlyPriceInCents = Math.round(parseFloat(formData.price_monthly) * 100)
+      const annualPriceInCents = Math.round(parseFloat(formData.price_annual) * 100)
       
-      if (isNaN(priceInCents) || priceInCents < 0) {
-        setError('Please enter a valid price')
+      if (isNaN(monthlyPriceInCents) || monthlyPriceInCents < 0) {
+        setError('Please enter a valid monthly price')
+        setLoading(false)
+        return
+      }
+      
+      if (isNaN(annualPriceInCents) || annualPriceInCents < 0) {
+        setError('Please enter a valid annual price')
+        setLoading(false)
+        return
+      }
+      
+      if (annualPriceInCents > monthlyPriceInCents * 12) {
+        setError('Annual price should be less than or equal to 12 months of monthly pricing')
         setLoading(false)
         return
       }
 
       const membershipData = {
-        season_id: formData.season_id,
         name: formData.name,
-        price: priceInCents,
+        description: formData.description || null,
+        price_monthly: monthlyPriceInCents,
+        price_annual: annualPriceInCents,
         accounting_code: formData.accounting_code || null,
         allow_discounts: formData.allow_discounts,
       }
@@ -115,10 +105,11 @@ export default function NewMembershipPage() {
     membership.name.toLowerCase() === formData.name.trim().toLowerCase()
   )
   
-  const canCreateMembership = formData.season_id && 
-                             formData.name.trim() && 
-                             formData.price && 
-                             parseFloat(formData.price) > 0 &&
+  const canCreateMembership = formData.name.trim() && 
+                             formData.price_monthly && 
+                             parseFloat(formData.price_monthly) > 0 &&
+                             formData.price_annual && 
+                             parseFloat(formData.price_annual) > 0 &&
                              !membershipNameExists
 
   return (
@@ -127,30 +118,28 @@ export default function NewMembershipPage() {
         <div className="px-4 py-6 sm:px-0">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Create New Membership</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Create New Membership Type</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Set up a membership plan for a specific season
+              Set up a flexible membership type with monthly and annual pricing
             </p>
           </div>
 
-          {/* Pre-selected Season Notice */}
-          {preSelectedSeasonId && selectedSeason && (
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">Creating Membership for {selectedSeason.name}</h3>
-                  <p className="mt-2 text-sm text-blue-700">
-                    This membership will be created for the {selectedSeason.name} season. You can change the season selection below if needed.
-                  </p>
-                </div>
+          {/* Info Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">Flexible Duration Memberships</h3>
+                <p className="mt-2 text-sm text-blue-700">
+                  Create membership types that users can purchase for flexible durations. Users will choose how many months they need or purchase an annual plan for savings.
+                </p>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Form */}
           <div className="bg-white shadow rounded-lg">
@@ -161,37 +150,10 @@ export default function NewMembershipPage() {
                 </div>
               )}
 
-              {/* Season Selection */}
-              <div>
-                <label htmlFor="season_id" className="block text-sm font-medium text-gray-700">
-                  Season
-                </label>
-                <select
-                  id="season_id"
-                  value={formData.season_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, season_id: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  required
-                >
-                  <option value="">Select a season</option>
-                  {seasons.map((season) => {
-                    const isEnded = new Date(season.end_date) < new Date()
-                    return (
-                      <option key={season.id} value={season.id}>
-                        {season.name} {isEnded ? '(Ended)' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">
-                  Choose which season this membership is for
-                </p>
-              </div>
-
               {/* Membership Name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Membership Name
+                  Membership Type Name
                 </label>
                 <input
                   type="text"
@@ -199,9 +161,30 @@ export default function NewMembershipPage() {
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., Fall/Winter 2025 Membership"
+                  placeholder="e.g., Full Hockey Membership, Social Membership"
                   required
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  A descriptive name for this membership type
+                </p>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="e.g., Includes access to all ice times, tournaments, and events"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Optional description of what this membership includes
+                </p>
               </div>
 
               {/* Duplicate Name Warning */}
@@ -223,31 +206,83 @@ export default function NewMembershipPage() {
                 </div>
               )}
 
-              {/* Price */}
-              <div>
-                <label htmlFor="price" className="block text-sm font-medium text-gray-700">
-                  Price (USD)
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+              {/* Pricing */}
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                {/* Monthly Price */}
+                <div>
+                  <label htmlFor="price_monthly" className="block text-sm font-medium text-gray-700">
+                    Monthly Price (USD)
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      id="price_monthly"
+                      step="0.01"
+                      min="0"
+                      value={formData.price_monthly}
+                      onChange={(e) => setFormData(prev => ({ ...prev, price_monthly: e.target.value }))}
+                      className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="0.00"
+                      required
+                    />
                   </div>
-                  <input
-                    type="number"
-                    id="price"
-                    step="0.01"
-                    min="0"
-                    value={formData.price}
-                    onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
-                    className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="0.00"
-                    required
-                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Price per month
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">
-                  Membership fee
-                </p>
+
+                {/* Annual Price */}
+                <div>
+                  <label htmlFor="price_annual" className="block text-sm font-medium text-gray-700">
+                    Annual Price (USD)
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      id="price_annual"
+                      step="0.01"
+                      min="0"
+                      value={formData.price_annual}
+                      onChange={(e) => setFormData(prev => ({ ...prev, price_annual: e.target.value }))}
+                      className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Price for full year (should be ≤ 12 months)
+                  </p>
+                </div>
               </div>
+
+              {/* Pricing Preview */}
+              {formData.price_monthly && formData.price_annual && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Pricing Comparison</h4>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div>
+                      <span className="text-sm text-gray-500">Monthly:</span>
+                      <span className="ml-2 text-sm font-medium">${parseFloat(formData.price_monthly).toFixed(2)}/month</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500">Annual:</span>
+                      <span className="ml-2 text-sm font-medium">${parseFloat(formData.price_annual).toFixed(2)}/year</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500">Annual savings:</span>
+                      <span className="ml-2 text-sm font-medium text-green-600">
+                        ${Math.max(0, (parseFloat(formData.price_monthly) * 12 - parseFloat(formData.price_annual))).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Accounting Code */}
               <div>
@@ -281,26 +316,26 @@ export default function NewMembershipPage() {
                 </label>
               </div>
 
-              {/* Season Preview */}
-              {selectedSeason && (
+              {/* Membership Preview */}
+              {formData.name && (
                 <div className={`border rounded-md p-4 ${membershipNameExists ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Selected Season Details</h4>
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">Membership Type Preview</h4>
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Season Name</dt>
-                      <dd className="text-sm text-gray-900">{selectedSeason.name}</dd>
+                      <dt className="text-sm font-medium text-gray-500">Name</dt>
+                      <dd className="text-sm text-gray-900">{formData.name}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Type</dt>
-                      <dd className="text-sm text-gray-900 capitalize">{selectedSeason.type.replace('_', '/')}</dd>
+                      <dt className="text-sm font-medium text-gray-500">Description</dt>
+                      <dd className="text-sm text-gray-900">{formData.description || 'No description'}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Start Date</dt>
-                      <dd className="text-sm text-gray-900">{formatDateString(selectedSeason.start_date)}</dd>
+                      <dt className="text-sm font-medium text-gray-500">Monthly Price</dt>
+                      <dd className="text-sm text-gray-900">${formData.price_monthly ? parseFloat(formData.price_monthly).toFixed(2) : '0.00'}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">End Date</dt>
-                      <dd className="text-sm text-gray-900">{formatDateString(selectedSeason.end_date)}</dd>
+                      <dt className="text-sm font-medium text-gray-500">Annual Price</dt>
+                      <dd className="text-sm text-gray-900">${formData.price_annual ? parseFloat(formData.price_annual).toFixed(2) : '0.00'}</dd>
                     </div>
                   </dl>
                 </div>
@@ -329,7 +364,7 @@ export default function NewMembershipPage() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   )}
-                  {loading ? 'Creating Membership...' : canCreateMembership ? 'Create Membership' : 'Complete Form to Create'}
+                  {loading ? 'Creating Membership Type...' : canCreateMembership ? 'Create Membership Type' : 'Complete Form to Create'}
                 </button>
               </div>
             </form>

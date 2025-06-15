@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
+// Removed formatDateString import - no longer needed
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -22,19 +22,10 @@ export default async function MembershipsPage() {
     redirect('/dashboard')
   }
 
-  // Get all memberships with their associated season info
+  // Get all membership types
   const { data: memberships, error } = await supabase
     .from('memberships')
-    .select(`
-      *,
-      seasons (
-        id,
-        name,
-        type,
-        start_date,
-        end_date
-      )
-    `)
+    .select('*')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -50,14 +41,14 @@ export default async function MembershipsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Membership Management</h1>
               <p className="mt-1 text-sm text-gray-600">
-                Create and manage membership plans for each season
+                Create and manage flexible membership types with monthly and annual pricing
               </p>
             </div>
             <Link
               href="/admin/memberships/new"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Create New Membership
+              Create New Membership Type
             </Link>
           </div>
 
@@ -65,43 +56,48 @@ export default async function MembershipsPage() {
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             {!memberships || memberships.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-gray-500 text-lg mb-4">No memberships created yet</div>
+                <div className="text-gray-500 text-lg mb-4">No membership types created yet</div>
                 <Link
                   href="/admin/memberships/new"
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                 >
-                  Create Your First Membership
+                  Create Your First Membership Type
                 </Link>
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">
                 {memberships.map((membership: any) => {
-                  const season = membership.seasons
-                  const isSeasonEnded = season && new Date(season.end_date) < new Date()
+                  const annualSavings = (membership.price_monthly * 12) - membership.price_annual
+                  const annualSavingsPercent = ((annualSavings / (membership.price_monthly * 12)) * 100).toFixed(0)
                   
                   return (
                     <li key={membership.id}>
                       <div className="px-4 py-4 flex items-center justify-between">
-                        <div className="flex items-center">
+                        <div className="flex items-center flex-1">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center">
                               <p className="text-lg font-medium text-gray-900 truncate">
                                 {membership.name}
                               </p>
-                              {isSeasonEnded ? (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                  Season Ended
-                                </span>
-                              ) : (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  Active
-                                </span>
-                              )}
+                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Membership Type
+                              </span>
                             </div>
+                            {membership.description && (
+                              <p className="mt-1 text-sm text-gray-600 truncate">
+                                {membership.description}
+                              </p>
+                            )}
                             <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span>{season?.name || 'No season'}</span>
+                              <span>${(membership.price_monthly / 100).toFixed(2)}/month</span>
                               <span className="mx-2">•</span>
-                              <span>${(membership.price / 100).toFixed(2)}</span>
+                              <span>${(membership.price_annual / 100).toFixed(2)}/year</span>
+                              {annualSavings > 0 && (
+                                <>
+                                  <span className="mx-2">•</span>
+                                  <span className="text-green-600">Save {annualSavingsPercent}% annually</span>
+                                </>
+                              )}
                               {membership.accounting_code && (
                                 <>
                                   <span className="mx-2">•</span>

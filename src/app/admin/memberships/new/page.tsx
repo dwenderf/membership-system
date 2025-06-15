@@ -98,7 +98,7 @@ export default function NewMembershipPage() {
     }
   }
 
-  const selectedSeason = seasons.find(s => s.id === formData.season_id)
+  // Removed season selection logic
   
   // Check for duplicate membership name
   const membershipNameExists = existingMemberships.some(membership => 

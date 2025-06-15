@@ -140,7 +140,7 @@ export default function NewRegistrationPage() {
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   required
                 >
-                  <option value="">Select a season</option>
+                  <option value="">Please select a season</option>
                   {seasons.map((season) => {
                     const isEnded = new Date(season.end_date) < new Date()
                     return (

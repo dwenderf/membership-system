@@ -51,28 +51,37 @@ CREATE TABLE seasons (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Memberships table
+-- Memberships table (flexible membership types)
 CREATE TABLE memberships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    price INTEGER NOT NULL, -- in cents
+    description TEXT,
+    price_monthly INTEGER NOT NULL, -- in cents
+    price_annual INTEGER NOT NULL, -- in cents
     accounting_code TEXT,
     allow_discounts BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure annual pricing offers some discount
+    CONSTRAINT chk_annual_pricing CHECK (price_annual <= price_monthly * 12)
 );
 
--- User memberships table
+-- User memberships table (duration-based purchases)
 CREATE TABLE user_memberships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     membership_id UUID NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+    valid_from DATE NOT NULL,
+    valid_until DATE NOT NULL,
+    months_purchased INTEGER,
     payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
     stripe_payment_intent_id TEXT,
     amount_paid INTEGER, -- in cents
     purchased_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, membership_id)
+    
+    -- Ensure valid_until > valid_from
+    CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from)
 );
 
 -- Registrations table
@@ -453,3 +462,7 @@ CREATE TRIGGER update_registration_count_trigger
     AFTER INSERT OR DELETE ON user_registrations
     FOR EACH ROW
     EXECUTE FUNCTION update_registration_count();
+
+-- Performance indexes for membership model
+CREATE INDEX idx_user_memberships_validity ON user_memberships(user_id, valid_from, valid_until);
+CREATE INDEX idx_user_memberships_membership_type ON user_memberships(membership_id);

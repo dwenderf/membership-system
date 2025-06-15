@@ -104,25 +104,31 @@ seasons (
 
 memberships (
   id: uuid PRIMARY KEY
-  season_id: uuid REFERENCES seasons(id)
-  name: text NOT NULL -- "Fall/Winter 2025 Membership"
-  price: integer NOT NULL -- in cents
+  name: text NOT NULL -- "Full Hockey Membership", "Social Membership"
+  description: text -- "Includes ice time, tournaments, and events"
+  price_monthly: integer NOT NULL -- in cents
+  price_annual: integer NOT NULL -- in cents  
   accounting_code: text
   allow_discounts: boolean DEFAULT true
   created_at: timestamp
+  
+  CONSTRAINT chk_annual_pricing CHECK (price_annual <= price_monthly * 12)
 )
 
 user_memberships (
   id: uuid PRIMARY KEY
   user_id: uuid REFERENCES users(id)
   membership_id: uuid REFERENCES memberships(id)
+  valid_from: date NOT NULL
+  valid_until: date NOT NULL
+  months_purchased: integer
   payment_status: text NOT NULL -- "pending" | "paid" | "refunded"
   stripe_payment_intent_id: text
   amount_paid: integer -- in cents
   purchased_at: timestamp
   created_at: timestamp
   
-  UNIQUE(user_id, membership_id)
+  CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from)
 )
 ```
 
@@ -311,15 +317,23 @@ email_logs (
 - **Spring/Summer Season**: March 1 - Aug 31
 - **Flexible architecture**: Easy to modify season structure in future
 
-### Registration Flow
-1. User attempts to register for team/event
-2. System checks required membership for that season
-3. If no membership: redirect to purchase membership + registration
-4. If has membership: proceed with registration only
-5. Apply current pricing tier based on date
-6. Apply discount codes if provided
-7. Process payment through configured provider
-8. Send confirmation emails
+### Membership & Registration Flow
+1. User attempts to register for team/event category
+2. System checks if category requires specific membership type
+3. If membership required: check if user has valid membership covering season dates
+4. If no valid membership: redirect to purchase membership (monthly/annual options)
+5. If has valid membership: proceed with registration only
+6. Apply current pricing tier based on date
+7. Apply discount codes if provided
+8. Process payment through configured provider
+9. Send confirmation emails
+
+### Membership Model
+- **Flexible Duration**: Users purchase memberships for custom time periods
+- **Membership Types**: Different levels (Full Hockey, Social, Youth, etc.)
+- **Pricing Options**: Monthly rate or discounted annual rate
+- **Validity Periods**: Memberships cover specific date ranges, not seasons
+- **Multi-Season Coverage**: Annual memberships can cover multiple seasons automatically
 
 ### Pricing Tiers Logic
 - **Current price = most recent tier** where `starts_at <= NOW()`
@@ -518,4 +532,4 @@ email_logs (
 ---
 
 *Last updated: June 15, 2025*
-*Status: Category-Level Membership Requirements and Guided Setup Complete*
+*Status: Duration-Based Membership Model with Flexible Pricing Complete*

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString } from '@/lib/date-utils'
+import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 
@@ -51,10 +52,18 @@ export default async function RegistrationDetailPage({
     notFound()
   }
 
-  // Get registration categories
+  // Get registration categories with joined category data
   const { data: categories, error: categoriesError } = await supabase
     .from('registration_categories')
-    .select('*')
+    .select(`
+      *,
+      categories (
+        id,
+        name,
+        description,
+        category_type
+      )
+    `)
     .eq('registration_id', params.id)
     .order('sort_order', { ascending: true })
 
@@ -189,9 +198,11 @@ export default async function RegistrationDetailPage({
                 ) : (
                   <div className="divide-y divide-gray-200">
                     {categories.map((category) => {
-                      const isAtCapacity = category.max_capacity && category.current_count >= category.max_capacity
+                      // TODO: Calculate current_count from user_registrations when implemented
+                      const current_count = 0 // Placeholder until user registrations are implemented
+                      const isAtCapacity = category.max_capacity && current_count >= category.max_capacity
                       const capacityPercentage = category.max_capacity 
-                        ? (category.current_count / category.max_capacity) * 100 
+                        ? (current_count / category.max_capacity) * 100 
                         : 0
 
                       return (
@@ -200,8 +211,13 @@ export default async function RegistrationDetailPage({
                             <div className="flex-1">
                               <div className="flex items-center">
                                 <h3 className="text-lg font-medium text-gray-900">
-                                  {category.name}
+                                  {getCategoryDisplayName(category)}
                                 </h3>
+                                {isCategoryCustom(category) && (
+                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    Custom
+                                  </span>
+                                )}
                                 {isAtCapacity ? (
                                   <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                     Full
@@ -215,7 +231,7 @@ export default async function RegistrationDetailPage({
                               
                               <div className="mt-1 flex items-center text-sm text-gray-500">
                                 <span>
-                                  {category.current_count} registered
+                                  {current_count} registered
                                   {category.max_capacity && ` of ${category.max_capacity} spots`}
                                 </span>
                                 {category.max_capacity && (

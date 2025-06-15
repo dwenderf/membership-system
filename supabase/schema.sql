@@ -87,19 +87,38 @@ CREATE TABLE registrations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Master categories table
+CREATE TABLE categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    category_type TEXT NOT NULL CHECK (category_type IN ('system', 'user')),
+    created_by UUID REFERENCES users(id), -- NULL for system categories
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure no duplicate names within the same type
+    UNIQUE(name, category_type)
+);
+
 -- Registration categories table
 CREATE TABLE registration_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
-    name TEXT NOT NULL, -- "Player", "Goalie", "Alternate", "Guest"
+    category_id UUID REFERENCES categories(id), -- NULL for one-off custom
+    custom_name TEXT, -- Used when category_id is NULL
     max_capacity INTEGER,
-    current_count INTEGER DEFAULT 0,
     accounting_code TEXT, -- accounting code for this category
     sort_order INTEGER DEFAULT 0, -- for display ordering
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
-    -- Ensure no duplicate category names within a registration
-    UNIQUE(registration_id, name)
+    -- Must have either category_id OR custom_name, not both
+    CONSTRAINT check_category_or_custom CHECK (
+        (category_id IS NOT NULL AND custom_name IS NULL) OR 
+        (category_id IS NULL AND custom_name IS NOT NULL)
+    ),
+    -- Ensure no duplicate categories within a registration
+    UNIQUE(registration_id, category_id),
+    UNIQUE(registration_id, custom_name)
 );
 
 -- User registrations table
@@ -255,7 +274,10 @@ CREATE INDEX idx_login_attempts_email_time ON login_attempts(email, attempted_at
 CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at);
 CREATE INDEX idx_magic_link_tokens_token ON magic_link_tokens(token);
 CREATE INDEX idx_magic_link_tokens_email_expires ON magic_link_tokens(email, expires_at);
+CREATE INDEX idx_categories_type ON categories(category_type);
+CREATE INDEX idx_categories_created_by ON categories(created_by);
 CREATE INDEX idx_registration_categories_registration ON registration_categories(registration_id);
+CREATE INDEX idx_registration_categories_category ON registration_categories(category_id);
 CREATE INDEX idx_registration_pricing_tiers_reg_starts ON registration_pricing_tiers(registration_id, starts_at);
 CREATE INDEX idx_registration_pricing_tiers_category ON registration_pricing_tiers(registration_category_id);
 CREATE INDEX idx_access_codes_code_type_active ON access_codes(code, type, is_active);
@@ -277,6 +299,7 @@ ALTER TABLE seasons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registration_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registration_pricing_tiers ENABLE ROW LEVEL SECURITY;
@@ -335,6 +358,7 @@ CREATE POLICY "Admins can view all registrations" ON user_registrations
 CREATE POLICY "Anyone can view seasons" ON seasons FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view memberships" ON memberships FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view registrations" ON registrations FOR SELECT USING (TRUE);
+CREATE POLICY "Anyone can view categories" ON categories FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view registration categories" ON registration_categories FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view registration pricing tiers" ON registration_pricing_tiers FOR SELECT USING (TRUE);
 
@@ -362,6 +386,25 @@ CREATE POLICY "Only admins can modify registrations" ON registrations
             WHERE id = auth.uid() AND is_admin = TRUE
         )
     );
+
+CREATE POLICY "Only admins can create user categories" ON categories 
+FOR INSERT WITH CHECK (
+    category_type = 'user' AND 
+    EXISTS (
+        SELECT 1 FROM users 
+        WHERE id = auth.uid() AND is_admin = TRUE
+    )
+);
+
+CREATE POLICY "Only admins can modify their user categories" ON categories 
+FOR UPDATE USING (
+    category_type = 'user' AND 
+    created_by = auth.uid() AND
+    EXISTS (
+        SELECT 1 FROM users 
+        WHERE id = auth.uid() AND is_admin = TRUE
+    )
+);
 
 CREATE POLICY "Only admins can modify registration categories" ON registration_categories
     FOR ALL USING (

@@ -33,20 +33,42 @@ export default function NewRegistrationCategoryPage() {
   const registrationId = params.id as string
   const supabase = createClient()
   
-  const [registration, setRegistration] = useState<any>(null)
-  const [existingCategories, setExistingCategories] = useState<any[]>([])
-  const [showPresets, setShowPresets] = useState(false)
+  const [registration, setRegistration] = useState<{
+    id: string
+    name: string
+    type: string
+  } | null>(null)
+  const [existingCategories, setExistingCategories] = useState<{
+    id: string
+    registration_id: string
+    category_id: string | null
+    custom_name: string | null
+    categories?: {
+      id: string
+      name: string
+      description: string | null
+      category_type: string
+    }
+  }[]>([])
   const [formData, setFormData] = useState({
-    name: '',
+    category_id: '',     // Selected from master categories
+    custom_name: '',     // For one-off custom categories
     max_capacity: '',
     accounting_code: '',
     sort_order: '',
   })
   
+  const [availableCategories, setAvailableCategories] = useState<{
+    id: string
+    name: string
+    category_type: string
+  }[]>([])
+  const [isCustom, setIsCustom] = useState(false)
+  
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Fetch registration details and existing categories
+  // Fetch registration details, existing categories, and available master categories
   useEffect(() => {
     const fetchData = async () => {
       // Get registration details
@@ -60,10 +82,18 @@ export default function NewRegistrationCategoryPage() {
         setRegistration(regData)
       }
 
-      // Get existing categories
+      // Get existing categories with their master category info
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('registration_categories')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            description,
+            category_type
+          )
+        `)
         .eq('registration_id', registrationId)
         .order('sort_order')
       
@@ -74,6 +104,16 @@ export default function NewRegistrationCategoryPage() {
           ...prev, 
           sort_order: categoriesData.length.toString() 
         }))
+      }
+
+      // Get available master categories (system + user categories)
+      const { data: masterCategories, error: masterError } = await supabase
+        .from('categories')
+        .select('*')
+        .order('category_type, name')
+      
+      if (!masterError && masterCategories) {
+        setAvailableCategories(masterCategories)
       }
     }
     
@@ -93,9 +133,9 @@ export default function NewRegistrationCategoryPage() {
     try {
       const categoryData = {
         registration_id: registrationId,
-        name: formData.name,
+        category_id: isCustom ? null : (formData.category_id || null),
+        custom_name: isCustom ? (formData.custom_name || null) : null,
         max_capacity: formData.max_capacity ? parseInt(formData.max_capacity) : null,
-        current_count: 0,
         accounting_code: formData.accounting_code || null,
         sort_order: parseInt(formData.sort_order) || 0,
       }
@@ -109,7 +149,7 @@ export default function NewRegistrationCategoryPage() {
       } else {
         router.push(`/admin/registrations/${registrationId}`)
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -117,12 +157,31 @@ export default function NewRegistrationCategoryPage() {
   }
 
   const handlePresetClick = (preset: { name: string; suggested_capacity: number }) => {
-    setFormData(prev => ({
-      ...prev,
-      name: preset.name,
-      max_capacity: preset.suggested_capacity.toString(),
-      accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}` || '',
-    }))
+    // Look for a matching system category
+    const matchingCategory = availableCategories.find(cat => 
+      cat.category_type === 'system' && cat.name.toLowerCase() === preset.name.toLowerCase()
+    )
+    
+    if (matchingCategory) {
+      setFormData(prev => ({
+        ...prev,
+        category_id: matchingCategory.id,
+        custom_name: '',
+        max_capacity: preset.suggested_capacity.toString(),
+        accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}` || '',
+      }))
+      setIsCustom(false)
+    } else {
+      // Fallback to custom if no system category found
+      setFormData(prev => ({
+        ...prev,
+        category_id: '',
+        custom_name: preset.name,
+        max_capacity: preset.suggested_capacity.toString(),
+        accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}` || '',
+      }))
+      setIsCustom(true)
+    }
     setShowPresets(false)
   }
 
@@ -134,14 +193,20 @@ export default function NewRegistrationCategoryPage() {
 
     try {
       const presets = CATEGORY_PRESETS[registration.type as keyof typeof CATEGORY_PRESETS] || []
-      const categoriesToAdd = presets.map((preset, index) => ({
-        registration_id: registrationId,
-        name: preset.name,
-        max_capacity: preset.suggested_capacity,
-        current_count: 0,
-        accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}`,
-        sort_order: existingCategories.length + index,
-      }))
+      const categoriesToAdd = presets.map((preset, index) => {
+        const matchingCategory = availableCategories.find(cat => 
+          cat.category_type === 'system' && cat.name.toLowerCase() === preset.name.toLowerCase()
+        )
+        
+        return {
+          registration_id: registrationId,
+          category_id: matchingCategory?.id || null,
+          custom_name: matchingCategory ? null : preset.name,
+          max_capacity: preset.suggested_capacity,
+          accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}`,
+          sort_order: existingCategories.length + index,
+        }
+      })
 
       const { error: insertError } = await supabase
         .from('registration_categories')
@@ -152,28 +217,38 @@ export default function NewRegistrationCategoryPage() {
       } else {
         router.push(`/admin/registrations/${registrationId}`)
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
     }
   }
 
-  // Check for duplicate category name
-  const categoryNameExists = existingCategories.some(category => 
-    category.name.toLowerCase() === formData.name.trim().toLowerCase()
-  )
+  // Check for duplicate category
+  const categoryAlreadyExists = existingCategories.some(category => {
+    if (isCustom) {
+      return category.custom_name?.toLowerCase() === formData.custom_name.trim().toLowerCase()
+    } else {
+      return category.category_id === formData.category_id
+    }
+  })
   
-  const canCreateCategory = formData.name.trim() && 
-                           (!formData.max_capacity || parseInt(formData.max_capacity) > 0) &&
-                           !categoryNameExists
+  const canCreateCategory = (
+    (isCustom && formData.custom_name.trim()) || 
+    (!isCustom && formData.category_id)
+  ) && 
+  (!formData.max_capacity || parseInt(formData.max_capacity) > 0) &&
+  !categoryAlreadyExists
 
   const availablePresets = registration 
     ? CATEGORY_PRESETS[registration.type as keyof typeof CATEGORY_PRESETS] || []
     : []
 
   const unusedPresets = availablePresets.filter(preset =>
-    !existingCategories.some(cat => cat.name.toLowerCase() === preset.name.toLowerCase())
+    !existingCategories.some(cat => {
+      const categoryName = cat.categories?.name || cat.custom_name || ''
+      return categoryName.toLowerCase() === preset.name.toLowerCase()
+    })
   )
 
   return (
@@ -184,7 +259,7 @@ export default function NewRegistrationCategoryPage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Add Registration Category</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Create a new category for "{registration?.name}"
+              Create a new category for &quot;{registration?.name}&quot;
             </p>
           </div>
 
@@ -238,27 +313,93 @@ export default function NewRegistrationCategoryPage() {
                 </div>
               )}
 
-              {/* Category Name */}
+              {/* Category Selection Type */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Category Name
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category Type
                 </label>
-                <input
-                  type="text"
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., Player, Goalie, Alternate"
-                  required
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  What type of participant is this? (e.g., Player, Goalie, Alternate, Guest)
-                </p>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={!isCustom}
+                      onChange={() => setIsCustom(false)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-900">Standard Category</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={isCustom}
+                      onChange={() => setIsCustom(true)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-900">Custom Category</span>
+                  </label>
+                </div>
               </div>
 
-              {/* Duplicate Name Warning */}
-              {categoryNameExists && (
+              {/* Standard Category Selection */}
+              {!isCustom && (
+                <div>
+                  <label htmlFor="category_id" className="block text-sm font-medium text-gray-700">
+                    Select Category
+                  </label>
+                  <select
+                    id="category_id"
+                    value={formData.category_id}
+                    onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    required={!isCustom}
+                  >
+                    <option value="">Select a category</option>
+                    <optgroup label="System Categories">
+                      {availableCategories.filter(cat => cat.category_type === 'system').map(category => (
+                        <option key={category.id} value={category.id}>
+                          {category.name} {category.description && `- ${category.description}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {availableCategories.some(cat => cat.category_type === 'user') && (
+                      <optgroup label="Your Categories">
+                        {availableCategories.filter(cat => cat.category_type === 'user').map(category => (
+                          <option key={category.id} value={category.id}>
+                            {category.name} {category.description && `- ${category.description}`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Choose from standard participant categories
+                  </p>
+                </div>
+              )}
+
+              {/* Custom Category Name */}
+              {isCustom && (
+                <div>
+                  <label htmlFor="custom_name" className="block text-sm font-medium text-gray-700">
+                    Custom Category Name
+                  </label>
+                  <input
+                    type="text"
+                    id="custom_name"
+                    value={formData.custom_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, custom_name: e.target.value }))}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="e.g., Special Guest, Team Parent"
+                    required={isCustom}
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Enter a custom name for this one-time category
+                  </p>
+                </div>
+              )}
+
+              {/* Duplicate Category Warning */}
+              {categoryAlreadyExists && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                   <div className="flex">
                     <div className="flex-shrink-0">
@@ -269,7 +410,7 @@ export default function NewRegistrationCategoryPage() {
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
                       <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
-                        <li>A category with the name "{formData.name}" already exists</li>
+                        <li>This category already exists for this registration</li>
                       </ul>
                     </div>
                   </div>
@@ -332,13 +473,29 @@ export default function NewRegistrationCategoryPage() {
               </div>
 
               {/* Preview */}
-              {formData.name && (
-                <div className={`border rounded-md p-4 ${categoryNameExists ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+              {((!isCustom && formData.category_id) || (isCustom && formData.custom_name)) && (
+                <div className={`border rounded-md p-4 ${categoryAlreadyExists ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Category Preview</h4>
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Name</dt>
-                      <dd className="text-sm text-gray-900">{formData.name}</dd>
+                      <dd className="text-sm text-gray-900">
+                        {isCustom ? formData.custom_name : availableCategories.find(cat => cat.id === formData.category_id)?.name}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Type</dt>
+                      <dd className="text-sm text-gray-900">
+                        {isCustom ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            Custom
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            Standard
+                          </span>
+                        )}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Capacity</dt>

@@ -1,11 +1,34 @@
 // Utility functions for registration calculations
 
-export interface RegistrationCategory {
+export interface Category {
   id: string
   name: string
+  description: string | null
+  category_type: 'system' | 'user'
+  created_by: string | null
+}
+
+export interface RegistrationCategory {
+  id: string
+  registration_id: string
+  category_id: string | null  // Reference to master categories
+  custom_name: string | null  // One-off custom name
   max_capacity: number | null
-  current_count: number
   accounting_code: string | null
+  sort_order: number
+  // current_count is calculated dynamically from user_registrations
+  
+  // Joined data when fetched with category details
+  categories?: Category
+}
+
+export interface RegistrationCategoryDisplay {
+  id: string
+  name: string  // Derived from categories.name OR custom_name
+  max_capacity: number | null
+  accounting_code: string | null
+  sort_order: number
+  is_custom: boolean  // True if using custom_name
 }
 
 export interface Registration {
@@ -16,9 +39,41 @@ export interface Registration {
 }
 
 /**
+ * Get display name for a registration category
+ */
+export function getCategoryDisplayName(category: RegistrationCategory): string {
+  return category.categories?.name || category.custom_name || 'Unknown Category'
+}
+
+/**
+ * Check if a category is custom (one-off) vs reusable
+ */
+export function isCategoryCustom(category: RegistrationCategory): boolean {
+  return category.custom_name !== null
+}
+
+/**
+ * Convert registration category to display format
+ */
+export function toDisplayCategory(category: RegistrationCategory): RegistrationCategoryDisplay {
+  return {
+    id: category.id,
+    name: getCategoryDisplayName(category),
+    max_capacity: category.max_capacity,
+    accounting_code: category.accounting_code,
+    sort_order: category.sort_order,
+    is_custom: isCategoryCustom(category)
+  }
+}
+
+export interface RegistrationCategoryWithCount extends RegistrationCategory {
+  current_count: number
+}
+
+/**
  * Calculate total capacity across all categories in a registration
  */
-export function calculateTotalCapacity(categories: RegistrationCategory[]): {
+export function calculateTotalCapacity(categories: RegistrationCategoryWithCount[]): {
   totalCapacity: number | null
   totalCurrent: number
   hasCapacityLimits: boolean
@@ -61,7 +116,7 @@ export function getAccountingCodes(categories: RegistrationCategory[]): string[]
 /**
  * Check if registration is at capacity
  */
-export function isRegistrationAtCapacity(categories: RegistrationCategory[]): boolean {
+export function isRegistrationAtCapacity(categories: RegistrationCategoryWithCount[]): boolean {
   const { totalCapacity, totalCurrent, hasCapacityLimits } = calculateTotalCapacity(categories)
   return hasCapacityLimits && totalCapacity !== null && totalCurrent >= totalCapacity
 }
@@ -70,7 +125,7 @@ export function isRegistrationAtCapacity(categories: RegistrationCategory[]): bo
  * Get registration status based on categories
  */
 export function getRegistrationStatus(
-  categories: RegistrationCategory[], 
+  categories: RegistrationCategoryWithCount[], 
   isSeasonEnded: boolean
 ): 'ended' | 'full' | 'open' {
   if (isSeasonEnded) return 'ended'
@@ -81,7 +136,7 @@ export function getRegistrationStatus(
 /**
  * Format capacity display string
  */
-export function formatCapacityDisplay(categories: RegistrationCategory[]): string {
+export function formatCapacityDisplay(categories: RegistrationCategoryWithCount[]): string {
   const { totalCapacity, totalCurrent, hasCapacityLimits } = calculateTotalCapacity(categories)
   
   if (!hasCapacityLimits) {

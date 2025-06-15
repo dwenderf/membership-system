@@ -444,28 +444,39 @@ email_logs (
   - [x] Season relationship display
   - [x] Consistent UI styling with season management
 
-- [x] **Registration System with Category Management**
+- [x] **Registration System with Hybrid Category Management**
   - [x] Registration creation with season and membership integration
   - [x] Registration types (team, scrimmage, event)
   - [x] Registration listing with clickable detail links
   - [x] Real-time duplicate name validation
-  - [x] **Registration Categories System**
+  - [x] **Hybrid Registration Categories System**
+    - [x] Master categories table with system and user categories
+    - [x] Standard categories (Player, Goalie, Alternate, Guest, etc.)
+    - [x] Custom one-off categories for unique situations
+    - [x] Radio button selection between standard and custom
+    - [x] Dropdown with grouped system/user categories
     - [x] Category creation with individual capacity limits
     - [x] Per-category accounting code support
     - [x] Smart preset suggestions by registration type
     - [x] Bulk category creation ("Add All" presets)
     - [x] Category-specific capacity tracking and progress bars
     - [x] Sort order management for display control
+    - [x] Duplicate category prevention across both types
   - [x] **Enhanced Admin Workflow**
     - [x] Registration detail pages with category overview
     - [x] Guided workflow: Registration → Categories → Pricing
     - [x] Visual capacity management with status indicators
     - [x] Clean separation of registration vs category concerns
+    - [x] Category type indicators (Standard/Custom badges)
   - [x] **Database Architecture Improvements**
+    - [x] Hybrid categories system with master categories table
+    - [x] Foreign key OR custom name constraint system
     - [x] Moved capacity management from registrations to categories
     - [x] Moved accounting codes from registrations to categories
-    - [x] Created utility functions for capacity calculations
+    - [x] Created utility functions for category display and management
+    - [x] Eliminated redundant current_count column (now calculated)
     - [x] Eliminated redundant fields and data duplication
+    - [x] Database migration scripts for seamless schema updates
 
 ### 🚧 In Progress
 
@@ -483,5 +494,5 @@ email_logs (
 
 ---
 
-*Last updated: December 14, 2025*
-*Status: Registration Categories System Complete*
+*Last updated: June 15, 2025*
+*Status: Hybrid Registration Categories System Complete*

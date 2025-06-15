@@ -11,7 +11,7 @@ export default function NewSeasonPage() {
   const supabase = createClient()
   
   const [formData, setFormData] = useState({
-    type: 'fall_winter' as 'fall_winter' | 'spring_summer',
+    type: '' as '' | 'fall_winter' | 'spring_summer',
     start_year: new Date().getFullYear(),
     is_active: true,
   })
@@ -20,17 +20,17 @@ export default function NewSeasonPage() {
   const [error, setError] = useState('')
   const [existingSeasons, setExistingSeasons] = useState<any[]>([])
 
-  // Calculate derived values
-  const seasonType = getSeasonTypeByKey(formData.type)!
-  const { startDate, endDate } = calculateSeasonDates(seasonType, formData.start_year)
-  const seasonName = generateSeasonName(seasonType, formData.start_year)
+  // Calculate derived values only if type is selected
+  const seasonType = formData.type ? getSeasonTypeByKey(formData.type) : null
+  const { startDate, endDate } = seasonType ? calculateSeasonDates(seasonType, formData.start_year) : { startDate: new Date(), endDate: new Date() }
+  const seasonName = seasonType ? generateSeasonName(seasonType, formData.start_year) : ''
 
   // Check validations
-  const isEndDateInPast = endDate < new Date()
-  const seasonExists = existingSeasons.some(season => 
+  const isEndDateInPast = seasonType ? endDate < new Date() : false
+  const seasonExists = formData.type ? existingSeasons.some(season => 
     season.type === formData.type && new Date(season.start_date).getFullYear() === formData.start_year
-  )
-  const canCreateSeason = !isEndDateInPast && !seasonExists
+  ) : false
+  const canCreateSeason = formData.type && !isEndDateInPast && !seasonExists
 
   // Fetch existing seasons to check for duplicates
   useEffect(() => {
@@ -111,9 +111,11 @@ export default function NewSeasonPage() {
                 <select
                   id="type"
                   value={formData.type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'fall_winter' | 'spring_summer' }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as '' | 'fall_winter' | 'spring_summer' }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  required
                 >
+                  <option value="">Please select a season type</option>
                   {SEASON_TYPES.map((type) => (
                     <option key={type.key} value={type.key}>
                       {type.name} - {type.description}
@@ -168,24 +170,28 @@ export default function NewSeasonPage() {
               {/* Season Preview */}
               <div className={`border rounded-md p-4 ${canCreateSeason ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Season Preview</h4>
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Season Name</dt>
-                    <dd className="text-sm text-gray-900">{seasonName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Type</dt>
-                    <dd className="text-sm text-gray-900">{seasonType.name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Start Date</dt>
-                    <dd className="text-sm text-gray-900">{startDate.toLocaleDateString()}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">End Date</dt>
-                    <dd className="text-sm text-gray-900">{endDate.toLocaleDateString()}</dd>
-                  </div>
-                </dl>
+                {formData.type ? (
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Season Name</dt>
+                      <dd className="text-sm text-gray-900">{seasonName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Type</dt>
+                      <dd className="text-sm text-gray-900">{seasonType?.name}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Start Date</dt>
+                      <dd className="text-sm text-gray-900">{startDate.toLocaleDateString()}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">End Date</dt>
+                      <dd className="text-sm text-gray-900">{endDate.toLocaleDateString()}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="text-sm text-gray-500">Please select a season type to see preview</p>
+                )}
               </div>
 
               {/* Is Active */}

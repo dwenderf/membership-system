@@ -61,7 +61,8 @@ export default async function RegistrationDetailPage({
       memberships (
         id,
         name,
-        price
+        price_monthly,
+        price_annual
       )
     `)
     .eq('registration_id', params.id)
@@ -234,7 +235,7 @@ export default async function RegistrationDetailPage({
 
                               {category.memberships && (
                                 <div className="mt-1 text-sm text-gray-500">
-                                  Requires: {category.memberships.name} (${(category.memberships.price / 100).toFixed(2)})
+                                  Requires: {category.memberships.name} (${(category.memberships.price_monthly / 100).toFixed(2)}/mo or ${(category.memberships.price_annual / 100).toFixed(2)}/yr)
                                 </div>
                               )}
 

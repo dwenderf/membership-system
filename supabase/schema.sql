@@ -47,7 +47,6 @@ CREATE TABLE seasons (
     type TEXT NOT NULL CHECK (type IN ('fall_winter', 'spring_summer')),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    fiscal_year INTEGER NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -80,7 +79,6 @@ CREATE TABLE user_memberships (
 CREATE TABLE registrations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
-    required_membership_id UUID REFERENCES memberships(id), -- NULL for free events
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('team', 'scrimmage', 'event')),
     allow_discounts BOOLEAN DEFAULT TRUE,
@@ -108,6 +106,7 @@ CREATE TABLE registration_categories (
     custom_name TEXT, -- Used when category_id is NULL
     max_capacity INTEGER,
     accounting_code TEXT, -- accounting code for this category
+    required_membership_id UUID REFERENCES memberships(id), -- Category-specific membership requirement
     sort_order INTEGER DEFAULT 0, -- for display ordering
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -278,6 +277,7 @@ CREATE INDEX idx_categories_type ON categories(category_type);
 CREATE INDEX idx_categories_created_by ON categories(created_by);
 CREATE INDEX idx_registration_categories_registration ON registration_categories(registration_id);
 CREATE INDEX idx_registration_categories_category ON registration_categories(category_id);
+CREATE INDEX idx_registration_categories_membership ON registration_categories(required_membership_id);
 CREATE INDEX idx_registration_pricing_tiers_reg_starts ON registration_pricing_tiers(registration_id, starts_at);
 CREATE INDEX idx_registration_pricing_tiers_category ON registration_pricing_tiers(registration_category_id);
 CREATE INDEX idx_access_codes_code_type_active ON access_codes(code, type, is_active);

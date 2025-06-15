@@ -27,7 +27,7 @@ export default async function RegistrationDetailPage({
     redirect('/dashboard')
   }
 
-  // Get registration details with season and membership info
+  // Get registration details with season info
   const { data: registration, error } = await supabase
     .from('registrations')
     .select(`
@@ -38,11 +38,6 @@ export default async function RegistrationDetailPage({
         type,
         start_date,
         end_date
-      ),
-      memberships (
-        id,
-        name,
-        price
       )
     `)
     .eq('id', params.id)
@@ -52,7 +47,7 @@ export default async function RegistrationDetailPage({
     notFound()
   }
 
-  // Get registration categories with joined category data
+  // Get registration categories with joined category and membership data
   const { data: categories, error: categoriesError } = await supabase
     .from('registration_categories')
     .select(`
@@ -62,6 +57,11 @@ export default async function RegistrationDetailPage({
         name,
         description,
         category_type
+      ),
+      memberships (
+        id,
+        name,
+        price
       )
     `)
     .eq('registration_id', params.id)
@@ -72,7 +72,6 @@ export default async function RegistrationDetailPage({
   }
 
   const season = registration.seasons
-  const membership = registration.memberships
   const isSeasonEnded = season && new Date(season.end_date) < new Date()
 
   return (
@@ -139,14 +138,6 @@ export default async function RegistrationDetailPage({
                     </div>
                   )}
 
-                  {membership && (
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
-                      <dd className="mt-1 text-sm text-gray-900">
-                        {membership.name} - ${(membership.price / 100).toFixed(2)}
-                      </dd>
-                    </div>
-                  )}
 
 
                   <div>
@@ -240,6 +231,12 @@ export default async function RegistrationDetailPage({
                                   </span>
                                 )}
                               </div>
+
+                              {category.memberships && (
+                                <div className="mt-1 text-sm text-gray-500">
+                                  Requires: {category.memberships.name} (${(category.memberships.price / 100).toFixed(2)})
+                                </div>
+                              )}
 
                               {category.max_capacity && (
                                 <div className="mt-2">

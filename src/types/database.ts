@@ -43,7 +43,6 @@ export type Database = {
           type: 'fall_winter' | 'spring_summer'
           start_date: string
           end_date: string
-          fiscal_year: number
           is_active: boolean
           created_at: string
         }
@@ -53,7 +52,6 @@ export type Database = {
           type: 'fall_winter' | 'spring_summer'
           start_date: string
           end_date: string
-          fiscal_year: number
           is_active?: boolean
           created_at?: string
         }
@@ -63,7 +61,6 @@ export type Database = {
           type?: 'fall_winter' | 'spring_summer'
           start_date?: string
           end_date?: string
-          fiscal_year?: number
           is_active?: boolean
           created_at?: string
         }
@@ -104,9 +101,6 @@ export type Database = {
           required_membership_id: string | null
           name: string
           type: 'team' | 'scrimmage' | 'event'
-          max_capacity: number | null
-          current_count: number
-          accounting_code: string | null
           allow_discounts: boolean
           created_at: string
         }
@@ -116,9 +110,6 @@ export type Database = {
           required_membership_id?: string | null
           name: string
           type: 'team' | 'scrimmage' | 'event'
-          max_capacity?: number | null
-          current_count?: number
-          accounting_code?: string | null
           allow_discounts?: boolean
           created_at?: string
         }
@@ -128,9 +119,6 @@ export type Database = {
           required_membership_id?: string | null
           name?: string
           type?: 'team' | 'scrimmage' | 'event'
-          max_capacity?: number | null
-          current_count?: number
-          accounting_code?: string | null
           allow_discounts?: boolean
           created_at?: string
         }

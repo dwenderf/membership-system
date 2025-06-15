@@ -15,11 +15,17 @@ export interface RegistrationCategory {
   custom_name: string | null  // One-off custom name
   max_capacity: number | null
   accounting_code: string | null
+  required_membership_id: string | null  // Category-specific membership requirement
   sort_order: number
   // current_count is calculated dynamically from user_registrations
   
   // Joined data when fetched with category details
   categories?: Category
+  memberships?: {
+    id: string
+    name: string
+    price: number
+  }
 }
 
 export interface RegistrationCategoryDisplay {
@@ -27,6 +33,8 @@ export interface RegistrationCategoryDisplay {
   name: string  // Derived from categories.name OR custom_name
   max_capacity: number | null
   accounting_code: string | null
+  required_membership_id: string | null
+  required_membership_name: string | null  // For display
   sort_order: number
   is_custom: boolean  // True if using custom_name
 }
@@ -61,6 +69,8 @@ export function toDisplayCategory(category: RegistrationCategory): RegistrationC
     name: getCategoryDisplayName(category),
     max_capacity: category.max_capacity,
     accounting_code: category.accounting_code,
+    required_membership_id: category.required_membership_id,
+    required_membership_name: category.memberships?.name || null,
     sort_order: category.sort_order,
     is_custom: isCategoryCustom(category)
   }

@@ -98,7 +98,6 @@ seasons (
   type: text NOT NULL -- "fall_winter" | "spring_summer"
   start_date: date NOT NULL -- Sept 1 for Fall/Winter, March 1 for Spring/Summer
   end_date: date NOT NULL
-  fiscal_year: integer NOT NULL -- 2025
   is_active: boolean DEFAULT true
   created_at: timestamp
 )
@@ -132,13 +131,21 @@ user_memberships (
 registrations (
   id: uuid PRIMARY KEY
   season_id: uuid REFERENCES seasons(id)
-  required_membership_id: uuid REFERENCES memberships(id) -- NULL for free events
   name: text NOT NULL -- "Rec League Team A", "Friday Scrimmage"
   type: text NOT NULL -- "team" | "scrimmage" | "event"
-  max_capacity: integer
-  current_count: integer DEFAULT 0
-  accounting_code: text
   allow_discounts: boolean DEFAULT true
+  created_at: timestamp
+)
+
+registration_categories (
+  id: uuid PRIMARY KEY
+  registration_id: uuid REFERENCES registrations(id)
+  category_id: uuid REFERENCES categories(id) -- NULL for custom categories
+  custom_name: text -- NULL for standard categories
+  max_capacity: integer -- NULL for unlimited
+  accounting_code: text
+  required_membership_id: uuid REFERENCES memberships(id) -- Category-level membership requirement
+  sort_order: integer DEFAULT 0
   created_at: timestamp
 )
 
@@ -462,12 +469,24 @@ email_logs (
     - [x] Category-specific capacity tracking and progress bars
     - [x] Sort order management for display control
     - [x] Duplicate category prevention across both types
+    - [x] **Category-Level Membership Requirements**
+      - [x] Moved membership requirements from registration to category level
+      - [x] Database migration to update schema and preserve data
+      - [x] Category-specific membership selection in admin interface
+      - [x] "No membership required" option per category
+      - [x] Warning system when no memberships exist for season
   - [x] **Enhanced Admin Workflow**
     - [x] Registration detail pages with category overview
     - [x] Guided workflow: Registration → Categories → Pricing
     - [x] Visual capacity management with status indicators
     - [x] Clean separation of registration vs category concerns
     - [x] Category type indicators (Standard/Custom badges)
+    - [x] **Guided Membership Setup Workflow**
+      - [x] Season creation redirects to membership setup page
+      - [x] Multi-option membership assignment (existing/new/skip)
+      - [x] Pre-selected season parameters for new membership creation
+      - [x] Warning systems when no memberships exist
+      - [x] Loading states on all creation forms to prevent double-clicking
   - [x] **Database Architecture Improvements**
     - [x] Hybrid categories system with master categories table
     - [x] Foreign key OR custom name constraint system
@@ -477,6 +496,10 @@ email_logs (
     - [x] Eliminated redundant current_count column (now calculated)
     - [x] Eliminated redundant fields and data duplication
     - [x] Database migration scripts for seamless schema updates
+    - [x] **Membership Requirements Architecture**
+      - [x] Moved required_membership_id from registrations to registration_categories
+      - [x] Database migration to preserve existing data relationships
+      - [x] Category-level membership constraints for granular control
 
 ### 🚧 In Progress
 
@@ -495,4 +518,4 @@ email_logs (
 ---
 
 *Last updated: June 15, 2025*
-*Status: Hybrid Registration Categories System Complete*
+*Status: Category-Level Membership Requirements and Guided Setup Complete*

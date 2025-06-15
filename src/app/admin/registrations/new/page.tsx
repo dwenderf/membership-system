@@ -12,19 +12,18 @@ export default function NewRegistrationPage() {
   
   const [formData, setFormData] = useState({
     season_id: '',
-    required_membership_id: '',
     name: '',
     type: 'team' as 'team' | 'scrimmage' | 'event',
     allow_discounts: true,
   })
   
   const [seasons, setSeasons] = useState<any[]>([])
-  const [memberships, setMemberships] = useState<any[]>([])
   const [existingRegistrations, setExistingRegistrations] = useState<any[]>([])
+  const [seasonMemberships, setSeasonMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Fetch available seasons, memberships, and existing registrations
+  // Fetch available seasons and existing registrations
   useEffect(() => {
     const fetchData = async () => {
       // Fetch seasons
@@ -50,28 +49,28 @@ export default function NewRegistrationPage() {
     fetchData()
   }, [])
 
-  // Fetch memberships when season changes
+  // Fetch memberships for selected season
   useEffect(() => {
-    const fetchMemberships = async () => {
+    const fetchSeasonMemberships = async () => {
       if (formData.season_id) {
-        const { data: membershipsData, error: membershipsError } = await supabase
+        const { data: memberships, error: membershipsError } = await supabase
           .from('memberships')
           .select('*')
           .eq('season_id', formData.season_id)
-          .order('name')
         
-        if (!membershipsError && membershipsData) {
-          setMemberships(membershipsData)
+        if (!membershipsError && memberships) {
+          setSeasonMemberships(memberships)
         } else {
-          setMemberships([])
+          setSeasonMemberships([])
         }
       } else {
-        setMemberships([])
+        setSeasonMemberships([])
       }
     }
     
-    fetchMemberships()
+    fetchSeasonMemberships()
   }, [formData.season_id])
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -86,7 +85,6 @@ export default function NewRegistrationPage() {
     try {
       const registrationData = {
         season_id: formData.season_id,
-        required_membership_id: formData.required_membership_id || null,
         name: formData.name,
         type: formData.type,
         allow_discounts: formData.allow_discounts,
@@ -120,7 +118,6 @@ export default function NewRegistrationPage() {
   }
 
   const selectedSeason = seasons.find(s => s.id === formData.season_id)
-  const selectedMembership = memberships.find(m => m.id === formData.required_membership_id)
   
   // Check for duplicate registration name
   const registrationNameExists = existingRegistrations.some(registration => 
@@ -160,7 +157,7 @@ export default function NewRegistrationPage() {
                 <select
                   id="season_id"
                   value={formData.season_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, season_id: e.target.value, required_membership_id: '' }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, season_id: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   required
                 >
@@ -178,6 +175,45 @@ export default function NewRegistrationPage() {
                   Choose which season this registration is for
                 </p>
               </div>
+
+              {/* No Memberships Warning */}
+              {formData.season_id && seasonMemberships.length === 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">No Memberships for This Season</h3>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        <p>The selected season has no memberships assigned. Registration categories won't have membership options unless you:</p>
+                        <ul className="mt-1 list-disc list-inside">
+                          <li>Set up memberships for this season now</li>
+                          <li>Or plan to use "No membership required" for all categories</li>
+                        </ul>
+                      </div>
+                      <div className="mt-4 flex space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => window.open(`/admin/seasons/${formData.season_id}/setup-membership`, '_blank')}
+                          className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm px-3 py-1 rounded border border-yellow-300"
+                        >
+                          Set Up Memberships
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.open(`/admin/memberships/new?season_id=${formData.season_id}`, '_blank')}
+                          className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm px-3 py-1 rounded border border-yellow-300"
+                        >
+                          Create New Membership
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Registration Type */}
               <div>
@@ -235,29 +271,6 @@ export default function NewRegistrationPage() {
                 </div>
               )}
 
-              {/* Required Membership */}
-              <div>
-                <label htmlFor="required_membership_id" className="block text-sm font-medium text-gray-700">
-                  Required Membership
-                </label>
-                <select
-                  id="required_membership_id"
-                  value={formData.required_membership_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, required_membership_id: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  disabled={!formData.season_id}
-                >
-                  <option value="">No membership required (free registration)</option>
-                  {memberships.map((membership) => (
-                    <option key={membership.id} value={membership.id}>
-                      {membership.name} - ${(membership.price / 100).toFixed(2)}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">
-                  {!formData.season_id ? 'Select a season first to see available memberships' : 'Optional: Choose a membership that users must have to register'}
-                </p>
-              </div>
 
               {/* Categories Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
@@ -270,7 +283,7 @@ export default function NewRegistrationPage() {
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-blue-800">About Categories</h3>
                     <div className="mt-2 text-sm text-blue-700">
-                      <p>After creating this registration, you'll be able to add participant categories (e.g., Players, Goalies, Alternates) with individual capacity limits and accounting codes.</p>
+                      <p>After creating this registration, you'll be able to add participant categories (e.g., Players, Goalies, Alternates) with individual capacity limits, membership requirements, and accounting codes.</p>
                     </div>
                   </div>
                 </div>
@@ -310,9 +323,9 @@ export default function NewRegistrationPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
+                      <dt className="text-sm font-medium text-gray-500">Membership Requirements</dt>
                       <dd className="text-sm text-gray-900">
-                        {selectedMembership ? selectedMembership.name : 'None (free registration)'}
+                        Set per category
                       </dd>
                     </div>
                   </dl>
@@ -330,13 +343,19 @@ export default function NewRegistrationPage() {
                 <button
                   type="submit"
                   disabled={loading || !canCreateRegistration}
-                  className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 ${
+                  className={`inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 ${
                     canCreateRegistration && !loading
                       ? 'bg-blue-600 hover:bg-blue-700' 
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
                 >
-{loading ? 'Creating...' : canCreateRegistration ? 'Create Registration & Add Categories' : 'Complete Form to Create'}
+                  {loading && (
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                  {loading ? 'Creating Registration...' : canCreateRegistration ? 'Create Registration & Add Categories' : 'Complete Form to Create'}
                 </button>
               </div>
             </form>

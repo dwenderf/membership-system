@@ -22,7 +22,7 @@ export default async function RegistrationsPage() {
     redirect('/dashboard')
   }
 
-  // Get all registrations with their associated season and membership info
+  // Get all registrations with their associated season info
   const { data: registrations, error } = await supabase
     .from('registrations')
     .select(`
@@ -33,11 +33,6 @@ export default async function RegistrationsPage() {
         type,
         start_date,
         end_date
-      ),
-      memberships (
-        id,
-        name,
-        price
       )
     `)
     .order('created_at', { ascending: false })
@@ -82,7 +77,6 @@ export default async function RegistrationsPage() {
               <ul className="divide-y divide-gray-200">
                 {registrations.map((registration: any) => {
                   const season = registration.seasons
-                  const membership = registration.memberships
                   const isSeasonEnded = season && new Date(season.end_date) < new Date()
                   
                   return (
@@ -116,12 +110,6 @@ export default async function RegistrationsPage() {
                             </div>
                             <div className="mt-1 flex items-center text-sm text-gray-500">
                               <span>{season?.name || 'No season'}</span>
-                              {membership && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span>Requires: {membership.name}</span>
-                                </>
-                              )}
                               {!registration.allow_discounts && (
                                 <>
                                   <span className="mx-2">•</span>

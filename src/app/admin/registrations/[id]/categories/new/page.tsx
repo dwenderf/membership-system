@@ -209,7 +209,6 @@ export default function NewRegistrationCategoryPage() {
       }))
       setIsCustom(true)
     }
-    setShowPresets(false)
   }
 
   const handleAddAllPresets = async () => {

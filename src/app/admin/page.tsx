@@ -99,7 +99,7 @@ export default async function AdminDashboard() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Memberships</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Active Membership Types</dt>
                       <dd className="text-lg font-medium text-gray-900">{totalMemberships || 0}</dd>
                     </dl>
                   </div>
@@ -117,7 +117,7 @@ export default async function AdminDashboard() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Registrations</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Active Registrations</dt>
                       <dd className="text-lg font-medium text-gray-900">{totalRegistrations || 0}</dd>
                     </dl>
                   </div>
@@ -145,7 +145,7 @@ export default async function AdminDashboard() {
                   href="/admin/memberships"
                   className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <div className="text-gray-900 font-medium">Manage Memberships</div>
+                  <div className="text-gray-900 font-medium">Manage Membership Types</div>
                   <div className="mt-1 text-sm text-gray-500">Set up membership plans and pricing</div>
                 </Link>
 

@@ -545,15 +545,62 @@ email_logs (
 
 ### 🚧 In Progress
 
-### 📋 Next Steps  
+### 📋 Next Steps (Private User Dashboard & Purchase Flow)
+
+#### **Phase 1: User Dashboard Foundation** 🏠 **(NEXT PRIORITY)**
+- [ ] **User Dashboard Core**
+  - [ ] Create authenticated user dashboard layout and navigation
+  - [ ] Account management page (view/edit profile, contact info, preferences)
+  - [ ] User authentication state management and protected routes
+  - [ ] Dashboard home page with personalized overview
+- [ ] **Current Membership Status Display**
+  - [ ] Show user's active memberships with validity dates
+  - [ ] Display membership type details and benefits
+  - [ ] Warning indicators for expiring memberships
+  - [ ] "No active membership" state with clear next steps
+- [ ] **Registration History & Status**
+  - [ ] View current active registrations
+  - [ ] Display past registration history
+  - [ ] Show registration status (paid, pending, waitlisted)
+  - [ ] Link to registration details and category information
+
+#### **Phase 2: Private Membership Purchase Flow** 💳
+- [ ] **Browse Available Membership Types**
+  - [ ] Private page showing all membership types (authenticated users only)
+  - [ ] Clear pricing display (monthly vs annual savings)
+  - [ ] Membership descriptions and benefits
+  - [ ] Duration selection UI (1 month, 3 months, 6 months, annual)
+- [ ] **Membership Purchase Workflow**
+  - [ ] Purchase flow integrated within user dashboard
+  - [ ] Calculate pricing based on selected duration
+  - [ ] Preview membership validity period
+  - [ ] Integration point for future Stripe payment processing
+- [ ] **Membership Management**
+  - [ ] View purchase history and receipts
+  - [ ] Renewal notifications and easy renewal flow
+  - [ ] Upgrade/downgrade between membership types
+
+#### **Phase 3: Registration Discovery & Purchase** 🏒
+- [ ] **Smart Registration Eligibility**
+  - [ ] Show available registrations based on current memberships
+  - [ ] Clear messaging: "You need X membership to register"
+  - [ ] Hide/gray out ineligible registrations with explanations
+- [ ] **Registration Purchase Flow**
+  - [ ] Category selection with capacity indicators
+  - [ ] Membership + registration bundle recommendations
+  - [ ] Registration management within user dashboard
+- [ ] **Waitlist & Notifications**
+  - [ ] Join waitlists for full registrations
+  - [ ] Email notifications for available spots
+  - [ ] Waitlist position tracking
+
+#### **Future Enhancements** 🔮
 - [ ] Add membership type editing functionality (update pricing, descriptions, accounting codes)
 - [ ] Add registration category editing functionality (capacity, membership requirements)
-- [ ] Implement user-facing membership purchase workflow
 - [ ] Stripe payment integration for membership and registration payments
 - [ ] Registration pricing tiers system (early bird, regular, late pricing)
 - [ ] Discount codes system for memberships and registrations
 - [ ] Loops.so email integration for automated communications
-- [ ] Waitlist management system when registrations reach capacity
 - [ ] Admin reporting and analytics dashboard
 
 ### ⚠️ Security Items to Address
@@ -562,4 +609,4 @@ email_logs (
 ---
 
 *Last updated: June 15, 2025*
-*Status: Duration-Based Membership Model Complete - Ready for Payment Integration*
+*Status: Admin Foundation Complete - Ready for User Dashboard & Private Purchase Flow*

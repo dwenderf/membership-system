@@ -343,6 +343,13 @@ CREATE POLICY "Admins can view all users" ON users
 CREATE POLICY "Users can view their own memberships" ON user_memberships
     FOR SELECT USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can insert their own memberships" ON user_memberships
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own memberships" ON user_memberships
+    FOR UPDATE USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Admins can view all memberships" ON user_memberships
     FOR ALL USING (
         EXISTS (

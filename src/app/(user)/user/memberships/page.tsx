@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import MembershipPurchase from '@/components/MembershipPurchase'
 
 export default async function UserMembershipsPage() {
   const supabase = await createClient()
@@ -128,33 +129,10 @@ export default async function UserMembershipsPage() {
                     {membership.description}
                   </p>
                 )}
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-500">Monthly:</span>
-                    <span className="text-lg font-medium text-gray-900">
-                      ${(membership.price_monthly / 100).toFixed(2)}/month
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm text-gray-500">Annual:</span>
-                    <div className="text-right">
-                      <span className="text-lg font-medium text-gray-900">
-                        ${(membership.price_annual / 100).toFixed(2)}/year
-                      </span>
-                      {membership.price_annual < membership.price_monthly * 12 && (
-                        <div className="text-xs text-green-600">
-                          Save ${((membership.price_monthly * 12 - membership.price_annual) / 100).toFixed(2)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    disabled
-                    className="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
-                  >
-                    Purchase (Coming Soon)
-                  </button>
-                </div>
+                <MembershipPurchase 
+                  membership={membership} 
+                  userMemberships={userMemberships}
+                />
               </div>
             </div>
           ))}

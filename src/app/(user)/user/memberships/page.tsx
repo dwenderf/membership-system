@@ -51,55 +51,71 @@ export default async function UserMembershipsPage() {
         <h2 className="text-lg font-medium text-gray-900 mb-4">Active Memberships</h2>
         {activeMemberships.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {activeMemberships.map((userMembership) => (
-              <div key={userMembership.id} className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-green-400">
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
+            {activeMemberships.map((userMembership) => {
+              const now = new Date()
+              const validUntil = new Date(userMembership.valid_until)
+              const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+              const isExpiringSoon = daysUntilExpiration <= 90
+              
+              return (
+                <div key={userMembership.id} className={`bg-white overflow-hidden shadow rounded-lg border-l-4 ${
+                  isExpiringSoon ? 'border-yellow-400' : 'border-green-400'
+                }`}>
+                  <div className="p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          isExpiringSoon ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                        }`}>
+                          {isExpiringSoon ? 'Expiring Soon' : 'Active'}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-4">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      {userMembership.membership?.name}
-                    </h3>
-                    {userMembership.membership?.description && (
-                      <p className="mt-1 text-sm text-gray-600">
-                        {userMembership.membership.description}
-                      </p>
-                    )}
-                    <div className="mt-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Valid From:</span>
-                        <span className="text-gray-900">
-                          {new Date(userMembership.valid_from).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Valid Until:</span>
-                        <span className="text-gray-900">
-                          {new Date(userMembership.valid_until).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Duration:</span>
-                        <span className="text-gray-900">
-                          {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Amount Paid:</span>
-                        <span className="text-gray-900">
-                          ${(userMembership.amount_paid / 100).toFixed(2)}
-                        </span>
+                    <div className="mt-4">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        {userMembership.membership?.name}
+                      </h3>
+                      {userMembership.membership?.description && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          {userMembership.membership.description}
+                        </p>
+                      )}
+                      <div className="mt-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Valid From:</span>
+                          <span className="text-gray-900">
+                            {new Date(userMembership.valid_from).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Valid Until:</span>
+                          <span className="text-gray-900">
+                            {validUntil.toLocaleDateString()}
+                          </span>
+                        </div>
+                        {isExpiringSoon && (
+                          <div className="text-yellow-600 font-medium text-sm">
+                            ⚠️ Expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Duration:</span>
+                          <span className="text-gray-900">
+                            {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Amount Paid:</span>
+                          <span className="text-gray-900">
+                            ${(userMembership.amount_paid / 100).toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="text-center py-8">

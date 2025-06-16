@@ -48,6 +48,14 @@ export default async function UserDashboardPage() {
   }) || []
 
   const hasActiveMembership = activeMemberships.length > 0
+  
+  // Check if any active membership expires within 90 days
+  const hasExpiringSoonMembership = activeMemberships.some(um => {
+    const now = new Date()
+    const validUntil = new Date(um.valid_until)
+    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiration <= 90
+  })
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -67,11 +75,18 @@ export default async function UserDashboardPage() {
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  hasActiveMembership 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                  !hasActiveMembership 
+                    ? 'bg-red-100 text-red-800'
+                    : hasExpiringSoonMembership
+                    ? 'bg-yellow-100 text-yellow-800' 
+                    : 'bg-green-100 text-green-800'
                 }`}>
-                  {hasActiveMembership ? 'Active Member' : 'No Active Membership'}
+                  {!hasActiveMembership 
+                    ? 'No Active Membership'
+                    : hasExpiringSoonMembership
+                    ? 'Expiring Soon'
+                    : 'Active Member'
+                  }
                 </div>
               </div>
             </div>
@@ -81,13 +96,25 @@ export default async function UserDashboardPage() {
               </h3>
               {hasActiveMembership ? (
                 <div className="mt-2">
-                  {activeMemberships.map((membership) => (
-                    <div key={membership.id} className="text-sm text-gray-600">
-                      <strong>{membership.membership?.name}</strong>
-                      <br />
-                      Valid until: {new Date(membership.valid_until).toLocaleDateString()}
-                    </div>
-                  ))}
+                  {activeMemberships.map((membership) => {
+                    const now = new Date()
+                    const validUntil = new Date(membership.valid_until)
+                    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    const isExpiringSoon = daysUntilExpiration <= 90
+                    
+                    return (
+                      <div key={membership.id} className="text-sm text-gray-600">
+                        <strong>{membership.membership?.name}</strong>
+                        <br />
+                        Valid until: {validUntil.toLocaleDateString()}
+                        {isExpiringSoon && (
+                          <div className="text-yellow-600 font-medium mt-1">
+                            ⚠️ Expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-gray-600">

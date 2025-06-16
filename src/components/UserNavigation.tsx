@@ -27,7 +27,6 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
-    { name: 'Account', href: '/user/account', current: pathname === '/user/account' },
   ]
 
   return (
@@ -77,10 +76,16 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                 )}
               </div>
             )}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-700">
-                {user?.first_name} {user?.last_name}
-              </span>
+            <div className="flex items-center space-x-4">
+              <Link 
+                href="/user/account"
+                className="text-sm text-gray-700 hover:text-gray-900 font-medium flex items-center space-x-1"
+              >
+                <span>{user?.first_name} {user?.last_name}</span>
+                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </Link>
               <form action="/auth/signout" method="post" className="inline">
                 <button
                   type="submit"
@@ -135,9 +140,14 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="pt-4 pb-3 border-t border-gray-200">
             <div className="flex items-center px-4">
               <div className="flex-shrink-0">
-                <span className="text-sm font-medium text-gray-900">
-                  {user?.first_name} {user?.last_name}
-                </span>
+                <Link 
+                  href="/user/account"
+                  className="text-sm font-medium text-gray-900 hover:text-gray-600 flex items-center space-x-1"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <span>{user?.first_name} {user?.last_name}</span>
+                  <span className="text-xs text-gray-500 ml-2">(Account Settings)</span>
+                </Link>
               </div>
             </div>
             <div className="mt-3 space-y-1">

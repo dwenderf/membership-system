@@ -604,6 +604,14 @@ email_logs (
   - [ ] Email notifications for available spots
   - [ ] Waitlist position tracking
 
+#### **Phase 3.5: User Onboarding Enhancement** 👤 **(NEW PRIORITY)**
+- [ ] **First-Time User Onboarding Flow**
+  - [ ] Create user onboarding flow for first-time login to capture required profile info
+  - [ ] Build onboarding form with first/last name validation (required fields)
+  - [ ] Pre-populate onboarding form with Google OAuth data when available
+  - [ ] Add logic to detect new users and redirect to onboarding vs dashboard
+  - [ ] Ensure smooth UX for both magic link and OAuth authentication methods
+
 #### **Phase 4: Payment Integration & Core Features** 💳 **(NEXT PRIORITY)**
 - [ ] **Stripe Payment Integration**
   - [ ] Set up Stripe configuration and webhooks
@@ -650,5 +658,10 @@ email_logs (
 - Added countdown warnings showing exact days until expiration (⚠️ Expires in X days)
 - Applied consistent warning styling across dashboard and membership pages
 - Enhanced user experience to prevent accidental membership lapses
+
+📋 **Next Enhancement: User Onboarding Flow**
+- **Identified Gap**: Google OAuth auto-fills name fields beautifully, but magic link users start with incomplete profiles
+- **Solution**: First-time user onboarding to capture required profile information (first/last name)
+- **UX Goal**: Ensure smooth experience regardless of authentication method while maintaining data quality
 
 **Ready for Phase 4: Stripe Payment Integration** - Purchase flow is complete and ready for payment processing integration.

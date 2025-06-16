@@ -16,10 +16,6 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  // Default to admin dashboard for admins, user dashboard for regular users
-  if (userProfile?.is_admin) {
-    redirect('/admin')
-  } else {
-    redirect('/user')
-  }
+  // Default all users to member dashboard - admins can toggle to admin mode when needed
+  redirect('/user')
 }

@@ -79,12 +79,9 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
             <div className="flex items-center">
               <Link 
                 href="/user/account"
-                className="text-sm text-gray-700 hover:text-gray-900 font-medium flex items-center space-x-1"
+                className="text-sm text-gray-700 hover:text-gray-900 font-medium"
               >
-                <span>{user?.first_name} {user?.last_name}</span>
-                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
+                {user?.first_name} {user?.last_name}
               </Link>
             </div>
           </div>

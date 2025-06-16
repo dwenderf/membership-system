@@ -7,8 +7,9 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const supabase = createClient()
-    const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code)
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    const user = data?.user
     
     if (!error && user) {
       // Check if user exists in our users table

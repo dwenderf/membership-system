@@ -1,0 +1,220 @@
+import { createClient } from '@/lib/supabase/server'
+
+export default async function UserMembershipsPage() {
+  const supabase = await createClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    return null // Layout will handle redirect
+  }
+
+  // Get user's memberships
+  const { data: userMemberships } = await supabase
+    .from('user_memberships')
+    .select(`
+      *,
+      membership:memberships(*)
+    `)
+    .eq('user_id', user.id)
+    .order('valid_until', { ascending: false })
+
+  // Get available membership types for purchase
+  const { data: availableMemberships } = await supabase
+    .from('memberships')
+    .select('*')
+    .order('name')
+
+  const now = new Date()
+  const activeMemberships = userMemberships?.filter(um => {
+    const validUntil = new Date(um.valid_until)
+    return validUntil > now && um.payment_status === 'paid'
+  }) || []
+
+  const expiredMemberships = userMemberships?.filter(um => {
+    const validUntil = new Date(um.valid_until)
+    return validUntil <= now || um.payment_status !== 'paid'
+  }) || []
+
+  return (
+    <div className="px-4 py-6 sm:px-0">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">My Memberships</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Manage your hockey association memberships and purchase new ones
+        </p>
+      </div>
+
+      {/* Active Memberships */}
+      <div className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Active Memberships</h2>
+        {activeMemberships.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {activeMemberships.map((userMembership) => (
+              <div key={userMembership.id} className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-green-400">
+                <div className="p-5">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Active
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                      {userMembership.membership?.name}
+                    </h3>
+                    {userMembership.membership?.description && (
+                      <p className="mt-1 text-sm text-gray-600">
+                        {userMembership.membership.description}
+                      </p>
+                    )}
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Valid From:</span>
+                        <span className="text-gray-900">
+                          {new Date(userMembership.valid_from).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Valid Until:</span>
+                        <span className="text-gray-900">
+                          {new Date(userMembership.valid_until).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Duration:</span>
+                        <span className="text-gray-900">
+                          {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Amount Paid:</span>
+                        <span className="text-gray-900">
+                          ${(userMembership.amount_paid / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No active memberships</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              You don't have any active memberships. Purchase one below to access registrations.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Available Memberships for Purchase */}
+      <div className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Available Memberships</h2>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {availableMemberships?.map((membership) => (
+            <div key={membership.id} className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  {membership.name}
+                </h3>
+                {membership.description && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    {membership.description}
+                  </p>
+                )}
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-gray-500">Monthly:</span>
+                    <span className="text-lg font-medium text-gray-900">
+                      ${(membership.price_monthly / 100).toFixed(2)}/month
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-sm text-gray-500">Annual:</span>
+                    <div className="text-right">
+                      <span className="text-lg font-medium text-gray-900">
+                        ${(membership.price_annual / 100).toFixed(2)}/year
+                      </span>
+                      {membership.price_annual < membership.price_monthly * 12 && (
+                        <div className="text-xs text-green-600">
+                          Save ${((membership.price_monthly * 12 - membership.price_annual) / 100).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    disabled
+                    className="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
+                  >
+                    Purchase (Coming Soon)
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {(!availableMemberships || availableMemberships.length === 0) && (
+          <div className="text-center py-8">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8-4 4-4-4m0 0L9 9l-4-4" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No memberships available</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Check back later or contact an administrator.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Past/Expired Memberships */}
+      {expiredMemberships.length > 0 && (
+        <div>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Past Memberships</h2>
+          <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul className="divide-y divide-gray-200">
+              {expiredMemberships.map((userMembership) => (
+                <li key={userMembership.id}>
+                  <div className="px-4 py-4 sm:px-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <p className="text-sm font-medium text-gray-900">
+                          {userMembership.membership?.name}
+                        </p>
+                        <div className="ml-2 flex-shrink-0">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            userMembership.payment_status === 'paid' 
+                              ? 'bg-gray-100 text-gray-800' 
+                              : userMembership.payment_status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {userMembership.payment_status === 'paid' ? 'Expired' : userMembership.payment_status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {new Date(userMembership.valid_from).toLocaleDateString()} - {new Date(userMembership.valid_until).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <div className="flex justify-between text-sm text-gray-500">
+                        <span>Duration: {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}</span>
+                        <span>Paid: ${(userMembership.amount_paid / 100).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

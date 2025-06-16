@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import AdminHeader from '@/components/AdminHeader'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -44,12 +45,11 @@ export default async function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage your hockey association membership system
-            </p>
-          </div>
+          <AdminHeader 
+            title="Admin Dashboard"
+            description="Manage your hockey association membership system"
+            useToggle={true}
+          />
 
           {/* Stats Overview */}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -184,14 +184,6 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-          <div className="mt-6">
-            <Link
-              href="/dashboard"
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-            >
-              ← Back to User Dashboard
-            </Link>
-          </div>
         </div>
       </div>
     </div>

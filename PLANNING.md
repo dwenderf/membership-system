@@ -629,7 +629,7 @@ email_logs (
 ---
 
 *Last updated: June 16, 2025*
-*Status: **Phase 2 Complete** - Membership Purchase Flow with Smart Extension Logic*
+*Status: **Phase 2 Complete** - Membership Purchase Flow with Smart Extension Logic + Expiration Warning System*
 
 ## Recent Achievements (June 16, 2025)
 ✅ **Phase 1: Complete User Dashboard Implementation**
@@ -644,5 +644,11 @@ email_logs (
 - Added visual indicators for membership extensions vs new purchases
 - Fixed RLS policies to allow users to insert/update their own memberships
 - Created test data management tools for development and validation
+
+✅ **Enhancement: Membership Expiration Warning System**
+- Implemented 90-day expiration warning indicators with yellow "Expiring Soon" status badges
+- Added countdown warnings showing exact days until expiration (⚠️ Expires in X days)
+- Applied consistent warning styling across dashboard and membership pages
+- Enhanced user experience to prevent accidental membership lapses
 
 **Ready for Phase 4: Stripe Payment Integration** - Purchase flow is complete and ready for payment processing integration.

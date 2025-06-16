@@ -76,7 +76,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                 )}
               </div>
             )}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center">
               <Link 
                 href="/user/account"
                 className="text-sm text-gray-700 hover:text-gray-900 font-medium flex items-center space-x-1"
@@ -86,14 +86,6 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </Link>
-              <form action="/auth/signout" method="post" className="inline">
-                <button
-                  type="submit"
-                  className="text-gray-500 hover:text-gray-700 text-sm font-medium"
-                >
-                  Sign Out
-                </button>
-              </form>
             </div>
           </div>
 
@@ -176,14 +168,6 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   )}
                 </div>
               )}
-              <form action="/auth/signout" method="post" className="block px-4 py-2">
-                <button
-                  type="submit"
-                  className="text-base font-medium text-gray-500 hover:text-gray-800 w-full text-left"
-                >
-                  Sign Out
-                </button>
-              </form>
             </div>
           </div>
         </div>

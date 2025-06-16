@@ -19,7 +19,7 @@ export default function AdminHeader({ title, description, useToggle = false }: A
             <p className="mt-1 text-sm text-gray-600">{description}</p>
           )}
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center">
           {useToggle ? (
             <AdminToggle isAdminView={true} />
           ) : (
@@ -35,14 +35,6 @@ export default function AdminHeader({ title, description, useToggle = false }: A
               </Link>
             </div>
           )}
-          <form action="/auth/signout" method="post" className="inline">
-            <button
-              type="submit"
-              className="text-gray-500 hover:text-gray-700 text-sm font-medium"
-            >
-              Sign Out
-            </button>
-          </form>
         </div>
       </div>
     </div>

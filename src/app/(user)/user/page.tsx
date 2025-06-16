@@ -158,24 +158,6 @@ export default async function UserDashboardPage() {
         <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <a
-            href="/user/memberships"
-            className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-          >
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="absolute inset-0" aria-hidden="true" />
-              <p className="text-sm font-medium text-gray-900">Manage Memberships</p>
-              <p className="text-sm text-gray-500">View and purchase memberships</p>
-            </div>
-          </a>
-
-          <a
             href="/user/registrations"
             className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
           >
@@ -190,6 +172,24 @@ export default async function UserDashboardPage() {
               <span className="absolute inset-0" aria-hidden="true" />
               <p className="text-sm font-medium text-gray-900">Browse Registrations</p>
               <p className="text-sm text-gray-500">Register for teams and events</p>
+            </div>
+          </a>
+
+          <a
+            href="/user/memberships"
+            className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+          >
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="absolute inset-0" aria-hidden="true" />
+              <p className="text-sm font-medium text-gray-900">Manage Memberships</p>
+              <p className="text-sm text-gray-500">View and purchase memberships</p>
             </div>
           </a>
         </div>

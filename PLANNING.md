@@ -569,21 +569,24 @@ email_logs (
 
 ### 🚧 In Progress
 
-### 📋 Next Steps (Private Membership & Registration Purchase Flow)
+### 📋 Next Steps (Payment Integration & Registration Purchase Flow)
 
-#### **Phase 2: Private Membership Purchase Flow** 💳 **(NEXT PRIORITY)**
-- [ ] **Browse Available Membership Types**
-  - [x] Private page showing all membership types (authenticated users only) - *Basic display completed*
-  - [x] Clear pricing display (monthly vs annual savings) - *Display completed*
-  - [x] Membership descriptions and benefits - *Display completed*
-  - [ ] Duration selection UI (1 month, 3 months, 6 months, annual)
-- [ ] **Membership Purchase Workflow**
-  - [ ] Purchase flow integrated within user dashboard
-  - [ ] Calculate pricing based on selected duration
-  - [ ] Preview membership validity period
-  - [ ] Integration point for future Stripe payment processing
-- [ ] **Membership Management**
-  - [x] View purchase history and receipts - *Basic history display completed*
+#### **✅ Phase 2: Private Membership Purchase Flow - COMPLETED** 💳
+- [x] **Browse Available Membership Types**
+  - [x] Private page showing all membership types (authenticated users only)
+  - [x] Clear pricing display with real-time calculations
+  - [x] Membership descriptions and benefits
+  - [x] Duration selection UI (3, 6, 12 months) with smart pricing
+- [x] **Membership Purchase Workflow**
+  - [x] Purchase flow integrated within user dashboard
+  - [x] Calculate pricing based on selected duration with savings display
+  - [x] Preview membership validity period with smart extension logic
+  - [x] **Smart Date Extension**: Seamlessly extends existing memberships vs new purchases
+  - [x] Visual indicators for extensions (no gaps or overlaps)
+  - [x] Integration point ready for Stripe payment processing
+- [x] **Membership Management**
+  - [x] View purchase history and receipts
+  - [x] **Enhanced Features**: Extension logic, test data tools, RLS policy fixes
   - [ ] Renewal notifications and easy renewal flow
   - [ ] Upgrade/downgrade between membership types
 
@@ -601,28 +604,45 @@ email_logs (
   - [ ] Email notifications for available spots
   - [ ] Waitlist position tracking
 
+#### **Phase 4: Payment Integration & Core Features** 💳 **(NEXT PRIORITY)**
+- [ ] **Stripe Payment Integration**
+  - [ ] Set up Stripe configuration and webhooks
+  - [ ] Integrate payment processing into membership purchase flow
+  - [ ] Handle payment success/failure states and user feedback
+  - [ ] Create payment records and link to user_memberships
+- [ ] **Core Feature Completion**
+  - [ ] Registration pricing tiers system (early bird, regular, late pricing)
+  - [ ] Add membership type editing functionality (update pricing, descriptions, accounting codes)
+  - [ ] Add registration category editing functionality (capacity, membership requirements)
+
 #### **Future Enhancements** 🔮
-- [ ] Add membership type editing functionality (update pricing, descriptions, accounting codes)
-- [ ] Add registration category editing functionality (capacity, membership requirements)
-- [ ] Stripe payment integration for membership and registration payments
-- [ ] Registration pricing tiers system (early bird, regular, late pricing)
 - [ ] Discount codes system for memberships and registrations
 - [ ] Loops.so email integration for automated communications
 - [ ] Admin reporting and analytics dashboard
+- [ ] Renewal notifications and easy renewal flow
+- [ ] Upgrade/downgrade between membership types
 
 ### ⚠️ Security Items to Address
-- [ ] **HIGH PRIORITY**: Fix RLS policies to only allow actual admins (currently allows all authenticated users)
+- [x] **COMPLETED**: Fix user_memberships RLS policies to allow user INSERT/UPDATE operations
+- [ ] **HIGH PRIORITY**: Fix admin RLS policies to only allow actual admins (currently allows all authenticated users)
 
 ---
 
 *Last updated: June 16, 2025*
-*Status: **Phase 1 Complete** - User Dashboard Foundation with Hybrid Admin/User Role Switching*
+*Status: **Phase 2 Complete** - Membership Purchase Flow with Smart Extension Logic*
 
 ## Recent Achievements (June 16, 2025)
-✅ **Complete User Dashboard Implementation**
+✅ **Phase 1: Complete User Dashboard Implementation**
 - Built comprehensive user dashboard with account management, membership viewing, and registration browsing
 - Implemented hybrid admin/user role switching with intuitive toggle interface
 - Added security-first defaults (all users start in member view, admins toggle to admin mode when needed)
 - Created responsive navigation with mobile support and real-time data integration
 
-**Ready for Phase 2: Private Membership Purchase Flow** - Focus on duration selection UI and purchase workflow integration.
+✅ **Phase 2: Complete Membership Purchase Flow**
+- Implemented duration selection UI (3, 6, 12 months) with smart pricing calculations
+- Built smart date extension logic - seamlessly extends existing memberships without gaps or overlaps
+- Added visual indicators for membership extensions vs new purchases
+- Fixed RLS policies to allow users to insert/update their own memberships
+- Created test data management tools for development and validation
+
+**Ready for Phase 4: Stripe Payment Integration** - Purchase flow is complete and ready for payment processing integration.

@@ -84,6 +84,8 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
       return
     }
 
+    // Open modal immediately for better perceived performance
+    setShowPaymentForm(true)
     setIsLoading(true)
     setError(null)
     
@@ -107,9 +109,9 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
 
       const { clientSecret } = await response.json()
       setClientSecret(clientSecret)
-      setShowPaymentForm(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
+      setShowPaymentForm(false) // Close modal on error
     } finally {
       setIsLoading(false)
     }
@@ -234,13 +236,17 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
       </button>
 
       {/* Payment Form Modal */}
-      {showPaymentForm && clientSecret && (
+      {showPaymentForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Complete Payment</h3>
               <button
-                onClick={() => setShowPaymentForm(false)}
+                onClick={() => {
+                  setShowPaymentForm(false)
+                  setClientSecret(null)
+                  setIsLoading(false)
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <span className="sr-only">Close</span>
@@ -253,30 +259,54 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
               <div className="text-sm text-gray-600">{membership.name} - {selectedDuration} months</div>
             </div>
 
-            <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <PaymentForm
-                membershipId={membership.id}
-                durationMonths={selectedDuration}
-                amount={selectedPrice}
-                startDate={startDate}
-                endDate={endDate}
-                onSuccess={() => {
-                  setShowPaymentForm(false)
-                  setClientSecret(null)
-                  // Reset form state
-                  setSelectedDuration(null) // Reset to no selection
-                  setError(null)
-                  // Scroll to top to show updated membership status
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                  // Refresh the page to show updated membership
-                  setTimeout(() => window.location.reload(), 1000)
-                }}
-                onError={(error) => {
-                  setError(error)
-                  setShowPaymentForm(false)
-                }}
-              />
-            </Elements>
+            {clientSecret ? (
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <PaymentForm
+                  membershipId={membership.id}
+                  durationMonths={selectedDuration}
+                  amount={selectedPrice}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onSuccess={() => {
+                    setShowPaymentForm(false)
+                    setClientSecret(null)
+                    // Reset form state
+                    setSelectedDuration(null) // Reset to no selection
+                    setError(null)
+                    // Scroll to top to show updated membership status
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    // Refresh the page to show updated membership
+                    setTimeout(() => window.location.reload(), 1000)
+                  }}
+                  onError={(error) => {
+                    setError(error)
+                    setShowPaymentForm(false)
+                  }}
+                />
+              </Elements>
+            ) : (
+              // Show loading skeleton while payment intent is being created
+              <div className="space-y-4">
+                <div className="text-center text-sm text-gray-500 mb-4">
+                  Setting up secure payment...
+                </div>
+                <div className="space-y-4 animate-pulse">
+                  <div className="space-y-3">
+                    <div className="h-4 bg-gray-200 rounded w-24"></div>
+                    <div className="h-12 bg-gray-200 rounded"></div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="h-4 bg-gray-200 rounded w-32"></div>
+                    <div className="h-12 bg-gray-200 rounded"></div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                    <div className="h-12 bg-gray-200 rounded"></div>
+                  </div>
+                  <div className="h-12 bg-gray-300 rounded"></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

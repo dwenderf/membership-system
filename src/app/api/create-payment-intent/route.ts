@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Create payment record in database
-    const { error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
         user_id: user.id,
@@ -75,10 +75,27 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         payment_method: 'stripe',
       })
+      .select()
+      .single()
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)
       // Don't fail the request, but log the error
+    } else if (paymentRecord) {
+      // Create payment item record for the membership
+      const { error: paymentItemError } = await supabase
+        .from('payment_items')
+        .insert({
+          payment_id: paymentRecord.id,
+          item_type: 'membership',
+          item_id: membershipId,
+          amount: amount,
+        })
+
+      if (paymentItemError) {
+        console.error('Error creating payment item record:', paymentItemError)
+        // Don't fail the request, but log the error
+      }
     }
 
     return NextResponse.json({

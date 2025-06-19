@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
+import { stripePromise } from '@/lib/stripe-client'
+import PaymentForm from './PaymentForm'
 
 interface Membership {
   id: string
@@ -28,7 +31,10 @@ const DURATION_OPTIONS = [
 
 export default function MembershipPurchase({ membership, userMemberships = [] }: MembershipPurchaseProps) {
   const [selectedDuration, setSelectedDuration] = useState(6) // Default to 6 months
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const calculatePrice = (months: number) => {
     if (months === 12) {
@@ -70,9 +76,36 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
   
   const isExtension = startDate > new Date()
 
-  const handlePurchase = () => {
-    // For now, just show an alert - will integrate with Stripe later
-    alert(`Purchase initiated for ${membership.name} - ${selectedDuration} months for $${(selectedPrice / 100).toFixed(2)}`)
+  const handlePurchase = async () => {
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          membershipId: membership.id,
+          durationMonths: selectedDuration,
+          amount: selectedPrice,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create payment intent')
+      }
+
+      const { clientSecret } = await response.json()
+      setClientSecret(clientSecret)
+      setShowPaymentForm(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -169,13 +202,69 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
         </div>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="text-red-800 text-sm">{error}</div>
+        </div>
+      )}
+
       {/* Purchase Button */}
       <button
         onClick={handlePurchase}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+        disabled={isLoading}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
-        Purchase Membership
+        {isLoading ? 'Processing...' : 'Purchase Membership'}
       </button>
+
+      {/* Payment Form Modal */}
+      {showPaymentForm && clientSecret && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Complete Payment</h3>
+              <button
+                onClick={() => setShowPaymentForm(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-4 p-3 bg-gray-50 rounded">
+              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">${(selectedPrice / 100).toFixed(2)}</span></div>
+              <div className="text-sm text-gray-600">{membership.name} - {selectedDuration} months</div>
+            </div>
+
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <PaymentForm
+                membershipId={membership.id}
+                durationMonths={selectedDuration}
+                amount={selectedPrice}
+                startDate={startDate}
+                endDate={endDate}
+                onSuccess={() => {
+                  setShowPaymentForm(false)
+                  setClientSecret(null)
+                  // Reset form state
+                  setSelectedDuration(6) // Reset to default
+                  setError(null)
+                  // Scroll to top to show updated membership status
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                  // Refresh the page to show updated membership
+                  setTimeout(() => window.location.reload(), 1000)
+                }}
+                onError={(error) => {
+                  setError(error)
+                  setShowPaymentForm(false)
+                }}
+              />
+            </Elements>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

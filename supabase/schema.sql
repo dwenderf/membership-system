@@ -67,6 +67,8 @@ CREATE TABLE memberships (
 );
 
 -- User memberships table (duration-based purchases)
+-- Stores individual membership purchases. Users can have multiple records 
+-- for the same membership type to support extensions and renewals.
 CREATE TABLE user_memberships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -82,6 +84,7 @@ CREATE TABLE user_memberships (
     
     -- Ensure valid_until > valid_from
     CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from)
+    -- Note: No unique constraint on (user_id, membership_id) to allow extensions/renewals
 );
 
 -- Registrations table

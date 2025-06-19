@@ -15,6 +15,7 @@ interface Membership {
 
 interface MembershipPurchaseProps {
   membership: Membership
+  userEmail: string
   userMemberships?: Array<{
     valid_until: string
     membership?: {
@@ -29,7 +30,7 @@ const DURATION_OPTIONS = [
   { months: 12, label: '12 Months (Annual)' },
 ]
 
-export default function MembershipPurchase({ membership, userMemberships = [] }: MembershipPurchaseProps) {
+export default function MembershipPurchase({ membership, userEmail, userMemberships = [] }: MembershipPurchaseProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null) // No default selection
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -263,10 +264,11 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
               <Elements stripe={stripePromise} options={{ clientSecret }}>
                 <PaymentForm
                   membershipId={membership.id}
-                  durationMonths={selectedDuration}
+                  durationMonths={selectedDuration!}
                   amount={selectedPrice}
                   startDate={startDate}
                   endDate={endDate}
+                  userEmail={userEmail}
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setClientSecret(null)

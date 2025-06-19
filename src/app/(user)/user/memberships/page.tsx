@@ -166,6 +166,7 @@ export default async function UserMembershipsPage() {
                 )}
                 <MembershipPurchase 
                   membership={membership} 
+                  userEmail={user.email || ''}
                   userMemberships={userMemberships}
                 />
               </div>

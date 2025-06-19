@@ -49,11 +49,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
-    // Create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Create payment intent with explicit Link support
+    const paymentIntentParams = {
       amount: amount, // Amount in cents
       currency: 'usd',
       receipt_email: userProfile.email,
+      payment_method_types: ['card', 'link'],
       metadata: {
         userId: user.id,
         membershipId: membershipId,
@@ -62,6 +63,18 @@ export async function POST(request: NextRequest) {
         userName: `${userProfile.first_name} ${userProfile.last_name}`,
       },
       description: `${membership.name} - ${durationMonths} months`,
+    }
+    
+    
+    const paymentIntent = await stripe.paymentIntents.create({
+      ...paymentIntentParams,
+      shipping: {
+        name: `${userProfile.first_name} ${userProfile.last_name}`,
+        address: {
+          line1: '', // You can add address fields if you collect them
+          country: 'US', // Default country
+        },
+      },
     })
 
     // Create payment record in database

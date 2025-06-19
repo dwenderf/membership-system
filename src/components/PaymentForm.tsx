@@ -9,6 +9,7 @@ interface PaymentFormProps {
   amount: number
   startDate: Date
   endDate: Date
+  userEmail: string
   onSuccess: () => void
   onError: (error: string) => void
 }
@@ -19,6 +20,7 @@ export default function PaymentForm({
   amount,
   startDate,
   endDate,
+  userEmail,
   onSuccess,
   onError
 }: PaymentFormProps) {
@@ -26,6 +28,7 @@ export default function PaymentForm({
   const elements = useElements()
   const [isLoading, setIsLoading] = useState(false)
   const [isElementsReady, setIsElementsReady] = useState(false)
+  
   const [isFormComplete, setIsFormComplete] = useState(false)
 
   // Check if Elements are ready for form validation
@@ -147,14 +150,16 @@ export default function PaymentForm({
         <>
           <PaymentElement 
             options={{
-              layout: 'tabs',
+              defaultValues: {
+                billingDetails: {
+                  email: userEmail,
+                },
+              },
             }}
             onReady={() => {
-              console.log('PaymentElement onReady fired')
               setIsElementsReady(true)
             }}
             onChange={(event) => {
-              console.log('PaymentElement onChange:', event.complete)
               setIsFormComplete(event.complete === true)
             }}
           />

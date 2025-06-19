@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import MembershipPurchase from '@/components/MembershipPurchase'
+import PurchaseHistory from '@/components/PurchaseHistory'
 
 export default async function UserMembershipsPage() {
   const supabase = await createClient()
@@ -27,15 +28,43 @@ export default async function UserMembershipsPage() {
     .order('name')
 
   const now = new Date()
-  const activeMemberships = userMemberships?.filter(um => {
+  
+  // Get all paid memberships for processing
+  const paidMemberships = userMemberships?.filter(um => um.payment_status === 'paid') || []
+  
+  // Consolidate active memberships by type
+  const consolidatedMemberships = paidMemberships.reduce((acc, um) => {
     const validUntil = new Date(um.valid_until)
-    return validUntil > now && um.payment_status === 'paid'
-  }) || []
-
-  const expiredMemberships = userMemberships?.filter(um => {
-    const validUntil = new Date(um.valid_until)
-    return validUntil <= now || um.payment_status !== 'paid'
-  }) || []
+    
+    // Only include if still valid
+    if (validUntil > now) {
+      const membershipId = um.membership_id
+      
+      if (!acc[membershipId]) {
+        acc[membershipId] = {
+          membershipId,
+          membership: um.membership,
+          validFrom: um.valid_from,
+          validUntil: um.valid_until,
+          purchases: []
+        }
+      }
+      
+      // Update overall validity period
+      if (um.valid_from < acc[membershipId].validFrom) {
+        acc[membershipId].validFrom = um.valid_from
+      }
+      if (um.valid_until > acc[membershipId].validUntil) {
+        acc[membershipId].validUntil = um.valid_until
+      }
+      
+      acc[membershipId].purchases.push(um)
+    }
+    
+    return acc
+  }, {} as Record<string, any>)
+  
+  const activeMemberships = Object.values(consolidatedMemberships)
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -46,19 +75,18 @@ export default async function UserMembershipsPage() {
         </p>
       </div>
 
-      {/* Active Memberships */}
+      {/* Active Memberships - Consolidated View */}
       <div className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Active Memberships</h2>
         {activeMemberships.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {activeMemberships.map((userMembership) => {
-              const now = new Date()
-              const validUntil = new Date(userMembership.valid_until)
+            {activeMemberships.map((consolidatedMembership) => {
+              const validUntil = new Date(consolidatedMembership.validUntil)
               const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
               const isExpiringSoon = daysUntilExpiration <= 90
               
               return (
-                <div key={userMembership.id} className={`bg-white overflow-hidden shadow rounded-lg border-l-4 ${
+                <div key={consolidatedMembership.membershipId} className={`bg-white overflow-hidden shadow rounded-lg border-l-4 ${
                   isExpiringSoon ? 'border-yellow-400' : 'border-green-400'
                 }`}>
                   <div className="p-5">
@@ -73,18 +101,18 @@ export default async function UserMembershipsPage() {
                     </div>
                     <div className="mt-4">
                       <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        {userMembership.membership?.name}
+                        {consolidatedMembership.membership?.name}
                       </h3>
-                      {userMembership.membership?.description && (
+                      {consolidatedMembership.membership?.description && (
                         <p className="mt-1 text-sm text-gray-600">
-                          {userMembership.membership.description}
+                          {consolidatedMembership.membership.description}
                         </p>
                       )}
                       <div className="mt-4 space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Valid From:</span>
                           <span className="text-gray-900">
-                            {new Date(userMembership.valid_from).toLocaleDateString()}
+                            {new Date(consolidatedMembership.validFrom).toLocaleDateString()}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -98,18 +126,6 @@ export default async function UserMembershipsPage() {
                             ⚠️ Expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}
                           </div>
                         )}
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Duration:</span>
-                          <span className="text-gray-900">
-                            {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Amount Paid:</span>
-                          <span className="text-gray-900">
-                            ${(userMembership.amount_paid / 100).toFixed(2)}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -166,49 +182,8 @@ export default async function UserMembershipsPage() {
         )}
       </div>
 
-      {/* Past/Expired Memberships */}
-      {expiredMemberships.length > 0 && (
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Past Memberships</h2>
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
-              {expiredMemberships.map((userMembership) => (
-                <li key={userMembership.id}>
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <p className="text-sm font-medium text-gray-900">
-                          {userMembership.membership?.name}
-                        </p>
-                        <div className="ml-2 flex-shrink-0">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            userMembership.payment_status === 'paid' 
-                              ? 'bg-gray-100 text-gray-800' 
-                              : userMembership.payment_status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {userMembership.payment_status === 'paid' ? 'Expired' : userMembership.payment_status}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(userMembership.valid_from).toLocaleDateString()} - {new Date(userMembership.valid_until).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="mt-2">
-                      <div className="flex justify-between text-sm text-gray-500">
-                        <span>Duration: {userMembership.months_purchased} month{userMembership.months_purchased !== 1 ? 's' : ''}</span>
-                        <span>Paid: ${(userMembership.amount_paid / 100).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      {/* Purchase History */}
+      <PurchaseHistory userMemberships={userMemberships || []} />
     </div>
   )
 }

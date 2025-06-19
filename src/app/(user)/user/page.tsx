@@ -41,18 +41,49 @@ export default async function UserDashboardPage() {
     .order('registered_at', { ascending: false })
     .limit(5)
 
-  const activeMemberships = userMemberships?.filter(um => {
-    const now = new Date()
+  const now = new Date()
+  
+  // Get all paid memberships for processing
+  const paidMemberships = userMemberships?.filter(um => um.payment_status === 'paid') || []
+  
+  // Consolidate active memberships by type
+  const consolidatedMemberships = paidMemberships.reduce((acc, um) => {
     const validUntil = new Date(um.valid_until)
-    return validUntil > now
-  }) || []
-
+    
+    // Only include if still valid
+    if (validUntil > now) {
+      const membershipId = um.membership_id
+      
+      if (!acc[membershipId]) {
+        acc[membershipId] = {
+          membershipId,
+          membership: um.membership,
+          validFrom: um.valid_from,
+          validUntil: um.valid_until,
+          purchases: []
+        }
+      }
+      
+      // Update overall validity period
+      if (um.valid_from < acc[membershipId].validFrom) {
+        acc[membershipId].validFrom = um.valid_from
+      }
+      if (um.valid_until > acc[membershipId].validUntil) {
+        acc[membershipId].validUntil = um.valid_until
+      }
+      
+      acc[membershipId].purchases.push(um)
+    }
+    
+    return acc
+  }, {} as Record<string, any>)
+  
+  const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
   
   // Check if any active membership expires within 90 days
-  const hasExpiringSoonMembership = activeMemberships.some(um => {
-    const now = new Date()
-    const validUntil = new Date(um.valid_until)
+  const hasExpiringSoonMembership = activeMemberships.some((consolidated: any) => {
+    const validUntil = new Date(consolidated.validUntil)
     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiration <= 90
   })
@@ -96,15 +127,14 @@ export default async function UserDashboardPage() {
               </h3>
               {hasActiveMembership ? (
                 <div className="mt-2">
-                  {activeMemberships.map((membership) => {
-                    const now = new Date()
-                    const validUntil = new Date(membership.valid_until)
+                  {activeMemberships.map((consolidatedMembership: any) => {
+                    const validUntil = new Date(consolidatedMembership.validUntil)
                     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     const isExpiringSoon = daysUntilExpiration <= 90
                     
                     return (
-                      <div key={membership.id} className="text-sm text-gray-600">
-                        <strong>{membership.membership?.name}</strong>
+                      <div key={consolidatedMembership.membershipId} className="text-sm text-gray-600">
+                        <strong>{consolidatedMembership.membership?.name}</strong>
                         <br />
                         Valid until: {validUntil.toLocaleDateString()}
                         {isExpiringSoon && (

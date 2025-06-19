@@ -30,7 +30,7 @@ const DURATION_OPTIONS = [
 ]
 
 export default function MembershipPurchase({ membership, userMemberships = [] }: MembershipPurchaseProps) {
-  const [selectedDuration, setSelectedDuration] = useState(6) // Default to 6 months
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null) // No default selection
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -49,8 +49,8 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
     return regularPrice - actualPrice
   }
 
-  const selectedPrice = calculatePrice(selectedDuration)
-  const savings = calculateSavings(selectedDuration)
+  const selectedPrice = selectedDuration ? calculatePrice(selectedDuration) : 0
+  const savings = selectedDuration ? calculateSavings(selectedDuration) : 0
   
   // Calculate validity period - start from latest expiration date of current memberships of same type, or today
   const getStartDate = () => {
@@ -72,11 +72,18 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
   
   const startDate = getStartDate()
   const endDate = new Date(startDate)
-  endDate.setMonth(endDate.getMonth() + selectedDuration)
+  if (selectedDuration) {
+    endDate.setMonth(endDate.getMonth() + selectedDuration)
+  }
   
   const isExtension = startDate > new Date()
 
   const handlePurchase = async () => {
+    if (!selectedDuration) {
+      setError('Please select a duration before purchasing')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     
@@ -165,42 +172,50 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
       </div>
 
       {/* Purchase Summary */}
-      <div className="bg-gray-50 rounded-lg p-4 mb-4">
-        <h4 className="text-sm font-medium text-gray-900 mb-2">Purchase Summary</h4>
-        {isExtension && (
-          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-            This will extend your current membership (no gap or overlap)
-          </div>
-        )}
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Membership:</span>
-            <span className="text-gray-900">{membership.name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Duration:</span>
-            <span className="text-gray-900">{selectedDuration} months</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">{isExtension ? 'Extends from:' : 'Valid from:'}:</span>
-            <span className="text-gray-900">{startDate.toLocaleDateString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Valid until:</span>
-            <span className="text-gray-900">{endDate.toLocaleDateString()}</span>
-          </div>
-          {savings > 0 && (
-            <div className="flex justify-between text-green-600">
-              <span>Savings:</span>
-              <span>${(savings / 100).toFixed(2)}</span>
+      {selectedDuration ? (
+        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <h4 className="text-sm font-medium text-gray-900 mb-2">Purchase Summary</h4>
+          {isExtension && (
+            <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+              This will extend your current membership (no gap or overlap)
             </div>
           )}
-          <div className="flex justify-between border-t pt-2 font-medium">
-            <span className="text-gray-900">Total:</span>
-            <span className="text-gray-900">${(selectedPrice / 100).toFixed(2)}</span>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Membership:</span>
+              <span className="text-gray-900">{membership.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Duration:</span>
+              <span className="text-gray-900">{selectedDuration} months</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">{isExtension ? 'Extends from:' : 'Valid from:'}:</span>
+              <span className="text-gray-900">{startDate.toLocaleDateString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Valid until:</span>
+              <span className="text-gray-900">{endDate.toLocaleDateString()}</span>
+            </div>
+            {savings > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Savings:</span>
+                <span>${(savings / 100).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-2 font-medium">
+              <span className="text-gray-900">Total:</span>
+              <span className="text-gray-900">${(selectedPrice / 100).toFixed(2)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
+          <p className="text-sm text-blue-800">
+            <span className="font-medium">Select a duration above</span> to see pricing details and purchase summary.
+          </p>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -212,10 +227,10 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
       {/* Purchase Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading}
+        disabled={isLoading || !selectedDuration}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
-        {isLoading ? 'Processing...' : 'Purchase Membership'}
+        {isLoading ? 'Processing...' : selectedDuration ? 'Purchase Membership' : 'Select Duration to Continue'}
       </button>
 
       {/* Payment Form Modal */}
@@ -249,7 +264,7 @@ export default function MembershipPurchase({ membership, userMemberships = [] }:
                   setShowPaymentForm(false)
                   setClientSecret(null)
                   // Reset form state
-                  setSelectedDuration(6) // Reset to default
+                  setSelectedDuration(null) // Reset to no selection
                   setError(null)
                   // Scroll to top to show updated membership status
                   window.scrollTo({ top: 0, behavior: 'smooth' })

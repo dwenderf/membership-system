@@ -108,13 +108,7 @@ export default async function UserMembershipsPage() {
                           {consolidatedMembership.membership.description}
                         </p>
                       )}
-                      <div className="mt-4 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Valid From:</span>
-                          <span className="text-gray-900">
-                            {new Date(consolidatedMembership.validFrom).toLocaleDateString()}
-                          </span>
-                        </div>
+                      <div className="mt-4">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Valid Until:</span>
                           <span className="text-gray-900">

@@ -146,6 +146,9 @@ export default async function UserMembershipsPage() {
         )}
       </div>
 
+      {/* Purchase History */}
+      <PurchaseHistory userMemberships={userMemberships || []} />
+
       {/* Available Memberships for Purchase */}
       <div className="mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Available Memberships</h2>
@@ -181,9 +184,6 @@ export default async function UserMembershipsPage() {
           </div>
         )}
       </div>
-
-      {/* Purchase History */}
-      <PurchaseHistory userMemberships={userMemberships || []} />
     </div>
   )
 }

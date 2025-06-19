@@ -39,19 +39,17 @@ export default function PurchaseHistory({ userMemberships }: PurchaseHistoryProp
     <div className="mb-8">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full text-left text-lg font-medium text-gray-900 hover:text-gray-700 transition-colors"
+        className="flex items-center text-left text-lg font-medium text-gray-900 hover:text-gray-700 transition-colors"
       >
         <span>Purchase History</span>
-        <div className="flex items-center">
-          <span className="text-sm text-gray-500 mr-2">
-            {userMemberships.length} purchase{userMemberships.length !== 1 ? 's' : ''}
-          </span>
-          {isExpanded ? (
-            <ChevronUpIcon className="h-5 w-5 text-gray-400" />
-          ) : (
-            <ChevronDownIcon className="h-5 w-5 text-gray-400" />
-          )}
-        </div>
+        <span className="text-sm text-gray-500 ml-3 mr-2">
+          {userMemberships.length} purchase{userMemberships.length !== 1 ? 's' : ''}
+        </span>
+        {isExpanded ? (
+          <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+        ) : (
+          <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+        )}
       </button>
 
       {isExpanded && (

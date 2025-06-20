@@ -703,11 +703,36 @@ email_logs (
 
 ## Next Priority Areas
 
+### 🎯 **Phase 2.5: User Onboarding Enhancement** *(HIGH PRIORITY)*
+**Problem**: Current passwordless auth auto-creates accounts without user confirmation, leading to potential issues:
+- Wrong email addresses (work emails, typos) create unwanted accounts
+- No terms and conditions acceptance
+- Missed membership upsell opportunity at signup
+
+**Solution**: Implement new user onboarding flow
+- [ ] **New User Detection**: Check if authenticated user exists in users table
+- [ ] **Onboarding Screen** for new users:
+  - [ ] Display pre-populated email address (read-only, cannot be changed)
+  - [ ] Collect first name and last name with validation
+  - [ ] Terms and conditions acceptance checkbox (required)
+  - [ ] "Cancel" button to abort account creation and return to login
+  - [ ] "Would you like to purchase a membership?" checkbox (defaults to checked)
+- [ ] **Account Creation Workflow**:
+  - [ ] Only create user record after onboarding completion
+  - [ ] Track terms acceptance with timestamp in database
+  - [ ] Direct flow to membership purchase if selected during onboarding
+- [ ] **Technical Implementation**:
+  - [ ] Modify auth callback to detect new vs existing users
+  - [ ] Create onboarding page component with form validation
+  - [ ] Update user creation logic to require onboarding completion
+  - [ ] Add terms acceptance tracking to users table
+
+**Benefits**: Prevents accidental accounts, ensures legal compliance, immediate membership conversion opportunity
+
 ### 📈 **Immediate Enhancements (Optional)**
-1. **Payment Exception Handling** - Address edge cases where payments succeed but database operations fail
-2. **Registration Purchase Flow** - Allow users to purchase event/team registrations
-3. **Admin Reporting** - Dashboard for payment reconciliation and membership analytics
-4. **Email Template Expansion** - Set up remaining email templates (welcome, expiration, payment failed)
+1. **Registration Purchase Flow** - Allow users to purchase event/team registrations
+2. **Admin Reporting** - Dashboard for payment reconciliation and membership analytics
+3. **Email Template Expansion** - Set up remaining email templates (welcome, expiration, payment failed)
 
 ### 🔄 **System Reliability (Recommended)**
 - **Error Logging & Monitoring**: Comprehensive logging for payment processing failures

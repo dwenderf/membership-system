@@ -248,6 +248,7 @@ class EmailService {
       eventType: EMAIL_EVENTS.MEMBERSHIP_PURCHASED,
       subject: `Membership Purchase Confirmation - ${options.membershipName}`,
       triggeredBy: 'user_action',
+      templateId: process.env.LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID,
       data: {
         userName: options.userName,
         membershipName: options.membershipName,
@@ -256,7 +257,8 @@ class EmailService {
         validFrom: options.validFrom,
         validUntil: options.validUntil,
         paymentIntentId: options.paymentIntentId,
-        purchaseDate: new Date().toLocaleDateString()
+        purchaseDate: new Date().toLocaleDateString(),
+        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
       }
     })
   }

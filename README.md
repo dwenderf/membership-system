@@ -33,14 +33,16 @@ npm install
 Create a `.env.local` file with the following variables:
 
 ```bash
+# Application Configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your_nextauth_secret
+
 # Database
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Authentication
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_nextauth_secret
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 
@@ -52,6 +54,9 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 # Email Integration
 LOOPS_API_KEY=your_loops_api_key
 LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
+LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
+LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 ```
 
 ### 3. Database Setup
@@ -133,14 +138,97 @@ The system uses Loops.so for transactional email delivery. Follow these steps to
    - Copy the template ID from Loops
    - Add it to your `.env.local` as `LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID`
 
-### 3. Additional Email Templates (Optional)
+### 3. Additional Required Email Templates
 
-You can create additional templates for:
-- Welcome emails (`LOOPS_WELCOME_TEMPLATE_ID`)
-- Membership expiration warnings (`LOOPS_EXPIRATION_WARNING_TEMPLATE_ID`)
-- Payment failure notifications (`LOOPS_PAYMENT_FAILED_TEMPLATE_ID`)
+The system includes several other email types that need templates configured:
 
-### 4. Testing Email Integration
+#### Welcome Email Template (`LOOPS_WELCOME_TEMPLATE_ID`)
+
+**Data Variables:**
+- `userName` - New user's full name
+- `dashboardUrl` - Link to user dashboard
+- `membershipUrl` - Link to membership purchase page
+
+**Template Example:**
+```
+Hi [userName],
+
+Welcome to the Hockey Association! 🏒
+
+Your account has been successfully created. Here's what you can do next:
+
+• Explore membership options: [membershipUrl]
+• Access your dashboard: [dashboardUrl]
+• Browse upcoming seasons and events
+
+We're excited to have you as part of our hockey community!
+
+Questions? Reply to this email anytime.
+
+The Hockey Association Team
+```
+
+#### Membership Expiration Warning (`LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID`)
+
+**Data Variables:**
+- `userName` - Member's full name
+- `membershipName` - Type of membership expiring
+- `expirationDate` - When membership expires
+- `daysUntilExpiration` - Number of days remaining
+- `renewUrl` - Link to renewal page
+
+**Template Example:**
+```
+Hi [userName],
+
+Your [membershipName] will expire in [daysUntilExpiration] days on [expirationDate].
+
+To avoid any interruption to your membership benefits, please renew before the expiration date.
+
+Renew now: [renewUrl]
+
+Questions about renewal? Reply to this email.
+
+The Hockey Association Team
+```
+
+#### Payment Failed Notification (`LOOPS_PAYMENT_FAILED_TEMPLATE_ID`)
+
+**Data Variables:**
+- `userName` - Customer's full name
+- `membershipName` - Type of membership attempted
+- `amount` - Payment amount that failed
+- `failureReason` - Reason for payment failure
+- `retryUrl` - Link to retry payment
+
+**Template Example:**
+```
+Hi [userName],
+
+We were unable to process your payment for [membershipName] in the amount of $[amount].
+
+Reason: [failureReason]
+
+Please try again: [retryUrl]
+
+If you continue to have issues, please contact our support team.
+
+The Hockey Association Team
+```
+
+### 4. Template Management Guidelines
+
+**🚨 IMPORTANT:** When adding new email functionality to the application:
+
+1. **Add the email event type** to `EMAIL_EVENTS` in `src/lib/email-service.ts`
+2. **Create the email function** (e.g., `sendRegistrationConfirmation()`)
+3. **Add environment variable** for template ID (e.g., `LOOPS_REGISTRATION_TEMPLATE_ID`)
+4. **Update this README.md** with template setup instructions and data variables
+5. **Test the email** with sample data to ensure all variables work correctly
+
+This ensures all email templates are properly documented and maintainable.
+
+### 5. Testing Email Integration
 
 1. Complete the Loops setup above
 2. Make a test membership purchase in your application

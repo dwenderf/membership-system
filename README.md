@@ -1,36 +1,195 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hockey Association Membership System
+
+A comprehensive membership and registration system for adult hockey associations, built with Next.js, Supabase, and Stripe.
+
+## Features
+
+- **User Management**: Passwordless authentication with magic links and Google OAuth
+- **Membership System**: Flexible duration-based memberships with monthly/annual pricing
+- **Registration System**: Team and event registration with capacity management
+- **Payment Processing**: Secure payments via Stripe with payment intent handling
+- **Email Integration**: Transactional emails via Loops.so for confirmations and notifications
+- **Admin Dashboard**: Season management, membership oversight, and user administration
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+ and npm
+- Supabase account and project
+- Stripe account (test mode for development)
+- Loops.so account for email integration
+
+### 1. Clone and Install
+
+```bash
+git clone <repository-url>
+cd membership-system
+npm install
+```
+
+### 2. Environment Setup
+
+Create a `.env.local` file with the following variables:
+
+```bash
+# Database
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Authentication
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your_nextauth_secret
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+
+# Payments
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Email Integration
+LOOPS_API_KEY=your_loops_api_key
+LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+```
+
+### 3. Database Setup
+
+1. Create a new Supabase project
+2. Run the database schema:
+   ```bash
+   # Apply the schema.sql file in your Supabase SQL editor
+   ```
+3. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+
+### 4. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Email Integration Setup (Loops.so)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The system uses Loops.so for transactional email delivery. Follow these steps to configure email templates:
 
-## Learn More
+### 1. Create Loops.so Account
 
-To learn more about Next.js, take a look at the following resources:
+1. Sign up at [https://loops.so](https://loops.so)
+2. Get your API key from the settings
+3. Add `LOOPS_API_KEY` to your environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Set Up Transactional Email Templates
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+#### Membership Purchase Confirmation Template
 
-## Deploy on Vercel
+1. **In Loops Dashboard:**
+   - Go to "Transactional" section
+   - Click "Create transactional email"
+   - Name: "Membership Purchase Confirmation"
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. **Add Data Variables:**
+   Use the "Insert data variable" button to add these variables:
+   - `userName` - Customer's full name
+   - `membershipName` - Type of membership purchased
+   - `amount` - Price (formatted as "45.00")
+   - `durationMonths` - Duration in months
+   - `validFrom` - Membership start date
+   - `validUntil` - Membership end date
+   - `purchaseDate` - Purchase date
+   - `paymentIntentId` - Stripe transaction ID
+   - `dashboardUrl` - Link to user dashboard
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+3. **Email Template Example:**
+   ```
+   Hi [userName],
+
+   Great news! Your membership purchase has been confirmed and your access is now active.
+
+   MEMBERSHIP DETAILS:
+   - Membership Type: [membershipName]
+   - Duration: [durationMonths] months
+   - Amount Paid: $[amount]
+   - Valid From: [validFrom]
+   - Valid Until: [validUntil]
+   - Purchase Date: [purchaseDate]
+
+   WHAT'S NEXT:
+   • Browse available teams and events you can now join
+   • Manage your account: [dashboardUrl]
+   • Watch for updates about league schedules
+
+   Transaction ID: [paymentIntentId]
+
+   Questions? Reply to this email or contact support.
+
+   Thank you for being part of our hockey community!
+   The Hockey Association Team
+   ```
+
+4. **Get Template ID:**
+   - Copy the template ID from Loops
+   - Add it to your `.env.local` as `LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID`
+
+### 3. Additional Email Templates (Optional)
+
+You can create additional templates for:
+- Welcome emails (`LOOPS_WELCOME_TEMPLATE_ID`)
+- Membership expiration warnings (`LOOPS_EXPIRATION_WARNING_TEMPLATE_ID`)
+- Payment failure notifications (`LOOPS_PAYMENT_FAILED_TEMPLATE_ID`)
+
+### 4. Testing Email Integration
+
+1. Complete the Loops setup above
+2. Make a test membership purchase in your application
+3. Check the `email_logs` table in Supabase to verify delivery status
+4. Confirm the email was received with proper variable substitution
+
+## Project Structure
+
+```
+src/
+├── app/                 # Next.js app directory
+├── components/          # React components
+├── lib/                # Utilities and services
+│   ├── email-service.ts # Email integration service
+│   ├── supabase.ts     # Database client
+│   └── stripe.ts       # Payment processing
+├── middleware.ts       # Authentication middleware
+└── types/              # TypeScript type definitions
+```
+
+## Key Services
+
+- **Email Service** (`src/lib/email-service.ts`): Handles all email communications
+- **Supabase Client** (`src/lib/supabase.ts`): Database operations and auth
+- **Stripe Integration** (`src/lib/stripe.ts`): Payment processing
+
+## Development Workflow
+
+1. **Make Changes**: Edit code and test locally
+2. **Test Email**: Use test purchases to verify email delivery
+3. **Check Logs**: Monitor `email_logs` table for delivery status
+4. **Commit Changes**: Use descriptive commit messages
+
+## Deployment
+
+The application is designed to deploy on Vercel with Supabase as the backend:
+
+1. **Environment Variables**: Add all `.env.local` variables to your deployment platform
+2. **Database**: Ensure Supabase project is configured for production
+3. **Webhooks**: Update Stripe webhook endpoints for production URLs
+4. **Email Templates**: Verify Loops templates work with production data
+
+## Support
+
+For questions about the codebase or setup process, refer to:
+- **Planning Document**: `PLANNING.md` for detailed architecture
+- **Database Schema**: `supabase/schema.sql` for data models
+- **Email Logs**: Check Supabase `email_logs` table for debugging
+
+---
+
+**Tech Stack**: Next.js 14, TypeScript, Tailwind CSS, Supabase, Stripe, Loops.so

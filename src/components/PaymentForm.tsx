@@ -78,14 +78,24 @@ export default function PaymentForm({
       })
 
       if (error) {
-        // Capture payment failure in Sentry
-        const paymentError = new Error(`Payment failed: ${error.message}`)
-        Sentry.captureException(paymentError, {
+        // Capture payment failure as business event in Sentry
+        Sentry.captureMessage(`Payment declined: ${error.message}`, {
+          level: 'warning',
           tags: {
             payment_related: 'true',
             payment_failure: 'true',
             error_code: error.code,
             error_type: error.type
+          },
+          extra: {
+            customer_email: userEmail,
+            membership_id: membershipId,
+            duration_months: durationMonths,
+            amount_cents: amount,
+            stripe_error_code: error.code,
+            stripe_error_type: error.type,
+            stripe_error_message: error.message,
+            decline_reason: error.decline_code || 'Not provided'
           }
         })
         
@@ -115,13 +125,21 @@ export default function PaymentForm({
 
         onSuccess()
       } else if (paymentIntent) {
-        // Capture non-success payment status
-        const statusError = new Error(`Payment status: ${paymentIntent.status}`)
-        Sentry.captureException(statusError, {
+        // Capture non-success payment status as business event
+        Sentry.captureMessage(`Payment not completed - status: ${paymentIntent.status}`, {
+          level: 'warning',
           tags: {
             payment_related: 'true',
             payment_status: paymentIntent.status,
             payment_intent_id: paymentIntent.id
+          },
+          extra: {
+            customer_email: userEmail,
+            membership_id: membershipId,
+            duration_months: durationMonths,
+            amount_cents: amount,
+            payment_intent_id: paymentIntent.id,
+            payment_status: paymentIntent.status
           }
         })
         

@@ -9,18 +9,18 @@ Sentry.init({
   // Performance Monitoring
   tracesSampleRate: 1.0,
   
-  // Temporarily disable filtering for testing
-  // beforeSend(event) {
-  //   // Allow critical payment errors in development for testing
-  //   if (process.env.NODE_ENV === 'development') {
-  //     // Only allow payment-related errors through in development
-  //     if (event.tags?.payment_related === 'true' || event.tags?.critical === 'payment_inconsistency') {
-  //       return event;
-  //     }
-  //     return null;
-  //   }
-  //   return event;
-  // },
+  // Error filtering
+  beforeSend(event) {
+    // Allow critical payment errors and warnings in development for testing
+    if (process.env.NODE_ENV === 'development') {
+      // Only allow payment-related events through in development
+      if (event.tags?.payment_related === 'true' || event.tags?.critical === 'payment_inconsistency') {
+        return event;
+      }
+      return null;
+    }
+    return event;
+  },
   
   // Set sample rate for profiling
   profilesSampleRate: 1.0,

@@ -15,9 +15,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
-  // Test if this API is being called
-  Sentry.captureMessage('Confirm payment API called', 'info')
-  
   try {
     const supabase = await createClient()
     
@@ -59,17 +56,25 @@ export async function POST(request: NextRequest) {
     paymentContext.membershipId = paymentIntent.metadata.membershipId
     
     if (paymentIntent.status !== 'succeeded') {
-      // Send info message to Sentry about payment failure
-      Sentry.captureMessage(`Payment declined - status: ${paymentIntent.status}`, {
-        level: 'info',
+      // Capture payment failure as business event
+      Sentry.captureMessage(`Payment confirmation failed - status: ${paymentIntent.status}`, {
+        level: 'warning',
         tags: {
+          payment_related: 'true',
           payment_status: paymentIntent.status,
           payment_intent_id: paymentIntentId
+        },
+        extra: {
+          customer_email: user.email,
+          customer_id: user.id,
+          membership_id: paymentIntent.metadata.membershipId,
+          membership_name: paymentIntent.metadata.membershipName,
+          duration_months: paymentIntent.metadata.durationMonths,
+          amount_cents: paymentIntent.amount,
+          payment_intent_id: paymentIntentId,
+          payment_status: paymentIntent.status
         }
       })
-      
-      const error = new Error(`Payment not completed - status: ${paymentIntent.status}`)
-      capturePaymentError(error, paymentContext, 'error')
       
       return NextResponse.json(
         { error: 'Payment not completed' },

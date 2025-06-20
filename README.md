@@ -19,6 +19,7 @@ A comprehensive membership and registration system for adult hockey associations
 - Supabase account and project
 - Stripe account (test mode for development)
 - Loops.so account for email integration
+- Sentry account for error monitoring and alerting
 
 ### 1. Clone and Install
 
@@ -57,6 +58,15 @@ LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
+
+# Error Monitoring (Development)
+NEXT_PUBLIC_SENTRY_DSN=https://42acadb32aa51f126cb247cecc726f2a@o4509532837380096.ingest.us.sentry.io/4509532838690816
+SENTRY_ORG=nycpha
+SENTRY_PROJECT=membership-system-dev
+
+# For production deployment, use:
+# NEXT_PUBLIC_SENTRY_DSN=https://3d5da7b7f3e7728021deb87ce4672760@o4509532837380096.ingest.us.sentry.io/4509532884697088
+# SENTRY_PROJECT=membership-system-prod
 ```
 
 ### 3. Database Setup
@@ -235,6 +245,51 @@ This ensures all email templates are properly documented and maintainable.
 3. Check the `email_logs` table in Supabase to verify delivery status
 4. Confirm the email was received with proper variable substitution
 
+## Error Monitoring Setup (Sentry)
+
+The application uses Sentry for error monitoring and alerting, particularly for critical payment issues where payments succeed but database operations fail.
+
+### 1. Create Sentry Project
+
+1. **Sign up** at [https://sentry.io](https://sentry.io)
+2. **Create Organization** (if needed)
+3. **Create one Next.js project:**
+   - `membership-system` - Single project using environments
+
+### 2. Configure Environment Variables
+
+**Both Development & Production:**
+```bash
+NEXT_PUBLIC_SENTRY_DSN=https://42acadb32aa51f126cb247cecc726f2a@o4509532837380096.ingest.us.sentry.io/4509532838690816
+SENTRY_ORG=nycpha
+SENTRY_PROJECT=membership-system
+```
+
+The system automatically uses `NODE_ENV` to separate development and production events into different environments within the same project.
+
+### 3. Critical Error Scenarios Monitored
+
+The system automatically captures and alerts on:
+
+- **Payment succeeded but membership creation failed** - Critical business issue
+- **Database connection failures during payment processing**
+- **Email delivery failures after successful purchases**
+- **Stripe API errors and timeout issues**
+
+### 4. Alert Configuration
+
+**Development Environment**: Minimal alerts for testing
+**Production Environment**: 
+- Email/Slack notifications for critical errors
+- Real-time monitoring of payment inconsistencies
+- Performance tracking for payment operations
+
+### 5. Testing Error Monitoring
+
+1. **Test with payment failure cards** to verify error capture
+2. **Check Sentry dashboard** for error events
+3. **Verify alert notifications** are working properly
+
 ## Testing the Payment System
 
 The application uses Stripe in test mode for development. Use these test card numbers to simulate different scenarios:
@@ -294,6 +349,7 @@ src/
 - **Email Service** (`src/lib/email-service.ts`): Handles all email communications
 - **Supabase Client** (`src/lib/supabase.ts`): Database operations and auth
 - **Stripe Integration** (`src/lib/stripe.ts`): Payment processing
+- **Sentry Integration** (`src/lib/sentry-helpers.ts`): Error monitoring and alerting
 
 ## Development Workflow
 

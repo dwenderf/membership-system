@@ -6,6 +6,10 @@ import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 
+// Force import client config
+import '../../sentry.client.config'
+import * as Sentry from '@sentry/nextjs'
+
 interface Membership {
   id: string
   name: string
@@ -86,6 +90,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       setError('Please select a duration before purchasing')
       return
     }
+
 
     // Open modal immediately for better perceived performance
     setShowPaymentForm(true)

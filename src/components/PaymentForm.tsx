@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js'
 
+// Force import client config
+import '../../sentry.client.config'
+import * as Sentry from '@sentry/nextjs'
+
 interface PaymentFormProps {
   membershipId: string
   durationMonths: number
@@ -74,6 +78,17 @@ export default function PaymentForm({
       })
 
       if (error) {
+        // Capture payment failure in Sentry
+        const paymentError = new Error(`Payment failed: ${error.message}`)
+        Sentry.captureException(paymentError, {
+          tags: {
+            payment_related: 'true',
+            payment_failure: 'true',
+            error_code: error.code,
+            error_type: error.type
+          }
+        })
+        
         onError(error.message || 'Payment failed')
         return
       }
@@ -99,6 +114,20 @@ export default function PaymentForm({
         }
 
         onSuccess()
+      } else if (paymentIntent) {
+        // Capture non-success payment status
+        const statusError = new Error(`Payment status: ${paymentIntent.status}`)
+        Sentry.captureException(statusError, {
+          tags: {
+            payment_related: 'true',
+            payment_status: paymentIntent.status,
+            payment_intent_id: paymentIntent.id
+          }
+        })
+        
+        onError(`Payment ${paymentIntent.status}`)
+      } else {
+        onError('No payment intent returned')
       }
     } catch (err) {
       onError(err instanceof Error ? err.message : 'An unexpected error occurred')

@@ -59,14 +59,10 @@ LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 
-# Error Monitoring (Development)
-NEXT_PUBLIC_SENTRY_DSN=https://42acadb32aa51f126cb247cecc726f2a@o4509532837380096.ingest.us.sentry.io/4509532838690816
-SENTRY_ORG=nycpha
-SENTRY_PROJECT=membership-system-dev
-
-# For production deployment, use:
-# NEXT_PUBLIC_SENTRY_DSN=https://3d5da7b7f3e7728021deb87ce4672760@o4509532837380096.ingest.us.sentry.io/4509532884697088
-# SENTRY_PROJECT=membership-system-prod
+# Error Monitoring
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
+SENTRY_ORG=your_sentry_org
+SENTRY_PROJECT=membership-system
 ```
 
 ### 3. Database Setup
@@ -260,8 +256,8 @@ The application uses Sentry for error monitoring and alerting, particularly for 
 
 **Both Development & Production:**
 ```bash
-NEXT_PUBLIC_SENTRY_DSN=https://42acadb32aa51f126cb247cecc726f2a@o4509532837380096.ingest.us.sentry.io/4509532838690816
-SENTRY_ORG=nycpha
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
+SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
 ```
 

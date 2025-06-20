@@ -235,6 +235,46 @@ This ensures all email templates are properly documented and maintainable.
 3. Check the `email_logs` table in Supabase to verify delivery status
 4. Confirm the email was received with proper variable substitution
 
+## Testing the Payment System
+
+The application uses Stripe in test mode for development. Use these test card numbers to simulate different scenarios:
+
+### Test Credit Card Numbers
+
+#### **Successful Payments:**
+- **Visa**: `4242 4242 4242 4242`
+- **Visa (debit)**: `4000 0566 5566 5556`
+- **Mastercard**: `5555 5555 5555 4444`
+- **American Express**: `3782 822463 10005`
+
+#### **Payment Failures:**
+- **Generic decline**: `4000 0000 0000 0002`
+- **Insufficient funds**: `4000 0000 0000 9995`
+- **Lost card**: `4000 0000 0000 9987`
+- **Stolen card**: `4000 0000 0000 9979`
+- **Expired card**: `4000 0000 0000 0069`
+- **Incorrect CVC**: `4000 0000 0000 0127`
+- **Processing error**: `4000 0000 0000 0119`
+
+#### **For All Test Cards:**
+- **Expiry Date**: Use any future date (e.g., `12/34`)
+- **CVC**: Use any 3-digit number (e.g., `123`)
+- **ZIP Code**: Use any 5-digit number (e.g., `12345`)
+
+### Testing Different Scenarios
+
+1. **Successful Purchase**: Use `4242 4242 4242 4242` to test the complete flow and email delivery
+2. **Payment Failure**: Use `4000 0000 0000 0002` to test error handling and user notifications
+3. **Email Delivery**: Check your `email_logs` table in Supabase after each test
+4. **Toast Notifications**: Verify success/error messages appear correctly
+
+### Stripe Link Testing
+
+The application supports Stripe Link for one-click payments:
+- Use test card `4242 4242 4242 4242` with email `test@example.com`
+- Complete the first purchase to set up Link
+- Subsequent purchases will offer one-click Link payments
+
 ## Project Structure
 
 ```

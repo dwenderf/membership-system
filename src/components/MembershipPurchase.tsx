@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Membership {
   id: string
@@ -36,6 +37,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { showSuccess, showError } = useToast()
 
   const calculatePrice = (months: number) => {
     if (months === 12) {
@@ -111,8 +113,15 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       const { clientSecret } = await response.json()
       setClientSecret(clientSecret)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
       setShowPaymentForm(false) // Close modal on error
+      
+      // Show error notification
+      showError(
+        'Setup Error', 
+        'Unable to initialize payment. Please try again.'
+      )
     } finally {
       setIsLoading(false)
     }
@@ -275,14 +284,27 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                     // Reset form state
                     setSelectedDuration(null) // Reset to no selection
                     setError(null)
+                    
+                    // Show success notification
+                    showSuccess(
+                      'Purchase Successful!', 
+                      `Your ${membership.name} membership is now active for ${selectedDuration} months.`
+                    )
+                    
                     // Scroll to top to show updated membership status
                     window.scrollTo({ top: 0, behavior: 'smooth' })
-                    // Refresh the page to show updated membership
-                    setTimeout(() => window.location.reload(), 1000)
+                    // Refresh the page to show updated membership (delayed for user to see success)
+                    setTimeout(() => window.location.reload(), 2000)
                   }}
                   onError={(error) => {
                     setError(error)
                     setShowPaymentForm(false)
+                    
+                    // Show error notification
+                    showError(
+                      'Payment Failed', 
+                      error || 'There was an issue processing your payment. Please try again.'
+                    )
                   }}
                 />
               </Elements>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { emailService } from '@/lib/email-service'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -97,6 +98,39 @@ export async function POST(request: NextRequest) {
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
 
+        // Send confirmation email (as backup to confirm-payment endpoint)
+        try {
+          const { data: userProfile } = await supabase
+            .from('users')
+            .select('first_name, last_name, email')
+            .eq('id', userId)
+            .single()
+
+          const { data: membershipDetails } = await supabase
+            .from('memberships')
+            .select('name')
+            .eq('id', membershipId)
+            .single()
+
+          if (userProfile && membershipDetails) {
+            await emailService.sendMembershipPurchaseConfirmation({
+              userId: userId,
+              email: userProfile.email,
+              userName: `${userProfile.first_name} ${userProfile.last_name}`,
+              membershipName: membershipDetails.name,
+              amount: paymentIntent.amount,
+              durationMonths,
+              validFrom: startDate.toISOString().split('T')[0],
+              validUntil: endDate.toISOString().split('T')[0],
+              paymentIntentId: paymentIntent.id
+            })
+            console.log('✅ Webhook: Membership confirmation email sent successfully')
+          }
+        } catch (emailError) {
+          console.error('❌ Webhook: Failed to send confirmation email:', emailError)
+          // Don't fail the webhook - membership was created successfully
+        }
+
         console.log('Successfully processed payment intent:', paymentIntent.id)
         break
       }
@@ -111,6 +145,37 @@ export async function POST(request: NextRequest) {
             status: 'failed',
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
+
+        // Send payment failure notification email
+        try {
+          const userId = paymentIntent.metadata.userId
+          if (userId) {
+            const { data: userProfile } = await supabase
+              .from('users')
+              .select('first_name, last_name, email')
+              .eq('id', userId)
+              .single()
+
+            if (userProfile) {
+              await emailService.sendEmail({
+                userId: userId,
+                email: userProfile.email,
+                eventType: 'payment.failed',
+                subject: 'Payment Failed - Please Try Again',
+                triggeredBy: 'automated',
+                data: {
+                  userName: `${userProfile.first_name} ${userProfile.last_name}`,
+                  paymentIntentId: paymentIntent.id,
+                  failureReason: paymentIntent.last_payment_error?.message || 'Unknown error',
+                  retryUrl: `${process.env.NEXTAUTH_URL}/user/memberships`
+                }
+              })
+              console.log('✅ Webhook: Payment failure email sent successfully')
+            }
+          }
+        } catch (emailError) {
+          console.error('❌ Webhook: Failed to send payment failure email:', emailError)
+        }
 
         console.log('Payment failed for payment intent:', paymentIntent.id)
         break

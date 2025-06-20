@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { emailService } from '@/lib/email-service'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -83,6 +84,40 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       console.error('Error updating payment record:', updateError)
       // Don't fail the request, membership was created successfully
+    }
+
+    // Get user and membership details for email
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('first_name, last_name, email')
+      .eq('id', user.id)
+      .single()
+
+    const { data: membershipDetails } = await supabase
+      .from('memberships')
+      .select('name')
+      .eq('id', membershipId)
+      .single()
+
+    // Send confirmation email
+    if (userProfile && membershipDetails) {
+      try {
+        await emailService.sendMembershipPurchaseConfirmation({
+          userId: user.id,
+          email: userProfile.email,
+          userName: `${userProfile.first_name} ${userProfile.last_name}`,
+          membershipName: membershipDetails.name,
+          amount: paymentIntent.amount,
+          durationMonths,
+          validFrom: startDate,
+          validUntil: endDate,
+          paymentIntentId: paymentIntentId
+        })
+        console.log('✅ Membership confirmation email sent successfully')
+      } catch (emailError) {
+        console.error('❌ Failed to send confirmation email:', emailError)
+        // Don't fail the request - membership was created successfully
+      }
     }
 
     return NextResponse.json({

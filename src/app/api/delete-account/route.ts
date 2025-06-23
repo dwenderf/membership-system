@@ -103,20 +103,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 })
     }
 
-    // Step 2: Update auth.users email to match (prevents re-authentication)
+    // Step 2: Sign out the user BEFORE deletion to prevent session issues
+    try {
+      await supabase.auth.signOut()
+    } catch (signOutError) {
+      console.error('Failed to sign out user before deletion:', signOutError)
+      // Continue with deletion - sign out failure shouldn't block the process
+    }
+
+    // Step 3: Prevent all future authentication by permanently banning the user
     // Create admin client with service role key for admin operations
     const adminClient = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // First update the auth.users email
+    // Update auth.users with anonymized email and permanent ban
     const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(user.id, {
-      email: anonymizedEmail
+      email: anonymizedEmail,
+      ban_duration: '876000h' // ~100 years - effectively permanent ban
     })
 
     if (authUpdateError) {
-      console.error('Failed to update auth.users email:', authUpdateError)
+      console.error('Failed to update and ban auth.users:', authUpdateError)
       captureCriticalAccountDeletionError(authUpdateError, {
         ...deletionContext,
         step: 'auth_update',
@@ -125,52 +134,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
     }
 
-    // Step 3: Unlink all OAuth identities to prevent re-authentication via OAuth
-    try {
-      const { data: userData } = await adminClient.auth.admin.getUserById(user.id)
-      
-      if (userData.user?.identities && userData.user.identities.length > 0) {
-        for (const identity of userData.user.identities) {
-          const { error: unlinkError } = await adminClient.auth.admin.unlinkIdentity({
-            userId: user.id,
-            identityId: identity.id
-          })
-          
-          if (unlinkError) {
-            console.error('Failed to unlink identity:', identity.provider, unlinkError)
-            captureAccountDeletionWarning('Failed to unlink OAuth identity during account deletion', {
-              ...deletionContext,
-              step: 'identity_unlink',
-              emailSent
-            }, { provider: identity.provider, error: unlinkError })
-          }
-        }
-      }
-    } catch (identityError) {
-      console.error('Failed to process OAuth identities:', identityError)
-      captureAccountDeletionWarning('Failed to process OAuth identities during account deletion', {
-        ...deletionContext,
-        step: 'identity_unlink',
-        emailSent
-      }, identityError)
-    }
-
-    // Sign out the user from Supabase auth
-    try {
-      await supabase.auth.signOut()
-    } catch (signOutError) {
-      console.error('Failed to sign out user:', signOutError)
-      captureAccountDeletionWarning('Account deletion succeeded but sign out failed', {
-        ...deletionContext,
-        step: 'auth_signout',
-        emailSent
-      }, signOutError)
-      // Don't fail the whole operation if sign out fails
-    }
+    console.log('Successfully anonymized and permanently banned user:', user.id)
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Account successfully deleted and anonymized' 
+      message: 'Account successfully deleted' 
     })
 
   } catch (error) {

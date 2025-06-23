@@ -157,7 +157,7 @@ export default async function UserDashboardPage() {
                 href="/user/memberships"
                 className="text-sm font-medium text-blue-600 hover:text-blue-500"
               >
-                View all memberships →
+                View my memberships →
               </a>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default async function UserDashboardPage() {
                 href="/user/registrations"
                 className="text-sm font-medium text-blue-600 hover:text-blue-500"
               >
-                View all registrations →
+                View my registrations →
               </a>
             </div>
           </div>
@@ -215,7 +215,7 @@ export default async function UserDashboardPage() {
         <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <a
-            href="/user/registrations"
+            href="/user/browse-registrations"
             className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
           >
             <div className="flex-shrink-0">
@@ -228,25 +228,25 @@ export default async function UserDashboardPage() {
             <div className="flex-1 min-w-0">
               <span className="absolute inset-0" aria-hidden="true" />
               <p className="text-sm font-medium text-gray-900">Browse Registrations</p>
-              <p className="text-sm text-gray-500">Register for teams and events</p>
+              <p className="text-sm text-gray-500">Search for and register for upcoming events and teams</p>
             </div>
           </a>
 
           <a
-            href="/user/memberships"
+            href="/user/browse-memberships"
             className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
           >
             <div className="flex-shrink-0">
               <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center">
                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                 </svg>
               </div>
             </div>
             <div className="flex-1 min-w-0">
               <span className="absolute inset-0" aria-hidden="true" />
-              <p className="text-sm font-medium text-gray-900">Manage Memberships</p>
-              <p className="text-sm text-gray-500">View and purchase memberships</p>
+              <p className="text-sm font-medium text-gray-900">Browse Memberships</p>
+              <p className="text-sm text-gray-500">Search for and purchase new memberships or extend existing ones</p>
             </div>
           </a>
         </div>

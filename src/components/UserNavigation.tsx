@@ -25,8 +25,8 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
 
   const navigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
-    { name: 'Browse Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
+    { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
   ]
 
   return (

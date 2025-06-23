@@ -78,23 +78,22 @@ export async function POST(request: NextRequest) {
       // Continue with deletion even if email fails
     }
 
-    // Generate the anonymized email that will be used in both tables
-    const anonymizedEmail = `deleted_user_${user.id}@deleted.local`
-
-    // Step 1: Anonymize the public.users record
+    // Step 1: Mark the public.users record as deleted while preserving business data
+    const deletionTimestamp = new Date().toISOString()
+    
     const { error: updateError } = await supabase
       .from('users')
       .update({
         first_name: 'Deleted',
-        last_name: 'User',
-        email: anonymizedEmail,
+        last_name: 'User', 
+        email: `deleted_user_${user.id}@deleted.local`,
         phone: null,
         deleted_at: deletionTimestamp,
       })
       .eq('id', user.id)
 
     if (updateError) {
-      console.error('Account deletion error:', updateError)
+      console.error('Failed to mark user as deleted:', updateError)
       captureCriticalAccountDeletionError(updateError, {
         ...deletionContext,
         step: 'database_update',
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 })
     }
 
-    // Step 2: Sign out the user BEFORE deletion to prevent session issues
+    // Step 2: Sign out the user BEFORE auth deletion to prevent session issues
     try {
       await supabase.auth.signOut()
     } catch (signOutError) {
@@ -111,30 +110,26 @@ export async function POST(request: NextRequest) {
       // Continue with deletion - sign out failure shouldn't block the process
     }
 
-    // Step 3: Prevent all future authentication by permanently banning the user
-    // Create admin client with service role key for admin operations
+    // Step 3: Delete the auth.users record completely (prevents all future authentication)
+    // With the foreign key constraint removed, this won't affect the business data
     const adminClient = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Update auth.users with anonymized email and permanent ban
-    const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(user.id, {
-      email: anonymizedEmail,
-      ban_duration: '876000h' // ~100 years - effectively permanent ban
-    })
+    const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id)
 
-    if (authUpdateError) {
-      console.error('Failed to update and ban auth.users:', authUpdateError)
-      captureCriticalAccountDeletionError(authUpdateError, {
+    if (deleteUserError) {
+      console.error('Failed to delete auth.users record:', deleteUserError)
+      captureCriticalAccountDeletionError(deleteUserError, {
         ...deletionContext,
-        step: 'auth_update',
+        step: 'auth_delete',
         emailSent
       })
       return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
     }
 
-    console.log('Successfully anonymized and permanently banned user:', user.id)
+    console.log('Successfully deleted auth.users record while preserving business data for user:', user.id)
 
     return NextResponse.json({ 
       success: true, 

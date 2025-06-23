@@ -3,9 +3,10 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table (extends Supabase auth.users)
+-- Users table (business data independent of auth.users lifecycle)
+-- When auth.users is deleted, this record becomes "orphaned" but preserves business data
 CREATE TABLE users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY, -- Matches auth.users.id when active, preserved as orphaned record when auth user is deleted
     email TEXT UNIQUE NOT NULL,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
@@ -279,12 +280,13 @@ CREATE TABLE email_logs (
     bounce_reason TEXT,
     email_data JSONB,
     triggered_by TEXT CHECK (triggered_by IN ('user_action', 'admin_send', 'automated')),
-    triggered_by_user_id UUID REFERENCES users(id),
+    triggered_by_user_id UUID, -- References users(id) but no foreign key constraint
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 
 -- Create indexes for performance
+CREATE INDEX idx_users_deleted_at ON users(deleted_at);
 CREATE INDEX idx_login_attempts_user_id_time ON login_attempts(user_id, attempted_at);
 CREATE INDEX idx_login_attempts_email_time ON login_attempts(email, attempted_at);
 CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at);

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import SignOutButton from '@/components/SignOutButton'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -139,14 +140,7 @@ export default async function AccountPage() {
                   <h3 className="text-sm font-medium text-gray-900">Sign Out</h3>
                   <p className="text-sm text-gray-500">Sign out of your account</p>
                 </div>
-                <form action="/auth/signout" method="post">
-                  <button
-                    type="submit"
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-md text-sm font-medium"
-                  >
-                    Sign Out
-                  </button>
-                </form>
+                <SignOutButton />
               </div>
             </div>
           </div>

@@ -13,6 +13,12 @@ export default function LoginPage() {
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
 
+  // Email validation function
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email.trim())
+  }
+
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -73,8 +79,9 @@ export default function LoginPage() {
       if (error) {
         setMessage(error.message)
         showError('Login failed', error.message)
+        setLoading(false) // Only reset on error
       }
-      // Note: On success, user will be redirected, so no need to handle success case
+      // Note: On success, user will be redirected to Google, so don't reset loading
     } catch (error: any) {
       console.error('Google login error:', error)
       
@@ -91,9 +98,7 @@ export default function LoginPage() {
       
       setMessage(errorMessage)
       showError('Login failed', errorMessage)
-    } finally {
-      // Reset loading state if there was an error (success redirects away)
-      setLoading(false)
+      setLoading(false) // Only reset on error
     }
   }
 
@@ -142,7 +147,7 @@ export default function LoginPage() {
             <div>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isValidEmail(email)}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Sending...' : 'Send Magic Link'}

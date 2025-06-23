@@ -60,9 +60,7 @@ export default async function RegistrationDetailPage({
       ),
       memberships (
         id,
-        name,
-        price_monthly,
-        price_annual
+        name
       )
     `)
     .eq('registration_id', params.id)
@@ -233,11 +231,16 @@ export default async function RegistrationDetailPage({
                                 )}
                               </div>
 
-                              {category.memberships && (
-                                <div className="mt-1 text-sm text-gray-500">
-                                  Requires: {category.memberships.name} (${(category.memberships.price_monthly / 100).toFixed(2)}/mo or ${(category.memberships.price_annual / 100).toFixed(2)}/yr)
-                                </div>
-                              )}
+                              <div className="mt-1 text-sm text-gray-500">
+                                <span className="font-medium text-gray-700">
+                                  Price: ${(category.price / 100).toFixed(2)}
+                                </span>
+                                {category.memberships && (
+                                  <span className="ml-4">
+                                    Requires: {category.memberships.name}
+                                  </span>
+                                )}
+                              </div>
 
                               {category.max_capacity && (
                                 <div className="mt-2">

@@ -567,87 +567,68 @@ email_logs (
   - [x] Membership eligibility checking for registrations
   - [x] Real-time data integration with Supabase backend
 
-### 🚧 In Progress
+## 📋 Current Development Phases
 
-### 📋 Next Steps (Payment Integration & Registration Purchase Flow)
+### ✅ **COMPLETED PHASES**
 
-#### **✅ Phase 2: Private Membership Purchase Flow - COMPLETED** 💳
-- [x] **Browse Available Membership Types**
-  - [x] Private page showing all membership types (authenticated users only)
-  - [x] Clear pricing display with real-time calculations
-  - [x] Membership descriptions and benefits
-  - [x] Duration selection UI (3, 6, 12 months) with smart pricing
-- [x] **Membership Purchase Workflow**
-  - [x] Purchase flow integrated within user dashboard
-  - [x] Calculate pricing based on selected duration with savings display
-  - [x] Preview membership validity period with smart extension logic
-  - [x] **Smart Date Extension**: Seamlessly extends existing memberships vs new purchases
-  - [x] Visual indicators for extensions (no gaps or overlaps)
-  - [x] Integration point ready for Stripe payment processing
-- [x] **Membership Management**
-  - [x] View purchase history and receipts
-  - [x] **Enhanced Features**: Extension logic, test data tools, RLS policy fixes
-  - [ ] Renewal notifications and easy renewal flow
-  - [ ] Upgrade/downgrade between membership types
+#### **✅ Phase 1: Core Foundation - COMPLETED**
+- [x] Next.js project setup with TypeScript and Tailwind CSS
+- [x] Supabase integration and database schema creation
+- [x] Authentication system (magic links + Google OAuth)
+- [x] User management with admin roles and Row Level Security
+- [x] Season, membership, and registration management systems
+- [x] User dashboard with account management
 
-#### **Phase 3: Registration Discovery & Purchase** 🏒
-- [ ] **Smart Registration Eligibility**
-  - [x] Show available registrations based on current memberships - *Basic display completed*
-  - [x] Clear messaging: "You need X membership to register" - *Visual indicators completed*
-  - [x] Hide/gray out ineligible registrations with explanations - *Basic eligibility checking completed*
-- [ ] **Registration Purchase Flow**
-  - [ ] Category selection with capacity indicators
-  - [ ] Membership + registration bundle recommendations
-  - [ ] Registration management within user dashboard
-- [ ] **Waitlist & Notifications**
-  - [ ] Join waitlists for full registrations
-  - [ ] Email notifications for available spots
-  - [ ] Waitlist position tracking
+#### **✅ Phase 2: Membership Purchase System - COMPLETED** 💳
+- [x] **Membership Purchase Flow**: Complete purchase workflow with duration selection
+- [x] **Stripe Payment Integration**: Payment intents, Elements UI, webhook processing
+- [x] **Smart Date Extension**: Seamless membership extension logic
+- [x] **Purchase History**: Consolidated membership display with transaction records
+- [x] **Email Integration**: Loops.so transactional emails with purchase confirmations
+- [x] **Toast Notifications**: Enhanced user feedback throughout purchase flow
 
-#### **✅ Phase 4: Payment Integration & Core Features - COMPLETED** 💳
-- [x] **Stripe Payment Integration**
-  - [x] Set up Stripe configuration and webhooks
-  - [x] Integrate payment processing into membership purchase flow
-  - [x] Handle payment success/failure states and user feedback
-  - [x] Create payment records and link to user_memberships
-  - [x] **Advanced Features**: Payment intents, Stripe Elements UI, webhook processing
-  - [x] **UX Enhancements**: Consolidated membership view, intentional selection, purchase history
-- [ ] **Core Feature Completion**
-  - [ ] Registration pricing tiers system (early bird, regular, late pricing)
-  - [ ] Add membership type editing functionality (update pricing, descriptions, accounting codes)
-  - [ ] Add registration category editing functionality (capacity, membership requirements)
+#### **✅ Phase 2.5: User Onboarding Enhancement - COMPLETED** 🎯
+- [x] **Onboarding Flow**: Complete form with name collection, terms acceptance, membership upsell
+- [x] **Legal Compliance**: Terms & Conditions, Code of Conduct, Privacy Policy
+- [x] **Secure Middleware**: Prevents route access until onboarding completion
+- [x] **Enhanced Login UX**: Toast notifications, disabled buttons, error handling
 
-#### **🚨 CRITICAL: Payment Exception Handling** ⚠️ **(HIGH PRIORITY)**
-- [ ] **Error Recovery System**
-  - [ ] Implement comprehensive error logging for payment processing failures
-  - [ ] Create admin notification system for payment/database inconsistencies
-  - [ ] Build admin interface to view and resolve failed transactions
-  - [ ] Add retry mechanisms for failed database operations after successful payments
-- [ ] **Monitoring & Alerting**
-  - [ ] Set up automated alerts for payment success but membership creation failure
-  - [ ] Create audit trail for all payment-related database operations
-  - [ ] Implement health checks for payment processing pipeline
-  - [ ] Add manual reconciliation tools for admins
-- [ ] **Prevention & Recovery**
-  - [ ] Improve transaction handling to ensure atomicity
-  - [ ] Add idempotency checks to prevent duplicate processing
-  - [ ] Create manual membership creation tools for edge cases
-  - [ ] Implement automatic retry with exponential backoff
+#### **✅ Phase 3: Account Deletion & Privacy Compliance - COMPLETED** 🗑️
+- [x] **Complete Authentication Prevention**: Auth.users deletion prevents all login methods
+- [x] **Business Data Preservation**: Orphaned user records maintain payment/membership history
+- [x] **Clean Re-registration**: Same email can create new account with fresh UUID
+- [x] **Two-Step Security Process**: Warning screen + typed verification
+- [x] **Email Confirmation**: Deletion confirmation sent before account processing
 
-**Issue**: Users can successfully pay via Stripe but membership creation may fail due to database errors, network issues, or other exceptions. This results in charged customers without received services.
+#### **✅ Phase 4: Error Monitoring & Reliability - COMPLETED** ⚠️
+- [x] **Sentry Integration**: Comprehensive error tracking for critical operations
+- [x] **Payment Error Monitoring**: Specialized tracking for payment processing failures
+- [x] **Account Deletion Monitoring**: Step-by-step error tracking with context
+- [x] **Critical Error Classification**: Fatal-level alerts for business-critical failures
+- [x] **Contextual Error Data**: User, payment, and operation context in all error reports
 
-#### **Future Enhancements** 🔮
-- [ ] Discount codes system for memberships and registrations
-- [ ] Loops.so email integration for automated communications
-- [ ] Admin reporting and analytics dashboard
-- [ ] Renewal notifications and easy renewal flow
+### 🚧 **IN PROGRESS / NEXT PHASES**
+
+#### **Phase 5: Registration Purchase System** 🏒
+- [x] **Basic Registration Display**: Show available registrations with membership requirements
+- [x] **Eligibility Checking**: Visual indicators for registration access requirements
+- [ ] **Registration Purchase Flow**: Category selection with capacity indicators
+- [ ] **Bundle Recommendations**: Membership + registration package suggestions
+- [ ] **Registration Management**: Purchase history and registration details in dashboard
+
+#### **Phase 6: Advanced Features** 🔮
+- [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
+- [ ] **Discount Codes**: Percentage-based discounts with usage tracking
+- [ ] **Waitlist Management**: Automated waitlist handling for full registrations
+- [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
+- [ ] **Content Management**: Admin interface for Terms & Conditions updates
+
+### 🚀 **FUTURE ENHANCEMENTS**
+- [ ] Renewal notifications and automated renewal flow
 - [ ] Upgrade/downgrade between membership types
-- [ ] **Admin Content Management System**
-  - [ ] Admin interface to update Terms & Conditions with version tracking
-  - [ ] Admin interface to update Code of Conduct
-  - [ ] Admin interface to update Privacy Policy
-  - [ ] Content version history and rollback capabilities
-  - [ ] User notification system when terms are updated (require re-acceptance)
+- [ ] Advanced analytics and reporting dashboard
+- [ ] Mobile application development
+- [ ] Multi-language support
 
 ### ⚠️ Security Items to Address
 - [x] **COMPLETED**: Fix user_memberships RLS policies to allow user INSERT/UPDATE operations
@@ -668,126 +649,28 @@ email_logs (
 - **✅ Business Data Preservation**: Maintained all payment, membership, and registration history through orphaned user records
 - **✅ Production Testing**: Successfully tested complete deletion → authentication prevention → clean re-registration flow
 
-**🎯 Result**: Production-ready account deletion system with complete privacy compliance, authentication prevention, and business data preservation
+✅ **Comprehensive Error Monitoring Implementation**
+- **✅ Sentry Integration**: Complete error tracking system for critical business operations
+- **✅ Payment Error Monitoring**: Specialized monitoring for payment processing failures with business-friendly messages
+- **✅ Account Deletion Monitoring**: Step-by-step error tracking with contextual data for debugging
+- **✅ Critical Error Classification**: Fatal-level alerts for business-critical failures requiring immediate attention
+- **✅ Contextual Error Data**: Rich error context including user data, payment details, and operation state
 
-## Previous Achievements (June 20, 2025)
+**🎯 Result**: Production-ready account deletion system with complete privacy compliance, authentication prevention, business data preservation, and comprehensive error monitoring
 
-✅ **Complete Email Integration & UX Enhancement**
-- **✅ Email System Testing**: Successfully tested Loops.so transactional email delivery
-- **✅ Toast Notification System**: Implemented comprehensive toast notifications for enhanced user feedback
-- **✅ Purchase UX Improvements**: Added immediate success/failure notifications with detailed messaging
-- **✅ Documentation**: Added complete email template setup guide and Stripe test card documentation
-- **✅ Testing Framework**: Comprehensive testing instructions for payment scenarios and email delivery
+## Previous Achievements Summary
 
-✅ **Phase 4: Complete Stripe Payment Integration** *(Previously Completed)*
-- Implemented full Stripe payment processing with sandbox integration
-- Created secure API endpoints for payment intents, confirmation, and webhook handling
-- Built Stripe Elements UI with modal payment forms and comprehensive error handling
-- Added payment records integration with user_memberships and payments tables
-- Implemented smart membership extension logic (no gaps or overlaps in coverage)
-- Added post-purchase UX improvements (scroll to top, form reset, loading states)
-- **✅ Stripe Link Integration**: Added one-click payments for returning users and progressive Link enrollment for new users
-- **✅ UI Improvements**: Cleaned up memberships page by removing unnecessary 'Valid From' dates for cleaner, focused display
+For detailed information about all completed features and implementations, see the **Current Development Phases** section above, which provides a comprehensive overview of:
 
-✅ **Enhanced Membership UX & Consolidated Display** *(Previously Completed)*
-- Refactored membership display to show consolidated active memberships by type
-- Created collapsible PurchaseHistory component with detailed transaction records
-- Implemented intentional selection UX (no default duration selection)
-- Added progressive disclosure for purchase summary and pricing details
-- Applied consistent membership consolidation logic across dashboard and memberships page
-- Enhanced user experience with validation, error messaging, and clear visual feedback
+- **Phase 1**: Core Foundation (Next.js, Supabase, Authentication, Admin Systems)
+- **Phase 2**: Membership Purchase System (Stripe, Email Integration, Toast Notifications)  
+- **Phase 2.5**: User Onboarding Enhancement (Legal Compliance, Secure Middleware)
+- **Phase 3**: Account Deletion & Privacy Compliance (Authentication Prevention, Data Preservation)
+- **Phase 4**: Error Monitoring & Reliability (Sentry Integration, Critical Error Tracking)
 
-✅ **Database & Architecture Improvements** *(Previously Completed)*
-- Removed unique constraint on user_memberships to allow membership extensions/renewals
-- Updated schema.sql to reflect membership extension capability
-- Fixed payment processing flow to handle multiple purchases of same membership type
-- Created database migration scripts for seamless schema updates
+**🎯 Current Status**: Complete user lifecycle management system with membership purchasing, privacy compliance, and comprehensive error monitoring.
 
-✅ **Professional Email System Implementation**
-- **✅ Loops.so Integration**: Complete transactional email system with template support
-- **✅ Email Templates**: Purchase confirmations, welcome emails, expiration warnings, payment failures
-- **✅ Email Logging**: Comprehensive delivery tracking in email_logs table
-- **✅ Template Documentation**: Complete setup guide with data variables and examples
-- **✅ Testing Documentation**: Stripe test card numbers and payment scenario testing guide
-
-✅ **Toast Notification System**
-- **✅ Component Architecture**: Reusable Toast component with animations and auto-dismiss
-- **✅ Context Management**: Global ToastProvider for app-wide notification management
-- **✅ Purchase Flow Integration**: Success/failure notifications with detailed messaging
-- **✅ Enhanced User Feedback**: Immediate visual confirmation for all payment operations
-- **✅ Improved Timing**: 2-second delay before page refresh to show success notifications
-
-**🎯 Current Status: Core System Complete** - Full membership purchase flow with payments, emails, and notifications working end-to-end.
-
-## Next Priority Areas
-
-### ✅ **Phase 2.5: User Onboarding Enhancement - COMPLETED** 🎯
-**Problem Solved**: Eliminated auto-creation of accounts without user confirmation.
-
-**✅ Complete Onboarding System Implementation**
-- **✅ Database Schema**: Added `onboarding_completed_at`, `terms_accepted_at`, `terms_version` fields
-- **✅ Secure-by-Default Middleware**: Blocks all protected routes until onboarding completion
-- **✅ Legal Pages**: Terms & Conditions, Code of Conduct, Privacy Policy with proper linking
-- **✅ Onboarding Flow**: Comprehensive form with name collection, terms acceptance, membership upsell
-- **✅ User Experience Enhancements**:
-  - Pre-populated email address (read-only, from OAuth provider)
-  - Smart name detection from OAuth metadata (Google, etc.)
-  - Real-time form validation with disabled submit until complete
-  - Toast notifications for success/failure states
-  - Clean error handling with specific network error messages
-  - Cancel option that signs out and returns to login
-  - Membership upsell checkbox (defaults checked) with direct routing
-- **✅ Technical Architecture**:
-  - Modified auth callback to stop auto-creating user records
-  - Secure middleware prevents bypassing onboarding via direct URLs
-  - User layout handles missing profiles gracefully
-  - Migration script marks existing users as onboarded
-  - Organized migration files with date prefixes
-- **✅ Enhanced Login UX**:
-  - Toast notifications on magic link send/Google login
-  - Disabled buttons during processing with loading text
-  - Improved error handling for network timeouts
-  - Clean button states without complex spinners
-
-**Result**: Professional onboarding experience with legal compliance and immediate membership conversion opportunity
-
-### ✅ **Account Deletion & Privacy Compliance - COMPLETED** 🗑️
-**Problem Solved**: Users can now permanently delete their accounts in compliance with privacy regulations.
-
-**✅ Complete Account Deletion System Implementation**
-- **✅ Two-Step Security Process**: Initial warning with data loss details, final confirmation requiring typed verification
-- **✅ Privacy-Compliant Data Handling**: Personal data anonymized while preserving business records for financial compliance
-- **✅ Complete Authentication Prevention**: Deletes entire auth.users record to prevent all login methods (email, OAuth, magic links)
-- **✅ Database Architecture Redesign**: 
-  - Removed foreign key constraint between users and auth.users tables
-  - Added `deleted_at` field with proper indexing for performance and audit trails
-  - Enables "orphaned" user records that preserve business data after auth deletion
-- **✅ Email Confirmation**: Sends deletion confirmation email to original address before account processing
-- **✅ Clean Re-registration**: Same email can create new account with fresh UUID and no data linking
-- **✅ Technical Features**:
-  - API endpoint with service role admin client for auth.users deletion
-  - Comprehensive error handling with Sentry monitoring for critical operations
-  - Reusable DeleteAccountSection component with three-state UI flow
-  - Business data preservation (payments, memberships, registrations) with audit trails
-  - Automatic sign-out and session cleanup
-- **✅ User Experience**: Clear warnings, loading states, toast notifications, clean redirect flow
-- **✅ Testing Benefits**: Perfect testing loop - delete and recreate accounts with same email for comprehensive testing
-
-**Result**: Full privacy compliance with GDPR-style data deletion, complete authentication prevention, business data preservation, and clean re-registration capability
-
-### 📈 **Immediate Enhancements (Optional)**
-1. **Registration Purchase Flow** - Allow users to purchase event/team registrations
-2. **Admin Reporting** - Dashboard for payment reconciliation and membership analytics
-3. **Email Template Expansion** - Set up remaining email templates (welcome, expiration, payment failed)
-
-### 🔄 **System Reliability (Recommended)**
-- **Error Logging & Monitoring**: Comprehensive logging for payment processing failures
-- **Admin Recovery Interface**: Tools for resolving payment inconsistencies
-- **Transaction Reliability**: Improved error recovery and idempotency checks
-- **Health Monitoring**: Automated alerts for payment processing issues
-
-### 🚀 **Future Features**
-- **Registration System**: Team and event registration with membership requirements
-- **Pricing Tiers**: Early bird, regular, and late pricing for registrations
-- **Discount Codes**: Percentage-based discounts with usage tracking
-- **Waitlist Management**: Automated waitlist handling for full registrations
+### 🚀 **Next Priority Recommendations**
+1. **Registration Purchase Flow** - Complete the registration purchase system (Phase 5)
+2. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
+3. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 6)

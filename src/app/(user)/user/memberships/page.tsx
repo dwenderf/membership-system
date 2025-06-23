@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import MembershipPurchase from '@/components/MembershipPurchase'
 import PurchaseHistory from '@/components/PurchaseHistory'
+import Link from 'next/link'
 
 export default async function UserMembershipsPage() {
   const supabase = await createClient()
@@ -21,11 +21,6 @@ export default async function UserMembershipsPage() {
     .eq('user_id', user.id)
     .order('valid_until', { ascending: false })
 
-  // Get available membership types for purchase
-  const { data: availableMemberships } = await supabase
-    .from('memberships')
-    .select('*')
-    .order('name')
 
   const now = new Date()
   
@@ -71,7 +66,7 @@ export default async function UserMembershipsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">My Memberships</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Manage your hockey association memberships and purchase new ones
+          View and manage your current hockey association memberships
         </p>
       </div>
 
@@ -128,14 +123,28 @@ export default async function UserMembershipsPage() {
             })}
           </div>
         ) : (
-          <div className="text-center py-8">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No active memberships</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              You don't have any active memberships. Purchase one below to access registrations.
-            </p>
+          <div className="py-8">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-12 w-12 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-900">No active memberships</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  You don't have any active memberships. Purchase a membership to access teams and events.
+                </p>
+                <div className="mt-4">
+                  <Link
+                    href="/user/browse-memberships"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    Browse Memberships
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -143,42 +152,36 @@ export default async function UserMembershipsPage() {
       {/* Purchase History */}
       <PurchaseHistory userMemberships={userMemberships || []} />
 
-      {/* Available Memberships for Purchase */}
-      <div className="mb-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Available Memberships</h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {availableMemberships?.map((membership) => (
-            <div key={membership.id} className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  {membership.name}
-                </h3>
-                {membership.description && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    {membership.description}
-                  </p>
-                )}
-                <MembershipPurchase 
-                  membership={membership} 
-                  userEmail={user.email || ''}
-                  userMemberships={userMemberships}
-                />
+      {/* Call to Action for Purchasing - Only show if user has memberships */}
+      {activeMemberships.length > 0 && (
+        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-blue-800">
+                Need a new membership?
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>
+                  Browse available membership types and purchase new memberships or extend your existing ones.
+                </p>
+              </div>
+              <div className="mt-4">
+                <Link
+                  href="/user/browse-memberships"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Browse Memberships
+                </Link>
               </div>
             </div>
-          ))}
-        </div>
-        {(!availableMemberships || availableMemberships.length === 0) && (
-          <div className="text-center py-8">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8-4 4-4-4m0 0L9 9l-4-4" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No memberships available</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Check back later or contact an administrator.
-            </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

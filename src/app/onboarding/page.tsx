@@ -145,7 +145,7 @@ export default function OnboardingPage() {
 
       // Redirect based on membership preference (no delay needed)
       if (formData.wantsMembership) {
-        router.push('/user/memberships?onboarding=true')
+        router.push('/user/browse-memberships?onboarding=true')
       } else {
         router.push('/dashboard')
       }

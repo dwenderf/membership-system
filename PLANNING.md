@@ -609,12 +609,21 @@ email_logs (
 
 ### 🚧 **IN PROGRESS / NEXT PHASES**
 
-#### **Phase 5: Registration Purchase System** 🏒
+#### **✅ Phase 5: Registration Purchase System - COMPLETED** 🏒
 - [x] **Basic Registration Display**: Show available registrations with membership requirements
 - [x] **Eligibility Checking**: Visual indicators for registration access requirements
-- [ ] **Registration Purchase Flow**: Category selection with capacity indicators
-- [ ] **Bundle Recommendations**: Membership + registration package suggestions
-- [ ] **Registration Management**: Purchase history and registration details in dashboard
+- [x] **Registration Purchase Flow**: Complete category selection with dynamic pricing and payment processing
+- [x] **Information Architecture Separation**: Clear distinction between "My" pages (viewing) and "Browse" pages (purchasing)
+- [x] **Enhanced Admin Management**: Comprehensive registration management system with timing controls
+
+#### **✅ Phase 5.5: Advanced Registration Management - COMPLETED** ⏰
+- [x] **Registration Timing System**: Pre-sale, general, and end date controls with validation
+- [x] **Publication Status Control**: Draft/published state with admin workflow protection
+- [x] **Status-Based Organization**: Collapsible sections by registration state (Draft/Active/Coming Soon/Expired)
+- [x] **Registration Category Pricing**: Direct category-based pricing with admin price management
+- [x] **Inline Admin Editing**: Quick registration name editing with real-time updates
+- [x] **Category Edit Workflow**: Complete CRUD operations for registration categories
+- [x] **Comprehensive Status Logic**: 5-state system (draft/coming_soon/presale/open/expired) with proper timing validation
 
 #### **Phase 6: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
@@ -637,9 +646,27 @@ email_logs (
 ---
 
 *Last updated: June 23, 2025*
-*Status: **Account Management Complete** - Full user lifecycle with onboarding, authentication, and production-ready privacy-compliant deletion*
+*Status: **Registration System Complete** - Full registration lifecycle with timing controls, purchase flow, and advanced admin management*
 
 ## Recent Achievements (June 23, 2025)
+
+✅ **Advanced Registration Management System Implementation**
+- **✅ Registration Timing & Publication Controls**: Complete pre-sale, general, and end date system with draft/published workflow
+- **✅ Status-Based Admin Organization**: Intelligent collapsible sections organizing registrations by state (Draft/Active/Coming Soon/Expired)
+- **✅ Simplified Pricing Architecture**: Direct category-based pricing replacing complex time-based tiers
+- **✅ Enhanced Admin UX**: Inline editing, real-time validation, and comprehensive CRUD operations
+- **✅ Information Architecture Separation**: Clear "My" vs "Browse" page distinction for optimal user experience
+- **✅ Complete Registration Purchase Flow**: End-to-end category selection, payment processing, and confirmation system
+
+✅ **Database Architecture & Validation Improvements**
+- **✅ Registration Timing Schema**: Added timing fields with proper constraints and validation logic
+- **✅ Category Pricing Migration**: Seamless migration from complex pricing tiers to simple category pricing
+- **✅ Status Utility System**: Comprehensive 5-state registration status logic with proper date validation
+- **✅ Real-time Form Validation**: Date ordering validation with user-friendly warning system
+
+**🎯 Result**: Complete registration system with advanced timing controls, streamlined admin workflow, and production-ready purchase flow
+
+## Previous Achievements Summary (June 23, 2025)
 
 ✅ **Account Deletion System Architecture Refinement**
 - **✅ OAuth Authentication Bypass Resolution**: Discovered and resolved critical issue where deleted users could still authenticate via Google OAuth
@@ -656,8 +683,6 @@ email_logs (
 - **✅ Critical Error Classification**: Fatal-level alerts for business-critical failures requiring immediate attention
 - **✅ Contextual Error Data**: Rich error context including user data, payment details, and operation state
 
-**🎯 Result**: Production-ready account deletion system with complete privacy compliance, authentication prevention, business data preservation, and comprehensive error monitoring
-
 ## Previous Achievements Summary
 
 For detailed information about all completed features and implementations, see the **Current Development Phases** section above, which provides a comprehensive overview of:
@@ -668,9 +693,9 @@ For detailed information about all completed features and implementations, see t
 - **Phase 3**: Account Deletion & Privacy Compliance (Authentication Prevention, Data Preservation)
 - **Phase 4**: Error Monitoring & Reliability (Sentry Integration, Critical Error Tracking)
 
-**🎯 Current Status**: Complete user lifecycle management system with membership purchasing, privacy compliance, and comprehensive error monitoring.
+**🎯 Current Status**: Complete registration system with advanced timing controls, membership purchasing, and comprehensive admin management.
 
 ### 🚀 **Next Priority Recommendations**
-1. **Registration Purchase Flow** - Complete the registration purchase system (Phase 5)
+1. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 6)
 2. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
-3. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 6)
+3. **User Experience Enhancements** - Registration history, notifications, and user-facing timing displays

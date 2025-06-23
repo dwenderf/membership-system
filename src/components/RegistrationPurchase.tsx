@@ -6,6 +6,7 @@ import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
+import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -54,12 +55,7 @@ interface Registration {
 interface RegistrationPurchaseProps {
   registration: Registration
   userEmail: string
-  activeMemberships?: Array<{
-    membership?: {
-      id: string
-      name: string
-    }
-  }>
+  activeMemberships?: UserMembership[]
   isEligible: boolean
 }
 
@@ -95,11 +91,25 @@ export default function RegistrationPurchase({
     }
   }, [categories, selectedCategoryId, activeMemberships])
 
-  // Check if selected category is eligible
+  // Check if selected category is eligible (basic membership check)
   const isCategoryEligible = selectedCategory ? 
     !selectedCategory.required_membership_id || 
     activeMemberships.some(um => um.membership?.id === selectedCategory.required_membership_id)
     : false
+
+  // Enhanced validation: check if membership covers entire season
+  const membershipValidation = selectedCategory?.required_membership_id && registration.season
+    ? validateMembershipCoverage(
+        selectedCategory.required_membership_id,
+        activeMemberships,
+        registration.season
+      )
+    : { isValid: true } // No membership required or no season info
+
+  const hasSeasonCoverage = membershipValidation.isValid
+  const membershipWarning = formatMembershipWarning(membershipValidation)
+  const shouldShowSeasonWarning = selectedCategory && !hasSeasonCoverage && membershipWarning
+
 
   const handlePurchase = async () => {
     if (!selectedCategoryId) {
@@ -109,6 +119,12 @@ export default function RegistrationPurchase({
 
     if (!isCategoryEligible) {
       setError('You need the required membership for this category')
+      return
+    }
+
+    // Prevent registration if membership doesn't cover the full season
+    if (!hasSeasonCoverage) {
+      setError('Your membership must cover the entire season duration')
       return
     }
 
@@ -207,11 +223,8 @@ export default function RegistrationPurchase({
                           {categoryName}
                         </div>
                         {requiresMembership && (
-                          <div className={`text-xs ${
-                            hasRequiredMembership ? 'text-green-600' : 'text-yellow-600'
-                          }`}>
-                            {hasRequiredMembership ? '✓ ' : '⚠ Requires: '}
-                            {category.memberships?.name}
+                          <div className="text-xs text-gray-600">
+                            Requires: {category.memberships?.name}
                           </div>
                         )}
                         {category.max_capacity && (
@@ -257,11 +270,8 @@ export default function RegistrationPurchase({
                       {categoryName}
                     </div>
                     {requiresMembership && (
-                      <div className={`text-xs ${
-                        hasRequiredMembership ? 'text-green-600' : 'text-yellow-600'
-                      }`}>
-                        {hasRequiredMembership ? '✓ ' : '⚠ Requires: '}
-                        {category.membership?.name}
+                      <div className="text-xs text-gray-600">
+                        Requires: {category.memberships?.name}
                       </div>
                     )}
                   </div>
@@ -324,6 +334,20 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Season Coverage Warning */}
+      {shouldShowSeasonWarning && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+          <div className="text-yellow-800 text-sm">
+            <strong>Membership Extension Required:</strong> {membershipWarning}
+          </div>
+          <div className="mt-2 text-sm text-yellow-700">
+            <a href="/user/browse-memberships" className="underline hover:text-yellow-900">
+              Browse memberships to extend your coverage →
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -334,12 +358,13 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage}
         className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
         {isLoading ? 'Processing...' : 
          !selectedCategoryId ? 'Select Category to Continue' :
          !isCategoryEligible ? 'Membership Required' :
+         !hasSeasonCoverage ? 'Membership Extension Required' :
          'Register Now'}
       </button>
 

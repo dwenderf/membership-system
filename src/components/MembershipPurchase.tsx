@@ -5,6 +5,7 @@ import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
+import Link from 'next/link'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -41,6 +42,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [purchaseCompleted, setPurchaseCompleted] = useState(false)
   const { showSuccess, showError } = useToast()
 
   const calculatePrice = (months: number) => {
@@ -130,6 +132,43 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show success state if purchase completed
+  if (purchaseCompleted) {
+    return (
+      <div className="mt-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+          <div className="flex justify-center mb-4">
+            <svg className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-green-900 mb-2">
+            Membership Purchase Complete!
+          </h3>
+          <p className="text-green-800 mb-6">
+            Your {membership.name} is now active. You can register for teams, events, and activities.
+          </p>
+          <div className="space-y-3">
+            <Link
+              href="/user/browse-registrations"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
+            >
+              Browse Available Registrations →
+            </Link>
+            <div>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-sm text-gray-600 hover:text-gray-800 underline"
+              >
+                Refresh to see updated membership status
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -286,20 +325,17 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setClientSecret(null)
-                    // Reset form state
-                    setSelectedDuration(null) // Reset to no selection
                     setError(null)
+                    setPurchaseCompleted(true)
                     
                     // Show success notification
                     showSuccess(
                       'Purchase Successful!', 
-                      `Your ${membership.name} membership is now active for ${selectedDuration} months.`
+                      `Your ${membership.name} membership is now active for ${selectedDuration} months. You can now register for teams and events!`
                     )
                     
-                    // Scroll to top to show updated membership status
+                    // Scroll to top to show success section
                     window.scrollTo({ top: 0, behavior: 'smooth' })
-                    // Refresh the page to show updated membership (delayed for user to see success)
-                    setTimeout(() => window.location.reload(), 2000)
                   }}
                   onError={(error) => {
                     setError(error)

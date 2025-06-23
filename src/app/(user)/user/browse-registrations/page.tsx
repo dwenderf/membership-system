@@ -72,6 +72,42 @@ export default async function BrowseRegistrationsPage() {
     .order('created_at', { ascending: false })
 
   const activeMemberships = userMemberships || []
+  
+  // Consolidate memberships by type to show latest expiration (same logic as dashboard)
+  const now = new Date()
+  const consolidatedMemberships = activeMemberships.reduce((acc, um) => {
+    const validUntil = new Date(um.valid_until)
+    
+    // Only include if still valid
+    if (validUntil > now) {
+      const membershipId = um.membership_id
+      
+      if (!acc[membershipId]) {
+        acc[membershipId] = {
+          membershipId,
+          membership: um.membership,
+          validFrom: um.valid_from,
+          validUntil: um.valid_until,
+          purchases: []
+        }
+      }
+      
+      // Update overall validity period
+      if (um.valid_from < acc[membershipId].validFrom) {
+        acc[membershipId].validFrom = um.valid_from
+      }
+      if (um.valid_until > acc[membershipId].validUntil) {
+        acc[membershipId].validUntil = um.valid_until
+      }
+      
+      acc[membershipId].purchases.push(um)
+    }
+    
+    return acc
+  }, {} as Record<string, any>)
+  
+  const consolidatedMembershipList = Object.values(consolidatedMemberships)
+  const hasActiveMembership = consolidatedMembershipList.length > 0
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
   return (
@@ -95,42 +131,65 @@ export default async function BrowseRegistrationsPage() {
         </p>
       </div>
 
-      {/* Membership Status Alert */}
-      <div className={`mb-6 border rounded-lg p-4 ${
-        activeMemberships.length > 0 
-          ? 'bg-green-50 border-green-200' 
-          : 'bg-yellow-50 border-yellow-200'
-      }`}>
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className={`h-5 w-5 ${
-              activeMemberships.length > 0 ? 'text-green-400' : 'text-yellow-400'
-            }`} fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h3 className={`text-sm font-medium ${
-              activeMemberships.length > 0 ? 'text-green-800' : 'text-yellow-800'
-            }`}>
-              Membership Status
-            </h3>
-            <div className={`mt-2 text-sm ${
-              activeMemberships.length > 0 ? 'text-green-700' : 'text-yellow-700'
-            }`}>
-              <p>
-                {activeMemberships.length > 0 
-                  ? `You have ${activeMemberships.length} active membership${activeMemberships.length !== 1 ? 's' : ''} and can register for eligible events.`
-                  : 'You need an active membership to register for most teams and events.'
-                }
-                {' '}
-                <Link href="/user/browse-memberships" className="font-medium underline">
-                  {activeMemberships.length > 0 ? 'Manage memberships' : 'Browse memberships'} →
-                </Link>
-              </p>
+      {/* Membership Status */}
+      <div className="mb-6 bg-white border rounded-lg p-4">
+        <h3 className="text-sm font-medium text-gray-900 mb-3">
+          Membership Status
+        </h3>
+        {hasActiveMembership ? (
+          <div className="space-y-2">
+            {consolidatedMembershipList.map((consolidatedMembership: any) => {
+              const validUntil = new Date(consolidatedMembership.validUntil)
+              const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+              const isExpiringSoon = daysUntilExpiration <= 90
+              
+              return (
+                <div key={consolidatedMembership.membershipId} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-shrink-0">
+                      {isExpiringSoon ? (
+                        <span className="text-yellow-500">⚠️</span>
+                      ) : (
+                        <span className="text-green-500">✅</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-900">
+                        {consolidatedMembership.membership?.name}
+                      </span>
+                      <div className={`text-xs ${isExpiringSoon ? 'text-yellow-700' : 'text-gray-600'}`}>
+                        Expires: {validUntil.toLocaleDateString()}
+                        {isExpiringSoon && (
+                          <span className="ml-1">
+                            ({daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''} remaining)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <Link href="/user/browse-memberships" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Manage memberships →
+              </Link>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center space-x-2">
+            <span className="text-red-500">❌</span>
+            <div>
+              <p className="text-sm text-gray-900">No active memberships</p>
+              <p className="text-xs text-gray-600">
+                You need an active membership to register for most teams and events.
+              </p>
+              <Link href="/user/browse-memberships" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                Browse memberships →
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Available Registrations */}
@@ -145,7 +204,7 @@ export default async function BrowseRegistrationsPage() {
                 // Check if user has required memberships for any category
                 const hasEligibleMembership = registration.registration_categories?.some(cat => {
                   if (!cat.memberships?.name) return true // No membership required
-                  return activeMemberships.some(um => um.membership?.name === cat.memberships?.name)
+                  return consolidatedMembershipList.some(cm => cm.membership?.name === cat.memberships?.name)
                 })
 
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
@@ -190,33 +249,6 @@ export default async function BrowseRegistrationsPage() {
                         </p>
                       </div>
 
-                      {/* Categories */}
-                      {registration.registration_categories && registration.registration_categories.length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">Available Categories:</h4>
-                          <div className="space-y-1">
-                            {registration.registration_categories.map((regCat) => (
-                              <div key={regCat.id} className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600">
-                                  {regCat.categories?.name || regCat.custom_name}
-                                </span>
-                                <div className="flex items-center space-x-2">
-                                  {regCat.memberships?.name && (
-                                    <span className="text-xs text-gray-500">
-                                      Requires: {regCat.memberships.name}
-                                    </span>
-                                  )}
-                                  {regCat.max_capacity && (
-                                    <span className="text-xs text-gray-500">
-                                      Cap: {regCat.max_capacity}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
                       <div className="mt-5">
                         {isAlreadyRegistered ? (

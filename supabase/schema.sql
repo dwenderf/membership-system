@@ -12,6 +12,9 @@ CREATE TABLE users (
     phone TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT '{}',
+    onboarding_completed_at TIMESTAMP WITH TIME ZONE,
+    terms_accepted_at TIMESTAMP WITH TIME ZONE,
+    terms_version TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -279,6 +282,7 @@ CREATE TABLE email_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+
 -- Create indexes for performance
 CREATE INDEX idx_login_attempts_user_id_time ON login_attempts(user_id, attempted_at);
 CREATE INDEX idx_login_attempts_email_time ON login_attempts(email, attempted_at);
@@ -297,6 +301,7 @@ CREATE INDEX idx_discount_usage_user_season ON discount_usage(user_id, season_id
 CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, used_at);
 CREATE INDEX idx_waitlists_registration_position ON waitlists(registration_id, position);
 CREATE INDEX idx_waitlists_registration_time ON waitlists(registration_id, joined_at);
+
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
 CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);

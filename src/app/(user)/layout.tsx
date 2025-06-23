@@ -21,6 +21,11 @@ export default async function UserLayout({
     .eq('id', user.id)
     .single()
 
+  // If user profile doesn't exist or onboarding not completed, redirect to onboarding
+  if (!userProfile || !userProfile.onboarding_completed_at) {
+    redirect('/onboarding')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <UserNavigation user={userProfile} useToggle={true} />

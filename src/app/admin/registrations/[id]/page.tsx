@@ -3,6 +3,7 @@ import { formatDateString } from '@/lib/date-utils'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import EditableRegistrationName from '@/components/EditableRegistrationName'
 
 export default async function RegistrationDetailPage({
   params,
@@ -80,8 +81,11 @@ export default async function RegistrationDetailPage({
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{registration.name}</h1>
+              <div className="flex-1">
+                <EditableRegistrationName 
+                  registrationId={params.id}
+                  initialName={registration.name}
+                />
                 <p className="mt-1 text-sm text-gray-600">
                   Registration details and category management
                 </p>

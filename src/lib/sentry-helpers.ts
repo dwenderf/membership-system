@@ -139,7 +139,7 @@ export interface AccountDeletionContext {
   userId: string;
   userEmail: string;
   userName?: string;
-  step?: 'email_send' | 'database_update' | 'auth_signout';
+  step?: 'email_send' | 'database_update' | 'auth_update' | 'auth_signout';
   emailSent?: boolean;
   originalEmail?: string;
 }

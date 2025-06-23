@@ -77,13 +77,16 @@ export async function POST(request: NextRequest) {
       // Continue with deletion even if email fails
     }
 
-    // Anonymize the user account
+    // Generate the anonymized email that will be used in both tables
+    const anonymizedEmail = `deleted_user_${user.id}@deleted.local`
+
+    // Step 1: Anonymize the public.users record
     const { error: updateError } = await supabase
       .from('users')
       .update({
         first_name: 'Deleted',
         last_name: 'User',
-        email: `deleted_user_${user.id}@deleted.local`,
+        email: anonymizedEmail,
         phone: null,
         deleted_at: deletionTimestamp,
       })
@@ -97,6 +100,21 @@ export async function POST(request: NextRequest) {
         emailSent
       })
       return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 })
+    }
+
+    // Step 2: Update auth.users email to match (prevents re-authentication)
+    const { error: authUpdateError } = await supabase.auth.admin.updateUserById(user.id, {
+      email: anonymizedEmail
+    })
+
+    if (authUpdateError) {
+      console.error('Failed to update auth.users email:', authUpdateError)
+      captureCriticalAccountDeletionError(authUpdateError, {
+        ...deletionContext,
+        step: 'auth_update',
+        emailSent
+      })
+      return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
     }
 
     // Sign out the user from Supabase auth

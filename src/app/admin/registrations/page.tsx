@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString } from '@/lib/date-utils'
+import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import RegistrationsList from '@/components/RegistrationsList'
 
 export default async function RegistrationsPage() {
   const supabase = await createClient()
@@ -52,6 +54,37 @@ export default async function RegistrationsPage() {
               <p className="mt-1 text-sm text-gray-600">
                 Create and manage team registrations and events
               </p>
+              {registrations && registrations.length > 0 && (
+                <div className="mt-3 flex items-center space-x-4 text-sm">
+                  {(() => {
+                    const activeCount = registrations.filter((reg: any) => {
+                      const status = getRegistrationStatus(reg)
+                      return status === 'open' || status === 'presale'
+                    }).length
+                    const draftCount = registrations.filter((reg: any) => !reg.is_active).length
+                    const expiredCount = registrations.filter((reg: any) => {
+                      const status = getRegistrationStatus(reg)
+                      return status === 'expired'
+                    }).length
+                    const comingSoonCount = registrations.filter((reg: any) => {
+                      const status = getRegistrationStatus(reg)
+                      return status === 'coming_soon'
+                    }).length
+                    
+                    return (
+                      <>
+                        <span className="text-gray-600 font-medium">{draftCount} Draft</span>
+                        <span className="text-gray-400">•</span>
+                        <span className="text-green-600 font-medium">{activeCount} Active</span>
+                        <span className="text-gray-400">•</span>
+                        <span className="text-yellow-600 font-medium">{comingSoonCount} Coming Soon</span>
+                        <span className="text-gray-400">•</span>
+                        <span className="text-red-600 font-medium">{expiredCount} Expired</span>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
             </div>
             <Link
               href="/admin/registrations/new"
@@ -62,8 +95,8 @@ export default async function RegistrationsPage() {
           </div>
 
           {/* Registrations List */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            {!registrations || registrations.length === 0 ? (
+          {!registrations || registrations.length === 0 ? (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <div className="text-center py-12">
                 <div className="text-gray-500 text-lg mb-4">No registrations created yet</div>
                 <Link
@@ -73,64 +106,10 @@ export default async function RegistrationsPage() {
                   Create Your First Registration
                 </Link>
               </div>
-            ) : (
-              <ul className="divide-y divide-gray-200">
-                {registrations.map((registration: any) => {
-                  const season = registration.seasons
-                  const isSeasonEnded = season && new Date(season.end_date) < new Date()
-                  
-                  return (
-                    <li key={registration.id}>
-                      <div className="px-4 py-4 flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center">
-                              <Link
-                                href={`/admin/registrations/${registration.id}`}
-                                className="text-lg font-medium text-gray-900 hover:text-blue-600 truncate"
-                              >
-                                {registration.name}
-                              </Link>
-                              <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                                registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                                registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                                'bg-purple-100 text-purple-800'
-                              }`}>
-                                {registration.type}
-                              </span>
-                              {isSeasonEnded ? (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                  Season Ended
-                                </span>
-                              ) : (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  Active
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span>{season?.name || 'No season'}</span>
-                              {!registration.allow_discounts && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span className="text-red-600">No Discounts</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-gray-400">
-                            Created {new Date(registration.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
+            </div>
+          ) : (
+            <RegistrationsList registrations={registrations} />
+          )}
 
           {/* Back to Admin Dashboard */}
           <div className="mt-6">

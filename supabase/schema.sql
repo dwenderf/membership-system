@@ -99,6 +99,11 @@ CREATE TABLE registrations (
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('team', 'scrimmage', 'event')),
     allow_discounts BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT FALSE, -- Whether registration is published (false = draft/hidden from users)
+    presale_start_at TIMESTAMP WITH TIME ZONE, -- When pre-sale registration opens (requires presale_code)
+    regular_start_at TIMESTAMP WITH TIME ZONE, -- When general registration opens to all users
+    registration_end_at TIMESTAMP WITH TIME ZONE, -- When registration closes
+    presale_code TEXT, -- Code required for pre-sale access
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

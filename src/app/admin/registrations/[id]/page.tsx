@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString } from '@/lib/date-utils'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
+import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
@@ -82,15 +83,33 @@ export default async function RegistrationDetailPage({
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <EditableRegistrationName 
-                  registrationId={params.id}
-                  initialName={registration.name}
-                />
+                <div className="flex items-center space-x-3 mb-2">
+                  <EditableRegistrationName 
+                    registrationId={params.id}
+                    initialName={registration.name}
+                  />
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    getStatusBadgeStyle(getRegistrationStatus(registration))
+                  }`}>
+                    {getStatusDisplayText(getRegistrationStatus(registration))}
+                  </span>
+                  {!registration.is_active && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      Not Published
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-gray-600">
                   Registration details and category management
                 </p>
               </div>
               <div className="flex space-x-3">
+                <Link
+                  href={`/admin/registrations/${params.id}/timing`}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Edit Timing
+                </Link>
                 <Link
                   href={`/admin/registrations/${params.id}/categories/new`}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -150,6 +169,38 @@ export default async function RegistrationDetailPage({
                         <span className="text-green-600">Allowed</span>
                       ) : (
                         <span className="text-red-600">Not Allowed</span>
+                      )}
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Registration Timing</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {registration.presale_start_at || registration.regular_start_at || registration.registration_end_at ? (
+                        <div className="space-y-1">
+                          {registration.presale_start_at && (
+                            <div>
+                              <span className="font-medium">Pre-sale:</span> {new Date(registration.presale_start_at).toLocaleString()}
+                              {registration.presale_code && (
+                                <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
+                                  Code: {registration.presale_code}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {registration.regular_start_at && (
+                            <div>
+                              <span className="font-medium">General:</span> {new Date(registration.regular_start_at).toLocaleString()}
+                            </div>
+                          )}
+                          {registration.registration_end_at && (
+                            <div>
+                              <span className="font-medium">Ends:</span> {new Date(registration.registration_end_at).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">Always available</span>
                       )}
                     </dd>
                   </div>

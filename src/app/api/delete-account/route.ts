@@ -79,8 +79,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Mark the public.users record as deleted while preserving business data
-    const deletionTimestamp = new Date().toISOString()
-    
     const { error: updateError } = await supabase
       .from('users')
       .update({

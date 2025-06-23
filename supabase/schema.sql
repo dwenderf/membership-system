@@ -15,6 +15,7 @@ CREATE TABLE users (
     onboarding_completed_at TIMESTAMP WITH TIME ZONE,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
     terms_version TEXT,
+    deleted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

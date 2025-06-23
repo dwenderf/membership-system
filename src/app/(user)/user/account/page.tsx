@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import SignOutButton from '@/components/SignOutButton'
+import DeleteAccountSection from '@/components/DeleteAccountSection'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -143,6 +144,9 @@ export default async function AccountPage() {
                 <SignOutButton />
               </div>
             </div>
+
+            {/* Delete Account */}
+            <DeleteAccountSection user={userProfile} />
           </div>
         </div>
       </div>

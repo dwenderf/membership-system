@@ -134,3 +134,74 @@ export function capturePaymentSuccess(
     }
   });
 }
+
+export interface AccountDeletionContext {
+  userId: string;
+  userEmail: string;
+  userName?: string;
+  step?: 'email_send' | 'database_update' | 'auth_signout';
+  emailSent?: boolean;
+  originalEmail?: string;
+}
+
+/**
+ * Capture critical account deletion failure
+ */
+export function captureCriticalAccountDeletionError(
+  error: Error | any,
+  context: AccountDeletionContext
+) {
+  return Sentry.captureException(error, {
+    tags: {
+      critical: 'account_deletion_failure',
+      operation: 'delete_account',
+      endpoint: '/api/delete-account',
+      step: context.step || 'unknown'
+    },
+    extra: {
+      userId: context.userId,
+      userEmail: context.userEmail,
+      userName: context.userName,
+      emailSent: context.emailSent,
+      originalEmail: context.originalEmail,
+      failureStep: context.step,
+      errorDetails: error,
+      timestamp: new Date().toISOString()
+    },
+    user: {
+      id: context.userId,
+      email: context.userEmail,
+      username: context.userName
+    },
+    level: 'fatal',
+    fingerprint: ['account-deletion-failure', context.userId]
+  });
+}
+
+/**
+ * Capture account deletion operation warning (non-critical issues)
+ */
+export function captureAccountDeletionWarning(
+  message: string,
+  context: AccountDeletionContext,
+  details?: any
+) {
+  return Sentry.captureMessage(message, {
+    tags: {
+      operation: 'delete_account',
+      endpoint: '/api/delete-account',
+      step: context.step || 'unknown'
+    },
+    extra: {
+      userId: context.userId,
+      userEmail: context.userEmail,
+      details,
+      timestamp: new Date().toISOString()
+    },
+    user: {
+      id: context.userId,
+      email: context.userEmail
+    },
+    level: 'warning'
+  });
+}

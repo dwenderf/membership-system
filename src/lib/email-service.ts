@@ -9,6 +9,7 @@ export const EMAIL_EVENTS = {
   REGISTRATION_COMPLETED: 'registration.completed',
   PAYMENT_FAILED: 'payment.failed',
   WELCOME: 'user.welcome',
+  ACCOUNT_DELETED: 'account.deleted',
 } as const
 
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]
@@ -308,6 +309,31 @@ class EmailService {
         userName: options.userName,
         dashboardUrl: `${process.env.NEXTAUTH_URL}/user`,
         membershipUrl: `${process.env.NEXTAUTH_URL}/user/memberships`
+      }
+    })
+  }
+
+  /**
+   * Send account deletion confirmation email
+   */
+  async sendAccountDeletionConfirmation(options: {
+    userId: string
+    email: string
+    userName: string
+    deletedAt: string
+    supportEmail?: string
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.ACCOUNT_DELETED,
+      subject: 'Account Deletion Confirmation',
+      triggeredBy: 'user_action',
+      data: {
+        userName: options.userName,
+        deletedAt: new Date(options.deletedAt).toLocaleDateString(),
+        supportEmail: options.supportEmail || 'support@hockeyassociation.org',
+        loginUrl: `${process.env.NEXTAUTH_URL}/auth/login`
       }
     })
   }

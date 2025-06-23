@@ -2,13 +2,41 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
   const pathname = usePathname()
+  const [canAccessDashboard, setCanAccessDashboard] = useState(false)
   
-  // Show "Back to Dashboard" link only on legal pages
-  const showBackToDashboard = ['/terms', '/privacy-policy', '/code-of-conduct'].includes(pathname)
+  // Check if user can access dashboard (authenticated + onboarding complete)
+  useEffect(() => {
+    const checkUserAccess = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        setCanAccessDashboard(false)
+        return
+      }
+
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('onboarding_completed_at')
+        .eq('id', user.id)
+        .single()
+
+      // User can access dashboard if they exist and have completed onboarding
+      setCanAccessDashboard(!!userProfile?.onboarding_completed_at)
+    }
+
+    checkUserAccess()
+  }, [pathname])
+  
+  // Show "Back to Dashboard" link only on legal pages AND if user can access dashboard
+  const isOnLegalPage = ['/terms', '/privacy-policy', '/code-of-conduct'].includes(pathname)
+  const showBackToDashboard = isOnLegalPage && canAccessDashboard
 
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">

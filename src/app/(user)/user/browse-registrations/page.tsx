@@ -13,54 +13,13 @@ function formatDateString(dateString: string): string {
   return date.toLocaleDateString()
 }
 
-// Helper function to get current price for a registration category
-function getCurrentPrice(
-  registration: any, 
-  categoryId?: string
-): { price: number; tierName: string } {
-  const now = new Date()
-  const pricingTiers = registration.registration_pricing_tiers || []
-  
-  // Filter tiers for this category (or general tiers if category-specific not found)
-  const categoryTiers = pricingTiers.filter((tier: any) => 
-    tier.registration_category_id === categoryId
-  )
-  const generalTiers = pricingTiers.filter((tier: any) => 
-    tier.registration_category_id === null
-  )
-  
-  // Use category-specific tiers if available, otherwise fall back to general tiers
-  const relevantTiers = categoryTiers.length > 0 ? categoryTiers : generalTiers
-  
-  if (relevantTiers.length === 0) {
-    return { price: 5000, tierName: 'Standard' } // Default $50.00
+// Helper function to get price for a registration category (simplified)
+function getCategoryPrice(category: any): { price: number; tierName: string } {
+  // Use the price directly from the category
+  return { 
+    price: category.price || 5000, // Default to $50.00 if no price set
+    tierName: 'Standard' 
   }
-  
-  // Sort tiers by start date (latest first) and find current active tier
-  const activeTiers = relevantTiers
-    .filter((tier: any) => new Date(tier.starts_at) <= now)
-    .sort((a: any, b: any) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
-  
-  if (activeTiers.length > 0) {
-    return { 
-      price: activeTiers[0].price, 
-      tierName: activeTiers[0].tier_name 
-    }
-  }
-  
-  // If no active tiers, get the earliest upcoming tier
-  const upcomingTiers = relevantTiers
-    .filter((tier: any) => new Date(tier.starts_at) > now)
-    .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
-  
-  if (upcomingTiers.length > 0) {
-    return { 
-      price: upcomingTiers[0].price, 
-      tierName: upcomingTiers[0].tier_name 
-    }
-  }
-  
-  return { price: 5000, tierName: 'Standard' } // Default fallback
 }
 
 export default async function BrowseRegistrationsPage() {
@@ -107,9 +66,6 @@ export default async function BrowseRegistrationsPage() {
         *,
         categories:category_id(name),
         memberships:required_membership_id(name)
-      ),
-      registration_pricing_tiers(
-        *
       )
     `)
     .in('season_id', seasonIds)
@@ -277,7 +233,7 @@ export default async function BrowseRegistrationsPage() {
                               // Pre-calculate pricing for all categories
                               registration_categories: registration.registration_categories?.map(cat => ({
                                 ...cat,
-                                pricing: getCurrentPrice(registration, cat.id)
+                                pricing: getCategoryPrice(cat)
                               })) || []
                             }}
                             userEmail={user.email || ''}

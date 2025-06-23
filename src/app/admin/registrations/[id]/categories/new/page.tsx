@@ -53,11 +53,13 @@ export default function NewRegistrationCategoryPage() {
   const [formData, setFormData] = useState({
     category_id: '',     // Selected from master categories
     custom_name: '',     // For one-off custom categories
+    price: '',           // Price in cents, starts empty
     max_capacity: '',
     accounting_code: '',
     required_membership_id: '',  // Category-specific membership requirement
     sort_order: '',
   })
+  const [priceDisplay, setPriceDisplay] = useState('')
   
   const [availableCategories, setAvailableCategories] = useState<{
     id: string
@@ -161,6 +163,7 @@ export default function NewRegistrationCategoryPage() {
         registration_id: registrationId,
         category_id: isCustom ? null : (formData.category_id || null),
         custom_name: isCustom ? (formData.custom_name || null) : null,
+        price: parseInt(formData.price),
         max_capacity: formData.max_capacity ? parseInt(formData.max_capacity) : null,
         accounting_code: formData.accounting_code || null,
         required_membership_id: formData.required_membership_id === 'none' ? null : (formData.required_membership_id || null),
@@ -263,6 +266,7 @@ export default function NewRegistrationCategoryPage() {
     (isCustom && formData.custom_name.trim()) || 
     (!isCustom && formData.category_id)
   ) && 
+  formData.price && parseInt(formData.price) > 0 &&
   (!formData.max_capacity || parseInt(formData.max_capacity) > 0) &&
   !categoryAlreadyExists
 
@@ -446,7 +450,7 @@ export default function NewRegistrationCategoryPage() {
               {/* Max Capacity */}
               <div>
                 <label htmlFor="max_capacity" className="block text-sm font-medium text-gray-700">
-                  Maximum Capacity
+                  Maximum Capacity (optional)
                 </label>
                 <input
                   type="number"
@@ -458,7 +462,7 @@ export default function NewRegistrationCategoryPage() {
                   placeholder="e.g., 20"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Leave empty for unlimited capacity, or set a maximum number of participants for this category
+                  Leave empty for unlimited capacity
                 </p>
               </div>
 
@@ -531,10 +535,56 @@ export default function NewRegistrationCategoryPage() {
                 </p>
               </div>
 
+              {/* Price */}
+              <div>
+                <label htmlFor="price" className="block text-sm font-medium text-gray-700">
+                  Price
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">$</span>
+                  </div>
+                  <input
+                    type="text"
+                    id="price"
+                    value={priceDisplay}
+                    onChange={(e) => setPriceDisplay(e.target.value)}
+                    onBlur={(e) => {
+                      const value = e.target.value.trim()
+                      if (value === '') {
+                        setFormData(prev => ({ ...prev, price: '' }))
+                        setPriceDisplay('')
+                        return
+                      }
+                      
+                      const dollars = parseFloat(value)
+                      if (!isNaN(dollars) && dollars >= 0) {
+                        const cents = Math.round(dollars * 100)
+                        setFormData(prev => ({ ...prev, price: cents.toString() }))
+                        setPriceDisplay(dollars.toFixed(2))
+                      } else {
+                        // Invalid input, reset to previous valid value
+                        if (formData.price) {
+                          setPriceDisplay((parseInt(formData.price) / 100).toFixed(2))
+                        } else {
+                          setPriceDisplay('')
+                        }
+                      }
+                    }}
+                    className="pl-7 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Enter price (e.g., 25.00)"
+                    required
+                  />
+                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  Registration fee for this category in dollars (required)
+                </p>
+              </div>
+
               {/* Accounting Code */}
               <div>
                 <label htmlFor="accounting_code" className="block text-sm font-medium text-gray-700">
-                  Accounting Code
+                  Accounting Code (optional)
                 </label>
                 <input
                   type="text"
@@ -545,14 +595,14 @@ export default function NewRegistrationCategoryPage() {
                   placeholder="e.g., TEAM-PLAYER"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Optional code for accounting system integration
+                  Code for accounting system integration
                 </p>
               </div>
 
               {/* Sort Order */}
               <div>
                 <label htmlFor="sort_order" className="block text-sm font-medium text-gray-700">
-                  Display Order
+                  Display Order (optional)
                 </label>
                 <input
                   type="number"
@@ -563,7 +613,7 @@ export default function NewRegistrationCategoryPage() {
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Order in which this category appears (0 = first, higher numbers appear later)
+                  Order in which this category appears (defaults to last)
                 </p>
               </div>
 
@@ -611,6 +661,12 @@ export default function NewRegistrationCategoryPage() {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Accounting Code</dt>
                       <dd className="text-sm text-gray-900">{formData.accounting_code || 'None'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Price</dt>
+                      <dd className="text-sm text-gray-900">
+                        {formData.price ? `$${(parseInt(formData.price) / 100).toFixed(2)}` : 'Not set'}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Display Order</dt>

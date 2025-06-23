@@ -121,6 +121,7 @@ CREATE TABLE registration_categories (
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
     category_id UUID REFERENCES categories(id), -- NULL for one-off custom
     custom_name TEXT, -- Used when category_id is NULL
+    price INTEGER NOT NULL DEFAULT 5000, -- Price in cents, defaults to $50.00
     max_capacity INTEGER,
     accounting_code TEXT, -- accounting code for this category
     required_membership_id UUID REFERENCES memberships(id), -- Category-specific membership requirement

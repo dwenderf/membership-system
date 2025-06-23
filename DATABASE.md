@@ -61,6 +61,40 @@ user_memberships (
 **Alternative Considered:** Single record per user per membership with updates
 **Trade-off:** Lost simple audit trail, gained extension flexibility
 
+### 4. Account Deletion & Data Preservation
+
+**Pattern Used:** Orphaned user records with independent authentication lifecycle
+
+```sql
+-- NO foreign key constraint between users and auth.users
+users (
+  id: UUID PRIMARY KEY  -- matches auth.users.id when active
+  deleted_at: TIMESTAMP -- marks when account was deleted
+  -- business data preserved even after auth.users deletion
+)
+```
+
+**Design Decision:** Completely decouple authentication from business data to enable:
+- Privacy-compliant account deletion (GDPR compliance)
+- Complete authentication prevention (no OAuth bypass)
+- Business data preservation (payments, memberships, audit trails)
+- Clean re-registration capability (same email, fresh account)
+
+**How It Works:**
+1. **Account Deletion:** Delete auth.users record entirely, anonymize public.users record
+2. **Authentication Prevention:** No auth.users = no login via any method (email, OAuth, magic links)
+3. **Data Preservation:** Business data remains in "orphaned" public.users record
+4. **Re-registration:** Same email can create new auth.users with different UUID
+
+**Alternative Considered:** Foreign key constraint with CASCADE deletion
+**Trade-off:** Lost referential integrity, gained flexible account lifecycle management
+
+**When to Use Orphaned Records:**
+- ✅ Need to preserve business data after user deletion
+- ✅ Regulatory compliance requirements (GDPR, audit trails)
+- ✅ Re-registration with same email required
+- ✅ Authentication and business data have different lifecycles
+
 ### 3. Hybrid Category System
 
 **Pattern Used:** Combination of standard and custom categories
@@ -82,6 +116,7 @@ registration_categories (
 ## Table Relationships
 
 ### Core Entities
+- `auth.users` ↔ `users` (1:1 when active, orphaned when deleted)
 - `users` → `user_memberships` (1:many)
 - `memberships` → `user_memberships` (1:many)
 - `seasons` → `registrations` (1:many)
@@ -115,12 +150,15 @@ All tables use RLS with policies ensuring:
 - Membership validity queries: `idx_user_memberships_validity`
 - Membership type queries: `idx_user_memberships_membership_type`
 - Payment lookups by Stripe ID for webhook processing
+- Deleted user queries: `idx_users_deleted_at`
 
 ### Query Patterns
 Database schema optimized for common queries:
 - User's active memberships (validity date range checks)
 - Registration eligibility (membership requirement checks)
 - Payment reconciliation (Stripe ID lookups)
+- Account deletion filtering (`WHERE deleted_at IS NULL`)
+- Orphaned user record identification (`WHERE deleted_at IS NOT NULL`)
 
 ## Data Integrity
 
@@ -128,6 +166,11 @@ Database schema optimized for common queries:
 - Date validations: `valid_until > valid_from`
 - Payment status enums: `'pending' | 'paid' | 'refunded'`
 - Pricing logic: `price_annual <= price_monthly * 12`
+
+### Intentionally Relaxed Constraints
+- **No foreign key from users.id to auth.users.id**: Enables account deletion with data preservation
+- **Polymorphic payment_items**: No formal foreign keys for flexibility
+- **Application-level relationship management**: More flexible than database constraints for complex business logic
 
 ### Business Logic
 - Smart membership extension (application-level)

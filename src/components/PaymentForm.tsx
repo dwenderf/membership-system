@@ -8,11 +8,18 @@ import '../../sentry.client.config'
 import * as Sentry from '@sentry/nextjs'
 
 interface PaymentFormProps {
-  membershipId: string
-  durationMonths: number
+  // For memberships
+  membershipId?: string
+  durationMonths?: number
+  startDate?: Date
+  endDate?: Date
+  
+  // For registrations
+  registrationId?: string
+  categoryId?: string
+  
+  // Common props
   amount: number
-  startDate: Date
-  endDate: Date
   userEmail: string
   onSuccess: () => void
   onError: (error: string) => void
@@ -21,9 +28,11 @@ interface PaymentFormProps {
 export default function PaymentForm({
   membershipId,
   durationMonths,
-  amount,
   startDate,
   endDate,
+  registrationId,
+  categoryId,
+  amount,
   userEmail,
   onSuccess,
   onError
@@ -72,7 +81,9 @@ export default function PaymentForm({
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/user/memberships`,
+          return_url: registrationId 
+            ? `${window.location.origin}/user/registrations`
+            : `${window.location.origin}/user/memberships`,
         },
         redirect: 'if_required',
       })
@@ -90,6 +101,8 @@ export default function PaymentForm({
           extra: {
             customer_email: userEmail,
             membership_id: membershipId,
+            registration_id: registrationId,
+            category_id: categoryId,
             duration_months: durationMonths,
             amount_cents: amount,
             stripe_error_code: error.code,
@@ -104,22 +117,35 @@ export default function PaymentForm({
       }
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
-        // Payment succeeded, now create the membership record
-        const response = await fetch('/api/confirm-payment', {
+        // Payment succeeded, now create the record (membership or registration)
+        const isRegistration = registrationId && categoryId
+        const endpoint = isRegistration 
+          ? '/api/confirm-registration-payment'
+          : '/api/confirm-payment'
+        
+        const body = isRegistration
+          ? {
+              paymentIntentId: paymentIntent.id,
+              categoryId: categoryId,
+            }
+          : {
+              paymentIntentId: paymentIntent.id,
+              startDate: startDate!.toISOString().split('T')[0], // YYYY-MM-DD format
+              endDate: endDate!.toISOString().split('T')[0], // YYYY-MM-DD format
+            }
+
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            paymentIntentId: paymentIntent.id,
-            startDate: startDate.toISOString().split('T')[0], // YYYY-MM-DD format
-            endDate: endDate.toISOString().split('T')[0], // YYYY-MM-DD format
-          }),
+          body: JSON.stringify(body),
         })
 
         if (!response.ok) {
           const errorData = await response.json()
-          onError(errorData.error || 'Failed to create membership')
+          const recordType = isRegistration ? 'registration' : 'membership'
+          onError(errorData.error || `Failed to create ${recordType}`)
           return
         }
 
@@ -136,6 +162,8 @@ export default function PaymentForm({
           extra: {
             customer_email: userEmail,
             membership_id: membershipId,
+            registration_id: registrationId,
+            category_id: categoryId,
             duration_months: durationMonths,
             amount_cents: amount,
             payment_intent_id: paymentIntent.id,

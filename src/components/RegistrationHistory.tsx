@@ -3,6 +3,17 @@
 import { useState } from 'react'
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
+// Helper function to safely parse date strings without timezone conversion
+function formatDateString(dateString: string): string {
+  if (!dateString) return 'N/A'
+  
+  // Parse the date components manually to avoid timezone issues
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // month is 0-indexed
+  
+  return date.toLocaleDateString()
+}
+
 interface UserRegistration {
   id: string
   registration_id: string
@@ -116,7 +127,7 @@ export default function RegistrationHistory({ userRegistrations }: RegistrationH
                         <span className="text-gray-500">Season Dates:</span>
                         <span className="ml-1 text-gray-900">
                           {userRegistration.registration?.season?.start_date && userRegistration.registration?.season?.end_date
-                            ? `${new Date(userRegistration.registration.season.start_date).toLocaleDateString()} - ${new Date(userRegistration.registration.season.end_date).toLocaleDateString()}`
+                            ? `${formatDateString(userRegistration.registration.season.start_date)} - ${formatDateString(userRegistration.registration.season.end_date)}`
                             : 'N/A'
                           }
                         </span>

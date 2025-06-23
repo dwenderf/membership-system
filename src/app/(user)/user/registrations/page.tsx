@@ -2,6 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import RegistrationHistory from '@/components/RegistrationHistory'
 import Link from 'next/link'
 
+// Helper function to safely parse date strings without timezone conversion
+function formatDateString(dateString: string): string {
+  if (!dateString) return 'N/A'
+  
+  // Parse the date components manually to avoid timezone issues
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // month is 0-indexed
+  
+  return date.toLocaleDateString()
+}
+
 export default async function UserRegistrationsPage() {
   const supabase = await createClient()
   
@@ -21,8 +32,8 @@ export default async function UserRegistrationsPage() {
         season:seasons(*),
         registration_categories(
           *,
-          category:categories(name),
-          membership:memberships(name)
+          categories:category_id(name),
+          memberships:required_membership_id(name)
         )
       )
     `)
@@ -41,6 +52,14 @@ export default async function UserRegistrationsPage() {
     .gte('valid_until', new Date().toISOString().split('T')[0])
 
   // Get available registrations for current/future seasons
+  // First get current/future seasons
+  const { data: currentSeasons } = await supabase
+    .from('seasons')
+    .select('id')
+    .gte('end_date', new Date().toISOString().split('T')[0])
+
+  const seasonIds = currentSeasons?.map(s => s.id) || []
+
   const { data: availableRegistrations } = await supabase
     .from('registrations')
     .select(`
@@ -48,12 +67,12 @@ export default async function UserRegistrationsPage() {
       season:seasons(*),
       registration_categories(
         *,
-        category:categories(name),
-        membership:memberships(name)
+        categories:category_id(name),
+        memberships:required_membership_id(name)
       )
     `)
-    .gte('seasons.end_date', new Date().toISOString().split('T')[0])
-    .order('seasons.start_date', { ascending: true })
+    .in('season_id', seasonIds)
+    .order('created_at', { ascending: false })
 
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
@@ -126,7 +145,7 @@ export default async function UserRegistrationsPage() {
                         Type: {userRegistration.registration?.type}
                       </p>
                       <p className="text-sm text-gray-500">
-                        Season: {new Date(userRegistration.registration?.season?.start_date || '').toLocaleDateString()} - {new Date(userRegistration.registration?.season?.end_date || '').toLocaleDateString()}
+                        Season: {formatDateString(userRegistration.registration?.season?.start_date || '')} - {formatDateString(userRegistration.registration?.season?.end_date || '')}
                       </p>
                     </div>
                   </div>

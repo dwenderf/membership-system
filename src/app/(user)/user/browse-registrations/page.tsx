@@ -1,5 +1,67 @@
 import { createClient } from '@/lib/supabase/server'
+import RegistrationPurchase from '@/components/RegistrationPurchase'
 import Link from 'next/link'
+
+// Helper function to safely parse date strings without timezone conversion
+function formatDateString(dateString: string): string {
+  if (!dateString) return 'N/A'
+  
+  // Parse the date components manually to avoid timezone issues
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // month is 0-indexed
+  
+  return date.toLocaleDateString()
+}
+
+// Helper function to get current price for a registration category
+function getCurrentPrice(
+  registration: any, 
+  categoryId?: string
+): { price: number; tierName: string } {
+  const now = new Date()
+  const pricingTiers = registration.registration_pricing_tiers || []
+  
+  // Filter tiers for this category (or general tiers if category-specific not found)
+  const categoryTiers = pricingTiers.filter((tier: any) => 
+    tier.registration_category_id === categoryId
+  )
+  const generalTiers = pricingTiers.filter((tier: any) => 
+    tier.registration_category_id === null
+  )
+  
+  // Use category-specific tiers if available, otherwise fall back to general tiers
+  const relevantTiers = categoryTiers.length > 0 ? categoryTiers : generalTiers
+  
+  if (relevantTiers.length === 0) {
+    return { price: 5000, tierName: 'Standard' } // Default $50.00
+  }
+  
+  // Sort tiers by start date (latest first) and find current active tier
+  const activeTiers = relevantTiers
+    .filter((tier: any) => new Date(tier.starts_at) <= now)
+    .sort((a: any, b: any) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
+  
+  if (activeTiers.length > 0) {
+    return { 
+      price: activeTiers[0].price, 
+      tierName: activeTiers[0].tier_name 
+    }
+  }
+  
+  // If no active tiers, get the earliest upcoming tier
+  const upcomingTiers = relevantTiers
+    .filter((tier: any) => new Date(tier.starts_at) > now)
+    .sort((a: any, b: any) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+  
+  if (upcomingTiers.length > 0) {
+    return { 
+      price: upcomingTiers[0].price, 
+      tierName: upcomingTiers[0].tier_name 
+    }
+  }
+  
+  return { price: 5000, tierName: 'Standard' } // Default fallback
+}
 
 export default async function BrowseRegistrationsPage() {
   const supabase = await createClient()
@@ -28,6 +90,14 @@ export default async function BrowseRegistrationsPage() {
     .eq('user_id', user.id)
 
   // Get available registrations for current/future seasons
+  // First get current/future seasons
+  const { data: currentSeasons } = await supabase
+    .from('seasons')
+    .select('id')
+    .gte('end_date', new Date().toISOString().split('T')[0])
+
+  const seasonIds = currentSeasons?.map(s => s.id) || []
+
   const { data: availableRegistrations } = await supabase
     .from('registrations')
     .select(`
@@ -35,12 +105,15 @@ export default async function BrowseRegistrationsPage() {
       season:seasons(*),
       registration_categories(
         *,
-        category:categories(name),
-        membership:memberships(name)
+        categories:category_id(name),
+        memberships:required_membership_id(name)
+      ),
+      registration_pricing_tiers(
+        *
       )
     `)
-    .gte('seasons.end_date', new Date().toISOString().split('T')[0])
-    .order('seasons.start_date', { ascending: true })
+    .in('season_id', seasonIds)
+    .order('created_at', { ascending: false })
 
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
@@ -115,8 +188,8 @@ export default async function BrowseRegistrationsPage() {
               .map((registration) => {
                 // Check if user has required memberships for any category
                 const hasEligibleMembership = registration.registration_categories?.some(cat => {
-                  if (!cat.membership?.name) return true // No membership required
-                  return activeMemberships.some(um => um.membership?.name === cat.membership?.name)
+                  if (!cat.memberships?.name) return true // No membership required
+                  return activeMemberships.some(um => um.membership?.name === cat.memberships?.name)
                 })
 
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
@@ -157,7 +230,7 @@ export default async function BrowseRegistrationsPage() {
                           {registration.season?.name}
                         </p>
                         <p className="text-sm text-gray-500">
-                          {new Date(registration.season?.start_date || '').toLocaleDateString()} - {new Date(registration.season?.end_date || '').toLocaleDateString()}
+                          {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
                         </p>
                       </div>
 
@@ -169,12 +242,12 @@ export default async function BrowseRegistrationsPage() {
                             {registration.registration_categories.map((regCat) => (
                               <div key={regCat.id} className="flex justify-between items-center text-sm">
                                 <span className="text-gray-600">
-                                  {regCat.category?.name || regCat.custom_name}
+                                  {regCat.categories?.name || regCat.custom_name}
                                 </span>
                                 <div className="flex items-center space-x-2">
-                                  {regCat.membership?.name && (
+                                  {regCat.memberships?.name && (
                                     <span className="text-xs text-gray-500">
-                                      Requires: {regCat.membership.name}
+                                      Requires: {regCat.memberships.name}
                                     </span>
                                   )}
                                   {regCat.max_capacity && (
@@ -197,27 +270,20 @@ export default async function BrowseRegistrationsPage() {
                           >
                             View in My Registrations
                           </Link>
-                        ) : hasEligibleMembership ? (
-                          <button
-                            disabled
-                            className="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
-                          >
-                            Register (Coming Soon)
-                          </button>
                         ) : (
-                          <div>
-                            <button
-                              disabled
-                              className="w-full bg-yellow-300 text-yellow-800 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed mb-2"
-                            >
-                              Membership Required
-                            </button>
-                            <p className="text-xs text-gray-500 text-center">
-                              <Link href="/user/browse-memberships" className="underline">
-                                Purchase a membership
-                              </Link> to become eligible
-                            </p>
-                          </div>
+                          <RegistrationPurchase
+                            registration={{
+                              ...registration,
+                              // Pre-calculate pricing for all categories
+                              registration_categories: registration.registration_categories?.map(cat => ({
+                                ...cat,
+                                pricing: getCurrentPrice(registration, cat.id)
+                              })) || []
+                            }}
+                            userEmail={user.email || ''}
+                            activeMemberships={activeMemberships}
+                            isEligible={hasEligibleMembership}
+                          />
                         )}
                       </div>
                     </div>

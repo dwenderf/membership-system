@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { emailService } from '@/lib/email-service'
 import { captureCriticalAccountDeletionError, captureAccountDeletionWarning } from '@/lib/sentry-helpers'
@@ -103,7 +104,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Update auth.users email to match (prevents re-authentication)
-    const { error: authUpdateError } = await supabase.auth.admin.updateUserById(user.id, {
+    // Create admin client with service role key for admin operations
+    const adminClient = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // First update the auth.users email
+    const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(user.id, {
       email: anonymizedEmail
     })
 
@@ -115,6 +123,36 @@ export async function POST(request: NextRequest) {
         emailSent
       })
       return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
+    }
+
+    // Step 3: Unlink all OAuth identities to prevent re-authentication via OAuth
+    try {
+      const { data: userData } = await adminClient.auth.admin.getUserById(user.id)
+      
+      if (userData.user?.identities && userData.user.identities.length > 0) {
+        for (const identity of userData.user.identities) {
+          const { error: unlinkError } = await adminClient.auth.admin.unlinkIdentity({
+            userId: user.id,
+            identityId: identity.id
+          })
+          
+          if (unlinkError) {
+            console.error('Failed to unlink identity:', identity.provider, unlinkError)
+            captureAccountDeletionWarning('Failed to unlink OAuth identity during account deletion', {
+              ...deletionContext,
+              step: 'identity_unlink',
+              emailSent
+            }, { provider: identity.provider, error: unlinkError })
+          }
+        }
+      }
+    } catch (identityError) {
+      console.error('Failed to process OAuth identities:', identityError)
+      captureAccountDeletionWarning('Failed to process OAuth identities during account deletion', {
+        ...deletionContext,
+        step: 'identity_unlink',
+        emailSent
+      }, identityError)
     }
 
     // Sign out the user from Supabase auth

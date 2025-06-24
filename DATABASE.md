@@ -131,6 +131,40 @@ registration_categories (
 - `categories` → `registration_categories` (1:many, optional)
 - `registration_categories` → `user_registrations` (1:many)
 
+### Payment Tracking in User Registrations
+
+**Pattern Used:** Dual price tracking for discount support
+
+```sql
+user_registrations (
+  registration_fee: INTEGER    -- Original/catalog price in cents
+  amount_paid: INTEGER        -- Actual amount charged in cents
+)
+```
+
+**Design Decision:** Track both original pricing and final amount to support:
+- **Audit trails:** Complete record of original pricing vs discounts applied
+- **Revenue analytics:** Ability to calculate total discounts given
+- **Promotional reporting:** Track effectiveness of discount codes and early bird pricing
+- **Future discount systems:** Schema ready for complex promotion systems
+
+**Field Definitions:**
+- **`registration_fee`**: The base price from `registration_categories.price` before any discounts
+- **`amount_paid`**: The actual amount processed through Stripe (after discounts, codes, etc.)
+
+**Discount Calculation:**
+```sql
+-- Total discount amount given
+SELECT registration_fee - amount_paid AS discount_amount
+FROM user_registrations;
+
+-- Discount percentage  
+SELECT ROUND(((registration_fee - amount_paid)::DECIMAL / registration_fee) * 100, 2) AS discount_percent
+FROM user_registrations;
+```
+
+**Current State:** Both fields contain the same value since discount codes aren't implemented yet, but the structure supports future discount functionality without schema changes.
+
 ## Security Model
 
 ### Row Level Security (RLS)

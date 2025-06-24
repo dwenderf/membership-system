@@ -425,6 +425,9 @@ CREATE POLICY "Admins can view all payment items" ON payment_items
 CREATE POLICY "Users can view their own registrations" ON user_registrations
     FOR SELECT USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can insert their own registrations" ON user_registrations
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Admins can view all registrations" ON user_registrations
     FOR ALL USING (
         EXISTS (
@@ -508,30 +511,8 @@ CREATE TRIGGER update_users_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
--- Function to automatically update registration count
-CREATE OR REPLACE FUNCTION update_registration_count()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE registrations 
-        SET current_count = current_count + 1 
-        WHERE id = NEW.registration_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE registrations 
-        SET current_count = current_count - 1 
-        WHERE id = OLD.registration_id;
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Add trigger for user registrations
-CREATE TRIGGER update_registration_count_trigger
-    AFTER INSERT OR DELETE ON user_registrations
-    FOR EACH ROW
-    EXECUTE FUNCTION update_registration_count();
+-- NOTE: Registration count trigger and function removed
+-- Count is now calculated dynamically to avoid consistency issues
 
 -- Performance indexes for membership model
 CREATE INDEX idx_user_memberships_validity ON user_memberships(user_id, valid_from, valid_until);

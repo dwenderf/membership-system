@@ -97,6 +97,19 @@ export default function RegistrationPurchase({
     activeMemberships.some(um => um.membership?.id === selectedCategory.required_membership_id)
     : false
 
+  // Debug membership matching
+  if (selectedCategory?.required_membership_id) {
+    console.log('DEBUG: Membership validation', {
+      required_membership_id: selectedCategory.required_membership_id,
+      user_memberships: activeMemberships.map(um => ({
+        id: um.id,
+        membership_id: um.membership?.id,
+        membership_name: um.membership?.name
+      })),
+      isCategoryEligible
+    })
+  }
+
   // Enhanced validation: check if membership covers entire season
   const membershipValidation = selectedCategory?.required_membership_id && registration.season
     ? validateMembershipCoverage(

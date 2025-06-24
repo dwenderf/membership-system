@@ -199,7 +199,12 @@ export default async function BrowseRegistrationsPage() {
         {availableRegistrations && availableRegistrations.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {availableRegistrations
-              .filter(reg => !userRegistrationIds.includes(reg.id))
+              .filter(reg => {
+                const isAlreadyRegistered = userRegistrationIds.includes(reg.id)
+                // For teams: show all (registered and unregistered)
+                // For events/scrimmages: hide if already registered (allow multiple)
+                return reg.type === 'team' || !isAlreadyRegistered
+              })
               .map((registration) => {
                 // Check if user has required memberships for any category
                 const hasEligibleMembership = registration.registration_categories?.some(cat => {
@@ -210,12 +215,12 @@ export default async function BrowseRegistrationsPage() {
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
 
                 return (
-                  <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow ${
+                  <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg transition-shadow ${
                     isAlreadyRegistered 
                       ? 'border-l-4 border-blue-400' 
                       : hasEligibleMembership 
-                      ? 'border-l-4 border-green-400' 
-                      : 'border-l-4 border-yellow-400'
+                      ? 'border-l-4 border-green-400 hover:shadow-md' 
+                      : 'border-l-4 border-yellow-400 hover:shadow-md'
                   }`}>
                     <div className="p-5">
                       <div className="flex items-start justify-between">
@@ -252,12 +257,38 @@ export default async function BrowseRegistrationsPage() {
 
                       <div className="mt-5">
                         {isAlreadyRegistered ? (
-                          <Link
-                            href="/user/registrations"
-                            className="w-full bg-blue-100 text-blue-800 px-4 py-2 rounded-md text-sm font-medium text-center block"
-                          >
-                            View in My Registrations
-                          </Link>
+                          registration.type === 'team' ? (
+                            // Team registrations: show registered state with explanation
+                            <div className="space-y-3">
+                              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <div className="flex items-center">
+                                  <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-blue-800">
+                                    You're already registered for this team
+                                  </span>
+                                </div>
+                                <p className="text-xs text-blue-700 mt-1">
+                                  Each player can only register once per team. Need changes? Contact an admin.
+                                </p>
+                              </div>
+                              <Link
+                                href="/user/registrations"
+                                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-md text-sm font-medium text-center block transition-colors"
+                              >
+                                View My Registration →
+                              </Link>
+                            </div>
+                          ) : (
+                            // Events/Scrimmages: simple registered state
+                            <Link
+                              href="/user/registrations"
+                              className="w-full bg-blue-100 text-blue-800 px-4 py-2 rounded-md text-sm font-medium text-center block"
+                            >
+                              View in My Registrations
+                            </Link>
+                          )
                         ) : (
                           <RegistrationPurchase
                             registration={{

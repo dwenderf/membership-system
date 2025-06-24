@@ -102,28 +102,34 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('user_id', user.id)
       .eq('payment_status', 'paid')
-      .gte('valid_until', new Date().toISOString())
+      .gte('valid_until', new Date().toISOString().split('T')[0])
       .limit(1)
       .single()
+
+    // Debug the data we're trying to insert
+    const registrationData = {
+      user_id: user.id,
+      registration_id: registrationId,
+      registration_category_id: categoryId,
+      user_membership_id: activeMembership?.id || null,
+      payment_status: 'paid',
+      registration_fee: paymentIntent.amount, // Use registration_fee field
+      amount_paid: paymentIntent.amount,
+      registered_at: new Date().toISOString(),
+    }
+    
+    console.log('DEBUG API: Creating registration with data:', registrationData)
 
     // Create user registration record - THIS IS THE CRITICAL OPERATION
     const { data: userRegistration, error: registrationError } = await supabase
       .from('user_registrations')
-      .insert({
-        user_id: user.id,
-        registration_id: registrationId,
-        registration_category_id: categoryId,
-        user_membership_id: activeMembership?.id || null,
-        payment_status: 'paid',
-        stripe_payment_intent_id: paymentIntentId,
-        amount_paid: paymentIntent.amount,
-        registered_at: new Date().toISOString(),
-      })
+      .insert(registrationData)
       .select()
       .single()
 
     if (registrationError) {
       console.error('Error creating user registration:', registrationError)
+      console.error('Registration data that failed:', registrationData)
       
       // THIS IS THE CRITICAL ERROR - Payment succeeded but registration creation failed
       captureCriticalPaymentError(registrationError, paymentContext, [

@@ -634,7 +634,23 @@ email_logs (
 - [x] **Enhanced Purchase Success Flow**: Toast notifications and success screens with clear next steps
 - [x] **Improved Status Indicators**: Consistent 90-day warning logic with proper visual indicators (✅⚠️❌)
 
-#### **Phase 6: Advanced Features** 🔮
+#### **Phase 5.8: Registration Email Notifications** 📧
+- [ ] **Registration Confirmation Emails**: Send confirmation emails for all successful registrations
+  - Create registration confirmation email template in Loops.so
+  - Include registration details (event name, category, season, amount paid)
+  - Include next steps and important information
+  - Update API to trigger email after successful registration creation
+  - Test email delivery and template rendering
+
+#### **Phase 6: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
+- [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events
+  - Implement atomic database checks during registration creation (check capacity in same transaction)
+  - Automatic immediate refund for overflow registrations 
+  - Critical error reporting to Sentry for capacity violations
+  - Email notifications to affected users explaining payment, refund, and overflow situation
+  - Clear user communication about being moved to waitlist if available
+
+#### **Phase 7: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
 - [ ] **Discount Codes**: Percentage-based discounts with usage tracking
 - [ ] **Waitlist Management**: Automated waitlist handling for full registrations
@@ -715,6 +731,8 @@ For detailed information about all completed features and implementations, see t
 **🎯 Current Status**: Complete registration system with advanced timing controls, membership purchasing, and comprehensive admin management.
 
 ### 🚀 **Next Priority Recommendations**
-1. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 6)
-2. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
-3. **User Experience Enhancements** - Registration history, notifications, and user-facing timing displays
+1. **📧 Registration Email Notifications** - Send confirmation emails for all registrations (Phase 5.8)
+2. **🚨 CRITICAL: Race Condition Protection** - Fix capacity oversubscription race conditions (Phase 6)
+3. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 7)
+4. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
+5. **User Experience Enhancements** - Registration history, notifications, and user-facing timing displays

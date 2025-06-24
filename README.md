@@ -58,6 +58,7 @@ LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
+LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -219,6 +220,44 @@ Please try again: [retryUrl]
 
 If you continue to have issues, please contact our support team.
 
+The Hockey Association Team
+```
+
+#### Registration Confirmation Template (`LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID`)
+
+**Data Variables:**
+- `userName` - Customer's full name
+- `registrationName` - Name of event/team registered for
+- `categoryName` - Registration category (Player, Goalie, etc.)
+- `seasonName` - Season name and dates
+- `amount` - Registration fee paid (formatted as "75.00")
+- `registrationDate` - Date of registration
+- `paymentIntentId` - Stripe transaction ID
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+```
+Hi [userName],
+
+Congratulations! Your registration has been confirmed and payment processed successfully.
+
+REGISTRATION DETAILS:
+- Event/Team: [registrationName]
+- Category: [categoryName]
+- Season: [seasonName]
+- Amount Paid: $[amount]
+- Registration Date: [registrationDate]
+
+WHAT'S NEXT:
+• Watch for team communications and schedule updates
+• Manage your registrations: [dashboardUrl]
+• Contact team organizers if you have questions
+
+Transaction ID: [paymentIntentId]
+
+Questions about your registration? Reply to this email.
+
+Welcome to the team!
 The Hockey Association Team
 ```
 

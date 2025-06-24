@@ -79,7 +79,7 @@ export default async function RegistrationsPage() {
                         <span className="text-gray-400">•</span>
                         <span className="text-yellow-600 font-medium">{comingSoonCount} Coming Soon</span>
                         <span className="text-gray-400">•</span>
-                        <span className="text-red-600 font-medium">{expiredCount} Expired</span>
+                        <span className="text-red-600 font-medium">{expiredCount} Closed</span>
                       </>
                     )
                   })()}

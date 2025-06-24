@@ -144,7 +144,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
   
   const draftRegistrations = registrations.filter(reg => !reg.is_active)
   
-  const expiredRegistrations = registrations.filter(reg => {
+  const closedRegistrations = registrations.filter(reg => {
     const status = getRegistrationStatus(reg)
     return status === 'expired'
   })
@@ -185,12 +185,12 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Expired Registrations"
-        count={expiredRegistrations.length}
+        title="Closed Registrations"
+        count={closedRegistrations.length}
         badgeColor="bg-red-100 text-red-800"
         defaultExpanded={false}
       >
-        {expiredRegistrations.map(registration => (
+        {closedRegistrations.map(registration => (
           <RegistrationItem key={registration.id} registration={registration} />
         ))}
       </CollapsibleSection>

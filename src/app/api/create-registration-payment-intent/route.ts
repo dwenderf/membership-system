@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
         .from('user_registrations')
         .select('*', { count: 'exact', head: true })
         .eq('registration_category_id', categoryId)
+        .eq('payment_status', 'paid')
 
       if (currentCount && currentCount >= selectedCategory.max_capacity) {
         capturePaymentError(new Error('Registration full'), paymentContext, 'warning')

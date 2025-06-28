@@ -27,6 +27,7 @@ interface RegistrationCategory {
   id: string
   custom_name?: string
   max_capacity?: number
+  current_count?: number
   required_membership_id?: string
   categories?: {
     name: string
@@ -242,7 +243,16 @@ export default function RegistrationPurchase({
                         )}
                         {category.max_capacity && (
                           <div className="text-xs text-gray-500">
-                            Capacity: {category.max_capacity}
+                            {(() => {
+                              const remaining = category.max_capacity - (category.current_count || 0)
+                              if (remaining <= 0) {
+                                return 'Full - No spots remaining'
+                              } else if (remaining === 1) {
+                                return '1 spot remaining'
+                              } else {
+                                return `${remaining} spots remaining`
+                              }
+                            })()}
                           </div>
                         )}
                       </div>
@@ -285,6 +295,25 @@ export default function RegistrationPurchase({
                     {requiresMembership && (
                       <div className="text-xs text-gray-600">
                         Requires: {category.memberships?.name}
+                      </div>
+                    )}
+                    {category.max_capacity && (
+                      <div className="text-xs text-gray-500">
+                        {(() => {
+                          const remaining = category.max_capacity - (category.current_count || 0)
+                          console.log(`DEBUG: Single Category ${category.id} capacity calculation:`, {
+                            max_capacity: category.max_capacity,
+                            current_count: category.current_count,
+                            remaining: remaining
+                          })
+                          if (remaining <= 0) {
+                            return 'Full - No spots remaining'
+                          } else if (remaining === 1) {
+                            return '1 spot remaining'
+                          } else {
+                            return `${remaining} spots remaining`
+                          }
+                        })()}
                       </div>
                     )}
                   </div>

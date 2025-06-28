@@ -436,6 +436,14 @@ CREATE POLICY "Admins can view all registrations" ON user_registrations
         )
     );
 
+-- Public policy for counting paid registrations (for capacity display)
+-- Updated to be more explicit about allowing authenticated users to see paid registrations
+CREATE POLICY "Anyone can count paid registrations" ON user_registrations
+    FOR SELECT USING (
+        payment_status = 'paid' 
+        AND auth.role() = 'authenticated'
+    );
+
 -- Public read access for seasons, memberships, registrations
 CREATE POLICY "Anyone can view seasons" ON seasons FOR SELECT USING (TRUE);
 CREATE POLICY "Anyone can view memberships" ON memberships FOR SELECT USING (TRUE);

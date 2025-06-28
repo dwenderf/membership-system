@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateString } from '@/lib/date-utils'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
@@ -67,6 +68,10 @@ export default async function RegistrationDetailPage({
     `)
     .eq('registration_id', params.id)
     .order('sort_order', { ascending: true })
+
+  // Get paid registration counts for each category
+  const categoryIds = categories?.map(cat => cat.id) || []
+  const categoryRegistrationCounts = await getCategoryRegistrationCounts(categoryIds)
 
   if (categoriesError) {
     console.error('Error fetching categories:', categoriesError)
@@ -243,8 +248,7 @@ export default async function RegistrationDetailPage({
                 ) : (
                   <div className="divide-y divide-gray-200">
                     {categories.map((category) => {
-                      // TODO: Calculate current_count from user_registrations when implemented
-                      const current_count = 0 // Placeholder until user registrations are implemented
+                      const current_count = categoryRegistrationCounts[category.id] || 0
                       const isAtCapacity = category.max_capacity && current_count >= category.max_capacity
                       const capacityPercentage = category.max_capacity 
                         ? (current_count / category.max_capacity) * 100 

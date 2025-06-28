@@ -59,6 +59,7 @@ LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
+LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -258,6 +259,39 @@ Transaction ID: [paymentIntentId]
 Questions about your registration? Reply to this email.
 
 Welcome to the team!
+The Hockey Association Team
+```
+
+#### Waitlist Added Notification Template (`LOOPS_WAITLIST_ADDED_TEMPLATE_ID`)
+
+**Data Variables:**
+- `userName` - Customer's full name
+- `registrationName` - Name of event/team they were waitlisted for
+- `categoryName` - Registration category (Player, Goalie, etc.)
+- `seasonName` - Season name and dates
+- `position` - Position on the waitlist
+- `waitlistDate` - Date added to waitlist
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+```
+Hi [userName],
+
+You've been added to the waitlist for [registrationName].
+
+WAITLIST DETAILS:
+- Event/Team: [registrationName]
+- Category: [categoryName]
+- Season: [seasonName]
+- Your Position: #[position] on the waitlist
+- Added to Waitlist: [waitlistDate]
+
+WHAT'S NEXT:
+• You'll be notified if a spot becomes available
+• Check your status anytime: [dashboardUrl]
+• We'll contact you with further instructions if selected
+
+Thank you for your interest in joining the team!
 The Hockey Association Team
 ```
 

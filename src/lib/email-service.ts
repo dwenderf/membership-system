@@ -7,6 +7,7 @@ export const EMAIL_EVENTS = {
   MEMBERSHIP_EXPIRING: 'membership.expiring',
   MEMBERSHIP_EXPIRED: 'membership.expired',
   REGISTRATION_COMPLETED: 'registration.completed',
+  WAITLIST_ADDED: 'waitlist.added',
   PAYMENT_FAILED: 'payment.failed',
   WELCOME: 'user.welcome',
   ACCOUNT_DELETED: 'account.deleted',
@@ -334,6 +335,70 @@ class EmailService {
         deletedAt: new Date(options.deletedAt).toLocaleDateString(),
         supportEmail: options.supportEmail || 'support@hockeyassociation.org',
         loginUrl: `${process.env.NEXTAUTH_URL}/auth/login`
+      }
+    })
+  }
+
+  /**
+   * Send registration confirmation email
+   */
+  async sendRegistrationConfirmation(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    categoryName: string
+    seasonName: string
+    amount: number
+    paymentIntentId: string
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.REGISTRATION_COMPLETED,
+      subject: `Registration Confirmed - ${options.registrationName}`,
+      triggeredBy: 'user_action',
+      templateId: process.env.LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        registrationName: options.registrationName,
+        categoryName: options.categoryName,
+        seasonName: options.seasonName,
+        amount: (options.amount / 100).toFixed(2),
+        registrationDate: new Date().toLocaleDateString(),
+        paymentIntentId: options.paymentIntentId,
+        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+      }
+    })
+  }
+
+  /**
+   * Send waitlist added notification email
+   */
+  async sendWaitlistAddedNotification(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    categoryName: string
+    seasonName: string
+    position: number
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.WAITLIST_ADDED,
+      subject: `Added to Waitlist - ${options.registrationName}`,
+      triggeredBy: 'user_action',
+      templateId: process.env.LOOPS_WAITLIST_ADDED_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        registrationName: options.registrationName,
+        categoryName: options.categoryName,
+        seasonName: options.seasonName,
+        position: options.position,
+        waitlistDate: new Date().toLocaleDateString(),
+        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
       }
     })
   }

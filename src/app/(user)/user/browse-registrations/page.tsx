@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import Link from 'next/link'
 
@@ -70,6 +71,19 @@ export default async function BrowseRegistrationsPage() {
     `)
     .in('season_id', seasonIds)
     .order('created_at', { ascending: false })
+
+  // Get paid registration counts for all categories using shared utility
+  const allCategoryIds: string[] = []
+  if (availableRegistrations) {
+    availableRegistrations.forEach(reg => {
+      if (reg.registration_categories) {
+        reg.registration_categories.forEach(cat => {
+          allCategoryIds.push(cat.id)
+        })
+      }
+    })
+  }
+  const categoryRegistrationCounts = await getCategoryRegistrationCounts(allCategoryIds)
 
   const activeMemberships = userMemberships || []
   
@@ -296,7 +310,8 @@ export default async function BrowseRegistrationsPage() {
                               // Pre-calculate pricing for all categories
                               registration_categories: registration.registration_categories?.map(cat => ({
                                 ...cat,
-                                pricing: getCategoryPrice(cat)
+                                pricing: getCategoryPrice(cat),
+                                current_count: categoryRegistrationCounts[cat.id] || 0
                               })) || []
                             }}
                             userEmail={user.email || ''}

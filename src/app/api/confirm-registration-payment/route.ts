@@ -187,14 +187,33 @@ export async function POST(request: NextRequest) {
       .eq('id', registrationId)
       .single()
 
-    // Send confirmation email (for now we'll skip this until we create the registration email template)
+    // Send confirmation email
     if (userProfile && registrationDetails) {
       try {
-        // TODO: Create registration confirmation email template
-        console.log('📧 Registration confirmation email would be sent here')
-        console.log('User:', `${userProfile.first_name} ${userProfile.last_name}`)
-        console.log('Registration:', registrationDetails.name)
-        console.log('Amount:', paymentIntent.amount)
+        // Get the category details from the registration_categories
+        const selectedCategory = registrationDetails.registration_categories.find(
+          (cat: any) => cat.id === categoryId
+        )
+        
+        const categoryName = selectedCategory?.category?.name || selectedCategory?.custom_name || 'Unknown Category'
+        
+        const emailResult = await emailService.sendRegistrationConfirmation({
+          userId: user.id,
+          email: userProfile.email,
+          userName: `${userProfile.first_name} ${userProfile.last_name}`,
+          registrationName: registrationDetails.name,
+          categoryName: categoryName,
+          seasonName: registrationDetails.season?.name || 'Unknown Season',
+          amount: paymentIntent.amount,
+          paymentIntentId: paymentIntentId
+        })
+
+        if (emailResult.success) {
+          console.log('✅ Registration confirmation email sent successfully')
+        } else {
+          console.error('❌ Failed to send registration confirmation email:', emailResult.error)
+          capturePaymentError(new Error(`Email delivery failed: ${emailResult.error}`), paymentContext, 'warning')
+        }
       } catch (emailError) {
         console.error('❌ Failed to send confirmation email:', emailError)
         capturePaymentError(emailError, paymentContext, 'warning')

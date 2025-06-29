@@ -634,13 +634,27 @@ email_logs (
 - [x] **Enhanced Purchase Success Flow**: Toast notifications and success screens with clear next steps
 - [x] **Improved Status Indicators**: Consistent 90-day warning logic with proper visual indicators (✅⚠️❌)
 
-#### **Phase 5.8: Registration Email Notifications** 📧
-- [ ] **Registration Confirmation Emails**: Send confirmation emails for all successful registrations
-  - Create registration confirmation email template in Loops.so
-  - Include registration details (event name, category, season, amount paid)
-  - Include next steps and important information
-  - Update API to trigger email after successful registration creation
-  - Test email delivery and template rendering
+#### **✅ Phase 5.8: Registration Email Notifications - COMPLETED** 📧
+- [x] **Registration Confirmation Emails**: Send confirmation emails for all successful registrations
+- [x] **Email Template Integration**: Complete Loops.so template setup with registration details
+- [x] **Waitlist Email Support**: Template and integration ready for future waitlist functionality
+- [x] **Email Documentation**: Complete README.md documentation for all email templates
+- [x] **API Integration**: Automatic email sending after successful payment confirmation
+- [x] **Error Monitoring**: Sentry integration for email delivery failures
+
+#### **✅ Phase 5.9: Registration Count Display Fixes - COMPLETED** 🔢
+- [x] **Admin Count Display**: Fixed admin registration detail page to show actual paid registration counts
+- [x] **User Capacity Display**: Updated user browse page to show remaining spots instead of total capacity
+- [x] **Shared Utility Function**: Created `getCategoryRegistrationCounts()` for consistency across admin and user pages
+- [x] **RLS Policy Fix**: Updated Row Level Security policies to allow users to see paid registration counts for capacity planning
+- [x] **Capacity Validation Fix**: Updated payment intent creation to only count paid registrations for capacity validation
+
+#### **✅ Phase 5.10: Registration Timing & Presale System - COMPLETED** ⏰
+- [x] **User-Side Timing Validation**: Implemented registration timing controls on user browse page (respects draft, coming_soon, presale, open, expired status)
+- [x] **Presale Visibility**: Show presale registrations with clear "Pre-Sale" status tags for user awareness
+- [x] **Presale Code Functionality**: Added presale code input with real-time validation and case-insensitive matching
+- [x] **Status-Based UX**: Appropriate button states and messaging for each registration timing status
+- [x] **User Guidance**: Clear messaging and visual indicators for registration availability and requirements
 
 #### **Phase 6: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
 - [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events
@@ -718,6 +732,21 @@ email_logs (
 - **✅ Critical Error Classification**: Fatal-level alerts for business-critical failures requiring immediate attention
 - **✅ Contextual Error Data**: Rich error context including user data, payment details, and operation state
 
+✅ **Registration Email & Count System Implementation**
+- **✅ Registration Confirmation Emails**: Complete Loops.so integration with automatic email sending after successful registration
+- **✅ Admin Count Display Fix**: Fixed admin registration detail page to show actual paid registration counts instead of hardcoded 0
+- **✅ User Capacity Display**: Updated user browse page to show "X spots remaining" instead of total capacity
+- **✅ Shared Utility Function**: Created `getCategoryRegistrationCounts()` for consistency across admin and user interfaces
+- **✅ RLS Policy Fix**: Updated Row Level Security to allow users to see paid registration counts for capacity planning
+- **✅ Capacity Validation**: Fixed payment intent creation to only count paid registrations for accurate capacity management
+
+✅ **Registration Timing & Presale System Implementation**
+- **✅ User-Side Timing Validation**: Complete registration timing controls respecting draft, coming_soon, presale, open, and expired status
+- **✅ Presale Visibility & Functionality**: Show presale registrations with status tags and working presale code input system
+- **✅ Case-Insensitive Presale Codes**: User-friendly presale code validation with real-time feedback
+- **✅ Status-Based UX**: Appropriate button states, messaging, and visual indicators for each registration timing status
+- **✅ Complete Registration Lifecycle**: Full user experience from presale through open registration with proper state management
+
 ## Previous Achievements Summary
 
 For detailed information about all completed features and implementations, see the **Current Development Phases** section above, which provides a comprehensive overview of:
@@ -728,11 +757,11 @@ For detailed information about all completed features and implementations, see t
 - **Phase 3**: Account Deletion & Privacy Compliance (Authentication Prevention, Data Preservation)
 - **Phase 4**: Error Monitoring & Reliability (Sentry Integration, Critical Error Tracking)
 
-**🎯 Current Status**: Complete registration system with advanced timing controls, membership purchasing, and comprehensive admin management.
+**🎯 Current Status**: Complete registration system with email notifications, timing controls, presale functionality, accurate capacity display, and comprehensive admin management.
 
 ### 🚀 **Next Priority Recommendations**
-1. **📧 Registration Email Notifications** - Send confirmation emails for all registrations (Phase 5.8)
-2. **🚨 CRITICAL: Race Condition Protection** - Fix capacity oversubscription race conditions (Phase 6)
-3. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 7)
-4. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
-5. **User Experience Enhancements** - Registration history, notifications, and user-facing timing displays
+1. **🚨 CRITICAL: Race Condition Protection** - Fix capacity oversubscription race conditions (Phase 6)
+2. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 7)
+3. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
+4. **User Experience Enhancements** - Registration history and additional notifications
+5. **Content Management** - Admin interface for Terms & Conditions updates

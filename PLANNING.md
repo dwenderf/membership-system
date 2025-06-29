@@ -656,6 +656,20 @@ email_logs (
 - [x] **Status-Based UX**: Appropriate button states and messaging for each registration timing status
 - [x] **User Guidance**: Clear messaging and visual indicators for registration availability and requirements
 
+#### **✅ Phase 5.11: Enhanced Presale Code Tracking & Coming Soon UX - COMPLETED** 🎯
+- [x] **Presale Code Audit Trail**: Added `presale_code_used` field to `user_registrations` table for complete tracking
+- [x] **Registration Purchase Flow**: Updated APIs to capture and store presale codes when used during registration
+- [x] **Coming Soon Status Display**: Show "Coming Soon" registrations with disabled state and timing information
+- [x] **Smart Timing Messages**: Display when presale or regular registration opens with date/time details
+- [x] **Enhanced Browse Page UX**: Clear visual indicators and messaging for all registration timing states
+
+#### **✅ Phase 5.12: Optimized Browse Registration UX - COMPLETED** 🎨
+- [x] **Priority-Based Layout**: Moved "Available Teams & Events" to top position for immediate focus
+- [x] **Conditional Membership Warnings**: Only show warnings when memberships expire ≤90 days or are missing
+- [x] **Clean Interface**: Most users with healthy memberships see streamlined browsing experience
+- [x] **Prominent CTA Buttons**: Replaced text links with actionable buttons for membership extension/purchase
+- [x] **Early Warning System**: Proactive membership expiration alerts prevent purchase-time friction
+
 #### **Phase 6: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
 - [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events
   - Implement atomic database checks during registration creation (check capacity in same transaction)
@@ -684,10 +698,25 @@ email_logs (
 
 ---
 
-*Last updated: June 23, 2025*
+*Last updated: June 29, 2025*
 *Status: **Enhanced Registration & Membership System Complete** - Full lifecycle with intelligent validation, honest UX, and seamless user flows*
 
-## Recent Achievements (June 23, 2025)
+## Recent Achievements (June 29, 2025)
+
+✅ **Enhanced Presale Code Tracking & Coming Soon UX Implementation**
+- **✅ Complete Presale Audit Trail**: Added database field and API updates to track which presale codes were used for each registration
+- **✅ Coming Soon Registration Display**: Show "Coming Soon" registrations with disabled state and smart timing messages
+- **✅ Intelligent Timing Messages**: Display when presale or regular registration opens with precise date/time information
+- **✅ Enhanced Registration Status Logic**: Complete 5-state system (draft/coming_soon/presale/open/expired) with proper user guidance
+
+✅ **Optimized Browse Registration UX Implementation**
+- **✅ Priority-Based Information Architecture**: Moved "Available Teams & Events" to top position for immediate user focus
+- **✅ Conditional Warning System**: Only show membership warnings when action is needed (expiring ≤90 days or missing)
+- **✅ Clean Interface Design**: Most users with healthy memberships see streamlined, distraction-free browsing
+- **✅ Prominent CTA Implementation**: Converted text links to actionable buttons with hover states and icons
+- **✅ Proactive User Experience**: Early membership warnings prevent friction during registration purchase flow
+
+## Previous Achievements Summary (June 29, 2025)
 
 ✅ **Enhanced Membership Validation & UX System Implementation**
 - **✅ Season-Long Membership Validation**: Smart validation ensuring membership coverage through entire season duration

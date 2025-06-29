@@ -225,12 +225,13 @@ CREATE TABLE waitlists (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+    registration_category_id UUID REFERENCES registration_categories(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
     joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     bypass_code_generated BOOLEAN DEFAULT FALSE,
     bypass_code_id UUID REFERENCES access_codes(id),
     removed_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(user_id, registration_id)
+    UNIQUE(user_id, registration_id, registration_category_id)
 );
 
 -- Payments table
@@ -311,6 +312,7 @@ CREATE INDEX idx_discount_usage_user_season ON discount_usage(user_id, season_id
 CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, used_at);
 CREATE INDEX idx_waitlists_registration_position ON waitlists(registration_id, position);
 CREATE INDEX idx_waitlists_registration_time ON waitlists(registration_id, joined_at);
+CREATE INDEX idx_waitlists_category ON waitlists(registration_category_id, position, removed_at);
 
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
@@ -542,5 +544,42 @@ CREATE POLICY "Admins can view all email logs" ON email_logs
         EXISTS (
             SELECT 1 FROM users 
             WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Waitlist policies
+CREATE POLICY "Users can view their own waitlist entries" ON waitlists
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can join waitlists" ON waitlists
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own waitlist entries" ON waitlists
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all waitlist entries" ON waitlists
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE users.id = auth.uid() 
+            AND users.is_admin = true
+        )
+    );
+
+CREATE POLICY "Admins can manage all waitlist entries" ON waitlists
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE users.id = auth.uid() 
+            AND users.is_admin = true
+        )
+    );
+
+CREATE POLICY "Admins can delete waitlist entries" ON waitlists
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE users.id = auth.uid() 
+            AND users.is_admin = true
         )
     );

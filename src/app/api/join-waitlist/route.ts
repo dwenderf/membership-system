@@ -1,0 +1,216 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { emailService } from '@/lib/email-service'
+import { getCategoryDisplayName } from '@/lib/registration-utils'
+
+// Force import server config
+import '../../../../sentry.server.config'
+import * as Sentry from '@sentry/nextjs'
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient()
+    
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { registrationId, categoryId } = body
+    
+    // Validate required fields
+    if (!registrationId || !categoryId) {
+      return NextResponse.json(
+        { error: 'Missing required fields: registrationId, categoryId' },
+        { status: 400 }
+      )
+    }
+
+    // Get category details to verify it exists and is at capacity
+    const { data: category, error: categoryError } = await supabase
+      .from('registration_categories')
+      .select(`
+        id, 
+        max_capacity,
+        custom_name,
+        categories (name),
+        registration_id
+      `)
+      .eq('id', categoryId)
+      .single()
+
+    if (categoryError || !category) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    }
+
+    // Check if category has capacity limits
+    if (!category.max_capacity) {
+      return NextResponse.json({ 
+        error: 'This category does not have capacity limits and does not require a waitlist' 
+      }, { status: 400 })
+    }
+
+    // Check current registration count for this category
+    const { count: currentCount, error: countError } = await supabase
+      .from('user_registrations')
+      .select('*', { count: 'exact', head: true })
+      .eq('registration_category_id', categoryId)
+      .eq('payment_status', 'paid')
+
+    if (countError) {
+      console.error('Error checking category capacity:', countError)
+      return NextResponse.json({ error: 'Failed to check category capacity' }, { status: 500 })
+    }
+
+    // Verify category is actually at capacity
+    if (!currentCount || currentCount < category.max_capacity) {
+      return NextResponse.json({ 
+        error: 'This category is not at capacity. You can register normally.' 
+      }, { status: 400 })
+    }
+
+    // Check if user is already registered for this registration
+    const { data: existingRegistration } = await supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('registration_id', registrationId)
+      .single()
+
+    if (existingRegistration) {
+      return NextResponse.json({ 
+        error: 'You are already registered for this event' 
+      }, { status: 400 })
+    }
+
+    // Check if user is already on waitlist for this category
+    const { data: existingWaitlist } = await supabase
+      .from('waitlists')
+      .select('id, position')
+      .eq('user_id', user.id)
+      .eq('registration_id', registrationId)
+      .eq('registration_category_id', categoryId)
+      .is('removed_at', null)
+      .single()
+
+    if (existingWaitlist) {
+      return NextResponse.json({ 
+        error: `You are already on the waitlist for this category (position #${existingWaitlist.position})` 
+      }, { status: 400 })
+    }
+
+    // Get the next position in line for this category
+    const { data: maxPosition } = await supabase
+      .from('waitlists')
+      .select('position')
+      .eq('registration_id', registrationId)
+      .eq('registration_category_id', categoryId)
+      .is('removed_at', null)
+      .order('position', { ascending: false })
+      .limit(1)
+      .single()
+
+    const nextPosition = maxPosition ? maxPosition.position + 1 : 1
+
+    // Add user to waitlist
+    const { data: waitlistEntry, error: waitlistError } = await supabase
+      .from('waitlists')
+      .insert({
+        user_id: user.id,
+        registration_id: registrationId,
+        registration_category_id: categoryId,
+        position: nextPosition,
+      })
+      .select()
+      .single()
+
+    if (waitlistError) {
+      console.error('Error adding to waitlist:', waitlistError)
+      Sentry.captureException(waitlistError, {
+        tags: {
+          operation: 'waitlist_join',
+          user_id: user.id,
+          registration_id: registrationId,
+          category_id: categoryId
+        }
+      })
+      return NextResponse.json({ error: 'Failed to join waitlist' }, { status: 500 })
+    }
+
+    // Get registration and user details for email
+    const { data: registration, error: registrationError } = await supabase
+      .from('registrations')
+      .select(`
+        name,
+        season (name)
+      `)
+      .eq('id', registrationId)
+      .single()
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('first_name, last_name, email')
+      .eq('id', user.id)
+      .single()
+
+    if (!registrationError && !userError && registration && userData) {
+      // Send waitlist notification email
+      try {
+        await emailService.sendWaitlistAddedNotification({
+          userId: user.id,
+          email: userData.email,
+          userName: `${userData.first_name} ${userData.last_name}`,
+          registrationName: registration.name,
+          categoryName: getCategoryDisplayName(category),
+          seasonName: registration.season?.name || 'Unknown Season',
+          position: nextPosition
+        })
+      } catch (emailError) {
+        // Log email error but don't fail the waitlist join
+        console.error('Failed to send waitlist email:', emailError)
+        Sentry.captureException(emailError, {
+          tags: {
+            operation: 'waitlist_email_failed',
+            user_id: user.id,
+            registration_id: registrationId,
+            category_id: categoryId
+          }
+        })
+      }
+    }
+
+    // Log successful waitlist join
+    Sentry.addBreadcrumb({
+      message: 'User successfully joined waitlist',
+      data: {
+        user_id: user.id,
+        registration_id: registrationId,
+        category_id: categoryId,
+        position: nextPosition
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      position: nextPosition,
+      waitlistId: waitlistEntry.id,
+      message: `You've been added to the waitlist. You're #${nextPosition} in line.`
+    })
+    
+  } catch (error) {
+    console.error('Error joining waitlist:', error)
+    
+    Sentry.captureException(error, {
+      tags: {
+        operation: 'waitlist_join_error'
+      }
+    })
+    
+    return NextResponse.json(
+      { error: 'Failed to join waitlist' },
+      { status: 500 }
+    )
+  }
+}

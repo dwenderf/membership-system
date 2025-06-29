@@ -8,6 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
+import { createClient } from '@/lib/supabase/client'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -78,6 +79,7 @@ export default function RegistrationPurchase({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [presaleCode, setPresaleCode] = useState<string>('')
+  const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
   const { showSuccess, showError } = useToast()
 
   const categories = registration.registration_categories || []
@@ -92,6 +94,57 @@ export default function RegistrationPurchase({
   const hasValidPresaleCode = isPresale && 
     presaleCode.trim().toLowerCase() === registration.presale_code?.toLowerCase()
   const isTimingAvailable = isRegistrationAvailable(registration, hasValidPresaleCode)
+  
+  // Check if selected category is at capacity
+  const isCategoryAtCapacity = selectedCategory?.max_capacity ? 
+    (selectedCategory.current_count || 0) >= selectedCategory.max_capacity 
+    : false
+  
+  // Check if user is already on waitlist for selected category
+  const userWaitlistEntry = selectedCategoryId ? userWaitlistEntries[selectedCategoryId] : null
+  const isUserOnWaitlist = !!userWaitlistEntry
+  
+  // Load user's existing waitlist entries for this registration
+  useEffect(() => {
+    const loadUserWaitlistEntries = async () => {
+      if (!registration.id) return
+      
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        
+        const { data: waitlistEntries, error } = await supabase
+          .from('waitlists')
+          .select('id, registration_category_id, position')
+          .eq('user_id', user.id)
+          .eq('registration_id', registration.id)
+          .is('removed_at', null)
+        
+        if (error) {
+          console.error('Error loading waitlist entries:', error)
+          return
+        }
+        
+        // Convert to the format expected by the state
+        const entriesMap: Record<string, { position: number, id: string }> = {}
+        waitlistEntries?.forEach(entry => {
+          if (entry.registration_category_id) {
+            entriesMap[entry.registration_category_id] = {
+              position: entry.position,
+              id: entry.id
+            }
+          }
+        })
+        
+        setUserWaitlistEntries(entriesMap)
+      } catch (error) {
+        console.error('Error loading waitlist entries:', error)
+      }
+    }
+    
+    loadUserWaitlistEntries()
+  }, [registration.id])
   
   // Auto-select single category if eligible
   useEffect(() => {
@@ -156,10 +209,64 @@ export default function RegistrationPurchase({
       return
     }
 
-    // Open modal immediately for better perceived performance
-    setShowPaymentForm(true)
     setIsLoading(true)
     setError(null)
+    
+    // Handle waitlist joining if category is at capacity
+    if (isCategoryAtCapacity) {
+      // Prevent duplicate waitlist joins
+      if (isUserOnWaitlist) {
+        setError('You are already on the waitlist for this category')
+        setIsLoading(false)
+        return
+      }
+      
+      try {
+        const response = await fetch('/api/join-waitlist', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            registrationId: registration.id,
+            categoryId: selectedCategoryId,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to join waitlist')
+        }
+
+        const result = await response.json()
+        
+        // Update local state to reflect new waitlist entry
+        setUserWaitlistEntries(prev => ({
+          ...prev,
+          [selectedCategoryId]: {
+            position: result.position,
+            id: result.waitlistId
+          }
+        }))
+        
+        // Show success message
+        showSuccess(
+          'Waitlist Joined!', 
+          `You've been added to the waitlist. You're #${result.position} in line.`
+        )
+        
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+        setError(errorMessage)
+        showError('Waitlist Error', errorMessage)
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
+
+    // Regular registration flow - open payment modal
+    setShowPaymentForm(true)
     
     try {
       const response = await fetch('/api/create-registration-payment-intent', {
@@ -257,11 +364,27 @@ export default function RegistrationPurchase({
                           </div>
                         )}
                         {category.max_capacity && (
-                          <div className="text-xs text-gray-500">
+                          <div className={`text-xs ${
+                            (() => {
+                              const remaining = category.max_capacity - (category.current_count || 0)
+                              const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                              if (remaining <= 0 && selectedCategoryId === category.id) {
+                                return categoryWaitlistEntry ? 'text-blue-700' : 'text-red-700'
+                              } else {
+                                return 'text-gray-500'
+                              }
+                            })()
+                          }`}>
                             {(() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
+                              const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                              
                               if (remaining <= 0) {
-                                return 'Full - No spots remaining'
+                                if (categoryWaitlistEntry) {
+                                  return `On waitlist - Position #${categoryWaitlistEntry.position}`
+                                } else {
+                                  return 'Full - No spots remaining'
+                                }
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
                               } else {
@@ -313,16 +436,35 @@ export default function RegistrationPurchase({
                       </div>
                     )}
                     {category.max_capacity && (
-                      <div className="text-xs text-gray-500">
+                      <div className={`text-xs ${
+                        (() => {
+                          const remaining = category.max_capacity - (category.current_count || 0)
+                          const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                          // For single category, it's auto-selected, so show colors appropriately
+                          if (remaining <= 0) {
+                            return categoryWaitlistEntry ? 'text-blue-500' : 'text-red-500'
+                          } else {
+                            return 'text-gray-500'
+                          }
+                        })()
+                      }`}>
                         {(() => {
                           const remaining = category.max_capacity - (category.current_count || 0)
+                          const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                          
                           console.log(`DEBUG: Single Category ${category.id} capacity calculation:`, {
                             max_capacity: category.max_capacity,
                             current_count: category.current_count,
-                            remaining: remaining
+                            remaining: remaining,
+                            userOnWaitlist: !!categoryWaitlistEntry
                           })
+                          
                           if (remaining <= 0) {
-                            return 'Full - No spots remaining'
+                            if (categoryWaitlistEntry) {
+                              return `On waitlist - Position #${categoryWaitlistEntry.position}`
+                            } else {
+                              return 'Full - No spots remaining'
+                            }
                           } else if (remaining === 1) {
                             return '1 spot remaining'
                           } else {
@@ -348,8 +490,8 @@ export default function RegistrationPurchase({
         </div>
       )}
 
-      {/* Registration Summary */}
-      {selectedCategoryId && selectedCategory ? (
+      {/* Registration Summary - Only show if not sold out */}
+      {selectedCategoryId && selectedCategory && !isCategoryAtCapacity && (
         <div className="bg-gray-50 rounded-lg p-4 mb-4">
           <h4 className="text-sm font-medium text-gray-900 mb-2">Registration Summary</h4>
           <div className="space-y-1 text-sm">
@@ -383,7 +525,10 @@ export default function RegistrationPurchase({
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* Select Category Message - Only show if no category selected */}
+      {!selectedCategoryId && (
         <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
           <p className="text-sm text-blue-800">
             <span className="font-medium">Select a category above</span> to see registration details.
@@ -432,6 +577,41 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Sold Out Warning - Only show when selected category is at capacity */}
+      {selectedCategory && isCategoryAtCapacity && (
+        <div className={`mb-4 p-3 rounded-md ${
+          isUserOnWaitlist 
+            ? 'bg-blue-50 border border-blue-200' 
+            : 'bg-red-50 border border-red-200'
+        }`}>
+          <div className="flex items-center mb-2">
+            {isUserOnWaitlist ? (
+              <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+            <h4 className={`text-sm font-medium ${
+              isUserOnWaitlist ? 'text-blue-800' : 'text-red-800'
+            }`}>
+              {isUserOnWaitlist ? 'You\'re on the Waitlist' : 'Category Sold Out'}
+            </h4>
+          </div>
+          <p className={`text-sm ${
+            isUserOnWaitlist ? 'text-blue-700' : 'text-red-700'
+          }`}>
+            {isUserOnWaitlist ? (
+              `You're currently #${userWaitlistEntry?.position} in line for this category. We'll notify you if a spot becomes available.`
+            ) : (
+              `This category is currently at capacity (${selectedCategory.current_count} spots filled). You can join the waitlist and we'll notify you if a spot becomes available.`
+            )}
+          </p>
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -442,14 +622,20 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable}
-        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist)}
+        className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
+          isCategoryAtCapacity 
+            ? (isUserOnWaitlist ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed')
+            : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
+        }`}
       >
         {isLoading ? 'Processing...' : 
          !selectedCategoryId ? 'Select Category to Continue' :
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
+         (isCategoryAtCapacity && isUserOnWaitlist) ? `On Waitlist - Position #${userWaitlistEntry?.position}` :
+         isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
       </button>
 

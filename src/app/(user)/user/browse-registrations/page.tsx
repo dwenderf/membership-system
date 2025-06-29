@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
+import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import Link from 'next/link'
 
@@ -215,9 +216,20 @@ export default async function BrowseRegistrationsPage() {
             {availableRegistrations
               .filter(reg => {
                 const isAlreadyRegistered = userRegistrationIds.includes(reg.id)
-                // For teams: show all (registered and unregistered)
-                // For events/scrimmages: hide if already registered (allow multiple)
-                return reg.type === 'team' || !isAlreadyRegistered
+                const status = getRegistrationStatus(reg)
+                
+                // Filter logic - show registrations that are:
+                // - open (fully available)
+                // - presale (visible but may require code)
+                // Hide registrations that are:
+                // - draft (not published)
+                // - expired (past end date)
+                // - coming_soon (before any start date)
+                const shouldShow = status === 'open' || status === 'presale'
+                
+                // For teams: show all (registered and unregistered) if timing allows
+                // For events/scrimmages: hide if already registered (allow multiple) if timing allows
+                return shouldShow && (reg.type === 'team' || !isAlreadyRegistered)
               })
               .map((registration) => {
                 // Check if user has required memberships for any category
@@ -227,6 +239,7 @@ export default async function BrowseRegistrationsPage() {
                 })
 
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
+                const registrationStatus = getRegistrationStatus(registration)
 
                 return (
                   <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg transition-shadow ${
@@ -250,6 +263,11 @@ export default async function BrowseRegistrationsPage() {
                             }`}>
                               {registration.type}
                             </span>
+                            {registrationStatus === 'presale' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                Pre-Sale
+                              </span>
+                            )}
                             {isAlreadyRegistered && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                 Registered

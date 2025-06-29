@@ -7,6 +7,7 @@ import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
+import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -45,6 +46,11 @@ interface Registration {
   id: string
   name: string
   type: string
+  is_active: boolean
+  presale_start_at?: string | null
+  regular_start_at?: string | null
+  registration_end_at?: string | null
+  presale_code?: string | null
   season?: {
     name: string
     start_date: string
@@ -71,6 +77,7 @@ export default function RegistrationPurchase({
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [presaleCode, setPresaleCode] = useState<string>('')
   const { showSuccess, showError } = useToast()
 
   const categories = registration.registration_categories || []
@@ -78,6 +85,13 @@ export default function RegistrationPurchase({
   
   // Get pricing for selected category
   const pricing = selectedCategory?.pricing || { price: 0, tierName: 'Standard' }
+  
+  // Check registration timing status
+  const registrationStatus = getRegistrationStatus(registration)
+  const isPresale = registrationStatus === 'presale'
+  const hasValidPresaleCode = isPresale && 
+    presaleCode.trim().toLowerCase() === registration.presale_code?.toLowerCase()
+  const isTimingAvailable = isRegistrationAvailable(registration, hasValidPresaleCode)
   
   // Auto-select single category if eligible
   useEffect(() => {
@@ -390,6 +404,33 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Presale Code Input */}
+      {isPresale && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-md">
+          <div className="text-purple-800 text-sm mb-3">
+            <strong>Pre-Sale Registration:</strong> This registration is currently in pre-sale period and requires a special access code.
+          </div>
+          <div className="text-sm text-purple-700 mb-2">
+            If you have a pre-sale code, please enter it here:
+          </div>
+          <input
+            type="text"
+            value={presaleCode}
+            onChange={(e) => setPresaleCode(e.target.value)}
+            placeholder="Enter pre-sale code"
+            className="w-full px-3 py-2 border border-purple-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+          />
+          {hasValidPresaleCode && (
+            <div className="mt-2 text-sm text-green-700 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Valid pre-sale code entered
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -400,13 +441,14 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable}
         className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
         {isLoading ? 'Processing...' : 
          !selectedCategoryId ? 'Select Category to Continue' :
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
+         !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
          'Register Now'}
       </button>
 

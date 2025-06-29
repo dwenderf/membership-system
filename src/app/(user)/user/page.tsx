@@ -81,12 +81,20 @@ export default async function UserDashboardPage() {
   const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
   
+  // Check for expired memberships
+  const expiredMemberships = paidMemberships.filter(um => {
+    const validUntil = new Date(um.valid_until)
+    return validUntil <= now
+  })
+  const hasExpiredMembership = expiredMemberships.length > 0
+  
   // Check if any active membership expires within 90 days
-  const hasExpiringSoonMembership = activeMemberships.some((consolidated: any) => {
+  const expiringSoonMemberships = activeMemberships.filter((consolidated: any) => {
     const validUntil = new Date(consolidated.validUntil)
     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiration <= 90
   })
+  const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -108,12 +116,16 @@ export default async function UserDashboardPage() {
                 <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   !hasActiveMembership 
                     ? 'bg-red-100 text-red-800'
+                    : hasExpiredMembership
+                    ? 'bg-red-100 text-red-800'
                     : hasExpiringSoonMembership
                     ? 'bg-yellow-100 text-yellow-800' 
                     : 'bg-green-100 text-green-800'
                 }`}>
                   {!hasActiveMembership 
                     ? 'No Active Membership'
+                    : hasExpiredMembership
+                    ? 'Membership Expired'
                     : hasExpiringSoonMembership
                     ? 'Expiring Soon'
                     : 'Active Member'
@@ -153,12 +165,48 @@ export default async function UserDashboardPage() {
               )}
             </div>
             <div className="mt-5">
-              <a
-                href="/user/memberships"
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
-              >
-                View my memberships →
-              </a>
+              {!hasActiveMembership ? (
+                // No active memberships - encourage purchase
+                <a
+                  href="/user/browse-memberships"
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+                >
+                  Get Membership
+                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </a>
+              ) : hasExpiredMembership ? (
+                // Has expired memberships - encourage renewal
+                <a
+                  href="/user/browse-memberships"
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+                >
+                  Renew Membership
+                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </a>
+              ) : hasExpiringSoonMembership ? (
+                // Has expiring soon memberships - encourage extension
+                <a
+                  href="/user/browse-memberships"
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+                >
+                  Extend Membership
+                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </a>
+              ) : (
+                // Healthy memberships - regular link to view
+                <a
+                  href="/user/memberships"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  View my memberships →
+                </a>
+              )}
             </div>
           </div>
         </div>

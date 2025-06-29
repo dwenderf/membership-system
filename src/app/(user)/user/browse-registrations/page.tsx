@@ -207,7 +207,7 @@ export default async function BrowseRegistrationsPage() {
             <div className="mt-4">
               <Link 
                 href="/user/browse-memberships" 
-                className="inline-flex items-center px-4 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-800 bg-yellow-100 hover:bg-yellow-200 hover:border-yellow-400 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
               >
                 Extend Membership
                 <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -222,25 +222,25 @@ export default async function BrowseRegistrationsPage() {
       {/* No Active Memberships Warning - Only show if no memberships at all */}
       {!hasActiveMembership && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
+          <div className="flex items-center mb-3">
             <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
-            <div>
-              <h3 className="text-sm font-medium text-red-800">No Active Memberships</h3>
-              <p className="text-xs text-red-700 mt-1">
-                You need an active membership to register for most teams and events.
-              </p>
-              <Link 
-                href="/user/browse-memberships" 
-                className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-800 bg-red-100 hover:bg-red-200 hover:border-red-400 transition-colors mt-3"
-              >
-                Get Membership
-                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </Link>
-            </div>
+            <h3 className="text-sm font-medium text-red-800">No Active Memberships</h3>
+          </div>
+          <div>
+            <p className="text-xs text-red-700 mb-3">
+              You need an active membership to register for most teams and events.
+            </p>
+            <Link 
+              href="/user/browse-memberships" 
+              className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+            >
+              Get Membership
+              <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </Link>
           </div>
         </div>
       )}

@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
       payment_status: 'paid',
       registration_fee: paymentIntent.amount, // Use registration_fee field
       amount_paid: paymentIntent.amount,
+      presale_code_used: paymentIntent.metadata.presaleCodeUsed || null,
       registered_at: new Date().toISOString(),
     }
     

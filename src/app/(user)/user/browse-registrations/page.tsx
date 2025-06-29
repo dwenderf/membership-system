@@ -24,6 +24,29 @@ function getCategoryPrice(category: any): { price: number; tierName: string } {
   }
 }
 
+// Helper function to get timing message for coming soon registrations
+function getTimingMessage(registration: any): string {
+  const now = new Date()
+  
+  // Check if presale is configured and coming up
+  if (registration.presale_start_at) {
+    const presaleStart = new Date(registration.presale_start_at)
+    if (now < presaleStart) {
+      return `Pre-sale starts ${presaleStart.toLocaleDateString()} at ${presaleStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    }
+  }
+  
+  // Check regular start time
+  if (registration.regular_start_at) {
+    const regularStart = new Date(registration.regular_start_at)
+    if (now < regularStart) {
+      return `Registration opens ${regularStart.toLocaleDateString()} at ${regularStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    }
+  }
+  
+  return 'Registration timing not yet announced'
+}
+
 export default async function BrowseRegistrationsPage() {
   const supabase = await createClient()
   
@@ -221,11 +244,11 @@ export default async function BrowseRegistrationsPage() {
                 // Filter logic - show registrations that are:
                 // - open (fully available)
                 // - presale (visible but may require code)
+                // - coming_soon (show with disabled state and timing info)
                 // Hide registrations that are:
                 // - draft (not published)
                 // - expired (past end date)
-                // - coming_soon (before any start date)
-                const shouldShow = status === 'open' || status === 'presale'
+                const shouldShow = status === 'open' || status === 'presale' || status === 'coming_soon'
                 
                 // For teams: show all (registered and unregistered) if timing allows
                 // For events/scrimmages: hide if already registered (allow multiple) if timing allows
@@ -266,6 +289,11 @@ export default async function BrowseRegistrationsPage() {
                             {registrationStatus === 'presale' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
                                 Pre-Sale
+                              </span>
+                            )}
+                            {registrationStatus === 'coming_soon' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Coming Soon
                               </span>
                             )}
                             {isAlreadyRegistered && (
@@ -321,6 +349,29 @@ export default async function BrowseRegistrationsPage() {
                               View in My Registrations
                             </Link>
                           )
+                        ) : registrationStatus === 'coming_soon' ? (
+                          // Coming Soon: Show timing information with disabled state
+                          <div className="space-y-3">
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                              <div className="flex items-center">
+                                <svg className="h-5 w-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-sm font-medium text-yellow-800">
+                                  Registration Not Yet Open
+                                </span>
+                              </div>
+                              <p className="text-xs text-yellow-700 mt-1">
+                                {getTimingMessage(registration)}
+                              </p>
+                            </div>
+                            <button
+                              disabled
+                              className="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
+                            >
+                              Registration Opens Soon
+                            </button>
+                          </div>
                         ) : (
                           <RegistrationPurchase
                             registration={{

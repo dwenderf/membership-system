@@ -171,6 +171,7 @@ export default function RegistrationPurchase({
           registrationId: registration.id,
           categoryId: selectedCategoryId,
           amount: pricing.price, // For now using base price, later implement tiered pricing
+          presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
         }),
       })
 

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount } = body
+    const { registrationId, categoryId, amount, presaleCode } = body
     
     // Set payment context for Sentry
     const paymentContext = {
@@ -176,6 +176,7 @@ export async function POST(request: NextRequest) {
         categoryName: categoryName,
         seasonName: registration.season?.name || '',
         userName: `${userProfile.first_name} ${userProfile.last_name}`,
+        presaleCodeUsed: presaleCode || '',
       },
       description: `${registration.name} - ${categoryName} (${registration.season?.name})`,
     }

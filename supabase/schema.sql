@@ -153,6 +153,7 @@ CREATE TABLE user_registrations (
     payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
     registration_fee INTEGER, -- in cents
     amount_paid INTEGER, -- in cents (after discounts)
+    presale_code_used TEXT, -- Stores the presale code used for this registration (if any)
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id, registration_id)

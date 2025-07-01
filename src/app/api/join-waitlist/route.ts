@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       .from('registrations')
       .select(`
         name,
-        season (name)
+        seasons (name)
       `)
       .eq('id', registrationId)
       .single()
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
           userName: `${userData.first_name} ${userData.last_name}`,
           registrationName: registration.name,
           categoryName: getCategoryDisplayName(category),
-          seasonName: registration.season?.name || 'Unknown Season',
+          seasonName: registration.seasons?.name || 'Unknown Season',
           position: nextPosition
         })
       } catch (emailError) {

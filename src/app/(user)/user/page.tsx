@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCategoryDisplayName } from '@/lib/registration-utils'
 
 export default async function UserDashboardPage() {
   const supabase = await createClient()
@@ -39,6 +40,25 @@ export default async function UserDashboardPage() {
     `)
     .eq('user_id', user.id)
     .order('registered_at', { ascending: false })
+    .limit(5)
+
+  // Get user's current waitlist entries
+  const { data: userWaitlistEntries } = await supabase
+    .from('waitlists')
+    .select(`
+      *,
+      registration:registrations(
+        *,
+        season:seasons(*)
+      ),
+      registration_category:registration_categories(
+        *,
+        categories:category_id(name)
+      )
+    `)
+    .eq('user_id', user.id)
+    .is('removed_at', null)
+    .order('joined_at', { ascending: false })
     .limit(5)
 
   const now = new Date()
@@ -215,12 +235,13 @@ export default async function UserDashboardPage() {
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Recent Registrations
+              Recent Registrations & Waitlists
             </h3>
-            {userRegistrations && userRegistrations.length > 0 ? (
+            {(userRegistrations && userRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
               <div className="mt-4 space-y-3">
-                {userRegistrations.slice(0, 3).map((registration) => (
-                  <div key={registration.id} className="flex justify-between">
+                {/* Show recent registrations */}
+                {userRegistrations?.slice(0, 2).map((registration) => (
+                  <div key={`reg-${registration.id}`} className="flex justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {registration.registration?.name}
@@ -240,10 +261,27 @@ export default async function UserDashboardPage() {
                     </div>
                   </div>
                 ))}
+                
+                {/* Show recent waitlist entries */}
+                {userWaitlistEntries?.slice(0, 2).map((waitlistEntry) => (
+                  <div key={`wait-${waitlistEntry.id}`} className="flex justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {waitlistEntry.registration?.name}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Waitlist #{waitlistEntry.position}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="mt-4 text-sm text-gray-600">
-                No registrations yet. Browse available registrations to get started.
+                No registrations or waitlists yet. Browse available registrations to get started.
               </p>
             )}
             <div className="mt-5">
@@ -251,7 +289,7 @@ export default async function UserDashboardPage() {
                 href="/user/registrations"
                 className="text-sm font-medium text-blue-600 hover:text-blue-500"
               >
-                View my registrations →
+                View my registrations & waitlists →
               </a>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import RegistrationHistory from '@/components/RegistrationHistory'
 import Link from 'next/link'
+import { getCategoryDisplayName } from '@/lib/registration-utils'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -74,6 +75,24 @@ export default async function UserRegistrationsPage() {
     .in('season_id', seasonIds)
     .order('created_at', { ascending: false })
 
+  // Get user's current waitlist entries
+  const { data: userWaitlistEntries } = await supabase
+    .from('waitlists')
+    .select(`
+      *,
+      registration:registrations(
+        *,
+        season:seasons(*)
+      ),
+      registration_category:registration_categories(
+        *,
+        categories:category_id(name)
+      )
+    `)
+    .eq('user_id', user.id)
+    .is('removed_at', null)
+    .order('joined_at', { ascending: false })
+
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
@@ -86,6 +105,21 @@ export default async function UserRegistrationsPage() {
 
   const pastRegistrations = userRegistrations?.filter(ur => {
     const season = ur.registration?.season
+    if (!season) return false
+    const endDate = new Date(season.end_date)
+    return endDate < new Date()
+  }) || []
+
+  // Split waitlist entries into current and past
+  const currentWaitlistEntries = userWaitlistEntries?.filter(we => {
+    const season = we.registration?.season
+    if (!season) return false
+    const endDate = new Date(season.end_date)
+    return endDate >= new Date()
+  }) || []
+
+  const pastWaitlistEntries = userWaitlistEntries?.filter(we => {
+    const season = we.registration?.season
     if (!season) return false
     const endDate = new Date(season.end_date)
     return endDate < new Date()
@@ -180,6 +214,58 @@ export default async function UserRegistrationsPage() {
         )}
       </div>
 
+      {/* Current Waitlist Entries */}
+      <div className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Current Waitlists</h2>
+        {currentWaitlistEntries.length > 0 ? (
+          <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul className="divide-y divide-gray-200">
+              {currentWaitlistEntries.map((waitlistEntry) => (
+                <li key={waitlistEntry.id}>
+                  <div className="px-4 py-4 sm:px-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {waitlistEntry.registration?.name}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
+                          </p>
+                        </div>
+                        <div className="ml-4 flex-shrink-0">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            Position #{waitlistEntry.position}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">
+                          Joined: {new Date(waitlistEntry.joined_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600">
+                        Type: {waitlistEntry.registration?.type}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Season: {formatDateString(waitlistEntry.registration?.season?.start_date || '')} - {formatDateString(waitlistEntry.registration?.season?.end_date || '')}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              You are not currently on any waitlists.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Past Registrations */}
       {pastRegistrations.length > 0 && (
@@ -205,6 +291,41 @@ export default async function UserRegistrationsPage() {
                         </p>
                         <p className="text-sm text-gray-500">
                           Registered: {new Date(userRegistration.registered_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Past Waitlist Entries */}
+      {pastWaitlistEntries.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Past Waitlists</h2>
+          <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul className="divide-y divide-gray-200">
+              {pastWaitlistEntries.map((waitlistEntry) => (
+                <li key={waitlistEntry.id}>
+                  <div className="px-4 py-4 sm:px-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {waitlistEntry.registration?.name}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">
+                          Position #{waitlistEntry.position}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Joined: {new Date(waitlistEntry.joined_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>

@@ -683,13 +683,14 @@ email_logs (
 
 **Note**: Waitlists and user registrations are independent systems by design. Deleting a registration does not automatically remove waitlist entries, allowing for manual admin control over waitlist management.
 
-#### **Phase 7: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
+#### **Phase 7: Critical Registration Fixes & Discount Codes** ⚠️ **HIGH PRIORITY**
 - [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events
   - Implement atomic database checks during registration creation (check capacity in same transaction)
   - Automatic immediate refund for overflow registrations 
   - Critical error reporting to Sentry for capacity violations
   - Email notifications to affected users explaining payment, refund, and overflow situation
   - Clear user communication about being moved to waitlist if available
+- [ ] **Discount Codes**: Percentage-based discounts with usage tracking and admin management
 
 #### **Phase 8: Admin Waitlist Management** 📋
 - [ ] **Waitlist Dashboard**: Admin interface to view all waitlists by registration and category
@@ -701,7 +702,6 @@ email_logs (
 
 #### **Phase 9: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
-- [ ] **Discount Codes**: Percentage-based discounts with usage tracking
 - [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
 - [ ] **Content Management**: Admin interface for Terms & Conditions updates
 

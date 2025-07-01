@@ -118,8 +118,6 @@ export async function POST(request: NextRequest) {
       presale_code_used: paymentIntent.metadata.presaleCodeUsed || null,
       registered_at: new Date().toISOString(),
     }
-    
-    console.log('DEBUG API: Creating registration with data:', registrationData)
 
     // Create user registration record - THIS IS THE CRITICAL OPERATION
     const { data: userRegistration, error: registrationError } = await supabase

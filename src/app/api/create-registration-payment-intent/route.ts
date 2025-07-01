@@ -103,11 +103,6 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .eq('membership_id', selectedCategory.required_membership_id)
       
-      console.log('DEBUG API: Membership check', {
-        required_membership_id: selectedCategory.required_membership_id,
-        today: today,
-        all_user_memberships: allUserMemberships
-      })
 
       const { data: userMemberships } = await supabase
         .from('user_memberships')

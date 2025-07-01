@@ -681,6 +681,8 @@ email_logs (
 - [x] **Button State Logic**: Disabled states for waitlisted users with clear position display in button text
 - [x] **Waitlist Visibility**: Show the user's waitlisted registrations on the dashboard under recent registrations and also on the my registrations page.
 
+**Note**: Waitlists and user registrations are independent systems by design. Deleting a registration does not automatically remove waitlist entries, allowing for manual admin control over waitlist management.
+
 #### **Phase 7: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
 - [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events
   - Implement atomic database checks during registration creation (check capacity in same transaction)
@@ -689,7 +691,15 @@ email_logs (
   - Email notifications to affected users explaining payment, refund, and overflow situation
   - Clear user communication about being moved to waitlist if available
 
-#### **Phase 8: Advanced Features** 🔮
+#### **Phase 8: Admin Waitlist Management** 📋
+- [ ] **Waitlist Dashboard**: Admin interface to view all waitlists by registration and category
+- [ ] **Waitlist Position Management**: Ability to manually adjust waitlist positions and remove users
+- [ ] **Bypass Code Generation**: Generate single-use bypass codes for waitlisted users
+- [ ] **Waitlist Notifications**: Send custom notifications to waitlisted users about status changes
+- [ ] **Registration Conversion**: Move users from waitlist to registration when spots become available
+- [ ] **Waitlist Analytics**: Reports on waitlist conversion rates and demand patterns
+
+#### **Phase 9: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
 - [ ] **Discount Codes**: Percentage-based discounts with usage tracking
 - [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics

@@ -679,7 +679,7 @@ email_logs (
 - [x] **Database Schema Updates**: Category-specific waitlist support with proper RLS policies and migration scripts
 - [x] **Visual State Management**: Color-coded warnings (red for sold out, blue for waitlisted) with appropriate icons and messaging
 - [x] **Button State Logic**: Disabled states for waitlisted users with clear position display in button text
-- [ ] **Waitlist Visibility**: Show the user's waitlisted registrations on the dashboard under recent registrations and also on the my registrations page.
+- [x] **Waitlist Visibility**: Show the user's waitlisted registrations on the dashboard under recent registrations and also on the my registrations page.
 
 #### **Phase 7: Critical Registration Fixes** ⚠️ **HIGH PRIORITY**
 - [ ] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events

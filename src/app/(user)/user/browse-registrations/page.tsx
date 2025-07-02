@@ -72,6 +72,7 @@ export default async function BrowseRegistrationsPage() {
     .from('user_registrations')
     .select('registration_id')
     .eq('user_id', user.id)
+    .eq('payment_status', 'paid')
 
   // Get available registrations for current/future seasons
   // First get current/future seasons

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -18,13 +18,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Registration ID required' }, { status: 400 })
     }
 
-    // Delete processing records for this user/registration
-    const { error: deleteError } = await supabase
+    // Delete processing records for this user/registration using admin client to bypass RLS
+    const adminSupabase = createAdminClient()
+    const { data: deletedRecords, error: deleteError } = await adminSupabase
       .from('user_registrations')
       .delete()
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
       .eq('payment_status', 'processing')
+      .select()
+      
+    console.log(`Cleanup API: Deleted ${deletedRecords?.length || 0} processing records for user ${user.id} registration ${registrationId}`)
 
     if (deleteError) {
       console.error('Error deleting processing record:', deleteError)

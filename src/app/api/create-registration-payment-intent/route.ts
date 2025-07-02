@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
 
@@ -156,14 +156,33 @@ export async function POST(request: NextRequest) {
     if (selectedCategory.max_capacity) {
       // Clean up any existing processing records for this user/registration first
       try {
-        await supabase
+        // Use admin client to bypass RLS for cleanup operations
+        const adminSupabase = createAdminClient()
+        
+        // First check what records exist
+        const { data: existingRecords } = await adminSupabase
           .from('user_registrations')
-          .delete()
+          .select('id, payment_status, processing_expires_at')
           .eq('user_id', user.id)
           .eq('registration_id', registrationId)
-          .eq('payment_status', 'processing')
         
-        console.log('Cleaned up any existing processing records before creating new reservation')
+        console.log('Existing records before cleanup:', existingRecords)
+        
+        // Delete processing records directly using admin client
+        const processingRecords = existingRecords?.filter(r => r.payment_status === 'processing') || []
+        
+        for (const record of processingRecords) {
+          const { data: deletedRecord, error: deleteError } = await adminSupabase
+            .from('user_registrations')
+            .delete()
+            .eq('id', record.id)
+            .eq('payment_status', 'processing')
+            .select()
+          
+          console.log(`Delete processing record result for ${record.id}:`, { deletedRecord, deleteError })
+        }
+        
+        console.log(`Successfully cleaned up ${processingRecords.length} processing records using admin client`)
       } catch (cleanupError) {
         console.error('Error cleaning up existing processing records:', cleanupError)
         // Continue anyway - the insert will handle duplicates
@@ -199,10 +218,24 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (reservationError) {
+        console.error('Reservation creation error:', reservationError)
+        
         // Check if this is a duplicate registration error
         if (reservationError.code === '23505') { // Unique constraint violation
+          // Check what type of existing registration exists
+          const { data: existingReg } = await supabase
+            .from('user_registrations')
+            .select('payment_status')
+            .eq('user_id', user.id)
+            .eq('registration_id', registrationId)
+            .single()
+          
+          console.log('Existing registration found:', existingReg)
+          
           return NextResponse.json({ 
-            error: 'You are already registered for this event' 
+            error: existingReg?.payment_status === 'paid' 
+              ? 'You are already registered for this event'
+              : 'Registration conflict - please try again'
           }, { status: 400 })
         }
         

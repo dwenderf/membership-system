@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if user already registered (paid registrations only) via centralized API
+    // Check if user already registered or has active reservation via centralized API
     try {
       const duplicateCheckResponse = await fetch(`${getBaseUrl()}/api/check-duplicate-registration?registrationId=${registrationId}`, {
         headers: {
@@ -91,9 +91,22 @@ export async function POST(request: NextRequest) {
       
       if (duplicateCheckResponse.ok) {
         const duplicateCheck = await duplicateCheckResponse.json()
+        
         if (duplicateCheck.isAlreadyRegistered) {
-          capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
+          capturePaymentError(new Error('User already registered (paid)'), paymentContext, 'warning')
           return NextResponse.json({ error: 'You are already registered for this event' }, { status: 400 })
+        }
+        
+        if (duplicateCheck.hasActiveReservation) {
+          const expiresAt = new Date(duplicateCheck.expiresAt)
+          const minutesLeft = Math.ceil((expiresAt.getTime() - new Date().getTime()) / (1000 * 60))
+          
+          capturePaymentError(new Error('User has active payment reservation'), paymentContext, 'warning')
+          return NextResponse.json({ 
+            error: `You have a payment in progress for this event. Please complete your payment or wait ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''} to try again.`,
+            reservationExpiresAt: duplicateCheck.expiresAt,
+            reservationId: duplicateCheck.registrationId
+          }, { status: 409 }) // 409 Conflict for reservation in progress
         }
       }
     } catch (error) {

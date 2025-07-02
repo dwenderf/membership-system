@@ -57,6 +57,27 @@ export async function POST(request: NextRequest) {
     paymentContext.registrationId = paymentIntent.metadata.registrationId
     
     if (paymentIntent.status !== 'succeeded') {
+      // Clean up processing reservation for failed/cancelled payments
+      const reservationId = paymentIntent.metadata.reservationId
+      if (reservationId) {
+        try {
+          const { error: cleanupError } = await supabase
+            .from('user_registrations')
+            .delete()
+            .eq('id', reservationId)
+            .eq('user_id', user.id)
+            .eq('payment_status', 'processing')
+          
+          if (cleanupError) {
+            console.error('Error cleaning up failed payment reservation:', cleanupError)
+          } else {
+            console.log(`Cleaned up failed payment reservation: ${reservationId}`)
+          }
+        } catch (cleanupError) {
+          console.error('Error during reservation cleanup:', cleanupError)
+        }
+      }
+      
       // Capture payment failure as business event
       Sentry.captureMessage(`Registration payment confirmation failed - status: ${paymentIntent.status}`, {
         level: 'warning',
@@ -74,7 +95,8 @@ export async function POST(request: NextRequest) {
           category_name: paymentIntent.metadata.categoryName,
           amount_cents: paymentIntent.amount,
           payment_intent_id: paymentIntentId,
-          payment_status: paymentIntent.status
+          payment_status: paymentIntent.status,
+          reservation_cleaned_up: !!reservationId
         }
       })
       

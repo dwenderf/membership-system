@@ -17,23 +17,43 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Registration ID required' }, { status: 400 })
     }
 
-    // Check for existing paid registration (exclude processing records)
-    const { data: existingRegistration, error } = await supabase
+    // Check for existing registrations (paid or non-expired processing)
+    const { data: existingRegistrations, error } = await supabase
       .from('user_registrations')
-      .select('id, payment_status')
+      .select('id, payment_status, processing_expires_at')
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
-      .eq('payment_status', 'paid')
-      .single()
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error) {
       console.error('Error checking duplicate registration:', error)
       return NextResponse.json({ error: 'Failed to check registration' }, { status: 500 })
     }
 
+    // Check each registration status
+    let paidRegistration = null
+    let activeProcessingRegistration = null
+    
+    if (existingRegistrations && existingRegistrations.length > 0) {
+      for (const reg of existingRegistrations) {
+        if (reg.payment_status === 'paid') {
+          paidRegistration = reg
+          break // Paid takes priority
+        }
+        if (reg.payment_status === 'processing' && reg.processing_expires_at) {
+          const expiresAt = new Date(reg.processing_expires_at)
+          if (expiresAt > new Date()) {
+            activeProcessingRegistration = reg
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
-      isAlreadyRegistered: !!existingRegistration,
-      registrationId: existingRegistration?.id || null
+      isAlreadyRegistered: !!paidRegistration,
+      hasActiveReservation: !!activeProcessingRegistration,
+      status: paidRegistration ? 'paid' : (activeProcessingRegistration ? 'processing' : 'none'),
+      registrationId: paidRegistration?.id || activeProcessingRegistration?.id || null,
+      expiresAt: activeProcessingRegistration?.processing_expires_at || null
     })
     
   } catch (error) {

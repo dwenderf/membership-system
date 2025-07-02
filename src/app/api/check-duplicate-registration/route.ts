@@ -39,10 +39,15 @@ export async function GET(request: NextRequest) {
           paidRegistration = reg
           break // Paid takes priority
         }
-        if (reg.payment_status === 'processing' && reg.processing_expires_at) {
-          const expiresAt = new Date(reg.processing_expires_at)
-          if (expiresAt > new Date()) {
-            activeProcessingRegistration = reg
+        if (reg.payment_status === 'processing') {
+          if (reg.processing_expires_at) {
+            const expiresAt = new Date(reg.processing_expires_at)
+            if (expiresAt > new Date()) {
+              activeProcessingRegistration = reg
+            }
+          } else {
+            // Old processing record without expiration - treat as expired
+            console.log(`Found old processing record without expiration: ${reg.id}`)
           }
         }
       }

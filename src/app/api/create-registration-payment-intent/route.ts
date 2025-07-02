@@ -154,6 +154,75 @@ export async function POST(request: NextRequest) {
     let reservationId: string | null = null
     
     if (selectedCategory.max_capacity) {
+      // Check for existing processing records and reuse them instead of creating new ones
+      let reservation = null
+      let reservationError = null
+      
+      try {
+        // Check if there's already a processing record
+        const { data: existingProcessing } = await supabase
+          .from('user_registrations')
+          .select('id, processing_expires_at')
+          .eq('user_id', user.id)
+          .eq('registration_id', registrationId)
+          .eq('payment_status', 'processing')
+          .single()
+        
+        if (existingProcessing) {
+          // Update the existing processing record with new expiration
+          const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+          
+          const { error: updateError } = await supabase
+            .from('user_registrations')
+            .update({
+              processing_expires_at: expiresAt.toISOString(),
+              registration_fee: amount,
+              amount_paid: amount,
+              presale_code_used: presaleCode || null,
+            })
+            .eq('id', existingProcessing.id)
+          
+          if (updateError) {
+            reservation = null
+            reservationError = updateError
+          } else {
+            // Use the existing record info since update was successful
+            reservation = { id: existingProcessing.id, ...existingProcessing }
+            reservationError = null
+          }
+        } else {
+          // No existing record, create new one
+          const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+          
+          const { data: newReservation, error: createError } = await supabase
+            .from('user_registrations')
+            .insert({
+              user_id: user.id,
+              registration_id: registrationId,
+              registration_category_id: categoryId,
+              payment_status: 'processing',
+              processing_expires_at: expiresAt.toISOString(),
+              registration_fee: amount,
+              amount_paid: amount,
+              presale_code_used: presaleCode || null,
+            })
+            .select()
+            .single()
+          
+          reservation = newReservation
+          reservationError = createError
+        }
+      } catch (error) {
+        console.error('Error handling processing record:', error)
+        reservationError = error
+      }
+      
+      if (reservationError) {
+        console.error('Error creating/updating reservation:', reservationError)
+        capturePaymentError(reservationError, paymentContext, 'error')
+        return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
+      }
+
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
       
@@ -165,47 +234,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Create processing reservation (5 minute expiration)
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
-      
-      const { data: reservation, error: reservationError } = await supabase
-        .from('user_registrations')
-        .insert({
-          user_id: user.id,
-          registration_id: registrationId,
-          registration_category_id: categoryId,
-          payment_status: 'processing',
-          processing_expires_at: expiresAt.toISOString(),
-          registration_fee: amount,
-          amount_paid: amount,
-          presale_code_used: presaleCode || null,
-        })
-        .select()
-        .single()
-
-      if (reservationError) {
-        // Check if this is a duplicate registration error
-        if (reservationError.code === '23505') { // Unique constraint violation
-          return NextResponse.json({ 
-            error: 'You are already registered for this event' 
-          }, { status: 400 })
-        }
-        
-        // Could be a race condition - check capacity again
-        const recheckedCount = await getSingleCategoryRegistrationCount(categoryId)
-        if (recheckedCount >= selectedCategory.max_capacity) {
-          return NextResponse.json({ 
-            error: 'This category just became full',
-            shouldShowWaitlist: true 
-          }, { status: 400 })
-        }
-        
-        capturePaymentError(reservationError, paymentContext, 'error')
-        return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
-      }
-
       reservationId = reservation.id
-      console.log(`Reserved spot for user ${user.id}, reservation ID: ${reservationId}, expires: ${expiresAt.toISOString()}`)
     }
 
     // Fetch user details for customer info

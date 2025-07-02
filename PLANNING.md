@@ -683,7 +683,7 @@ email_logs (
 
 **Note**: Waitlists and user registrations are independent systems by design. Deleting a registration does not automatically remove waitlist entries, allowing for manual admin control over waitlist management.
 
-#### **Phase 7: Critical Registration Fixes & Discount Codes** ⚠️ **HIGH PRIORITY**
+#### **✅ Phase 7: Critical Registration Fixes & Discount Codes - COMPLETED** ⚠️
 - [x] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events ✅ **COMPLETED**
   - [x] Implemented 5-minute reservation system for capacity-limited registrations
   - [x] Added `processing` status to `user_registrations` table with expiration timestamps
@@ -692,10 +692,36 @@ email_logs (
   - [x] Centralized user registration display logic in APIs (paid registrations only)
   - [x] Added race condition handling with automatic waitlist fallback
   - [x] Created database migration and updated schema.sql
+- [x] **Payment Timer & Cleanup System**: Complete countdown timer and processing record cleanup ✅ **COMPLETED**
+  - [x] Added 5-minute countdown timer in payment form showing reservation expiration
+  - [x] Implemented clean reservation system with modal close cleanup
+  - [x] Added timer expiration handling with toast notifications
+  - [x] Fixed RLS issues preventing processing record cleanup by creating admin client
+  - [x] Added service role key bypass for database cleanup operations
+  - [x] Implemented reliable cleanup on modal close and timer expiration
 - [ ] **Discount Codes**: Percentage-based discounts with usage tracking and admin management
 - [ ] **Add Donation to Purchase**: When purchasing a registration, add the option to donate to the organization
 
-#### **Phase 8: Admin Waitlist Management** 📋
+#### **Phase 8: Xero Accounting Integration** 🧾
+- [ ] **OAuth 2.0 Setup**: Xero app registration with secure token management and refresh capability
+- [ ] **Database Schema Extensions**: Add Xero tracking fields and sync status logging to existing tables
+- [ ] **Automatic Invoice Creation**: Generate Xero invoices for all purchases (memberships + registrations) with multi-line item support
+- [ ] **Contact Management**: Create and sync Xero contacts for users making their first purchase
+- [ ] **Stripe Fee Tracking**: Record Stripe processing fees as separate expense items in Xero
+- [ ] **Discount Code Integration**: Handle discount codes as negative line items in invoices for clear financial breakdown
+- [ ] **Real-time Synchronization**: Webhook integration for automatic sync between systems
+- [ ] **Payment Recording**: Link Stripe payments to Xero bank accounts with proper reconciliation
+- [ ] **Error Handling & Retry Logic**: Robust error handling for rate limits, authentication, and network issues
+- [ ] **Testing & Sandbox**: Complete testing framework using Xero demo company environment
+
+**Business Benefits:**
+- Automated bookkeeping eliminating manual invoice entry
+- Accurate fee tracking with Stripe processing costs recorded
+- Professional invoicing using Xero's templates and delivery system
+- Real-time financial data synchronization
+- Clear discount transparency and promotional pricing breakdown
+
+#### **Phase 9: Admin Waitlist Management** 📋
 - [ ] **Waitlist Dashboard**: Admin interface to view all waitlists by registration and category
 - [ ] **Waitlist Position Management**: Ability to manually adjust waitlist positions and remove users
 - [ ] **Bypass Code Generation**: Generate single-use bypass codes for waitlisted users
@@ -703,7 +729,7 @@ email_logs (
 - [ ] **Registration Conversion**: Move users from waitlist to registration when spots become available
 - [ ] **Waitlist Analytics**: Reports on waitlist conversion rates and demand patterns
 
-#### **Phase 9: Advanced Features** 🔮
+#### **Phase 10: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
 - [ ] **Email Marketing**: Send marketing and team/event emails through the admin page rather through Mailchimp
 - [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
@@ -723,13 +749,19 @@ email_logs (
 ---
 
 *Last updated: July 2, 2025*
-*Status: **Race Condition Protection Complete** - Atomic reservation system preventing registration oversubscription*
+*Status: **Complete Reservation System with Timer & RLS Fixes** - Robust payment countdown with reliable cleanup*
 
 ## Recent Achievements (July 2, 2025)
 
-✅ **Race Condition Protection & Reservation System Implementation**
+✅ **Complete Reservation System with Payment Timer Implementation**
 - **✅ Atomic Spot Reservation**: 5-minute reservation system preventing race conditions during payment processing
 - **✅ Processing Status Architecture**: Added `processing` payment status with expiration timestamps to `user_registrations` table
+- **✅ Payment Countdown Timer**: Visual 5-minute countdown in payment form motivating completion and showing reservation status
+- **✅ Clean Reservation System**: Modal close triggers cleanup allowing immediate retry with fresh reservation window
+- **✅ Timer Expiration Handling**: Toast notifications when timer expires with automatic spot release
+- **✅ RLS Issue Resolution**: Fixed Row Level Security preventing cleanup by adding admin client with service role key
+- **✅ Reliable Cleanup Operations**: Database operations now use service role key to bypass RLS for processing record deletion
+- **✅ Enhanced User Experience**: Seamless payment flow with visual feedback and proper error handling
 - **✅ Centralized Registration Counting**: Updated counting logic to include valid processing reservations in capacity calculations
 - **✅ API-First User Display**: Centralized user registration display logic ensuring only paid registrations are shown to users
 - **✅ Enhanced Duplicate Prevention**: Updated duplicate registration checks to exclude processing records from validation

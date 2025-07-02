@@ -80,7 +80,38 @@ export default function RegistrationPurchase({
   const [error, setError] = useState<string | null>(null)
   const [presaleCode, setPresaleCode] = useState<string>('')
   const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
+  const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
+
+  // Cleanup function to remove processing reservation
+  const cleanupProcessingReservation = async () => {
+    try {
+      await fetch(`/api/cleanup-processing-reservation?registrationId=${registration.id}`, {
+        method: 'DELETE',
+      })
+    } catch (error) {
+      console.error('Error cleaning up processing reservation:', error)
+    }
+  }
+
+  // Close modal and cleanup
+  const closeModal = async () => {
+    setShowPaymentForm(false)
+    setClientSecret(null)
+    setSelectedCategoryId(null) // Clear selected category
+    setReservationExpiresAt(null)
+    await cleanupProcessingReservation()
+  }
+
+  // Handle timer expiration
+  const handleTimerExpired = async () => {
+    await cleanupProcessingReservation()
+    setShowPaymentForm(false)
+    setClientSecret(null)
+    setSelectedCategoryId(null)
+    setReservationExpiresAt(null)
+    showError('Payment Timer Expired', 'Your reserved spot has been released. Please try registering again.')
+  }
 
   const categories = registration.registration_categories || []
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId)
@@ -275,8 +306,9 @@ export default function RegistrationPurchase({
         throw new Error(errorData.error || 'Failed to create payment intent')
       }
 
-      const { clientSecret } = await response.json()
+      const { clientSecret, reservationExpiresAt: expiresAt } = await response.json()
       setClientSecret(clientSecret)
+      setReservationExpiresAt(expiresAt || null)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)
@@ -622,16 +654,18 @@ export default function RegistrationPurchase({
 
       {/* Payment Form Modal */}
       {showPaymentForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={closeModal}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Complete Registration</h3>
               <button
-                onClick={() => {
-                  setShowPaymentForm(false)
-                  setClientSecret(null)
-                  setIsLoading(false)
-                }}
+                onClick={closeModal}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <span className="sr-only">Close</span>
@@ -651,6 +685,8 @@ export default function RegistrationPurchase({
                   categoryId={selectedCategoryId!}
                   amount={pricing.price}
                   userEmail={userEmail}
+                  reservationExpiresAt={reservationExpiresAt || undefined}
+                  onTimerExpired={handleTimerExpired}
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setClientSecret(null)

@@ -23,6 +23,10 @@ interface PaymentFormProps {
   userEmail: string
   onSuccess: () => void
   onError: (error: string) => void
+  
+  // Reservation timer (only for capacity-limited registrations)
+  reservationExpiresAt?: string
+  onTimerExpired?: () => void
 }
 
 export default function PaymentForm({
@@ -35,14 +39,41 @@ export default function PaymentForm({
   amount,
   userEmail,
   onSuccess,
-  onError
+  onError,
+  reservationExpiresAt,
+  onTimerExpired
 }: PaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
   const [isLoading, setIsLoading] = useState(false)
   const [isElementsReady, setIsElementsReady] = useState(false)
-  
   const [isFormComplete, setIsFormComplete] = useState(false)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
+
+  // Initialize and update countdown timer
+  useEffect(() => {
+    if (!reservationExpiresAt) return
+
+    const updateTimer = () => {
+      const now = new Date()
+      const expires = new Date(reservationExpiresAt)
+      const secondsLeft = Math.max(0, Math.floor((expires.getTime() - now.getTime()) / 1000))
+      
+      setTimeLeft(secondsLeft)
+      
+      if (secondsLeft === 0 && onTimerExpired) {
+        onTimerExpired()
+      }
+    }
+
+    // Initial update
+    updateTimer()
+    
+    // Update every second
+    const timer = setInterval(updateTimer, 1000)
+    
+    return () => clearInterval(timer)
+  }, [reservationExpiresAt, onTimerExpired])
 
   // Check if Elements are ready for form validation
   useEffect(() => {
@@ -214,6 +245,24 @@ export default function PaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Countdown Timer for capacity-limited registrations */}
+      {timeLeft !== null && (
+        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-2"></div>
+              <span className="text-sm font-medium text-orange-900">Complete payment in:</span>
+            </div>
+            <span className="text-lg font-mono font-bold text-orange-600">
+              {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <p className="text-xs text-orange-700 mt-1">
+            Your spot is reserved until the timer expires
+          </p>
+        </div>
+      )}
+      
       {!isElementsReady ? (
         <div className="space-y-4">
           <div className="text-center text-sm text-gray-500 mb-4">

@@ -705,6 +705,7 @@ email_logs (
 
 #### **Phase 9: Advanced Features** 🔮
 - [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
+- [ ] **Email Marketing**: Send marketing and team/event emails through the admin page rather through Mailchimp
 - [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
 - [ ] **Content Management**: Admin interface for Terms & Conditions updates
 

@@ -290,12 +290,21 @@ export default async function UserDashboardPage() {
               </p>
             )}
             <div className="mt-5">
-              <a
-                href="/user/registrations"
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
-              >
-                View my registrations & waitlists →
-              </a>
+              {(userRegistrations && userRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
+                <a
+                  href="/user/registrations"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  View my registrations & waitlists →
+                </a>
+              ) : (
+                <a
+                  href="/user/browse-registrations"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                >
+                  Browse available registrations →
+                </a>
+              )}
             </div>
           </div>
         </div>

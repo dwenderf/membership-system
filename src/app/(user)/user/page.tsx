@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
+import { getBaseUrl } from '@/lib/url-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -33,7 +34,7 @@ export default async function UserDashboardPage() {
   // Get user's current paid registrations only (via API for centralized logic)
   let userRegistrations: any[] = []
   try {
-    const registrationsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/user-registrations`, {
+    const registrationsResponse = await fetch(`${getBaseUrl()}/api/user-registrations`, {
       headers: {
         'Cookie': headersList.get('cookie') || '',
       },

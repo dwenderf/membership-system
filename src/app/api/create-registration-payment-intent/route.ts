@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
+import { getBaseUrl } from '@/lib/url-utils'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already registered (paid registrations only) via centralized API
     try {
-      const duplicateCheckResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/check-duplicate-registration?registrationId=${registrationId}`, {
+      const duplicateCheckResponse = await fetch(`${getBaseUrl()}/api/check-duplicate-registration?registrationId=${registrationId}`, {
         headers: {
           'Cookie': request.headers.get('cookie') || '',
         },

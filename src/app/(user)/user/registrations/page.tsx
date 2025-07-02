@@ -3,6 +3,7 @@ import RegistrationHistory from '@/components/RegistrationHistory'
 import Link from 'next/link'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
+import { getBaseUrl } from '@/lib/url-utils'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -28,7 +29,7 @@ export default async function UserRegistrationsPage() {
   // Get user's paid registrations only (via API for centralized logic)
   let userRegistrations: any[] = []
   try {
-    const registrationsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/user-registrations`, {
+    const registrationsResponse = await fetch(`${getBaseUrl()}/api/user-registrations`, {
       headers: {
         'Cookie': headersList.get('cookie') || '',
       },

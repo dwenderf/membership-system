@@ -693,6 +693,7 @@ email_logs (
   - [x] Added race condition handling with automatic waitlist fallback
   - [x] Created database migration and updated schema.sql
 - [ ] **Discount Codes**: Percentage-based discounts with usage tracking and admin management
+- [ ] **Add Donation to Purchase**: When purchasing a registration, add the option to donate to the organization
 
 #### **Phase 8: Admin Waitlist Management** 📋
 - [ ] **Waitlist Dashboard**: Admin interface to view all waitlists by registration and category

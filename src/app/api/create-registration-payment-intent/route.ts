@@ -154,6 +154,21 @@ export async function POST(request: NextRequest) {
     let reservationId: string | null = null
     
     if (selectedCategory.max_capacity) {
+      // Clean up any existing processing records for this user/registration first
+      try {
+        await supabase
+          .from('user_registrations')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('registration_id', registrationId)
+          .eq('payment_status', 'processing')
+        
+        console.log('Cleaned up any existing processing records before creating new reservation')
+      } catch (cleanupError) {
+        console.error('Error cleaning up existing processing records:', cleanupError)
+        // Continue anyway - the insert will handle duplicates
+      }
+      
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
       

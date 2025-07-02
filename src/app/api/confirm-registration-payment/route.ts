@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
 
     // Extract metadata
     const registrationId = paymentIntent.metadata.registrationId
+    const reservationId = paymentIntent.metadata.reservationId
     const userMembershipId = null // For now, we won't require linking to specific membership
 
     // Get user's active membership for eligibility (if any)
@@ -106,29 +107,72 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single()
 
-    // Debug the data we're trying to insert
-    const registrationData = {
-      user_id: user.id,
-      registration_id: registrationId,
-      registration_category_id: categoryId,
-      user_membership_id: activeMembership?.id || null,
-      payment_status: 'paid',
-      registration_fee: paymentIntent.amount, // Use registration_fee field
-      amount_paid: paymentIntent.amount,
-      presale_code_used: paymentIntent.metadata.presaleCodeUsed || null,
-      registered_at: new Date().toISOString(),
+    // RESERVATION SYSTEM: Update existing processing record to paid
+    let userRegistration
+    let registrationError
+
+    if (reservationId) {
+      // Update existing reservation to paid status
+      const { data, error } = await supabase
+        .from('user_registrations')
+        .update({
+          payment_status: 'paid',
+          user_membership_id: activeMembership?.id || null,
+          registered_at: new Date().toISOString(),
+          processing_expires_at: null, // Clear expiration since it's now paid
+        })
+        .eq('id', reservationId)
+        .eq('user_id', user.id) // Security check
+        .eq('payment_status', 'processing') // Only update if still processing
+        .select()
+        .single()
+
+      userRegistration = data
+      registrationError = error
+
+      // If reservation not found or expired, check if it was already processed
+      if (registrationError) {
+        const { data: existingPaid } = await supabase
+          .from('user_registrations')
+          .select()
+          .eq('id', reservationId)
+          .eq('user_id', user.id)
+          .eq('payment_status', 'paid')
+          .single()
+
+        if (existingPaid) {
+          // Payment already processed, return success
+          userRegistration = existingPaid
+          registrationError = null
+        }
+      }
+    } else {
+      // Fallback: Create new record (for backwards compatibility or unlimited capacity)
+      const registrationData = {
+        user_id: user.id,
+        registration_id: registrationId,
+        registration_category_id: categoryId,
+        user_membership_id: activeMembership?.id || null,
+        payment_status: 'paid',
+        registration_fee: paymentIntent.amount,
+        amount_paid: paymentIntent.amount,
+        presale_code_used: paymentIntent.metadata.presaleCodeUsed || null,
+        registered_at: new Date().toISOString(),
+      }
+
+      const { data, error } = await supabase
+        .from('user_registrations')
+        .insert(registrationData)
+        .select()
+        .single()
+
+      userRegistration = data
+      registrationError = error
     }
 
-    // Create user registration record - THIS IS THE CRITICAL OPERATION
-    const { data: userRegistration, error: registrationError } = await supabase
-      .from('user_registrations')
-      .insert(registrationData)
-      .select()
-      .single()
-
     if (registrationError) {
-      console.error('Error creating user registration:', registrationError)
-      console.error('Registration data that failed:', registrationData)
+      console.error('Error confirming registration:', registrationError)
+      console.error('Payment intent metadata:', paymentIntent.metadata)
       
       // THIS IS THE CRITICAL ERROR - Payment succeeded but registration creation failed
       captureCriticalPaymentError(registrationError, paymentContext, [

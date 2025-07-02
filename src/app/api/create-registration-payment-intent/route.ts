@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -79,17 +80,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if user already registered for this registration
-    const { data: existingRegistration } = await supabase
-      .from('user_registrations')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('registration_id', registrationId)
-      .single()
-
-    if (existingRegistration) {
-      capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
-      return NextResponse.json({ error: 'You are already registered for this event' }, { status: 400 })
+    // Check if user already registered (paid registrations only) via centralized API
+    try {
+      const duplicateCheckResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/check-duplicate-registration?registrationId=${registrationId}`, {
+        headers: {
+          'Cookie': request.headers.get('cookie') || '',
+        },
+      })
+      
+      if (duplicateCheckResponse.ok) {
+        const duplicateCheck = await duplicateCheckResponse.json()
+        if (duplicateCheck.isAlreadyRegistered) {
+          capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
+          return NextResponse.json({ error: 'You are already registered for this event' }, { status: 400 })
+        }
+      }
+    } catch (error) {
+      console.error('Error checking duplicate registration:', error)
+      // Continue without duplicate check rather than fail the entire request
     }
 
     // Check membership eligibility if required
@@ -128,18 +136,62 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check capacity if limited
+    // STEP 1: Reserve spot immediately (race condition protection)
+    let reservationId: string | null = null
+    
     if (selectedCategory.max_capacity) {
-      const { count: currentCount } = await supabase
-        .from('user_registrations')
-        .select('*', { count: 'exact', head: true })
-        .eq('registration_category_id', categoryId)
-        .eq('payment_status', 'paid')
-
-      if (currentCount && currentCount >= selectedCategory.max_capacity) {
+      // Get current count including active reservations
+      const currentCount = await getSingleCategoryRegistrationCount(categoryId)
+      
+      if (currentCount >= selectedCategory.max_capacity) {
         capturePaymentError(new Error('Registration full'), paymentContext, 'warning')
-        return NextResponse.json({ error: 'This category is at capacity' }, { status: 400 })
+        return NextResponse.json({ 
+          error: 'This category is at capacity',
+          shouldShowWaitlist: true 
+        }, { status: 400 })
       }
+
+      // Create processing reservation (5 minute expiration)
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+      
+      const { data: reservation, error: reservationError } = await supabase
+        .from('user_registrations')
+        .insert({
+          user_id: user.id,
+          registration_id: registrationId,
+          registration_category_id: categoryId,
+          payment_status: 'processing',
+          processing_expires_at: expiresAt.toISOString(),
+          registration_fee: amount,
+          amount_paid: amount,
+          presale_code_used: presaleCode || null,
+        })
+        .select()
+        .single()
+
+      if (reservationError) {
+        // Check if this is a duplicate registration error
+        if (reservationError.code === '23505') { // Unique constraint violation
+          return NextResponse.json({ 
+            error: 'You are already registered for this event' 
+          }, { status: 400 })
+        }
+        
+        // Could be a race condition - check capacity again
+        const recheckedCount = await getSingleCategoryRegistrationCount(categoryId)
+        if (recheckedCount >= selectedCategory.max_capacity) {
+          return NextResponse.json({ 
+            error: 'This category just became full',
+            shouldShowWaitlist: true 
+          }, { status: 400 })
+        }
+        
+        capturePaymentError(reservationError, paymentContext, 'error')
+        return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
+      }
+
+      reservationId = reservation.id
+      console.log(`Reserved spot for user ${user.id}, reservation ID: ${reservationId}, expires: ${expiresAt.toISOString()}`)
     }
 
     // Fetch user details for customer info
@@ -172,6 +224,7 @@ export async function POST(request: NextRequest) {
         seasonName: registration.season?.name || '',
         userName: `${userProfile.first_name} ${userProfile.last_name}`,
         presaleCodeUsed: presaleCode || '',
+        reservationId: reservationId || '',
       },
       description: `${registration.name} - ${categoryName} (${registration.season?.name})`,
     }

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import RegistrationHistory from '@/components/RegistrationHistory'
 import Link from 'next/link'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
+import { headers } from 'next/headers'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -15,6 +16,7 @@ function formatDateString(dateString: string): string {
 }
 
 export default async function UserRegistrationsPage() {
+  const headersList = await headers()
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,23 +25,20 @@ export default async function UserRegistrationsPage() {
     return null // Layout will handle redirect
   }
 
-  // Get user's registrations
-  const { data: userRegistrations } = await supabase
-    .from('user_registrations')
-    .select(`
-      *,
-      registration:registrations(
-        *,
-        season:seasons(*),
-        registration_categories(
-          *,
-          categories:category_id(name),
-          memberships:required_membership_id(name)
-        )
-      )
-    `)
-    .eq('user_id', user.id)
-    .order('registered_at', { ascending: false })
+  // Get user's paid registrations only (via API for centralized logic)
+  let userRegistrations: any[] = []
+  try {
+    const registrationsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/user-registrations`, {
+      headers: {
+        'Cookie': headersList.get('cookie') || '',
+      },
+    })
+    if (registrationsResponse.ok) {
+      userRegistrations = await registrationsResponse.json()
+    }
+  } catch (error) {
+    console.error('Error fetching user registrations:', error)
+  }
 
   // Get user's active memberships to check eligibility
   const { data: userMemberships } = await supabase

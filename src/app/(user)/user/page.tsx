@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
+import { headers } from 'next/headers'
 
 export default async function UserDashboardPage() {
+  const headersList = await headers()
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,19 +30,21 @@ export default async function UserDashboardPage() {
     .gte('valid_until', new Date().toISOString().split('T')[0])
     .order('valid_until', { ascending: false })
 
-  // Get user's current registrations
-  const { data: userRegistrations } = await supabase
-    .from('user_registrations')
-    .select(`
-      *,
-      registration:registrations(
-        *,
-        season:seasons(*)
-      )
-    `)
-    .eq('user_id', user.id)
-    .order('registered_at', { ascending: false })
-    .limit(5)
+  // Get user's current paid registrations only (via API for centralized logic)
+  let userRegistrations: any[] = []
+  try {
+    const registrationsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/user-registrations`, {
+      headers: {
+        'Cookie': headersList.get('cookie') || '',
+      },
+    })
+    if (registrationsResponse.ok) {
+      const allRegistrations = await registrationsResponse.json()
+      userRegistrations = allRegistrations.slice(0, 5) // Limit to 5 for dashboard
+    }
+  } catch (error) {
+    console.error('Error fetching user registrations:', error)
+  }
 
   // Get user's current waitlist entries
   const { data: userWaitlistEntries } = await supabase

@@ -144,16 +144,19 @@ CREATE TABLE registration_categories (
 );
 
 -- User registrations table
+-- User registration records with reservation system. 
+-- Flow: processing (reserved) -> paid (confirmed) or deleted (expired/failed).
 CREATE TABLE user_registrations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
     registration_category_id UUID REFERENCES registration_categories(id),
     user_membership_id UUID REFERENCES user_memberships(id), -- NULL for free events
-    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded')),
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded', 'processing')),
     registration_fee INTEGER, -- in cents
     amount_paid INTEGER, -- in cents (after discounts)
     presale_code_used TEXT, -- Stores the presale code used for this registration (if any)
+    processing_expires_at TIMESTAMP WITH TIME ZONE, -- Expiration time for processing reservations. Used to prevent race conditions by reserving spots for 5 minutes while payment is processed.
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id, registration_id)
@@ -313,6 +316,7 @@ CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, us
 CREATE INDEX idx_waitlists_registration_position ON waitlists(registration_id, position);
 CREATE INDEX idx_waitlists_registration_time ON waitlists(registration_id, joined_at);
 CREATE INDEX idx_waitlists_category ON waitlists(registration_category_id, position, removed_at);
+CREATE INDEX idx_user_registrations_processing_expires ON user_registrations(processing_expires_at) WHERE payment_status = 'processing';
 
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);

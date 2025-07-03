@@ -28,7 +28,7 @@ export default async function DiscountCategoriesPage() {
       *,
       discount_codes (count)
     `)
-    .order('created_at', { ascending: false })
+    .order('name', { ascending: true })
 
   if (error) {
     console.error('Error fetching discount categories:', error)
@@ -95,7 +95,7 @@ export default async function DiscountCategoriesPage() {
                               </p>
                             )}
                             <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span>Code: {category.accounting_code}</span>
+                              <span>Accounting Code: {category.accounting_code}</span>
                               {category.max_discount_per_user_per_season && (
                                 <>
                                   <span className="mx-2">•</span>
@@ -113,20 +113,11 @@ export default async function DiscountCategoriesPage() {
                         </div>
                         <div className="flex items-center space-x-4">
                           <Link
-                            href={`/admin/discount-codes?category=${category.id}`}
-                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                          >
-                            View Codes
-                          </Link>
-                          <Link
                             href={`/admin/discount-categories/${category.id}/edit`}
-                            className="text-gray-600 hover:text-gray-500 text-sm"
+                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                           >
                             Edit
                           </Link>
-                          <span className="text-xs text-gray-400">
-                            Created {new Date(category.created_at).toLocaleDateString()}
-                          </span>
                         </div>
                       </div>
                     </li>

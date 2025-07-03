@@ -44,7 +44,7 @@ export default async function DiscountCodesPage({ searchParams }: PageProps) {
         max_discount_per_user_per_season
       )
     `)
-    .order('created_at', { ascending: false })
+    .order('percentage', { ascending: false })
 
   // Filter by category if specified
   if (searchParams.category) {
@@ -74,7 +74,7 @@ export default async function DiscountCodesPage({ searchParams }: PageProps) {
               </p>
             </div>
             <Link
-              href="/admin/discount-codes/new"
+              href={`/admin/discount-codes/new${searchParams.category ? `?category=${searchParams.category}` : ''}`}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Create New Code
@@ -83,21 +83,26 @@ export default async function DiscountCodesPage({ searchParams }: PageProps) {
 
           {/* Filter and Navigation */}
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-4">
-              <CategoryFilter 
-                categories={categories || []} 
-                selectedCategory={searchParams.category}
-              />
-              
-              {searchParams.category && (
+            {!searchParams.category ? (
+              <div className="flex items-center space-x-4">
+                <CategoryFilter 
+                  categories={categories || []} 
+                  selectedCategory={searchParams.category}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-gray-600">
+                  Showing codes for: <span className="font-medium text-gray-900">{selectedCategory?.name}</span>
+                </div>
                 <Link
                   href="/admin/discount-codes"
                   className="text-blue-600 hover:text-blue-500 text-sm"
                 >
-                  Clear filter
+                  View all codes
                 </Link>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Codes List */}
@@ -111,10 +116,10 @@ export default async function DiscountCodesPage({ searchParams }: PageProps) {
                   }
                 </div>
                 <Link
-                  href="/admin/discount-codes/new"
+                  href={`/admin/discount-codes/new${searchParams.category ? `?category=${searchParams.category}` : ''}`}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                 >
-                  Create Your First Code
+                  {searchParams.category ? 'Create Code for This Category' : 'Create Your First Code'}
                 </Link>
               </div>
             ) : (
@@ -179,20 +184,11 @@ export default async function DiscountCodesPage({ searchParams }: PageProps) {
                         </div>
                         <div className="flex items-center space-x-4">
                           <Link
-                            href={`/admin/discount-codes/${code.id}/usage`}
-                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                          >
-                            Usage
-                          </Link>
-                          <Link
                             href={`/admin/discount-codes/${code.id}/edit`}
-                            className="text-gray-600 hover:text-gray-500 text-sm"
+                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                           >
                             Edit
                           </Link>
-                          <span className="text-xs text-gray-400">
-                            Created {new Date(code.created_at).toLocaleDateString()}
-                          </span>
                         </div>
                       </div>
                     </li>

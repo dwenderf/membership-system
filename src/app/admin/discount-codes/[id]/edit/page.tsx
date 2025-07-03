@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 
-function NewDiscountCodeForm() {
+export default function EditDiscountCodePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const params = useParams()
+  const codeId = params.id as string
   const supabase = createClient()
   
+  const [code, setCode] = useState<any>(null)
   const [formData, setFormData] = useState({
-    discount_category_id: searchParams.get('category') || '',
     code: '',
     percentage: '',
     valid_from: '',
@@ -19,41 +21,62 @@ function NewDiscountCodeForm() {
     is_active: true,
   })
   
-  const [categories, setCategories] = useState<any[]>([])
   const [existingCodes, setExistingCodes] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Fetch categories and existing codes
+  // Fetch code data and existing codes for duplicate checking
   useEffect(() => {
     const fetchData = async () => {
-      const [categoriesResponse, codesResponse] = await Promise.all([
-        supabase
-          .from('discount_categories')
-          .select('id, name, accounting_code, max_discount_per_user_per_season, is_active')
-          .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('discount_codes')
-          .select('code')
-      ])
-      
-      if (!categoriesResponse.error && categoriesResponse.data) {
-        setCategories(categoriesResponse.data)
+      // Get current code data with category info
+      const { data: codeData, error: codeError } = await supabase
+        .from('discount_codes')
+        .select(`
+          *,
+          discount_categories (
+            id,
+            name,
+            accounting_code,
+            max_discount_per_user_per_season
+          )
+        `)
+        .eq('id', codeId)
+        .single()
+
+      if (codeError) {
+        setError('Discount code not found')
+        return
       }
+
+      if (codeData) {
+        setCode(codeData)
+        setFormData({
+          code: codeData.code || '',
+          percentage: codeData.percentage ? codeData.percentage.toString() : '',
+          valid_from: codeData.valid_from ? codeData.valid_from.split('T')[0] : '',
+          valid_until: codeData.valid_until ? codeData.valid_until.split('T')[0] : '',
+          is_active: codeData.is_active ?? true,
+        })
+      }
+
+      // Get existing codes for duplicate checking (excluding current code)
+      const { data: codesData, error: codesError } = await supabase
+        .from('discount_codes')
+        .select('id, code')
+        .neq('id', codeId)
       
-      if (!codesResponse.error && codesResponse.data) {
-        setExistingCodes(codesResponse.data)
+      if (!codesError && codesData) {
+        setExistingCodes(codesData)
       }
     }
     
     fetchData()
-  }, [])
+  }, [codeId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!canCreateCode) {
+    if (!canUpdateCode) {
       return
     }
     
@@ -81,7 +104,6 @@ function NewDiscountCodeForm() {
       }
 
       const codeData = {
-        discount_category_id: formData.discount_category_id,
         code: formData.code.trim().toUpperCase(),
         percentage: percentage,
         valid_from: formData.valid_from || null,
@@ -89,8 +111,8 @@ function NewDiscountCodeForm() {
         is_active: formData.is_active,
       }
 
-      const response = await fetch('/api/admin/discount-codes', {
-        method: 'POST',
+      const response = await fetch(`/api/admin/discount-codes/${codeId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -99,11 +121,11 @@ function NewDiscountCodeForm() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        setError(errorData.error || 'Failed to create discount code')
+        setError(errorData.error || 'Failed to update discount code')
       } else {
-        // Navigate back to codes list, optionally filtered by category
-        const returnUrl = formData.discount_category_id 
-          ? `/admin/discount-codes?category=${formData.discount_category_id}`
+        // Navigate back to codes list, filtered by category if we came from there
+        const returnUrl = code?.discount_categories?.id 
+          ? `/admin/discount-codes?category=${code.discount_categories.id}`
           : '/admin/discount-codes'
         router.push(returnUrl)
       }
@@ -115,18 +137,25 @@ function NewDiscountCodeForm() {
   }
 
   // Check for duplicate code
-  const codeExists = existingCodes.some(code => 
-    code.code.toLowerCase() === formData.code.trim().toLowerCase()
+  const codeExists = existingCodes.some(existingCode => 
+    existingCode.code.toLowerCase() === formData.code.trim().toLowerCase()
   )
   
-  const selectedCategory = categories.find(cat => cat.id === formData.discount_category_id)
-  
-  const canCreateCode = formData.discount_category_id && 
-                       formData.code.trim() &&
+  const canUpdateCode = formData.code.trim() &&
                        formData.percentage &&
                        parseFloat(formData.percentage) > 0 &&
                        parseFloat(formData.percentage) <= 100 &&
                        !codeExists
+
+  if (!code) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg text-gray-600">Loading...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -134,29 +163,30 @@ function NewDiscountCodeForm() {
         <div className="px-4 py-6 sm:px-0">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Create New Discount Code</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Edit Discount Code</h1>
             <p className="mt-1 text-sm text-gray-600">
-              {selectedCategory 
-                ? `Create a discount code for ${selectedCategory.name}`
-                : 'Create a discount code within an organizational category'
-              }
+              Update discount code for {code.discount_categories?.name}
             </p>
           </div>
 
-          {/* Info Notice */}
+          {/* Category Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-blue-800">Category-Based Discount Codes</h3>
-                <p className="mt-2 text-sm text-blue-700">
-                  Discount codes are organized by category for accounting and limit tracking. Each code inherits the spending limits and accounting code from its category.
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-blue-800">Category: {code.discount_categories?.name}</h3>
+                <p className="mt-1 text-sm text-blue-700">
+                  Accounting Code: {code.discount_categories?.accounting_code}
+                  {code.discount_categories?.max_discount_per_user_per_season && (
+                    <span> • Limit: ${(code.discount_categories.max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
+                  )}
                 </p>
               </div>
+              <Link
+                href={`/admin/discount-codes?category=${code.discount_categories?.id}`}
+                className="inline-flex items-center px-3 py-2 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50"
+              >
+                Back to Category Codes
+              </Link>
             </div>
           </div>
 
@@ -168,55 +198,6 @@ function NewDiscountCodeForm() {
                   {error}
                 </div>
               )}
-
-              {/* Category Selection or Display */}
-              {!searchParams.get('category') ? (
-                <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                    Discount Category
-                  </label>
-                  <select
-                    id="category"
-                    value={formData.discount_category_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, discount_category_id: e.target.value }))}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    required
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name} ({category.accounting_code})
-                        {category.max_discount_per_user_per_season && 
-                          ` - $${(category.max_discount_per_user_per_season / 100).toFixed(2)} limit`
-                        }
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Select the organizational category for this discount code
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Discount Category
-                  </label>
-                  <div className="mt-1 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-                    <div className="text-sm text-gray-900 font-medium">
-                      {selectedCategory?.name} ({selectedCategory?.accounting_code})
-                    </div>
-                    {selectedCategory?.max_discount_per_user_per_season && (
-                      <div className="text-sm text-gray-500">
-                        Spending limit: ${(selectedCategory.max_discount_per_user_per_season / 100).toFixed(2)} per user per season
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Creating code for this category
-                  </p>
-                </div>
-              )}
-
 
               {/* Discount Code */}
               <div>
@@ -331,7 +312,7 @@ function NewDiscountCodeForm() {
               )}
 
               {/* Code Preview */}
-              {formData.code && selectedCategory && (
+              {formData.code && (
                 <div className={`border rounded-md p-4 ${codeExists ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Discount Code Preview</h4>
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
@@ -345,7 +326,7 @@ function NewDiscountCodeForm() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Category</dt>
-                      <dd className="text-sm text-gray-900">{selectedCategory.name}</dd>
+                      <dd className="text-sm text-gray-900">{code.discount_categories?.name}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Status</dt>
@@ -369,8 +350,8 @@ function NewDiscountCodeForm() {
               {/* Submit Buttons */}
               <div className="flex justify-end space-x-3">
                 <Link
-                  href={formData.discount_category_id 
-                    ? `/admin/discount-codes?category=${formData.discount_category_id}`
+                  href={code?.discount_categories?.id 
+                    ? `/admin/discount-codes?category=${code.discount_categories.id}`
                     : '/admin/discount-codes'
                   }
                   className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -379,9 +360,9 @@ function NewDiscountCodeForm() {
                 </Link>
                 <button
                   type="submit"
-                  disabled={loading || !canCreateCode}
+                  disabled={loading || !canUpdateCode}
                   className={`inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 ${
-                    canCreateCode && !loading
+                    canUpdateCode && !loading
                       ? 'bg-blue-600 hover:bg-blue-700' 
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
@@ -392,7 +373,7 @@ function NewDiscountCodeForm() {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   )}
-                  {loading ? 'Creating Code...' : canCreateCode ? 'Create Discount Code' : 'Complete Form to Create'}
+                  {loading ? 'Updating Code...' : canUpdateCode ? 'Update Discount Code' : 'Complete Form to Update'}
                 </button>
               </div>
             </form>
@@ -400,13 +381,5 @@ function NewDiscountCodeForm() {
         </div>
       </div>
     </div>
-  )
-}
-
-export default function NewDiscountCodePage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
-      <NewDiscountCodeForm />
-    </Suspense>
   )
 }

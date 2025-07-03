@@ -10,8 +10,9 @@ import EditableRegistrationName from '@/components/EditableRegistrationName'
 export default async function RegistrationDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,7 +44,7 @@ export default async function RegistrationDetailPage({
         end_date
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !registration) {
@@ -66,7 +67,7 @@ export default async function RegistrationDetailPage({
         name
       )
     `)
-    .eq('registration_id', params.id)
+    .eq('registration_id', id)
     .order('sort_order', { ascending: true })
 
   // Get paid registration counts for each category
@@ -90,7 +91,7 @@ export default async function RegistrationDetailPage({
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-2">
                   <EditableRegistrationName 
-                    registrationId={params.id}
+                    registrationId={id}
                     initialName={registration.name}
                   />
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -110,13 +111,13 @@ export default async function RegistrationDetailPage({
               </div>
               <div className="flex space-x-3">
                 <Link
-                  href={`/admin/registrations/${params.id}/timing`}
+                  href={`/admin/registrations/${id}/timing`}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Edit Timing
                 </Link>
                 <Link
-                  href={`/admin/registrations/${params.id}/categories/new`}
+                  href={`/admin/registrations/${id}/categories/new`}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Add Category
@@ -239,7 +240,7 @@ export default async function RegistrationDetailPage({
                       Categories help organize different types of participants (e.g., Players, Goalies, Alternates)
                     </p>
                     <Link
-                      href={`/admin/registrations/${params.id}/categories/new`}
+                      href={`/admin/registrations/${id}/categories/new`}
                       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                     >
                       Add First Category
@@ -319,7 +320,7 @@ export default async function RegistrationDetailPage({
                             
                             <div className="ml-4 flex items-center space-x-2">
                               <Link
-                                href={`/admin/registrations/${params.id}/categories/${category.id}/edit`}
+                                href={`/admin/registrations/${id}/categories/${category.id}/edit`}
                                 className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                               >
                                 Edit

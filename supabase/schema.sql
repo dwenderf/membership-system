@@ -587,3 +587,42 @@ CREATE POLICY "Admins can delete waitlist entries" ON waitlists
             AND users.is_admin = true
         )
     );
+
+-- Admin-only policies for sensitive tables
+
+-- Registration Pricing Tiers: Admin-only management
+CREATE POLICY "registration_pricing_tiers_admin_only" ON registration_pricing_tiers
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Discount Codes: Admin-only management (sensitive pricing information)
+CREATE POLICY "discount_codes_admin_only" ON discount_codes
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Access Codes: Admin-only management (security-sensitive bypass codes)
+CREATE POLICY "access_codes_admin_only" ON access_codes
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Payment Configurations: Admin-only management (critical payment system settings)
+CREATE POLICY "payment_configurations_admin_only" ON payment_configurations
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+

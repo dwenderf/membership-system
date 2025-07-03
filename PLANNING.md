@@ -880,6 +880,39 @@ email_logs (
 
 **🎯 Result**: Complete registration system with intelligent membership validation, honest UX, and seamless user flows from membership purchase to registration completion
 
+## 🔮 Future Technical Improvements
+
+### Database Naming Consistency (Deferred)
+
+**Issue Identified**: Inconsistent naming patterns for master/instance table relationships
+- `categories` (master) → `registration_categories` (instances)  
+- `discount_categories` (master) → `discount_codes` (instances)
+
+**Proposed Solution**: Consistent naming pattern for architectural clarity
+- `registration_categories` (master) → `registration_category_instances` (instances)
+- `discount_categories` (master) → `discount_category_instances` (instances)
+
+**Benefits**:
+- Clear master/instance relationship pattern
+- More self-documenting schema
+- Easier onboarding for new developers
+- Consistent architectural patterns
+
+**Complexity Considerations**:
+- Extensive code changes across API endpoints, frontend components, and database queries
+- Complex multi-table renaming requires careful sequencing to avoid naming conflicts
+- High risk operation requiring comprehensive testing
+- Would need temporary table names during migration to avoid conflicts
+
+**Decision**: Deferred due to high complexity/risk ratio. Current naming works well and this is primarily an architectural aesthetic improvement rather than functional necessity.
+
+**Future Implementation Strategy** (if pursued):
+1. Create intermediate migration with temporary table names
+2. Update all code references systematically
+3. Final migration to desired names
+4. Comprehensive testing of all functionality
+5. Consider implementing during major version upgrade when other breaking changes are planned
+
 ## Previous Achievements Summary (June 23, 2025)
 
 ✅ **Account Deletion System Architecture Refinement**

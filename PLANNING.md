@@ -184,27 +184,39 @@ registration_pricing_tiers (
   UNIQUE(registration_id, tier_name)
 )
 
+-- NEW: Category-based discount system for organizational management
+discount_categories (
+  id: uuid PRIMARY KEY
+  name: text NOT NULL -- "Scholarship Fund", "Board Member", "Captain", "Volunteer"
+  accounting_code: text NOT NULL -- For Xero integration ("DISCOUNT-SCHOLAR", "DISCOUNT-BOARD")
+  max_discount_per_user_per_season: integer -- In cents, NULL = no limit (e.g., $500 = 50000)
+  is_active: boolean DEFAULT true
+  description: text -- Optional description
+  created_at: timestamp
+)
+
+-- UPDATED: Discount codes now belong to categories
 discount_codes (
   id: uuid PRIMARY KEY
-  code: text UNIQUE NOT NULL -- "STUDENT15", "EARLY10"
-  name: text NOT NULL -- "Student Discount"
-  percentage: decimal(5,2) NOT NULL -- 15.00 for 15%
-  max_discount_per_user_per_season: integer NOT NULL -- in cents
-  accounting_code: text
+  discount_category_id: uuid REFERENCES discount_categories(id)
+  code: text UNIQUE NOT NULL -- "PRIDE100", "PRIDE75", "PRIDE50", "PRIDE25"
+  percentage: decimal(5,2) NOT NULL -- 100.00, 75.00, 50.00, 25.00
   is_active: boolean DEFAULT true
   valid_from: timestamp
   valid_until: timestamp
   created_at: timestamp
 )
 
+-- UPDATED: Track usage per category for limit enforcement
 discount_usage (
   id: uuid PRIMARY KEY
   user_id: uuid REFERENCES users(id)
   discount_code_id: uuid REFERENCES discount_codes(id)
+  discount_category_id: uuid REFERENCES discount_categories(id) -- Denormalized for fast queries
   season_id: uuid REFERENCES seasons(id)
   amount_saved: integer NOT NULL -- in cents
   used_at: timestamp NOT NULL
-  transaction_id: uuid -- links to payment record
+  registration_id: uuid REFERENCES registrations(id) -- What they used it on
 )
 ```
 

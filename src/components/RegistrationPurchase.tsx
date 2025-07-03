@@ -8,7 +8,6 @@ import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
-import { createClient } from '@/lib/supabase/client'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -135,40 +134,24 @@ export default function RegistrationPurchase({
   const userWaitlistEntry = selectedCategoryId ? userWaitlistEntries[selectedCategoryId] : null
   const isUserOnWaitlist = !!userWaitlistEntry
   
-  // Load user's existing waitlist entries for this registration
+  // Load user's existing waitlist entries for this registration via API
   useEffect(() => {
     const loadUserWaitlistEntries = async () => {
       if (!registration.id) return
       
       try {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        const response = await fetch(`/api/user-waitlists/${registration.id}`)
         
-        const { data: waitlistEntries, error } = await supabase
-          .from('waitlists')
-          .select('id, registration_category_id, position')
-          .eq('user_id', user.id)
-          .eq('registration_id', registration.id)
-          .is('removed_at', null)
-        
-        if (error) {
-          console.error('Error loading waitlist entries:', error)
-          return
+        if (!response.ok) {
+          if (response.status === 401) {
+            // User not authenticated, skip loading waitlist
+            return
+          }
+          throw new Error('Failed to load waitlist entries')
         }
         
-        // Convert to the format expected by the state
-        const entriesMap: Record<string, { position: number, id: string }> = {}
-        waitlistEntries?.forEach(entry => {
-          if (entry.registration_category_id) {
-            entriesMap[entry.registration_category_id] = {
-              position: entry.position,
-              id: entry.id
-            }
-          }
-        })
-        
-        setUserWaitlistEntries(entriesMap)
+        const { waitlistEntries } = await response.json()
+        setUserWaitlistEntries(waitlistEntries)
       } catch (error) {
         console.error('Error loading waitlist entries:', error)
       }

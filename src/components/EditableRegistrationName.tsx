@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 interface EditableRegistrationNameProps {
   registrationId: string
@@ -16,7 +15,6 @@ export default function EditableRegistrationName({
   const [name, setName] = useState(initialName)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const supabase = createClient()
 
   const handleSave = async () => {
     if (name.trim() === initialName) {
@@ -33,20 +31,24 @@ export default function EditableRegistrationName({
     setError('')
 
     try {
-      const { error: updateError } = await supabase
-        .from('registrations')
-        .update({ name: name.trim() })
-        .eq('id', registrationId)
+      const response = await fetch(`/api/admin/registrations/${registrationId}/name`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      })
 
-      if (updateError) {
-        setError(updateError.message)
-      } else {
-        setIsEditing(false)
-        // Refresh the page to show updated name
-        window.location.reload()
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update registration name')
       }
+
+      setIsEditing(false)
+      // Refresh the page to show updated name
+      window.location.reload()
     } catch (err) {
-      setError('An unexpected error occurred')
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setLoading(false)
     }

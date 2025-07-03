@@ -256,6 +256,80 @@ Database schema optimized for common queries:
 - Category-level membership requirements
 - Capacity management with overflow to waitlists
 
+### Advanced Discount System Architecture
+
+**Pattern Used:** Category-based discount codes with per-category usage limits and accounting integration.
+
+**Design Decision:** Two-tier system with discount categories containing multiple discount codes for organizational flexibility and financial reporting.
+
+```sql
+-- Discount Categories: Organizational groupings with accounting codes
+discount_categories (
+  id: uuid PRIMARY KEY
+  name: text NOT NULL                           -- "Scholarship Fund", "Board Member", "Captain", "Volunteer"
+  accounting_code: text NOT NULL                -- For Xero integration ("DISCOUNT-SCHOLAR", "DISCOUNT-BOARD")
+  max_discount_per_user_per_season: integer     -- In cents, NULL = no limit (e.g., $500 = 50000)
+  is_active: boolean DEFAULT true
+  description: text                             -- Optional description
+  created_at: timestamp
+)
+
+-- Discount Codes: Individual codes within categories
+discount_codes (
+  id: uuid PRIMARY KEY
+  discount_category_id: uuid REFERENCES discount_categories(id)
+  code: text UNIQUE NOT NULL                    -- "PRIDE100", "PRIDE75", "PRIDE50", "PRIDE25"
+  percentage: decimal(5,2) NOT NULL             -- 100.00, 75.00, 50.00, 25.00
+  is_active: boolean DEFAULT true
+  valid_from: timestamp
+  valid_until: timestamp
+  created_at: timestamp
+)
+
+-- Discount Usage: Track usage against category limits
+discount_usage (
+  id: uuid PRIMARY KEY
+  user_id: uuid REFERENCES users(id)
+  discount_code_id: uuid REFERENCES discount_codes(id)
+  discount_category_id: uuid REFERENCES discount_categories(id)  -- Denormalized for fast queries
+  season_id: uuid REFERENCES seasons(id)
+  amount_saved: integer NOT NULL                -- In cents
+  used_at: timestamp NOT NULL
+  registration_id: uuid REFERENCES registrations(id)
+)
+```
+
+**Business Rules:**
+```sql
+-- Validate per-user, per-category, per-season limits
+SELECT SUM(amount_saved) as total_used 
+FROM discount_usage 
+WHERE user_id = ? AND discount_category_id = ? AND season_id = ?;
+
+-- Check against category.max_discount_per_user_per_season
+-- Reject if total_used + new_discount > category_limit
+```
+
+**Why This Pattern:**
+- **Organizational Clarity:** Group related codes by purpose (Scholarship, Board, Captain, Volunteer)
+- **Financial Integration:** Each category maps to specific accounting code for Xero reporting
+- **Flexible Usage Limits:** Different limits per category (e.g., Scholarship $500/season, Board unlimited)
+- **Admin Efficiency:** Bulk create related codes (PRIDE100, PRIDE75, PRIDE50, PRIDE25) under one category
+- **Analytics Ready:** Track discount effectiveness by organizational purpose
+
+**Example Usage:**
+- **Scholarship Fund Category** (accounting_code: "DISCOUNT-SCHOLAR", limit: $500/season)
+  - PRIDE100 (100% discount)
+  - PRIDE75 (75% discount) 
+  - PRIDE50 (50% discount)
+  - PRIDE25 (25% discount)
+- **Board Member Category** (accounting_code: "DISCOUNT-BOARD", limit: unlimited)
+  - BOARD50 (50% discount)
+  - BOARD100 (100% discount)
+
+**Alternative Considered:** Single discount_codes table with individual limits
+**Trade-off:** Lost organizational grouping and accounting integration, gained simpler schema
+
 ## Future Considerations
 
 ### Scalability

@@ -699,7 +699,30 @@ email_logs (
   - [x] Fixed RLS issues preventing processing record cleanup by creating admin client
   - [x] Added service role key bypass for database cleanup operations
   - [x] Implemented reliable cleanup on modal close and timer expiration
-- [ ] **Discount Codes**: Percentage-based discounts with usage tracking and admin management
+- [ ] **Comprehensive Discount Code System**: Advanced category-based discount system with accounting integration
+  - [ ] **Phase 1: Database & Core APIs**
+    - [ ] Create discount_categories table (name, accounting_code, max_per_user_per_season)
+    - [ ] Update discount_codes table to reference categories
+    - [ ] Update discount_usage table with category tracking
+    - [ ] Build discount validation API with category limits
+    - [ ] Update payment processing to handle category-based discounts
+  - [ ] **Phase 2: Admin Interface**
+    - [ ] Category management pages (CRUD with accounting codes)
+    - [ ] Code management grouped by category
+    - [ ] Bulk code creation tools (e.g., create PRIDE100, PRIDE75, PRIDE50, PRIDE25)
+    - [ ] Usage analytics per category
+  - [ ] **Phase 3: Analytics & Reporting**
+    - [ ] Category-based usage tracking dashboard
+    - [ ] Per-user season limit enforcement
+    - [ ] Xero integration preparation with accounting codes
+
+**Discount Categories System:**
+- **Scholarship Fund**: PRIDE100 (100%), PRIDE75 (75%), PRIDE50 (50%), PRIDE25 (25%)
+- **Board Member**: Custom percentage codes with board-specific accounting code
+- **Captain**: Captain-specific codes with separate accounting tracking
+- **Volunteer**: Volunteer recognition codes with volunteer accounting code
+- **Per-Category Limits**: e.g., $500 max per user per season for Scholarship Fund
+- **Accounting Integration**: Each category maps to specific accounting code for Xero
 - [ ] **Add Donation to Purchase**: When purchasing a registration, add the option to donate to the organization
 
 #### **Phase 8: Xero Accounting Integration** 🧾

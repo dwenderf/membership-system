@@ -7,6 +7,11 @@ A comprehensive membership and registration system for adult hockey associations
 - **User Management**: Passwordless authentication with magic links and Google OAuth
 - **Membership System**: Flexible duration-based memberships with monthly/annual pricing
 - **Registration System**: Team and event registration with capacity management
+- **Advanced Discount System**: Category-based discount codes with organizational grouping
+  - **Scholarship Fund**: PRIDE codes (100%, 75%, 50%, 25% discounts)
+  - **Board Member, Captain, Volunteer**: Role-specific discount categories
+  - **Usage Limits**: Per-category limits per user per season (e.g., $500 scholarship cap)
+  - **Accounting Integration**: Category-specific accounting codes for financial reporting
 - **Payment Processing**: Secure payments via Stripe with payment intent handling
 - **Email Integration**: Transactional emails via Loops.so for confirmations and notifications
 - **Admin Dashboard**: Season management, membership oversight, and user administration

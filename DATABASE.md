@@ -170,13 +170,58 @@ FROM user_registrations;
 ### Row Level Security (RLS)
 All tables use RLS with policies ensuring:
 - Users can only access their own data
-- Admins can access all data
+- Admins can access all data (verified via `users.is_admin = true`)
 - Public read access for reference data (seasons, memberships, registrations)
+
+**Critical Security Note:** All admin operations are properly restricted to users with `is_admin = true`. Any policy allowing access based solely on authentication (`auth.uid() IS NOT NULL`) without admin verification is a security vulnerability.
 
 ### Payment Security
 - Payment operations require authentication
 - Stripe handles sensitive payment data (PCI compliance)
 - Local database stores only metadata and status
+
+### API-First Database Access (Architectural Principle)
+
+**Preferred Pattern:** All database operations should go through Next.js API routes rather than direct client-side queries.
+
+**Why API-First:**
+- **Enhanced Security:** Server-side validation and authorization before database access
+- **Centralized Business Logic:** Complex operations handled in controlled server environment
+- **Better Error Handling:** Consistent error responses and logging
+- **Easier Testing:** Business logic in testable API endpoints
+- **Future Flexibility:** API layer can evolve without breaking client implementations
+- **Performance Control:** Server can optimize queries and implement caching
+
+**Examples:**
+```typescript
+// ✅ PREFERRED: API route with server-side logic
+export default async function handler(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  // Server-side authorization
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Business logic and validation
+  const result = await processBusinessLogic(user, req.body)
+  return NextResponse.json(result)
+}
+
+// ❌ AVOID: Direct client-side database queries
+const { data } = await supabase.from('table').select('*')
+```
+
+**When to Use Direct Client Queries:**
+- Simple, read-only operations for public data
+- Real-time subscriptions for UI updates
+- Basic user profile updates
+
+**When to Use API Routes:**
+- Complex business logic operations
+- Multi-table transactions
+- Admin operations requiring authorization
+- Payment processing and financial operations
+- Data validation and transformation
 
 ## Performance Considerations
 

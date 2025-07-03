@@ -742,9 +742,34 @@ email_logs (
 - [ ] Mobile application development
 - [ ] Multi-language support
 
+## Architectural Principles
+
+### Database Access Pattern (API-First Architecture)
+**Preferred Pattern:** All database operations should go through Next.js API routes rather than direct client-side queries.
+
+**Why API-First:**
+- **Enhanced Security:** Server-side validation and authorization before database access
+- **Centralized Business Logic:** Complex operations handled in controlled server environment
+- **Better Error Handling:** Consistent error responses and logging
+- **Easier Testing:** Business logic in testable API endpoints
+- **Future Flexibility:** API layer can evolve without breaking client implementations
+- **Performance Control:** Server can optimize queries and implement caching
+
+**When to Use API Routes:**
+- ✅ Complex business logic operations
+- ✅ Multi-table transactions  
+- ✅ Admin operations requiring authorization
+- ✅ Payment processing and financial operations
+- ✅ Data validation and transformation
+
+**When Direct Client Queries Are Acceptable:**
+- Simple, read-only operations for public data
+- Real-time subscriptions for UI updates
+- Basic user profile updates
+
 ### ⚠️ Security Items to Address
 - [x] **COMPLETED**: Fix user_memberships RLS policies to allow user INSERT/UPDATE operations
-- [ ] **HIGH PRIORITY**: Fix admin RLS policies to only allow actual admins (currently allows all authenticated users)
+- [x] **COMPLETED**: Fix admin RLS policies to only allow actual admins (migration created: 20250702000000_fix_admin_rls_policies.sql)
 
 ---
 

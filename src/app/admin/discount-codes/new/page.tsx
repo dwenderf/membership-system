@@ -224,7 +224,7 @@ function NewDiscountCodeForm() {
                   type="text"
                   id="code"
                   value={formData.code}
-                  onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value.toUpperCase().trim() }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
                   placeholder="e.g., PRIDE100, SCHOLAR50"
                   required

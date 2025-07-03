@@ -134,7 +134,7 @@ export default function RegistrationPurchase({
   const registrationStatus = getRegistrationStatus(registration)
   const isPresale = registrationStatus === 'presale'
   const hasValidPresaleCode = isPresale && 
-    presaleCode.trim().toLowerCase() === registration.presale_code?.toLowerCase()
+    presaleCode.trim().toUpperCase() === registration.presale_code?.toUpperCase()
   const isTimingAvailable = isRegistrationAvailable(registration, hasValidPresaleCode)
   
   // Check if selected category is at capacity
@@ -624,9 +624,9 @@ export default function RegistrationPurchase({
           <input
             type="text"
             value={presaleCode}
-            onChange={(e) => setPresaleCode(e.target.value)}
+            onChange={(e) => setPresaleCode(e.target.value.toUpperCase().trim())}
             placeholder="Enter pre-sale code"
-            className="w-full px-3 py-2 border border-purple-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            className="w-full px-3 py-2 border border-purple-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono"
           />
           {hasValidPresaleCode && (
             <div className="mt-2 text-sm text-green-700 flex items-center">
@@ -689,7 +689,7 @@ export default function RegistrationPurchase({
           <input
             type="text"
             value={discountCode}
-            onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+            onChange={(e) => setDiscountCode(e.target.value.toUpperCase().trim())}
             placeholder="Enter discount code (e.g., PRIDE100)"
             className="w-full px-3 py-2 border border-green-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono"
           />

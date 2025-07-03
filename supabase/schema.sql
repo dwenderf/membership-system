@@ -175,29 +175,46 @@ CREATE TABLE registration_pricing_tiers (
     UNIQUE(registration_id, tier_name)
 );
 
--- Discount codes table
+-- Discount categories table for organizational grouping
+CREATE TABLE discount_categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    accounting_code TEXT NOT NULL,
+    max_discount_per_user_per_season INTEGER, -- In cents, NULL = no limit
+    is_active BOOLEAN DEFAULT TRUE,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure unique category names and accounting codes
+    CONSTRAINT uq_discount_categories_name UNIQUE (name),
+    CONSTRAINT uq_discount_categories_accounting_code UNIQUE (accounting_code),
+    
+    -- Validate max discount is positive if set
+    CONSTRAINT chk_max_discount_positive CHECK (max_discount_per_user_per_season IS NULL OR max_discount_per_user_per_season > 0)
+);
+
+-- Discount codes table (updated for category-based system)
 CREATE TABLE discount_codes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    discount_category_id UUID NOT NULL REFERENCES discount_categories(id),
     code TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
     percentage DECIMAL(5,2) NOT NULL,
-    max_discount_per_user_per_season INTEGER NOT NULL, -- in cents
-    accounting_code TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     valid_from TIMESTAMP WITH TIME ZONE,
     valid_until TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Discount usage tracking table
+-- Discount usage tracking table (updated for category-based limits)
 CREATE TABLE discount_usage (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     discount_code_id UUID NOT NULL REFERENCES discount_codes(id) ON DELETE CASCADE,
+    discount_category_id UUID NOT NULL REFERENCES discount_categories(id), -- Denormalized for fast queries
     season_id UUID NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
     amount_saved INTEGER NOT NULL, -- in cents
     used_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    transaction_id UUID -- links to payment record
+    registration_id UUID REFERENCES registrations(id) -- What they used it on
 );
 
 -- Access codes table
@@ -336,6 +353,7 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registration_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registration_pricing_tiers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discount_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discount_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discount_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE access_codes ENABLE ROW LEVEL SECURITY;
@@ -533,6 +551,11 @@ CREATE TRIGGER update_users_updated_at
 CREATE INDEX idx_user_memberships_validity ON user_memberships(user_id, valid_from, valid_until);
 CREATE INDEX idx_user_memberships_membership_type ON user_memberships(membership_id);
 
+-- Performance indexes for discount system
+CREATE INDEX idx_discount_codes_category_id ON discount_codes(discount_category_id);
+CREATE INDEX idx_discount_usage_category_season ON discount_usage(user_id, discount_category_id, season_id);
+CREATE INDEX idx_discount_usage_registration ON discount_usage(registration_id);
+
 -- Email logs policies
 CREATE POLICY "Users can view their own email logs" ON email_logs
     FOR SELECT USING (auth.uid() = user_id);
@@ -592,6 +615,15 @@ CREATE POLICY "Admins can delete waitlist entries" ON waitlists
 
 -- Registration Pricing Tiers: Admin-only management
 CREATE POLICY "registration_pricing_tiers_admin_only" ON registration_pricing_tiers
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Discount Categories: Admin-only management (organizational groupings with accounting codes)
+CREATE POLICY "discount_categories_admin_only" ON discount_categories
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM users 

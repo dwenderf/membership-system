@@ -78,6 +78,9 @@ export default function RegistrationPurchase({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [presaleCode, setPresaleCode] = useState<string>('')
+  const [discountCode, setDiscountCode] = useState<string>('')
+  const [discountValidation, setDiscountValidation] = useState<any>(null)
+  const [isValidatingDiscount, setIsValidatingDiscount] = useState(false)
   const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
@@ -98,6 +101,8 @@ export default function RegistrationPurchase({
     setShowPaymentForm(false)
     setClientSecret(null)
     setSelectedCategoryId(null) // Clear selected category
+    setDiscountCode('')
+    setDiscountValidation(null)
     setReservationExpiresAt(null)
     await cleanupProcessingReservation()
   }
@@ -108,6 +113,8 @@ export default function RegistrationPurchase({
     setShowPaymentForm(false)
     setClientSecret(null)
     setSelectedCategoryId(null)
+    setDiscountCode('')
+    setDiscountValidation(null)
     setReservationExpiresAt(null)
     showError('Payment Timer Expired', 'Your reserved spot has been released. Please try registering again.')
   }
@@ -117,6 +124,11 @@ export default function RegistrationPurchase({
   
   // Get pricing for selected category
   const pricing = selectedCategory?.pricing || { price: 0, tierName: 'Standard' }
+  
+  // Calculate final price with discount
+  const originalAmount = pricing.price
+  const discountAmount = discountValidation?.isValid ? discountValidation.discountAmount : 0
+  const finalAmount = originalAmount - discountAmount
   
   // Check registration timing status
   const registrationStatus = getRegistrationStatus(registration)
@@ -193,6 +205,59 @@ export default function RegistrationPurchase({
   const membershipWarning = formatMembershipWarning(membershipValidation)
   const shouldShowSeasonWarning = selectedCategory && !hasSeasonCoverage && membershipWarning
 
+  // Validate discount code
+  const validateDiscountCode = async (code: string) => {
+    if (!code.trim() || !selectedCategoryId) {
+      setDiscountValidation(null)
+      return
+    }
+    
+    setIsValidatingDiscount(true)
+    try {
+      const response = await fetch('/api/validate-discount-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code.trim(),
+          registrationId: registration.id,
+          amount: originalAmount
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setDiscountValidation(result)
+      } else {
+        const errorData = await response.json()
+        setDiscountValidation({ 
+          isValid: false, 
+          error: errorData.error || 'Invalid discount code' 
+        })
+      }
+    } catch (err) {
+      setDiscountValidation({ 
+        isValid: false, 
+        error: 'Failed to validate discount code' 
+      })
+    } finally {
+      setIsValidatingDiscount(false)
+    }
+  }
+
+  // Validate discount when code or selected category changes
+  useEffect(() => {
+    if (discountCode && selectedCategoryId) {
+      const timeoutId = setTimeout(() => {
+        validateDiscountCode(discountCode)
+      }, 500) // Debounce validation
+      
+      return () => clearTimeout(timeoutId)
+    } else {
+      setDiscountValidation(null)
+    }
+  }, [discountCode, selectedCategoryId, originalAmount])
 
   const handlePurchase = async () => {
     if (!selectedCategoryId) {
@@ -279,8 +344,9 @@ export default function RegistrationPurchase({
         body: JSON.stringify({
           registrationId: registration.id,
           categoryId: selectedCategoryId,
-          amount: pricing.price, // For now using base price, later implement tiered pricing
+          amount: originalAmount,
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
+          discountCode: discountValidation?.isValid ? discountCode.trim() : null,
         }),
       })
 
@@ -608,6 +674,65 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Discount Code Section */}
+      {selectedCategory && isTimingAvailable && !isCategoryAtCapacity && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-center mb-2">
+            <svg className="h-5 w-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 5a3 3 0 015-2.236A3 3 0 0114.83 6H16a2 2 0 110 4h-5V9a1 1 0 10-2 0v1H4a2 2 0 110-4h1.17C5.06 5.687 5 5.35 5 5zm4 1V5a1 1 0 10-1 1h1zm3 0a1 1 0 10-1-1v1h1z" clipRule="evenodd" />
+            </svg>
+            <h4 className="text-sm font-medium text-green-800">Discount Code (Optional)</h4>
+          </div>
+          <div className="text-sm text-green-700 mb-2">
+            Have a discount code? Enter it here to apply your discount:
+          </div>
+          <input
+            type="text"
+            value={discountCode}
+            onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+            placeholder="Enter discount code (e.g., PRIDE100)"
+            className="w-full px-3 py-2 border border-green-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono"
+          />
+          
+          {/* Validation States */}
+          {isValidatingDiscount && (
+            <div className="mt-2 text-sm text-green-700 flex items-center">
+              <svg className="animate-spin w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Validating discount code...
+            </div>
+          )}
+          
+          {discountValidation?.isValid && (
+            <div className="mt-2 text-sm text-green-700 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <div className="font-medium">
+                  {discountValidation.discountCode.percentage}% discount applied! 
+                  Save ${(discountValidation.discountAmount / 100).toFixed(2)}
+                </div>
+                <div className="text-xs">
+                  {discountValidation.discountCode.category.name} • {discountValidation.discountCode.category.accounting_code}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {discountValidation?.isValid === false && discountCode && (
+            <div className="mt-2 text-sm text-red-700 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {discountValidation.error}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -657,8 +782,27 @@ export default function RegistrationPurchase({
             </div>
             
             <div className="mb-4 p-3 bg-gray-50 rounded">
-              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">${(pricing.price / 100).toFixed(2)}</span></div>
               <div className="text-sm text-gray-600">{registration.name} - {selectedCategory ? getCategoryDisplayName(selectedCategory) : ''}</div>
+              
+              {/* Pricing Breakdown */}
+              {discountValidation?.isValid ? (
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Subtotal:</span>
+                    <span>${(originalAmount / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount ({discountValidation.discountCode.code}):</span>
+                    <span>-${(discountAmount / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="border-t pt-1 flex justify-between font-medium text-gray-900">
+                    <span>Total:</span>
+                    <span>${(finalAmount / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600 mt-2">Total: <span className="font-medium text-gray-900">${(originalAmount / 100).toFixed(2)}</span></div>
+              )}
             </div>
 
             {clientSecret ? (
@@ -666,7 +810,7 @@ export default function RegistrationPurchase({
                 <PaymentForm
                   registrationId={registration.id}
                   categoryId={selectedCategoryId!}
-                  amount={pricing.price}
+                  amount={finalAmount}
                   userEmail={userEmail}
                   reservationExpiresAt={reservationExpiresAt || undefined}
                   onTimerExpired={handleTimerExpired}
@@ -675,6 +819,8 @@ export default function RegistrationPurchase({
                     setClientSecret(null)
                     // Reset form state
                     setSelectedCategoryId(null)
+                    setDiscountCode('')
+                    setDiscountValidation(null)
                     setError(null)
                     
                     // Show success notification

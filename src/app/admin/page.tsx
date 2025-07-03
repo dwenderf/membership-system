@@ -166,11 +166,11 @@ export default async function AdminDashboard() {
                 </Link>
 
                 <Link
-                  href="/admin/discount-codes"
+                  href="/admin/discount-categories"
                   className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <div className="text-gray-900 font-medium">Discount Codes</div>
-                  <div className="mt-1 text-sm text-gray-500">Create and manage discount codes</div>
+                  <div className="text-gray-900 font-medium">Discount System</div>
+                  <div className="mt-1 text-sm text-gray-500">Manage categories and discount codes</div>
                 </Link>
 
                 <Link

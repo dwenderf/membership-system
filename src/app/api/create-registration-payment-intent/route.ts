@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode } = body
+    const { registrationId, categoryId, amount, presaleCode, discountCode } = body
     
     // Set payment context for Sentry
     const paymentContext = {
@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       registrationId: registrationId,
       categoryId: categoryId,
       amountCents: amount,
+      discountCode: discountCode,
       endpoint: '/api/create-registration-payment-intent',
       operation: 'registration_payment_intent_creation'
     }
@@ -150,6 +151,60 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle discount validation and application
+    let finalAmount = amount
+    let discountAmount = 0
+    let validatedDiscountCode = null
+
+    if (discountCode) {
+      // Validate discount code via API
+      try {
+        const discountResponse = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': request.headers.get('cookie') || '',
+          },
+          body: JSON.stringify({
+            code: discountCode,
+            registrationId: registrationId,
+            amount: amount
+          })
+        })
+
+        if (discountResponse.ok) {
+          const discountResult = await discountResponse.json()
+          
+          if (discountResult.isValid) {
+            validatedDiscountCode = discountResult.discountCode
+            discountAmount = discountResult.discountAmount
+            finalAmount = amount - discountAmount
+            
+            // Ensure final amount is not negative
+            if (finalAmount < 0) {
+              finalAmount = 0
+            }
+          } else {
+            capturePaymentError(new Error('Invalid discount code'), paymentContext, 'warning')
+            return NextResponse.json({ 
+              error: discountResult.error || 'Invalid discount code' 
+            }, { status: 400 })
+          }
+        } else {
+          capturePaymentError(new Error('Discount validation failed'), paymentContext, 'warning')
+          return NextResponse.json({ 
+            error: 'Failed to validate discount code' 
+          }, { status: 400 })
+        }
+      } catch (discountError) {
+        console.error('Error validating discount code:', discountError)
+        capturePaymentError(discountError, paymentContext, 'warning')
+        return NextResponse.json({ 
+          error: 'Failed to validate discount code' 
+        }, { status: 500 })
+      }
+    }
+
     // STEP 1: Reserve spot immediately (race condition protection)
     let reservationId: string | null = null
     
@@ -211,7 +266,7 @@ export async function POST(request: NextRequest) {
           payment_status: 'processing',
           processing_expires_at: expiresAt.toISOString(),
           registration_fee: amount,
-          amount_paid: amount,
+          amount_paid: finalAmount,
           presale_code_used: presaleCode || null,
         })
         .select()
@@ -272,7 +327,7 @@ export async function POST(request: NextRequest) {
 
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
-      amount: amount, // Amount in cents
+      amount: finalAmount, // Final amount after discount in cents
       currency: 'usd',
       receipt_email: userProfile.email,
       payment_method_types: ['card', 'link'],
@@ -286,8 +341,14 @@ export async function POST(request: NextRequest) {
         userName: `${userProfile.first_name} ${userProfile.last_name}`,
         presaleCodeUsed: presaleCode || '',
         reservationId: reservationId || '',
+        originalAmount: amount.toString(),
+        discountAmount: discountAmount.toString(),
+        discountCode: discountCode || '',
+        discountCategoryId: validatedDiscountCode?.category?.id || '',
+        discountCategoryName: validatedDiscountCode?.category?.name || '',
+        accountingCode: validatedDiscountCode?.category?.accounting_code || '',
       },
-      description: `${registration.name} - ${categoryName} (${registration.season?.name})`,
+      description: `${registration.name} - ${categoryName} (${registration.season?.name})${discountAmount > 0 ? ` - Discount: $${(discountAmount / 100).toFixed(2)}` : ''}`,
     }
     
     const paymentIntent = await stripe.paymentIntents.create({
@@ -310,7 +371,8 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         total_amount: amount,
-        final_amount: amount,
+        discount_amount: discountAmount,
+        final_amount: finalAmount,
         stripe_payment_intent_id: paymentIntent.id,
         status: 'pending',
         payment_method: 'stripe',
@@ -330,7 +392,7 @@ export async function POST(request: NextRequest) {
           payment_id: paymentRecord.id,
           item_type: 'registration',
           item_id: registrationId,
-          amount: amount,
+          amount: finalAmount,
         })
 
       if (paymentItemError) {
@@ -346,6 +408,10 @@ export async function POST(request: NextRequest) {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       reservationExpiresAt: reservationId ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : undefined,
+      originalAmount: amount,
+      discountAmount: discountAmount,
+      finalAmount: finalAmount,
+      discountCode: validatedDiscountCode,
     })
     
   } catch (error) {

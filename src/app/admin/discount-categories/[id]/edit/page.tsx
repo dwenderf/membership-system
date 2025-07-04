@@ -240,8 +240,10 @@ export default function EditDiscountCategoryPage() {
                     <span className="text-gray-500 sm:text-sm">$</span>
                   </div>
                   <input
-                    type="text"
+                    type="number"
                     id="max_discount"
+                    min="1"
+                    step="0.01"
                     value={limitDisplay}
                     onChange={(e) => setLimitDisplay(e.target.value)}
                     onBlur={(e) => {
@@ -253,7 +255,7 @@ export default function EditDiscountCategoryPage() {
                       }
                       
                       const dollars = parseFloat(value)
-                      if (!isNaN(dollars) && dollars >= 0) {
+                      if (!isNaN(dollars) && dollars >= 1) {
                         const cents = Math.round(dollars * 100)
                         setFormData(prev => ({ ...prev, max_discount_per_user_per_season: cents.toString() }))
                         setLimitDisplay(dollars.toFixed(2))

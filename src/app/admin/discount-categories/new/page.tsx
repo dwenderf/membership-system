@@ -209,11 +209,11 @@ export default function NewDiscountCategoryPage() {
                     type="number"
                     id="max_discount"
                     step="0.01"
-                    min="0"
+                    min="1"
                     value={formData.max_discount_per_user_per_season}
                     onChange={(e) => setFormData(prev => ({ ...prev, max_discount_per_user_per_season: e.target.value }))}
                     className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="0.00"
+                    placeholder="1.00"
                   />
                 </div>
                 <p className="mt-1 text-sm text-gray-500">

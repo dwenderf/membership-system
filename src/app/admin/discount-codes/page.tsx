@@ -4,10 +4,11 @@ import Link from 'next/link'
 import CategoryFilter from './CategoryFilter'
 
 interface PageProps {
-  searchParams: { category?: string }
+  searchParams: Promise<{ category?: string }>
 }
 
-export default async function DiscountCodesPage({ searchParams }: PageProps) {
+export default async function DiscountCodesPage({ searchParams: searchParamsPromise }: PageProps) {
+  const searchParams = await searchParamsPromise
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()

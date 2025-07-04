@@ -640,6 +640,20 @@ CREATE POLICY "discount_codes_admin_only" ON discount_codes
         )
     );
 
+-- Allow authenticated users to read active discount codes for validation during checkout
+CREATE POLICY "Users can read active discount codes for validation"
+ON discount_codes
+FOR SELECT
+TO authenticated
+USING (is_active = true);
+
+-- Allow authenticated users to read active discount categories for validation
+CREATE POLICY "Users can read active discount categories for validation"
+ON discount_categories
+FOR SELECT  
+TO authenticated
+USING (is_active = true);
+
 -- Access Codes: Admin-only management (security-sensitive bypass codes)
 CREATE POLICY "access_codes_admin_only" ON access_codes
     FOR ALL USING (

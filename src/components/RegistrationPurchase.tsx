@@ -716,7 +716,7 @@ export default function RegistrationPurchase({
                   Save ${(discountValidation.discountAmount / 100).toFixed(2)}
                 </div>
                 <div className="text-xs">
-                  {discountValidation.discountCode.category.name} • {discountValidation.discountCode.category.accounting_code}
+                  {discountValidation.discountCode.category.name}
                 </div>
               </div>
             </div>

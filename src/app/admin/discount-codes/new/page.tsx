@@ -124,7 +124,7 @@ function NewDiscountCodeForm() {
   const canCreateCode = formData.discount_category_id && 
                        formData.code.trim() &&
                        formData.percentage &&
-                       parseFloat(formData.percentage) > 0 &&
+                       parseFloat(formData.percentage) >= 1 &&
                        parseFloat(formData.percentage) <= 100 &&
                        !codeExists
 
@@ -247,12 +247,12 @@ function NewDiscountCodeForm() {
                     type="number"
                     id="percentage"
                     step="0.01"
-                    min="0.01"
+                    min="1"
                     max="100"
                     value={formData.percentage}
                     onChange={(e) => setFormData(prev => ({ ...prev, percentage: e.target.value }))}
                     className="block w-full pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="0.00"
+                    placeholder="1.00"
                     required
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">

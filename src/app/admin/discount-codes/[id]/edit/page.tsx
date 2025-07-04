@@ -16,8 +16,6 @@ export default function EditDiscountCodePage() {
   const [formData, setFormData] = useState({
     code: '',
     percentage: '',
-    valid_from: '',
-    valid_until: '',
     is_active: true,
   })
   
@@ -53,8 +51,6 @@ export default function EditDiscountCodePage() {
         setFormData({
           code: codeData.code || '',
           percentage: codeData.percentage ? codeData.percentage.toString() : '',
-          valid_from: codeData.valid_from ? codeData.valid_from.split('T')[0] : '',
-          valid_until: codeData.valid_until ? codeData.valid_until.split('T')[0] : '',
           is_active: codeData.is_active ?? true,
         })
       }
@@ -92,22 +88,11 @@ export default function EditDiscountCodePage() {
         return
       }
 
-      // Validate dates
-      if (formData.valid_from && formData.valid_until) {
-        const fromDate = new Date(formData.valid_from)
-        const untilDate = new Date(formData.valid_until)
-        if (fromDate >= untilDate) {
-          setError('Valid from date must be before valid until date')
-          setLoading(false)
-          return
-        }
-      }
-
       const codeData = {
         code: formData.code.trim().toUpperCase(),
         percentage: percentage,
-        valid_from: formData.valid_from || null,
-        valid_until: formData.valid_until || null,
+        valid_from: null,
+        valid_until: null,
         is_active: formData.is_active,
       }
 
@@ -245,40 +230,6 @@ export default function EditDiscountCodePage() {
                 </p>
               </div>
 
-              {/* Date Range */}
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="valid_from" className="block text-sm font-medium text-gray-700">
-                    Valid From (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    id="valid_from"
-                    value={formData.valid_from}
-                    onChange={(e) => setFormData(prev => ({ ...prev, valid_from: e.target.value }))}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    When this code becomes valid
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="valid_until" className="block text-sm font-medium text-gray-700">
-                    Valid Until (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    id="valid_until"
-                    value={formData.valid_until}
-                    onChange={(e) => setFormData(prev => ({ ...prev, valid_until: e.target.value }))}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    When this code expires
-                  </p>
-                </div>
-              </div>
 
               {/* Is Active */}
               <div className="flex items-center">
@@ -332,17 +283,6 @@ export default function EditDiscountCodePage() {
                       <dt className="text-sm font-medium text-gray-500">Status</dt>
                       <dd className="text-sm text-gray-900">{formData.is_active ? 'Active' : 'Inactive'}</dd>
                     </div>
-                    {(formData.valid_from || formData.valid_until) && (
-                      <div className="sm:col-span-2">
-                        <dt className="text-sm font-medium text-gray-500">Valid Period</dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.valid_from && `From ${new Date(formData.valid_from).toLocaleDateString()}`}
-                          {formData.valid_from && formData.valid_until && ' '}
-                          {formData.valid_until && `Until ${new Date(formData.valid_until).toLocaleDateString()}`}
-                          {!formData.valid_from && !formData.valid_until && 'No expiration'}
-                        </dd>
-                      </div>
-                    )}
                   </dl>
                 </div>
               )}

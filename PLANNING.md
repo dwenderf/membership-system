@@ -726,6 +726,7 @@ email_logs (
     - [x] Real-time discount validation with user feedback
     - [x] Category-focused UX removing unnecessary filters when context is clear
     - [x] Clean admin interface with percentage-based ordering and streamlined actions
+    - [x] **Partial discount application** for season limits with intelligent UX messaging
   - [ ] **Phase 3: Analytics & Reporting**
     - [ ] Category-based usage tracking dashboard
     - [ ] Per-user season limit enforcement
@@ -738,6 +739,7 @@ email_logs (
 - **Volunteer**: Volunteer recognition codes with volunteer accounting code
 - **Per-Category Limits**: e.g., $500 max per user per season for Scholarship Fund
 - **Accounting Integration**: Each category maps to specific accounting code for Xero
+- **Smart Partial Discounts**: When full discount would exceed season limit, applies partial amount up to remaining allowance with clear messaging
 - [ ] **Add Donation to Purchase**: When purchasing a registration, add the option to donate to the organization
 
 #### **Phase 8: Xero Accounting Integration** 🧾
@@ -811,10 +813,18 @@ email_logs (
 
 ---
 
-*Last updated: July 3, 2025*
-*Status: **Complete Category-Based Discount System** - Full admin interface with contextual UX and frontend integration*
+*Last updated: July 4, 2025*
+*Status: **Complete Category-Based Discount System with Smart Partial Discounts** - Full admin interface with contextual UX and intelligent season limit handling*
 
-## Recent Achievements (July 3, 2025)
+## Recent Achievements (July 4, 2025)
+
+✅ **Smart Partial Discount System Enhancement**
+- **✅ Intelligent Season Limit Handling**: Instead of rejecting discounts that exceed limits, apply partial discounts up to remaining allowance
+- **✅ Enhanced User Messaging**: Clear explanations when partial discounts are applied with specific limit information
+- **✅ Visual UX Indicators**: Yellow warning icons for partial discounts vs green checkmarks for full discounts
+- **✅ Maximized User Benefit**: Users always get the best possible discount within their category limits
+
+## Previous Achievements (July 3, 2025)
 
 ✅ **Complete Category-Based Discount System Implementation**
 - **✅ Advanced Admin Interface**: Full CRUD operations for discount categories with accounting codes, spending limits, and descriptions

@@ -15,6 +15,8 @@ interface DiscountValidationResult {
     }
   }
   discountAmount?: number // In cents
+  isPartialDiscount?: boolean // True when discount was capped by season limit
+  partialDiscountMessage?: string // Explanation of partial discount
   error?: string
 }
 
@@ -106,9 +108,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate discount amount
-    const discountAmount = Math.round((amount * discountCode.percentage) / 100)
+    let discountAmount = Math.round((amount * discountCode.percentage) / 100)
 
     // Check category usage limits if applicable
+    let isPartialDiscount = false
+    let partialDiscountMessage = ''
+    
     if (discountCode.discount_categories?.max_discount_per_user_per_season) {
       const { data: usageData, error: usageError } = await supabase
         .from('discount_usage')
@@ -124,14 +129,22 @@ export async function POST(request: NextRequest) {
 
       const totalUsed = usageData?.reduce((sum, usage) => sum + usage.amount_saved, 0) || 0
       const maxAllowed = discountCode.discount_categories.max_discount_per_user_per_season
+      const remaining = Math.max(0, maxAllowed - totalUsed)
       
-      if (totalUsed + discountAmount > maxAllowed) {
-        const remaining = Math.max(0, maxAllowed - totalUsed)
+      if (totalUsed >= maxAllowed) {
+        // User has already reached their limit
         const result: DiscountValidationResult = {
           isValid: false,
-          error: `Discount would exceed category limit. You have $${(remaining / 100).toFixed(2)} remaining for ${discountCode.discount_categories.name} this season.`
+          error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${discountCode.discount_categories.name}. No additional discount can be applied.`
         }
         return NextResponse.json(result)
+      }
+      
+      if (totalUsed + discountAmount > maxAllowed) {
+        // Apply partial discount up to the remaining limit
+        discountAmount = remaining
+        isPartialDiscount = true
+        partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${discountCode.discount_categories.name}.`
       }
     }
 
@@ -149,7 +162,9 @@ export async function POST(request: NextRequest) {
           max_discount_per_user_per_season: discountCode.discount_categories.max_discount_per_user_per_season
         }
       },
-      discountAmount
+      discountAmount,
+      isPartialDiscount,
+      partialDiscountMessage: isPartialDiscount ? partialDiscountMessage : undefined
     }
 
     return NextResponse.json(result)

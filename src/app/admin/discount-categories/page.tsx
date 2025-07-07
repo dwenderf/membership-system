@@ -128,13 +128,7 @@ export default async function DiscountCategoriesPage() {
           </div>
 
           {/* Navigation Links */}
-          <div className="mt-6 flex items-center space-x-6">
-            <Link
-              href="/admin/discount-codes"
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-            >
-              Manage Discount Codes →
-            </Link>
+          <div className="mt-6">
             <Link
               href="/admin"
               className="text-blue-600 hover:text-blue-500 text-sm font-medium"

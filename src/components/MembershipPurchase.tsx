@@ -332,7 +332,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                         step="0.01"
                         value={assistanceAmount}
                         onChange={(e) => setAssistanceAmount(e.target.value)}
-                        className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
                         placeholder="0.00"
                       />
                     </div>
@@ -383,7 +383,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                         step="0.01"
                         value={donationAmount}
                         onChange={(e) => setDonationAmount(e.target.value)}
-                        className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
                         placeholder="50.00"
                       />
                     </div>
@@ -547,7 +547,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             </div>
             
             <div className="mb-4 p-3 bg-gray-50 rounded">
-              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">${(selectedPrice / 100).toFixed(2)}</span></div>
+              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">${(finalAmount / 100).toFixed(2)}</span></div>
               <div className="text-sm text-gray-600">{membership.name} - {selectedDuration} months</div>
             </div>
 
@@ -556,7 +556,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                 <PaymentForm
                   membershipId={membership.id}
                   durationMonths={selectedDuration!}
-                  amount={selectedPrice}
+                  amount={finalAmount}
                   startDate={startDate}
                   endDate={endDate}
                   userEmail={userEmail}

@@ -84,12 +84,9 @@ function RegistrationItem({ registration }: { registration: Registration }) {
         <div className="flex items-center">
           <div className="flex-1 min-w-0">
             <div className="flex items-center">
-              <Link
-                href={`/admin/registrations/${registration.id}`}
-                className="text-lg font-medium text-gray-900 hover:text-blue-600 truncate"
-              >
+              <p className="text-lg font-medium text-gray-900 truncate">
                 {registration.name}
-              </Link>
+              </p>
               <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
                 registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
                 registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
@@ -121,9 +118,12 @@ function RegistrationItem({ registration }: { registration: Registration }) {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-400">
-            Created {new Date(registration.created_at).toLocaleDateString()}
-          </span>
+          <Link
+            href={`/admin/registrations/${registration.id}`}
+            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+          >
+            Edit
+          </Link>
         </div>
       </div>
     </li>

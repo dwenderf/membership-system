@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount } = body
+    const { membershipId, durationMonths, amount, paymentOption, assistanceAmount, donationAmount } = body
     
     // Set payment context for Sentry
     const paymentContext = {
@@ -72,6 +72,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
+    // Create description based on payment option
+    const getDescription = () => {
+      const baseName = `${membership.name} - ${durationMonths} months`
+      switch (paymentOption) {
+        case 'assistance':
+          return `${baseName} (Financial Assistance)`
+        case 'donation':
+          return `${baseName} + Donation`
+        default:
+          return baseName
+      }
+    }
+
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
       amount: amount, // Amount in cents
@@ -84,8 +97,11 @@ export async function POST(request: NextRequest) {
         membershipName: membership.name,
         durationMonths: durationMonths.toString(),
         userName: `${userProfile.first_name} ${userProfile.last_name}`,
+        paymentOption: paymentOption || 'standard',
+        ...(paymentOption === 'assistance' && assistanceAmount && { assistanceAmount: assistanceAmount.toString() }),
+        ...(paymentOption === 'donation' && donationAmount && { donationAmount: donationAmount.toString() }),
       },
-      description: `${membership.name} - ${durationMonths} months`,
+      description: getDescription(),
     }
     
     const paymentIntent = await stripe.paymentIntents.create({
@@ -102,13 +118,26 @@ export async function POST(request: NextRequest) {
     // Update payment context with payment intent ID
     paymentContext.paymentIntentId = paymentIntent.id
 
+    // Calculate amounts for payment record
+    const getMembershipAmount = () => {
+      if (paymentOption === 'assistance') {
+        return assistanceAmount || 0
+      }
+      // For donations and standard, use the base membership price calculation
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+      return basePrice
+    }
+
+    const membershipAmount = getMembershipAmount()
+    const totalAmount = amount // This is the final amount sent from frontend
+
     // Create payment record in database
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
         user_id: user.id,
-        total_amount: amount,
-        final_amount: amount,
+        total_amount: totalAmount,
+        final_amount: totalAmount,
         stripe_payment_intent_id: paymentIntent.id,
         status: 'pending',
         payment_method: 'stripe',
@@ -121,18 +150,33 @@ export async function POST(request: NextRequest) {
       // Log warning but don't fail the request since Stripe intent was created
       capturePaymentError(paymentError, paymentContext, 'warning')
     } else if (paymentRecord) {
-      // Create payment item record for the membership
+      // Create payment item records
+      const paymentItems = []
+
+      // Always add membership item
+      paymentItems.push({
+        payment_id: paymentRecord.id,
+        item_type: 'membership',
+        item_id: membershipId,
+        amount: membershipAmount,
+      })
+
+      // Add donation item if applicable
+      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+        paymentItems.push({
+          payment_id: paymentRecord.id,
+          item_type: 'donation',
+          item_id: membershipId, // Link to membership for context
+          amount: donationAmount,
+        })
+      }
+
       const { error: paymentItemError } = await supabase
         .from('payment_items')
-        .insert({
-          payment_id: paymentRecord.id,
-          item_type: 'membership',
-          item_id: membershipId,
-          amount: amount,
-        })
+        .insert(paymentItems)
 
       if (paymentItemError) {
-        console.error('Error creating payment item record:', paymentItemError)
+        console.error('Error creating payment item records:', paymentItemError)
         capturePaymentError(paymentItemError, paymentContext, 'warning')
       }
     }

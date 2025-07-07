@@ -598,6 +598,7 @@ email_logs (
 - [x] **Purchase History**: Consolidated membership display with transaction records
 - [x] **Email Integration**: Loops.so transactional emails with purchase confirmations
 - [x] **Toast Notifications**: Enhanced user feedback throughout purchase flow
+- [x] **Three-Option Payment System**: Financial assistance, donation support, and standard payment options
 
 #### **✅ Phase 2.5: User Onboarding Enhancement - COMPLETED** 🎯
 - [x] **Onboarding Flow**: Complete form with name collection, terms acceptance, membership upsell
@@ -740,7 +741,8 @@ email_logs (
 - **Per-Category Limits**: e.g., $500 max per user per season for Scholarship Fund
 - **Accounting Integration**: Each category maps to specific accounting code for Xero
 - **Smart Partial Discounts**: When full discount would exceed season limit, applies partial amount up to remaining allowance with clear messaging
-- [ ] **Add Donation to Purchase**: When purchasing a registration, add the option to donate to the organization
+- [x] **Add Donation to Membership Purchase**: Three-option payment system with financial assistance and donation support
+- [ ] **Add Donation to Registration Purchase**: Extend donation options to registration checkout flow
 
 #### **Phase 8: Xero Accounting Integration** 🧾
 - [ ] **OAuth 2.0 Setup**: Xero app registration with secure token management and refresh capability
@@ -814,9 +816,18 @@ email_logs (
 ---
 
 *Last updated: July 4, 2025*
-*Status: **Complete Category-Based Discount System with Smart Partial Discounts** - Full admin interface with contextual UX and intelligent season limit handling*
+*Status: **Complete Discount System + Three-Option Membership Payment System** - Full discount functionality with intelligent season limits + flexible membership payment options*
 
 ## Recent Achievements (July 4, 2025)
+
+✅ **Three-Option Membership Payment System Implementation**
+- **✅ Flexible Payment Options**: Three clear choices - financial assistance, donation support, or standard payment
+- **✅ Financial Assistance**: Pay-what-you-can option (0-100% of price, default 50%) for accessibility
+- **✅ Community Support**: Optional donations ($1-$1000, default $50) to support other members
+- **✅ Dynamic Pricing**: Real-time total calculation with clear breakdown showing membership + assistance/donation
+- **✅ Enhanced Purchase Flow**: Conditional inputs with proper validation and required selection
+- **✅ Accounting Ready**: Separate payment item records for membership vs donations for clean financial tracking
+- **✅ Stripe Integration**: Enhanced metadata and descriptions based on payment type
 
 ✅ **Smart Partial Discount System Enhancement**
 - **✅ Intelligent Season Limit Handling**: Instead of rejecting discounts that exceed limits, apply partial discounts up to remaining allowance

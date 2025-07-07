@@ -835,6 +835,13 @@ email_logs (
 - **✅ Visual UX Indicators**: Yellow warning icons for partial discounts vs green checkmarks for full discounts
 - **✅ Maximized User Benefit**: Users always get the best possible discount within their category limits
 
+## Future Enhancements
+
+🔮 **Membership Purchase Limits**
+- **Purchase Time Limits**: Add validation to limit membership purchases to 12-18 months in advance to prevent excessive advance purchases, especially when discounts are available
+- **Business Protection**: Prevent users from purchasing unreasonable durations (e.g., 100 years) that could impact system sustainability
+- **Implementation**: Add frontend validation and backend enforcement in membership purchase flow
+
 ## Previous Achievements (July 3, 2025)
 
 ✅ **Complete Category-Based Discount System Implementation**

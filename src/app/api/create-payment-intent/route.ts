@@ -11,6 +11,136 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
 })
 
+// Handle free membership purchases (amount = 0)
+async function handleFreeMembership({
+  supabase,
+  user,
+  userProfile,
+  membership,
+  membershipId,
+  durationMonths,
+  paymentOption,
+  assistanceAmount,
+  donationAmount,
+  paymentContext,
+  startTime
+}: {
+  supabase: any
+  user: any
+  userProfile: any
+  membership: any
+  membershipId: string
+  durationMonths: number
+  paymentOption?: string
+  assistanceAmount?: number
+  donationAmount?: number
+  paymentContext: any
+  startTime: number
+}) {
+  try {
+    // Fetch membership and user details if not provided
+    if (!membership) {
+      const { data: membershipData, error: membershipError } = await supabase
+        .from('memberships')
+        .select('*')
+        .eq('id', membershipId)
+        .single()
+
+      if (membershipError || !membershipData) {
+        capturePaymentError(membershipError || new Error('Membership not found'), paymentContext, 'error')
+        return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
+      }
+      membership = membershipData
+    }
+
+    if (!userProfile) {
+      const { data: profileData, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profileData) {
+        capturePaymentError(profileError || new Error('User profile not found'), paymentContext, 'error')
+        return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+      }
+      userProfile = profileData
+    }
+
+    // Create payment record with $0 amount and completed status
+    const { data: paymentRecord, error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        user_id: user.id,
+        total_amount: 0,
+        final_amount: 0,
+        stripe_payment_intent_id: null, // No Stripe payment for free
+        status: 'completed',
+        payment_method: 'free',
+      })
+      .select()
+      .single()
+
+    if (paymentError) {
+      capturePaymentError(paymentError, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
+    }
+
+    // Create payment item record
+    const { error: paymentItemError } = await supabase
+      .from('payment_items')
+      .insert({
+        payment_id: paymentRecord.id,
+        item_type: 'membership',
+        item_id: membershipId,
+        amount: 0,
+      })
+
+    if (paymentItemError) {
+      console.error('Error creating payment item record:', paymentItemError)
+      capturePaymentError(paymentItemError, paymentContext, 'warning')
+    }
+
+    // Create the membership record directly (similar to webhook processing)
+    const startDate = new Date()
+    const endDate = new Date(startDate)
+    endDate.setMonth(endDate.getMonth() + durationMonths)
+
+    const { error: membershipError } = await supabase
+      .from('user_memberships')
+      .insert({
+        user_id: user.id,
+        membership_id: membershipId,
+        payment_id: paymentRecord.id,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        price_paid: 0,
+        duration_months: durationMonths,
+      })
+
+    if (membershipError) {
+      capturePaymentError(membershipError, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to create membership' }, { status: 500 })
+    }
+
+    // Log successful operation
+    capturePaymentSuccess('free_membership_creation', paymentContext, Date.now() - startTime)
+
+    // Return success without client secret (no Stripe payment needed)
+    return NextResponse.json({
+      success: true,
+      paymentIntentId: null,
+      isFree: true,
+      message: 'Free membership created successfully'
+    })
+
+  } catch (error) {
+    console.error('Error handling free membership:', error)
+    capturePaymentError(error, paymentContext, 'error')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
@@ -37,8 +167,8 @@ export async function POST(request: NextRequest) {
     }
     setPaymentContext(paymentContext)
 
-    // Validate required fields
-    if (!membershipId || !durationMonths || !amount) {
+    // Validate required fields (amount can be 0 for free memberships)
+    if (!membershipId || !durationMonths || amount === undefined || amount === null) {
       const error = new Error('Missing required fields: membershipId, durationMonths, amount')
       capturePaymentError(error, paymentContext, 'warning')
       
@@ -46,6 +176,23 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields: membershipId, durationMonths, amount' },
         { status: 400 }
       )
+    }
+
+    // Handle free membership (amount = 0) - no Stripe payment needed
+    if (amount === 0) {
+      return await handleFreeMembership({
+        supabase,
+        user,
+        userProfile: null, // Will fetch in function
+        membership: null, // Will fetch in function
+        membershipId,
+        durationMonths,
+        paymentOption,
+        assistanceAmount,
+        donationAmount,
+        paymentContext,
+        startTime
+      })
     }
 
     // Fetch membership details for metadata

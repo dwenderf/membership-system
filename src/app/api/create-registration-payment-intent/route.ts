@@ -13,6 +13,173 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
 })
 
+// Handle free registration purchases (amount = 0)
+async function handleFreeRegistration({
+  supabase,
+  user,
+  registrationId,
+  categoryId,
+  presaleCode,
+  discountCode,
+  paymentContext,
+  startTime
+}: {
+  supabase: any
+  user: any
+  registrationId: string
+  categoryId: string
+  presaleCode?: string
+  discountCode?: string
+  paymentContext: any
+  startTime: number
+}) {
+  try {
+    const adminSupabase = createAdminClient()
+
+    // Get registration details for validation
+    const { data: registration, error: registrationError } = await supabase
+      .from('registrations')
+      .select(`
+        *,
+        season:seasons(*),
+        registration_categories(
+          *,
+          category:categories(name)
+        )
+      `)
+      .eq('id', registrationId)
+      .single()
+
+    if (registrationError || !registration) {
+      capturePaymentError(registrationError || new Error('Registration not found'), paymentContext, 'error')
+      return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
+    }
+
+    // Find the selected category
+    const selectedCategory = registration.registration_categories.find((cat: any) => cat.id === categoryId)
+    if (!selectedCategory) {
+      const error = new Error('Category not found')
+      capturePaymentError(error, paymentContext, 'error')
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    }
+
+    // Create atomic spot reservation first (same as paid flow)
+    const { data: reservationData, error: reservationError } = await adminSupabase
+      .from('user_registrations')
+      .insert({
+        user_id: user.id,
+        registration_id: registrationId,
+        registration_category_id: categoryId,
+        status: 'processing',
+        processing_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
+        presale_code_used: presaleCode || null,
+      })
+      .select('id')
+      .single()
+
+    if (reservationError) {
+      if (reservationError.code === '23505') { // Duplicate key error
+        return NextResponse.json({ error: 'You are already registered for this category' }, { status: 409 })
+      }
+      capturePaymentError(reservationError, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
+    }
+
+    // Create payment record with $0 amount and completed status
+    const { data: paymentRecord, error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        user_id: user.id,
+        total_amount: 0,
+        final_amount: 0,
+        stripe_payment_intent_id: null, // No Stripe payment for free
+        status: 'completed',
+        payment_method: 'free',
+      })
+      .select()
+      .single()
+
+    if (paymentError) {
+      capturePaymentError(paymentError, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
+    }
+
+    // Create payment item record
+    const { error: paymentItemError } = await supabase
+      .from('payment_items')
+      .insert({
+        payment_id: paymentRecord.id,
+        item_type: 'registration',
+        item_id: registrationId,
+        amount: 0,
+      })
+
+    if (paymentItemError) {
+      console.error('Error creating payment item record:', paymentItemError)
+      capturePaymentError(paymentItemError, paymentContext, 'warning')
+    }
+
+    // Update the registration to paid status (complete the reservation)
+    const { error: updateError } = await adminSupabase
+      .from('user_registrations')
+      .update({
+        status: 'paid',
+        payment_id: paymentRecord.id,
+        processing_expires_at: null,
+      })
+      .eq('id', reservationData.id)
+
+    if (updateError) {
+      capturePaymentError(updateError, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to complete registration' }, { status: 500 })
+    }
+
+    // Record discount usage if applicable
+    if (discountCode) {
+      // Note: In free registration case, the full amount was discounted
+      // We should still track this usage for limit enforcement
+      const { data: discountValidation } = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: discountCode,
+          registrationId: registrationId,
+          amount: selectedCategory.price || 0 // Use original price for tracking
+        })
+      }).then(res => res.json()).catch(() => ({ isValid: false }))
+
+      if (discountValidation?.isValid && discountValidation.discountCode) {
+        await supabase
+          .from('discount_usage')
+          .insert({
+            user_id: user.id,
+            discount_code_id: discountValidation.discountCode.id,
+            discount_category_id: discountValidation.discountCode.category.id,
+            season_id: registration.season.id,
+            amount_saved: selectedCategory.price || 0, // Full price was saved
+            registration_id: registrationId,
+          })
+      }
+    }
+
+    // Log successful operation
+    capturePaymentSuccess('free_registration_creation', paymentContext, Date.now() - startTime)
+
+    // Return success without client secret (no Stripe payment needed)
+    return NextResponse.json({
+      success: true,
+      paymentIntentId: null,
+      isFree: true,
+      message: 'Free registration completed successfully'
+    })
+
+  } catch (error) {
+    console.error('Error handling free registration:', error)
+    capturePaymentError(error, paymentContext, 'error')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
@@ -41,8 +208,8 @@ export async function POST(request: NextRequest) {
     }
     setPaymentContext(paymentContext)
 
-    // Validate required fields
-    if (!registrationId || !categoryId || !amount) {
+    // Validate required fields (amount can be 0 for free registrations)
+    if (!registrationId || !categoryId || amount === undefined || amount === null) {
       const error = new Error('Missing required fields: registrationId, categoryId, amount')
       capturePaymentError(error, paymentContext, 'warning')
       
@@ -50,6 +217,20 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields: registrationId, categoryId, amount' },
         { status: 400 }
       )
+    }
+
+    // Handle free registration (amount = 0) - no Stripe payment needed
+    if (amount === 0) {
+      return await handleFreeRegistration({
+        supabase,
+        user,
+        registrationId,
+        categoryId,
+        presaleCode,
+        discountCode,
+        paymentContext,
+        startTime
+      })
     }
 
     // Fetch registration details with category and season info

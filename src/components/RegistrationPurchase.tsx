@@ -344,7 +344,7 @@ export default function RegistrationPurchase({
         body: JSON.stringify({
           registrationId: registration.id,
           categoryId: selectedCategoryId,
-          amount: originalAmount,
+          amount: finalAmount, // Use final amount after discount, not original
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
         }),
@@ -355,7 +355,22 @@ export default function RegistrationPurchase({
         throw new Error(errorData.error || 'Failed to create payment intent')
       }
 
-      const { clientSecret, reservationExpiresAt: expiresAt } = await response.json()
+      const responseData = await response.json()
+      
+      // Handle free registration (no payment needed)
+      if (responseData.isFree) {
+        setShowPaymentForm(false)
+        setIsLoading(false)
+        showSuccess(
+          'Registration Complete!',
+          'Your free registration has been completed successfully.'
+        )
+        // Refresh the page to show updated registration status
+        setTimeout(() => window.location.reload(), 2000)
+        return
+      }
+      
+      const { clientSecret, reservationExpiresAt: expiresAt } = responseData
       setClientSecret(clientSecret)
       setReservationExpiresAt(expiresAt || null)
     } catch (err) {

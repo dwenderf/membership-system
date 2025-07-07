@@ -157,7 +157,20 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         throw new Error(errorData.error || 'Failed to create payment intent')
       }
 
-      const { clientSecret } = await response.json()
+      const responseData = await response.json()
+      
+      // Handle free membership (no payment needed)
+      if (responseData.isFree) {
+        setShowPaymentForm(false)
+        setPurchaseCompleted(true)
+        showSuccess(
+          'Membership Activated!',
+          'Your free membership has been activated successfully.'
+        )
+        return
+      }
+      
+      const { clientSecret } = responseData
       setClientSecret(clientSecret)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'

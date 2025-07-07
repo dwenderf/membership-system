@@ -70,7 +70,7 @@ async function handleFreeRegistration({
         user_id: user.id,
         registration_id: registrationId,
         registration_category_id: categoryId,
-        status: 'processing',
+        payment_status: 'processing',
         processing_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
         presale_code_used: presaleCode || null,
       })
@@ -123,8 +123,9 @@ async function handleFreeRegistration({
     const { error: updateError } = await adminSupabase
       .from('user_registrations')
       .update({
-        status: 'paid',
-        payment_id: paymentRecord.id,
+        payment_status: 'paid',
+        amount_paid: 0,
+        registered_at: new Date().toISOString(),
         processing_expires_at: null,
       })
       .eq('id', reservationData.id)

@@ -111,11 +111,13 @@ async function handleFreeMembership({
       .insert({
         user_id: user.id,
         membership_id: membershipId,
-        payment_id: paymentRecord.id,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        price_paid: 0,
-        duration_months: durationMonths,
+        valid_from: startDate.toISOString().split('T')[0],
+        valid_until: endDate.toISOString().split('T')[0],
+        months_purchased: durationMonths,
+        payment_status: 'paid',
+        stripe_payment_intent_id: null,
+        amount_paid: 0,
+        purchased_at: new Date().toISOString(),
       })
 
     if (membershipError) {

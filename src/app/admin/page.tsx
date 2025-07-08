@@ -174,6 +174,14 @@ export default async function AdminDashboard() {
                 </Link>
 
                 <Link
+                  href="/admin/accounting-codes"
+                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <div className="text-gray-900 font-medium">Manage Accounting Codes</div>
+                  <div className="mt-1 text-sm text-gray-500">Configure default codes and bulk updates</div>
+                </Link>
+
+                <Link
                   href="/admin/reports"
                   className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >

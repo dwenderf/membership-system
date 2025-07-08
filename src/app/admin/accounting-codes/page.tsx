@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import Link from 'next/link'
 
 interface AccountingCodes {
   membership_default: string
@@ -319,6 +320,16 @@ export default function AccountingCodesPage() {
             <li>• <strong>Bulk updates</strong> only affect records that currently have no accounting code set</li>
             <li>• <strong>Individual items</strong> can still have their own specific codes that override defaults</li>
           </ul>
+        </div>
+
+        {/* Return to Admin Link */}
+        <div className="mt-6">
+          <Link 
+            href="/admin"
+            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+          >
+            ← Back to Admin Dashboard
+          </Link>
         </div>
       </div>
     </div>

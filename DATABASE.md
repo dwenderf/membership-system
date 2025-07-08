@@ -1,7 +1,7 @@
 # Database Architecture & Design Decisions
 
 ## Overview
-This document explains the database design patterns, architectural decisions, and trade-offs made in the Hockey Association Membership System.
+This document explains the database design patterns, architectural decisions, and trade-offs made in the Hockey Association Membership System, including the Xero accounting integration.
 
 ## Core Design Philosophy
 The database balances **normalization principles** with **practical development needs**, choosing patterns that optimize for:
@@ -351,6 +351,100 @@ Database changes are managed through:
 - Sequential migration files in `supabase/` directory
 - Schema.sql as source of truth for new deployments
 - Careful constraint additions to avoid breaking existing data
+
+## Xero Integration Architecture
+
+### 7. Accounting System Integration Pattern
+
+**Pattern Used:** Bi-directional sync tracking with audit trails
+
+```sql
+-- Core sync tracking
+xero_invoices (
+  payment_id: UUID              -- Links to payments table
+  tenant_id: TEXT               -- Xero organization ID
+  xero_invoice_id: UUID         -- Xero's invoice ID
+  sync_status: ENUM             -- 'pending' | 'synced' | 'failed'
+  last_synced_at: TIMESTAMP
+)
+
+-- Detailed audit logging
+xero_sync_logs (
+  operation_type: ENUM          -- 'contact_sync' | 'invoice_sync' | 'payment_sync'
+  status: ENUM                  -- 'success' | 'error' | 'warning'
+  error_message: TEXT
+  request_data: JSONB           -- Full API payloads for debugging
+  response_data: JSONB
+)
+```
+
+**Why This Pattern:**
+- **Reliability:** Complete audit trail for debugging sync issues
+- **Resilience:** Failed syncs don't break payment processing
+- **Transparency:** Clear visibility into integration status
+- **Multi-tenant:** Supports multiple Xero organizations
+- **Reconciliation:** Detailed tracking enables financial reconciliation
+
+**Key Design Decisions:**
+
+1. **Payment Processing Independence:** Xero sync failures don't prevent payment completion
+2. **Automatic Sync:** New payments trigger immediate sync attempts via webhooks
+3. **Manual Recovery:** Admin interface for bulk sync and retry operations
+4. **Fee Tracking:** Stripe processing fees tracked separately for expense recording
+5. **Discount Integration:** Discount codes appear as negative line items in invoices
+
+### 8. OAuth Token Management
+
+**Pattern Used:** Secure token storage with automatic refresh
+
+```sql
+xero_oauth_tokens (
+  tenant_id: TEXT UNIQUE        -- Xero organization identifier
+  access_token: TEXT            -- Encrypted OAuth access token
+  refresh_token: TEXT           -- Encrypted OAuth refresh token
+  expires_at: TIMESTAMP         -- Token expiration tracking
+  is_active: BOOLEAN            -- Connection status
+)
+```
+
+**Security Considerations:**
+- Tokens stored in secure database with RLS policies
+- Automatic token refresh before expiration
+- Admin-only access to integration management
+- Audit logging for all OAuth operations
+
+### 9. Financial Data Consistency
+
+**Invoice Line Item Tracking:**
+```sql
+xero_invoice_line_items (
+  line_item_type: ENUM          -- 'membership' | 'registration' | 'discount' | 'donation'
+  item_id: UUID                 -- References source record
+  unit_amount: INTEGER          -- Amount in cents (can be negative for discounts)
+  account_code: TEXT            -- Xero chart of accounts mapping
+)
+```
+
+**Benefits:**
+- **Detailed Reconciliation:** Line-by-line tracking of invoice components
+- **Account Mapping:** Flexible assignment to Xero chart of accounts
+- **Discount Transparency:** Clear breakdown of promotional pricing
+- **Audit Compliance:** Complete financial paper trail
+
+### Integration Workflow
+
+1. **Payment Completed** → Stripe webhook triggers auto-sync
+2. **Contact Sync** → Create/update customer in Xero
+3. **Invoice Creation** → Generate detailed invoice with line items
+4. **Payment Recording** → Record net payment (gross - Stripe fees)
+5. **Fee Tracking** → Optional expense recording for processing fees
+6. **Error Handling** → Failed syncs logged with retry capability
+
+**Performance Optimizations:**
+- Efficient indexing on sync status and tenant IDs
+- Rate limiting to respect Xero API limits
+- Bulk operations for historical data migration
+- Real-time sync status in admin interface
 
 ---
 

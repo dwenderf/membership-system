@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
+import { autoSyncPaymentToXero } from '@/lib/xero-auto-sync'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -100,6 +101,22 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     }
   } catch (emailError) {
     console.error('❌ Webhook: Failed to send confirmation email:', emailError)
+    // Don't fail the webhook - membership was created successfully
+  }
+
+  // Auto-sync to Xero
+  try {
+    const { data: paymentRecord } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('stripe_payment_intent_id', paymentIntent.id)
+      .single()
+    
+    if (paymentRecord) {
+      await autoSyncPaymentToXero(paymentRecord.id)
+    }
+  } catch (xeroError) {
+    console.error('❌ Webhook: Failed to sync membership payment to Xero:', xeroError)
     // Don't fail the webhook - membership was created successfully
   }
 
@@ -230,6 +247,22 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     }
   } catch (emailError) {
     console.error('❌ Webhook: Failed to send registration confirmation email:', emailError)
+    // Don't fail the webhook - registration was processed successfully
+  }
+
+  // Auto-sync to Xero
+  try {
+    const { data: paymentRecord } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('stripe_payment_intent_id', paymentIntent.id)
+      .single()
+    
+    if (paymentRecord) {
+      await autoSyncPaymentToXero(paymentRecord.id)
+    }
+  } catch (xeroError) {
+    console.error('❌ Webhook: Failed to sync registration payment to Xero:', xeroError)
     // Don't fail the webhook - registration was processed successfully
   }
 

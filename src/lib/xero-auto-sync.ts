@@ -1,0 +1,106 @@
+import { createXeroInvoiceForPayment } from './xero-invoices'
+import { recordStripePaymentInXero } from './xero-payments'
+import { getActiveXeroTenants } from './xero-client'
+import { createClient } from './supabase/server'
+
+// Automatically sync a payment to all active Xero tenants
+export async function autoSyncPaymentToXero(paymentId: string): Promise<void> {
+  try {
+    const supabase = createClient()
+
+    // Check if payment is completed
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('id, status, final_amount')
+      .eq('id', paymentId)
+      .single()
+
+    if (paymentError || !payment) {
+      console.error('Payment not found for auto-sync:', paymentId)
+      return
+    }
+
+    if (payment.status !== 'completed') {
+      console.log('Payment not completed, skipping Xero sync:', paymentId)
+      return
+    }
+
+    // Get all active Xero tenants
+    const activeTenants = await getActiveXeroTenants()
+    
+    if (activeTenants.length === 0) {
+      console.log('No active Xero tenants configured, skipping sync for payment:', paymentId)
+      return
+    }
+
+    // Sync to the first active tenant (most organizations have one tenant)
+    // For multiple tenants, you could add business logic to choose the right one
+    const primaryTenant = activeTenants[0]
+    
+    console.log(`Auto-syncing payment ${paymentId} to Xero tenant: ${primaryTenant.tenant_name}`)
+
+    const result = await createXeroInvoiceForPayment(paymentId, primaryTenant.tenant_id)
+    
+    if (result.success) {
+      console.log(`✅ Payment ${paymentId} successfully synced to Xero as invoice ${result.invoiceNumber}`)
+      
+      // Also record the payment in Xero for complete reconciliation
+      try {
+        const paymentResult = await recordStripePaymentInXero(paymentId, primaryTenant.tenant_id)
+        if (paymentResult.success) {
+          console.log(`✅ Payment ${paymentId} also recorded in Xero with ID ${paymentResult.xeroPaymentId}`)
+        } else {
+          console.warn(`⚠️ Invoice created but payment recording failed for ${paymentId}: ${paymentResult.error}`)
+        }
+      } catch (paymentError) {
+        console.warn(`⚠️ Invoice created but payment recording failed for ${paymentId}:`, paymentError)
+        // Don't fail the overall sync - invoice was created successfully
+      }
+    } else {
+      console.error(`❌ Failed to sync payment ${paymentId} to Xero:`, result.error)
+      
+      // Log error but don't fail the webhook - payment was processed successfully
+      const { captureException } = await import('@sentry/nextjs')
+      captureException(new Error(`Xero auto-sync failed for payment ${paymentId}: ${result.error}`), {
+        extra: {
+          paymentId,
+          tenantId: primaryTenant.tenant_id,
+          tenantName: primaryTenant.tenant_name,
+          error: result.error
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error in auto-sync to Xero:', error)
+    
+    // Log error but don't fail the webhook
+    const { captureException } = await import('@sentry/nextjs')
+    captureException(error, {
+      extra: {
+        paymentId,
+        operation: 'xero_auto_sync'
+      }
+    })
+  }
+}
+
+// Utility to check if Xero auto-sync is enabled
+export async function isXeroAutoSyncEnabled(): Promise<boolean> {
+  try {
+    const activeTenants = await getActiveXeroTenants()
+    return activeTenants.length > 0
+  } catch (error) {
+    console.error('Error checking Xero auto-sync status:', error)
+    return false
+  }
+}
+
+// Schedule delayed sync (useful if immediate sync fails)
+export async function scheduleDelayedXeroSync(paymentId: string, delayMinutes: number = 5): Promise<void> {
+  // This is a simple implementation - in production you might use a queue system
+  setTimeout(async () => {
+    console.log(`Retrying Xero sync for payment ${paymentId} after ${delayMinutes} minutes`)
+    await autoSyncPaymentToXero(paymentId)
+  }, delayMinutes * 60 * 1000)
+}

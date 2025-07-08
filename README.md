@@ -15,6 +15,7 @@ A comprehensive membership and registration system for adult hockey associations
 - **Payment Processing**: Secure payments via Stripe with payment intent handling
 - **Email Integration**: Transactional emails via Loops.so for confirmations and notifications
 - **Admin Dashboard**: Season management, membership oversight, and user administration
+- **Xero Integration**: Automatic invoice creation and payment recording for seamless accounting
 
 ## Getting Started
 
@@ -25,6 +26,7 @@ A comprehensive membership and registration system for adult hockey associations
 - Stripe account (test mode for development)
 - Loops.so account for email integration
 - Sentry account for error monitoring and alerting
+- Xero account for accounting integration
 
 ### 1. Clone and Install
 
@@ -70,6 +72,12 @@ LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
+
+# Xero Integration Configuration
+XERO_CLIENT_ID=your_xero_client_id_here
+XERO_CLIENT_SECRET=your_xero_client_secret_here
+XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
+XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 ```
 
 ### 3. Database Setup
@@ -450,4 +458,115 @@ For questions about the codebase or setup process, refer to:
 
 ---
 
-**Tech Stack**: Next.js 14, TypeScript, Tailwind CSS, Supabase, Stripe, Loops.so
+## Xero Accounting Integration
+
+The system includes automatic Xero integration for seamless accounting and bookkeeping.
+
+### Setting Up Xero Integration
+
+#### 1. Create Xero Developer App
+
+1. Go to [Xero Developer Portal](https://developer.xero.com/)
+2. Sign in with your Xero account
+3. Create a new app with these settings:
+   - **App Type**: Web app
+   - **App Name**: "Hockey Association Membership System"
+   - **Company/Application URL**: Your domain (e.g., `https://yourdomain.com`)
+   - **OAuth 2.0 redirect URI**: 
+     - Development: `http://localhost:3000/api/xero/callback`
+     - Production: `https://yourdomain.com/api/xero/callback`
+   - **Scopes**: 
+     - `accounting.transactions` - Create and manage invoices
+     - `accounting.contacts` - Create and manage contacts
+     - `accounting.settings` - Read chart of accounts
+     - `offline_access` - Refresh tokens
+
+#### 2. Configure Environment Variables
+
+Add these to your `.env.local`:
+
+```bash
+XERO_CLIENT_ID=your_xero_client_id_here
+XERO_CLIENT_SECRET=your_xero_client_secret_here
+XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
+XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+```
+
+#### 3. Connect to Xero
+
+1. Start your development server: `npm run dev`
+2. Log in as an admin user
+3. Navigate to `/admin/xero-integration`
+4. Click "Connect to Xero" and authorize the integration
+5. Your Xero organization will now be connected
+
+#### 4. Xero Setup Recommendations
+
+**Chart of Accounts Setup:**
+- `MEMBERSHIP` - Membership revenue account
+- `REGISTRATION` - Registration revenue account  
+- `DONATION` - Donation revenue account
+- `STRIPE` - Stripe bank account for deposit tracking
+- `STRIPE_FEES` - Expense account for processing fees
+- `DISCOUNT-SCHOLAR` - Scholarship discount tracking
+- `DISCOUNT-BOARD` - Board member discount tracking
+
+**Bank Account Configuration:**
+- Set up your Stripe account in Xero's bank accounts
+- Use account code `STRIPE` for automatic payment recording
+
+### How Xero Integration Works
+
+#### Automatic Sync Process
+
+1. **Payment Completed** → Stripe webhook triggers auto-sync
+2. **Contact Creation** → User automatically added as Xero contact
+3. **Invoice Generation** → Detailed invoice created with line items:
+   - Membership purchases
+   - Registration fees
+   - Donations (if applicable)
+   - Discount codes (as negative line items)
+4. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
+5. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+
+#### Manual Sync Operations
+
+The admin interface provides manual sync options:
+
+- **Sync Contacts** - Create Xero contacts for all users who have made payments
+- **Sync Invoices** - Create invoices for all completed payments  
+- **Record Payments** - Record Stripe payments in Xero for existing invoices
+
+#### Financial Benefits
+
+✅ **Automated Bookkeeping** - Eliminates manual invoice entry
+✅ **Accurate Fee Tracking** - Stripe processing costs automatically recorded
+✅ **Professional Invoicing** - Uses Xero's templates and delivery system
+✅ **Real-time Sync** - Financial data synchronized immediately
+✅ **Discount Transparency** - Clear breakdown of promotional pricing
+✅ **Audit Trail** - Complete transaction history and error logging
+
+#### Troubleshooting
+
+**Common Issues:**
+- **Token Expired**: Tokens refresh automatically, but you can reconnect manually
+- **Sync Failures**: Check the sync logs in the admin interface for detailed error messages
+- **Missing Invoices**: Use the bulk sync feature to catch up on historical data
+- **Account Codes**: Discount codes and memberships will use default codes if not configured
+
+**Error Monitoring:**
+- All sync operations are logged to Sentry for monitoring
+- Detailed sync logs available in admin interface
+- Failed syncs don't affect payment processing
+
+### Testing Xero Integration
+
+1. **Use Xero Demo Company** for testing (recommended)
+2. **Complete a test purchase** to verify the full sync workflow
+3. **Check Xero** for created contact, invoice, and payment
+4. **Verify sync status** in admin interface
+5. **Test bulk sync** features with historical data
+
+---
+
+**Tech Stack**: Next.js 14, TypeScript, Tailwind CSS, Supabase, Stripe, Loops.so, Xero API

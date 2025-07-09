@@ -1,6 +1,7 @@
 import { Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
 import { createClient } from './supabase/server'
+import * as Sentry from '@sentry/nextjs'
 
 export interface UserContactData {
   id: string
@@ -334,6 +335,29 @@ export async function syncUserToXeroContact(
         errorCode = 'contact_sync_unknown'
       }
     }
+
+    // Capture contact sync error in Sentry (less critical than invoice errors, but still important)
+    Sentry.withScope((scope) => {
+      scope.setTag('integration', 'xero')
+      scope.setTag('operation', 'contact_sync')
+      scope.setTag('error_code', errorCode)
+      scope.setLevel('warning') // Contact sync failures are warnings, not critical errors
+      scope.setContext('xero_contact_error', {
+        user_id: userId,
+        tenant_id: tenantId,
+        user_email: userData.email,
+        user_name: `${userData.first_name} ${userData.last_name}`,
+        member_id: userData.member_id,
+        error_code: errorCode,
+        error_message: errorMessage
+      })
+      
+      if (error instanceof Error) {
+        Sentry.captureException(error)
+      } else {
+        Sentry.captureMessage(`Xero contact sync failure: ${errorMessage}`, 'warning')
+      }
+    })
 
     // Update sync status to failed
     const supabase = await createClient()

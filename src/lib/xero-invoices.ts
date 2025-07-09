@@ -2,6 +2,7 @@ import { Invoice, LineItem, CurrencyCode } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './xero-client'
 import { getOrCreateXeroContact } from './xero-contacts'
 import { createClient } from './supabase/server'
+import * as Sentry from '@sentry/nextjs'
 
 export interface PaymentInvoiceData {
   payment_id: string
@@ -210,6 +211,28 @@ export async function createXeroInvoiceBeforePayment(
         errorMessage = `Xero error: ${JSON.stringify(xeroError).substring(0, 200)}...`
       }
     }
+    
+    // Capture critical invoice creation error in Sentry
+    Sentry.withScope((scope) => {
+      scope.setTag('integration', 'xero')
+      scope.setTag('operation', 'invoice_creation')
+      scope.setTag('error_code', errorCode)
+      scope.setContext('xero_error', {
+        user_id: invoiceData.user_id,
+        total_amount: invoiceData.total_amount,
+        final_amount: invoiceData.final_amount,
+        payment_items_count: invoiceData.payment_items.length,
+        error_code: errorCode,
+        error_message: errorMessage,
+        has_discount_codes: invoiceData.discount_codes_used && invoiceData.discount_codes_used.length > 0
+      })
+      
+      if (error instanceof Error) {
+        Sentry.captureException(error)
+      } else {
+        Sentry.captureMessage(`Critical Xero invoice creation failure: ${errorMessage}`, 'error')
+      }
+    })
     
     const activeTenant = await getActiveTenant()
     if (activeTenant) {

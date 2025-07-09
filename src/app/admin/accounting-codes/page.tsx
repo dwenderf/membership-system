@@ -42,6 +42,10 @@ export default function AccountingCodesPage() {
     registration_default: ''
   })
   const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
+  const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
+    donation_default: '',
+    registration_default: ''
+  })
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
   const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({})
@@ -83,6 +87,7 @@ export default function AccountingCodesPage() {
         })
         
         setCodes(codesObj)
+        setOriginalCodes(codesObj) // Store original values for change detection
       } else {
         showError('Failed to fetch system accounting codes')
       }
@@ -166,6 +171,12 @@ export default function AccountingCodesPage() {
     }))
   }
 
+  // Check if default codes have changed
+  const hasDefaultCodesChanges = () => {
+    return codes.donation_default !== originalCodes.donation_default ||
+           codes.registration_default !== originalCodes.registration_default
+  }
+
   // Check if any category has changed
   const hasChanges = () => {
     return Object.keys(categoryInputs).some(categoryId => 
@@ -225,6 +236,8 @@ export default function AccountingCodesPage() {
         const data = await response.json()
         if (data.successCount > 0) {
           showSuccess(`Updated ${data.successCount} system accounting codes successfully`)
+          // Update original codes to reflect saved state
+          setOriginalCodes({ ...codes })
           // Refresh the system codes to reflect changes
           await fetchSystemCodes()
         } else {
@@ -504,7 +517,7 @@ export default function AccountingCodesPage() {
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleUpdateDefaults}
-              disabled={updating}
+              disabled={updating || !hasDefaultCodesChanges()}
               className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {updating ? 'Saving...' : 'Save Default Codes'}

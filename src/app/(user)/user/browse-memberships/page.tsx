@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import MembershipPurchase from '@/components/MembershipPurchase'
 import Link from 'next/link'
+import { getMembershipStatus } from '@/lib/membership-status'
 
 export default async function BrowseMembershipsPage() {
   const supabase = await createClient()
@@ -27,36 +28,6 @@ export default async function BrowseMembershipsPage() {
     .eq('user_id', user.id)
     .order('valid_until', { ascending: false })
 
-  const now = new Date()
-  
-  // Get all paid memberships for processing
-  const paidMemberships = userMemberships?.filter(um => um.payment_status === 'paid') || []
-  
-  // Helper function to get membership status
-  const getMembershipStatus = (membershipId: string) => {
-    const userMembershipsForType = paidMemberships.filter(um => um.membership_id === membershipId)
-    
-    if (userMembershipsForType.length === 0) {
-      return { status: 'not_owned', label: 'Available', className: 'bg-blue-100 text-blue-800' }
-    }
-    
-    // Find the latest expiration date for this membership type
-    const latestExpiration = Math.max(...userMembershipsForType.map(um => new Date(um.valid_until).getTime()))
-    const latestValidUntil = new Date(latestExpiration)
-    
-    if (latestValidUntil <= now) {
-      return { status: 'expired', label: 'Expired', className: 'bg-red-100 text-red-800' }
-    }
-    
-    const daysUntilExpiration = Math.ceil((latestValidUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    const isExpiringSoon = daysUntilExpiration <= 90
-    
-    if (isExpiringSoon) {
-      return { status: 'expiring_soon', label: 'Expiring Soon', className: 'bg-yellow-100 text-yellow-800' }
-    }
-    
-    return { status: 'active', label: 'Active', className: 'bg-green-100 text-green-800' }
-  }
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -86,7 +57,7 @@ export default async function BrowseMembershipsPage() {
         {availableMemberships && availableMemberships.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {availableMemberships.map((membership) => {
-              const membershipStatus = getMembershipStatus(membership.id)
+              const membershipStatus = getMembershipStatus(membership.id, userMemberships || [])
               
               return (
                 <div key={membership.id} className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow">

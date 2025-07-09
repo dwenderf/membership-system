@@ -23,7 +23,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
   try {
     // Import supabase here to avoid circular dependency
     const { createClient } = await import('./supabase/server')
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get stored tokens for the tenant
     const { data: tokenData, error } = await supabase
@@ -126,7 +126,7 @@ export async function getActiveXeroTenants(): Promise<Array<{
 }>> {
   try {
     const { createClient } = await import('./supabase/server')
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data, error } = await supabase
       .from('xero_oauth_tokens')
@@ -177,7 +177,7 @@ export async function logXeroSync(
 ): Promise<void> {
   try {
     const { createClient } = await import('./supabase/server')
-    const supabase = createClient()
+    const supabase = await createClient()
 
     await supabase
       .from('xero_sync_logs')

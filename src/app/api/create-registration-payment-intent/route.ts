@@ -586,6 +586,66 @@ export async function POST(request: NextRequest) {
     // Get category display name
     const categoryName = selectedCategory.category?.name || selectedCategory.custom_name || 'Registration'
 
+    // Create Xero invoice BEFORE payment
+    let invoiceNumber = null
+    let xeroInvoiceId = null
+    
+    try {
+      // Build invoice data for Xero
+      const paymentItems = [{
+        item_type: 'registration' as const,
+        item_id: registrationId,
+        amount: finalAmount,
+        description: `Registration: ${registration.name} - ${categoryName}`,
+        accounting_code: selectedCategory.accounting_code || registration.accounting_code
+      }]
+
+      // Add discount line items if applicable
+      const discountItems = []
+      if (validatedDiscountCode && discountAmount > 0) {
+        discountItems.push({
+          code: validatedDiscountCode.code,
+          amount_saved: discountAmount,
+          category_name: validatedDiscountCode.category?.name || 'Registration Discount',
+          accounting_code: validatedDiscountCode.category?.accounting_code
+        })
+      }
+
+      const xeroInvoiceData: PrePaymentInvoiceData = {
+        user_id: user.id,
+        total_amount: amount, // Original amount before discount
+        discount_amount: discountAmount,
+        final_amount: finalAmount, // Amount after discount
+        payment_items: paymentItems,
+        discount_codes_used: discountItems
+      }
+
+      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData)
+      
+      if (invoiceResult.success) {
+        invoiceNumber = invoiceResult.invoiceNumber
+        xeroInvoiceId = invoiceResult.xeroInvoiceId
+        console.log(`✅ Created Xero invoice ${invoiceNumber} before registration payment`)
+      } else {
+        console.warn(`⚠️ Failed to create Xero invoice before registration payment: ${invoiceResult.error}`)
+        // Continue with payment even if Xero invoice creation fails
+      }
+    } catch (error) {
+      console.warn('⚠️ Error creating Xero invoice before registration payment:', error)
+      // Continue with payment even if Xero invoice creation fails
+    }
+
+    // Create description based on invoice number
+    const getDescription = () => {
+      const baseName = invoiceNumber ? `Payment for invoice ${invoiceNumber}` : `${registration.name} - ${categoryName} (${registration.season?.name})`
+      
+      if (!invoiceNumber && discountAmount > 0) {
+        return `${baseName} - Discount: $${(discountAmount / 100).toFixed(2)}`
+      }
+      
+      return baseName
+    }
+
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
       amount: finalAmount, // Final amount after discount in cents
@@ -608,8 +668,10 @@ export async function POST(request: NextRequest) {
         discountCategoryId: validatedDiscountCode?.category?.id || '',
         discountCategoryName: validatedDiscountCode?.category?.name || '',
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
+        ...(invoiceNumber && { invoiceNumber: invoiceNumber }),
+        ...(xeroInvoiceId && { xeroInvoiceId: xeroInvoiceId }),
       },
-      description: `${registration.name} - ${categoryName} (${registration.season?.name})${discountAmount > 0 ? ` - Discount: $${(discountAmount / 100).toFixed(2)}` : ''}`,
+      description: getDescription(),
     }
     
     const paymentIntent = await stripe.paymentIntents.create({
@@ -640,6 +702,23 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
+
+    // Update Xero invoice with payment_id if invoice was created
+    if (paymentRecord && xeroInvoiceId) {
+      try {
+        await supabase
+          .from('xero_invoices')
+          .update({ 
+            payment_id: paymentRecord.id,
+            sync_status: 'pending' // Update from 'draft' to 'pending'
+          })
+          .eq('xero_invoice_id', xeroInvoiceId)
+        
+        console.log(`✅ Linked registration payment ${paymentRecord.id} to Xero invoice ${invoiceNumber}`)
+      } catch (linkError) {
+        console.error('⚠️ Failed to link registration payment to Xero invoice:', linkError)
+      }
+    }
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)

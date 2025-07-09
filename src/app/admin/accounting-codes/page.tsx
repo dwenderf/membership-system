@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 
+interface SystemAccountingCode {
+  id: string // UUID
+  code_type: string
+  accounting_code: string
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
 interface AccountingCodes {
   donation_default: string
   registration_default: string
@@ -29,9 +38,10 @@ interface Membership {
 
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
-    donation_default: 'DONATION', // Set a sensible default since this isn't stored in DB
+    donation_default: '',
     registration_default: ''
   })
+  const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
   const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({})
@@ -43,11 +53,44 @@ export default function AccountingCodesPage() {
   const [updating, setUpdating] = useState(false)
   const { showError, showSuccess, showWarning } = useToast()
 
-  // Fetch discount categories and memberships on component mount
+  // Fetch system codes, discount categories and memberships on component mount
   useEffect(() => {
+    fetchSystemCodes()
     fetchDiscountCategories()
     fetchMemberships()
   }, [])
+
+  const fetchSystemCodes = async () => {
+    try {
+      const response = await fetch('/api/admin/system-accounting-codes')
+      if (response.ok) {
+        const data = await response.json()
+        const systemCodes = data.codes || []
+        setSystemCodes(systemCodes)
+        
+        // Initialize the codes state from system codes
+        const codesObj: AccountingCodes = {
+          donation_default: '',
+          registration_default: ''
+        }
+        
+        systemCodes.forEach((code: SystemAccountingCode) => {
+          if (code.code_type === 'donation_default') {
+            codesObj.donation_default = code.accounting_code
+          } else if (code.code_type === 'registration_default') {
+            codesObj.registration_default = code.accounting_code
+          }
+        })
+        
+        setCodes(codesObj)
+      } else {
+        showError('Failed to fetch system accounting codes')
+      }
+    } catch (error) {
+      console.error('Error fetching system accounting codes:', error)
+      showError('Error fetching system accounting codes')
+    }
+  }
 
   const fetchDiscountCategories = async () => {
     setLoading(true)
@@ -160,21 +203,39 @@ export default function AccountingCodesPage() {
 
     setUpdating(true)
     try {
-      const response = await fetch('/api/admin/accounting-codes/update-defaults', {
-        method: 'POST',
+      // Prepare updates for system accounting codes
+      const updates = [
+        {
+          code_type: 'donation_default',
+          accounting_code: codes.donation_default.trim()
+        },
+        {
+          code_type: 'registration_default',
+          accounting_code: codes.registration_default.trim()
+        }
+      ]
+
+      const response = await fetch('/api/admin/system-accounting-codes', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(codes)
+        body: JSON.stringify({ updates })
       })
 
       if (response.ok) {
         const data = await response.json()
-        showSuccess(`Updated ${data.updated} records successfully`)
+        if (data.successCount > 0) {
+          showSuccess(`Updated ${data.successCount} system accounting codes successfully`)
+          // Refresh the system codes to reflect changes
+          await fetchSystemCodes()
+        } else {
+          showError('Failed to update system accounting codes')
+        }
       } else {
-        showError('Failed to update accounting codes')
+        showError('Failed to update system accounting codes')
       }
     } catch (error) {
-      console.error('Error updating accounting codes:', error)
-      showError('Error updating accounting codes')
+      console.error('Error updating system accounting codes:', error)
+      showError('Error updating system accounting codes')
     } finally {
       setUpdating(false)
     }
@@ -409,7 +470,7 @@ export default function AccountingCodesPage() {
                 placeholder="Enter Accounting Code (required)"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Used for all donation line items in Xero invoices (not stored in database)
+                Used for all donation line items in Xero invoices
               </p>
             </div>
             
@@ -437,6 +498,17 @@ export default function AccountingCodesPage() {
                 If empty, each registration category must have its own code
               </p>
             </div>
+          </div>
+          
+          {/* Save Button for Default Codes */}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={handleUpdateDefaults}
+              disabled={updating}
+              className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {updating ? 'Saving...' : 'Save Default Codes'}
+            </button>
           </div>
         </div>
 

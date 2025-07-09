@@ -3,7 +3,6 @@ import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
-import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -86,63 +85,6 @@ async function handleFreeRegistration({
       return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
     }
 
-    // Create Xero invoice BEFORE payment record (even for $0 registrations)
-    let invoiceNumber = null
-    let xeroInvoiceId = null
-    
-    try {
-      // Get registration and category details for invoice
-      const registrationCategory = registration.registration_categories.find((rc: any) => rc.id === categoryId)
-      
-      if (!registrationCategory) {
-        throw new Error('Registration category not found')
-      }
-      
-      // Build invoice data for Xero
-      const paymentItems = [{
-        item_type: 'registration' as const,
-        item_id: registrationId,
-        amount: 0, // $0 for free registration
-        description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
-        accounting_code: registrationCategory.accounting_code || registration.accounting_code
-      }]
-
-      // Add discount line items if applicable
-      const discountItems = []
-      if (discountCode) {
-        // TODO: Calculate discount amount based on discount code
-        // For now, assume 100% discount for free registrations
-        discountItems.push({
-          code: discountCode,
-          amount_saved: registrationCategory.price || 0, // Original price
-          category_name: 'Registration Discount',
-          accounting_code: undefined // Will use default discount accounting code
-        })
-      }
-
-      const xeroInvoiceData: PrePaymentInvoiceData = {
-        user_id: user.id,
-        total_amount: registrationCategory.price || 0, // Original price
-        discount_amount: registrationCategory.price || 0, // Full discount
-        final_amount: 0, // $0 after discount
-        payment_items: paymentItems,
-        discount_codes_used: discountItems
-      }
-
-      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
-        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0)
-      })
-      
-      if (invoiceResult.success) {
-        invoiceNumber = invoiceResult.invoiceNumber
-        xeroInvoiceId = invoiceResult.xeroInvoiceId
-        console.log(`✅ Created Xero invoice ${invoiceNumber} for free registration (marked as AUTHORISED)`)
-      } else {
-        console.warn(`⚠️ Failed to create Xero invoice for free registration: ${invoiceResult.error}`)
-      }
-    } catch (error) {
-      console.warn('⚠️ Error creating Xero invoice for free registration:', error)
-    }
 
     // Create payment record with $0 amount and completed status
     const { data: paymentRecord, error: paymentError } = await supabase
@@ -178,23 +120,6 @@ async function handleFreeRegistration({
       capturePaymentError(paymentItemError, paymentContext, 'warning')
     }
 
-    // Update Xero invoice with payment_id and mark as synced (since it's fully paid)
-    if (paymentRecord && xeroInvoiceId) {
-      try {
-        await supabase
-          .from('xero_invoices')
-          .update({ 
-            payment_id: paymentRecord.id,
-            sync_status: 'synced', // Mark as synced since payment is complete
-            last_synced_at: new Date().toISOString()
-          })
-          .eq('xero_invoice_id', xeroInvoiceId)
-        
-        console.log(`✅ Linked free registration payment ${paymentRecord.id} to Xero invoice ${invoiceNumber}`)
-      } catch (linkError) {
-        console.error('⚠️ Failed to link free registration payment to Xero invoice:', linkError)
-      }
-    }
 
     // Update the registration to paid status (complete the reservation)
     const { error: updateError } = await adminSupabase
@@ -248,9 +173,7 @@ async function handleFreeRegistration({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free registration completed successfully',
-      invoiceNumber: invoiceNumber || undefined, // Include invoice number if created
-      xeroInvoiceId: xeroInvoiceId || undefined
+      message: 'Free registration completed successfully'
     })
 
   } catch (error) {
@@ -586,60 +509,11 @@ export async function POST(request: NextRequest) {
     // Get category display name
     const categoryName = selectedCategory.category?.name || selectedCategory.custom_name || 'Registration'
 
-    // Create Xero invoice BEFORE payment
-    let invoiceNumber = null
-    let xeroInvoiceId = null
-    
-    try {
-      // Build invoice data for Xero
-      const paymentItems = [{
-        item_type: 'registration' as const,
-        item_id: registrationId,
-        amount: finalAmount,
-        description: `Registration: ${registration.name} - ${categoryName}`,
-        accounting_code: selectedCategory.accounting_code || registration.accounting_code
-      }]
-
-      // Add discount line items if applicable
-      const discountItems = []
-      if (validatedDiscountCode && discountAmount > 0) {
-        discountItems.push({
-          code: validatedDiscountCode.code,
-          amount_saved: discountAmount,
-          category_name: validatedDiscountCode.category?.name || 'Registration Discount',
-          accounting_code: validatedDiscountCode.category?.accounting_code
-        })
-      }
-
-      const xeroInvoiceData: PrePaymentInvoiceData = {
-        user_id: user.id,
-        total_amount: amount, // Original amount before discount
-        discount_amount: discountAmount,
-        final_amount: finalAmount, // Amount after discount
-        payment_items: paymentItems,
-        discount_codes_used: discountItems
-      }
-
-      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData)
-      
-      if (invoiceResult.success) {
-        invoiceNumber = invoiceResult.invoiceNumber
-        xeroInvoiceId = invoiceResult.xeroInvoiceId
-        console.log(`✅ Created Xero invoice ${invoiceNumber} before registration payment`)
-      } else {
-        console.warn(`⚠️ Failed to create Xero invoice before registration payment: ${invoiceResult.error}`)
-        // Continue with payment even if Xero invoice creation fails
-      }
-    } catch (error) {
-      console.warn('⚠️ Error creating Xero invoice before registration payment:', error)
-      // Continue with payment even if Xero invoice creation fails
-    }
-
-    // Create description based on invoice number
+    // Create description for payment intent
     const getDescription = () => {
-      const baseName = invoiceNumber ? `Payment for invoice ${invoiceNumber}` : `${registration.name} - ${categoryName} (${registration.season?.name})`
+      const baseName = `${registration.name} - ${categoryName} (${registration.season?.name})`
       
-      if (!invoiceNumber && discountAmount > 0) {
+      if (discountAmount > 0) {
         return `${baseName} - Discount: $${(discountAmount / 100).toFixed(2)}`
       }
       
@@ -668,8 +542,6 @@ export async function POST(request: NextRequest) {
         discountCategoryId: validatedDiscountCode?.category?.id || '',
         discountCategoryName: validatedDiscountCode?.category?.name || '',
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
-        ...(invoiceNumber && { invoiceNumber: invoiceNumber }),
-        ...(xeroInvoiceId && { xeroInvoiceId: xeroInvoiceId }),
       },
       description: getDescription(),
     }
@@ -703,22 +575,6 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    // Update Xero invoice with payment_id if invoice was created
-    if (paymentRecord && xeroInvoiceId) {
-      try {
-        await supabase
-          .from('xero_invoices')
-          .update({ 
-            payment_id: paymentRecord.id,
-            sync_status: 'pending' // Update from 'draft' to 'pending'
-          })
-          .eq('xero_invoice_id', xeroInvoiceId)
-        
-        console.log(`✅ Linked registration payment ${paymentRecord.id} to Xero invoice ${invoiceNumber}`)
-      } catch (linkError) {
-        console.error('⚠️ Failed to link registration payment to Xero invoice:', linkError)
-      }
-    }
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)

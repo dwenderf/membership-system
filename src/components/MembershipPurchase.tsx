@@ -132,6 +132,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   const isExtension = startDate > new Date()
 
+
   const handlePurchase = async () => {
     if (!selectedDuration) {
       setError('Please select a duration before purchasing')

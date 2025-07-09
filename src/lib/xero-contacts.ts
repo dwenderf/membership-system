@@ -310,8 +310,30 @@ export async function syncUserToXeroContact(
   } catch (error) {
     console.error('Error syncing contact to Xero:', error)
     
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'sync_failed'
+    // Extract meaningful error message from Xero API response
+    let errorMessage = 'Unknown error during contact sync'
+    let errorCode = 'sync_failed'
+    
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (error && typeof error === 'object') {
+      // Handle Xero API error structure
+      const xeroError = error as any
+      
+      if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
+        errorMessage = `Xero validation error: ${xeroError.response.body.Elements[0].ValidationErrors[0].Message}`
+        errorCode = xeroError.response.body.Elements[0].ValidationErrors[0].Message
+      } else if (xeroError.response?.body?.Message) {
+        errorMessage = `Xero API error: ${xeroError.response.body.Message}`
+        errorCode = 'xero_api_error'
+      } else if (xeroError.message) {
+        errorMessage = xeroError.message
+        errorCode = 'contact_sync_error'
+      } else {
+        errorMessage = `Contact sync error: ${JSON.stringify(xeroError).substring(0, 200)}...`
+        errorCode = 'contact_sync_unknown'
+      }
+    }
 
     // Update sync status to failed
     const supabase = await createClient()

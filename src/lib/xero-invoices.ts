@@ -188,6 +188,29 @@ export async function createXeroInvoiceBeforePayment(
   } catch (error) {
     console.error('Error creating Xero invoice before payment:', error)
     
+    // Extract meaningful error message from Xero API response
+    let errorMessage = 'Unknown error during pre-payment invoice creation'
+    let errorCode = 'invoice_creation_failed'
+    
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (error && typeof error === 'object') {
+      // Handle Xero API error structure
+      const xeroError = error as any
+      
+      if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
+        errorMessage = `Xero validation error: ${xeroError.response.body.Elements[0].ValidationErrors[0].Message}`
+        errorCode = 'xero_validation_error'
+      } else if (xeroError.response?.body?.Message) {
+        errorMessage = `Xero API error: ${xeroError.response.body.Message}`
+        errorCode = 'xero_api_error'
+      } else if (xeroError.message) {
+        errorMessage = xeroError.message
+      } else {
+        errorMessage = `Xero error: ${JSON.stringify(xeroError).substring(0, 200)}...`
+      }
+    }
+    
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
       await logXeroSync(
@@ -197,14 +220,14 @@ export async function createXeroInvoiceBeforePayment(
         null,
         null,
         'error',
-        'invoice_creation_failed',
-        error instanceof Error ? error.message : 'Unknown error during pre-payment invoice creation'
+        errorCode,
+        errorMessage
       )
     }
 
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: errorMessage
     }
   }
 }

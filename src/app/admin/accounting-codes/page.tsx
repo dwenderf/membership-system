@@ -15,7 +15,6 @@ interface SystemAccountingCode {
 
 interface AccountingCodes {
   donation_default: string
-  registration_default: string
 }
 
 interface DiscountCategory {
@@ -38,13 +37,11 @@ interface Membership {
 
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
-    donation_default: '',
-    registration_default: ''
+    donation_default: ''
   })
   const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
   const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
-    donation_default: '',
-    registration_default: ''
+    donation_default: ''
   })
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
@@ -74,15 +71,12 @@ export default function AccountingCodesPage() {
         
         // Initialize the codes state from system codes
         const codesObj: AccountingCodes = {
-          donation_default: '',
-          registration_default: ''
+          donation_default: ''
         }
         
         systemCodes.forEach((code: SystemAccountingCode) => {
           if (code.code_type === 'donation_default') {
             codesObj.donation_default = code.accounting_code
-          } else if (code.code_type === 'registration_default') {
-            codesObj.registration_default = code.accounting_code
           }
         })
         
@@ -173,8 +167,7 @@ export default function AccountingCodesPage() {
 
   // Check if default codes have changed
   const hasDefaultCodesChanges = () => {
-    return codes.donation_default !== originalCodes.donation_default ||
-           codes.registration_default !== originalCodes.registration_default
+    return codes.donation_default !== originalCodes.donation_default
   }
 
   // Check if any category has changed
@@ -219,10 +212,6 @@ export default function AccountingCodesPage() {
         {
           code_type: 'donation_default',
           accounting_code: codes.donation_default.trim()
-        },
-        {
-          code_type: 'registration_default',
-          accounting_code: codes.registration_default.trim()
         }
       ]
 
@@ -254,35 +243,6 @@ export default function AccountingCodesPage() {
     }
   }
 
-  const handleBulkUpdate = async (category: 'registration_categories') => {
-    const code = codes.registration_default
-    
-    if (!code.trim()) {
-      showError('Please enter a default code first')
-      return
-    }
-
-    setUpdating(true)
-    try {
-      const response = await fetch('/api/admin/accounting-codes/bulk-update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, accounting_code: code })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        showSuccess(`Updated ${data.updated} ${category.replace('_', ' ')} records`)
-      } else {
-        showError(`Failed to update ${category}`)
-      }
-    } catch (error) {
-      console.error(`Error updating ${category}:`, error)
-      showError(`Error updating ${category}`)
-    } finally {
-      setUpdating(false)
-    }
-  }
 
   const handleSaveDiscountCategories = async () => {
     const changedCategories = getChangedCategories()
@@ -465,9 +425,9 @@ export default function AccountingCodesPage() {
       <div className="space-y-6">
         {/* Default Codes Section */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Default Account Codes</h2>
+          <h2 className="text-lg font-semibold mb-4">Default Account Code</h2>
           <p className="text-sm text-gray-600 mb-4">
-            These codes are used when specific items don't have their own accounting codes set.
+            This code is used for donation line items in Xero invoices.
           </p>
           
           <div className="grid grid-cols-1 gap-4">
@@ -487,30 +447,6 @@ export default function AccountingCodesPage() {
               </p>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Registration Default
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={codes.registration_default}
-                  onChange={(e) => handleInputChange('registration_default', e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="Leave empty to require individual codes"
-                />
-                <button
-                  onClick={() => handleBulkUpdate('registration_categories')}
-                  disabled={updating || !codes.registration_default.trim()}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-                >
-                  Apply to All
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                If empty, each registration category must have its own code
-              </p>
-            </div>
           </div>
           
           {/* Save Button for Default Codes */}
@@ -520,7 +456,7 @@ export default function AccountingCodesPage() {
               disabled={updating || !hasDefaultCodesChanges()}
               className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {updating ? 'Saving...' : 'Save Default Codes'}
+              {updating ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -627,16 +563,6 @@ export default function AccountingCodesPage() {
           )}
         </div>
 
-        {/* Information */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 mb-2">How This Works</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• <strong>Default codes</strong> are used by Xero integration when specific items don't have their own codes</li>
-            <li>• <strong>Discount categories</strong> and <strong>memberships</strong> update immediately and affect all codes in that category</li>
-            <li>• <strong>Apply to All</strong> button only affects records that currently have no accounting code set</li>
-            <li>• <strong>Individual items</strong> can still have their own specific codes that override defaults</li>
-          </ul>
-        </div>
 
         {/* Return to Admin Link */}
         <div className="mt-6">

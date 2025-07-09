@@ -90,6 +90,53 @@ export async function syncUserToXeroContact(
           if (xeroContactId) {
             isUpdate = true
           }
+        } else {
+          // No contacts found by email, try searching by name
+          console.log(`No contacts found by email ${userData.email}, searching by name...`)
+          
+          try {
+            const nameSearchResponse = await xeroApi.getContacts(
+              tenantId,
+              undefined,
+              `Name="${userData.first_name} ${userData.last_name}"`
+            )
+            
+            if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
+              const nameFoundContacts = nameSearchResponse.body.contacts
+              
+              // Check if any of the name matches also have matching email
+              const emailAndNameMatch = nameFoundContacts.find(contact => 
+                contact.emailAddress === userData.email
+              )
+              
+              if (emailAndNameMatch && emailAndNameMatch.contactID) {
+                xeroContactId = emailAndNameMatch.contactID
+                isUpdate = true
+                console.log(`✅ Found exact name and email match for ${userData.first_name} ${userData.last_name}`)
+              } else {
+                // Name found but email doesn't match - this is the duplicate name case
+                console.log(`⚠️ Found existing contact with name "${userData.first_name} ${userData.last_name}" but different email`)
+                
+                // Try to find if there's a contact with same name but no email
+                const noEmailMatch = nameFoundContacts.find(contact => 
+                  !contact.emailAddress || contact.emailAddress === ''
+                )
+                
+                if (noEmailMatch && noEmailMatch.contactID) {
+                  // Update the existing contact with the email
+                  xeroContactId = noEmailMatch.contactID
+                  isUpdate = true
+                  console.log(`✅ Found contact with same name but no email, will update with email`)
+                } else {
+                  // All name matches have different emails - need to create with unique name
+                  console.log(`Multiple contacts exist with name "${userData.first_name} ${userData.last_name}" - will create with unique name`)
+                  // We'll handle this in the create section by making the name unique
+                }
+              }
+            }
+          } catch (nameSearchError) {
+            console.log('Name search failed, will create new contact')
+          }
         }
       } catch (searchError) {
         // If search fails, we'll create a new contact
@@ -98,8 +145,33 @@ export async function syncUserToXeroContact(
     }
 
     // Prepare contact data
+    let contactName = `${userData.first_name} ${userData.last_name}`
+    
+    // If we're creating a new contact and no existing contact was found,
+    // but we detected a duplicate name issue during search, make the name unique
+    if (!isUpdate && !xeroContactId) {
+      // Check if this might be a duplicate name scenario
+      try {
+        const duplicateCheckResponse = await xeroApi.getContacts(
+          tenantId,
+          undefined,
+          `Name="${contactName}"`
+        )
+        
+        if (duplicateCheckResponse.body.contacts && duplicateCheckResponse.body.contacts.length > 0) {
+          // There's already a contact with this name - make it unique by adding email
+          const emailPart = userData.email.split('@')[0]
+          contactName = `${userData.first_name} ${userData.last_name} (${emailPart})`
+          console.log(`⚠️ Creating contact with unique name: ${contactName}`)
+        }
+      } catch (duplicateCheckError) {
+        // If check fails, proceed with original name
+        console.log('Duplicate name check failed, proceeding with original name')
+      }
+    }
+    
     const contactData: Contact = {
-      name: `${userData.first_name} ${userData.last_name}`,
+      name: contactName,
       firstName: userData.first_name,
       lastName: userData.last_name,
       emailAddress: userData.email,

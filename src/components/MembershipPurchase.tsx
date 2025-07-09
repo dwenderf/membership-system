@@ -69,18 +69,19 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   // Calculate final payment amount based on payment option
   const getFinalPaymentAmount = () => {
-    if (!selectedPrice) return 0
+    // selectedPrice could be 0 for free memberships, so don't return early
+    const basePrice = selectedPrice || 0
     
     switch (paymentOption) {
       case 'assistance':
         const assistance = parseFloat(assistanceAmount) || 0
-        return Math.max(0, Math.min(assistance * 100, selectedPrice)) // Convert to cents, cap at full price
+        return Math.max(0, Math.min(assistance * 100, basePrice)) // Convert to cents, cap at full price
       case 'donation':
         const donation = parseFloat(donationAmount) || 0
-        return selectedPrice + (donation * 100) // Convert to cents
+        return basePrice + (donation * 100) // Convert to cents - works for free memberships too
       case 'standard':
       default:
-        return selectedPrice
+        return basePrice
     }
   }
   

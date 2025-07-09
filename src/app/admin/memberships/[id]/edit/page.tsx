@@ -1,13 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { useToast } from '@/contexts/ToastContext'
 
-export default function NewMembershipPage() {
+interface Membership {
+  id: string
+  name: string
+  description: string | null
+  accounting_code: string | null
+  price_monthly: number
+  price_annual: number
+  allow_discounts: boolean
+  created_at: string
+}
+
+export default function EditMembershipPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
   const router = useRouter()
   const supabase = createClient()
+  const { showError, showSuccess } = useToast()
   
   const [formData, setFormData] = useState({
     name: '',
@@ -18,37 +32,68 @@ export default function NewMembershipPage() {
     allow_discounts: true,
   })
   
-  // Removed seasons state - no longer needed
   const [existingMemberships, setExistingMemberships] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [currentMembership, setCurrentMembership] = useState<Membership | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(false)
 
-  // Fetch existing memberships to check for duplicates
+  // Fetch existing memberships and current membership
   useEffect(() => {
     const fetchData = async () => {
-      const { data: membershipsData, error: membershipsError } = await supabase
-        .from('memberships')
-        .select('name')
-      
-      if (!membershipsError && membershipsData) {
-        setExistingMemberships(membershipsData)
+      setLoading(true)
+      try {
+        // Fetch current membership
+        const { data: membershipData, error: membershipError } = await supabase
+          .from('memberships')
+          .select('*')
+          .eq('id', resolvedParams.id)
+          .single()
+        
+        if (membershipError) {
+          showError('Membership not found')
+          router.push('/admin/memberships')
+          return
+        }
+
+        setCurrentMembership(membershipData)
+        setFormData({
+          name: membershipData.name,
+          description: membershipData.description || '',
+          price_monthly: (membershipData.price_monthly / 100).toString(),
+          price_annual: (membershipData.price_annual / 100).toString(),
+          accounting_code: membershipData.accounting_code || '',
+          allow_discounts: membershipData.allow_discounts,
+        })
+
+        // Fetch other memberships to check for duplicates
+        const { data: membershipsData, error: membershipsError } = await supabase
+          .from('memberships')
+          .select('id, name')
+          .neq('id', resolvedParams.id) // Exclude current membership
+        
+        if (!membershipsError && membershipsData) {
+          setExistingMemberships(membershipsData)
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        showError('Error loading membership')
+        router.push('/admin/memberships')
+      } finally {
+        setLoading(false)
       }
     }
     
     fetchData()
-  }, [])
-
-  // Removed auto-generation - user will create membership types manually
+  }, [resolvedParams.id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!canCreateMembership) {
+    if (!canUpdateMembership) {
       return
     }
     
-    setLoading(true)
-    setError('')
+    setUpdating(true)
 
     try {
       // Convert prices from dollars to cents
@@ -56,62 +101,67 @@ export default function NewMembershipPage() {
       const annualPriceInCents = Math.round(parseFloat(formData.price_annual) * 100)
       
       if (isNaN(monthlyPriceInCents) || monthlyPriceInCents < 0) {
-        setError('Please enter a valid monthly price (0 or greater)')
-        setLoading(false)
+        showError('Please enter a valid monthly price (0 or greater)')
+        setUpdating(false)
         return
       }
       
       if (isNaN(annualPriceInCents) || annualPriceInCents < 0) {
-        setError('Please enter a valid annual price (0 or greater)')
-        setLoading(false)
+        showError('Please enter a valid annual price (0 or greater)')
+        setUpdating(false)
         return
       }
       
-      if (monthlyPriceInCents > 0 && annualPriceInCents > monthlyPriceInCents * 12) {
-        setError('Annual price should be less than or equal to 12 months of monthly pricing')
-        setLoading(false)
+      if (monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
+        showError('Annual price should be less than 12 times the monthly price')
+        setUpdating(false)
         return
       }
 
       if (!formData.accounting_code.trim()) {
-        setError('Accounting code is required')
-        setLoading(false)
+        showError('Accounting code is required')
+        setUpdating(false)
         return
       }
 
       const membershipData = {
-        name: formData.name,
-        description: formData.description || null,
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
         price_monthly: monthlyPriceInCents,
         price_annual: annualPriceInCents,
         accounting_code: formData.accounting_code.trim(),
         allow_discounts: formData.allow_discounts,
       }
 
-      const { error: insertError } = await supabase
-        .from('memberships')
-        .insert([membershipData])
+      const response = await fetch(`/api/admin/memberships/${resolvedParams.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(membershipData),
+      })
 
-      if (insertError) {
-        setError(insertError.message)
+      const responseData = await response.json()
+
+      if (!response.ok) {
+        showError(responseData.error || 'Failed to update membership')
       } else {
+        showSuccess('Membership updated successfully')
         router.push('/admin/memberships')
       }
     } catch (err) {
-      setError('An unexpected error occurred')
+      showError('An unexpected error occurred')
     } finally {
-      setLoading(false)
+      setUpdating(false)
     }
   }
-
-  // Removed season selection logic
   
   // Check for duplicate membership name
   const membershipNameExists = existingMemberships.some(membership => 
     membership.name.toLowerCase() === formData.name.trim().toLowerCase()
   )
   
-  const canCreateMembership = formData.name.trim() && 
+  const canUpdateMembership = formData.name.trim() && 
                              formData.price_monthly !== '' && 
                              parseFloat(formData.price_monthly) >= 0 &&
                              formData.price_annual !== '' && 
@@ -119,44 +169,35 @@ export default function NewMembershipPage() {
                              formData.accounting_code.trim() &&
                              !membershipNameExists
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 py-6 sm:px-0">
+            <div className="text-center py-8">
+              <div className="text-gray-500">Loading membership...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Create New Membership Type</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Edit Membership Type</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Set up a flexible membership type with monthly and annual pricing
+              Update the membership type details and pricing
             </p>
-          </div>
-
-          {/* Info Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-blue-800">Flexible Duration Memberships</h3>
-                <p className="mt-2 text-sm text-blue-700">
-                  Create membership types that users can purchase for flexible durations. Users will choose how many months they need or purchase an annual plan for savings.
-                </p>
-              </div>
-            </div>
           </div>
 
           {/* Form */}
           <div className="bg-white shadow rounded-lg">
             <form onSubmit={handleSubmit} className="space-y-6 p-6">
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
-                  {error}
-                </div>
-              )}
-
               {/* Membership Name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -263,7 +304,7 @@ export default function NewMembershipPage() {
                     />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    Price for full year (should be ≤ 12 months)
+                    Price for full year (should be &lt; 12 months)
                   </p>
                 </div>
               </div>
@@ -345,6 +386,14 @@ export default function NewMembershipPage() {
                       <dt className="text-sm font-medium text-gray-500">Annual Price</dt>
                       <dd className="text-sm text-gray-900">${formData.price_annual ? parseFloat(formData.price_annual).toFixed(2) : '0.00'}</dd>
                     </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Accounting Code</dt>
+                      <dd className="text-sm text-gray-900">{formData.accounting_code || 'Not set'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Discounts</dt>
+                      <dd className="text-sm text-gray-900">{formData.allow_discounts ? 'Allowed' : 'Not allowed'}</dd>
+                    </div>
                   </dl>
                 </div>
               )}
@@ -359,20 +408,20 @@ export default function NewMembershipPage() {
                 </Link>
                 <button
                   type="submit"
-                  disabled={loading || !canCreateMembership}
+                  disabled={updating || !canUpdateMembership}
                   className={`inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 ${
-                    canCreateMembership && !loading
+                    canUpdateMembership && !updating
                       ? 'bg-blue-600 hover:bg-blue-700' 
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
                 >
-                  {loading && (
+                  {updating && (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   )}
-                  {loading ? 'Creating Membership Type...' : canCreateMembership ? 'Create Membership Type' : 'Complete Form to Create'}
+                  {updating ? 'Updating Membership...' : canUpdateMembership ? 'Update Membership' : 'Complete Form to Update'}
                 </button>
               </div>
             </form>

@@ -189,11 +189,41 @@ export async function syncUserToXeroContact(
 
     let response
     if (isUpdate && xeroContactId) {
-      // Update existing contact
+      // Update existing contact - also ensure it's not archived
       contactData.contactID = xeroContactId
-      response = await xeroApi.updateContact(tenantId, xeroContactId, {
-        contacts: [contactData]
-      })
+      
+      try {
+        response = await xeroApi.updateContact(tenantId, xeroContactId, {
+          contacts: [contactData]
+        })
+      } catch (updateError: any) {
+        // Check if the error is due to archived contact
+        const errorMessage = updateError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || ''
+        if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
+          console.log(`⚠️ Contact ${xeroContactId} is archived, creating new contact instead`)
+          
+          // Create a new contact with unique name to avoid the archived contact
+          if (userData.member_id) {
+            contactData.name = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+          } else {
+            const emailPart = userData.email.split('@')[0]
+            contactData.name = `${userData.first_name} ${userData.last_name} (${emailPart})`
+          }
+          
+          // Remove contactID since we're creating new
+          delete contactData.contactID
+          
+          response = await xeroApi.createContacts(tenantId, {
+            contacts: [contactData]
+          })
+          
+          // Reset update flag since we created new
+          isUpdate = false
+        } else {
+          // Re-throw other errors
+          throw updateError
+        }
+      }
     } else {
       // Create new contact
       response = await xeroApi.createContacts(tenantId, {

@@ -6,7 +6,7 @@ import { createClient } from './supabase/server'
 // Automatically sync a payment to all active Xero tenants
 export async function autoSyncPaymentToXero(paymentId: string): Promise<void> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Check if payment is completed
     const { data: payment, error: paymentError } = await supabase

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { xero, logXeroSync } from '@/lib/xero-client'
+import { xero, logXeroSync, revokeXeroTokens } from '@/lib/xero-client'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -45,6 +45,23 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // First, revoke existing OAuth connections on Xero's side (single tenant model)
+    console.log('Revoking existing Xero OAuth connections...')
+    await revokeXeroTokens()
+
+    // Then disconnect any existing active connections in our database
+    const { error: deactivateError } = await supabase
+      .from('xero_oauth_tokens')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('is_active', true)
+
+    if (deactivateError) {
+      console.error('Error deactivating existing Xero tokens:', deactivateError)
+    }
+
     // Store tokens for each tenant
     const storedTenants = []
     for (const tenant of tenantConnections) {
@@ -52,54 +69,24 @@ export async function GET(request: NextRequest) {
         // Calculate expiration time
         const expiresAt = new Date(Date.now() + (tokenSet.expires_in || 1800) * 1000)
 
-        // Store or update the token
-        const { data: existingToken } = await supabase
+        // Insert new token (we deactivated all existing ones above)
+        const { error: insertError } = await supabase
           .from('xero_oauth_tokens')
-          .select('id')
-          .eq('tenant_id', tenant.tenantId)
-          .single()
+          .insert({
+            tenant_id: tenant.tenantId,
+            tenant_name: tenant.tenantName,
+            access_token: tokenSet.access_token,
+            refresh_token: tokenSet.refresh_token,
+            id_token: tokenSet.id_token,
+            expires_at: expiresAt.toISOString(),
+            scope: tokenSet.scope,
+            token_type: tokenSet.token_type || 'Bearer',
+            is_active: true
+          })
 
-        if (existingToken) {
-          // Update existing token
-          const { error: updateError } = await supabase
-            .from('xero_oauth_tokens')
-            .update({
-              tenant_name: tenant.tenantName,
-              access_token: tokenSet.access_token,
-              refresh_token: tokenSet.refresh_token,
-              id_token: tokenSet.id_token,
-              expires_at: expiresAt.toISOString(),
-              scope: tokenSet.scope,
-              token_type: tokenSet.token_type || 'Bearer',
-              is_active: true,
-              updated_at: new Date().toISOString()
-            })
-            .eq('tenant_id', tenant.tenantId)
-
-          if (updateError) {
-            console.error('Error updating Xero token:', updateError)
-            continue
-          }
-        } else {
-          // Insert new token
-          const { error: insertError } = await supabase
-            .from('xero_oauth_tokens')
-            .insert({
-              tenant_id: tenant.tenantId,
-              tenant_name: tenant.tenantName,
-              access_token: tokenSet.access_token,
-              refresh_token: tokenSet.refresh_token,
-              id_token: tokenSet.id_token,
-              expires_at: expiresAt.toISOString(),
-              scope: tokenSet.scope,
-              token_type: tokenSet.token_type || 'Bearer',
-              is_active: true
-            })
-
-          if (insertError) {
-            console.error('Error storing Xero token:', insertError)
-            continue
-          }
+        if (insertError) {
+          console.error('Error storing Xero token:', insertError)
+          continue
         }
 
         storedTenants.push(tenant.tenantName)

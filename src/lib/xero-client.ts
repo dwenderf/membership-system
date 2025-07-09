@@ -18,6 +18,18 @@ const xero = new XeroClient({
 
 export { xero }
 
+// Wrapper function for single-tenant operations
+export async function withActiveTenant<T>(
+  operation: (tenantId: string) => Promise<T>
+): Promise<T | null> {
+  const activeTenant = await getActiveTenant()
+  if (!activeTenant) {
+    console.error('No active Xero tenant found')
+    return null
+  }
+  return await operation(activeTenant.tenant_id)
+}
+
 // Helper function to get authenticated Xero client with token refresh
 export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroApi | null> {
   try {
@@ -118,7 +130,79 @@ async function refreshXeroToken(refreshToken: string): Promise<{
   }
 }
 
-// Helper function to get all active tenants
+// Helper function to revoke OAuth tokens on Xero's side
+export async function revokeXeroTokens(): Promise<boolean> {
+  try {
+    const { createClient } = await import('./supabase/server')
+    const supabase = await createClient()
+
+    // Get all active tokens
+    const { data: activeTokens, error } = await supabase
+      .from('xero_oauth_tokens')
+      .select('access_token, refresh_token, tenant_id')
+      .eq('is_active', true)
+
+    if (error || !activeTokens || activeTokens.length === 0) {
+      console.log('No active tokens to revoke')
+      return true
+    }
+
+    // Revoke each token on Xero's side
+    for (const token of activeTokens) {
+      try {
+        // Set the token on the client
+        await xero.setTokenSet({
+          access_token: token.access_token,
+          refresh_token: token.refresh_token,
+          token_type: 'Bearer'
+        })
+
+        // Revoke the connection on Xero's side
+        await xero.revokeToken()
+        console.log(`Successfully revoked token for tenant: ${token.tenant_id}`)
+        
+      } catch (revokeError) {
+        console.error(`Error revoking token for tenant ${token.tenant_id}:`, revokeError)
+        // Continue with other tokens even if one fails
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error revoking Xero tokens:', error)
+    return false
+  }
+}
+
+// Helper function to get the single active tenant (single tenant model)
+export async function getActiveTenant(): Promise<{
+  tenant_id: string
+  tenant_name: string
+  expires_at: string
+} | null> {
+  try {
+    const { createClient } = await import('./supabase/server')
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('xero_oauth_tokens')
+      .select('tenant_id, tenant_name, expires_at')
+      .eq('is_active', true)
+      .single()
+
+    if (error) {
+      console.error('Error fetching active Xero tenant:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error getting active Xero tenant:', error)
+    return null
+  }
+}
+
+// Helper function to get all active tenants (kept for backward compatibility)
 export async function getActiveXeroTenants(): Promise<Array<{
   tenant_id: string
   tenant_name: string

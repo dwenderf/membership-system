@@ -110,9 +110,7 @@ export default function XeroIntegrationPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          tenant_id: currentToken?.tenant_id
-        }),
+        body: JSON.stringify({}),
       })
 
       if (response.ok) {
@@ -192,7 +190,7 @@ export default function XeroIntegrationPage() {
                   <div>
                     <h3 className="text-sm font-medium text-green-800">Connected to Xero</h3>
                     <p className="text-sm text-green-700">
-                      Organization: {currentToken?.tenant_name}
+                      Active Organization: {currentToken?.tenant_name}
                     </p>
                   </div>
                 </div>
@@ -227,7 +225,7 @@ export default function XeroIntegrationPage() {
                 <div>
                   <h3 className="text-sm font-medium text-yellow-800">Not Connected</h3>
                   <p className="text-sm text-yellow-700">
-                    Connect to Xero to enable automatic syncing of invoices and payments
+                    Connect to a Xero organization to enable automatic syncing of invoices and payments
                   </p>
                 </div>
               </div>
@@ -416,7 +414,7 @@ export default function XeroIntegrationPage() {
               </h3>
               <div className="mt-2 px-7 py-3">
                 <p className="text-sm text-gray-500">
-                  Are you sure you want to disconnect from Xero? This will stop all automatic syncing of invoices and payments.
+                  Are you sure you want to disconnect from <strong>{currentToken?.tenant_name}</strong>? This will stop all automatic syncing of invoices and payments.
                 </p>
               </div>
               <div className="flex justify-center space-x-4 mt-4">

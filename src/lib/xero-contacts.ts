@@ -17,7 +17,7 @@ export async function syncUserToXeroContact(
   userData: UserContactData
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
 
     if (!xeroApi) {
@@ -164,7 +164,7 @@ export async function syncUserToXeroContact(
     const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'sync_failed'
 
     // Update sync status to failed
-    const supabase = createClient()
+    const supabase = await createClient()
     await supabase
       .from('xero_contacts')
       .upsert({
@@ -196,7 +196,7 @@ export async function getOrCreateXeroContact(
   tenantId: string
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get user data
     const { data: userData, error: userError } = await supabase
@@ -238,7 +238,7 @@ export async function bulkSyncMissingContacts(tenantId: string): Promise<{
   errors: string[]
 }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get users who have made payments but aren't synced to Xero
     const { data: usersNeedingSync, error: usersError } = await supabase

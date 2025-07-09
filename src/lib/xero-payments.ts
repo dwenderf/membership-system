@@ -20,7 +20,7 @@ export async function recordStripePaymentInXero(
   bankAccountCode: string = 'STRIPE' // Default account code for Stripe
 ): Promise<{ success: boolean; xeroPaymentId?: string; error?: string }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
 
     if (!xeroApi) {
@@ -250,7 +250,7 @@ async function recordStripeFeeExpense(
 // Get comprehensive Stripe payment data
 async function getStripePaymentData(paymentId: string): Promise<StripePaymentData | null> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
@@ -302,7 +302,7 @@ export async function bulkRecordUnsyncedPayments(
   errors: string[]
 }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get invoices that have been synced but don't have payment records
     const { data: invoicesNeedingPayments, error } = await supabase

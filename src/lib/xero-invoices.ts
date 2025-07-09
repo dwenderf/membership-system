@@ -31,7 +31,7 @@ export async function createXeroInvoiceForPayment(
   tenantId: string
 ): Promise<{ success: boolean; xeroInvoiceId?: string; invoiceNumber?: string; error?: string }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
 
     if (!xeroApi) {
@@ -244,7 +244,7 @@ export async function createXeroInvoiceForPayment(
     const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'invoice_creation_failed'
 
     // Update sync status
-    const supabase = createClient()
+    const supabase = await createClient()
     await supabase
       .from('payments')
       .update({
@@ -271,7 +271,7 @@ export async function createXeroInvoiceForPayment(
 // Get comprehensive payment data for invoice creation
 async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceData | null> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get payment data
     const { data: payment, error: paymentError } = await supabase
@@ -412,7 +412,7 @@ export async function bulkSyncUnsyncedInvoices(tenantId: string): Promise<{
   errors: string[]
 }> {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get payments that haven't been synced to Xero
     const { data: unsyncedPayments, error } = await supabase

@@ -776,6 +776,7 @@ email_logs (
 - [ ] **Email Marketing**: Send marketing and team/event emails through the admin page rather through Mailchimp
 - [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
 - [ ] **Content Management**: Admin interface for Terms & Conditions updates
+- [ ] **User Management System**: Complete admin interface for managing user accounts, roles, and permissions
 
 ### 🚀 **FUTURE ENHANCEMENTS**
 - [ ] Renewal notifications and automated renewal flow

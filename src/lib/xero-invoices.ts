@@ -1,5 +1,5 @@
 import { Invoice, LineItem, CurrencyCode } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
+import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './xero-client'
 import { getOrCreateXeroContact } from './xero-contacts'
 import { createClient } from './supabase/server'
 
@@ -23,6 +23,245 @@ export interface PaymentInvoiceData {
     accounting_code?: string
   }>
   stripe_payment_intent_id?: string
+}
+
+export interface PrePaymentInvoiceData {
+  user_id: string
+  total_amount: number // in cents
+  discount_amount?: number // in cents
+  final_amount: number // in cents
+  payment_items: Array<{
+    item_type: 'membership' | 'registration' | 'donation'
+    item_id: string | null
+    amount: number // in cents
+    description?: string
+    accounting_code?: string
+  }>
+  discount_codes_used?: Array<{
+    code: string
+    amount_saved: number // in cents
+    category_name: string
+    accounting_code?: string
+  }>
+}
+
+// Create an invoice in Xero BEFORE payment (for invoice-first flow)
+export async function createXeroInvoiceBeforePayment(
+  invoiceData: PrePaymentInvoiceData,
+  options?: { markAsAuthorised?: boolean }
+): Promise<{ success: boolean; xeroInvoiceId?: string; invoiceNumber?: string; error?: string }> {
+  try {
+    const activeTenant = await getActiveTenant()
+    if (!activeTenant) {
+      return { success: false, error: 'No active Xero tenant configured' }
+    }
+
+    const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
+    if (!xeroApi) {
+      return { success: false, error: 'Unable to authenticate with Xero' }
+    }
+
+    // Ensure contact exists in Xero
+    const contactResult = await getOrCreateXeroContact(invoiceData.user_id, activeTenant.tenant_id)
+    if (!contactResult.success || !contactResult.xeroContactId) {
+      return { 
+        success: false, 
+        error: `Failed to sync contact: ${contactResult.error}` 
+      }
+    }
+
+    // Build invoice line items
+    const lineItems: LineItem[] = []
+
+    // Add payment items (memberships, registrations, donations)
+    for (const item of invoiceData.payment_items) {
+      lineItems.push({
+        description: item.description || getDefaultItemDescription(item),
+        unitAmount: item.amount / 100, // Convert from cents to dollars
+        quantity: 1,
+        accountCode: item.accounting_code || getDefaultAccountCode(item.item_type),
+        taxType: 'NONE' // Assuming no tax for now, can be configured
+      })
+    }
+
+    // Add discount line items (negative amounts)
+    if (invoiceData.discount_codes_used) {
+      for (const discount of invoiceData.discount_codes_used) {
+        lineItems.push({
+          description: `Discount - ${discount.code} (${discount.category_name})`,
+          unitAmount: -(discount.amount_saved / 100), // Negative amount for discount
+          quantity: 1,
+          accountCode: discount.accounting_code || 'DISCOUNT',
+          taxType: 'NONE'
+        })
+      }
+    }
+
+    // Create the invoice
+    const xeroInvoiceData: Invoice = {
+      type: Invoice.TypeEnum.ACCREC, // Accounts Receivable
+      contact: {
+        contactID: contactResult.xeroContactId
+      },
+      status: options?.markAsAuthorised ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
+      lineItems: lineItems,
+      date: new Date().toISOString().split('T')[0], // Today's date
+      dueDate: new Date().toISOString().split('T')[0], // Due today
+      reference: options?.markAsAuthorised ? 'Fully Paid' : 'Pending Payment',
+      currencyCode: CurrencyCode.USD // Configurable if needed
+    }
+
+    const response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+      invoices: [xeroInvoiceData]
+    })
+
+    if (!response.body.invoices || response.body.invoices.length === 0) {
+      await logXeroSync(
+        activeTenant.tenant_id,
+        'invoice_sync',
+        'payment',
+        null,
+        null,
+        'error',
+        'no_invoice_returned',
+        'No invoice returned from Xero API during pre-payment creation'
+      )
+      return { success: false, error: 'No invoice returned from Xero API' }
+    }
+
+    const xeroInvoice = response.body.invoices[0]
+    const xeroInvoiceId = xeroInvoice.invoiceID
+    const invoiceNumber = xeroInvoice.invoiceNumber
+
+    if (!xeroInvoiceId || !invoiceNumber) {
+      await logXeroSync(
+        activeTenant.tenant_id,
+        'invoice_sync',
+        'payment',
+        null,
+        null,
+        'error',
+        'no_invoice_id',
+        'No invoice ID or number returned from Xero API during pre-payment creation'
+      )
+      return { success: false, error: 'No invoice ID or number returned from Xero API' }
+    }
+
+    // Store preliminary invoice record (will be updated when payment completes)
+    const supabase = await createClient()
+    const invoiceRecord = {
+      payment_id: null, // Will be set when payment is created
+      tenant_id: activeTenant.tenant_id,
+      xero_invoice_id: xeroInvoiceId,
+      invoice_number: invoiceNumber,
+      invoice_type: 'ACCREC',
+      invoice_status: xeroInvoice.status,
+      total_amount: invoiceData.total_amount,
+      discount_amount: invoiceData.discount_amount || 0,
+      net_amount: invoiceData.final_amount,
+      stripe_fee_amount: null, // Will be calculated after payment
+      sync_status: 'draft' as const, // Mark as draft until payment completes
+      last_synced_at: new Date().toISOString()
+    }
+
+    await supabase
+      .from('xero_invoices')
+      .insert(invoiceRecord)
+
+    await logXeroSync(
+      activeTenant.tenant_id,
+      'invoice_sync',
+      'payment',
+      null,
+      xeroInvoiceId,
+      'success',
+      undefined,
+      `Pre-payment invoice created successfully: ${invoiceNumber}`
+    )
+
+    return { 
+      success: true, 
+      xeroInvoiceId, 
+      invoiceNumber 
+    }
+
+  } catch (error) {
+    console.error('Error creating Xero invoice before payment:', error)
+    
+    const activeTenant = await getActiveTenant()
+    if (activeTenant) {
+      await logXeroSync(
+        activeTenant.tenant_id,
+        'invoice_sync',
+        'payment',
+        null,
+        null,
+        'error',
+        'invoice_creation_failed',
+        error instanceof Error ? error.message : 'Unknown error during pre-payment invoice creation'
+      )
+    }
+
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }
+  }
+}
+
+// Delete a draft invoice from Xero (for payment failures)
+export async function deleteXeroDraftInvoice(
+  xeroInvoiceId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const activeTenant = await getActiveTenant()
+    if (!activeTenant) {
+      return { success: false, error: 'No active Xero tenant configured' }
+    }
+
+    const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
+    if (!xeroApi) {
+      return { success: false, error: 'Unable to authenticate with Xero' }
+    }
+
+    // Delete the invoice from Xero
+    await xeroApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
+
+    await logXeroSync(
+      activeTenant.tenant_id,
+      'invoice_sync',
+      'payment',
+      null,
+      xeroInvoiceId,
+      'success',
+      undefined,
+      `Draft invoice deleted after payment failure: ${xeroInvoiceId}`
+    )
+
+    return { success: true }
+
+  } catch (error) {
+    console.error('Error deleting Xero draft invoice:', error)
+    
+    const activeTenant = await getActiveTenant()
+    if (activeTenant) {
+      await logXeroSync(
+        activeTenant.tenant_id,
+        'invoice_sync',
+        'payment',
+        null,
+        xeroInvoiceId,
+        'error',
+        'invoice_deletion_failed',
+        error instanceof Error ? error.message : 'Unknown error during invoice deletion'
+      )
+    }
+
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }
+  }
 }
 
 // Create an invoice in Xero for a payment

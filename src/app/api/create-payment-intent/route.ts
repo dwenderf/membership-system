@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -67,13 +68,62 @@ async function handleFreeMembership({
       userProfile = profileData
     }
 
+    // Create Xero invoice BEFORE payment record (even for $0 payments)
+    let invoiceNumber = null
+    let xeroInvoiceId = null
+    
+    try {
+      // Build invoice data for Xero
+      const paymentItems = [{
+        item_type: 'membership' as const,
+        item_id: membershipId,
+        amount: 0, // $0 for free membership
+        description: `${membership.name} - ${durationMonths} months${paymentOption === 'assistance' ? ' (Financial Assistance)' : ''}`,
+        accounting_code: membership.accounting_code
+      }]
+
+      // Add donation item if applicable (even for $0 memberships, someone might donate)
+      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+        paymentItems.push({
+          item_type: 'donation' as const,
+          item_id: membershipId,
+          amount: donationAmount,
+          description: 'Donation',
+          accounting_code: undefined
+        })
+      }
+
+      const xeroInvoiceData: PrePaymentInvoiceData = {
+        user_id: user.id,
+        total_amount: donationAmount || 0, // Only donation amount for free membership
+        discount_amount: 0,
+        final_amount: donationAmount || 0,
+        payment_items: paymentItems,
+        discount_codes_used: [] // TODO: Add discount codes when implemented
+      }
+
+      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
+        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0 + optional donation)
+      })
+      
+      if (invoiceResult.success) {
+        invoiceNumber = invoiceResult.invoiceNumber
+        xeroInvoiceId = invoiceResult.xeroInvoiceId
+        console.log(`✅ Created Xero invoice ${invoiceNumber} for free membership (marked as AUTHORISED)`)
+      } else {
+        console.warn(`⚠️ Failed to create Xero invoice for free membership: ${invoiceResult.error}`)
+      }
+    } catch (error) {
+      console.warn('⚠️ Error creating Xero invoice for free membership:', error)
+    }
+
     // Create payment record with $0 amount and completed status
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
         user_id: user.id,
-        total_amount: 0,
-        final_amount: 0,
+        total_amount: donationAmount || 0,
+        final_amount: donationAmount || 0,
         stripe_payment_intent_id: null, // No Stripe payment for free
         status: 'completed',
         payment_method: 'free',
@@ -86,19 +136,53 @@ async function handleFreeMembership({
       return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
     }
 
-    // Create payment item record
+    // Create payment item records
+    const paymentItems = [{
+      payment_id: paymentRecord.id,
+      item_type: 'membership',
+      item_id: membershipId,
+      amount: 0,
+    }]
+
+    // Add donation item if applicable
+    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+      paymentItems.push({
+        payment_id: paymentRecord.id,
+        item_type: 'donation',
+        item_id: membershipId,
+        amount: donationAmount,
+      })
+    }
+
     const { error: paymentItemError } = await supabase
       .from('payment_items')
-      .insert({
-        payment_id: paymentRecord.id,
-        item_type: 'membership',
-        item_id: membershipId,
-        amount: 0,
-      })
+      .insert(paymentItems)
 
     if (paymentItemError) {
-      console.error('Error creating payment item record:', paymentItemError)
+      console.error('Error creating payment item records:', paymentItemError)
       capturePaymentError(paymentItemError, paymentContext, 'warning')
+    }
+
+    // Update Xero invoice with payment_id and mark as synced (since it's fully paid)
+    if (paymentRecord && xeroInvoiceId) {
+      try {
+        await supabase
+          .from('xero_invoices')
+          .update({ 
+            payment_id: paymentRecord.id,
+            sync_status: 'synced', // Mark as synced since payment is complete
+            last_synced_at: new Date().toISOString()
+          })
+          .eq('xero_invoice_id', xeroInvoiceId)
+        
+        console.log(`✅ Linked free membership payment ${paymentRecord.id} to Xero invoice ${invoiceNumber}`)
+        
+        // TODO: Update the invoice status in Xero from DRAFT to AUTHORISED since it's fully paid
+        // This will require an API call to update the invoice status in Xero
+        
+      } catch (linkError) {
+        console.error('⚠️ Failed to link free membership payment to Xero invoice:', linkError)
+      }
     }
 
     // Create the membership record directly (similar to webhook processing)
@@ -133,7 +217,9 @@ async function handleFreeMembership({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free membership created successfully'
+      message: 'Free membership created successfully',
+      invoiceNumber: invoiceNumber || undefined, // Include invoice number if created
+      xeroInvoiceId: xeroInvoiceId || undefined
     })
 
   } catch (error) {
@@ -221,17 +307,84 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
-    // Create description based on payment option
-    const getDescription = () => {
-      const baseName = `${membership.name} - ${durationMonths} months`
-      switch (paymentOption) {
-        case 'assistance':
-          return `${baseName} (Financial Assistance)`
-        case 'donation':
-          return `${baseName} + Donation`
-        default:
-          return baseName
+    // Calculate amounts for Xero invoice
+    const getMembershipAmount = () => {
+      if (paymentOption === 'assistance') {
+        return assistanceAmount || 0
       }
+      // For donations and standard, use the base membership price calculation
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+      return basePrice
+    }
+
+    const membershipAmount = getMembershipAmount()
+
+    // Create Xero invoice BEFORE payment
+    let invoiceNumber = null
+    let xeroInvoiceId = null
+    
+    try {
+      // Build invoice data for Xero
+      const paymentItems = [{
+        item_type: 'membership' as const,
+        item_id: membershipId,
+        amount: membershipAmount,
+        description: `${membership.name} - ${durationMonths} months${paymentOption === 'assistance' ? ' (Financial Assistance)' : ''}`,
+        accounting_code: membership.accounting_code
+      }]
+
+      // Add donation item if applicable
+      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+        paymentItems.push({
+          item_type: 'donation' as const,
+          item_id: membershipId, // Link to membership for context
+          amount: donationAmount,
+          description: 'Donation',
+          accounting_code: undefined // Will use default donation accounting code
+        })
+      }
+
+      const xeroInvoiceData: PrePaymentInvoiceData = {
+        user_id: user.id,
+        total_amount: amount,
+        discount_amount: 0, // No discounts in membership flow yet
+        final_amount: amount,
+        payment_items: paymentItems,
+        discount_codes_used: [] // No discount codes in membership flow yet
+      }
+
+      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData)
+      
+      if (invoiceResult.success) {
+        invoiceNumber = invoiceResult.invoiceNumber
+        xeroInvoiceId = invoiceResult.xeroInvoiceId
+        console.log(`✅ Created Xero invoice ${invoiceNumber} before payment`)
+      } else {
+        console.warn(`⚠️ Failed to create Xero invoice before payment: ${invoiceResult.error}`)
+        // Continue with payment even if Xero invoice creation fails
+      }
+    } catch (error) {
+      console.warn('⚠️ Error creating Xero invoice before payment:', error)
+      // Continue with payment even if Xero invoice creation fails
+    }
+
+    // Create description based on invoice number
+    const getDescription = () => {
+      const baseName = invoiceNumber ? `Payment for invoice ${invoiceNumber}` : `${membership.name} - ${durationMonths} months`
+      
+      if (!invoiceNumber) {
+        // Fallback to old description format if invoice creation failed
+        switch (paymentOption) {
+          case 'assistance':
+            return `${baseName} (Financial Assistance)`
+          case 'donation':
+            return `${baseName} + Donation`
+          default:
+            return baseName
+        }
+      }
+      
+      return baseName
     }
 
     // Create payment intent with explicit Link support
@@ -249,6 +402,8 @@ export async function POST(request: NextRequest) {
         paymentOption: paymentOption || 'standard',
         ...(paymentOption === 'assistance' && assistanceAmount && { assistanceAmount: assistanceAmount.toString() }),
         ...(paymentOption === 'donation' && donationAmount && { donationAmount: donationAmount.toString() }),
+        ...(invoiceNumber && { invoiceNumber: invoiceNumber }),
+        ...(xeroInvoiceId && { xeroInvoiceId: xeroInvoiceId }),
       },
       description: getDescription(),
     }
@@ -267,17 +422,6 @@ export async function POST(request: NextRequest) {
     // Update payment context with payment intent ID
     paymentContext.paymentIntentId = paymentIntent.id
 
-    // Calculate amounts for payment record
-    const getMembershipAmount = () => {
-      if (paymentOption === 'assistance') {
-        return assistanceAmount || 0
-      }
-      // For donations and standard, use the base membership price calculation
-      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-      return basePrice
-    }
-
-    const membershipAmount = getMembershipAmount()
     const totalAmount = amount // This is the final amount sent from frontend
 
     // Create payment record in database
@@ -293,6 +437,23 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
+
+    // Update Xero invoice with payment_id if invoice was created
+    if (paymentRecord && xeroInvoiceId) {
+      try {
+        await supabase
+          .from('xero_invoices')
+          .update({ 
+            payment_id: paymentRecord.id,
+            sync_status: 'pending' // Update from 'draft' to 'pending'
+          })
+          .eq('xero_invoice_id', xeroInvoiceId)
+        
+        console.log(`✅ Linked payment ${paymentRecord.id} to Xero invoice ${invoiceNumber}`)
+      } catch (linkError) {
+        console.error('⚠️ Failed to link payment to Xero invoice:', linkError)
+      }
+    }
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)

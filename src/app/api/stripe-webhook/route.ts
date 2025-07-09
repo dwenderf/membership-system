@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
 import { autoSyncPaymentToXero } from '@/lib/xero-auto-sync'
+import { deleteXeroDraftInvoice } from '@/lib/xero-invoices'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -104,7 +105,7 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     // Don't fail the webhook - membership was created successfully
   }
 
-  // Auto-sync to Xero
+  // Handle Xero integration
   try {
     const { data: paymentRecord } = await supabase
       .from('payments')
@@ -113,7 +114,32 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
       .single()
     
     if (paymentRecord) {
-      await autoSyncPaymentToXero(paymentRecord.id)
+      // Check if invoice was already created (new invoice-first flow)
+      const invoiceNumber = paymentIntent.metadata.invoiceNumber
+      const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
+      
+      if (invoiceNumber && xeroInvoiceId) {
+        console.log(`✅ Found existing Xero invoice ${invoiceNumber} for payment, updating status...`)
+        
+        // Update existing invoice status and sync status
+        await supabase
+          .from('xero_invoices')
+          .update({ 
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString()
+          })
+          .eq('xero_invoice_id', xeroInvoiceId)
+          .eq('payment_id', paymentRecord.id)
+
+        // TODO: Update invoice status in Xero from DRAFT to AUTHORISED
+        // This will require a separate API call to update the invoice in Xero
+        
+        console.log(`✅ Updated Xero invoice ${invoiceNumber} status after payment completion`)
+      } else {
+        console.log('⚠️ No invoice metadata found, falling back to old flow')
+        // Fall back to old flow (create invoice after payment)
+        await autoSyncPaymentToXero(paymentRecord.id)
+      }
     }
   } catch (xeroError) {
     console.error('❌ Webhook: Failed to sync membership payment to Xero:', xeroError)
@@ -250,7 +276,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     // Don't fail the webhook - registration was processed successfully
   }
 
-  // Auto-sync to Xero
+  // Handle Xero integration
   try {
     const { data: paymentRecord } = await supabase
       .from('payments')
@@ -259,7 +285,32 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       .single()
     
     if (paymentRecord) {
-      await autoSyncPaymentToXero(paymentRecord.id)
+      // Check if invoice was already created (new invoice-first flow)
+      const invoiceNumber = paymentIntent.metadata.invoiceNumber
+      const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
+      
+      if (invoiceNumber && xeroInvoiceId) {
+        console.log(`✅ Found existing Xero invoice ${invoiceNumber} for registration payment, updating status...`)
+        
+        // Update existing invoice status and sync status
+        await supabase
+          .from('xero_invoices')
+          .update({ 
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString()
+          })
+          .eq('xero_invoice_id', xeroInvoiceId)
+          .eq('payment_id', paymentRecord.id)
+
+        // TODO: Update invoice status in Xero from DRAFT to AUTHORISED
+        // This will require a separate API call to update the invoice in Xero
+        
+        console.log(`✅ Updated Xero invoice ${invoiceNumber} status after registration payment completion`)
+      } else {
+        console.log('⚠️ No invoice metadata found, falling back to old flow')
+        // Fall back to old flow (create invoice after payment)
+        await autoSyncPaymentToXero(paymentRecord.id)
+      }
     }
   } catch (xeroError) {
     console.error('❌ Webhook: Failed to sync registration payment to Xero:', xeroError)
@@ -319,6 +370,41 @@ export async function POST(request: NextRequest) {
             status: 'failed',
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
+
+        // Clean up draft invoice if it exists
+        try {
+          const invoiceNumber = paymentIntent.metadata.invoiceNumber
+          const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
+          
+          if (invoiceNumber && xeroInvoiceId) {
+            console.log(`🗑️ Cleaning up draft invoice ${invoiceNumber} after payment failure`)
+            
+            // Delete the draft invoice from Xero
+            const deleteResult = await deleteXeroDraftInvoice(xeroInvoiceId)
+            
+            if (deleteResult.success) {
+              // Delete the draft invoice from our database
+              await supabase
+                .from('xero_invoices')
+                .delete()
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('sync_status', 'pending') // Only delete if still pending
+              
+              console.log(`✅ Fully cleaned up draft invoice ${invoiceNumber} after payment failure`)
+            } else {
+              console.warn(`⚠️ Failed to delete invoice from Xero: ${deleteResult.error}`)
+              // Still clean up our database tracking even if Xero deletion fails
+              await supabase
+                .from('xero_invoices')
+                .delete()
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('sync_status', 'pending')
+            }
+          }
+        } catch (cleanupError) {
+          console.error('⚠️ Error cleaning up draft invoice after payment failure:', cleanupError)
+          // Don't fail the webhook over cleanup issues
+        }
 
         // Send payment failure notification email
         try {

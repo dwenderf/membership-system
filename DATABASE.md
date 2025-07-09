@@ -69,6 +69,7 @@ user_memberships (
 -- NO foreign key constraint between users and auth.users
 users (
   id: UUID PRIMARY KEY  -- matches auth.users.id when active
+  member_id: INTEGER UNIQUE -- auto-generated member ID starting from 1000
   deleted_at: TIMESTAMP -- marks when account was deleted
   -- business data preserved even after auth.users deletion
 )
@@ -230,6 +231,7 @@ const { data } = await supabase.from('table').select('*')
 - Membership type queries: `idx_user_memberships_membership_type`
 - Payment lookups by Stripe ID for webhook processing
 - Deleted user queries: `idx_users_deleted_at`
+- Member ID lookups: `idx_users_member_id`
 
 ### Query Patterns
 Database schema optimized for common queries:
@@ -330,6 +332,50 @@ WHERE user_id = ? AND discount_category_id = ? AND season_id = ?;
 **Alternative Considered:** Single discount_codes table with individual limits
 **Trade-off:** Lost organizational grouping and accounting integration, gained simpler schema
 
+### 10. Member ID System for External Integration
+
+**Pattern Used:** Auto-generated sequential member IDs for unique identification in external systems
+
+```sql
+-- Member ID sequence starting from 1000
+CREATE SEQUENCE member_id_seq START 1000;
+
+-- Auto-generated member IDs
+users (
+  member_id: INTEGER UNIQUE   -- Auto-generated: 1000, 1001, 1002, etc.
+  -- Automatically assigned via trigger on INSERT
+)
+
+-- Trigger function for auto-generation
+CREATE TRIGGER set_member_id_trigger
+  BEFORE INSERT ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION set_member_id_on_insert();
+```
+
+**Why This Pattern:**
+- **External System Integration:** Provides human-readable IDs for Xero contacts
+- **Uniqueness Guarantee:** Sequential IDs prevent duplicate name conflicts
+- **Professional Appearance:** Clean format like "David Wender - 1000"
+- **Scalability:** Supports unlimited growth starting from 1000
+- **Backward Compatibility:** Existing users get IDs retroactively
+
+**Xero Integration Benefits:**
+```sql
+-- Contact names in Xero become unique and traceable
+"David Wender - 1000"     -- Member ID 1000
+"David Wender - 1001"     -- Different member with same name
+"John Smith - 1002"       -- Member ID 1002
+```
+
+**Design Decision:** Start from 1000 instead of 1 to:
+- Provide professional appearance (4-digit minimum)
+- Reserve space for system/test accounts if needed
+- Allow for future organizational numbering schemes
+
+**Alternative Considered:** Using UUID or email-based identification
+**Trade-off:** Lost human readability, gained guaranteed uniqueness and external system compatibility
+
 ## Future Considerations
 
 ### Scalability
@@ -351,6 +397,37 @@ Database changes are managed through:
 - Sequential migration files in `supabase/` directory
 - Schema.sql as source of truth for new deployments
 - Careful constraint additions to avoid breaking existing data
+
+### Recent Migration History
+
+**2025-07-09:** Member ID System (`2025-07-09-add-member-id-system.sql`)
+- Added `member_id` column to users table with auto-generated sequential IDs
+- Created sequence starting from 1000 for professional appearance
+- Added trigger for automatic member ID assignment on user creation
+- Enables unique Xero contact identification with clean "Name - ID" format
+
+**2025-07-08:** Xero Integration Schema (`2025-07-08-add-xero-integration-schema.sql`)
+- Added `xero_oauth_tokens` table for secure OAuth token management
+- Added `xero_contacts` table for contact synchronization tracking
+- Added `xero_invoices` table for invoice synchronization with payment linking
+- Added `xero_payments` table for payment recording and fee tracking
+- Added `xero_sync_logs` table for comprehensive audit trail
+- Added `xero_invoice_line_items` table for detailed invoice component tracking
+
+**2025-07-08:** System Accounting Codes (`2025-07-08-add-system-accounting-codes.sql`)
+- Added `system_accounting_codes` table for Xero chart of accounts mapping
+- Enables flexible assignment of accounting codes to different transaction types
+
+**2025-07-03:** Discount Categories System (`2025-07-03-add-discount-categories-system.sql`)
+- Added `discount_categories` table for organizational grouping of discount codes
+- Added `discount_codes` table for individual discount code management
+- Added `discount_usage` table for tracking usage against category limits
+- Enables sophisticated discount management with per-category limits and accounting integration
+
+**2025-07-02:** Processing Status and Reservation System (`2025-07-02-add-processing-status-and-reservation-system.sql`)
+- Added `processing_expires_at` to `user_registrations` for temporary spot reservations
+- Enhanced payment processing with atomic spot reservation capabilities
+- Prevents race conditions during high-demand registration periods
 
 ## Xero Integration Architecture
 

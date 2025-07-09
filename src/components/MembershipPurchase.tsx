@@ -6,6 +6,7 @@ import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
+import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -144,47 +145,38 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
-    // Open modal immediately for better perceived performance
-    setShowPaymentForm(true)
     setIsLoading(true)
     setError(null)
     
     try {
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          membershipId: membership.id,
-          durationMonths: selectedDuration,
-          amount: finalAmount,
-          paymentOption: paymentOption,
-          assistanceAmount: paymentOption === 'assistance' ? parseFloat(assistanceAmount) * 100 : undefined,
-          donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create payment intent')
+      const paymentData: PaymentFlowData = {
+        amount: finalAmount,
+        membershipId: membership.id,
+        durationMonths: selectedDuration,
+        paymentOption: paymentOption,
+        assistanceAmount: paymentOption === 'assistance' ? parseFloat(assistanceAmount) * 100 : undefined,
+        donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
       }
 
-      const responseData = await response.json()
+      const result = await handlePaymentFlow(paymentData)
       
-      // Handle free membership (no payment needed)
-      if (responseData.isFree) {
-        setShowPaymentForm(false)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process payment')
+      }
+
+      if (result.isFree) {
+        // Free membership completed
         setPurchaseCompleted(true)
         showSuccess(
           'Membership Activated!',
-          'Your free membership has been activated successfully.'
+          result.message || 'Your free membership has been activated successfully.'
         )
         return
       }
       
-      const { clientSecret } = responseData
-      setClientSecret(clientSecret)
+      // Paid membership - show payment form
+      setShowPaymentForm(true)
+      setClientSecret(result.clientSecret!)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)

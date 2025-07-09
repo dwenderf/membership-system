@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
 
     // Validate all updates have required fields
     for (const update of updates) {
-      if (!update.category_id || !update.accounting_code) {
+      if (!update.membership_id) {
         return NextResponse.json({ 
-          error: 'Each update must have category_id and accounting_code' 
+          error: 'Each update must have membership_id' 
         }, { status: 400 })
       }
     }
@@ -48,39 +48,39 @@ export async function POST(request: NextRequest) {
     for (const update of updates) {
       try {
         const { data, error } = await supabase
-          .from('discount_categories')
+          .from('memberships')
           .update({ accounting_code: update.accounting_code })
-          .eq('id', update.category_id)
+          .eq('id', update.membership_id)
           .select()
 
         if (error) {
-          console.error(`Error updating category ${update.category_id}:`, error)
+          console.error(`Error updating membership ${update.membership_id}:`, error)
           errorCount++
           results.push({ 
-            category_id: update.category_id, 
+            membership_id: update.membership_id, 
             success: false, 
             error: error.message 
           })
         } else if (!data || data.length === 0) {
           errorCount++
           results.push({ 
-            category_id: update.category_id, 
+            membership_id: update.membership_id, 
             success: false, 
-            error: 'Category not found' 
+            error: 'Membership not found' 
           })
         } else {
           successCount++
           results.push({ 
-            category_id: update.category_id, 
+            membership_id: update.membership_id, 
             success: true, 
             name: data[0].name 
           })
         }
       } catch (error) {
-        console.error(`Error processing update for ${update.category_id}:`, error)
+        console.error(`Error processing update for ${update.membership_id}:`, error)
         errorCount++
         results.push({ 
-          category_id: update.category_id, 
+          membership_id: update.membership_id, 
           success: false, 
           error: 'Processing error' 
         })
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error updating discount category accounting code:', error)
+    console.error('Error updating membership accounting codes:', error)
     return NextResponse.json({ 
       error: 'Internal server error' 
     }, { status: 500 })

@@ -45,6 +45,23 @@ CREATE TABLE magic_link_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- System accounting codes table
+CREATE TABLE system_accounting_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code_type TEXT NOT NULL,
+    accounting_code TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT unique_code_type UNIQUE(code_type)
+);
+
+-- Insert default system accounting codes
+INSERT INTO system_accounting_codes (code_type, accounting_code, description) VALUES
+('donation_default', 'DONATION', 'Default accounting code for donation line items in invoices'),
+('registration_default', '', 'Default accounting code for registration categories without specific codes');
+
 -- Seasons table
 CREATE TABLE seasons (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -854,6 +871,36 @@ CREATE POLICY "payment_configurations_admin_only" ON payment_configurations
             WHERE id = auth.uid() AND is_admin = TRUE
         )
     );
+
+-- System Accounting Codes: Readable by all authenticated users, admin-only modifications
+ALTER TABLE system_accounting_codes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow authenticated users to read system accounting codes" 
+ON system_accounting_codes FOR SELECT 
+TO authenticated 
+USING (true);
+
+CREATE POLICY "Allow admins to update system accounting codes" 
+ON system_accounting_codes FOR UPDATE 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM users 
+        WHERE users.id = auth.uid() 
+        AND users.is_admin = true
+    )
+);
+
+CREATE POLICY "Allow admins to insert system accounting codes" 
+ON system_accounting_codes FOR INSERT 
+TO authenticated 
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM users 
+        WHERE users.id = auth.uid() 
+        AND users.is_admin = true
+    )
+);
 
 -- Xero Integration RLS Policies (Admin only access)
 -- Xero OAuth tokens - admin only

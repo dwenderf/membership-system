@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import PurchaseHistory from '@/components/PurchaseHistory'
 import Link from 'next/link'
+import { consolidateUserMemberships } from '@/lib/membership-status'
 
 export default async function UserMembershipsPage() {
   const supabase = await createClient()
@@ -23,43 +24,7 @@ export default async function UserMembershipsPage() {
 
 
   const now = new Date()
-  
-  // Get all paid memberships for processing
-  const paidMemberships = userMemberships?.filter(um => um.payment_status === 'paid') || []
-  
-  // Consolidate active memberships by type
-  const consolidatedMemberships = paidMemberships.reduce((acc, um) => {
-    const validUntil = new Date(um.valid_until)
-    
-    // Only include if still valid
-    if (validUntil > now) {
-      const membershipId = um.membership_id
-      
-      if (!acc[membershipId]) {
-        acc[membershipId] = {
-          membershipId,
-          membership: um.membership,
-          validFrom: um.valid_from,
-          validUntil: um.valid_until,
-          purchases: []
-        }
-      }
-      
-      // Update overall validity period
-      if (um.valid_from < acc[membershipId].validFrom) {
-        acc[membershipId].validFrom = um.valid_from
-      }
-      if (um.valid_until > acc[membershipId].validUntil) {
-        acc[membershipId].validUntil = um.valid_until
-      }
-      
-      acc[membershipId].purchases.push(um)
-    }
-    
-    return acc
-  }, {} as Record<string, any>)
-  
-  const activeMemberships = Object.values(consolidatedMemberships)
+  const activeMemberships = consolidateUserMemberships(userMemberships || [])
 
   return (
     <div className="px-4 py-6 sm:px-0">

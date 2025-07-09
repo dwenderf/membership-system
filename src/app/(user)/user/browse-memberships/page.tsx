@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import MembershipPurchase from '@/components/MembershipPurchase'
 import Link from 'next/link'
+import { getMembershipStatus } from '@/lib/membership-status'
 
 export default async function BrowseMembershipsPage() {
   const supabase = await createClient()
@@ -26,6 +27,7 @@ export default async function BrowseMembershipsPage() {
     `)
     .eq('user_id', user.id)
     .order('valid_until', { ascending: false })
+
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -54,21 +56,29 @@ export default async function BrowseMembershipsPage() {
         
         {availableMemberships && availableMemberships.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {availableMemberships.map((membership) => (
-              <div key={membership.id} className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        {membership.name}
-                      </h3>
-                      {membership.description && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          {membership.description}
-                        </p>
-                      )}
+            {availableMemberships.map((membership) => {
+              const membershipStatus = getMembershipStatus(membership.id, userMemberships || [])
+              
+              return (
+                <div key={membership.id} className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg leading-6 font-medium text-gray-900">
+                            {membership.name}
+                          </h3>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${membershipStatus.className}`}>
+                            {membershipStatus.label}
+                          </span>
+                        </div>
+                        {membership.description && (
+                          <p className="mt-2 text-sm text-gray-600">
+                            {membership.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   
                   {/* Pricing Display */}
                   <div className="mt-4 border-t border-gray-200 pt-4">
@@ -98,12 +108,13 @@ export default async function BrowseMembershipsPage() {
                     <MembershipPurchase 
                       membership={membership} 
                       userEmail={user.email || ''}
-                      userMemberships={userMemberships}
+                      userMemberships={userMemberships || []}
                     />
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="py-8">

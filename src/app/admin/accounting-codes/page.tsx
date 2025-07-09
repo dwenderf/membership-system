@@ -2,67 +2,263 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import Link from 'next/link'
+
+interface SystemAccountingCode {
+  id: string // UUID
+  code_type: string
+  accounting_code: string
+  description: string | null
+  created_at: string
+  updated_at: string
+}
 
 interface AccountingCodes {
-  membership_default: string
   donation_default: string
-  registration_default: string | null
-  discount_scholarship_default: string
-  discount_board_default: string
-  discount_captains_default: string
-  discount_volunteers_default: string
+  registration_default: string
+}
+
+interface DiscountCategory {
+  id: string
+  name: string
+  accounting_code: string
+  description: string | null
+  is_active: boolean
+}
+
+interface Membership {
+  id: string
+  name: string
+  description: string | null
+  accounting_code: string | null
+  price_monthly: number
+  price_annual: number
+  allow_discounts: boolean
 }
 
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
-    membership_default: '411',
-    donation_default: '410.1',
-    registration_default: null,
-    discount_scholarship_default: '710.12',
-    discount_board_default: '401.1',
-    discount_captains_default: '401.3',
-    discount_volunteers_default: '401.2'
+    donation_default: '',
+    registration_default: ''
+  })
+  const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
+  const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
+    donation_default: '',
+    registration_default: ''
   })
   
+  const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
+  const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({})
+  const [originalCategoryInputs, setOriginalCategoryInputs] = useState<Record<string, string>>({})
+  const [memberships, setMemberships] = useState<Membership[]>([])
+  const [membershipInputs, setMembershipInputs] = useState<Record<string, string>>({})
+  const [originalMembershipInputs, setOriginalMembershipInputs] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [updating, setUpdating] = useState(false)
-  const { showToast } = useToast()
+  const { showError, showSuccess, showWarning } = useToast()
+
+  // Fetch system codes, discount categories and memberships on component mount
+  useEffect(() => {
+    fetchSystemCodes()
+    fetchDiscountCategories()
+    fetchMemberships()
+  }, [])
+
+  const fetchSystemCodes = async () => {
+    try {
+      const response = await fetch('/api/admin/system-accounting-codes')
+      if (response.ok) {
+        const data = await response.json()
+        const systemCodes = data.codes || []
+        setSystemCodes(systemCodes)
+        
+        // Initialize the codes state from system codes
+        const codesObj: AccountingCodes = {
+          donation_default: '',
+          registration_default: ''
+        }
+        
+        systemCodes.forEach((code: SystemAccountingCode) => {
+          if (code.code_type === 'donation_default') {
+            codesObj.donation_default = code.accounting_code
+          } else if (code.code_type === 'registration_default') {
+            codesObj.registration_default = code.accounting_code
+          }
+        })
+        
+        setCodes(codesObj)
+        setOriginalCodes(codesObj) // Store original values for change detection
+      } else {
+        showError('Failed to fetch system accounting codes')
+      }
+    } catch (error) {
+      console.error('Error fetching system accounting codes:', error)
+      showError('Error fetching system accounting codes')
+    }
+  }
+
+  const fetchDiscountCategories = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/admin/discount-categories')
+      if (response.ok) {
+        const data = await response.json()
+        const categories = data.categories || []
+        setDiscountCategories(categories)
+        
+        // Initialize category inputs with current accounting codes
+        const inputs: Record<string, string> = {}
+        categories.forEach((category: DiscountCategory) => {
+          inputs[category.id] = category.accounting_code || ''
+        })
+        setCategoryInputs(inputs)
+        setOriginalCategoryInputs(inputs)
+      } else {
+        showError('Failed to fetch discount categories')
+      }
+    } catch (error) {
+      console.error('Error fetching discount categories:', error)
+      showError('Error fetching discount categories')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchMemberships = async () => {
+    try {
+      const response = await fetch('/api/admin/memberships')
+      if (response.ok) {
+        const data = await response.json()
+        const memberships = data.memberships || []
+        setMemberships(memberships)
+        
+        // Initialize membership inputs with current accounting codes
+        const inputs: Record<string, string> = {}
+        memberships.forEach((membership: Membership) => {
+          inputs[membership.id] = membership.accounting_code || ''
+        })
+        setMembershipInputs(inputs)
+        setOriginalMembershipInputs(inputs)
+      } else {
+        showError('Failed to fetch memberships')
+      }
+    } catch (error) {
+      console.error('Error fetching memberships:', error)
+      showError('Error fetching memberships')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleInputChange = (key: keyof AccountingCodes, value: string) => {
     setCodes(prev => ({
       ...prev,
-      [key]: value === '' ? null : value
+      [key]: value
     }))
   }
 
+  const handleCategoryInputChange = (categoryId: string, value: string) => {
+    setCategoryInputs(prev => ({
+      ...prev,
+      [categoryId]: value
+    }))
+  }
+
+  const handleMembershipInputChange = (membershipId: string, value: string) => {
+    setMembershipInputs(prev => ({
+      ...prev,
+      [membershipId]: value
+    }))
+  }
+
+  // Check if default codes have changed
+  const hasDefaultCodesChanges = () => {
+    return codes.donation_default !== originalCodes.donation_default ||
+           codes.registration_default !== originalCodes.registration_default
+  }
+
+  // Check if any category has changed
+  const hasChanges = () => {
+    return Object.keys(categoryInputs).some(categoryId => 
+      categoryInputs[categoryId] !== originalCategoryInputs[categoryId]
+    )
+  }
+
+  // Get changed categories
+  const getChangedCategories = () => {
+    return Object.keys(categoryInputs).filter(categoryId => 
+      categoryInputs[categoryId] !== originalCategoryInputs[categoryId]
+    )
+  }
+
+  // Check if any membership has changed
+  const hasMembershipChanges = () => {
+    return Object.keys(membershipInputs).some(membershipId => 
+      membershipInputs[membershipId] !== originalMembershipInputs[membershipId]
+    )
+  }
+
+  // Get changed memberships
+  const getChangedMemberships = () => {
+    return Object.keys(membershipInputs).filter(membershipId => 
+      membershipInputs[membershipId] !== originalMembershipInputs[membershipId]
+    )
+  }
+
   const handleUpdateDefaults = async () => {
+    // Validate donation default is not empty
+    if (!codes.donation_default?.trim()) {
+      showError('Please enter a donation accounting code')
+      return
+    }
+
     setUpdating(true)
     try {
-      const response = await fetch('/api/admin/accounting-codes/update-defaults', {
-        method: 'POST',
+      // Prepare updates for system accounting codes
+      const updates = [
+        {
+          code_type: 'donation_default',
+          accounting_code: codes.donation_default.trim()
+        },
+        {
+          code_type: 'registration_default',
+          accounting_code: codes.registration_default.trim()
+        }
+      ]
+
+      const response = await fetch('/api/admin/system-accounting-codes', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(codes)
+        body: JSON.stringify({ updates })
       })
 
       if (response.ok) {
         const data = await response.json()
-        showToast(`Updated ${data.updated} records successfully`, 'success')
+        if (data.successCount > 0) {
+          showSuccess(`Updated ${data.successCount} system accounting codes successfully`)
+          // Update original codes to reflect saved state
+          setOriginalCodes({ ...codes })
+          // Refresh the system codes to reflect changes
+          await fetchSystemCodes()
+        } else {
+          showError('Failed to update system accounting codes')
+        }
       } else {
-        showToast('Failed to update accounting codes', 'error')
+        showError('Failed to update system accounting codes')
       }
     } catch (error) {
-      console.error('Error updating accounting codes:', error)
-      showToast('Error updating accounting codes', 'error')
+      console.error('Error updating system accounting codes:', error)
+      showError('Error updating system accounting codes')
     } finally {
       setUpdating(false)
     }
   }
 
-  const handleBulkUpdate = async (category: 'memberships' | 'registration_categories') => {
-    const code = category === 'memberships' ? codes.membership_default : codes.registration_default
+  const handleBulkUpdate = async (category: 'registration_categories') => {
+    const code = codes.registration_default
     
-    if (!code) {
-      showToast('Please enter a default code first', 'error')
+    if (!code.trim()) {
+      showError('Please enter a default code first')
       return
     }
 
@@ -76,35 +272,187 @@ export default function AccountingCodesPage() {
 
       if (response.ok) {
         const data = await response.json()
-        showToast(`Updated ${data.updated} ${category.replace('_', ' ')} records`, 'success')
+        showSuccess(`Updated ${data.updated} ${category.replace('_', ' ')} records`)
       } else {
-        showToast(`Failed to update ${category}`, 'error')
+        showError(`Failed to update ${category}`)
       }
     } catch (error) {
       console.error(`Error updating ${category}:`, error)
-      showToast(`Error updating ${category}`, 'error')
+      showError(`Error updating ${category}`)
     } finally {
       setUpdating(false)
     }
   }
 
-  const handleUpdateDiscountCategory = async (categoryName: string, accountingCode: string) => {
+  const handleSaveDiscountCategories = async () => {
+    const changedCategories = getChangedCategories()
+    if (changedCategories.length === 0) {
+      return
+    }
+
     setUpdating(true)
     try {
+      // Prepare updates array and validate all have values
+      const updates = []
+      const emptyCategories = []
+      
+      for (const categoryId of changedCategories) {
+        const accountingCode = categoryInputs[categoryId]?.trim()
+        if (!accountingCode) {
+          const categoryName = discountCategories.find(cat => cat.id === categoryId)?.name || 'Unknown'
+          emptyCategories.push(categoryName)
+        } else {
+          updates.push({
+            category_id: categoryId,
+            accounting_code: accountingCode
+          })
+        }
+      }
+
+      if (emptyCategories.length > 0) {
+        showError(`Please enter accounting codes for: ${emptyCategories.join(', ')}`)
+        return
+      }
+
+      if (updates.length === 0) {
+        return
+      }
+
       const response = await fetch('/api/admin/accounting-codes/update-discount-category', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category_name: categoryName, accounting_code: accountingCode })
+        body: JSON.stringify({ updates })
       })
 
       if (response.ok) {
-        showToast(`Updated ${categoryName} accounting code`, 'success')
+        const data = await response.json()
+        const { successCount, errorCount, results } = data
+
+        // Update local state for successful updates
+        results.forEach((result: any) => {
+          if (result.success) {
+            setDiscountCategories(prev => prev.map(cat => 
+              cat.id === result.category_id 
+                ? { ...cat, accounting_code: categoryInputs[result.category_id] } 
+                : cat
+            ))
+          }
+        })
+
+        // Update original inputs to reflect saved state for successful updates
+        const newOriginalInputs = { ...originalCategoryInputs }
+        results.forEach((result: any) => {
+          if (result.success) {
+            newOriginalInputs[result.category_id] = categoryInputs[result.category_id]
+          }
+        })
+        setOriginalCategoryInputs(newOriginalInputs)
+
+        // Show single toast message
+        if (successCount > 0 && errorCount === 0) {
+          if (successCount === 1) {
+            showSuccess('Accounting code updated successfully')
+          } else {
+            showSuccess(`${successCount} accounting codes updated successfully`)
+          }
+        } else if (successCount > 0 && errorCount > 0) {
+          showWarning(`${successCount} updated successfully, ${errorCount} failed`)
+        } else {
+          showError('Failed to update accounting codes')
+        }
       } else {
-        showToast(`Failed to update ${categoryName}`, 'error')
+        showError('Failed to update accounting codes')
       }
     } catch (error) {
-      console.error(`Error updating ${categoryName}:`, error)
-      showToast(`Error updating ${categoryName}`, 'error')
+      console.error('Error saving discount categories:', error)
+      showError('Error saving changes')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleSaveMemberships = async () => {
+    const changedMemberships = getChangedMemberships()
+    if (changedMemberships.length === 0) {
+      return
+    }
+
+    setUpdating(true)
+    try {
+      // Prepare updates array and validate all have values
+      const updates = []
+      const emptyMemberships = []
+      
+      for (const membershipId of changedMemberships) {
+        const accountingCode = membershipInputs[membershipId]?.trim()
+        if (!accountingCode) {
+          const membershipName = memberships.find(m => m.id === membershipId)?.name || 'Unknown'
+          emptyMemberships.push(membershipName)
+        } else {
+          updates.push({
+            membership_id: membershipId,
+            accounting_code: accountingCode
+          })
+        }
+      }
+
+      if (emptyMemberships.length > 0) {
+        showError(`Please enter accounting codes for: ${emptyMemberships.join(', ')}`)
+        return
+      }
+
+      if (updates.length === 0) {
+        return
+      }
+
+      const response = await fetch('/api/admin/accounting-codes/update-memberships', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const { successCount, errorCount, results } = data
+
+        // Update local state for successful updates
+        results.forEach((result: any) => {
+          if (result.success) {
+            setMemberships(prev => prev.map(membership => 
+              membership.id === result.membership_id 
+                ? { ...membership, accounting_code: membershipInputs[result.membership_id] || null } 
+                : membership
+            ))
+          }
+        })
+
+        // Update original inputs to reflect saved state for successful updates
+        const newOriginalInputs = { ...originalMembershipInputs }
+        results.forEach((result: any) => {
+          if (result.success) {
+            newOriginalInputs[result.membership_id] = membershipInputs[result.membership_id]
+          }
+        })
+        setOriginalMembershipInputs(newOriginalInputs)
+
+        // Show single toast message
+        if (successCount > 0 && errorCount === 0) {
+          if (successCount === 1) {
+            showSuccess('Membership accounting code updated successfully')
+          } else {
+            showSuccess(`${successCount} membership accounting codes updated successfully`)
+          }
+        } else if (successCount > 0 && errorCount > 0) {
+          showWarning(`${successCount} updated successfully, ${errorCount} failed`)
+        } else {
+          showError('Failed to update membership accounting codes')
+        }
+      } else {
+        showError('Failed to update membership accounting codes')
+      }
+    } catch (error) {
+      console.error('Error saving memberships:', error)
+      showError('Error saving changes')
     } finally {
       setUpdating(false)
     }
@@ -122,20 +470,7 @@ export default function AccountingCodesPage() {
             These codes are used when specific items don't have their own accounting codes set.
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Membership Default
-              </label>
-              <input
-                type="text"
-                value={codes.membership_default}
-                onChange={(e) => handleInputChange('membership_default', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="411"
-              />
-            </div>
-            
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Donation Default
@@ -145,169 +480,151 @@ export default function AccountingCodesPage() {
                 value={codes.donation_default}
                 onChange={(e) => handleInputChange('donation_default', e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="410.1"
+                placeholder="Enter Accounting Code (required)"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Used for all donation line items in Xero invoices
+              </p>
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Registration Default
               </label>
-              <input
-                type="text"
-                value={codes.registration_default || ''}
-                onChange={(e) => handleInputChange('registration_default', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="Leave empty to require individual codes"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={codes.registration_default}
+                  onChange={(e) => handleInputChange('registration_default', e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+                  placeholder="Leave empty to require individual codes"
+                />
+                <button
+                  onClick={() => handleBulkUpdate('registration_categories')}
+                  disabled={updating || !codes.registration_default.trim()}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  Apply to All
+                </button>
+              </div>
               <p className="text-xs text-gray-500 mt-1">
                 If empty, each registration category must have its own code
               </p>
             </div>
           </div>
+          
+          {/* Save Button for Default Codes */}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={handleUpdateDefaults}
+              disabled={updating || !hasDefaultCodesChanges()}
+              className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {updating ? 'Saving...' : 'Save Default Codes'}
+            </button>
+          </div>
         </div>
 
-        {/* Discount Category Codes */}
+        {/* Discount Accounting Codes */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Discount Category Codes</h2>
+          <h2 className="text-lg font-semibold mb-4">Discount Accounting Codes</h2>
           <p className="text-sm text-gray-600 mb-4">
             Account codes for different discount categories. Changes update the discount category immediately.
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Scholarship Fund
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={codes.discount_scholarship_default}
-                  onChange={(e) => handleInputChange('discount_scholarship_default', e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="710.12"
-                />
-                <button
-                  onClick={() => handleUpdateDiscountCategory('Scholarship Fund', codes.discount_scholarship_default)}
-                  disabled={updating}
-                  className="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Update
-                </button>
-              </div>
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="text-gray-500">Loading discount categories...</div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Board Member
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={codes.discount_board_default}
-                  onChange={(e) => handleInputChange('discount_board_default', e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="401.1"
-                />
-                <button
-                  onClick={() => handleUpdateDiscountCategory('Board Member', codes.discount_board_default)}
-                  disabled={updating}
-                  className="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Update
-                </button>
-              </div>
+          ) : discountCategories.length === 0 ? (
+            <div className="text-center py-4">
+              <div className="text-gray-500">No discount categories found</div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Captain
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={codes.discount_captains_default}
-                  onChange={(e) => handleInputChange('discount_captains_default', e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="401.3"
-                />
-                <button
-                  onClick={() => handleUpdateDiscountCategory('Captain', codes.discount_captains_default)}
-                  disabled={updating}
-                  className="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Update
-                </button>
-              </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {discountCategories.map((category) => (
+                <div key={category.id}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {category.name}
+                    {category.description && (
+                      <span className="text-gray-500 font-normal"> - {category.description}</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={categoryInputs[category.id] || ''}
+                    onChange={(e) => handleCategoryInputChange(category.id, e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder={category.accounting_code || 'Enter Accounting Code (required)'}
+                  />
+                </div>
+              ))}
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Volunteer
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={codes.discount_volunteers_default}
-                  onChange={(e) => handleInputChange('discount_volunteers_default', e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="401.2"
-                />
-                <button
-                  onClick={() => handleUpdateDiscountCategory('Volunteer', codes.discount_volunteers_default)}
-                  disabled={updating}
-                  className="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Update
-                </button>
-              </div>
+          )}
+          
+          {/* Save Button */}
+          {discountCategories.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleSaveDiscountCategories}
+                disabled={updating || !hasChanges()}
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updating ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Bulk Update Actions */}
+        {/* Membership Accounting Codes */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Bulk Update Operations</h2>
+          <h2 className="text-lg font-semibold mb-4">Membership Accounting Codes</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Apply default codes to existing records that don't have accounting codes set.
+            Account codes for individual membership types. Changes update the membership immediately.
           </p>
           
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-medium">Update All Memberships</h3>
-                <p className="text-sm text-gray-600">
-                  Set accounting code to "{codes.membership_default}" for all memberships without codes
-                </p>
-              </div>
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="text-gray-500">Loading memberships...</div>
+            </div>
+          ) : memberships.length === 0 ? (
+            <div className="text-center py-4">
+              <div className="text-gray-500">No memberships found</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {memberships.map((membership) => (
+                <div key={membership.id}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {membership.name}
+                    {membership.description && (
+                      <span className="text-gray-500 font-normal"> - {membership.description}</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={membershipInputs[membership.id] || ''}
+                    onChange={(e) => handleMembershipInputChange(membership.id, e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder={membership.accounting_code || 'Enter Accounting Code (required)'}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Save Button */}
+          {memberships.length > 0 && (
+            <div className="mt-4 flex justify-end">
               <button
-                onClick={() => handleBulkUpdate('memberships')}
-                disabled={updating || !codes.membership_default}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
+                onClick={handleSaveMemberships}
+                disabled={updating || !hasMembershipChanges()}
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Update Memberships
+                {updating ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-            
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-medium">Update All Registration Categories</h3>
-                <p className="text-sm text-gray-600">
-                  {codes.registration_default ? 
-                    `Set accounting code to "${codes.registration_default}" for categories without codes` :
-                    'No default set - registration categories require individual codes'
-                  }
-                </p>
-              </div>
-              <button
-                onClick={() => handleBulkUpdate('registration_categories')}
-                disabled={updating || !codes.registration_default}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
-              >
-                Update Categories
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Information */}
@@ -315,10 +632,20 @@ export default function AccountingCodesPage() {
           <h3 className="font-medium text-blue-900 mb-2">How This Works</h3>
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• <strong>Default codes</strong> are used by Xero integration when specific items don't have their own codes</li>
-            <li>• <strong>Discount categories</strong> update immediately and affect all codes in that category</li>
-            <li>• <strong>Bulk updates</strong> only affect records that currently have no accounting code set</li>
+            <li>• <strong>Discount categories</strong> and <strong>memberships</strong> update immediately and affect all codes in that category</li>
+            <li>• <strong>Apply to All</strong> button only affects records that currently have no accounting code set</li>
             <li>• <strong>Individual items</strong> can still have their own specific codes that override defaults</li>
           </ul>
+        </div>
+
+        {/* Return to Admin Link */}
+        <div className="mt-6">
+          <Link 
+            href="/admin"
+            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+          >
+            ← Back to Admin Dashboard
+          </Link>
         </div>
       </div>
     </div>

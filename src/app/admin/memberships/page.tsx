@@ -1,7 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
-// Removed formatDateString import - no longer needed
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+
+interface Membership {
+  id: string
+  name: string
+  description: string | null
+  accounting_code: string | null
+  price_monthly: number
+  price_annual: number
+  allow_discounts: boolean
+  created_at: string
+}
+
+function formatCurrency(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`
+}
 
 export default async function MembershipsPage() {
   const supabase = await createClient()
@@ -22,7 +36,7 @@ export default async function MembershipsPage() {
     redirect('/dashboard')
   }
 
-  // Get all membership types
+  // Get all memberships
   const { data: memberships, error } = await supabase
     .from('memberships')
     .select('*')
@@ -41,94 +55,121 @@ export default async function MembershipsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Membership Management</h1>
               <p className="mt-1 text-sm text-gray-600">
-                Create and manage flexible membership types with monthly and annual pricing
+                Create and manage membership types
               </p>
+              {memberships && memberships.length > 0 && (
+                <div className="mt-3 flex items-center space-x-4 text-sm">
+                  <span className="text-gray-600 font-medium">{memberships.length} membership types</span>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-green-600 font-medium">
+                    {memberships.filter(m => m.allow_discounts).length} allow discounts
+                  </span>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-red-600 font-medium">
+                    {memberships.filter(m => !m.accounting_code).length} missing accounting codes
+                  </span>
+                </div>
+              )}
             </div>
             <Link
               href="/admin/memberships/new"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Create New Membership Type
+              Create New Membership
             </Link>
           </div>
 
           {/* Memberships List */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            {!memberships || memberships.length === 0 ? (
+          {!memberships || memberships.length === 0 ? (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <div className="text-center py-12">
-                <div className="text-gray-500 text-lg mb-4">No membership types created yet</div>
-                <Link
-                  href="/admin/memberships/new"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
                 >
-                  Create Your First Membership Type
-                </Link>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                  />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No membership types</h3>
+                <p className="mt-1 text-sm text-gray-500">Get started by creating a new membership type.</p>
+                <div className="mt-6">
+                  <Link
+                    href="/admin/memberships/new"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Create New Membership
+                  </Link>
+                </div>
               </div>
-            ) : (
+            </div>
+          ) : (
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <ul className="divide-y divide-gray-200">
-                {memberships.map((membership: any) => {
-                  const annualSavings = (membership.price_monthly * 12) - membership.price_annual
-                  const annualSavingsPercent = ((annualSavings / (membership.price_monthly * 12)) * 100).toFixed(0)
-                  
-                  return (
-                    <li key={membership.id}>
-                      <div className="px-4 py-4 flex items-center justify-between">
-                        <div className="flex items-center flex-1">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center">
-                              <p className="text-lg font-medium text-gray-900 truncate">
-                                {membership.name}
-                              </p>
-                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Membership Type
+                {memberships.map((membership) => (
+                  <li key={membership.id}>
+                    <div className="px-4 py-4 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center">
+                            <p className="text-lg font-medium text-gray-900 truncate">
+                              {membership.name}
+                            </p>
+                            <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              membership.allow_discounts 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {membership.allow_discounts ? 'Discounts Allowed' : 'No Discounts'}
+                            </span>
+                            {!membership.accounting_code && (
+                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Missing Accounting Code
                               </span>
-                            </div>
-                            {membership.description && (
-                              <p className="mt-1 text-sm text-gray-600 truncate">
-                                {membership.description}
-                              </p>
                             )}
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span>${(membership.price_monthly / 100).toFixed(2)}/month</span>
-                              <span className="mx-2">•</span>
-                              <span>${(membership.price_annual / 100).toFixed(2)}/year</span>
-                              {annualSavings > 0 && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span className="text-green-600">Save {annualSavingsPercent}% annually</span>
-                                </>
-                              )}
-                              {membership.accounting_code && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span>Code: {membership.accounting_code}</span>
-                                </>
-                              )}
-                              {!membership.allow_discounts && (
-                                <>
-                                  <span className="mx-2">•</span>
-                                  <span className="text-red-600">No Discounts</span>
-                                </>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-gray-400">
-                            Created {new Date(membership.created_at).toLocaleDateString()}
-                          </span>
+                          <div className="mt-1 flex items-center text-sm text-gray-500">
+                            <span>Monthly: {formatCurrency(membership.price_monthly)}</span>
+                            <span className="mx-2">•</span>
+                            <span>Annual: {formatCurrency(membership.price_annual)}</span>
+                            {membership.accounting_code && (
+                              <>
+                                <span className="mx-2">•</span>
+                                <span>Code: {membership.accounting_code}</span>
+                              </>
+                            )}
+                          </div>
+                          {membership.description && (
+                            <div className="mt-1 text-sm text-gray-600">
+                              {membership.description}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </li>
-                  )
-                })}
+                      <div className="flex-shrink-0">
+                        <Link
+                          href={`/admin/memberships/${membership.id}/edit`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          Edit
+                        </Link>
+                      </div>
+                    </div>
+                  </li>
+                ))}
               </ul>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Back to Admin Dashboard */}
+          {/* Return to Admin Link */}
           <div className="mt-6">
-            <Link
+            <Link 
               href="/admin"
               className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >

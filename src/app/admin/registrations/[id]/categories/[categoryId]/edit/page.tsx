@@ -148,7 +148,7 @@ export default function EditRegistrationCategoryPage() {
         custom_name: isCustom ? (formData.custom_name || null) : null,
         price: parseInt(formData.price),
         max_capacity: formData.max_capacity ? parseInt(formData.max_capacity) : null,
-        accounting_code: formData.accounting_code || null,
+        accounting_code: formData.accounting_code.trim(),
         required_membership_id: formData.required_membership_id === 'none' ? null : (formData.required_membership_id || null),
         sort_order: parseInt(formData.sort_order) || 0,
       }
@@ -176,7 +176,8 @@ export default function EditRegistrationCategoryPage() {
     (isCustom && formData.custom_name.trim()) || 
     (!isCustom && formData.category_id)
   ) && 
-  formData.price && parseInt(formData.price) > 0
+  formData.price && parseInt(formData.price) > 0 &&
+  formData.accounting_code.trim()
 
   if (!category || !registration) {
     return (
@@ -377,7 +378,7 @@ export default function EditRegistrationCategoryPage() {
               {/* Accounting Code */}
               <div>
                 <label htmlFor="accounting_code" className="block text-sm font-medium text-gray-700">
-                  Accounting Code (optional)
+                  Accounting Code
                 </label>
                 <input
                   type="text"
@@ -385,8 +386,12 @@ export default function EditRegistrationCategoryPage() {
                   value={formData.accounting_code}
                   onChange={(e) => setFormData(prev => ({ ...prev, accounting_code: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., TEAM-PLAYER"
+                  placeholder="Enter Accounting Code (required)"
+                  required
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  Required code for Xero integration and accounting system
+                </p>
               </div>
 
               {/* Sort Order */}

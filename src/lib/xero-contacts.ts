@@ -8,6 +8,7 @@ export interface UserContactData {
   first_name: string
   last_name: string
   phone?: string
+  member_id?: number
 }
 
 // Create or update a contact in Xero
@@ -144,29 +145,32 @@ export async function syncUserToXeroContact(
       }
     }
 
-    // Prepare contact data
+    // Prepare contact data with member ID for uniqueness
     let contactName = `${userData.first_name} ${userData.last_name}`
     
-    // If we're creating a new contact and no existing contact was found,
-    // but we detected a duplicate name issue during search, make the name unique
-    if (!isUpdate && !xeroContactId) {
-      // Check if this might be a duplicate name scenario
-      try {
-        const duplicateCheckResponse = await xeroApi.getContacts(
-          tenantId,
-          undefined,
-          `Name="${contactName}"`
-        )
-        
-        if (duplicateCheckResponse.body.contacts && duplicateCheckResponse.body.contacts.length > 0) {
-          // There's already a contact with this name - make it unique by adding email
-          const emailPart = userData.email.split('@')[0]
-          contactName = `${userData.first_name} ${userData.last_name} (${emailPart})`
-          console.log(`⚠️ Creating contact with unique name: ${contactName}`)
+    // Always append member ID if available for guaranteed uniqueness
+    if (userData.member_id) {
+      contactName = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+    } else {
+      // Fallback to old logic if member_id is not available (legacy users)
+      if (!isUpdate && !xeroContactId) {
+        try {
+          const duplicateCheckResponse = await xeroApi.getContacts(
+            tenantId,
+            undefined,
+            `Name="${contactName}"`
+          )
+          
+          if (duplicateCheckResponse.body.contacts && duplicateCheckResponse.body.contacts.length > 0) {
+            // There's already a contact with this name - make it unique by adding email
+            const emailPart = userData.email.split('@')[0]
+            contactName = `${userData.first_name} ${userData.last_name} (${emailPart})`
+            console.log(`⚠️ Creating contact with unique name: ${contactName}`)
+          }
+        } catch (duplicateCheckError) {
+          // If check fails, proceed with original name
+          console.log('Duplicate name check failed, proceeding with original name')
         }
-      } catch (duplicateCheckError) {
-        // If check fails, proceed with original name
-        console.log('Duplicate name check failed, proceeding with original name')
       }
     }
     
@@ -317,7 +321,7 @@ export async function getOrCreateXeroContact(
     // Get user data
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, phone')
+      .select('id, email, first_name, last_name, phone, member_id')
       .eq('id', userId)
       .single()
 
@@ -400,7 +404,7 @@ export async function bulkSyncMissingContacts(tenantId: string): Promise<{
     const { data: usersNeedingSync, error: usersError } = await supabase
       .from('users')
       .select(`
-        id, email, first_name, last_name, phone,
+        id, email, first_name, last_name, phone, member_id,
         payments!inner(id)
       `)
       .not('payments.id', 'is', null)

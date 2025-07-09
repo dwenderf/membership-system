@@ -13,6 +13,7 @@ CREATE TABLE users (
     phone TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT '{}',
+    member_id INTEGER UNIQUE, -- Auto-generated unique member ID starting from 1000. Used for Xero contact identification.
     onboarding_completed_at TIMESTAMP WITH TIME ZONE,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
     terms_version TEXT,
@@ -20,6 +21,36 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Member ID sequence and functions
+CREATE SEQUENCE IF NOT EXISTS member_id_seq START 1000;
+
+-- Function to generate member ID
+CREATE OR REPLACE FUNCTION generate_member_id() RETURNS INTEGER AS $$
+BEGIN
+    RETURN nextval('member_id_seq');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to auto-generate member_id on insert
+CREATE OR REPLACE FUNCTION set_member_id_on_insert() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.member_id IS NULL THEN
+        NEW.member_id := generate_member_id();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for users table to auto-generate member_id
+DROP TRIGGER IF EXISTS set_member_id_trigger ON users;
+CREATE TRIGGER set_member_id_trigger
+    BEFORE INSERT ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION set_member_id_on_insert();
+
+-- Index for member_id performance
+CREATE INDEX IF NOT EXISTS idx_users_member_id ON users(member_id);
 
 -- Login attempts table
 CREATE TABLE login_attempts (

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       // Sync specific user
       const { data: userToSync, error: userToSyncError } = await supabase
         .from('users')
-        .select('id, email, first_name, last_name, phone')
+        .select('id, email, first_name, last_name, phone, member_id')
         .eq('id', user_id)
         .single()
 

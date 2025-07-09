@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 interface AccountingCodes {
   donation_default: string
-  registration_default: string | null
+  registration_default: string
 }
 
 interface DiscountCategory {
@@ -29,8 +29,8 @@ interface Membership {
 
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
-    donation_default: '',
-    registration_default: null
+    donation_default: 'DONATION', // Set a sensible default since this isn't stored in DB
+    registration_default: ''
   })
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
@@ -61,7 +61,7 @@ export default function AccountingCodesPage() {
         // Initialize category inputs with current accounting codes
         const inputs: Record<string, string> = {}
         categories.forEach((category: DiscountCategory) => {
-          inputs[category.id] = category.accounting_code
+          inputs[category.id] = category.accounting_code || ''
         })
         setCategoryInputs(inputs)
         setOriginalCategoryInputs(inputs)
@@ -105,7 +105,7 @@ export default function AccountingCodesPage() {
   const handleInputChange = (key: keyof AccountingCodes, value: string) => {
     setCodes(prev => ({
       ...prev,
-      [key]: value === '' ? null : value
+      [key]: value
     }))
   }
 
@@ -183,7 +183,7 @@ export default function AccountingCodesPage() {
   const handleBulkUpdate = async (category: 'registration_categories') => {
     const code = codes.registration_default
     
-    if (!code) {
+    if (!code.trim()) {
       showError('Please enter a default code first')
       return
     }
@@ -408,6 +408,9 @@ export default function AccountingCodesPage() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2"
                 placeholder="Enter Accounting Code (required)"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Used for all donation line items in Xero invoices (not stored in database)
+              </p>
             </div>
             
             <div>
@@ -417,14 +420,14 @@ export default function AccountingCodesPage() {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={codes.registration_default || ''}
+                  value={codes.registration_default}
                   onChange={(e) => handleInputChange('registration_default', e.target.value)}
                   className="flex-1 border border-gray-300 rounded-md px-3 py-2"
                   placeholder="Leave empty to require individual codes"
                 />
                 <button
                   onClick={() => handleBulkUpdate('registration_categories')}
-                  disabled={updating || !codes.registration_default}
+                  disabled={updating || !codes.registration_default.trim()}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
                 >
                   Apply to All

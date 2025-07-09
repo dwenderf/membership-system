@@ -199,22 +199,56 @@ export default function XeroIntegrationPage() {
                 </div>
               </div>
 
-              {/* Token expiry warning */}
-              {currentToken?.expires_at && new Date(currentToken.expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && (
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center">
-                    <svg className="h-5 w-5 text-yellow-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              {/* Token Status Information */}
+              <div className="space-y-3">
+                {/* Access Token Status (Informational) */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="h-5 w-5 text-blue-400 mr-3 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <div>
-                      <h3 className="text-sm font-medium text-yellow-800">Token Expiring Soon</h3>
-                      <p className="text-sm text-yellow-700">
-                        Your Xero token expires on {new Date(currentToken.expires_at).toLocaleDateString()}
-                      </p>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-blue-800">Token Status</h3>
+                      <div className="mt-1 text-xs text-blue-700 space-y-1">
+                        <p>
+                          <strong>Access Token:</strong> {currentToken?.expires_at ? (
+                            new Date(currentToken.expires_at) > new Date() 
+                              ? `Active until ${new Date(currentToken.expires_at).toLocaleString()}`
+                              : 'Expired (will refresh automatically)'
+                          ) : 'Unknown'}
+                        </p>
+                        <p>
+                          <strong>Refresh Token:</strong> {currentToken?.created_at ? (
+                            `Valid until ${new Date(new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000)).toLocaleString()}`
+                          ) : 'Unknown'}
+                        </p>
+                        <p className="text-blue-600 text-xs">
+                          Access tokens expire every 30 minutes for security and are automatically refreshed. 
+                          Refresh tokens are valid for 60 days and allow the system to obtain new access tokens without requiring you to reconnect.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              )}
+
+                {/* Refresh Token Warning (Only if expiring within 7 days) */}
+                {currentToken?.created_at && new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000) < new Date().getTime() + (7 * 24 * 60 * 60 * 1000) && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="h-5 w-5 text-yellow-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <div>
+                        <h3 className="text-sm font-medium text-yellow-800">Refresh Token Expiring Soon</h3>
+                        <p className="text-sm text-yellow-700">
+                          Your Xero refresh token expires on {new Date(new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000)).toLocaleString()}. 
+                          You'll need to reconnect to Xero before this date to maintain access.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">

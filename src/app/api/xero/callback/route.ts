@@ -69,23 +69,54 @@ export async function GET(request: NextRequest) {
         // Calculate expiration time
         const expiresAt = new Date(Date.now() + (tokenSet.expires_in || 1800) * 1000)
 
-        // Insert new token (we deactivated all existing ones above)
-        const { error: insertError } = await supabase
+        // Store or update the token (handle case where record exists but is inactive)
+        const { data: existingToken } = await supabase
           .from('xero_oauth_tokens')
-          .insert({
-            tenant_id: tenant.tenantId,
-            tenant_name: tenant.tenantName,
-            access_token: tokenSet.access_token,
-            refresh_token: tokenSet.refresh_token,
-            id_token: tokenSet.id_token,
-            expires_at: expiresAt.toISOString(),
-            scope: tokenSet.scope,
-            token_type: tokenSet.token_type || 'Bearer',
-            is_active: true
-          })
+          .select('id')
+          .eq('tenant_id', tenant.tenantId)
+          .single()
 
-        if (insertError) {
-          console.error('Error storing Xero token:', insertError)
+        let tokenError = null
+
+        if (existingToken) {
+          // Update existing token
+          const { error: updateError } = await supabase
+            .from('xero_oauth_tokens')
+            .update({
+              tenant_name: tenant.tenantName,
+              access_token: tokenSet.access_token,
+              refresh_token: tokenSet.refresh_token,
+              id_token: tokenSet.id_token,
+              expires_at: expiresAt.toISOString(),
+              scope: tokenSet.scope,
+              token_type: tokenSet.token_type || 'Bearer',
+              is_active: true,
+              updated_at: new Date().toISOString()
+            })
+            .eq('tenant_id', tenant.tenantId)
+
+          tokenError = updateError
+        } else {
+          // Insert new token
+          const { error: insertError } = await supabase
+            .from('xero_oauth_tokens')
+            .insert({
+              tenant_id: tenant.tenantId,
+              tenant_name: tenant.tenantName,
+              access_token: tokenSet.access_token,
+              refresh_token: tokenSet.refresh_token,
+              id_token: tokenSet.id_token,
+              expires_at: expiresAt.toISOString(),
+              scope: tokenSet.scope,
+              token_type: tokenSet.token_type || 'Bearer',
+              is_active: true
+            })
+
+          tokenError = insertError
+        }
+
+        if (tokenError) {
+          console.error('Error storing Xero token:', tokenError)
           continue
         }
 

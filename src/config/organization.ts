@@ -5,9 +5,9 @@ export const organizationConfig = {
     long: "NYC Pride Hockey Alliance"   // Used in formal documents, emails, legal text
   },
   contact: {
-    email: "",
+    email: "finance@nycpha.org",
     phone: "",
-    website: ""
+    website: "www.nycpha.org"
   },
   branding: {
     // Future logo paths can be added here

@@ -1,6 +1,6 @@
-import { Invoice, LineItem, CurrencyCode } from 'xero-node'
+import { Invoice, LineItem, CurrencyCode, Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './xero-client'
-import { getOrCreateXeroContact } from './xero-contacts'
+import { getOrCreateXeroContact, syncUserToXeroContact } from './xero-contacts'
 import { createClient } from './supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
@@ -44,6 +44,83 @@ export interface PrePaymentInvoiceData {
     category_name: string
     accounting_code?: string
   }>
+}
+
+// Helper function to create a new contact when the existing one is archived
+async function createNewContactForArchivedContact(
+  userId: string, 
+  tenantId: string
+): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
+  try {
+    const supabase = await createClient()
+    
+    // Get user data including member_id
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, phone, member_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !userData) {
+      return { success: false, error: 'User not found for archived contact workaround' }
+    }
+
+    // Force create a new contact with unique name to avoid archived contact
+    console.log(`🔄 Creating new contact for user ${userId} to avoid archived contact`)
+    
+    const xeroApi = await getAuthenticatedXeroClient(tenantId)
+    if (!xeroApi) {
+      return { success: false, error: 'Unable to authenticate with Xero for new contact creation' }
+    }
+
+    // Create contact with member ID format for uniqueness
+    let contactName = `${userData.first_name} ${userData.last_name}`
+    if (userData.member_id) {
+      contactName = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+    } else {
+      // Fallback: add timestamp to ensure uniqueness
+      const timestamp = Date.now().toString().slice(-6)
+      contactName = `${userData.first_name} ${userData.last_name} - ${timestamp}`
+    }
+
+    const contactData: Contact = {
+      name: contactName,
+      firstName: userData.first_name,
+      lastName: userData.last_name,
+      emailAddress: userData.email,
+      contactPersons: userData.phone ? [{
+        firstName: userData.first_name,
+        lastName: userData.last_name,
+        emailAddress: userData.email,
+        phoneNumber: userData.phone
+      } as ContactPerson] : undefined
+    }
+
+    const response = await xeroApi.createContacts(tenantId, {
+      contacts: [contactData]
+    })
+
+    if (!response.body.contacts || response.body.contacts.length === 0) {
+      return { success: false, error: 'No contact returned from Xero API during new contact creation' }
+    }
+
+    const xeroContact = response.body.contacts[0]
+    const xeroContactId = xeroContact.contactID
+
+    if (!xeroContactId) {
+      return { success: false, error: 'No contact ID returned from Xero API during new contact creation' }
+    }
+
+    console.log(`✅ Created new contact ${xeroContactId} with name "${contactName}" to avoid archived contact`)
+    return { success: true, xeroContactId }
+    
+  } catch (error) {
+    console.error('Error creating new contact for archived contact:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to create new contact' 
+    }
+  }
 }
 
 // Create an invoice in Xero BEFORE payment (for invoice-first flow)
@@ -112,9 +189,32 @@ export async function createXeroInvoiceBeforePayment(
       currencyCode: CurrencyCode.USD // Configurable if needed
     }
 
-    const response = await xeroApi.createInvoices(activeTenant.tenant_id, {
-      invoices: [xeroInvoiceData]
-    })
+    let response
+    try {
+      response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+        invoices: [xeroInvoiceData]
+      })
+    } catch (invoiceError: any) {
+      // Check if the error is due to archived contact
+      const errorMessage = invoiceError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || ''
+      if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
+        console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, creating new contact for invoice`)
+        
+        // Force create a new contact to avoid the archived one
+        const newContactResult = await createNewContactForArchivedContact(invoiceData.user_id, activeTenant.tenant_id)
+        if (!newContactResult.success || !newContactResult.xeroContactId) {
+          throw invoiceError // Re-throw original error if we can't create new contact
+        }
+        
+        // Update invoice data with new contact ID and retry
+        xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
+        response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+          invoices: [xeroInvoiceData]
+        })
+      } else {
+        throw invoiceError // Re-throw other errors
+      }
+    }
 
     if (!response.body.invoices || response.body.invoices.length === 0) {
       await logXeroSync(

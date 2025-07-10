@@ -90,7 +90,8 @@ CREATE TABLE system_accounting_codes (
 
 -- Insert default system accounting codes
 INSERT INTO system_accounting_codes (code_type, accounting_code, description) VALUES
-('donation_default', 'DONATION', 'Default accounting code for donation line items in invoices'),
+('donation_received_default', 'DONATION', 'Default accounting code for donations received (line items in invoices)'),
+('donation_given_default', 'ASSISTANCE', 'Default accounting code for financial assistance/discounts given'),
 ('registration_default', '', 'Default accounting code for registration categories without specific codes');
 
 -- Seasons table

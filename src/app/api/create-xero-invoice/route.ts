@@ -64,11 +64,11 @@ export async function POST(request: NextRequest) {
       const selectedCategory = registration.registration_categories[0]
       const categoryName = selectedCategory.category?.name || selectedCategory.custom_name || 'Registration'
       
-      // Build payment items
+      // Build payment items - always show full registration price
       const paymentItems = [{
         item_type: 'registration' as const,
         item_id: registrationId,
-        amount: paymentIntent.amount,
+        amount: originalAmount,
         description: `Registration: ${registration.name} - ${categoryName}`,
         accounting_code: selectedCategory.accounting_code || registration.accounting_code
       }]
@@ -115,26 +115,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
       }
       
-      // Calculate base membership amount
-      const getMembershipAmount = () => {
-        if (paymentOption === 'assistance') {
-          return assistanceAmount || 0
-        }
-        // For donations and standard, use the base membership price calculation
-        const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-        return basePrice
-      }
+      // Always use full membership price for the main line item
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
       
-      const membershipAmount = getMembershipAmount()
-      
-      // Build payment items
+      // Build payment items - always show full membership price
       const paymentItems = [{
         item_type: 'membership' as const,
         item_id: membershipId,
-        amount: membershipAmount,
-        description: `${membershipName} - ${durationMonths} months${paymentOption === 'assistance' ? ' (Financial Assistance)' : ''}`,
+        amount: basePrice,
+        description: `${membershipName} - ${durationMonths} months`,
         accounting_code: membership.accounting_code
       }]
+
+      // Add financial assistance discount if applicable
+      const discountCodesUsed = []
+      if (paymentOption === 'assistance' && assistanceAmount < basePrice) {
+        const assistanceDiscountAmount = basePrice - assistanceAmount
+        discountCodesUsed.push({
+          code: 'FINANCIAL_ASSISTANCE',
+          amount_saved: assistanceDiscountAmount,
+          category_name: 'Financial Assistance',
+          accounting_code: undefined // Will use donation_given_default from system codes
+        })
+      }
 
       // Add donation item if applicable
       if (paymentOption === 'donation' && donationAmount > 0) {
@@ -143,17 +146,17 @@ export async function POST(request: NextRequest) {
           item_id: membershipId,
           amount: donationAmount,
           description: 'Donation',
-          accounting_code: undefined // Will use default donation accounting code
+          accounting_code: undefined // Will use donation_received_default from system codes
         })
       }
 
       xeroInvoiceData = {
         user_id: user.id,
-        total_amount: paymentIntent.amount,
-        discount_amount: 0, // No discounts in membership flow yet
+        total_amount: basePrice + (donationAmount || 0),
+        discount_amount: discountCodesUsed.length > 0 ? discountCodesUsed[0].amount_saved : 0,
         final_amount: paymentIntent.amount,
         payment_items: paymentItems,
-        discount_codes_used: [] // No discount codes in membership flow yet
+        discount_codes_used: discountCodesUsed
       }
     }
 

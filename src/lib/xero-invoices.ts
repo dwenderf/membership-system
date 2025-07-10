@@ -4,6 +4,28 @@ import { getOrCreateXeroContact, syncUserToXeroContact } from './xero-contacts'
 import { createClient } from './supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
+// Helper function to get system accounting codes
+async function getSystemAccountingCode(codeType: string): Promise<string | null> {
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('system_accounting_codes')
+      .select('accounting_code')
+      .eq('code_type', codeType)
+      .single()
+    
+    if (error || !data) {
+      console.warn(`System accounting code not found for type: ${codeType}`)
+      return null
+    }
+    
+    return data.accounting_code
+  } catch (error) {
+    console.error('Error fetching system accounting code:', error)
+    return null
+  }
+}
+
 export interface PaymentInvoiceData {
   payment_id: string
   user_id: string
@@ -184,7 +206,7 @@ export async function createXeroInvoiceBeforePayment(
         description: item.description || getDefaultItemDescription(item),
         unitAmount: item.amount / 100, // Convert from cents to dollars
         quantity: 1,
-        accountCode: item.accounting_code || getDefaultAccountCode(item.item_type),
+        accountCode: item.accounting_code || await getDefaultAccountCode(item.item_type),
         taxType: 'NONE' // Assuming no tax for now, can be configured
       })
     }
@@ -192,11 +214,17 @@ export async function createXeroInvoiceBeforePayment(
     // Add discount line items (negative amounts)
     if (invoiceData.discount_codes_used) {
       for (const discount of invoiceData.discount_codes_used) {
+        // Use system accounting code for discounts/financial assistance
+        let accountCode = discount.accounting_code
+        if (!accountCode) {
+          accountCode = await getSystemAccountingCode('donation_given_default') || 'ASSISTANCE'
+        }
+        
         lineItems.push({
           description: `Discount - ${discount.code} (${discount.category_name})`,
           unitAmount: -(discount.amount_saved / 100), // Negative amount for discount
           quantity: 1,
-          accountCode: discount.accounting_code || 'DISCOUNT',
+          accountCode: accountCode,
           taxType: 'NONE'
         })
       }
@@ -640,7 +668,7 @@ export async function createXeroInvoiceForPayment(
         description: item.description || getDefaultItemDescription(item),
         unitAmount: item.amount / 100, // Convert from cents to dollars
         quantity: 1,
-        accountCode: item.accounting_code || getDefaultAccountCode(item.item_type),
+        accountCode: item.accounting_code || await getDefaultAccountCode(item.item_type),
         taxType: 'NONE' // Assuming no tax for now, can be configured
       })
     }
@@ -648,11 +676,17 @@ export async function createXeroInvoiceForPayment(
     // Add discount line items (negative amounts)
     if (paymentData.discount_codes_used) {
       for (const discount of paymentData.discount_codes_used) {
+        // Use system accounting code for discounts/financial assistance
+        let accountCode = discount.accounting_code
+        if (!accountCode) {
+          accountCode = await getSystemAccountingCode('donation_given_default') || 'ASSISTANCE'
+        }
+        
         lineItems.push({
           description: `Discount - ${discount.code} (${discount.category_name})`,
           unitAmount: -(discount.amount_saved / 100), // Negative amount for discount
           quantity: 1,
-          accountCode: discount.accounting_code || 'DISCOUNT',
+          accountCode: accountCode,
           taxType: 'NONE'
         })
       }
@@ -889,7 +923,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
           }
         } else if (item.item_type === 'donation') {
           description = 'Community Support Donation'
-          accounting_code = 'DONATION' // Default donation account code
+          accounting_code = await getSystemAccountingCode('donation_received_default') || 'DONATION'
         }
 
         return {
@@ -953,14 +987,14 @@ function getDefaultItemDescription(item: PaymentInvoiceData['payment_items'][0])
   }
 }
 
-function getDefaultAccountCode(itemType: string): string {
+async function getDefaultAccountCode(itemType: string): Promise<string> {
   switch (itemType) {
     case 'membership':
       return 'MEMBERSHIP'
     case 'registration':
       return 'REGISTRATION'
     case 'donation':
-      return 'DONATION'
+      return await getSystemAccountingCode('donation_received_default') || 'DONATION'
     default:
       return 'REVENUE'
   }

@@ -98,32 +98,32 @@ async function handleFreeRegistration({
         throw new Error('Registration category not found')
       }
       
-      // Build invoice data for Xero
+      // Build invoice data for Xero - always show full registration price
+      const fullPrice = registrationCategory.price || 0
       const paymentItems = [{
         item_type: 'registration' as const,
         item_id: registrationId,
-        amount: 0, // $0 for free registration
+        amount: fullPrice, // Full registration price
         description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
         accounting_code: registrationCategory.accounting_code || registration.accounting_code
       }]
 
       // Add discount line items if applicable
       const discountItems = []
-      if (discountCode) {
-        // TODO: Calculate discount amount based on discount code
-        // For now, assume 100% discount for free registrations
+      if (discountCode && fullPrice > 0) {
+        // For free registrations, the discount amount equals the full price
         discountItems.push({
           code: discountCode,
-          amount_saved: registrationCategory.price || 0, // Original price
+          amount_saved: fullPrice, // Full price was discounted
           category_name: 'Registration Discount',
-          accounting_code: undefined // Will use default discount accounting code
+          accounting_code: undefined // Will use donation_given_default from system codes
         })
       }
 
       const xeroInvoiceData: PrePaymentInvoiceData = {
         user_id: user.id,
-        total_amount: registrationCategory.price || 0, // Original price
-        discount_amount: registrationCategory.price || 0, // Full discount
+        total_amount: fullPrice, // Original price
+        discount_amount: fullPrice, // Full discount
         final_amount: 0, // $0 after discount
         payment_items: paymentItems,
         discount_codes_used: discountItems

@@ -6,6 +6,7 @@ import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
+import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 
 // Force import client config
 import '../../sentry.client.config'
@@ -69,18 +70,19 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   // Calculate final payment amount based on payment option
   const getFinalPaymentAmount = () => {
-    if (!selectedPrice) return 0
+    // selectedPrice could be 0 for free memberships, so don't return early
+    const basePrice = selectedPrice || 0
     
     switch (paymentOption) {
       case 'assistance':
         const assistance = parseFloat(assistanceAmount) || 0
-        return Math.max(0, Math.min(assistance * 100, selectedPrice)) // Convert to cents, cap at full price
+        return Math.max(0, Math.min(assistance * 100, basePrice)) // Convert to cents, cap at full price
       case 'donation':
         const donation = parseFloat(donationAmount) || 0
-        return selectedPrice + (donation * 100) // Convert to cents
+        return basePrice + (donation * 100) // Convert to cents - works for free memberships too
       case 'standard':
       default:
-        return selectedPrice
+        return basePrice
     }
   }
   
@@ -91,6 +93,17 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     if (selectedDuration && selectedPrice && paymentOption === 'assistance') {
       const defaultAssistance = (selectedPrice / 100 * 0.5).toFixed(2) // 50% of full price
       setAssistanceAmount(defaultAssistance)
+    }
+  }, [selectedDuration, selectedPrice, paymentOption])
+  
+  // Handle payment option for free memberships
+  React.useEffect(() => {
+    if (selectedDuration && selectedPrice === 0) {
+      // For free memberships, reset to null if assistance was selected (now hidden)
+      // Let user choose between donation or standard
+      if (paymentOption === 'assistance') {
+        setPaymentOption(null)
+      }
     }
   }, [selectedDuration, selectedPrice, paymentOption])
   
@@ -120,6 +133,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   const isExtension = startDate > new Date()
 
+
   const handlePurchase = async () => {
     if (!selectedDuration) {
       setError('Please select a duration before purchasing')
@@ -131,47 +145,38 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
-    // Open modal immediately for better perceived performance
-    setShowPaymentForm(true)
     setIsLoading(true)
     setError(null)
     
     try {
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          membershipId: membership.id,
-          durationMonths: selectedDuration,
-          amount: finalAmount,
-          paymentOption: paymentOption,
-          assistanceAmount: paymentOption === 'assistance' ? parseFloat(assistanceAmount) * 100 : undefined,
-          donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create payment intent')
+      const paymentData: PaymentFlowData = {
+        amount: finalAmount,
+        membershipId: membership.id,
+        durationMonths: selectedDuration,
+        paymentOption: paymentOption,
+        assistanceAmount: paymentOption === 'assistance' ? parseFloat(assistanceAmount) * 100 : undefined,
+        donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
       }
 
-      const responseData = await response.json()
+      const result = await handlePaymentFlow(paymentData)
       
-      // Handle free membership (no payment needed)
-      if (responseData.isFree) {
-        setShowPaymentForm(false)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process payment')
+      }
+
+      if (result.isFree) {
+        // Free membership completed
         setPurchaseCompleted(true)
         showSuccess(
           'Membership Activated!',
-          'Your free membership has been activated successfully.'
+          result.message || 'Your free membership has been activated successfully.'
         )
         return
       }
       
-      const { clientSecret } = responseData
-      setClientSecret(clientSecret)
+      // Paid membership - show payment form
+      setShowPaymentForm(true)
+      setClientSecret(result.clientSecret!)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)
@@ -287,62 +292,64 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             Payment Options
           </label>
           <div className="space-y-3">
-            {/* Option 1: Need Help */}
-            <label className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
-              paymentOption === 'assistance'
-                ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
-                : 'border-gray-300 hover:border-gray-400'
-            }`}>
-              <input
-                type="radio"
-                name="paymentOption"
-                value="assistance"
-                checked={paymentOption === 'assistance'}
-                onChange={(e) => {
-                  setPaymentOption('assistance')
-                  if (selectedPrice) {
-                    const defaultAssistance = (selectedPrice / 100 * 0.5).toFixed(2)
-                    setAssistanceAmount(defaultAssistance)
-                  }
-                }}
-                className="sr-only"
-              />
-              <div className="w-full">
-                <div className={`text-sm font-medium ${
-                  paymentOption === 'assistance' ? 'text-blue-900' : 'text-gray-900'
-                }`}>
-                  I need help paying for membership
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Pay what you can afford (up to full price)
-                </div>
-                {paymentOption === 'assistance' && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      How much are you able to pay?
-                    </label>
-                    <div className="relative rounded-md shadow-sm max-w-32">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-500 text-sm">$</span>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        max={(selectedPrice / 100).toFixed(2)}
-                        step="0.01"
-                        value={assistanceAmount}
-                        onChange={(e) => setAssistanceAmount(e.target.value)}
-                        className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Maximum: ${(selectedPrice / 100).toFixed(2)}
-                    </div>
+            {/* Option 1: Need Help - Only show for paid memberships */}
+            {selectedPrice > 0 && (
+              <label className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
+                paymentOption === 'assistance'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}>
+                <input
+                  type="radio"
+                  name="paymentOption"
+                  value="assistance"
+                  checked={paymentOption === 'assistance'}
+                  onChange={(e) => {
+                    setPaymentOption('assistance')
+                    if (selectedPrice) {
+                      const defaultAssistance = (selectedPrice / 100 * 0.5).toFixed(2)
+                      setAssistanceAmount(defaultAssistance)
+                    }
+                  }}
+                  className="sr-only"
+                />
+                <div className="w-full">
+                  <div className={`text-sm font-medium ${
+                    paymentOption === 'assistance' ? 'text-blue-900' : 'text-gray-900'
+                  }`}>
+                    I need help paying for membership
                   </div>
-                )}
-              </div>
-            </label>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Pay what you can afford (up to full price)
+                  </div>
+                  {paymentOption === 'assistance' && (
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        How much are you able to pay?
+                      </label>
+                      <div className="relative rounded-md shadow-sm max-w-32">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 text-sm">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max={(selectedPrice / 100).toFixed(2)}
+                          step="0.01"
+                          value={assistanceAmount}
+                          onChange={(e) => setAssistanceAmount(e.target.value)}
+                          className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Maximum: ${(selectedPrice / 100).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </label>
+            )}
 
             {/* Option 2: Donation */}
             <label className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${

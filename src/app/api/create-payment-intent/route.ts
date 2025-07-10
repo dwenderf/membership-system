@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -67,13 +68,101 @@ async function handleFreeMembership({
       userProfile = profileData
     }
 
+    // Create Xero invoice for zero payment
+    let invoiceNumber = null
+    let xeroInvoiceId = null
+    
+    try {
+      console.log('🔄 Starting Xero invoice creation for free membership...')
+      // Calculate full membership price
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+      
+      // Build invoice data for Xero - always show full membership price
+      const paymentItems = [{
+        item_type: 'membership' as const,
+        item_id: membershipId,
+        amount: basePrice, // Full membership price
+        description: `${membership.name} - ${durationMonths} months`,
+        accounting_code: membership.accounting_code
+      }]
+
+      // Add financial assistance discount for free memberships
+      const discountCodesUsed = []
+      if (paymentOption === 'assistance' && basePrice > 0) {
+        discountCodesUsed.push({
+          code: 'FINANCIAL_ASSISTANCE',
+          amount_saved: basePrice, // Full price was discounted
+          category_name: 'Financial Assistance',
+          accounting_code: undefined // Will use donation_given_default from system codes
+        })
+      }
+
+      // Add donation item if applicable (even for $0 memberships, someone might donate)
+      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+        paymentItems.push({
+          item_type: 'donation' as const,
+          item_id: membershipId,
+          amount: donationAmount,
+          description: 'Donation',
+          accounting_code: undefined // Will use donation_received_default from system codes
+        })
+      }
+
+      const xeroInvoiceData: PrePaymentInvoiceData = {
+        user_id: user.id,
+        total_amount: basePrice + (donationAmount || 0),
+        discount_amount: discountCodesUsed.length > 0 ? discountCodesUsed[0].amount_saved : 0,
+        final_amount: donationAmount || 0, // $0 after discount + optional donation
+        payment_items: paymentItems,
+        discount_codes_used: discountCodesUsed
+      }
+
+      console.log('📝 Calling createXeroInvoiceBeforePayment with data:', JSON.stringify(xeroInvoiceData, null, 2))
+      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
+        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0 + optional donation)
+      })
+      console.log('📋 Invoice result:', invoiceResult)
+      
+      if (invoiceResult.success) {
+        invoiceNumber = invoiceResult.invoiceNumber
+        xeroInvoiceId = invoiceResult.xeroInvoiceId
+        console.log(`✅ Created Xero invoice ${invoiceNumber} for free membership (marked as AUTHORISED)`)
+      } else {
+        console.warn(`⚠️ Failed to create Xero invoice for free membership: ${invoiceResult.error}`)
+      }
+    } catch (error) {
+      console.error('❌ Caught error in API endpoint:', error)
+      console.warn('⚠️ Error creating Xero invoice for free membership:', error)
+      
+      // Capture Xero invoice creation errors in Sentry for visibility
+      Sentry.withScope((scope) => {
+        scope.setTag('integration', 'xero')
+        scope.setTag('operation', 'free_membership_invoice')
+        scope.setTag('user_id', user.id)
+        scope.setLevel('warning') // Non-critical since payment still succeeds
+        scope.setContext('free_membership_invoice_error', {
+          user_id: user.id,
+          membership_id: membershipId,
+          duration_months: durationMonths,
+          donation_amount: donationAmount,
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        
+        if (error instanceof Error) {
+          Sentry.captureException(error)
+        } else {
+          Sentry.captureMessage(`Free membership Xero invoice creation failed: ${error}`, 'warning')
+        }
+      })
+    }
+
     // Create payment record with $0 amount and completed status
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
         user_id: user.id,
-        total_amount: 0,
-        final_amount: 0,
+        total_amount: donationAmount || 0,
+        final_amount: donationAmount || 0,
         stripe_payment_intent_id: null, // No Stripe payment for free
         status: 'completed',
         payment_method: 'free',
@@ -86,20 +175,33 @@ async function handleFreeMembership({
       return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
     }
 
-    // Create payment item record
+    // Create payment item records
+    const paymentItems = [{
+      payment_id: paymentRecord.id,
+      item_type: 'membership',
+      item_id: membershipId,
+      amount: 0,
+    }]
+
+    // Add donation item if applicable
+    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+      paymentItems.push({
+        payment_id: paymentRecord.id,
+        item_type: 'donation',
+        item_id: membershipId,
+        amount: donationAmount,
+      })
+    }
+
     const { error: paymentItemError } = await supabase
       .from('payment_items')
-      .insert({
-        payment_id: paymentRecord.id,
-        item_type: 'membership',
-        item_id: membershipId,
-        amount: 0,
-      })
+      .insert(paymentItems)
 
     if (paymentItemError) {
-      console.error('Error creating payment item record:', paymentItemError)
+      console.error('Error creating payment item records:', paymentItemError)
       capturePaymentError(paymentItemError, paymentContext, 'warning')
     }
+
 
     // Create the membership record directly (similar to webhook processing)
     const startDate = new Date()
@@ -133,7 +235,9 @@ async function handleFreeMembership({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free membership created successfully'
+      message: 'Free membership created successfully',
+      invoiceNumber: invoiceNumber || undefined,
+      xeroInvoiceId: xeroInvoiceId || undefined
     })
 
   } catch (error) {
@@ -221,9 +325,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
-    // Create description based on payment option
+    // Calculate amounts for Xero invoice
+    const getMembershipAmount = () => {
+      if (paymentOption === 'assistance') {
+        return assistanceAmount || 0
+      }
+      // For donations and standard, use the base membership price calculation
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+      return basePrice
+    }
+
+    const membershipAmount = getMembershipAmount()
+
+    // Create description for payment intent
     const getDescription = () => {
       const baseName = `${membership.name} - ${durationMonths} months`
+      
       switch (paymentOption) {
         case 'assistance':
           return `${baseName} (Financial Assistance)`
@@ -267,17 +384,6 @@ export async function POST(request: NextRequest) {
     // Update payment context with payment intent ID
     paymentContext.paymentIntentId = paymentIntent.id
 
-    // Calculate amounts for payment record
-    const getMembershipAmount = () => {
-      if (paymentOption === 'assistance') {
-        return assistanceAmount || 0
-      }
-      // For donations and standard, use the base membership price calculation
-      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-      return basePrice
-    }
-
-    const membershipAmount = getMembershipAmount()
     const totalAmount = amount // This is the final amount sent from frontend
 
     // Create payment record in database
@@ -293,6 +399,7 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
+
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)

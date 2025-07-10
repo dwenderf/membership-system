@@ -27,9 +27,9 @@ export default async function UserLayout({
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-gray-50">
+    <div className="flex flex-col h-full">
       <UserNavigation user={userProfile} useToggle={true} />
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 flex-1">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 flex-1 w-full overflow-y-auto">
         {children}
       </main>
     </div>

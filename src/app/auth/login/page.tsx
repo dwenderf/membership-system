@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
+import { getSystemTitle } from '@/lib/organization'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -111,7 +112,7 @@ export default function LoginPage() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Hockey Association Membership System
+            {getSystemTitle()}
           </p>
         </div>
         

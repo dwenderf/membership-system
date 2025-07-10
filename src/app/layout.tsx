@@ -27,13 +27,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 force-light-mode`}
+        style={{ background: '#f9fafb' }}
       >
         <ToastProvider>
-          <div className="flex-1">
-            {children}
+          <div className="flex flex-col h-screen">
+            <div className="flex-1 overflow-hidden">
+              {children}
+            </div>
+            <Footer />
           </div>
-          <Footer />
         </ToastProvider>
       </body>
     </html>

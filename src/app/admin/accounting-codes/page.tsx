@@ -14,7 +14,9 @@ interface SystemAccountingCode {
 }
 
 interface AccountingCodes {
-  donation_default: string
+  donation_received_default: string
+  donation_given_default: string
+  stripe_bank_account: string
 }
 
 interface DiscountCategory {
@@ -37,11 +39,15 @@ interface Membership {
 
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
-    donation_default: ''
+    donation_received_default: '',
+    donation_given_default: '',
+    stripe_bank_account: ''
   })
   const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
   const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
-    donation_default: ''
+    donation_received_default: '',
+    donation_given_default: '',
+    stripe_bank_account: ''
   })
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])
@@ -71,12 +77,18 @@ export default function AccountingCodesPage() {
         
         // Initialize the codes state from system codes
         const codesObj: AccountingCodes = {
-          donation_default: ''
+          donation_received_default: '',
+          donation_given_default: '',
+          stripe_bank_account: ''
         }
         
         systemCodes.forEach((code: SystemAccountingCode) => {
-          if (code.code_type === 'donation_default') {
-            codesObj.donation_default = code.accounting_code
+          if (code.code_type === 'donation_received_default') {
+            codesObj.donation_received_default = code.accounting_code || ''
+          } else if (code.code_type === 'donation_given_default') {
+            codesObj.donation_given_default = code.accounting_code || ''
+          } else if (code.code_type === 'stripe_bank_account') {
+            codesObj.stripe_bank_account = code.accounting_code || ''
           }
         })
         
@@ -167,7 +179,9 @@ export default function AccountingCodesPage() {
 
   // Check if default codes have changed
   const hasDefaultCodesChanges = () => {
-    return codes.donation_default !== originalCodes.donation_default
+    return codes.donation_received_default !== originalCodes.donation_received_default ||
+           codes.donation_given_default !== originalCodes.donation_given_default ||
+           codes.stripe_bank_account !== originalCodes.stripe_bank_account
   }
 
   // Check if any category has changed
@@ -199,9 +213,17 @@ export default function AccountingCodesPage() {
   }
 
   const handleUpdateDefaults = async () => {
-    // Validate donation default is not empty
-    if (!codes.donation_default?.trim()) {
-      showError('Please enter a donation accounting code')
+    // Validate donation codes are not empty
+    if (!codes.donation_received_default?.trim()) {
+      showError('Please enter a donation received accounting code')
+      return
+    }
+    if (!codes.donation_given_default?.trim()) {
+      showError('Please enter a donation given accounting code')
+      return
+    }
+    if (!codes.stripe_bank_account?.trim()) {
+      showError('Please enter a Stripe bank account code')
       return
     }
 
@@ -210,8 +232,16 @@ export default function AccountingCodesPage() {
       // Prepare updates for system accounting codes
       const updates = [
         {
-          code_type: 'donation_default',
-          accounting_code: codes.donation_default.trim()
+          code_type: 'donation_received_default',
+          accounting_code: codes.donation_received_default.trim()
+        },
+        {
+          code_type: 'donation_given_default',
+          accounting_code: codes.donation_given_default.trim()
+        },
+        {
+          code_type: 'stripe_bank_account',
+          accounting_code: codes.stripe_bank_account.trim()
         }
       ]
 
@@ -425,25 +455,55 @@ export default function AccountingCodesPage() {
       <div className="space-y-6">
         {/* Default Codes Section */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Default Account Code</h2>
+          <h2 className="text-lg font-semibold mb-4">Default Account Codes</h2>
           <p className="text-sm text-gray-600 mb-4">
-            This code is used for donation line items in Xero invoices.
+            These codes are required to connect to Xero.
           </p>
           
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Donation Default
+                Donation Received Default
               </label>
               <input
                 type="text"
-                value={codes.donation_default}
-                onChange={(e) => handleInputChange('donation_default', e.target.value)}
+                value={codes.donation_received_default}
+                onChange={(e) => handleInputChange('donation_received_default', e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2"
                 placeholder="Enter Accounting Code (required)"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Used for all donation line items in Xero invoices
+                Used for donation line items in Xero invoices
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Donation Given Default (Financial Assistance)
+              </label>
+              <input
+                type="text"
+                value={codes.donation_given_default}
+                onChange={(e) => handleInputChange('donation_given_default', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                placeholder="Enter Accounting Code (required)"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Used for financial assistance/discount line items in Xero invoices
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stripe Bank Account
+              </label>
+              <input
+                type="text"
+                value={codes.stripe_bank_account}
+                onChange={(e) => handleInputChange('stripe_bank_account', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                placeholder="Enter Accounting Code (required)"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Xero bank account where Stripe deposits payments (used when recording payments)
               </p>
             </div>
             

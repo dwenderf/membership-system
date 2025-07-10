@@ -13,6 +13,7 @@ CREATE TABLE users (
     phone TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT '{}',
+    member_id INTEGER UNIQUE, -- Auto-generated unique member ID starting from 1000. Used for Xero contact identification.
     onboarding_completed_at TIMESTAMP WITH TIME ZONE,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
     terms_version TEXT,
@@ -20,6 +21,36 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Member ID sequence and functions
+CREATE SEQUENCE IF NOT EXISTS member_id_seq START 1000;
+
+-- Function to generate member ID
+CREATE OR REPLACE FUNCTION generate_member_id() RETURNS INTEGER AS $$
+BEGIN
+    RETURN nextval('member_id_seq');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to auto-generate member_id on insert
+CREATE OR REPLACE FUNCTION set_member_id_on_insert() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.member_id IS NULL THEN
+        NEW.member_id := generate_member_id();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for users table to auto-generate member_id
+DROP TRIGGER IF EXISTS set_member_id_trigger ON users;
+CREATE TRIGGER set_member_id_trigger
+    BEFORE INSERT ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION set_member_id_on_insert();
+
+-- Index for member_id performance
+CREATE INDEX IF NOT EXISTS idx_users_member_id ON users(member_id);
 
 -- Login attempts table
 CREATE TABLE login_attempts (
@@ -49,7 +80,7 @@ CREATE TABLE magic_link_tokens (
 CREATE TABLE system_accounting_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code_type TEXT NOT NULL,
-    accounting_code TEXT NOT NULL,
+    accounting_code TEXT,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -59,8 +90,10 @@ CREATE TABLE system_accounting_codes (
 
 -- Insert default system accounting codes
 INSERT INTO system_accounting_codes (code_type, accounting_code, description) VALUES
-('donation_default', 'DONATION', 'Default accounting code for donation line items in invoices'),
-('registration_default', '', 'Default accounting code for registration categories without specific codes');
+('donation_received_default', null, 'Default accounting code for donations received (line items in invoices)'),
+('donation_given_default', null, 'Default accounting code for financial assistance/discounts given'),
+('registration_default', null, 'Default accounting code for registration categories without specific codes'),
+('stripe_bank_account', null, 'Xero bank account code for Stripe payments (where Stripe deposits funds)');
 
 -- Seasons table
 CREATE TABLE seasons (
@@ -354,9 +387,183 @@ CREATE INDEX idx_user_registrations_processing_expires ON user_registrations(pro
 
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
+CREATE INDEX idx_payments_xero_synced ON payments(xero_synced);
+CREATE INDEX idx_user_memberships_xero_synced ON user_memberships(xero_synced);
+CREATE INDEX idx_user_registrations_xero_synced ON user_registrations(xero_synced);
 CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);
 CREATE INDEX idx_email_logs_event_time ON email_logs(event_type, sent_at);
 CREATE INDEX idx_email_logs_status_time ON email_logs(status, sent_at);
+
+-- Xero Integration Indexes
+CREATE INDEX idx_xero_oauth_tokens_tenant_id ON xero_oauth_tokens(tenant_id);
+CREATE INDEX idx_xero_oauth_tokens_expires_at ON xero_oauth_tokens(expires_at);
+CREATE INDEX idx_xero_contacts_user_id ON xero_contacts(user_id);
+CREATE INDEX idx_xero_contacts_tenant_id ON xero_contacts(tenant_id);
+CREATE INDEX idx_xero_contacts_xero_contact_id ON xero_contacts(xero_contact_id);
+CREATE INDEX idx_xero_contacts_sync_status ON xero_contacts(sync_status);
+CREATE INDEX idx_xero_invoices_payment_id ON xero_invoices(payment_id);
+CREATE INDEX idx_xero_invoices_tenant_id ON xero_invoices(tenant_id);
+CREATE INDEX idx_xero_invoices_xero_invoice_id ON xero_invoices(xero_invoice_id);
+CREATE INDEX idx_xero_invoices_sync_status ON xero_invoices(sync_status);
+CREATE INDEX idx_xero_invoices_invoice_number ON xero_invoices(invoice_number);
+CREATE INDEX idx_xero_invoice_line_items_xero_invoice_id ON xero_invoice_line_items(xero_invoice_id);
+CREATE INDEX idx_xero_invoice_line_items_item_type ON xero_invoice_line_items(line_item_type);
+CREATE INDEX idx_xero_payments_xero_invoice_id ON xero_payments(xero_invoice_id);
+CREATE INDEX idx_xero_payments_tenant_id ON xero_payments(tenant_id);
+CREATE INDEX idx_xero_payments_xero_payment_id ON xero_payments(xero_payment_id);
+CREATE INDEX idx_xero_payments_sync_status ON xero_payments(sync_status);
+CREATE INDEX idx_xero_sync_logs_tenant_id ON xero_sync_logs(tenant_id);
+CREATE INDEX idx_xero_sync_logs_operation_type ON xero_sync_logs(operation_type);
+CREATE INDEX idx_xero_sync_logs_status ON xero_sync_logs(status);
+CREATE INDEX idx_xero_sync_logs_created_at ON xero_sync_logs(created_at);
+CREATE INDEX idx_xero_sync_logs_entity_type_id ON xero_sync_logs(entity_type, entity_id);
+CREATE INDEX idx_xero_webhooks_tenant_id ON xero_webhooks(tenant_id);
+CREATE INDEX idx_xero_webhooks_event_category ON xero_webhooks(event_category);
+
+-- Xero Integration Tables
+
+-- Xero OAuth token storage
+-- Stores OAuth tokens per organization (tenant) with refresh capability
+CREATE TABLE xero_oauth_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id TEXT NOT NULL UNIQUE, -- Xero organization ID
+    tenant_name TEXT NOT NULL, -- Organization name for admin display
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    id_token TEXT,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    scope TEXT NOT NULL,
+    token_type TEXT NOT NULL DEFAULT 'Bearer',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Xero contact synchronization tracking
+-- Tracks which users have been synced to Xero as contacts
+CREATE TABLE xero_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
+    xero_contact_id UUID NOT NULL, -- Xero's contact ID
+    contact_number TEXT, -- Xero's contact number
+    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'synced', 'failed', 'needs_update')),
+    last_synced_at TIMESTAMP WITH TIME ZONE,
+    sync_error TEXT, -- Error message if sync failed
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one contact per user per tenant
+    UNIQUE(user_id, tenant_id)
+);
+
+-- Xero invoice synchronization tracking
+-- Tracks which payments have been synced to Xero as invoices
+CREATE TABLE xero_invoices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
+    xero_invoice_id UUID NOT NULL, -- Xero's invoice ID
+    invoice_number TEXT NOT NULL, -- Xero's invoice number
+    invoice_type TEXT NOT NULL DEFAULT 'ACCREC', -- ACCREC = Accounts Receivable
+    invoice_status TEXT NOT NULL, -- DRAFT, AUTHORISED, PAID, etc.
+    total_amount INTEGER NOT NULL, -- in cents, gross amount
+    discount_amount INTEGER DEFAULT 0, -- in cents, total discounts
+    net_amount INTEGER NOT NULL, -- in cents, amount after discounts
+    stripe_fee_amount INTEGER DEFAULT 0, -- in cents, Stripe processing fees
+    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'synced', 'failed', 'needs_update')),
+    last_synced_at TIMESTAMP WITH TIME ZONE,
+    sync_error TEXT, -- Error message if sync failed
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one invoice per payment per tenant
+    UNIQUE(payment_id, tenant_id)
+);
+
+-- Xero invoice line items tracking
+-- Tracks individual line items within invoices for detailed reconciliation
+CREATE TABLE xero_invoice_line_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    xero_invoice_id UUID NOT NULL REFERENCES xero_invoices(id) ON DELETE CASCADE,
+    line_item_type TEXT NOT NULL CHECK (line_item_type IN ('membership', 'registration', 'discount', 'donation')),
+    item_id UUID, -- References membership_id, registration_id, discount_code_id, etc.
+    description TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_amount INTEGER NOT NULL, -- in cents (can be negative for discounts)
+    account_code TEXT, -- Xero account code
+    tax_type TEXT DEFAULT 'NONE',
+    line_amount INTEGER NOT NULL, -- in cents, quantity * unit_amount
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Xero payment recording tracking
+-- Tracks which Stripe payments have been recorded in Xero
+CREATE TABLE xero_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    xero_invoice_id UUID NOT NULL REFERENCES xero_invoices(id) ON DELETE CASCADE,
+    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
+    xero_payment_id UUID NOT NULL, -- Xero's payment ID
+    payment_method TEXT NOT NULL DEFAULT 'stripe',
+    bank_account_code TEXT, -- Xero bank account code
+    amount_paid INTEGER NOT NULL, -- in cents, net amount (after Stripe fees)
+    stripe_fee_amount INTEGER DEFAULT 0, -- in cents, recorded as separate expense
+    reference TEXT, -- Payment reference for reconciliation
+    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'synced', 'failed')),
+    last_synced_at TIMESTAMP WITH TIME ZONE,
+    sync_error TEXT, -- Error message if sync failed
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one payment record per invoice per tenant
+    UNIQUE(xero_invoice_id, tenant_id)
+);
+
+-- Xero synchronization error logs
+-- Detailed error logging for debugging and monitoring
+CREATE TABLE xero_sync_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
+    operation_type TEXT NOT NULL CHECK (operation_type IN ('contact_sync', 'invoice_sync', 'payment_sync', 'token_refresh')),
+    entity_type TEXT CHECK (entity_type IN ('user', 'payment', 'invoice', 'contact')),
+    entity_id UUID, -- References user_id, payment_id, etc.
+    xero_entity_id UUID, -- Xero's entity ID if applicable
+    status TEXT NOT NULL CHECK (status IN ('success', 'error', 'warning')),
+    error_code TEXT, -- Xero API error code
+    error_message TEXT, -- Detailed error message
+    request_data JSONB, -- Request payload for debugging
+    response_data JSONB, -- Response data for debugging
+    retry_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Xero webhook tracking (optional for future webhook support)
+CREATE TABLE xero_webhooks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
+    webhook_id UUID NOT NULL, -- Xero's webhook ID
+    webhook_key TEXT NOT NULL, -- Xero's webhook signing key
+    event_category TEXT NOT NULL, -- INVOICE, CONTACT, etc.
+    event_type TEXT NOT NULL, -- CREATE, UPDATE, DELETE
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one webhook per event type per tenant
+    UNIQUE(tenant_id, event_category, event_type)
+);
+
+-- Add Xero tracking fields to existing tables
+-- Add xero_synced flag to payments table
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
+
+-- Add Xero tracking fields to user_memberships table
+ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
+ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
+
+-- Add Xero tracking fields to user_registrations table
+ALTER TABLE user_registrations ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
+ALTER TABLE user_registrations ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
 
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -380,6 +587,15 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_configurations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
+
+-- Enable RLS for Xero tables
+ALTER TABLE xero_oauth_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_invoice_line_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_sync_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xero_webhooks ENABLE ROW LEVEL SECURITY;
 
 -- Create basic RLS policies (users can see their own data, admins can see everything)
 
@@ -718,4 +934,83 @@ WITH CHECK (
         AND users.is_admin = true
     )
 );
+
+-- Xero Integration RLS Policies (Admin only access)
+-- Xero OAuth tokens - admin only
+CREATE POLICY "xero_oauth_tokens_admin_only" ON xero_oauth_tokens
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero contacts - admin only
+CREATE POLICY "xero_contacts_admin_only" ON xero_contacts
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero invoices - admin only
+CREATE POLICY "xero_invoices_admin_only" ON xero_invoices
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero invoice line items - admin only
+CREATE POLICY "xero_invoice_line_items_admin_only" ON xero_invoice_line_items
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero payments - admin only
+CREATE POLICY "xero_payments_admin_only" ON xero_payments
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero sync logs - admin only
+CREATE POLICY "xero_sync_logs_admin_only" ON xero_sync_logs
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Xero webhooks - admin only
+CREATE POLICY "xero_webhooks_admin_only" ON xero_webhooks
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Create a function to automatically update updated_at timestamps
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create triggers for updated_at columns on Xero tables
+CREATE TRIGGER update_xero_oauth_tokens_updated_at BEFORE UPDATE ON xero_oauth_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_xero_contacts_updated_at BEFORE UPDATE ON xero_contacts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_xero_invoices_updated_at BEFORE UPDATE ON xero_invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_xero_payments_updated_at BEFORE UPDATE ON xero_payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

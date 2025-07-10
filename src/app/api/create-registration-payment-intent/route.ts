@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
+import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -85,6 +86,85 @@ async function handleFreeRegistration({
       return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
     }
 
+    // Create Xero invoice for zero payment
+    let invoiceNumber = null
+    let xeroInvoiceId = null
+    
+    try {
+      // Get registration and category details for invoice
+      const registrationCategory = registration.registration_categories.find((rc: any) => rc.id === categoryId)
+      
+      if (!registrationCategory) {
+        throw new Error('Registration category not found')
+      }
+      
+      // Build invoice data for Xero - always show full registration price
+      const fullPrice = registrationCategory.price || 0
+      const paymentItems = [{
+        item_type: 'registration' as const,
+        item_id: registrationId,
+        amount: fullPrice, // Full registration price
+        description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
+        accounting_code: registrationCategory.accounting_code || registration.accounting_code
+      }]
+
+      // Add discount line items if applicable
+      const discountItems = []
+      if (discountCode && fullPrice > 0) {
+        // For free registrations, the discount amount equals the full price
+        discountItems.push({
+          code: discountCode,
+          amount_saved: fullPrice, // Full price was discounted
+          category_name: 'Registration Discount',
+          accounting_code: undefined // Will use donation_given_default from system codes
+        })
+      }
+
+      const xeroInvoiceData: PrePaymentInvoiceData = {
+        user_id: user.id,
+        total_amount: fullPrice, // Original price
+        discount_amount: fullPrice, // Full discount
+        final_amount: 0, // $0 after discount
+        payment_items: paymentItems,
+        discount_codes_used: discountItems
+      }
+
+      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
+        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0)
+      })
+      
+      if (invoiceResult.success) {
+        invoiceNumber = invoiceResult.invoiceNumber
+        xeroInvoiceId = invoiceResult.xeroInvoiceId
+        console.log(`✅ Created Xero invoice ${invoiceNumber} for free registration (marked as AUTHORISED)`)
+      } else {
+        console.warn(`⚠️ Failed to create Xero invoice for free registration: ${invoiceResult.error}`)
+      }
+    } catch (error) {
+      console.warn('⚠️ Error creating Xero invoice for free registration:', error)
+      
+      // Capture Xero invoice creation errors in Sentry for visibility
+      Sentry.withScope((scope) => {
+        scope.setTag('integration', 'xero')
+        scope.setTag('operation', 'free_registration_invoice')
+        scope.setTag('user_id', user.id)
+        scope.setLevel('warning') // Non-critical since payment still succeeds
+        scope.setContext('free_registration_invoice_error', {
+          user_id: user.id,
+          registration_id: registrationId,
+          category_id: categoryId,
+          discount_code: discountCode,
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        
+        if (error instanceof Error) {
+          Sentry.captureException(error)
+        } else {
+          Sentry.captureMessage(`Free registration Xero invoice creation failed: ${error}`, 'warning')
+        }
+      })
+    }
+
     // Create payment record with $0 amount and completed status
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
@@ -118,6 +198,7 @@ async function handleFreeRegistration({
       console.error('Error creating payment item record:', paymentItemError)
       capturePaymentError(paymentItemError, paymentContext, 'warning')
     }
+
 
     // Update the registration to paid status (complete the reservation)
     const { error: updateError } = await adminSupabase
@@ -171,7 +252,9 @@ async function handleFreeRegistration({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free registration completed successfully'
+      message: 'Free registration completed successfully',
+      invoiceNumber: invoiceNumber || undefined,
+      xeroInvoiceId: xeroInvoiceId || undefined
     })
 
   } catch (error) {
@@ -507,6 +590,17 @@ export async function POST(request: NextRequest) {
     // Get category display name
     const categoryName = selectedCategory.category?.name || selectedCategory.custom_name || 'Registration'
 
+    // Create description for payment intent
+    const getDescription = () => {
+      const baseName = `${registration.name} - ${categoryName} (${registration.season?.name})`
+      
+      if (discountAmount > 0) {
+        return `${baseName} - Discount: $${(discountAmount / 100).toFixed(2)}`
+      }
+      
+      return baseName
+    }
+
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
       amount: finalAmount, // Final amount after discount in cents
@@ -530,7 +624,7 @@ export async function POST(request: NextRequest) {
         discountCategoryName: validatedDiscountCode?.category?.name || '',
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
       },
-      description: `${registration.name} - ${categoryName} (${registration.season?.name})${discountAmount > 0 ? ` - Discount: $${(discountAmount / 100).toFixed(2)}` : ''}`,
+      description: getDescription(),
     }
     
     const paymentIntent = await stripe.paymentIntents.create({
@@ -561,6 +655,7 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
+
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)

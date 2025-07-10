@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
+import { getOrganizationName } from '@/lib/organization'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -47,7 +48,7 @@ export default async function AdminDashboard() {
         <div className="px-4 py-6 sm:px-0">
           <AdminHeader 
             title="Admin Dashboard"
-            description="Manage your hockey association membership system"
+            description={`Manage your ${getOrganizationName('long').toLowerCase()} membership system`}
             useToggle={true}
           />
 
@@ -172,6 +173,14 @@ export default async function AdminDashboard() {
                 >
                   <div className="text-gray-900 font-medium">Manage Accounting Codes</div>
                   <div className="mt-1 text-sm text-gray-500">Configure default codes and bulk updates</div>
+                </Link>
+
+                <Link
+                  href="/admin/accounting"
+                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <div className="text-gray-900 font-medium">Manage Xero Integration</div>
+                  <div className="mt-1 text-sm text-gray-500">Connect and manage Xero accounting</div>
                 </Link>
 
                 <Link

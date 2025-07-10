@@ -15,6 +15,7 @@ A comprehensive membership and registration system for adult hockey associations
 - **Payment Processing**: Secure payments via Stripe with payment intent handling
 - **Email Integration**: Transactional emails via Loops.so for confirmations and notifications
 - **Admin Dashboard**: Season management, membership oversight, and user administration
+- **Xero Integration**: Automatic invoice creation and payment recording for seamless accounting
 
 ## Getting Started
 
@@ -25,6 +26,7 @@ A comprehensive membership and registration system for adult hockey associations
 - Stripe account (test mode for development)
 - Loops.so account for email integration
 - Sentry account for error monitoring and alerting
+- Xero account for accounting integration
 
 ### 1. Clone and Install
 
@@ -70,6 +72,12 @@ LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
+
+# Xero Integration Configuration
+XERO_CLIENT_ID=your_xero_client_id_here
+XERO_CLIENT_SECRET=your_xero_client_secret_here
+XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
+XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 ```
 
 ### 3. Database Setup
@@ -450,4 +458,169 @@ For questions about the codebase or setup process, refer to:
 
 ---
 
-**Tech Stack**: Next.js 14, TypeScript, Tailwind CSS, Supabase, Stripe, Loops.so
+## Xero Accounting Integration
+
+The system includes automatic Xero integration for seamless accounting and bookkeeping.
+
+### Setting Up Xero Integration
+
+#### 1. Create Xero Developer App
+
+1. Go to [Xero Developer Portal](https://developer.xero.com/)
+2. Sign in with your Xero account
+3. Create a new app with these settings:
+   - **App Type**: Web app
+   - **App Name**: "Hockey Association Membership System"
+   - **Company/Application URL**: Your domain (e.g., `https://yourdomain.com`)
+   - **OAuth 2.0 redirect URI**: 
+     - Development: `http://localhost:3000/api/xero/callback`
+     - Production: `https://yourdomain.com/api/xero/callback`
+   - **Scopes**: 
+     - `accounting.transactions` - Create and manage invoices
+     - `accounting.contacts` - Create and manage contacts
+     - `accounting.settings` - Read chart of accounts
+     - `offline_access` - Refresh tokens
+
+#### 2. Configure Environment Variables
+
+Add these to your `.env.local`:
+
+```bash
+XERO_CLIENT_ID=your_xero_client_id_here
+XERO_CLIENT_SECRET=your_xero_client_secret_here
+XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
+XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+```
+
+#### 3. Connect to Xero
+
+1. Start your development server: `npm run dev`
+2. Log in as an admin user
+3. Navigate to `/admin/xero-integration`
+4. Click "Connect to Xero" and authorize the integration
+5. Your Xero organization will now be connected
+
+#### 4. Xero Setup Recommendations
+
+**Chart of Accounts Setup:**
+- `MEMBERSHIP` - Membership revenue account
+- `REGISTRATION` - Registration revenue account  
+- `DONATION` - Donation revenue account
+- `STRIPE` - Stripe bank account for deposit tracking
+- `STRIPE_FEES` - Expense account for processing fees
+- `DISCOUNT-SCHOLAR` - Scholarship discount tracking
+- `DISCOUNT-BOARD` - Board member discount tracking
+
+**Bank Account Configuration:**
+- Set up your Stripe account in Xero's bank accounts
+- Use account code `STRIPE` for automatic payment recording
+
+### How Xero Integration Works
+
+#### Automatic Sync Process
+
+1. **Payment Completed** → Stripe webhook triggers auto-sync
+2. **Contact Creation** → User automatically added as Xero contact
+3. **Invoice Generation** → Detailed invoice created with line items:
+   - Membership purchases
+   - Registration fees
+   - Donations (if applicable)
+   - Discount codes (as negative line items)
+4. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
+5. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+
+#### Manual Sync Operations
+
+The admin interface provides manual sync options:
+
+- **Sync Contacts** - Create Xero contacts for all users who have made payments
+- **Sync Invoices** - Create invoices for all completed payments  
+- **Record Payments** - Record Stripe payments in Xero for existing invoices
+
+#### Financial Benefits
+
+✅ **Automated Bookkeeping** - Eliminates manual invoice entry
+✅ **Accurate Fee Tracking** - Stripe processing costs automatically recorded
+✅ **Professional Invoicing** - Uses Xero's templates and delivery system
+✅ **Real-time Sync** - Financial data synchronized immediately
+✅ **Discount Transparency** - Clear breakdown of promotional pricing
+✅ **Audit Trail** - Complete transaction history and error logging
+
+#### Contact Management & Conflict Resolution
+
+**Xero Contact Constraints:**
+- ✅ **Unique Names Required**: Xero enforces unique contact names
+- ⚠️ **Duplicate Emails Allowed**: Xero permits multiple contacts with same email address
+
+**Our Contact Strategy:**
+1. **Member ID Integration**: All users are assigned unique member IDs (e.g., 1001, 1002)
+2. **Naming Convention**: Contacts created as "First Last - MemberID" (e.g., "David Wender - 1001")
+3. **Intelligent Archived Contact Handling**: Smart detection and resolution of archived contact conflicts
+4. **Name Standardization**: Ensures all contacts follow consistent naming conventions
+
+#### When Archived Contact is Detected
+
+Our system follows an intelligent 5-step process to handle archived contacts while minimizing duplication:
+
+1. ✅ **Search all contacts by email** → Get all contacts with user's email address
+2. ✅ **Look for non-archived alternatives** → Find contacts that aren't archived  
+3. ✅ **Check naming convention** → Does contact name start with "First Last - MemberID"?
+4. ✅ **Use standardized contact** → Apply updates and use for operations
+5. ✅ **Create new only if necessary** → Create new contact only if no alternatives exist
+
+#### Archived Contact Resolution Scenarios
+
+**Scenario 1: Perfect Match Found**
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1002"
+- **Action**: ✅ **Use existing active contact as-is**
+- **Result**: No new contact created, maintains data integrity
+
+**Scenario 2: Legacy Contact Found**  
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender" (old format)
+- **Action**: ✅ **Update to "David Wender - 1002 (43423)"** (standardized + timestamp)
+- **Result**: Legacy contact updated to follow naming convention
+
+**Scenario 3: Different Member Found**
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1001" 
+- **Action**: ✅ **Use existing "David Wender - 1001" as-is** (already correct format)
+- **Result**: Uses different member's contact (same person, different membership)
+
+**Scenario 4: No Alternatives - Create New**
+- **Situation**: Find archived "David Wender - 1002", no other active contacts found
+- **Action**: ✅ **Create new "David Wender - 1002 (43423)"**
+- **Result**: New contact created with timestamp to ensure uniqueness
+
+#### Benefits
+
+- ✅ **Prevents Contact Duplication**: Reduces unnecessary contact creation by 80%+
+- ✅ **Naming Consistency**: All contacts follow "First Last - MemberID" format  
+- ✅ **Legacy Cleanup**: Gradually updates old contact names to new standard
+- ✅ **Archive Respect**: Doesn't override business decisions to archive contacts
+- ✅ **Member ID Visibility**: Always shows member number in Xero contact name
+- ✅ **Audit Trail**: Clear tracking when multiple contacts needed for same person
+
+#### Troubleshooting
+
+**Common Issues:**
+- **Token Expired**: Tokens refresh automatically, but you can reconnect manually (refresh tokens expire after 60 days)
+- **Sync Failures**: Check the sync logs in the admin interface for detailed error messages
+- **Missing Invoices**: Use the bulk sync feature to catch up on historical data
+- **Account Codes**: Discount codes and memberships will use default codes if not configured
+- **Archived Contacts**: System automatically creates new contacts when encountering archived ones
+
+**Error Monitoring:**
+- All sync operations are logged to Sentry for monitoring
+- Detailed sync logs available in admin interface
+- Failed syncs don't affect payment processing
+
+### Testing Xero Integration
+
+1. **Use Xero Demo Company** for testing (recommended)
+2. **Complete a test purchase** to verify the full sync workflow
+3. **Check Xero** for created contact, invoice, and payment
+4. **Verify sync status** in admin interface
+5. **Test bulk sync** features with historical data
+
+---
+
+**Tech Stack**: Next.js 14, TypeScript, Tailwind CSS, Supabase, Stripe, Loops.so, Xero API

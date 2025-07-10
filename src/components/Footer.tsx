@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getCopyrightText } from '@/lib/organization'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
@@ -44,7 +45,7 @@ export default function Footer() {
         <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
           {/* Copyright */}
           <div className="text-sm text-gray-500">
-            © {currentYear} Hockey Association. All rights reserved.
+            {getCopyrightText()}
           </div>
 
           {/* Navigation and Legal Links */}

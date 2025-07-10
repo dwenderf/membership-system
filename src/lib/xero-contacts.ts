@@ -57,6 +57,28 @@ export async function syncUserToXeroContact(
             // Multiple contacts found - log warning and attempt name matching
             console.warn(`⚠️ Multiple Xero contacts found for email ${userData.email} (${foundContacts.length} contacts)`)
             
+            // Send Sentry warning for duplicate email monitoring
+            Sentry.captureMessage(`Multiple Xero contacts found with same email during contact sync: ${userData.email}`, {
+              level: 'warning',
+              tags: {
+                component: 'xero-contact-sync',
+                operation: 'contact-search'
+              },
+              extra: {
+                email: userData.email,
+                contactCount: foundContacts.length,
+                contacts: foundContacts.map(contact => ({
+                  name: contact.name,
+                  contactID: contact.contactID,
+                  firstName: contact.firstName,
+                  lastName: contact.lastName,
+                  status: contact.contactStatus || 'ACTIVE'
+                })),
+                userID: userData.id,
+                searchContext: 'initial-contact-lookup'
+              }
+            })
+            
             // Try to find exact name match first
             const exactNameMatch = foundContacts.find(contact => 
               contact.firstName === userData.first_name && 
@@ -213,6 +235,29 @@ export async function syncUserToXeroContact(
             )
             
             if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
+              // Send Sentry warning if multiple contacts found during archived contact resolution
+              if (emailSearchResponse.body.contacts.length > 1) {
+                Sentry.captureMessage(`Multiple Xero contacts found during archived contact resolution: ${userData.email}`, {
+                  level: 'warning',
+                  tags: {
+                    component: 'xero-contact-resolution',
+                    operation: 'archived-contact-search'
+                  },
+                  extra: {
+                    email: userData.email,
+                    contactCount: emailSearchResponse.body.contacts.length,
+                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                      name: contact.name,
+                      contactID: contact.contactID,
+                      status: contact.contactStatus || 'ACTIVE'
+                    })),
+                    userID: userData.id,
+                    archivedContactID: xeroContactId,
+                    searchContext: 'archived-contact-resolution'
+                  }
+                })
+              }
+              
               // Look for any non-archived contact with same email
               const nonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
                 contact.contactID !== xeroContactId && // Exclude the archived one we just tried

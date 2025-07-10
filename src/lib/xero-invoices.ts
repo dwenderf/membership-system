@@ -263,6 +263,28 @@ export async function createXeroInvoiceBeforePayment(
                 console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || 'ACTIVE'}`)
               })
               
+              // Send Sentry warning if multiple contacts found with same email
+              if (emailSearchResponse.body.contacts.length > 1) {
+                Sentry.captureMessage(`Multiple Xero contacts found with same email: ${userData.email}`, {
+                  level: 'warning',
+                  tags: {
+                    component: 'xero-contact-resolution',
+                    operation: 'archived-contact-handling'
+                  },
+                  extra: {
+                    email: userData.email,
+                    contactCount: emailSearchResponse.body.contacts.length,
+                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                      name: contact.name,
+                      contactID: contact.contactID,
+                      status: contact.contactStatus || 'ACTIVE'
+                    })),
+                    userID: invoiceData.user_id,
+                    archivedContactID: contactResult.xeroContactId
+                  }
+                })
+              }
+              
               // First, look for exact name match with our naming convention
               const expectedNamePrefix = userData.member_id 
                 ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`

@@ -7,23 +7,54 @@ import Link from 'next/link'
 export default function XeroConnectPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)
+  const [accountingCodesError, setAccountingCodesError] = useState('')
   const router = useRouter()
 
-  // Check for OAuth callback results in URL params
+  // Check for OAuth callback results in URL params and validate accounting codes
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const xeroError = urlParams.get('xero_error')
-    const xeroSuccess = urlParams.get('xero_success')
-    
-    if (xeroError) {
-      setError(getErrorMessage(xeroError))
-    } else if (xeroSuccess) {
-      // Success - redirect to Xero management page
-      router.push('/admin/accounting/xero?connected=true')
+    const validateAndSetup = async () => {
+      // First validate accounting codes
+      try {
+        const response = await fetch('/api/validate-accounting-codes')
+        if (response.ok) {
+          const validation = await response.json()
+          setAccountingCodesValid(validation.isValid)
+          if (!validation.isValid) {
+            setAccountingCodesError(validation.message)
+          }
+        } else {
+          setAccountingCodesValid(false)
+          setAccountingCodesError('Failed to validate accounting codes')
+        }
+      } catch (error) {
+        setAccountingCodesValid(false)
+        setAccountingCodesError('Failed to validate accounting codes')
+      }
+
+      // Then check for OAuth callback results
+      const urlParams = new URLSearchParams(window.location.search)
+      const xeroError = urlParams.get('xero_error')
+      const xeroSuccess = urlParams.get('xero_success')
+      
+      if (xeroError) {
+        setError(getErrorMessage(xeroError))
+      } else if (xeroSuccess) {
+        // Success - redirect to Xero management page
+        router.push('/admin/accounting/xero?connected=true')
+      }
     }
+
+    validateAndSetup()
   }, [router])
 
   const handleConnect = async () => {
+    // Check accounting codes validation first
+    if (accountingCodesValid !== true) {
+      setError('All required accounting codes must be configured before connecting to Xero. Please set up the accounting codes first.')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -98,6 +129,35 @@ export default function XeroConnectPage() {
           </div>
         )}
 
+        {/* Accounting codes validation */}
+        {accountingCodesValid === false && (
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Accounting Codes Required
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>{accountingCodesError}</p>
+                </div>
+                <div className="mt-4">
+                  <Link
+                    href="/admin/accounting-codes"
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                  >
+                    Configure Accounting Codes
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-center">
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
@@ -117,8 +177,12 @@ export default function XeroConnectPage() {
             <div className="space-y-4">
               <button
                 onClick={handleConnect}
-                disabled={loading}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || accountingCodesValid !== true}
+                className={`inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  accountingCodesValid === true && !loading
+                    ? 'bg-blue-600 hover:bg-blue-700' 
+                    : 'bg-gray-400'
+                }`}
               >
                 {loading ? (
                   <>
@@ -128,6 +192,8 @@ export default function XeroConnectPage() {
                     </svg>
                     Connecting...
                   </>
+                ) : accountingCodesValid === false ? (
+                  'Configure Accounting Codes First'
                 ) : (
                   'Connect to Xero'
                 )}

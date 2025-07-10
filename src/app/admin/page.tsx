@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
+import { getOrganizationName } from '@/lib/organization'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -47,7 +48,7 @@ export default async function AdminDashboard() {
         <div className="px-4 py-6 sm:px-0">
           <AdminHeader 
             title="Admin Dashboard"
-            description="Manage your hockey association membership system"
+            description={`Manage your ${getOrganizationName('long').toLowerCase()} membership system`}
             useToggle={true}
           />
 

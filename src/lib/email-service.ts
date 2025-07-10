@@ -1,5 +1,6 @@
 import { LoopsClient } from 'loops'
 import { createClient } from '@/lib/supabase/server'
+import { getWelcomeMessage } from '@/lib/organization'
 
 // Email event types
 export const EMAIL_EVENTS = {
@@ -304,7 +305,7 @@ class EmailService {
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.WELCOME,
-      subject: 'Welcome to the Hockey Association!',
+      subject: getWelcomeMessage(),
       triggeredBy: 'automated',
       data: {
         userName: options.userName,

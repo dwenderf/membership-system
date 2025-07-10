@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import { getOrganizationName } from '@/lib/organization'
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<any>(null)
@@ -141,7 +142,7 @@ export default function OnboardingPage() {
       }
 
       // Show success toast
-      showSuccess('Profile completed!', 'Welcome to the hockey association')
+      showSuccess('Profile completed!', `Welcome to the ${getOrganizationName('long').toLowerCase()}`
 
       // Redirect based on membership preference (no delay needed)
       if (formData.wantsMembership) {
@@ -182,7 +183,7 @@ export default function OnboardingPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Welcome to the Hockey Association
+            Welcome to the {getOrganizationName('long')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Complete your profile to get started

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import PurchaseHistory from '@/components/PurchaseHistory'
 import Link from 'next/link'
 import { consolidateUserMemberships } from '@/lib/membership-status'
+import { getOrganizationName } from '@/lib/organization'
 
 export default async function UserMembershipsPage() {
   const supabase = await createClient()
@@ -31,7 +32,7 @@ export default async function UserMembershipsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">My Memberships</h1>
         <p className="mt-2 text-sm text-gray-600">
-          View and manage your current hockey association memberships
+          View and manage your current {getOrganizationName('long').toLowerCase()} memberships
         </p>
       </div>
 

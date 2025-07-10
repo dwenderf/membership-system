@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
+import { getOrganizationName } from '@/lib/organization'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -122,13 +123,13 @@ export default async function UserDashboardPage() {
   const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
   return (
-    <div className="px-4 py-6 sm:px-0 min-h-full">
+    <div className="px-4 py-6 sm:px-0">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {userProfile?.first_name}!
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Manage your hockey association membership and registrations
+          Manage your {getOrganizationName('long').toLowerCase()} membership and registrations
         </p>
       </div>
 

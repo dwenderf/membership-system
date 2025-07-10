@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import AdminToggle from './AdminToggle'
+import { getOrganizationName } from '@/lib/organization'
 
 interface User {
   id: string
@@ -37,7 +38,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/user" className="text-xl font-bold text-gray-900">
-                Hockey Association
+                {getOrganizationName('short')}
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">

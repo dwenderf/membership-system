@@ -428,6 +428,23 @@ email_logs (
 
 ## Future Enhancements (Phase 2)
 
+### Content Management System
+- **Dynamic Legal Documents Management**
+  - Admin interface for editing Privacy Policy, Terms of Service, Code of Conduct
+  - Rich text editor with version history
+  - Template system for consistent formatting
+  - Legal compliance tracking and archival
+  - Multi-language support for documents
+  - Document approval workflow for sensitive changes
+
+### Organization Configuration Management
+- **Advanced Organization Settings**
+  - Admin interface for organization name, contact info, branding
+  - Logo upload and management system
+  - Color scheme customization
+  - Feature flag management through admin UI
+  - Deployment-specific configuration management
+
 ### Hockey-Specific Features
 - Game scheduling and results tracking
 - Player statistics and performance metrics

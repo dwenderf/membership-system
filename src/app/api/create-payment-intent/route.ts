@@ -73,6 +73,7 @@ async function handleFreeMembership({
     let xeroInvoiceId = null
     
     try {
+      console.log('🔄 Starting Xero invoice creation for free membership...')
       // Build invoice data for Xero
       const paymentItems = [{
         item_type: 'membership' as const,
@@ -102,9 +103,11 @@ async function handleFreeMembership({
         discount_codes_used: [] // TODO: Add discount codes when implemented
       }
 
+      console.log('📝 Calling createXeroInvoiceBeforePayment with data:', JSON.stringify(xeroInvoiceData, null, 2))
       const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
         markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0 + optional donation)
       })
+      console.log('📋 Invoice result:', invoiceResult)
       
       if (invoiceResult.success) {
         invoiceNumber = invoiceResult.invoiceNumber
@@ -114,6 +117,7 @@ async function handleFreeMembership({
         console.warn(`⚠️ Failed to create Xero invoice for free membership: ${invoiceResult.error}`)
       }
     } catch (error) {
+      console.error('❌ Caught error in API endpoint:', error)
       console.warn('⚠️ Error creating Xero invoice for free membership:', error)
       
       // Capture Xero invoice creation errors in Sentry for visibility

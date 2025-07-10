@@ -129,6 +129,7 @@ export async function createXeroInvoiceBeforePayment(
   options?: { markAsAuthorised?: boolean }
 ): Promise<{ success: boolean; xeroInvoiceId?: string; invoiceNumber?: string; error?: string }> {
   try {
+    console.log('🚀 createXeroInvoiceBeforePayment called with:', { user_id: invoiceData.user_id, total_amount: invoiceData.total_amount })
     const activeTenant = await getActiveTenant()
     if (!activeTenant) {
       return { success: false, error: 'No active Xero tenant configured' }
@@ -140,8 +141,11 @@ export async function createXeroInvoiceBeforePayment(
     }
 
     // Ensure contact exists in Xero
+    console.log('👤 Getting/creating Xero contact for user:', invoiceData.user_id)
     const contactResult = await getOrCreateXeroContact(invoiceData.user_id, activeTenant.tenant_id)
+    console.log('👤 Contact result:', contactResult)
     if (!contactResult.success || !contactResult.xeroContactId) {
+      console.error('❌ Contact sync failed:', contactResult.error)
       return { 
         success: false, 
         error: `Failed to sync contact: ${contactResult.error}` 
@@ -191,12 +195,16 @@ export async function createXeroInvoiceBeforePayment(
 
     let response
     try {
+      console.log('📄 Creating Xero invoice with data:', JSON.stringify(xeroInvoiceData, null, 2))
       response = await xeroApi.createInvoices(activeTenant.tenant_id, {
         invoices: [xeroInvoiceData]
       })
+      console.log('✅ Invoice creation successful')
     } catch (invoiceError: any) {
+      console.error('❌ Invoice creation failed:', invoiceError)
       // Check if the error is due to archived contact
       const errorMessage = invoiceError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || ''
+      console.log('🔍 Checking if archived contact error:', errorMessage)
       if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
         console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, creating new contact for invoice`)
         

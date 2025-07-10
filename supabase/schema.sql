@@ -92,7 +92,8 @@ CREATE TABLE system_accounting_codes (
 INSERT INTO system_accounting_codes (code_type, accounting_code, description) VALUES
 ('donation_received_default', null, 'Default accounting code for donations received (line items in invoices)'),
 ('donation_given_default', null, 'Default accounting code for financial assistance/discounts given'),
-('registration_default', null, 'Default accounting code for registration categories without specific codes');
+('registration_default', null, 'Default accounting code for registration categories without specific codes'),
+('stripe_bank_account', null, 'Xero bank account code for Stripe payments (where Stripe deposits funds)');
 
 -- Seasons table
 CREATE TABLE seasons (

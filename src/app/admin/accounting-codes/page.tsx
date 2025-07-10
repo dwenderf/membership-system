@@ -16,6 +16,7 @@ interface SystemAccountingCode {
 interface AccountingCodes {
   donation_received_default: string
   donation_given_default: string
+  stripe_bank_account: string
 }
 
 interface DiscountCategory {
@@ -39,12 +40,14 @@ interface Membership {
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
     donation_received_default: '',
-    donation_given_default: ''
+    donation_given_default: '',
+    stripe_bank_account: ''
   })
   const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
   const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
     donation_received_default: '',
-    donation_given_default: ''
+    donation_given_default: '',
+    stripe_bank_account: ''
   })
   
   const [discountCategories, setDiscountCategories] = useState<DiscountCategory[]>([])

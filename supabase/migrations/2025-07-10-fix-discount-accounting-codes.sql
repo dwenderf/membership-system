@@ -11,4 +11,5 @@ WHERE code_type = 'donation_default';
 
 -- Add new donation_given_default for financial assistance/discounts (with null accounting_code)
 INSERT INTO system_accounting_codes (code_type, accounting_code, description) VALUES
-('donation_given_default', null, 'Default accounting code for financial assistance/discounts given');
+('donation_given_default', null, 'Default accounting code for financial assistance/discounts given'),
+('stripe_bank_account', null, 'Xero bank account code for Stripe payments (where Stripe deposits funds)');

@@ -122,7 +122,7 @@ export default async function UserDashboardPage() {
   const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
   return (
-    <div className="px-4 py-6 sm:px-0">
+    <div className="px-4 py-6 sm:px-0 min-h-full">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {userProfile?.first_name}!
@@ -135,7 +135,7 @@ export default async function UserDashboardPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Membership Status */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-5 flex flex-col h-full">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -158,7 +158,7 @@ export default async function UserDashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="mt-4">
+            <div className="mt-4 flex-grow">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Membership Status
               </h3>
@@ -224,12 +224,15 @@ export default async function UserDashboardPage() {
                   </svg>
                 </a>
               ) : (
-                // Healthy memberships - regular link to view
+                // Healthy memberships - browse for more
                 <a
-                  href="/user/memberships"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                  href="/user/browse-memberships"
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
                 >
-                  View my memberships →
+                  Browse Memberships
+                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </a>
               )}
             </div>
@@ -238,119 +241,74 @@ export default async function UserDashboardPage() {
 
         {/* Recent Registrations */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
+          <div className="p-5 flex flex-col h-full">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               Recent Registrations & Waitlists
             </h3>
-            {(userRegistrations && userRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
-              <div className="mt-4 space-y-3">
-                {/* Show recent registrations */}
-                {userRegistrations?.slice(0, 2).map((registration) => (
-                  <div key={`reg-${registration.id}`} className="flex justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {registration.registration?.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {registration.registration?.season?.name}
-                      </p>
-                    </div>
-                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      registration.payment_status === 'paid' 
-                        ? 'bg-green-100 text-green-800'
-                        : registration.payment_status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {registration.payment_status}
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Show recent waitlist entries */}
-                {userWaitlistEntries?.slice(0, 2).map((waitlistEntry) => (
-                  <div key={`wait-${waitlistEntry.id}`} className="flex justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {waitlistEntry.registration?.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
-                      </p>
-                    </div>
-                    <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Waitlist #{waitlistEntry.position}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-600">
-                No registrations or waitlists yet. Browse available registrations to get started.
-              </p>
-            )}
-            <div className="mt-5">
+            <div className="flex-grow">
               {(userRegistrations && userRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
-                <a
-                  href="/user/registrations"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                >
-                  View my registrations & waitlists →
-                </a>
+                <div className="mt-4 space-y-3">
+                  {/* Show recent registrations */}
+                  {userRegistrations?.slice(0, 2).map((registration) => (
+                    <div key={`reg-${registration.id}`} className="flex justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {registration.registration?.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {registration.registration?.season?.name}
+                        </p>
+                      </div>
+                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        registration.payment_status === 'paid' 
+                          ? 'bg-green-100 text-green-800'
+                          : registration.payment_status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {registration.payment_status}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Show recent waitlist entries */}
+                  {userWaitlistEntries?.slice(0, 2).map((waitlistEntry) => (
+                    <div key={`wait-${waitlistEntry.id}`} className="flex justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {waitlistEntry.registration?.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Waitlist #{waitlistEntry.position}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <a
-                  href="/user/browse-registrations"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                >
-                  Browse available registrations →
-                </a>
+                <p className="mt-4 text-sm text-gray-600">
+                  No registrations or waitlists yet. Browse available registrations to get started.
+                </p>
               )}
+            </div>
+            <div className="mt-5">
+              <a
+                href="/user/browse-registrations"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+              >
+                Browse Available Registrations
+                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </a>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <a
-            href="/user/browse-registrations"
-            className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-          >
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 bg-green-500 rounded-lg flex items-center justify-center">
-                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="absolute inset-0" aria-hidden="true" />
-              <p className="text-sm font-medium text-gray-900">Browse Registrations</p>
-              <p className="text-sm text-gray-500">Search for and register for upcoming events and teams</p>
-            </div>
-          </a>
-
-          <a
-            href="/user/browse-memberships"
-            className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-          >
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="absolute inset-0" aria-hidden="true" />
-              <p className="text-sm font-medium text-gray-900">Browse Memberships</p>
-              <p className="text-sm text-gray-500">Search for and purchase new memberships or extend existing ones</p>
-            </div>
-          </a>
-        </div>
-      </div>
     </div>
   )
 }

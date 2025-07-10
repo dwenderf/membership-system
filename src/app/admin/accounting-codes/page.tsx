@@ -455,9 +455,9 @@ export default function AccountingCodesPage() {
       <div className="space-y-6">
         {/* Default Codes Section */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Default Account Code</h2>
+          <h2 className="text-lg font-semibold mb-4">Default Account Codes</h2>
           <p className="text-sm text-gray-600 mb-4">
-            This code is used for donation line items in Xero invoices.
+            These codes are required to connect to Xero.
           </p>
           
           <div className="grid grid-cols-1 gap-4">

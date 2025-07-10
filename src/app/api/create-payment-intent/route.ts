@@ -74,14 +74,28 @@ async function handleFreeMembership({
     
     try {
       console.log('🔄 Starting Xero invoice creation for free membership...')
-      // Build invoice data for Xero
+      // Calculate full membership price
+      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+      
+      // Build invoice data for Xero - always show full membership price
       const paymentItems = [{
         item_type: 'membership' as const,
         item_id: membershipId,
-        amount: 0, // $0 for free membership
-        description: `${membership.name} - ${durationMonths} months${paymentOption === 'assistance' ? ' (Financial Assistance)' : ''}`,
+        amount: basePrice, // Full membership price
+        description: `${membership.name} - ${durationMonths} months`,
         accounting_code: membership.accounting_code
       }]
+
+      // Add financial assistance discount for free memberships
+      const discountCodesUsed = []
+      if (paymentOption === 'assistance' && basePrice > 0) {
+        discountCodesUsed.push({
+          code: 'FINANCIAL_ASSISTANCE',
+          amount_saved: basePrice, // Full price was discounted
+          category_name: 'Financial Assistance',
+          accounting_code: undefined // Will use donation_given_default from system codes
+        })
+      }
 
       // Add donation item if applicable (even for $0 memberships, someone might donate)
       if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
@@ -90,17 +104,17 @@ async function handleFreeMembership({
           item_id: membershipId,
           amount: donationAmount,
           description: 'Donation',
-          accounting_code: undefined
+          accounting_code: undefined // Will use donation_received_default from system codes
         })
       }
 
       const xeroInvoiceData: PrePaymentInvoiceData = {
         user_id: user.id,
-        total_amount: donationAmount || 0, // Only donation amount for free membership
-        discount_amount: 0,
-        final_amount: donationAmount || 0,
+        total_amount: basePrice + (donationAmount || 0),
+        discount_amount: discountCodesUsed.length > 0 ? discountCodesUsed[0].amount_saved : 0,
+        final_amount: donationAmount || 0, // $0 after discount + optional donation
         payment_items: paymentItems,
-        discount_codes_used: [] // TODO: Add discount codes when implemented
+        discount_codes_used: discountCodesUsed
       }
 
       console.log('📝 Calling createXeroInvoiceBeforePayment with data:', JSON.stringify(xeroInvoiceData, null, 2))

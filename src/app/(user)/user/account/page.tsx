@@ -37,6 +37,14 @@ export default async function AccountPage() {
         <div className="px-6 py-4">
           <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
             <div>
+              <dt className="text-sm font-medium text-gray-500">Membership Number</dt>
+              <dd className="mt-1">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-200">
+                  #{userProfile?.member_id || 'Not assigned'}
+                </span>
+              </dd>
+            </div>
+            <div>
               <dt className="text-sm font-medium text-gray-500">Email Address</dt>
               <dd className="mt-1 text-sm text-gray-900">{userProfile?.email}</dd>
             </div>

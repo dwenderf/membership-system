@@ -80,7 +80,7 @@ CREATE TABLE magic_link_tokens (
 CREATE TABLE system_accounting_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code_type TEXT NOT NULL,
-    accounting_code TEXT NOT NULL,
+    accounting_code TEXT,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

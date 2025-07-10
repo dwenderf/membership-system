@@ -115,6 +115,27 @@ async function handleFreeMembership({
       }
     } catch (error) {
       console.warn('⚠️ Error creating Xero invoice for free membership:', error)
+      
+      // Capture Xero invoice creation errors in Sentry for visibility
+      Sentry.withScope((scope) => {
+        scope.setTag('integration', 'xero')
+        scope.setTag('operation', 'free_membership_invoice')
+        scope.setTag('user_id', user.id)
+        scope.setLevel('warning') // Non-critical since payment still succeeds
+        scope.setContext('free_membership_invoice_error', {
+          user_id: user.id,
+          membership_id: membershipId,
+          duration_months: durationMonths,
+          donation_amount: donationAmount,
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        
+        if (error instanceof Error) {
+          Sentry.captureException(error)
+        } else {
+          Sentry.captureMessage(`Free membership Xero invoice creation failed: ${error}`, 'warning')
+        }
+      })
     }
 
     // Create payment record with $0 amount and completed status

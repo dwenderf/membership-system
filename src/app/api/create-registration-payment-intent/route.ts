@@ -142,6 +142,27 @@ async function handleFreeRegistration({
       }
     } catch (error) {
       console.warn('⚠️ Error creating Xero invoice for free registration:', error)
+      
+      // Capture Xero invoice creation errors in Sentry for visibility
+      Sentry.withScope((scope) => {
+        scope.setTag('integration', 'xero')
+        scope.setTag('operation', 'free_registration_invoice')
+        scope.setTag('user_id', user.id)
+        scope.setLevel('warning') // Non-critical since payment still succeeds
+        scope.setContext('free_registration_invoice_error', {
+          user_id: user.id,
+          registration_id: registrationId,
+          category_id: categoryId,
+          discount_code: discountCode,
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        
+        if (error instanceof Error) {
+          Sentry.captureException(error)
+        } else {
+          Sentry.captureMessage(`Free registration Xero invoice creation failed: ${error}`, 'warning')
+        }
+      })
     }
 
     // Create payment record with $0 amount and completed status

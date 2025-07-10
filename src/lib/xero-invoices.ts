@@ -243,9 +243,10 @@ export async function createXeroInvoiceBeforePayment(
         
         // Before creating new contact, check if there's another non-archived contact with same email
         try {
+          const supabase = await createClient()
           const { data: userData } = await supabase
             .from('users')
-            .select('email')
+            .select('email, first_name, last_name, member_id')
             .eq('id', invoiceData.user_id)
             .single()
           
@@ -257,52 +258,63 @@ export async function createXeroInvoiceBeforePayment(
             )
             
             if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
-              // Look for any non-archived contact with same email
-              const nonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+              console.log(`🔍 Found ${emailSearchResponse.body.contacts.length} contacts with email ${userData.email}:`)
+              emailSearchResponse.body.contacts.forEach((contact, index) => {
+                console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || 'ACTIVE'}`)
+              })
+              
+              // First, look for exact name match with our naming convention
+              const expectedNamePrefix = userData.member_id 
+                ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                : `${userData.first_name} ${userData.last_name}`
+              
+              const exactNameMatch = emailSearchResponse.body.contacts.find(contact => 
+                contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
+                contact.contactStatus !== 'ARCHIVED' &&             // Must be non-archived
+                contact.name === expectedNamePrefix                  // Exact name match
+              )
+              
+              // If no exact match, look for any non-archived contact
+              const anyNonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
                 contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
                 contact.contactStatus !== 'ARCHIVED'               // Find non-archived contacts
               )
               
+              const nonArchivedContact = exactNameMatch || anyNonArchivedContact
+              
+              if (exactNameMatch) {
+                console.log(`🎯 Found exact name match: "${exactNameMatch.name}" (${exactNameMatch.contactID})`)
+              } else {
+                console.log(`🔍 Non-archived contact found: ${nonArchivedContact ? `"${nonArchivedContact.name}" (${nonArchivedContact.contactID})` : 'None'}`)
+              }
+              
               if (nonArchivedContact && nonArchivedContact.contactID) {
                 console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)
                 
-                // Get full user data to check naming convention
-                const { data: fullUserData } = await supabase
-                  .from('users')
-                  .select('first_name, last_name, member_id')
-                  .eq('id', invoiceData.user_id)
-                  .single()
-                
-                if (fullUserData) {
-                  // Check if the contact name follows our naming convention
-                  const expectedNamePrefix = fullUserData.member_id 
-                    ? `${fullUserData.first_name} ${fullUserData.last_name} - ${fullUserData.member_id}`
-                    : `${fullUserData.first_name} ${fullUserData.last_name}`
+                // Check if the contact name follows our naming convention (only update if not exact match)
+                if (!exactNameMatch) {
+                  // This contact doesn't follow our convention, update it but add timestamp for uniqueness
+                  const timestamp = Date.now().toString().slice(-6)
+                  const finalContactName = userData.member_id 
+                    ? `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
+                    : `${userData.first_name} ${userData.last_name} (${timestamp})`
                   
-                  if (!nonArchivedContact.name?.startsWith(expectedNamePrefix)) {
-                    // Contact name doesn't follow our convention, update it but add timestamp for uniqueness
-                    const timestamp = Date.now().toString().slice(-6)
-                    const finalContactName = fullUserData.member_id 
-                      ? `${fullUserData.first_name} ${fullUserData.last_name} - ${fullUserData.member_id} (${timestamp})`
-                      : `${fullUserData.first_name} ${fullUserData.last_name} (${timestamp})`
-                    
-                    console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
-                    
-                    // Update the contact name to follow our convention
-                    await xeroApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
-                      contacts: [{
-                        contactID: nonArchivedContact.contactID,
-                        name: finalContactName,
-                        firstName: fullUserData.first_name,
-                        lastName: fullUserData.last_name,
-                        emailAddress: userData.email
-                      }]
-                    })
-                    
-                    console.log(`✅ Updated contact name to follow convention: ${finalContactName}`)
-                  } else {
-                    console.log(`✅ Contact name already follows our convention: ${nonArchivedContact.name}`)
-                  }
+                  console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
+                  
+                  // Update the contact name to follow our convention
+                  await xeroApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
+                    contacts: [{
+                      contactID: nonArchivedContact.contactID,
+                      name: finalContactName,
+                      firstName: userData.first_name,
+                      lastName: userData.last_name,
+                      emailAddress: userData.email
+                    }]
+                  })
+                  
+                  console.log(`✅ Updated contact name to follow convention: ${finalContactName}`)
+                } else {
+                  console.log(`✅ Contact name already follows our convention: ${nonArchivedContact.name}`)
                 }
                 
                 // Use the non-archived contact for invoice
@@ -342,7 +354,8 @@ export async function createXeroInvoiceBeforePayment(
             throw new Error('User email not found')
           }
         } catch (searchError) {
-          console.log('Error searching for non-archived contacts, falling back to creating new contact')
+          console.error('Error searching for non-archived contacts:', searchError)
+          console.log('Falling back to creating new contact')
           const newContactResult = await createNewContactForArchivedContact(invoiceData.user_id, activeTenant.tenant_id)
           if (!newContactResult.success || !newContactResult.xeroContactId) {
             throw invoiceError

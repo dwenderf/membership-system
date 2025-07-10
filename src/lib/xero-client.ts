@@ -57,9 +57,15 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
 
     if (isExpired) {
       // Try to refresh the token
+      console.log(`🔄 Attempting to refresh expired Xero token for tenant: ${tenantId}`)
       const refreshedTokens = await refreshXeroToken(tokenData.refresh_token)
       if (!refreshedTokens) {
         console.error('Failed to refresh Xero token for tenant:', tenantId)
+        console.error('This usually means:')
+        console.error('1. Refresh token has expired (60 days)')
+        console.error('2. App has been disconnected by user')
+        console.error('3. Refresh token has been revoked')
+        console.error('👉 User needs to re-authenticate with Xero')
         return null
       }
 
@@ -124,8 +130,17 @@ async function refreshXeroToken(refreshToken: string): Promise<{
       expires_at: refreshedTokenSet.expires_at?.toString() || 
                   new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error refreshing Xero token:', error)
+    
+    // Log more details about the error
+    if (error?.response?.data) {
+      console.error('Xero token refresh error details:', error.response.data)
+    }
+    if (error?.response?.status) {
+      console.error('Xero token refresh status:', error.response.status)
+    }
+    
     return null
   }
 }

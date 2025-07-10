@@ -455,6 +455,38 @@ xero_sync_logs (
 )
 ```
 
+### Contact Management & Conflict Resolution
+
+**Xero API Constraints:**
+- ✅ **Contact Names Must Be Unique**: Xero enforces unique contact names globally
+- ⚠️ **Email Addresses Can Be Duplicated**: Multiple contacts can share the same email
+- 🔒 **Archived Contacts Cannot Be Updated**: Archived contacts require special handling
+
+**Our Resolution Strategy:**
+
+1. **Member ID Integration**: All users get unique member_id (1001, 1002, etc.)
+   ```sql
+   -- User table includes member_id for contact naming
+   users (
+     member_id: INTEGER UNIQUE  -- Auto-incrementing member number
+   )
+   ```
+
+2. **Contact Naming Convention**: 
+   - **Primary Format**: "First Last - MemberID" → "David Wender - 1001"
+   - **Conflict Resolution**: "First Last - MemberID (timestamp)" → "David Wender - 1001 (43423)"
+
+3. **Archived Contact Handling**:
+   - **Detection**: API returns validation error for archived contacts
+   - **Strategy**: Create new contact instead of unarchiving (respects business decisions)
+   - **Naming**: Uses member ID + timestamp for uniqueness
+
+**Benefits:**
+- **Guaranteed Uniqueness**: Member ID prevents naming conflicts
+- **Business Logic Respect**: Doesn't override archival decisions
+- **Audit Trail**: Clear tracking when multiple contacts needed
+- **Easy Identification**: Member number always visible in Xero
+
 **Why This Pattern:**
 - **Reliability:** Complete audit trail for debugging sync issues
 - **Resilience:** Failed syncs don't break payment processing

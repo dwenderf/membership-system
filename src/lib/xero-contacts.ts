@@ -180,6 +180,7 @@ export async function syncUserToXeroContact(
       firstName: userData.first_name,
       lastName: userData.last_name,
       emailAddress: userData.email,
+      contactStatus: 'ACTIVE' as any, // Try to unarchive if archived
       contactPersons: userData.phone ? [{
         firstName: userData.first_name,
         lastName: userData.last_name,
@@ -201,7 +202,62 @@ export async function syncUserToXeroContact(
         // Check if the error is due to archived contact
         const errorMessage = updateError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || ''
         if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
-          console.log(`⚠️ Contact ${xeroContactId} is archived, creating new contact instead`)
+          console.log(`⚠️ Contact ${xeroContactId} is archived, checking for other non-archived contacts with same email`)
+          
+          // Before creating new contact, check if there's another non-archived contact with same email
+          try {
+            const emailSearchResponse = await xeroApi.getContacts(
+              tenantId,
+              undefined,
+              `EmailAddress="${userData.email}"`
+            )
+            
+            if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
+              // Look for any non-archived contact with same email
+              const nonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+                contact.contactID !== xeroContactId && // Exclude the archived one we just tried
+                contact.contactStatus !== 'ARCHIVED'   // Find non-archived contacts
+              )
+              
+              if (nonArchivedContact && nonArchivedContact.contactID) {
+                console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)
+                
+                // Check if the contact name follows our naming convention
+                const expectedNamePrefix = userData.member_id 
+                  ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                  : `${userData.first_name} ${userData.last_name}`
+                
+                let finalContactName = expectedNamePrefix
+                
+                if (!nonArchivedContact.name?.startsWith(expectedNamePrefix)) {
+                  // Contact name doesn't follow our convention, update it but add timestamp for uniqueness
+                  const timestamp = Date.now().toString().slice(-6)
+                  finalContactName = userData.member_id 
+                    ? `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
+                    : `${userData.first_name} ${userData.last_name} (${timestamp})`
+                  
+                  console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
+                } else {
+                  console.log(`✅ Contact name already follows our convention: ${nonArchivedContact.name}`)
+                }
+                
+                // Update the non-archived contact with correct naming convention
+                contactData.contactID = nonArchivedContact.contactID
+                contactData.name = finalContactName
+                
+                response = await xeroApi.updateContact(tenantId, nonArchivedContact.contactID, {
+                  contacts: [contactData]
+                })
+                
+                console.log(`✅ Successfully updated existing non-archived contact: ${nonArchivedContact.contactID} with name: ${finalContactName}`)
+                return
+              }
+            }
+          } catch (emailSearchError) {
+            console.log('Error searching for non-archived contacts with same email, proceeding to create new contact')
+          }
+          
+          console.log(`⚠️ No non-archived contacts found with email ${userData.email}, creating new contact`)
           
           // Create a new contact with unique name to avoid the archived contact
           if (userData.member_id) {
@@ -209,6 +265,27 @@ export async function syncUserToXeroContact(
           } else {
             const emailPart = userData.email.split('@')[0]
             contactData.name = `${userData.first_name} ${userData.last_name} (${emailPart})`
+          }
+          
+          // Check for name uniqueness and add timestamp if needed
+          try {
+            const nameCheckResponse = await xeroApi.getContacts(
+              tenantId,
+              undefined,
+              `Name="${contactData.name}"`
+            )
+            
+            if (nameCheckResponse.body.contacts && nameCheckResponse.body.contacts.length > 0) {
+              const timestamp = Date.now().toString().slice(-6)
+              if (userData.member_id) {
+                contactData.name = `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
+              } else {
+                contactData.name = `${userData.first_name} ${userData.last_name} (${timestamp})`
+              }
+              console.log(`⚠️ Name conflict detected, using timestamped name: ${contactData.name}`)
+            }
+          } catch (nameCheckError) {
+            console.log('Name uniqueness check failed, proceeding with generated name')
           }
           
           // Remove contactID since we're creating new

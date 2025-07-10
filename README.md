@@ -546,13 +546,32 @@ The admin interface provides manual sync options:
 ✅ **Discount Transparency** - Clear breakdown of promotional pricing
 ✅ **Audit Trail** - Complete transaction history and error logging
 
+#### Contact Management & Conflict Resolution
+
+**Xero Contact Constraints:**
+- ✅ **Unique Names Required**: Xero enforces unique contact names
+- ⚠️ **Duplicate Emails Allowed**: Xero permits multiple contacts with same email address
+
+**Our Contact Strategy:**
+1. **Member ID Integration**: All users are assigned unique member IDs (e.g., 1001, 1002)
+2. **Naming Convention**: Contacts created as "First Last - MemberID" (e.g., "David Wender - 1001")
+3. **Archived Contact Handling**: When encountering archived contacts, we create new contacts instead of unarchiving (respects the archival decision)
+4. **Name Conflict Resolution**: If name conflicts occur, timestamp is added in parentheses: "David Wender - 1001 (43423)"
+
+**Benefits:**
+- ✅ **Guaranteed Uniqueness**: Member ID ensures no naming conflicts
+- ✅ **Easy Identification**: Member number visible in Xero contact name
+- ✅ **Audit Trail**: Clear tracking when multiple contacts needed for same person
+- ✅ **Archive Respect**: Doesn't override business decisions to archive contacts
+
 #### Troubleshooting
 
 **Common Issues:**
-- **Token Expired**: Tokens refresh automatically, but you can reconnect manually
+- **Token Expired**: Tokens refresh automatically, but you can reconnect manually (refresh tokens expire after 60 days)
 - **Sync Failures**: Check the sync logs in the admin interface for detailed error messages
 - **Missing Invoices**: Use the bulk sync feature to catch up on historical data
 - **Account Codes**: Discount codes and memberships will use default codes if not configured
+- **Archived Contacts**: System automatically creates new contacts when encountering archived ones
 
 **Error Monitoring:**
 - All sync operations are logged to Sentry for monitoring

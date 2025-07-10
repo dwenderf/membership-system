@@ -17,7 +17,7 @@ export interface StripePaymentData {
 export async function recordStripePaymentInXero(
   paymentId: string,
   tenantId: string,
-  bankAccountCode: string = 'STRIPE' // Default account code for Stripe
+  bankAccountCode?: string // Will fetch from system_accounting_codes if not provided
 ): Promise<{ success: boolean; xeroPaymentId?: string; error?: string }> {
   try {
     const supabase = await createClient()
@@ -25,6 +25,24 @@ export async function recordStripePaymentInXero(
 
     if (!xeroApi) {
       return { success: false, error: 'Unable to authenticate with Xero' }
+    }
+
+    // Get bank account code from system_accounting_codes if not provided
+    if (!bankAccountCode) {
+      const { data: systemCode, error: codeError } = await supabase
+        .from('system_accounting_codes')
+        .select('accounting_code')
+        .eq('code_type', 'stripe_bank_account')
+        .single()
+      
+      if (codeError || !systemCode?.accounting_code) {
+        return { 
+          success: false, 
+          error: 'Stripe bank account code not configured. Please set up the stripe_bank_account in system accounting codes.' 
+        }
+      }
+      
+      bankAccountCode = systemCode.accounting_code
     }
 
     // Check if payment already recorded

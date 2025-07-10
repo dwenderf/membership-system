@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the required accounting codes
-    const requiredCodes = ['donation_received_default', 'donation_given_default']
+    const requiredCodes = ['donation_received_default', 'donation_given_default', 'stripe_bank_account']
     const { data: codes, error } = await supabase
       .from('system_accounting_codes')
       .select('code_type, accounting_code')
@@ -53,6 +53,8 @@ export async function GET(request: NextRequest) {
             return 'Donation Received'
           case 'donation_given_default':
             return 'Donation Given (Financial Assistance)'
+          case 'stripe_bank_account':
+            return 'Stripe Bank Account'
           default:
             return code
         }

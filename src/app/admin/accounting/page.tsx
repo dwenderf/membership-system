@@ -1,33 +1,52 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function AccountingIntegrationPage() {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    redirect('/auth/login')
+export default function AccountingIntegrationPage() {
+  const [isXeroConnected, setIsXeroConnected] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    const checkXeroStatus = async () => {
+      try {
+        const response = await fetch('/api/xero/status')
+        if (response.ok) {
+          const data = await response.json()
+          setIsXeroConnected(data.has_active_connection)
+        } else if (response.status === 401) {
+          router.push('/auth/login')
+          return
+        } else if (response.status === 403) {
+          router.push('/dashboard')
+          return
+        }
+      } catch (error) {
+        console.error('Error checking Xero status:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkXeroStatus()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
+          <div className="space-y-6">
+            <div className="h-32 bg-gray-200 rounded"></div>
+            <div className="h-32 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
-
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!userProfile?.is_admin) {
-    redirect('/dashboard')
-  }
-
-  // Check if Xero is connected by looking for active OAuth tokens
-  const { data: xeroTokens } = await supabase
-    .from('xero_oauth_tokens')
-    .select('*')
-    .eq('is_active', true)
-
-  const isXeroConnected = xeroTokens && xeroTokens.length > 0
 
   return (
     <div className="p-6">

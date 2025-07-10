@@ -240,7 +240,7 @@ export async function createXeroInvoiceBeforePayment(
       lineItems: lineItems,
       date: new Date().toISOString().split('T')[0], // Today's date
       dueDate: new Date().toISOString().split('T')[0], // Due today
-      reference: options?.markAsAuthorised ? 'Fully Paid' : 'Pending Payment',
+      reference: '',
       currencyCode: CurrencyCode.USD // Configurable if needed
     }
 

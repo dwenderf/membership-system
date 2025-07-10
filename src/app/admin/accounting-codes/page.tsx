@@ -78,14 +78,17 @@ export default function AccountingCodesPage() {
         // Initialize the codes state from system codes
         const codesObj: AccountingCodes = {
           donation_received_default: '',
-          donation_given_default: ''
+          donation_given_default: '',
+          stripe_bank_account: ''
         }
         
         systemCodes.forEach((code: SystemAccountingCode) => {
           if (code.code_type === 'donation_received_default') {
-            codesObj.donation_received_default = code.accounting_code
+            codesObj.donation_received_default = code.accounting_code || ''
           } else if (code.code_type === 'donation_given_default') {
-            codesObj.donation_given_default = code.accounting_code
+            codesObj.donation_given_default = code.accounting_code || ''
+          } else if (code.code_type === 'stripe_bank_account') {
+            codesObj.stripe_bank_account = code.accounting_code || ''
           }
         })
         
@@ -177,7 +180,8 @@ export default function AccountingCodesPage() {
   // Check if default codes have changed
   const hasDefaultCodesChanges = () => {
     return codes.donation_received_default !== originalCodes.donation_received_default ||
-           codes.donation_given_default !== originalCodes.donation_given_default
+           codes.donation_given_default !== originalCodes.donation_given_default ||
+           codes.stripe_bank_account !== originalCodes.stripe_bank_account
   }
 
   // Check if any category has changed
@@ -218,6 +222,10 @@ export default function AccountingCodesPage() {
       showError('Please enter a donation given accounting code')
       return
     }
+    if (!codes.stripe_bank_account?.trim()) {
+      showError('Please enter a Stripe bank account code')
+      return
+    }
 
     setUpdating(true)
     try {
@@ -230,6 +238,10 @@ export default function AccountingCodesPage() {
         {
           code_type: 'donation_given_default',
           accounting_code: codes.donation_given_default.trim()
+        },
+        {
+          code_type: 'stripe_bank_account',
+          accounting_code: codes.stripe_bank_account.trim()
         }
       ]
 
@@ -477,6 +489,21 @@ export default function AccountingCodesPage() {
               />
               <p className="text-xs text-gray-500 mt-1">
                 Used for financial assistance/discount line items in Xero invoices
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stripe Bank Account
+              </label>
+              <input
+                type="text"
+                value={codes.stripe_bank_account}
+                onChange={(e) => handleInputChange('stripe_bank_account', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                placeholder="Enter Accounting Code (required)"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Xero bank account where Stripe deposits payments (used when recording payments)
               </p>
             </div>
             

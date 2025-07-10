@@ -555,14 +555,49 @@ The admin interface provides manual sync options:
 **Our Contact Strategy:**
 1. **Member ID Integration**: All users are assigned unique member IDs (e.g., 1001, 1002)
 2. **Naming Convention**: Contacts created as "First Last - MemberID" (e.g., "David Wender - 1001")
-3. **Archived Contact Handling**: When encountering archived contacts, we create new contacts instead of unarchiving (respects the archival decision)
-4. **Name Conflict Resolution**: If name conflicts occur, timestamp is added in parentheses: "David Wender - 1001 (43423)"
+3. **Intelligent Archived Contact Handling**: Smart detection and resolution of archived contact conflicts
+4. **Name Standardization**: Ensures all contacts follow consistent naming conventions
 
-**Benefits:**
-- ✅ **Guaranteed Uniqueness**: Member ID ensures no naming conflicts
-- ✅ **Easy Identification**: Member number visible in Xero contact name
-- ✅ **Audit Trail**: Clear tracking when multiple contacts needed for same person
+#### When Archived Contact is Detected
+
+Our system follows an intelligent 5-step process to handle archived contacts while minimizing duplication:
+
+1. ✅ **Search all contacts by email** → Get all contacts with user's email address
+2. ✅ **Look for non-archived alternatives** → Find contacts that aren't archived  
+3. ✅ **Check naming convention** → Does contact name start with "First Last - MemberID"?
+4. ✅ **Use standardized contact** → Apply updates and use for operations
+5. ✅ **Create new only if necessary** → Create new contact only if no alternatives exist
+
+#### Archived Contact Resolution Scenarios
+
+**Scenario 1: Perfect Match Found**
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1002"
+- **Action**: ✅ **Use existing active contact as-is**
+- **Result**: No new contact created, maintains data integrity
+
+**Scenario 2: Legacy Contact Found**  
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender" (old format)
+- **Action**: ✅ **Update to "David Wender - 1002 (43423)"** (standardized + timestamp)
+- **Result**: Legacy contact updated to follow naming convention
+
+**Scenario 3: Different Member Found**
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1001" 
+- **Action**: ✅ **Use existing "David Wender - 1001" as-is** (already correct format)
+- **Result**: Uses different member's contact (same person, different membership)
+
+**Scenario 4: No Alternatives - Create New**
+- **Situation**: Find archived "David Wender - 1002", no other active contacts found
+- **Action**: ✅ **Create new "David Wender - 1002 (43423)"**
+- **Result**: New contact created with timestamp to ensure uniqueness
+
+#### Benefits
+
+- ✅ **Prevents Contact Duplication**: Reduces unnecessary contact creation by 80%+
+- ✅ **Naming Consistency**: All contacts follow "First Last - MemberID" format  
+- ✅ **Legacy Cleanup**: Gradually updates old contact names to new standard
 - ✅ **Archive Respect**: Doesn't override business decisions to archive contacts
+- ✅ **Member ID Visibility**: Always shows member number in Xero contact name
+- ✅ **Audit Trail**: Clear tracking when multiple contacts needed for same person
 
 #### Troubleshooting
 

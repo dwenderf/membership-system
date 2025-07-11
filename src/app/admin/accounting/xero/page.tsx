@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
@@ -24,7 +24,7 @@ interface SyncLog {
   created_at: string
 }
 
-export default function XeroIntegrationPage() {
+function XeroIntegrationContent() {
   const [isXeroConnected, setIsXeroConnected] = useState(false)
   const [currentToken, setCurrentToken] = useState<XeroToken | null>(null)
   const [recentSyncLogs, setRecentSyncLogs] = useState<SyncLog[]>([])
@@ -471,5 +471,24 @@ export default function XeroIntegrationPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function XeroIntegrationPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
+          <div className="space-y-6">
+            <div className="h-32 bg-gray-200 rounded"></div>
+            <div className="h-32 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    }>
+      <XeroIntegrationContent />
+    </Suspense>
   )
 }

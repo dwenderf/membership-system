@@ -161,7 +161,6 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
 
 // Handle registration payment processing
 async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, registrationId: string) {
-  console.log(`🔍 Webhook: Processing registration payment for intent: ${paymentIntent.id}`)
   // Note: Webhook doesn't have access to categoryId, so we'll need to get it from the registration
   // For now, let's keep the direct database update in webhooks since they're backup/redundancy
   

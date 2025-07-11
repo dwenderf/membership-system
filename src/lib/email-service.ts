@@ -92,14 +92,10 @@ class EmailService {
       let loopsResponse
       if (templateId) {
         // Send using a template
-        console.log(`📧 Sending email with template ID: ${templateId}`)
-        console.log(`📧 Email data:`, JSON.stringify(data, null, 2))
-        
         // Clean data to ensure no undefined values
         const cleanData = Object.fromEntries(
           Object.entries(data).filter(([_, value]) => value !== undefined)
         )
-        console.log(`📧 Cleaned email data:`, JSON.stringify(cleanData, null, 2))
         
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
@@ -108,7 +104,6 @@ class EmailService {
         })
       } else {
         // Send as a basic contact event (for triggering automations)
-        console.log(`📧 No template ID provided, sending as event: ${eventType}`)
         loopsResponse = await this.loops.sendEvent({
           email: email,
           eventName: eventType,

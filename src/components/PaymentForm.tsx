@@ -261,7 +261,6 @@ export default function PaymentForm({
               endDate: endDate!.toISOString().split('T')[0], // YYYY-MM-DD format
             }
 
-        console.log(`🔍 Frontend: Sending confirmation with payment intent: ${paymentIntent.id}`)
 
         const response = await fetch(endpoint, {
           method: 'POST',

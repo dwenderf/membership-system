@@ -69,6 +69,7 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -231,6 +232,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -389,6 +391,8 @@ export async function POST(request: NextRequest) {
           .from('payments')
           .update({
             status: 'failed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
 

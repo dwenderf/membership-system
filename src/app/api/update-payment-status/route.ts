@@ -29,13 +29,21 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Build update object
+    const updateData: any = {
+      status: status,
+      updated_at: new Date().toISOString()
+    }
+
+    // Set completed_at for final states (transaction is finished, successfully or not)
+    if (['completed', 'failed', 'cancelled'].includes(status)) {
+      updateData.completed_at = new Date().toISOString()
+    }
+
     // Update the payment status
     const { data, error } = await adminSupabase
       .from('payments')
-      .update({ 
-        status: status,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('stripe_payment_intent_id', stripePaymentIntentId)
       .eq('user_id', user.id) // Ensure user can only update their own payments
       .select()

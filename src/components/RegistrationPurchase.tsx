@@ -373,9 +373,7 @@ export default function RegistrationPurchase({
       return
     }
 
-    // Regular registration flow - open payment modal
-    setShowPaymentForm(true)
-    
+    // Regular registration flow - open payment modal AFTER getting fresh payment intent
     try {
       const response = await fetch('/api/create-registration-payment-intent', {
         method: 'POST',
@@ -415,6 +413,7 @@ export default function RegistrationPurchase({
       setClientSecret(clientSecret)
       setPaymentIntentId(intentId)
       setReservationExpiresAt(expiresAt || null)
+      setShowPaymentForm(true) // Only show form after we have fresh payment intent data
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)

@@ -142,7 +142,7 @@ export default function OnboardingPage() {
       }
 
       // Show success toast
-      showSuccess('Profile completed!', `Welcome to the ${getOrganizationName('long').toLowerCase()}`
+      showSuccess('Profile completed!', `Welcome to the ${getOrganizationName('long').toLowerCase()}`)
 
       // Redirect based on membership preference (no delay needed)
       if (formData.wantsMembership) {

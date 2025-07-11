@@ -104,7 +104,7 @@ class EmailService {
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
-          dataVariables: cleanData
+          datavariable: cleanData  // Changed from dataVariables to datavariable (singular, lowercase)
         })
       } else {
         // Send as a basic contact event (for triggering automations)

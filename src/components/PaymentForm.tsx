@@ -27,6 +27,9 @@ interface PaymentFormProps {
   // Reservation timer (only for capacity-limited registrations)
   reservationExpiresAt?: string
   onTimerExpired?: () => void
+  
+  // Payment intent ID for status updates
+  paymentIntentId?: string
 }
 
 export default function PaymentForm({
@@ -41,7 +44,8 @@ export default function PaymentForm({
   onSuccess,
   onError,
   reservationExpiresAt,
-  onTimerExpired
+  onTimerExpired,
+  paymentIntentId
 }: PaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
@@ -183,8 +187,11 @@ export default function PaymentForm({
           }
         }
 
-        // Update payment record status to 'failed' if we have a payment intent
-        if (paymentIntent) {
+        // Update payment record status to 'failed' 
+        // Use payment intent ID from either the error response or the prop passed from parent
+        const intentId = paymentIntent?.id || paymentIntentId
+        
+        if (intentId) {
           try {
             await fetch('/api/update-payment-status', {
               method: 'POST',
@@ -192,13 +199,16 @@ export default function PaymentForm({
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                stripePaymentIntentId: paymentIntent.id,
+                stripePaymentIntentId: intentId,
                 status: 'failed'
               }),
             })
+            console.log(`✅ Updated payment ${intentId} status to failed`)
           } catch (paymentError) {
             console.warn('Failed to update payment status to failed:', paymentError)
           }
+        } else {
+          console.warn('No payment intent ID available to update payment status to failed')
         }
 
         onError(error.message || 'Payment failed')

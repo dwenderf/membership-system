@@ -75,6 +75,7 @@ export default function RegistrationPurchase({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [presaleCode, setPresaleCode] = useState<string>('')
@@ -100,6 +101,7 @@ export default function RegistrationPurchase({
   const closeModal = async () => {
     setShowPaymentForm(false)
     setClientSecret(null)
+    setPaymentIntentId(null)
     setSelectedCategoryId(null) // Clear selected category
     setDiscountCode('')
     setDiscountValidation(null)
@@ -370,8 +372,9 @@ export default function RegistrationPurchase({
         return
       }
       
-      const { clientSecret, reservationExpiresAt: expiresAt } = responseData
+      const { clientSecret, paymentIntentId: intentId, reservationExpiresAt: expiresAt } = responseData
       setClientSecret(clientSecret)
+      setPaymentIntentId(intentId)
       setReservationExpiresAt(expiresAt || null)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
@@ -841,6 +844,7 @@ export default function RegistrationPurchase({
                   userEmail={userEmail}
                   reservationExpiresAt={reservationExpiresAt || undefined}
                   onTimerExpired={handleTimerExpired}
+                  paymentIntentId={paymentIntentId || undefined}
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setClientSecret(null)

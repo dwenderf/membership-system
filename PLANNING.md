@@ -5,7 +5,7 @@ A comprehensive membership and registration system for an adult hockey associati
 
 ## Project Status 🚀
 
-### Recent Achievements (2025-07-10)
+### Recent Achievements (2025-07-11)
 - ✅ **Phase 8: Xero Accounting Integration** - **COMPLETED**
   - Full OAuth 2.0 implementation with automatic token management
   - Intelligent contact management with 80%+ duplicate reduction
@@ -13,9 +13,29 @@ A comprehensive membership and registration system for an adult hockey associati
   - Advanced error handling and monitoring with Sentry integration
   - Production-ready with comprehensive documentation
 
-### Current Focus
-- **Phase 9**: Admin Waitlist Management
-- **Phase 10**: Advanced Features (Pricing Tiers, Enhanced Admin Tools)
+- ✅ **Critical Payment System Fixes** - **COMPLETED**
+  - Fixed race condition where wrong payment records were updated during retry attempts
+  - Resolved frontend caching causing stale payment intent IDs in PaymentForm component
+  - Implemented proper payment lifecycle tracking with audit trails
+  - Added completed_at timestamps for final payment states
+  - Fixed email confirmation errors with Loops.so API integration
+  - Enhanced payment status updates with centralized API endpoint
+
+- ✅ **Xero Token Keep-Alive System** - **COMPLETED**
+  - Automated token refresh system to prevent Xero authentication failures
+  - Vercel Cron job running every 12 hours for production environments
+  - Startup connection testing for development and deployment scenarios
+  - Comprehensive documentation and monitoring with error logging
+  - Supports both scheduled (production) and startup-based (development) token management
+
+### Current Status
+The core membership and registration system is **production-ready** with all critical features completed:
+- Complete payment processing with retry reliability
+- Xero accounting integration with automated token management  
+- Comprehensive waitlist and discount systems
+- Full admin and user interfaces
+
+**Optional Future Enhancements**: Admin reporting dashboard, content management system, enhanced email marketing tools
 
 ### System Maturity
 - **Core Features**: ✅ Production Ready (Memberships, Registrations, Payments)
@@ -480,350 +500,80 @@ email_logs (
 
 ## Implementation Status
 
-### ✅ Completed (Phase 1)
+### ✅ Core System Foundation
+**Authentication & User Management**
 - [x] Next.js project setup with TypeScript and Tailwind CSS
-- [x] Supabase integration and database schema creation
+- [x] Supabase integration with Row Level Security (RLS) policies
 - [x] Authentication system (magic links + Google OAuth)
-- [x] User management with admin roles
-- [x] Row Level Security (RLS) policies
-- [x] Protected routes with middleware
-- [x] Admin dashboard with stats for active/future seasons
-- [x] Database tables for all planned features
-- [x] **Season Management System**
-  - [x] Smart season creation (type + year input only)
-  - [x] Auto-generated season names and dates
-  - [x] Duplicate detection and validation
-  - [x] Past date prevention
-  - [x] Real-time form validation with warnings
-  - [x] Clean season listing interface
-  - [x] Status indicators (Active/Ended) with proper color coding
-  - [x] Sorted by start date (newest first)
-  - [x] Streamlined UI (removed unnecessary edit/view buttons)
+- [x] User management with admin roles and protected routes
+- [x] User dashboard with responsive design and role switching
+- [x] Account management and profile editing
 
-### ✅ Completed (Phase 1 continued)
-- [x] **Membership Management System**
-  - [x] Membership creation interface with season selection
-  - [x] Auto-generated membership names based on season
-  - [x] Price input with cents conversion for accuracy
-  - [x] Accounting code integration
-  - [x] Discount eligibility settings
-  - [x] Real-time duplicate name validation
-  - [x] Visual warning system (yellow box + red background)
-  - [x] Form validation preventing invalid submissions
-  - [x] Clean membership listing with status indicators
-  - [x] Season relationship display
-  - [x] Consistent UI styling with season management
+**Season & Membership Management**
+- [x] Smart season creation with auto-generated names and dates
+- [x] Duration-based membership model with monthly/annual pricing
+- [x] Membership validity tracking across seasons
+- [x] Real-time form validation and duplicate prevention
 
-- [x] **Registration System with Hybrid Category Management**
-  - [x] Registration creation with season and membership integration
-  - [x] Registration types (team, scrimmage, event)
-  - [x] Registration listing with clickable detail links
-  - [x] Real-time duplicate name validation
-  - [x] **Hybrid Registration Categories System**
-    - [x] Master categories table with system and user categories
-    - [x] Standard categories (Player, Goalie, Alternate, Guest, etc.)
-    - [x] Custom one-off categories for unique situations
-    - [x] Radio button selection between standard and custom
-    - [x] Dropdown with grouped system/user categories
-    - [x] Category creation with individual capacity limits
-    - [x] Per-category accounting code support
-    - [x] Smart preset suggestions by registration type
-    - [x] Bulk category creation ("Add All" presets)
-    - [x] Category-specific capacity tracking and progress bars
-    - [x] Sort order management for display control
-    - [x] Duplicate category prevention across both types
-    - [x] **Category-Level Membership Requirements**
-      - [x] Moved membership requirements from registration to category level
-      - [x] Database migration to update schema and preserve data
-      - [x] Category-specific membership selection in admin interface
-      - [x] "No membership required" option per category
-      - [x] Warning system when no memberships exist for season
-  - [x] **Enhanced Admin Workflow**
-    - [x] Registration detail pages with category overview
-    - [x] Guided workflow: Registration → Categories → Pricing
-    - [x] Visual capacity management with status indicators
-    - [x] Clean separation of registration vs category concerns
-    - [x] Category type indicators (Standard/Custom badges)
-    - [x] **Guided Membership Setup Workflow**
-      - [x] Season creation redirects to membership setup page
-      - [x] Multi-option membership assignment (existing/new/skip)
-      - [x] Pre-selected season parameters for new membership creation
-      - [x] Warning systems when no memberships exist
-      - [x] Loading states on all creation forms to prevent double-clicking
-  - [x] **Database Architecture Improvements**
-    - [x] Hybrid categories system with master categories table
-    - [x] Foreign key OR custom name constraint system
-    - [x] Moved capacity management from registrations to categories
-    - [x] Moved accounting codes from registrations to categories
-    - [x] Created utility functions for category display and management
-    - [x] Eliminated redundant current_count column (now calculated)
-    - [x] Eliminated redundant fields and data duplication
-    - [x] Database migration scripts for seamless schema updates
-    - [x] **Membership Requirements Architecture**
-      - [x] Moved required_membership_id from registrations to registration_categories
-      - [x] Database migration to preserve existing data relationships
-      - [x] Category-level membership constraints for granular control
+**Registration System**
+- [x] Hybrid category management (standard + custom categories)
+- [x] Category-level membership requirements and capacity limits
+- [x] Registration timing controls (draft, presale, open, expired)
+- [x] Enhanced admin workflow with visual capacity management
 
-- [x] **Duration-Based Membership Model Refactor (Major Architecture Change)**
-  - [x] **New Flexible Membership Types**
-    - [x] Converted from season-specific to reusable membership types
-    - [x] Added monthly and annual pricing with automatic savings calculation
-    - [x] Added optional descriptions for membership benefits
-    - [x] Removed season dependency from membership creation
-  - [x] **Enhanced Admin Experience**
-    - [x] Simplified membership creation with dual pricing structure
-    - [x] Updated membership listing to show pricing comparison and savings
-    - [x] Removed unnecessary guided membership setup workflow
-    - [x] Improved dropdown UX with "Please select" defaults for required fields
-  - [x] **Database Schema Modernization**
-    - [x] Complete migration script for new membership model
-    - [x] Updated schema.sql to reflect current structure
-    - [x] Added integrity constraints for pricing validation
-    - [x] Added performance indexes for membership validity queries
-    - [x] Preserved existing data with sensible migration defaults
-  - [x] **Real-World Usage Patterns**
-    - [x] Annual memberships can cover multiple seasons automatically
-    - [x] Mini-seasons and tournaments covered by existing memberships
-    - [x] Flexible duration purchases (users choose months or annual)
-    - [x] Categories can require specific membership types or none
-  - [x] **Comprehensive Testing & Bug Fixes**
-    - [x] Fixed database field references after schema changes
-    - [x] Resolved JavaScript errors in preset functionality
-    - [x] Tested full workflow: membership creation → season creation → registration → categories
-    - [x] Verified mixed capacity limits and membership requirements work correctly
+**Database Architecture**
+- [x] Complete schema with all planned features
+- [x] Migration system for seamless updates
+- [x] Performance indexes and integrity constraints
+- [x] Utility functions for consistent data access
 
-### ✅ Completed (Phase 1 - User Dashboard Foundation)
-- [x] **User Dashboard Core**
-  - [x] Create authenticated user dashboard layout and navigation with responsive design
-  - [x] Account management page (view/edit profile, contact info, preferences)
-  - [x] User authentication state management and protected routes
-  - [x] Dashboard home page with personalized overview and quick actions
-- [x] **Current Membership Status Display**
-  - [x] Show user's active memberships with validity dates and pricing details
-  - [x] Display membership type details and benefits
-  - [x] Warning indicators for expiring memberships
-  - [x] "No active membership" state with clear next steps
-  - [x] Available memberships for purchase display
-- [x] **Registration History & Status**
-  - [x] View current active registrations with payment status
-  - [x] Display past registration history organized by season
-  - [x] Show registration status (paid, pending, waitlisted) with visual indicators
-  - [x] Link to registration details and category information
-- [x] **Advanced Features**
-  - [x] Hybrid admin/user role switching with intuitive toggle interface
-  - [x] Smart dashboard routing with security-first defaults (all users start in member view)
-  - [x] Mobile-responsive navigation with collapsible menus
-  - [x] Membership eligibility checking for registrations
-  - [x] Real-time data integration with Supabase backend
+### ✅ Payment & Purchase Systems
+**Membership Purchase Flow**
+- [x] Complete purchase workflow with duration selection
+- [x] Stripe payment integration with Elements UI and webhook processing
+- [x] Smart date extension logic for existing memberships
+- [x] Three-option payment system (standard, financial assistance, donations)
+- [x] Purchase history and consolidated membership display
 
-## 📋 Current Development Phases
+**Registration Purchase Flow**
+- [x] Category selection with dynamic pricing
+- [x] Membership requirement validation
+- [x] 5-minute reservation system preventing race conditions
+- [x] Payment countdown timer with automatic cleanup
+- [x] Presale code functionality with audit tracking
 
-### ✅ **COMPLETED PHASES**
+**Email & Notifications**
+- [x] Loops.so integration for transactional emails
+- [x] Purchase confirmations and registration notifications
+- [x] Toast notification system throughout purchase flows
+- [x] Waitlist confirmation emails with position tracking
 
-#### **✅ Phase 1: Core Foundation - COMPLETED**
-- [x] Next.js project setup with TypeScript and Tailwind CSS
-- [x] Supabase integration and database schema creation
-- [x] Authentication system (magic links + Google OAuth)
-- [x] User management with admin roles and Row Level Security
-- [x] Season, membership, and registration management systems
-- [x] User dashboard with account management
+### ✅ Advanced Features & Integrations
+**Waitlist System**
+- [x] Category-specific waitlist with position tracking
+- [x] Automatic waitlist join when capacity reached
+- [x] Waitlist confirmation emails with position details
+- [x] Real-time state management preventing duplicate joins
 
-#### **✅ Phase 2: Membership Purchase System - COMPLETED** 💳
-- [x] **Membership Purchase Flow**: Complete purchase workflow with duration selection
-- [x] **Stripe Payment Integration**: Payment intents, Elements UI, webhook processing
-- [x] **Smart Date Extension**: Seamless membership extension logic
-- [x] **Purchase History**: Consolidated membership display with transaction records
-- [x] **Email Integration**: Loops.so transactional emails with purchase confirmations
-- [x] **Toast Notifications**: Enhanced user feedback throughout purchase flow
-- [x] **Three-Option Payment System**: Financial assistance, donation support, and standard payment options
+**Discount Code System**
+- [x] Category-based discount codes with accounting integration
+- [x] Season spending limits per user per category
+- [x] Smart partial discount application
+- [x] Admin interface for category and code management
+- [x] Real-time validation in checkout flow
 
-#### **✅ Phase 2.5: User Onboarding Enhancement - COMPLETED** 🎯
-- [x] **Onboarding Flow**: Complete form with name collection, terms acceptance, membership upsell
-- [x] **Legal Compliance**: Terms & Conditions, Code of Conduct, Privacy Policy
-- [x] **Secure Middleware**: Prevents route access until onboarding completion
-- [x] **Enhanced Login UX**: Toast notifications, disabled buttons, error handling
+**User Experience & Privacy**
+- [x] Complete onboarding flow with legal compliance
+- [x] Account deletion with authentication prevention
+- [x] Business data preservation for auditing
+- [x] Error monitoring with Sentry integration
 
-#### **✅ Phase 3: Account Deletion & Privacy Compliance - COMPLETED** 🗑️
-- [x] **Complete Authentication Prevention**: Auth.users deletion prevents all login methods
-- [x] **Business Data Preservation**: Orphaned user records maintain payment/membership history
-- [x] **Clean Re-registration**: Same email can create new account with fresh UUID
-- [x] **Two-Step Security Process**: Warning screen + typed verification
-- [x] **Email Confirmation**: Deletion confirmation sent before account processing
-
-#### **✅ Phase 4: Error Monitoring & Reliability - COMPLETED** ⚠️
-- [x] **Sentry Integration**: Comprehensive error tracking for critical operations
-- [x] **Payment Error Monitoring**: Specialized tracking for payment processing failures
-- [x] **Account Deletion Monitoring**: Step-by-step error tracking with context
-- [x] **Critical Error Classification**: Fatal-level alerts for business-critical failures
-- [x] **Contextual Error Data**: User, payment, and operation context in all error reports
-
-### 🚧 **IN PROGRESS / NEXT PHASES**
-
-#### **✅ Phase 5: Registration Purchase System - COMPLETED** 🏒
-- [x] **Basic Registration Display**: Show available registrations with membership requirements
-- [x] **Eligibility Checking**: Visual indicators for registration access requirements
-- [x] **Registration Purchase Flow**: Complete category selection with dynamic pricing and payment processing
-- [x] **Information Architecture Separation**: Clear distinction between "My" pages (viewing) and "Browse" pages (purchasing)
-- [x] **Enhanced Admin Management**: Comprehensive registration management system with timing controls
-
-#### **✅ Phase 5.5: Advanced Registration Management - COMPLETED** ⏰
-- [x] **Registration Timing System**: Pre-sale, general, and end date controls with validation
-- [x] **Publication Status Control**: Draft/published state with admin workflow protection
-- [x] **Status-Based Organization**: Collapsible sections by registration state (Draft/Active/Coming Soon/Expired)
-- [x] **Registration Category Pricing**: Direct category-based pricing with admin price management
-- [x] **Inline Admin Editing**: Quick registration name editing with real-time updates
-- [x] **Category Edit Workflow**: Complete CRUD operations for registration categories
-- [x] **Comprehensive Status Logic**: 5-state system (draft/coming_soon/presale/open/expired) with proper timing validation
-
-#### **✅ Phase 5.7: Enhanced Membership Validation & UX - COMPLETED** 🎯
-- [x] **Season-Long Membership Validation**: Enhanced validation ensuring membership covers entire season duration
-- [x] **Smart Expiration Logic**: Fixed validation to use latest membership expiration date (not first found)
-- [x] **Membership Extension Warnings**: Yellow warning system with guidance for insufficient coverage
-- [x] **Honest Category Requirements**: Replaced misleading checkmarks with clear "Requires: X membership" text
-- [x] **Consolidated Membership Display**: Show membership types by latest expiration, not purchase count
-- [x] **Enhanced Purchase Success Flow**: Toast notifications and success screens with clear next steps
-- [x] **Improved Status Indicators**: Consistent 90-day warning logic with proper visual indicators (✅⚠️❌)
-
-#### **✅ Phase 5.8: Registration Email Notifications - COMPLETED** 📧
-- [x] **Registration Confirmation Emails**: Send confirmation emails for all successful registrations
-- [x] **Email Template Integration**: Complete Loops.so template setup with registration details
-- [x] **Waitlist Email Support**: Template and integration ready for future waitlist functionality
-- [x] **Email Documentation**: Complete README.md documentation for all email templates
-- [x] **API Integration**: Automatic email sending after successful payment confirmation
-- [x] **Error Monitoring**: Sentry integration for email delivery failures
-
-#### **✅ Phase 5.9: Registration Count Display Fixes - COMPLETED** 🔢
-- [x] **Admin Count Display**: Fixed admin registration detail page to show actual paid registration counts
-- [x] **User Capacity Display**: Updated user browse page to show remaining spots instead of total capacity
-- [x] **Shared Utility Function**: Created `getCategoryRegistrationCounts()` for consistency across admin and user pages
-- [x] **RLS Policy Fix**: Updated Row Level Security policies to allow users to see paid registration counts for capacity planning
-- [x] **Capacity Validation Fix**: Updated payment intent creation to only count paid registrations for capacity validation
-
-#### **✅ Phase 5.10: Registration Timing & Presale System - COMPLETED** ⏰
-- [x] **User-Side Timing Validation**: Implemented registration timing controls on user browse page (respects draft, coming_soon, presale, open, expired status)
-- [x] **Presale Visibility**: Show presale registrations with clear "Pre-Sale" status tags for user awareness
-- [x] **Presale Code Functionality**: Added presale code input with real-time validation and case-insensitive matching
-- [x] **Status-Based UX**: Appropriate button states and messaging for each registration timing status
-- [x] **User Guidance**: Clear messaging and visual indicators for registration availability and requirements
-
-#### **✅ Phase 5.11: Enhanced Presale Code Tracking & Coming Soon UX - COMPLETED** 🎯
-- [x] **Presale Code Audit Trail**: Added `presale_code_used` field to `user_registrations` table for complete tracking
-- [x] **Registration Purchase Flow**: Updated APIs to capture and store presale codes when used during registration
-- [x] **Coming Soon Status Display**: Show "Coming Soon" registrations with disabled state and timing information
-- [x] **Smart Timing Messages**: Display when presale or regular registration opens with date/time details
-- [x] **Enhanced Browse Page UX**: Clear visual indicators and messaging for all registration timing states
-
-#### **✅ Phase 5.12: Optimized Browse Registration UX - COMPLETED** 🎨
-- [x] **Priority-Based Layout**: Moved "Available Teams & Events" to top position for immediate focus
-- [x] **Conditional Membership Warnings**: Only show warnings when memberships expire ≤90 days or are missing
-- [x] **Clean Interface**: Most users with healthy memberships see streamlined browsing experience
-- [x] **Prominent CTA Buttons**: Replaced text links with actionable buttons for membership extension/purchase
-- [x] **Early Warning System**: Proactive membership expiration alerts prevent purchase-time friction
-
-#### **✅ Phase 6: Comprehensive Waitlist System - COMPLETED** 🎯
-- [x] **Complete Waitlist Functionality**: Category-specific waitlist system with position tracking and user management
-- [x] **Waitlist Join API**: Full validation, duplicate prevention, and capacity checking with proper error handling
-- [x] **Real-time State Management**: User waitlist position tracking and button state management to prevent duplicate joins
-- [x] **Email Notifications**: Automatic waitlist confirmation emails using Loops.so template with position and registration details
-- [x] **Enhanced UX Design**: Dynamic messaging showing waitlist position instead of generic "sold out" messaging
-- [x] **Database Schema Updates**: Category-specific waitlist support with proper RLS policies and migration scripts
-- [x] **Visual State Management**: Color-coded warnings (red for sold out, blue for waitlisted) with appropriate icons and messaging
-- [x] **Button State Logic**: Disabled states for waitlisted users with clear position display in button text
-- [x] **Waitlist Visibility**: Show the user's waitlisted registrations on the dashboard under recent registrations and also on the my registrations page.
-
-**Note**: Waitlists and user registrations are independent systems by design. Deleting a registration does not automatically remove waitlist entries, allowing for manual admin control over waitlist management.
-
-#### **✅ Phase 7: Critical Registration Fixes & Discount Codes - COMPLETED** ⚠️
-- [x] **Race Condition Protection**: Prevent oversubscription when multiple users register simultaneously for capacity-limited events ✅ **COMPLETED**
-  - [x] Implemented 5-minute reservation system for capacity-limited registrations
-  - [x] Added `processing` status to `user_registrations` table with expiration timestamps
-  - [x] Created atomic spot reservation before payment intent creation
-  - [x] Updated registration counting to include valid processing reservations
-  - [x] Centralized user registration display logic in APIs (paid registrations only)
-  - [x] Added race condition handling with automatic waitlist fallback
-  - [x] Created database migration and updated schema.sql
-- [x] **Payment Timer & Cleanup System**: Complete countdown timer and processing record cleanup ✅ **COMPLETED**
-  - [x] Added 5-minute countdown timer in payment form showing reservation expiration
-  - [x] Implemented clean reservation system with modal close cleanup
-  - [x] Added timer expiration handling with toast notifications
-  - [x] Fixed RLS issues preventing processing record cleanup by creating admin client
-  - [x] Added service role key bypass for database cleanup operations
-  - [x] Implemented reliable cleanup on modal close and timer expiration
-- [x] **Comprehensive Discount Code System**: Advanced category-based discount system with accounting integration ✅ **COMPLETED**
-  - [x] **Phase 1: Database & Core APIs** ✅ **COMPLETED**
-    - [x] Create discount_categories table (name, accounting_code, max_per_user_per_season)
-    - [x] Update discount_codes table to reference categories
-    - [x] Update discount_usage table with category tracking
-    - [x] Build discount validation API with category limits
-    - [x] Update payment processing to handle category-based discounts
-  - [x] **Phase 2: Admin Interface & Frontend Integration** ✅ **COMPLETED**
-    - [x] Category management pages (CRUD with accounting codes)
-    - [x] Code management grouped by category with contextual navigation
-    - [x] Individual code creation and editing with category context
-    - [x] Frontend integration with registration checkout for discount code input
-    - [x] Real-time discount validation with user feedback
-    - [x] Category-focused UX removing unnecessary filters when context is clear
-    - [x] Clean admin interface with percentage-based ordering and streamlined actions
-    - [x] **Partial discount application** for season limits with intelligent UX messaging
-  - [ ] **Phase 3: Analytics & Reporting**
-    - [ ] Category-based usage tracking dashboard
-    - [ ] Per-user season limit enforcement
-    - [ ] Xero integration preparation with accounting codes
-
-**Discount Categories System:**
-- **Scholarship Fund**: PRIDE100 (100%), PRIDE75 (75%), PRIDE50 (50%), PRIDE25 (25%)
-- **Board Member**: Custom percentage codes with board-specific accounting code
-- **Captain**: Captain-specific codes with separate accounting tracking
-- **Volunteer**: Volunteer recognition codes with volunteer accounting code
-- **Per-Category Limits**: e.g., $500 max per user per season for Scholarship Fund
-- **Accounting Integration**: Each category maps to specific accounting code for Xero
-- **Smart Partial Discounts**: When full discount would exceed season limit, applies partial amount up to remaining allowance with clear messaging
-- [x] **Add Donation to Membership Purchase**: Three-option payment system with financial assistance and donation support
-- [ ] **Add Donation to Registration Purchase**: Extend donation options to registration checkout flow
-
-#### **Phase 8: Xero Accounting Integration** 🧾 ✅ **COMPLETED**
-- [x] **OAuth 2.0 Setup**: Xero app registration with secure token management and refresh capability
-- [x] **Database Schema Extensions**: Add Xero tracking fields and sync status logging to existing tables
-- [x] **Automatic Invoice Creation**: Generate Xero invoices for all purchases (memberships + registrations) with multi-line item support
-- [x] **Contact Management**: Create and sync Xero contacts for users making their first purchase
-- [x] **Stripe Fee Tracking**: Record Stripe processing fees as separate expense items in Xero
-- [x] **Discount Code Integration**: Handle discount codes as negative line items in invoices for clear financial breakdown
-- [x] **Real-time Synchronization**: Webhook integration for automatic sync between systems
-- [x] **Payment Recording**: Link Stripe payments to Xero bank accounts with proper reconciliation
-- [x] **Error Handling & Retry Logic**: Robust error handling for rate limits, authentication, and network issues
-- [x] **Testing & Sandbox**: Complete testing framework using Xero demo company environment
-- [x] **Advanced Contact Conflict Resolution**: Intelligent handling of archived contacts with smart reuse of existing active contacts
-- [x] **Contact Name Standardization**: Consistent "First Last - MemberID" naming convention with timestamp-based conflict resolution
-- [x] **Comprehensive Error Monitoring**: Sentry integration for tracking duplicate emails and resolution failures
-- [x] **Token Management**: Automatic token refresh with detailed error logging and user guidance
-- [x] **Production Documentation**: Complete setup guides, troubleshooting, and architectural decision documentation
-
-**Business Benefits:**
-- ✅ Automated bookkeeping eliminating manual invoice entry
-- ✅ Accurate fee tracking with Stripe processing costs recorded
-- ✅ Professional invoicing using Xero's templates and delivery system
-- ✅ Real-time financial data synchronization
-- ✅ Clear discount transparency and promotional pricing breakdown
-- ✅ **Advanced Contact Management**: 80%+ reduction in duplicate contacts through intelligent resolution
-- ✅ **Data Quality Assurance**: Consistent naming conventions and contact standardization
-- ✅ **Production Monitoring**: Comprehensive error tracking and duplicate email alerts
-- ✅ **Robust Error Handling**: Graceful fallbacks for archived contacts and token expiration
-- ✅ **Zero Manual Intervention**: Fully automated contact creation and conflict resolution
-
-#### **Phase 9: Admin Waitlist Management** 📋
-- [ ] **Waitlist Dashboard**: Admin interface to view all waitlists by registration and category
-- [ ] **Waitlist Position Management**: Ability to manually adjust waitlist positions and remove users
-- [ ] **Bypass Code Generation**: Generate single-use bypass codes for waitlisted users
-- [ ] **Waitlist Notifications**: Send custom notifications to waitlisted users about status changes
-- [ ] **Registration Conversion**: Move users from waitlist to registration when spots become available
-- [ ] **Waitlist Analytics**: Reports on waitlist conversion rates and demand patterns
-
-#### **Phase 10: Advanced Features** 🔮
-- [ ] **Pricing Tiers**: Early bird, regular, and late pricing for registrations
-- [ ] **Email Marketing**: Send marketing and team/event emails through the admin page rather through Mailchimp
-- [ ] **Admin Reporting**: Dashboard for payment reconciliation and membership analytics
-- [ ] **Content Management**: Admin interface for Terms & Conditions updates
-- [ ] **User Management System**: Complete admin interface for managing user accounts, roles, and permissions
+**Xero Accounting Integration**
+- [x] OAuth 2.0 setup with automatic token management
+- [x] Automated invoice creation for all purchases
+- [x] Intelligent contact management with duplicate resolution
+- [x] Stripe fee tracking and payment reconciliation
+- [x] Token keep-alive system for production reliability
 
 ### 🚀 **FUTURE ENHANCEMENTS**
 - [ ] Renewal notifications and automated renewal flow
@@ -863,114 +613,18 @@ email_logs (
 
 ---
 
-*Last updated: July 4, 2025*
-*Status: **Complete Discount System + Three-Option Membership Payment System** - Full discount functionality with intelligent season limits + flexible membership payment options*
+*Last updated: July 11, 2025*
+*Status: **Production-Ready Core System** - Complete membership/registration system with Xero integration, payment reliability fixes, and automated token management*
 
-## Recent Achievements (July 4, 2025)
+### Historic Development Summary
 
-✅ **Three-Option Membership Payment System Implementation**
-- **✅ Flexible Payment Options**: Three clear choices - financial assistance, donation support, or standard payment
-- **✅ Financial Assistance**: Pay-what-you-can option (0-100% of price, default 50%) for accessibility
-- **✅ Community Support**: Optional donations ($1-$1000, default $50) to support other members
-- **✅ Dynamic Pricing**: Real-time total calculation with clear breakdown showing membership + assistance/donation
-- **✅ Enhanced Purchase Flow**: Conditional inputs with proper validation and required selection
-- **✅ Accounting Ready**: Separate payment item records for membership vs donations for clean financial tracking
-- **✅ Stripe Integration**: Enhanced metadata and descriptions based on payment type
-
-✅ **Smart Partial Discount System Enhancement**
-- **✅ Intelligent Season Limit Handling**: Instead of rejecting discounts that exceed limits, apply partial discounts up to remaining allowance
-- **✅ Enhanced User Messaging**: Clear explanations when partial discounts are applied with specific limit information
-- **✅ Visual UX Indicators**: Yellow warning icons for partial discounts vs green checkmarks for full discounts
-- **✅ Maximized User Benefit**: Users always get the best possible discount within their category limits
-
-## Future Enhancements
-
-🔮 **Membership Purchase Limits**
-- **Purchase Time Limits**: Add validation to limit membership purchases to 12-18 months in advance to prevent excessive advance purchases, especially when discounts are available
-- **Business Protection**: Prevent users from purchasing unreasonable durations (e.g., 100 years) that could impact system sustainability
-- **Implementation**: Add frontend validation and backend enforcement in membership purchase flow
-
-## Previous Achievements (July 3, 2025)
-
-✅ **Complete Category-Based Discount System Implementation**
-- **✅ Advanced Admin Interface**: Full CRUD operations for discount categories with accounting codes, spending limits, and descriptions
-- **✅ Contextual Code Management**: Category-focused workflow with smart navigation removing filters when context is clear
-- **✅ Individual Code Editing**: Complete edit functionality for discount codes with real-time validation and duplicate checking
-- **✅ Frontend Integration**: Registration checkout with real-time discount code validation and dynamic pricing display
-- **✅ Clean UX Design**: Removed unnecessary clutter (creation dates, usage links) for focused admin workflow
-- **✅ Smart Ordering**: Codes ordered by percentage (highest discounts first) for better admin organization
-- **✅ Category-Specific Navigation**: "Manage Codes" buttons maintain category context throughout the workflow
-- **✅ Comprehensive API Layer**: Full REST APIs for categories and codes with proper validation and error handling
-- **✅ Database Naming Discussion**: Documented future technical improvement considerations in PLANNING.md
-
-## Previous Achievements (July 2, 2025)
-
-✅ **Complete Reservation System with Payment Timer Implementation**
-- **✅ Atomic Spot Reservation**: 5-minute reservation system preventing race conditions during payment processing
-- **✅ Processing Status Architecture**: Added `processing` payment status with expiration timestamps to `user_registrations` table
-- **✅ Payment Countdown Timer**: Visual 5-minute countdown in payment form motivating completion and showing reservation status
-- **✅ Clean Reservation System**: Modal close triggers cleanup allowing immediate retry with fresh reservation window
-- **✅ Timer Expiration Handling**: Toast notifications when timer expires with automatic spot release
-- **✅ RLS Issue Resolution**: Fixed Row Level Security preventing cleanup by adding admin client with service role key
-- **✅ Reliable Cleanup Operations**: Database operations now use service role key to bypass RLS for processing record deletion
-- **✅ Enhanced User Experience**: Seamless payment flow with visual feedback and proper error handling
-- **✅ Centralized Registration Counting**: Updated counting logic to include valid processing reservations in capacity calculations
-- **✅ API-First User Display**: Centralized user registration display logic ensuring only paid registrations are shown to users
-- **✅ Enhanced Duplicate Prevention**: Updated duplicate registration checks to exclude processing records from validation
-- **✅ Database Migration & Schema**: Complete migration system with efficient indexing for processing record cleanup
-- **✅ URL Utility Helper**: Created reusable `getBaseUrl()` helper eliminating duplicate environment URL logic across components
-
-## Previous Achievements (June 29, 2025)
-
-✅ **Comprehensive Waitlist System Implementation**
-- **✅ Category-Specific Waitlist Architecture**: Database schema updates supporting waitlists per registration category with position tracking
-- **✅ Complete Waitlist Join API**: Full validation including capacity checking, duplicate prevention, and proper error handling with Sentry monitoring
-- **✅ Real-time State Management**: User waitlist position tracking with automatic state updates preventing duplicate join attempts
-- **✅ Email Integration**: Automatic waitlist confirmation emails using Loops.so template with position, registration, and category details
-- **✅ Enhanced UX Design**: Dynamic messaging system showing user's current waitlist position instead of generic "sold out" messaging
-- **✅ Visual State Management**: Intelligent color coding (red for sold out, blue for waitlisted) with appropriate icons and contextual messaging
-- **✅ Button State Logic**: Smart disabled states for waitlisted users with clear position display in button text and prevention of duplicate actions
-
-✅ **Enhanced Presale Code Tracking & Coming Soon UX Implementation**
-- **✅ Complete Presale Audit Trail**: Added database field and API updates to track which presale codes were used for each registration
-- **✅ Coming Soon Registration Display**: Show "Coming Soon" registrations with disabled state and smart timing messages
-- **✅ Intelligent Timing Messages**: Display when presale or regular registration opens with precise date/time information
-- **✅ Enhanced Registration Status Logic**: Complete 5-state system (draft/coming_soon/presale/open/expired) with proper user guidance
-
-✅ **Optimized Browse Registration UX Implementation**
-- **✅ Priority-Based Information Architecture**: Moved "Available Teams & Events" to top position for immediate user focus
-- **✅ Conditional Warning System**: Only show membership warnings when action is needed (expiring ≤90 days or missing)
-- **✅ Clean Interface Design**: Most users with healthy memberships see streamlined, distraction-free browsing
-- **✅ Prominent CTA Implementation**: Converted text links to actionable buttons with hover states and icons
-- **✅ Proactive User Experience**: Early membership warnings prevent friction during registration purchase flow
-
-## Previous Achievements Summary (June 29, 2025)
-
-✅ **Enhanced Membership Validation & UX System Implementation**
-- **✅ Season-Long Membership Validation**: Smart validation ensuring membership coverage through entire season duration
-- **✅ Intelligent Expiration Logic**: Fixed validation to use latest membership expiration (handles extensions correctly)
-- **✅ User-Friendly Warning System**: Yellow warning boxes with clear extension guidance and month calculations
-- **✅ Honest Requirement Display**: Replaced misleading green checkmarks with neutral "Requires: X membership" text
-- **✅ Consolidated Membership Status**: Show membership types by latest expiration, not confusing purchase counts
-- **✅ Enhanced Purchase Success Flow**: Toast notifications and success screens with direct registration links
-- **✅ Consistent Status Indicators**: 90-day warning logic with proper visual indicators (✅⚠️❌) across all pages
-
-✅ **Advanced Registration Management System Implementation**
-- **✅ Registration Timing & Publication Controls**: Complete pre-sale, general, and end date system with draft/published workflow
-- **✅ Status-Based Admin Organization**: Intelligent collapsible sections organizing registrations by state (Draft/Active/Coming Soon/Expired)
-- **✅ Simplified Pricing Architecture**: Direct category-based pricing replacing complex time-based tiers
-- **✅ Enhanced Admin UX**: Inline editing, real-time validation, and comprehensive CRUD operations
-- **✅ Information Architecture Separation**: Clear "My" vs "Browse" page distinction for optimal user experience
-- **✅ Complete Registration Purchase Flow**: End-to-end category selection, payment processing, and confirmation system
-
-✅ **Database Architecture & Technical Improvements**
-- **✅ Membership Validation Utilities**: New membership-validation.ts with proper type safety and season coverage logic
-- **✅ Registration Timing Schema**: Added timing fields with proper constraints and validation logic
-- **✅ Category Pricing Migration**: Seamless migration from complex pricing tiers to simple category pricing
-- **✅ Status Utility System**: Comprehensive 5-state registration status logic with proper date validation
-- **✅ Real-time Form Validation**: Date ordering validation with user-friendly warning system
-
-**🎯 Result**: Complete registration system with intelligent membership validation, honest UX, and seamless user flows from membership purchase to registration completion
+**Previous Major Phases Completed:**
+- ✅ **Three-Option Membership Payment System**: Financial assistance, donation support, standard payment with accounting separation
+- ✅ **Smart Partial Discount System**: Category-based discounts with intelligent season limit handling
+- ✅ **Complete Reservation System**: 5-minute payment timer with race condition protection
+- ✅ **Comprehensive Waitlist System**: Category-specific waitlists with position tracking and email notifications
+- ✅ **Enhanced Membership Validation**: Season-long coverage validation with user-friendly warnings
+- ✅ **Advanced Registration Management**: Complete timing controls, presale codes, and admin workflow
 
 ## 🔮 Future Technical Improvements
 
@@ -1005,53 +659,14 @@ email_logs (
 4. Comprehensive testing of all functionality
 5. Consider implementing during major version upgrade when other breaking changes are planned
 
-## Previous Achievements Summary (June 23, 2025)
+## Future Enhancements
 
-✅ **Account Deletion System Architecture Refinement**
-- **✅ OAuth Authentication Bypass Resolution**: Discovered and resolved critical issue where deleted users could still authenticate via Google OAuth
-- **✅ Database Architecture Improvement**: Removed unnecessary foreign key constraint between users and auth.users tables for flexible account lifecycle management
-- **✅ Complete Auth Prevention**: Implemented auth.users deletion instead of banning for absolute authentication prevention
-- **✅ Clean Re-registration**: Enabled same-email account recreation with proper data separation and no linking to historical records
-- **✅ Business Data Preservation**: Maintained all payment, membership, and registration history through orphaned user records
-- **✅ Production Testing**: Successfully tested complete deletion → authentication prevention → clean re-registration flow
-
-✅ **Comprehensive Error Monitoring Implementation**
-- **✅ Sentry Integration**: Complete error tracking system for critical business operations
-- **✅ Payment Error Monitoring**: Specialized monitoring for payment processing failures with business-friendly messages
-- **✅ Account Deletion Monitoring**: Step-by-step error tracking with contextual data for debugging
-- **✅ Critical Error Classification**: Fatal-level alerts for business-critical failures requiring immediate attention
-- **✅ Contextual Error Data**: Rich error context including user data, payment details, and operation state
-
-✅ **Registration Email & Count System Implementation**
-- **✅ Registration Confirmation Emails**: Complete Loops.so integration with automatic email sending after successful registration
-- **✅ Admin Count Display Fix**: Fixed admin registration detail page to show actual paid registration counts instead of hardcoded 0
-- **✅ User Capacity Display**: Updated user browse page to show "X spots remaining" instead of total capacity
-- **✅ Shared Utility Function**: Created `getCategoryRegistrationCounts()` for consistency across admin and user interfaces
-- **✅ RLS Policy Fix**: Updated Row Level Security to allow users to see paid registration counts for capacity planning
-- **✅ Capacity Validation**: Fixed payment intent creation to only count paid registrations for accurate capacity management
-
-✅ **Registration Timing & Presale System Implementation**
-- **✅ User-Side Timing Validation**: Complete registration timing controls respecting draft, coming_soon, presale, open, and expired status
-- **✅ Presale Visibility & Functionality**: Show presale registrations with status tags and working presale code input system
-- **✅ Case-Insensitive Presale Codes**: User-friendly presale code validation with real-time feedback
-- **✅ Status-Based UX**: Appropriate button states, messaging, and visual indicators for each registration timing status
-- **✅ Complete Registration Lifecycle**: Full user experience from presale through open registration with proper state management
-
-## Previous Achievements Summary
-
-For detailed information about all completed features and implementations, see the **Current Development Phases** section above, which provides a comprehensive overview of:
-
-- **Phase 1**: Core Foundation (Next.js, Supabase, Authentication, Admin Systems)
-- **Phase 2**: Membership Purchase System (Stripe, Email Integration, Toast Notifications)  
-- **Phase 2.5**: User Onboarding Enhancement (Legal Compliance, Secure Middleware)
-- **Phase 3**: Account Deletion & Privacy Compliance (Authentication Prevention, Data Preservation)
-- **Phase 4**: Error Monitoring & Reliability (Sentry Integration, Critical Error Tracking)
-
-**🎯 Current Status**: Complete registration system with email notifications, timing controls, presale functionality, accurate capacity display, and comprehensive admin management.
+🔮 **Membership Purchase Limits**
+- **Purchase Time Limits**: Add validation to limit membership purchases to 12-18 months in advance to prevent excessive advance purchases
+- **Business Protection**: Prevent users from purchasing unreasonable durations that could impact system sustainability
 
 ### 🚀 **Next Priority Recommendations**
-1. **🚨 CRITICAL: Race Condition Protection** - Fix capacity oversubscription race conditions (Phase 6)
-2. **Advanced Features** - Pricing tiers, discount codes, waitlist management (Phase 7)
-3. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
-4. **User Experience Enhancements** - Registration history and additional notifications
-5. **Content Management** - Admin interface for Terms & Conditions updates
+1. **Admin Reporting Dashboard** - Payment reconciliation and membership analytics  
+2. **Content Management** - Admin interface for Terms & Conditions updates
+3. **User Management System** - Complete admin interface for managing user accounts and roles
+4. **Email Marketing** - Send team/event emails through admin interface

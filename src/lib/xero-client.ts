@@ -4,6 +4,51 @@ if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
   throw new Error('Missing Xero environment variables')
 }
 
+// Run startup connection test when this module is first imported
+let hasRunStartupTest = false
+
+async function runXeroStartupTest() {
+  if (hasRunStartupTest) return
+  hasRunStartupTest = true
+
+  // Only run on server side
+  if (typeof window !== 'undefined') return
+
+  console.log('🏓 Xero startup connection test initiated...')
+  
+  try {
+    // Small delay to ensure app is ready
+    setTimeout(async () => {
+      try {
+        const activeXeroTenants = await getActiveXeroTenants()
+        
+        if (activeXeroTenants.length > 0) {
+          console.log(`🔍 Found ${activeXeroTenants.length} active Xero tenant(s), testing connection...`)
+          
+          // Test connection to first active tenant
+          const isConnected = await validateXeroConnection(activeXeroTenants[0].tenant_id)
+          
+          if (isConnected) {
+            console.log(`✅ Xero connection verified for: ${activeXeroTenants[0].tenant_name}`)
+          } else {
+            console.log(`⚠️ Xero connection test failed for: ${activeXeroTenants[0].tenant_name}`)
+          }
+        } else {
+          console.log('ℹ️ No active Xero tenants found at startup')
+        }
+      } catch (error) {
+        console.warn('⚠️ Xero startup test error:', error instanceof Error ? error.message : 'Unknown error')
+      }
+    }, 2000) // 2 second delay to ensure everything is initialized
+    
+  } catch (error) {
+    console.warn('⚠️ Error during Xero startup test:', error instanceof Error ? error.message : 'Unknown error')
+  }
+}
+
+// Trigger startup test
+runXeroStartupTest()
+
 const xero = new XeroClient({
   clientId: process.env.XERO_CLIENT_ID,
   clientSecret: process.env.XERO_CLIENT_SECRET,

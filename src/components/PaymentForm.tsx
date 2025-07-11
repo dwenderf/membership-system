@@ -252,7 +252,7 @@ export default function PaymentForm({
         
         const body = isRegistration
           ? {
-              paymentIntentId: paymentIntent.id,
+              paymentIntentId: paymentIntent.id, // Always use the actual successful payment intent ID
               categoryId: categoryId,
             }
           : {
@@ -260,6 +260,8 @@ export default function PaymentForm({
               startDate: startDate!.toISOString().split('T')[0], // YYYY-MM-DD format
               endDate: endDate!.toISOString().split('T')[0], // YYYY-MM-DD format
             }
+
+        console.log(`🔍 Frontend: Sending confirmation with payment intent: ${paymentIntent.id}`)
 
         const response = await fetch(endpoint, {
           method: 'POST',

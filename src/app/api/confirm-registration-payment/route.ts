@@ -254,6 +254,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update payment record status
+    console.log(`🔍 Updating payment record for payment intent: ${paymentIntentId}`)
     const { data: updatedPayment, error: updateError } = await supabase
       .from('payments')
       .update({

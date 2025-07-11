@@ -5,7 +5,7 @@ This system prevents Xero OAuth tokens from expiring by making regular API calls
 ## How it works
 
 1. **Keep-alive endpoint** (`/api/xero/keep-alive`) makes lightweight API calls to all active Xero tenants
-2. **Scheduled cron job** (`/api/cron/xero-keep-alive`) runs every 12 hours via Vercel Cron
+2. **Scheduled cron job** (`/api/cron/xero-keep-alive`) runs daily via Vercel Cron (requires Pro plan for more frequent runs)
 3. **Token refresh** happens automatically when tokens are close to expiration
 
 ## Setup
@@ -49,7 +49,7 @@ curl -X GET https://your-domain.com/api/cron/xero-keep-alive \
 
 ## Schedule Options
 
-Current schedule: `0 */12 * * *` (every 12 hours)
+Current schedule: `0 0 * * *` (daily at midnight)
 
 You can adjust the schedule in `vercel.json`:
 - `0 */6 * * *` - Every 6 hours  

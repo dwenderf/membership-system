@@ -94,10 +94,17 @@ class EmailService {
         // Send using a template
         console.log(`📧 Sending email with template ID: ${templateId}`)
         console.log(`📧 Email data:`, JSON.stringify(data, null, 2))
+        
+        // Clean data to ensure no undefined values
+        const cleanData = Object.fromEntries(
+          Object.entries(data).filter(([_, value]) => value !== undefined)
+        )
+        console.log(`📧 Cleaned email data:`, JSON.stringify(cleanData, null, 2))
+        
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
-          dataVariables: data
+          dataVariables: cleanData
         })
       } else {
         // Send as a basic contact event (for triggering automations)
@@ -137,6 +144,11 @@ class EmailService {
 
     } catch (error) {
       console.error('Email sending failed:', error)
+      
+      // Log additional error details if available
+      if (error && typeof error === 'object' && 'json' in error) {
+        console.error('Loops.so API error details:', (error as any).json)
+      }
       
       // Log the failure
       await this.logEmail({

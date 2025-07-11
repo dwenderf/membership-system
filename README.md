@@ -442,12 +442,175 @@ src/
 
 ## Deployment
 
-The application is designed to deploy on Vercel with Supabase as the backend:
+### Vercel Deployment (Recommended)
 
-1. **Environment Variables**: Add all `.env.local` variables to your deployment platform
-2. **Database**: Ensure Supabase project is configured for production
-3. **Webhooks**: Update Stripe webhook endpoints for production URLs
-4. **Email Templates**: Verify Loops templates work with production data
+The application is designed to deploy on Vercel with optimal Next.js integration and built-in cron job support for Xero token management.
+
+#### Prerequisites
+- Vercel account (free tier available)
+- GitHub/GitLab/Bitbucket repository
+- All services configured (Supabase, Stripe, Loops.so, etc.)
+
+#### Step 1: Install Vercel CLI
+```bash
+npm install -g vercel
+```
+
+#### Step 2: Login to Vercel
+```bash
+vercel login
+```
+
+#### Step 3: Deploy from Repository
+```bash
+# From your project directory
+vercel --prod
+```
+
+Follow the prompts:
+- **Project name**: Choose a name for your project
+- **Directory**: Use current directory (default)
+- **Settings**: Accept defaults for Next.js project
+
+#### Step 4: Configure Environment Variables
+
+In your Vercel dashboard, add all environment variables from your `.env.local`:
+
+**Application Configuration:**
+```bash
+NEXTAUTH_URL=https://your-domain.vercel.app
+NEXTAUTH_SECRET=your_nextauth_secret
+CRON_SECRET=your_random_cron_secret_for_xero_keepalive
+```
+
+**Database & Authentication:**
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+```
+
+**Payment Processing:**
+```bash
+STRIPE_SECRET_KEY=sk_live_your_stripe_live_secret_key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_live_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_production_webhook_secret
+```
+
+**Email & Monitoring:**
+```bash
+LOOPS_API_KEY=your_loops_api_key
+LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
+LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
+LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
+LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
+LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
+SENTRY_ORG=your_sentry_org
+SENTRY_PROJECT=membership-system
+```
+
+**Xero Integration:**
+```bash
+XERO_CLIENT_ID=your_xero_client_id_here
+XERO_CLIENT_SECRET=your_xero_client_secret_here
+XERO_REDIRECT_URI=https://your-domain.vercel.app/api/xero/callback
+XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+```
+
+#### Step 5: Update Service Configurations
+
+**Stripe Webhooks:**
+1. Go to your Stripe Dashboard → Webhooks
+2. Update endpoint URL to: `https://your-domain.vercel.app/api/webhooks/stripe`
+3. Copy the new webhook secret to `STRIPE_WEBHOOK_SECRET`
+
+**Google OAuth:**
+1. Go to Google Cloud Console → Credentials
+2. Update authorized redirect URIs to include:
+   - `https://your-domain.vercel.app/api/auth/callback/google`
+
+**Xero OAuth:**
+1. Go to Xero Developer Portal → Your App
+2. Update OAuth 2.0 redirect URI to:
+   - `https://your-domain.vercel.app/api/xero/callback`
+
+#### Step 6: Verify Deployment
+
+**Automatic Features (Vercel handles these):**
+- ✅ **Next.js Build**: Automatic build optimization
+- ✅ **Serverless Functions**: API routes automatically deployed
+- ✅ **Cron Jobs**: Xero keep-alive runs every 12 hours (configured in `vercel.json`)
+- ✅ **SSL Certificate**: Automatic HTTPS with custom domain support
+- ✅ **CDN**: Global edge network for fast loading
+
+**Test Your Deployment:**
+1. Visit your production URL
+2. Test user registration and login
+3. Make a test purchase with Stripe test cards
+4. Verify email delivery through Loops.so
+5. Check Xero integration (if configured)
+6. Monitor Sentry for any deployment errors
+
+#### Step 7: Set Up Custom Domain (Optional)
+
+1. **Purchase Domain**: Buy domain from your preferred registrar
+2. **Add to Vercel**: In project settings → Domains → Add domain
+3. **Configure DNS**: Update your domain's nameservers to Vercel's
+4. **Update Environment Variables**: Change `NEXTAUTH_URL` to your custom domain
+5. **Update Service Callbacks**: Update Stripe, Google, and Xero redirect URLs
+
+#### Deployment Checklist
+
+- [ ] All environment variables configured in Vercel dashboard
+- [ ] Stripe webhooks updated to production URL
+- [ ] Google OAuth redirect URIs updated
+- [ ] Xero OAuth redirect URI updated
+- [ ] Supabase RLS policies tested with production data
+- [ ] Email templates tested with production environment
+- [ ] Sentry error monitoring configured for production
+- [ ] Custom domain configured (if desired)
+- [ ] SSL certificate active and verified
+- [ ] Cron job (`CRON_SECRET`) configured for Xero token keep-alive
+
+#### Monitoring & Maintenance
+
+**Vercel Dashboard:**
+- Monitor deployment logs and function execution
+- View usage analytics and performance metrics
+- Manage environment variables and domains
+
+**Application Health:**
+- **Stripe**: Monitor payment processing in Stripe dashboard
+- **Supabase**: Check database performance and connection pools
+- **Loops.so**: Monitor email delivery rates and engagement
+- **Sentry**: Track errors and performance issues
+- **Xero**: Verify automatic invoicing and contact sync
+
+#### Troubleshooting Common Issues
+
+**Build Failures:**
+- Check environment variables are properly set
+- Verify all dependencies are installed
+- Review build logs in Vercel dashboard
+
+**Runtime Errors:**
+- Check Sentry for detailed error reports
+- Verify database connections and API keys
+- Test payment flows with Stripe test cards
+
+**Email Issues:**
+- Verify Loops.so templates and API key
+- Check email logs in Supabase `email_logs` table
+- Test with different email providers
+
+**Xero Sync Issues:**
+- Verify OAuth redirect URI matches exactly
+- Check Xero token expiration (automatic refresh should work)
+- Review sync logs in admin interface
 
 ## Support
 

@@ -764,6 +764,7 @@ export async function POST(request: NextRequest) {
       // Log warning but don't fail the request since Stripe intent was created
       capturePaymentError(paymentError, paymentContext, 'warning')
     } else if (paymentRecord) {
+      console.log(`✅ Created payment record: ${paymentRecord.id} for Stripe payment intent: ${paymentIntent.id}`)
       // Create payment item record for the registration
       const { error: paymentItemError } = await supabase
         .from('payment_items')

@@ -136,18 +136,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Update payment record status
-    const { error: updateError } = await supabase
+    const { data: updatedPayment, error: updateError } = await supabase
       .from('payments')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
       .eq('stripe_payment_intent_id', paymentIntentId)
+      .select()
 
     if (updateError) {
       console.error('Error updating payment record:', updateError)
       // Log warning but don't fail - membership was created successfully
       capturePaymentError(updateError, paymentContext, 'warning')
+    } else if (updatedPayment && updatedPayment.length > 0) {
+      console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+    } else {
+      console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }
 
     // Get user and membership details for email

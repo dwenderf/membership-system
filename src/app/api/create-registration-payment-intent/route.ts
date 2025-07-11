@@ -71,8 +71,8 @@ async function handleFreeRegistration({
         user_id: user.id,
         registration_id: registrationId,
         registration_category_id: categoryId,
-        payment_status: 'processing',
-        processing_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
+        payment_status: 'awaiting_payment',
+        reservation_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
         presale_code_used: presaleCode || null,
       })
       .select('id')
@@ -207,7 +207,7 @@ async function handleFreeRegistration({
         payment_status: 'paid',
         amount_paid: 0,
         registered_at: new Date().toISOString(),
-        processing_expires_at: null,
+        reservation_expires_at: null,
       })
       .eq('id', reservationData.id)
 
@@ -347,37 +347,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if user already registered or has active reservation via centralized API
-    try {
-      const duplicateCheckResponse = await fetch(`${getBaseUrl()}/api/check-duplicate-registration?registrationId=${registrationId}`, {
-        headers: {
-          'Cookie': request.headers.get('cookie') || '',
-        },
-      })
-      
-      if (duplicateCheckResponse.ok) {
-        const duplicateCheck = await duplicateCheckResponse.json()
-        
-        if (duplicateCheck.isAlreadyRegistered) {
-          capturePaymentError(new Error('User already registered (paid)'), paymentContext, 'warning')
-          return NextResponse.json({ error: 'You are already registered for this event' }, { status: 400 })
-        }
-        
-        if (duplicateCheck.hasActiveReservation) {
-          const expiresAt = new Date(duplicateCheck.expiresAt)
-          const minutesLeft = Math.ceil((expiresAt.getTime() - new Date().getTime()) / (1000 * 60))
-          
-          capturePaymentError(new Error('User has active payment reservation'), paymentContext, 'warning')
-          return NextResponse.json({ 
-            error: `You have a payment in progress for this event. Please complete your payment or wait ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''} to try again.`,
-            reservationExpiresAt: duplicateCheck.expiresAt,
-            reservationId: duplicateCheck.registrationId
-          }, { status: 409 }) // 409 Conflict for reservation in progress
-        }
-      }
-    } catch (error) {
-      console.error('Error checking duplicate registration:', error)
-      // Continue without duplicate check rather than fail the entire request
+    // Check if user already has a completed registration (exclude failed records for audit trail)
+    const { data: existingRegistration } = await supabase
+      .from('user_registrations')
+      .select('id, payment_status')
+      .eq('user_id', user.id)
+      .eq('registration_id', registrationId)
+      .in('payment_status', ['paid', 'refunded'])
+      .single()
+
+    if (existingRegistration) {
+      capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
+      return NextResponse.json({ 
+        error: existingRegistration.payment_status === 'paid' 
+          ? 'You are already registered for this event'
+          : 'You have a refunded registration for this event. Please contact support for assistance.'
+      }, { status: 400 })
     }
 
     // Check membership eligibility if required
@@ -470,43 +455,155 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 1: Reserve spot immediately (race condition protection)
-    let reservationId: string | null = null
+    // STEP 1: Clean up any existing processing records for this user/registration first
+    // This allows users to retry payments without being locked out for 5 minutes
+    let reservationId: string | null = null // Declare here so it's accessible throughout
     
-    if (selectedCategory.max_capacity) {
-      // Clean up any existing processing records for this user/registration first
-      try {
-        // Use admin client to bypass RLS for cleanup operations
-        const adminSupabase = createAdminClient()
+    try {
+      // Use admin client to bypass RLS for cleanup operations
+      const adminSupabase = createAdminClient()
+      
+      // First check what records exist
+      const { data: existingRecords } = await adminSupabase
+        .from('user_registrations')
+        .select('id, payment_status, reservation_expires_at, stripe_payment_intent_id')
+        .eq('user_id', user.id)
+        .eq('registration_id', registrationId)
+      
+      // Separate records by status
+      const awaitingPaymentRecords = existingRecords?.filter(r => r.payment_status === 'awaiting_payment') || []
+      const processingRecords = existingRecords?.filter(r => r.payment_status === 'processing') || []
+      const failedRecords = existingRecords?.filter(r => r.payment_status === 'failed') || []
+      
+      // Handle 'processing' records - check Stripe status before blocking
+      if (processingRecords.length > 0) {
+        const processingRecord = processingRecords[0]
         
-        // First check what records exist
-        const { data: existingRecords } = await adminSupabase
-          .from('user_registrations')
-          .select('id, payment_status, processing_expires_at')
-          .eq('user_id', user.id)
-          .eq('registration_id', registrationId)
-        
-        console.log('Existing records before cleanup:', existingRecords)
-        
-        // Delete processing records directly using admin client
-        const processingRecords = existingRecords?.filter(r => r.payment_status === 'processing') || []
-        
-        for (const record of processingRecords) {
-          const { data: deletedRecord, error: deleteError } = await adminSupabase
+        // If there's a Stripe payment intent ID, check its status
+        if (processingRecord.stripe_payment_intent_id) {
+          try {
+            console.log(`🔍 Checking Stripe status for payment intent: ${processingRecord.stripe_payment_intent_id}`)
+            const paymentIntent = await stripe.paymentIntents.retrieve(processingRecord.stripe_payment_intent_id)
+            
+            if (paymentIntent.status === 'succeeded') {
+              // Payment succeeded but our DB wasn't updated - fix it
+              console.log(`✅ Payment succeeded, updating DB to paid status`)
+              await fetch(`${getBaseUrl()}/api/update-registration-status`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Cookie': request.headers.get('cookie') || '',
+                },
+                body: JSON.stringify({
+                  registrationId: registrationId,
+                  categoryId: selectedCategory.id,
+                  status: 'paid'
+                }),
+              })
+              
+              return NextResponse.json({ 
+                error: 'Your payment has already been completed successfully. Please check your registrations.'
+              }, { status: 400 })
+              
+            } else if (['failed', 'canceled', 'requires_payment_method'].includes(paymentIntent.status)) {
+              // Payment failed - clean up and allow retry
+              console.log(`❌ Payment ${paymentIntent.status}, cleaning up processing record`)
+              await adminSupabase
+                .from('user_registrations')
+                .delete()
+                .eq('id', processingRecord.id)
+                .eq('payment_status', 'processing')
+              
+              console.log(`🔄 Payment failed in Stripe, allowing user to retry`)
+              // Continue with new payment attempt
+              
+            } else {
+              // Payment still processing in Stripe - block retry
+              capturePaymentError(new Error('Payment currently processing in Stripe'), paymentContext, 'warning')
+              return NextResponse.json({ 
+                error: `Your payment is currently being processed by Stripe. Please wait for it to complete before trying again.`
+              }, { status: 409 })
+            }
+            
+          } catch (stripeError) {
+            console.error('Error checking Stripe payment intent status:', stripeError)
+            // If we can't check Stripe, be conservative and block
+            capturePaymentError(new Error('Unable to verify payment status'), paymentContext, 'warning')
+            return NextResponse.json({ 
+              error: `Unable to verify your payment status. Please wait a moment and try again.`
+            }, { status: 409 })
+          }
+        } else {
+          // Processing record without Stripe ID - likely corrupted, clean it up
+          console.log(`🧹 Cleaning up processing record without Stripe payment intent ID`)
+          await adminSupabase
             .from('user_registrations')
             .delete()
-            .eq('id', record.id)
+            .eq('id', processingRecord.id)
             .eq('payment_status', 'processing')
-            .select()
-          
-          console.log(`Delete processing record result for ${record.id}:`, { deletedRecord, deleteError })
         }
-        
-        console.log(`Successfully cleaned up ${processingRecords.length} processing records using admin client`)
-      } catch (cleanupError) {
-        console.error('Error cleaning up existing processing records:', cleanupError)
-        // Continue anyway - the insert will handle duplicates
       }
+      
+      // Handle 'awaiting_payment' records - update existing record with fresh timer
+      if (awaitingPaymentRecords.length > 0) {
+        const existingRecord = awaitingPaymentRecords[0]
+        console.log(`🔄 Updating existing awaiting_payment record with fresh timer: ${existingRecord.id}`)
+        
+        const { data: updatedRecord, error: updateError } = await adminSupabase
+          .from('user_registrations')
+          .update({
+            reservation_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Fresh 5-minute timer
+            stripe_payment_intent_id: null, // Clear any old payment intent
+            registered_at: null // Clear registration timestamp
+          })
+          .eq('id', existingRecord.id)
+          .select()
+          .single()
+        
+        if (updateError) {
+          console.error(`Error updating awaiting_payment record:`, updateError)
+          // Fall through to create new record
+        } else {
+          console.log(`✅ Updated awaiting_payment record with fresh timer`)
+          // Skip creating new record, continue with payment intent creation for existing record
+          reservationId = existingRecord.id
+        }
+      }
+      
+      // Handle 'failed' records - reuse the most recent failed record for retry
+      if (failedRecords.length > 0) {
+        const failedRecord = failedRecords[0] // Use most recent failed record
+        console.log(`🔄 Found failed payment record - reusing for retry attempt: ${failedRecord.id}`)
+        
+        const { data: updatedRecord, error: updateError } = await adminSupabase
+          .from('user_registrations')
+          .update({
+            payment_status: 'awaiting_payment',
+            reservation_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Fresh 5-minute timer
+            stripe_payment_intent_id: null, // Clear previous payment intent
+            registered_at: null // Clear registration timestamp
+          })
+          .eq('id', failedRecord.id)
+          .select()
+          .single()
+        
+        if (updateError) {
+          console.error(`Error updating failed record:`, updateError)
+          // Fall through to create new record
+        } else {
+          console.log(`✅ Updated failed record for retry with fresh timer`)
+          // Skip creating new record, continue with payment intent creation for existing record
+          reservationId = failedRecord.id
+        }
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up existing processing records:', cleanupError)
+      // Continue anyway - the insert will handle duplicates
+    }
+
+    // STEP 2: Reserve spot immediately (race condition protection)
+    
+    if (selectedCategory.max_capacity) {
       
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
@@ -519,25 +616,27 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Create processing reservation (5 minute expiration)
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
-      
-      const { data: reservation, error: reservationError } = await supabase
-        .from('user_registrations')
-        .insert({
-          user_id: user.id,
-          registration_id: registrationId,
-          registration_category_id: categoryId,
-          payment_status: 'processing',
-          processing_expires_at: expiresAt.toISOString(),
-          registration_fee: amount,
-          amount_paid: finalAmount,
-          presale_code_used: presaleCode || null,
-        })
-        .select()
-        .single()
+      // Create new reservation only if we don't already have one from updating existing record
+      if (!reservationId) {
+        // Create processing reservation (5 minute expiration)
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+        
+        const { data: reservation, error: reservationError } = await supabase
+          .from('user_registrations')
+          .insert({
+            user_id: user.id,
+            registration_id: registrationId,
+            registration_category_id: categoryId,
+            payment_status: 'awaiting_payment',
+            reservation_expires_at: expiresAt.toISOString(),
+            registration_fee: amount,
+            amount_paid: finalAmount,
+            presale_code_used: presaleCode || null,
+          })
+          .select()
+          .single()
 
-      if (reservationError) {
+        if (reservationError) {
         console.error('Reservation creation error:', reservationError)
         
         // Check if this is a duplicate registration error
@@ -570,9 +669,12 @@ export async function POST(request: NextRequest) {
         
         capturePaymentError(reservationError, paymentContext, 'error')
         return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
+        } else {
+          reservationId = reservation.id
+        }
+      } else {
+        console.log(`✅ Using existing updated record as reservation: ${reservationId}`)
       }
-
-      reservationId = reservation.id
     }
 
     // Fetch user details for customer info

@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
   
   try {
     const supabase = await createClient()
+    const { createAdminClient } = await import('@/lib/supabase/server')
+    const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
             .delete()
             .eq('id', reservationId)
             .eq('user_id', user.id)
-            .eq('payment_status', 'processing')
+            .eq('payment_status', 'awaiting_payment')
           
           if (cleanupError) {
             console.error('Error cleaning up failed payment reservation:', cleanupError)
@@ -134,23 +136,50 @@ export async function POST(request: NextRequest) {
     let registrationError
 
     if (reservationId) {
-      // Update existing reservation to paid status
-      const { data, error } = await supabase
+      console.log(`Attempting to update reservation ${reservationId} to paid status`)
+      
+      // First check what exists in the database
+      const { data: existingRecord } = await supabase
         .from('user_registrations')
-        .update({
-          payment_status: 'paid',
-          user_membership_id: activeMembership?.id || null,
-          registered_at: new Date().toISOString(),
-          processing_expires_at: null, // Clear expiration since it's now paid
-        })
+        .select('id, payment_status, user_id, registration_id')
         .eq('id', reservationId)
-        .eq('user_id', user.id) // Security check
-        .eq('payment_status', 'processing') // Only update if still processing
-        .select()
         .single()
+      
+      console.log(`Existing record for reservation ${reservationId}:`, existingRecord)
+      
+      // Update existing reservation to paid status via standardized API
+      try {
+        const { getBaseUrl } = await import('@/lib/url-utils')
+        const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': request.headers.get('cookie') || '',
+          },
+          body: JSON.stringify({
+            registrationId: registrationId,
+            categoryId: categoryId,
+            status: 'paid',
+            userMembershipId: activeMembership?.id || null
+          }),
+        })
 
-      userRegistration = data
-      registrationError = error
+        console.log(`Status update response:`, statusResponse.status)
+        
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          userRegistration = statusData.registration
+          registrationError = null
+          console.log(`✅ Updated registration to paid via API`)
+        } else {
+          const statusError = await statusResponse.json()
+          registrationError = new Error(statusError.error || 'Failed to update status')
+          console.log(`❌ Failed to update status:`, statusError)
+        }
+      } catch (apiError) {
+        registrationError = apiError as Error
+        console.log(`❌ API call error:`, apiError)
+      }
 
       // If reservation not found or expired, check if it was already processed
       if (registrationError) {
@@ -166,10 +195,17 @@ export async function POST(request: NextRequest) {
           // Payment already processed, return success
           userRegistration = existingPaid
           registrationError = null
+        } else {
+          // Reservation not found (likely cleaned up), fall back to creating new record
+          console.log(`Reservation ${reservationId} not found, will create new registration record`)
+          // Fall through to creation logic below
         }
       }
-    } else {
-      // Fallback: Create new record (for backwards compatibility or unlimited capacity)
+    }
+
+    // Create new registration if reservation update failed or no reservation ID
+    if (!userRegistration && (registrationError || !reservationId)) {
+      console.log('Creating new registration record (fallback)')
       const registrationData = {
         user_id: user.id,
         registration_id: registrationId,
@@ -182,7 +218,7 @@ export async function POST(request: NextRequest) {
         registered_at: new Date().toISOString(),
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await adminSupabase
         .from('user_registrations')
         .insert(registrationData)
         .select()

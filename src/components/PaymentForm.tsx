@@ -108,7 +108,7 @@ export default function PaymentForm({
     setIsLoading(true)
 
     try {
-      // Confirm payment with Stripe
+      // Confirm payment with Stripe first to get payment intent
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -118,6 +118,27 @@ export default function PaymentForm({
         },
         redirect: 'if_required',
       })
+
+      // Update registration status to 'processing' with payment intent ID (for registrations only)
+      if (!error && paymentIntent && registrationId && categoryId) {
+        try {
+          await fetch('/api/update-registration-status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              registrationId: registrationId,
+              categoryId: categoryId,
+              status: 'processing',
+              stripePaymentIntentId: paymentIntent.id
+            }),
+          })
+        } catch (statusError) {
+          console.warn('Failed to update registration status to processing:', statusError)
+          // Continue anyway - the main flow should still work
+        }
+      }
 
       if (error) {
         // Capture payment failure as business event in Sentry
@@ -143,6 +164,43 @@ export default function PaymentForm({
           }
         })
         
+        // Update registration status to 'failed' for declined payments (registrations only)
+        if (registrationId && categoryId) {
+          try {
+            await fetch('/api/update-registration-status', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                registrationId: registrationId,
+                categoryId: categoryId,
+                status: 'failed'
+              }),
+            })
+          } catch (statusError) {
+            console.warn('Failed to update registration status to failed:', statusError)
+          }
+        }
+
+        // Update payment record status to 'failed' if we have a payment intent
+        if (paymentIntent) {
+          try {
+            await fetch('/api/update-payment-status', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                stripePaymentIntentId: paymentIntent.id,
+                status: 'failed'
+              }),
+            })
+          } catch (paymentError) {
+            console.warn('Failed to update payment status to failed:', paymentError)
+          }
+        }
+
         onError(error.message || 'Payment failed')
         return
       }

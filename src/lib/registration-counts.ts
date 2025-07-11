@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 /**
  * Get current registration counts for multiple categories (includes valid reservations)
- * Counts paid registrations + non-expired processing reservations
+ * Counts paid registrations + non-expired awaiting_payment reservations
  * @param categoryIds Array of registration category IDs  
  * @returns Record mapping category ID to current registration count
  */
@@ -15,7 +15,7 @@ export async function getCategoryRegistrationCounts(categoryIds: string[]): Prom
       .from('user_registrations')
       .select('*', { count: 'exact', head: true })
       .eq('registration_category_id', categoryId)
-      .or('payment_status.eq.paid,and(payment_status.eq.processing,processing_expires_at.gt.' + new Date().toISOString() + ')')
+      .or('payment_status.eq.paid,and(payment_status.eq.awaiting_payment,reservation_expires_at.gt.' + new Date().toISOString() + ')')
     
     counts[categoryId] = count || 0
   }
@@ -25,9 +25,9 @@ export async function getCategoryRegistrationCounts(categoryIds: string[]): Prom
 
 /**
  * Get current registration count for a single category (includes valid reservations)
- * Counts paid registrations + non-expired processing reservations
+ * Counts paid registrations + non-expired awaiting_payment reservations
  * @param categoryId Registration category ID
- * @returns Number of current registrations (paid + valid processing)
+ * @returns Number of current registrations (paid + valid awaiting_payment)
  */
 export async function getSingleCategoryRegistrationCount(categoryId: string): Promise<number> {
   const supabase = await createClient()
@@ -36,7 +36,7 @@ export async function getSingleCategoryRegistrationCount(categoryId: string): Pr
     .from('user_registrations')
     .select('*', { count: 'exact', head: true })
     .eq('registration_category_id', categoryId)
-    .or('payment_status.eq.paid,and(payment_status.eq.processing,processing_expires_at.gt.' + new Date().toISOString() + ')')
+    .or('payment_status.eq.paid,and(payment_status.eq.awaiting_payment,reservation_expires_at.gt.' + new Date().toISOString() + ')')
   
   return count || 0
 }

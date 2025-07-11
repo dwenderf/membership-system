@@ -151,7 +151,10 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
 
 // Handle registration payment processing
 async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, registrationId: string) {
-  // Update user registration record from processing to paid
+  // Note: Webhook doesn't have access to categoryId, so we'll need to get it from the registration
+  // For now, let's keep the direct database update in webhooks since they're backup/redundancy
+  
+  // Update user registration record from awaiting_payment/processing to paid
   const { data: userRegistration, error: registrationError } = await supabase
     .from('user_registrations')
     .update({
@@ -160,7 +163,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     })
     .eq('user_id', userId)
     .eq('registration_id', registrationId)
-    .eq('payment_status', 'processing')
+    .in('payment_status', ['awaiting_payment', 'processing'])
     .select()
     .single()
 

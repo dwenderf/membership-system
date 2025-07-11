@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Check for existing registrations (paid or non-expired processing)
     const { data: existingRegistrations, error } = await supabase
       .from('user_registrations')
-      .select('id, payment_status, processing_expires_at')
+      .select('id, payment_status, reservation_expires_at')
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
 
@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
           paidRegistration = reg
           break // Paid takes priority
         }
-        if (reg.payment_status === 'processing') {
-          if (reg.processing_expires_at) {
-            const expiresAt = new Date(reg.processing_expires_at)
+        if (reg.payment_status === 'awaiting_payment') {
+          if (reg.reservation_expires_at) {
+            const expiresAt = new Date(reg.reservation_expires_at)
             if (expiresAt > new Date()) {
               activeProcessingRegistration = reg
             }
@@ -56,9 +56,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       isAlreadyRegistered: !!paidRegistration,
       hasActiveReservation: !!activeProcessingRegistration,
-      status: paidRegistration ? 'paid' : (activeProcessingRegistration ? 'processing' : 'none'),
+      status: paidRegistration ? 'paid' : (activeProcessingRegistration ? 'awaiting_payment' : 'none'),
       registrationId: paidRegistration?.id || activeProcessingRegistration?.id || null,
-      expiresAt: activeProcessingRegistration?.processing_expires_at || null
+      expiresAt: activeProcessingRegistration?.reservation_expires_at || null
     })
     
   } catch (error) {

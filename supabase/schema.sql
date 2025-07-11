@@ -195,18 +195,19 @@ CREATE TABLE registration_categories (
 
 -- User registrations table
 -- User registration records with reservation system. 
--- Flow: processing (reserved) -> paid (confirmed) or deleted (expired/failed).
+-- Flow: awaiting_payment (reserved) -> processing (payment submitted) -> paid (confirmed) or failed (retry allowed).
 CREATE TABLE user_registrations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
     registration_category_id UUID REFERENCES registration_categories(id),
     user_membership_id UUID REFERENCES user_memberships(id), -- NULL for free events
-    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'refunded', 'processing')),
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('awaiting_payment', 'processing', 'paid', 'failed', 'refunded')),
     registration_fee INTEGER, -- in cents
     amount_paid INTEGER, -- in cents (after discounts)
     presale_code_used TEXT, -- Stores the presale code used for this registration (if any)
-    processing_expires_at TIMESTAMP WITH TIME ZONE, -- Expiration time for processing reservations. Used to prevent race conditions by reserving spots for 5 minutes while payment is processed.
+    stripe_payment_intent_id TEXT, -- Stripe payment intent ID for this registration payment
+    reservation_expires_at TIMESTAMP WITH TIME ZONE, -- When the spot reservation expires (user must complete payment before this time)
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id, registration_id)
@@ -317,7 +318,8 @@ CREATE TABLE payments (
     refund_reason TEXT,
     refunded_by UUID REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE
+    completed_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Payment items table
@@ -383,7 +385,8 @@ CREATE INDEX idx_discount_usage_code_time ON discount_usage(discount_code_id, us
 CREATE INDEX idx_waitlists_registration_position ON waitlists(registration_id, position);
 CREATE INDEX idx_waitlists_registration_time ON waitlists(registration_id, joined_at);
 CREATE INDEX idx_waitlists_category ON waitlists(registration_category_id, position, removed_at);
-CREATE INDEX idx_user_registrations_processing_expires ON user_registrations(processing_expires_at) WHERE payment_status = 'processing';
+CREATE INDEX idx_user_registrations_reservation_expires ON user_registrations(reservation_expires_at) WHERE payment_status = 'awaiting_payment';
+CREATE INDEX idx_user_registrations_stripe_payment_intent_id ON user_registrations(stripe_payment_intent_id);
 
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);

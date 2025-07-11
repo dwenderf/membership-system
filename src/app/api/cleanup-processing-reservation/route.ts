@@ -18,20 +18,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Registration ID required' }, { status: 400 })
     }
 
-    // Delete processing records for this user/registration using admin client to bypass RLS
+    // Delete awaiting_payment records for this user/registration using admin client to bypass RLS
     const adminSupabase = createAdminClient()
     const { data: deletedRecords, error: deleteError } = await adminSupabase
       .from('user_registrations')
       .delete()
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
-      .eq('payment_status', 'processing')
+      .eq('payment_status', 'awaiting_payment')
       .select()
       
-    console.log(`Cleanup API: Deleted ${deletedRecords?.length || 0} processing records for user ${user.id} registration ${registrationId}`)
+    console.log(`Cleanup API: Deleted ${deletedRecords?.length || 0} awaiting_payment records for user ${user.id} registration ${registrationId}`)
 
     if (deleteError) {
-      console.error('Error deleting processing record:', deleteError)
+      console.error('Error deleting awaiting_payment record:', deleteError)
       return NextResponse.json({ error: 'Failed to cleanup reservation' }, { status: 500 })
     }
 

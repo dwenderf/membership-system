@@ -58,7 +58,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     if (isExpired) {
       // Try to refresh the token
       console.log(`🔄 Attempting to refresh expired Xero token for tenant: ${tenantId}`)
-      const refreshedTokens = await refreshXeroToken(tokenData.refresh_token)
+      const refreshedTokens = await refreshXeroToken(tokenData.refresh_token, tenantId)
       if (!refreshedTokens) {
         console.error('Failed to refresh Xero token for tenant:', tenantId)
         console.error('This usually means:')
@@ -108,7 +108,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
 }
 
 // Helper function to refresh Xero token
-async function refreshXeroToken(refreshToken: string): Promise<{
+async function refreshXeroToken(refreshToken: string, tenantId?: string): Promise<{
   access_token: string
   refresh_token: string
   expires_at: string
@@ -139,6 +139,35 @@ async function refreshXeroToken(refreshToken: string): Promise<{
     }
     if (error?.response?.status) {
       console.error('Xero token refresh status:', error.response.status)
+    }
+    
+    // Send critical alert to Sentry for token refresh failures
+    try {
+      const { captureMessage } = await import('@sentry/nextjs')
+      captureMessage('🚨 CRITICAL: Xero token refresh failed - Re-authentication required', {
+        level: 'error',
+        tags: {
+          integration: 'xero',
+          operation: 'token_refresh',
+          tenant_id: tenantId || 'unknown'
+        },
+        extra: {
+          tenant_id: tenantId,
+          error_type: error?.response?.data?.error || 'unknown',
+          error_status: error?.response?.status,
+          error_details: error?.response?.data,
+          error_message: error?.message,
+          possible_causes: [
+            'Refresh token has expired (Demo Company: ~7-14 days, Production: ~60 days)',
+            'App has been disconnected by user in Xero',
+            'Refresh token has been revoked',
+            'Invalid client credentials'
+          ],
+          action_required: 'User needs to re-authenticate with Xero via /admin/xero/connect'
+        }
+      })
+    } catch (sentryError) {
+      console.error('Failed to send Sentry alert for Xero token refresh failure:', sentryError)
     }
     
     return null

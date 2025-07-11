@@ -96,7 +96,7 @@ export default function RegistrationPurchase({
     }
   }
 
-  // Close modal and cleanup
+  // Close modal and cleanup to free capacity for other users
   const closeModal = async () => {
     setShowPaymentForm(false)
     setClientSecret(null)
@@ -104,7 +104,7 @@ export default function RegistrationPurchase({
     setDiscountCode('')
     setDiscountValidation(null)
     setReservationExpiresAt(null)
-    await cleanupProcessingReservation()
+    await cleanupProcessingReservation() // Free up spot for others
   }
 
   // Handle timer expiration
@@ -344,7 +344,7 @@ export default function RegistrationPurchase({
         body: JSON.stringify({
           registrationId: registration.id,
           categoryId: selectedCategoryId,
-          amount: finalAmount, // Use final amount after discount, not original
+          amount: originalAmount, // Use original amount, let backend apply discount
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
         }),

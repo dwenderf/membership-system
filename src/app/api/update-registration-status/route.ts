@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
       payment_status: status,
     }
 
-    // Clear expiration when processing or paid
-    if (status === 'processing' || status === 'paid') {
+    // Clear expiration when processing, paid, or failed (so failed records don't block capacity)
+    if (status === 'processing' || status === 'paid' || status === 'failed') {
       updateData.reservation_expires_at = null
     }
 

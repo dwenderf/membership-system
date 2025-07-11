@@ -523,6 +523,13 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 
 #### Step 5: Update Service Configurations
 
+**Supabase Authentication:**
+1. Go to your Supabase Dashboard → Authentication → URL Configuration
+2. Update **Site URL** to: `https://your-domain.vercel.app`
+3. Add to **Redirect URLs**:
+   - `https://your-domain.vercel.app/auth/callback`
+   - `https://your-domain.vercel.app/**` (wildcard for all auth flows)
+
 **Stripe Webhooks:**
 1. Go to your Stripe Dashboard → Webhooks
 2. Update endpoint URL to: `https://your-domain.vercel.app/api/webhooks/stripe`

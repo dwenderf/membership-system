@@ -313,7 +313,7 @@ CREATE TABLE payments (
     discount_amount INTEGER DEFAULT 0, -- in cents
     final_amount INTEGER NOT NULL, -- in cents
     stripe_payment_intent_id TEXT,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded', 'cancelled')),
     payment_method TEXT DEFAULT 'stripe',
     refund_reason TEXT,
     refunded_by UUID REFERENCES users(id),

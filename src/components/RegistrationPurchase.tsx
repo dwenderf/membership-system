@@ -99,6 +99,25 @@ export default function RegistrationPurchase({
 
   // Close modal and cleanup to free capacity for other users
   const closeModal = async () => {
+    // Update payment status to cancelled if user closes form
+    if (paymentIntentId) {
+      try {
+        await fetch('/api/update-payment-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            stripePaymentIntentId: paymentIntentId,
+            status: 'cancelled'
+          }),
+        })
+        console.log(`✅ Updated payment ${paymentIntentId} status to cancelled (user closed form)`)
+      } catch (error) {
+        console.warn('Failed to update payment status to cancelled:', error)
+      }
+    }
+
     setShowPaymentForm(false)
     setClientSecret(null)
     setPaymentIntentId(null)
@@ -111,9 +130,29 @@ export default function RegistrationPurchase({
 
   // Handle timer expiration
   const handleTimerExpired = async () => {
+    // Update payment status to cancelled when timer expires
+    if (paymentIntentId) {
+      try {
+        await fetch('/api/update-payment-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            stripePaymentIntentId: paymentIntentId,
+            status: 'cancelled'
+          }),
+        })
+        console.log(`✅ Updated payment ${paymentIntentId} status to cancelled (timer expired)`)
+      } catch (error) {
+        console.warn('Failed to update payment status to cancelled on timer expiry:', error)
+      }
+    }
+
     await cleanupProcessingReservation()
     setShowPaymentForm(false)
     setClientSecret(null)
+    setPaymentIntentId(null)
     setSelectedCategoryId(null)
     setDiscountCode('')
     setDiscountValidation(null)

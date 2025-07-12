@@ -79,8 +79,8 @@ export async function withActiveTenant<T>(
 export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroApi | null> {
   try {
     // Import supabase here to avoid circular dependency
-    const { createClient } = await import('./supabase/server')
-    const supabase = await createClient()
+    const { createAdminClient } = await import('./supabase/server')
+    const supabase = createAdminClient()
 
     // Get stored tokens for the tenant
     const { data: tokenData, error } = await supabase
@@ -222,8 +222,8 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
 // Helper function to revoke OAuth tokens on Xero's side
 export async function revokeXeroTokens(): Promise<boolean> {
   try {
-    const { createClient } = await import('./supabase/server')
-    const supabase = await createClient()
+    const { createAdminClient } = await import('./supabase/server')
+    const supabase = createAdminClient()
 
     // Get all active tokens
     const { data: activeTokens, error } = await supabase
@@ -270,8 +270,8 @@ export async function getActiveTenant(): Promise<{
   expires_at: string
 } | null> {
   try {
-    const { createClient } = await import('./supabase/server')
-    const supabase = await createClient()
+    const { createAdminClient } = await import('./supabase/server')
+    const supabase = createAdminClient()
 
     const { data, error } = await supabase
       .from('xero_oauth_tokens')
@@ -298,8 +298,8 @@ export async function getActiveXeroTenants(): Promise<Array<{
   expires_at: string
 }>> {
   try {
-    const { createClient } = await import('./supabase/server')
-    const supabase = await createClient()
+    const { createAdminClient } = await import('./supabase/server')
+    const supabase = createAdminClient()
 
     const { data, error } = await supabase
       .from('xero_oauth_tokens')
@@ -335,7 +335,7 @@ export async function validateXeroConnection(tenantId: string): Promise<boolean>
   }
 }
 
-// Helper function to log Xero sync operations
+// Helper function to log Xero sync operations (legacy format)
 export async function logXeroSync(
   tenantId: string,
   operationType: 'contact_sync' | 'invoice_sync' | 'payment_sync' | 'token_refresh',
@@ -347,39 +347,102 @@ export async function logXeroSync(
   errorMessage?: string,
   requestData?: any,
   responseData?: any
+): Promise<void>
+
+// Helper function to log Xero sync operations (new object format)
+export async function logXeroSync(params: {
+  operation: string
+  tenant_id: string
+  record_type: string
+  record_id: string
+  success: boolean
+  xero_id?: string
+  details?: string
+  error_message?: string
+}): Promise<void>
+
+// Implementation
+export async function logXeroSync(
+  tenantIdOrParams: string | {
+    operation: string
+    tenant_id: string
+    record_type: string
+    record_id: string
+    success: boolean
+    xero_id?: string
+    details?: string
+    error_message?: string
+  },
+  operationType?: 'contact_sync' | 'invoice_sync' | 'payment_sync' | 'token_refresh',
+  entityType?: 'user' | 'payment' | 'invoice' | 'contact' | null,
+  entityId?: string | null,
+  xeroEntityId?: string | null,
+  status?: 'success' | 'error' | 'warning',
+  errorCode?: string,
+  errorMessage?: string,
+  requestData?: any,
+  responseData?: any
 ): Promise<void> {
   try {
-    const { createClient } = await import('./supabase/server')
-    const supabase = await createClient()
+    const { createAdminClient } = await import('./supabase/server')
+    const supabase = createAdminClient()
 
-    await supabase
-      .from('xero_sync_logs')
-      .insert({
-        tenant_id: tenantId,
-        operation_type: operationType,
-        entity_type: entityType,
-        entity_id: entityId,
-        xero_entity_id: xeroEntityId,
-        status,
-        error_code: errorCode,
-        error_message: errorMessage,
-        request_data: requestData,
-        response_data: responseData
-      })
+    // Handle both calling patterns
+    if (typeof tenantIdOrParams === 'object') {
+      // New object format
+      const params = tenantIdOrParams
+      await supabase
+        .from('xero_sync_logs')
+        .insert({
+          tenant_id: params.tenant_id,
+          operation_type: params.operation,
+          entity_type: params.record_type,
+          entity_id: params.record_id,
+          xero_entity_id: params.xero_id || null,
+          status: params.success ? 'success' : 'error',
+          error_message: params.error_message || null,
+          request_data: null,
+          response_data: params.details ? { details: params.details } : null
+        })
+    } else {
+      // Legacy format
+      await supabase
+        .from('xero_sync_logs')
+        .insert({
+          tenant_id: tenantIdOrParams,
+          operation_type: operationType!,
+          entity_type: entityType,
+          entity_id: entityId,
+          xero_entity_id: xeroEntityId,
+          status: status!,
+          error_code: errorCode,
+          error_message: errorMessage,
+          request_data: requestData,
+          response_data: responseData
+        })
+    }
 
     // Also log to Sentry for errors
-    if (status === 'error' && errorMessage) {
+    const isError = typeof tenantIdOrParams === 'object' 
+      ? !tenantIdOrParams.success 
+      : status === 'error'
+    const errorMsg = typeof tenantIdOrParams === 'object' 
+      ? tenantIdOrParams.error_message 
+      : errorMessage
+    const operation = typeof tenantIdOrParams === 'object' 
+      ? tenantIdOrParams.operation 
+      : operationType
+    const tenantId = typeof tenantIdOrParams === 'object' 
+      ? tenantIdOrParams.tenant_id 
+      : tenantIdOrParams
+
+    if (isError && errorMsg) {
       const { captureException } = await import('@sentry/nextjs')
-      captureException(new Error(`Xero ${operationType} failed: ${errorMessage}`), {
+      captureException(new Error(`Xero ${operation} failed: ${errorMsg}`), {
         extra: {
           tenantId,
-          operationType,
-          entityType,
-          entityId,
-          xeroEntityId,
-          errorCode,
-          requestData,
-          responseData
+          operation,
+          errorMessage: errorMsg
         }
       })
     }

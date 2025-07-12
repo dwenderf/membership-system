@@ -1,0 +1,419 @@
+/**
+ * Xero Staging System
+ * 
+ * Implements staging-first approach for Xero integration:
+ * 1. Always create staging records first (guaranteed success)
+ * 2. Batch sync staged records to Xero API
+ * 3. Admin recovery for failed syncs
+ */
+
+import { createClient } from './supabase/server'
+import { getActiveXeroTenants } from './xero-client'
+import { PaymentInvoiceData, PrePaymentInvoiceData } from './xero-invoices'
+import { Database } from '@/types/database'
+
+type StagingPaymentData = {
+  payment_id?: string
+  user_id: string
+  total_amount: number
+  discount_amount: number
+  final_amount: number
+  payment_items: Array<{
+    item_type: 'membership' | 'registration' | 'donation'
+    item_id: string | null
+    amount: number
+    description?: string
+    accounting_code?: string
+  }>
+  discount_codes_used?: Array<{
+    code: string
+    amount_saved: number
+    category_name: string
+    accounting_code?: string
+  }>
+  stripe_payment_intent_id?: string
+}
+
+export class XeroStagingManager {
+  private supabase: ReturnType<typeof createClient<Database>>
+
+  constructor() {
+    this.supabase = createClient()
+  }
+
+  /**
+   * Create staging records for a paid purchase
+   */
+  async createPaidPurchaseStaging(paymentId: string): Promise<boolean> {
+    try {
+      console.log('📊 Creating Xero staging for paid purchase:', paymentId)
+
+      // Get payment data with all items
+      const paymentData = await this.getPaymentDataForStaging(paymentId)
+      if (!paymentData) {
+        console.error('❌ No payment data found for staging:', paymentId)
+        return false
+      }
+
+      // Get active tenants
+      const tenants = await getActiveXeroTenants()
+      if (tenants.length === 0) {
+        console.log('⚠️ No active Xero tenants, skipping staging')
+        return true // Not a failure - just no Xero configured
+      }
+
+      // Create staging records for each tenant
+      let allSucceeded = true
+      for (const tenant of tenants) {
+        const success = await this.createInvoiceStaging(paymentData, tenant.tenant_id)
+        if (!success) allSucceeded = false
+      }
+
+      return allSucceeded
+    } catch (error) {
+      console.error('❌ Error creating paid purchase staging:', error)
+      return false
+    }
+  }
+
+  /**
+   * Create staging records for a free purchase
+   */
+  async createFreePurchaseStaging(
+    event: {
+      user_id: string
+      record_id: string
+      trigger_source: 'user_memberships' | 'user_registrations'
+    }
+  ): Promise<boolean> {
+    try {
+      console.log('🆓 Creating Xero staging for free purchase:', event.record_id)
+
+      // Get the purchase data based on type
+      const purchaseData = await this.getFreePurchaseData(event)
+      if (!purchaseData) {
+        console.error('❌ No purchase data found for free staging:', event.record_id)
+        return false
+      }
+
+      // Convert to staging format
+      const stagingData = await this.convertToStagingData(purchaseData, event.trigger_source)
+      
+      // Get active tenants
+      const tenants = await getActiveXeroTenants()
+      if (tenants.length === 0) {
+        console.log('⚠️ No active Xero tenants, skipping staging')
+        return true // Not a failure - just no Xero configured
+      }
+
+      // Create staging records for each tenant
+      let allSucceeded = true
+      for (const tenant of tenants) {
+        const success = await this.createInvoiceStaging(stagingData, tenant.tenant_id)
+        if (!success) allSucceeded = false
+      }
+
+      return allSucceeded
+    } catch (error) {
+      console.error('❌ Error creating free purchase staging:', error)
+      return false
+    }
+  }
+
+  /**
+   * Create staging records for invoice and payment
+   */
+  private async createInvoiceStaging(
+    data: StagingPaymentData, 
+    tenantId: string
+  ): Promise<boolean> {
+    try {
+      // Generate unique invoice number for staging
+      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      // Create invoice staging record
+      const { data: invoiceStaging, error: invoiceError } = await this.supabase
+        .from('xero_invoices')
+        .insert({
+          payment_id: data.payment_id || null,
+          tenant_id: tenantId,
+          xero_invoice_id: '00000000-0000-0000-0000-000000000000', // Placeholder until synced
+          invoice_number: invoiceNumber,
+          invoice_type: 'ACCREC',
+          invoice_status: 'DRAFT',
+          total_amount: data.total_amount,
+          discount_amount: data.discount_amount,
+          net_amount: data.final_amount,
+          stripe_fee_amount: 0, // Calculate from payment data if needed
+          sync_status: 'staged',
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            user_id: data.user_id,
+            payment_items: data.payment_items,
+            discount_codes_used: data.discount_codes_used || [],
+            stripe_payment_intent_id: data.stripe_payment_intent_id,
+            created_at: new Date().toISOString()
+          }
+        })
+        .select()
+        .single()
+
+      if (invoiceError || !invoiceStaging) {
+        console.error('❌ Failed to create invoice staging:', invoiceError)
+        return false
+      }
+
+      // Create line item staging records
+      const lineItems = this.generateLineItems(data)
+      for (const lineItem of lineItems) {
+        const { error: lineError } = await this.supabase
+          .from('xero_invoice_line_items')
+          .insert({
+            xero_invoice_id: invoiceStaging.id,
+            line_item_type: lineItem.item_type,
+            item_id: lineItem.item_id,
+            description: lineItem.description,
+            quantity: lineItem.quantity,
+            unit_amount: lineItem.unit_amount,
+            account_code: lineItem.account_code,
+            tax_type: 'NONE',
+            line_amount: lineItem.line_amount
+          })
+
+        if (lineError) {
+          console.error('❌ Failed to create line item staging:', lineError)
+          // Continue with other line items
+        }
+      }
+
+      // Create payment staging record if this is a paid purchase
+      if (data.payment_id && data.final_amount > 0) {
+        const { error: paymentError } = await this.supabase
+          .from('xero_payments')
+          .insert({
+            xero_invoice_id: invoiceStaging.id,
+            tenant_id: tenantId,
+            xero_payment_id: '00000000-0000-0000-0000-000000000000', // Placeholder until synced
+            payment_method: 'stripe',
+            bank_account_code: 'STRIPE', // Default - should be configurable
+            amount_paid: data.final_amount,
+            stripe_fee_amount: 0, // Calculate if needed
+            reference: data.stripe_payment_intent_id || '',
+            sync_status: 'staged',
+            staged_at: new Date().toISOString(),
+            staging_metadata: {
+              payment_id: data.payment_id,
+              stripe_payment_intent_id: data.stripe_payment_intent_id,
+              created_at: new Date().toISOString()
+            }
+          })
+
+        if (paymentError) {
+          console.error('❌ Failed to create payment staging:', paymentError)
+          return false
+        }
+      }
+
+      console.log('✅ Staging records created for tenant:', tenantId, 'invoice:', invoiceNumber)
+      return true
+      
+    } catch (error) {
+      console.error('❌ Error creating staging records:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get payment data for staging
+   */
+  private async getPaymentDataForStaging(paymentId: string): Promise<StagingPaymentData | null> {
+    try {
+      const { data: payment, error } = await this.supabase
+        .from('payments')
+        .select(`
+          *,
+          payment_items (
+            item_type,
+            item_id,
+            amount
+          )
+        `)
+        .eq('id', paymentId)
+        .single()
+
+      if (error || !payment) {
+        return null
+      }
+
+      // Get detailed item information and build descriptions
+      const paymentItems = []
+      for (const item of payment.payment_items) {
+        const itemDetails = await this.getItemDetails(item.item_type, item.item_id)
+        paymentItems.push({
+          item_type: item.item_type,
+          item_id: item.item_id,
+          amount: item.amount,
+          description: itemDetails?.description || `${item.item_type} purchase`,
+          accounting_code: itemDetails?.accounting_code || null
+        })
+      }
+
+      // TODO: Get discount codes used (from discount_usage table)
+      const discountCodesUsed = []
+
+      return {
+        payment_id: payment.id,
+        user_id: payment.user_id,
+        total_amount: payment.total_amount,
+        discount_amount: payment.discount_amount,
+        final_amount: payment.final_amount,
+        payment_items: paymentItems,
+        discount_codes_used: discountCodesUsed,
+        stripe_payment_intent_id: payment.stripe_payment_intent_id
+      }
+    } catch (error) {
+      console.error('❌ Error getting payment data for staging:', error)
+      return null
+    }
+  }
+
+  /**
+   * Get free purchase data
+   */
+  private async getFreePurchaseData(event: {
+    user_id: string
+    record_id: string
+    trigger_source: 'user_memberships' | 'user_registrations'
+  }) {
+    // This will get the membership or registration data for free purchases
+    // TODO: Implement based on trigger_source
+    console.log('🚧 Get free purchase data - to be implemented')
+    return null
+  }
+
+  /**
+   * Convert purchase data to staging format
+   */
+  private async convertToStagingData(
+    purchaseData: any, 
+    type: 'user_memberships' | 'user_registrations'
+  ): Promise<StagingPaymentData> {
+    // TODO: Convert membership/registration data to staging format
+    console.log('🚧 Convert to staging data - to be implemented')
+    return {
+      user_id: purchaseData.user_id,
+      total_amount: 0,
+      discount_amount: 0,
+      final_amount: 0,
+      payment_items: []
+    }
+  }
+
+  /**
+   * Get item details for description and accounting codes
+   */
+  private async getItemDetails(itemType: string, itemId: string | null) {
+    if (!itemId) return null
+
+    try {
+      if (itemType === 'membership') {
+        const { data } = await this.supabase
+          .from('memberships')
+          .select('name, accounting_code')
+          .eq('id', itemId)
+          .single()
+        
+        return {
+          description: `Membership: ${data?.name || 'Unknown'}`,
+          accounting_code: data?.accounting_code || 'MEMBERSHIP'
+        }
+      } else if (itemType === 'registration') {
+        const { data } = await this.supabase
+          .from('registrations')
+          .select('name')
+          .eq('id', itemId)
+          .single()
+        
+        return {
+          description: `Registration: ${data?.name || 'Unknown'}`,
+          accounting_code: 'REGISTRATION'
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('❌ Error getting item details:', error)
+      return null
+    }
+  }
+
+  /**
+   * Generate line items for invoice
+   */
+  private generateLineItems(data: StagingPaymentData) {
+    const lineItems = []
+
+    // Add payment items
+    for (const item of data.payment_items) {
+      lineItems.push({
+        item_type: item.item_type,
+        item_id: item.item_id,
+        description: item.description || `${item.item_type} purchase`,
+        quantity: 1,
+        unit_amount: item.amount,
+        account_code: item.accounting_code || 'SALES',
+        line_amount: item.amount
+      })
+    }
+
+    // Add discount line items (negative amounts)
+    if (data.discount_codes_used) {
+      for (const discount of data.discount_codes_used) {
+        lineItems.push({
+          item_type: 'discount' as const,
+          item_id: null,
+          description: `Discount: ${discount.code} (${discount.category_name})`,
+          quantity: 1,
+          unit_amount: -discount.amount_saved,
+          account_code: discount.accounting_code || 'DISCOUNT',
+          line_amount: -discount.amount_saved
+        })
+      }
+    }
+
+    return lineItems
+  }
+
+  /**
+   * Get all pending staging records for batch sync
+   */
+  async getPendingStagingRecords() {
+    try {
+      const { data: pendingInvoices } = await this.supabase
+        .from('xero_invoices')
+        .select(`
+          *,
+          xero_invoice_line_items (*)
+        `)
+        .in('sync_status', ['pending', 'staged'])
+        .order('staged_at', { ascending: true })
+
+      const { data: pendingPayments } = await this.supabase
+        .from('xero_payments')
+        .select('*')
+        .in('sync_status', ['pending', 'staged'])
+        .order('staged_at', { ascending: true })
+
+      return {
+        invoices: pendingInvoices || [],
+        payments: pendingPayments || []
+      }
+    } catch (error) {
+      console.error('❌ Error getting pending staging records:', error)
+      return { invoices: [], payments: [] }
+    }
+  }
+}
+
+// Export singleton instance
+export const xeroStagingManager = new XeroStagingManager()

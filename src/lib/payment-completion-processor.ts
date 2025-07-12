@@ -8,6 +8,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import { emailService } from './email-service'
+import { xeroStagingManager } from './xero-staging'
+import { xeroBatchSyncManager } from './xero-batch-sync'
 
 type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'
@@ -240,9 +242,21 @@ export class PaymentCompletionProcessor {
   private async createFreeXeroStaging(event: PaymentCompletionEvent) {
     console.log('🆓 Creating Xero staging for free purchase...')
     
-    // TODO: Implement free purchase Xero staging
-    // This should create a $0 invoice showing full price with discount
-    console.log('🚧 Free Xero staging - to be implemented')
+    try {
+      const success = await xeroStagingManager.createFreePurchaseStaging({
+        user_id: event.user_id,
+        record_id: event.record_id,
+        trigger_source: event.trigger_source as 'user_memberships' | 'user_registrations'
+      })
+      
+      if (success) {
+        console.log('✅ Free purchase Xero staging created successfully')
+      } else {
+        console.log('⚠️ Free purchase Xero staging failed (non-critical)')
+      }
+    } catch (error) {
+      console.error('❌ Error creating free Xero staging:', error)
+    }
   }
 
   /**
@@ -251,9 +265,17 @@ export class PaymentCompletionProcessor {
   private async createPaidXeroStaging(event: PaymentCompletionEvent, paymentData: any) {
     console.log('💰 Creating Xero staging for paid purchase...')
     
-    // TODO: Implement paid purchase Xero staging
-    // This should create staging records for invoice and payment
-    console.log('🚧 Paid Xero staging - to be implemented')
+    try {
+      const success = await xeroStagingManager.createPaidPurchaseStaging(event.payment_id!)
+      
+      if (success) {
+        console.log('✅ Paid purchase Xero staging created successfully')
+      } else {
+        console.log('⚠️ Paid purchase Xero staging failed (non-critical)')
+      }
+    } catch (error) {
+      console.error('❌ Error creating paid Xero staging:', error)
+    }
   }
 
   /**
@@ -294,28 +316,13 @@ export class PaymentCompletionProcessor {
     console.log('🔄 Syncing pending Xero records...')
     
     try {
-      // Get all pending Xero invoices
-      const { data: pendingInvoices } = await this.supabase
-        .from('xero_invoices')
-        .select('*')
-        .in('sync_status', ['pending', 'staged'])
-
-      // Get all pending Xero payments
-      const { data: pendingPayments } = await this.supabase
-        .from('xero_payments')
-        .select('*')
-        .in('sync_status', ['pending', 'staged'])
-
-      console.log(`📋 Found ${pendingInvoices?.length || 0} pending invoices, ${pendingPayments?.length || 0} pending payments`)
-
-      // TODO: Implement actual Xero API sync
-      // For now, just log what would be synced
-      if (pendingInvoices?.length) {
-        console.log('🚧 Would sync invoices:', pendingInvoices.map(i => i.id))
-      }
-      if (pendingPayments?.length) {
-        console.log('🚧 Would sync payments:', pendingPayments.map(p => p.id))
-      }
+      // Use the batch sync manager to sync all pending records
+      const results = await xeroBatchSyncManager.syncAllPendingRecords()
+      
+      console.log('📊 Xero sync results:', {
+        invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
+        payments: `${results.payments.synced} synced, ${results.payments.failed} failed`
+      })
       
     } catch (error) {
       console.error('❌ Failed to sync Xero records:', error)

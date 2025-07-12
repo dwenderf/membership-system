@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { serviceManager } from '@/lib/services/startup'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
+import { xeroBatchSyncManager } from '@/lib/xero-batch-sync'
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,9 +102,16 @@ export async function POST(request: NextRequest) {
           message: 'Pending records processed'
         })
 
+      case 'sync-xero':
+        const syncResults = await xeroBatchSyncManager.syncAllPendingRecords()
+        return NextResponse.json({ 
+          message: 'Xero batch sync completed',
+          results: syncResults
+        })
+
       default:
         return NextResponse.json(
-          { error: 'Invalid action. Use: start, stop, restart, or process-pending' },
+          { error: 'Invalid action. Use: start, stop, restart, process-pending, or sync-xero' },
           { status: 400 }
         )
     }

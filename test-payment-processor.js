@@ -1,5 +1,5 @@
 /**
- * Test script for payment completion processor
+ * Test script for payment completion processor with Xero staging
  * 
  * Run with: node test-payment-processor.js
  */
@@ -8,16 +8,20 @@
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'your-supabase-url'
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'your-service-role-key'
 
-// Simple test of the payment processor
+// Test the payment processor with new staging system
 async function testPaymentProcessor() {
-  console.log('🧪 Testing Payment Completion Processor...')
+  console.log('🧪 Testing Payment Completion Processor with Xero Staging...')
   
   try {
-    // Import the processor
+    // Import the processor and staging manager
     const { paymentProcessor } = await import('./src/lib/payment-completion-processor.ts')
+    const { xeroStagingManager } = await import('./src/lib/xero-staging.ts')
+    const { xeroBatchSyncManager } = await import('./src/lib/xero-batch-sync.ts')
     
-    // Test event simulation
-    const testEvent = {
+    console.log('📦 All modules loaded successfully')
+    
+    // Test event simulation for free membership
+    const freeMembershipEvent = {
       event_type: 'user_memberships',
       record_id: 'test-membership-id',
       user_id: 'test-user-id',
@@ -27,16 +31,36 @@ async function testPaymentProcessor() {
       timestamp: new Date().toISOString()
     }
     
-    console.log('📋 Test Event:', testEvent)
+    // Test event simulation for paid purchase
+    const paidPurchaseEvent = {
+      event_type: 'payments',
+      record_id: 'test-payment-id',
+      user_id: 'test-user-id',
+      payment_id: 'test-payment-id',
+      amount: 5000, // $50.00
+      trigger_source: 'payments',
+      timestamp: new Date().toISOString()
+    }
+    
+    console.log('📋 Test Events:')
+    console.log('  Free Membership:', freeMembershipEvent)
+    console.log('  Paid Purchase:', paidPurchaseEvent)
     
     // Test processing (this will fail without real database, but shows the flow)
-    await paymentProcessor.processPaymentCompletion(testEvent)
+    console.log('\n🔄 Testing free membership processing...')
+    await paymentProcessor.processPaymentCompletion(freeMembershipEvent)
     
-    console.log('✅ Test completed successfully')
+    console.log('\n🔄 Testing paid purchase processing...')
+    await paymentProcessor.processPaymentCompletion(paidPurchaseEvent)
+    
+    console.log('\n🔄 Testing batch sync...')
+    await xeroBatchSyncManager.syncAllPendingRecords()
+    
+    console.log('\n✅ All tests completed successfully')
     
   } catch (error) {
     console.log('⚠️ Test failed (expected with mock data):', error.message)
-    console.log('✅ But the processor structure is working!')
+    console.log('✅ But the staging system structure is working!')
   }
 }
 

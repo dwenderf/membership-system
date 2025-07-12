@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/server'
 import { serviceManager } from '@/lib/services/startup'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { xeroBatchSyncManager } from '@/lib/xero-batch-sync'
+import { scheduledBatchProcessor } from '@/lib/scheduled-batch-processor'
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,9 +37,11 @@ export async function GET(request: NextRequest) {
 
     // Return service status
     const status = serviceManager.getStatus()
+    const batchProcessorStatus = scheduledBatchProcessor.getStatus()
     
     return NextResponse.json({
       services: status,
+      batchProcessor: batchProcessorStatus,
       timestamp: new Date().toISOString()
     })
 
@@ -109,9 +112,23 @@ export async function POST(request: NextRequest) {
           results: syncResults
         })
 
+      case 'start-batch-processor':
+        await scheduledBatchProcessor.startScheduledProcessing()
+        return NextResponse.json({ 
+          message: 'Scheduled batch processor started',
+          status: scheduledBatchProcessor.getStatus()
+        })
+
+      case 'stop-batch-processor':
+        await scheduledBatchProcessor.stopScheduledProcessing()
+        return NextResponse.json({ 
+          message: 'Scheduled batch processor stopped',
+          status: scheduledBatchProcessor.getStatus()
+        })
+
       default:
         return NextResponse.json(
-          { error: 'Invalid action. Use: start, stop, restart, process-pending, or sync-xero' },
+          { error: 'Invalid action. Use: start, stop, restart, process-pending, sync-xero, start-batch-processor, or stop-batch-processor' },
           { status: 400 }
         )
     }

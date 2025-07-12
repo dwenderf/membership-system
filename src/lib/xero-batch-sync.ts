@@ -9,6 +9,7 @@ import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
 import { getOrCreateXeroContact } from './xero-contacts'
 import { createClient } from './supabase/server'
 import { Database } from '@/types/database'
+import { batchProcessor } from './batch-processor'
 import * as Sentry from '@sentry/nextjs'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
@@ -25,13 +26,13 @@ export class XeroBatchSyncManager {
   }
 
   /**
-   * Sync all pending invoices and payments
+   * Sync all pending invoices and payments with intelligent batching
    */
   async syncAllPendingRecords(): Promise<{
     invoices: { synced: number; failed: number }
     payments: { synced: number; failed: number }
   }> {
-    console.log('🔄 Starting batch sync of pending Xero records...')
+    console.log('🔄 Starting intelligent batch sync of pending Xero records...')
 
     const results = {
       invoices: { synced: 0, failed: 0 },
@@ -39,7 +40,7 @@ export class XeroBatchSyncManager {
     }
 
     try {
-      // Get pending records
+      // Get pending records, prioritizing older records first
       const { data: pendingInvoices } = await this.supabase
         .from('xero_invoices')
         .select(`
@@ -57,60 +58,86 @@ export class XeroBatchSyncManager {
 
       console.log(`📋 Found ${pendingInvoices?.length || 0} pending invoices, ${pendingPayments?.length || 0} pending payments`)
 
-      // Sync invoices first
+      // Sync invoices first using intelligent batch processing
       if (pendingInvoices?.length) {
-        for (const invoice of pendingInvoices) {
-          try {
-            const success = await this.syncInvoiceToXero(invoice as XeroInvoiceRecord)
-            if (success) {
-              results.invoices.synced++
-            } else {
-              results.invoices.failed++
-            }
-          } catch (error) {
-            console.error('❌ Error syncing invoice:', invoice.id, error)
-            results.invoices.failed++
+        const invoiceResults = await batchProcessor.processBatch(
+          pendingInvoices as XeroInvoiceRecord[],
+          (invoice) => this.syncSingleInvoice(invoice),
+          {
+            batchSize: 5,              // Process 5 invoices at a time
+            concurrency: 2,            // Max 2 concurrent API calls
+            delayBetweenBatches: 200,  // 200ms between batches
+            retryFailures: true,       // Enable intelligent retry
+            operationType: 'xero_api'  // Use Xero-specific retry strategy
           }
+        )
 
-          // Add small delay between API calls to respect rate limits
-          await this.delay(100)
+        results.invoices.synced = invoiceResults.successful.length
+        results.invoices.failed = invoiceResults.failed.length
+
+        // Log failed invoices for admin review
+        if (invoiceResults.failed.length > 0) {
+          console.log('❌ Failed invoice syncs:', invoiceResults.failed.map(f => ({
+            invoice: f.item.invoice_number,
+            error: f.error
+          })))
         }
       }
 
-      // Sync payments after invoices
+      // Sync payments after invoices (they depend on invoice sync completion)
       if (pendingPayments?.length) {
-        for (const payment of pendingPayments) {
-          try {
-            const success = await this.syncPaymentToXero(payment)
-            if (success) {
-              results.payments.synced++
-            } else {
-              results.payments.failed++
-            }
-          } catch (error) {
-            console.error('❌ Error syncing payment:', payment.id, error)
-            results.payments.failed++
+        const paymentResults = await batchProcessor.processBatch(
+          pendingPayments,
+          (payment) => this.syncSinglePayment(payment),
+          {
+            batchSize: 8,              // Process more payments at once
+            concurrency: 3,            // Slightly higher concurrency for payments
+            delayBetweenBatches: 150,  // Shorter delay between payment batches
+            retryFailures: true,
+            operationType: 'xero_api'
           }
+        )
 
-          // Add small delay between API calls
-          await this.delay(100)
+        results.payments.synced = paymentResults.successful.length
+        results.payments.failed = paymentResults.failed.length
+
+        // Log failed payments for admin review
+        if (paymentResults.failed.length > 0) {
+          console.log('❌ Failed payment syncs:', paymentResults.failed.map(f => ({
+            payment: f.item.id,
+            error: f.error
+          })))
         }
       }
 
-      console.log('✅ Batch sync completed:', results)
+      console.log('✅ Intelligent batch sync completed:', results)
       return results
 
     } catch (error) {
       console.error('❌ Error in batch sync:', error)
       await Sentry.captureException(error, {
-        tags: { component: 'xero-batch-sync' }
+        tags: { component: 'xero-batch-sync', feature: 'intelligent-batching' }
       })
       return results
     }
   }
 
   /**
-   * Sync a single invoice to Xero
+   * Wrapper for batch processing - sync single invoice
+   */
+  private async syncSingleInvoice(invoiceRecord: XeroInvoiceRecord): Promise<boolean> {
+    return this.syncInvoiceToXero(invoiceRecord)
+  }
+
+  /**
+   * Wrapper for batch processing - sync single payment
+   */
+  private async syncSinglePayment(paymentRecord: XeroPaymentRecord): Promise<boolean> {
+    return this.syncPaymentToXero(paymentRecord)
+  }
+
+  /**
+   * Sync a single invoice to Xero (core implementation)
    */
   async syncInvoiceToXero(invoiceRecord: XeroInvoiceRecord): Promise<boolean> {
     try {
@@ -367,12 +394,6 @@ export class XeroBatchSyncManager {
       .eq('id', stagingId)
   }
 
-  /**
-   * Add delay between API calls
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
 }
 
 // Export singleton instance

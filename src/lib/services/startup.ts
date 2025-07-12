@@ -6,6 +6,7 @@
  */
 
 import { paymentProcessor } from '../payment-completion-processor'
+import { scheduledBatchProcessor } from '../scheduled-batch-processor'
 
 export class ServiceManager {
   private static instance: ServiceManager
@@ -24,6 +25,14 @@ export class ServiceManager {
     this.registerService('payment-processor', {
       start: () => paymentProcessor.startListening(),
       stop: () => paymentProcessor.stopListening()
+    })
+    
+    this.registerService('scheduled-batch-processor', {
+      start: async () => {
+        await scheduledBatchProcessor.startScheduledProcessing()
+        return true
+      },
+      stop: () => scheduledBatchProcessor.stopScheduledProcessing()
     })
   }
 

@@ -474,7 +474,10 @@ Follow the prompts:
 
 #### Step 4: Configure Environment Variables
 
-In your Vercel dashboard, add all environment variables from your `.env.local`:
+In your Vercel dashboard, add all environment variables from your `.env.local`.
+Replace your-domain with: 
+- Staging/Testing: membership-system-nycpha-preview
+- Production: membership-system-nycpha
 
 **Application Configuration:**
 ```bash

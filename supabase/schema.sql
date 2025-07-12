@@ -128,6 +128,7 @@ CREATE TABLE user_memberships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     membership_id UUID NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+    payment_id UUID REFERENCES payments(id),
     valid_from DATE NOT NULL,
     valid_until DATE NOT NULL,
     months_purchased INTEGER,
@@ -202,6 +203,7 @@ CREATE TABLE user_registrations (
     registration_id UUID NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
     registration_category_id UUID REFERENCES registration_categories(id),
     user_membership_id UUID REFERENCES user_memberships(id), -- NULL for free events
+    payment_id UUID REFERENCES payments(id),
     payment_status TEXT NOT NULL CHECK (payment_status IN ('awaiting_payment', 'processing', 'paid', 'failed', 'refunded')),
     registration_fee INTEGER, -- in cents
     amount_paid INTEGER, -- in cents (after discounts)
@@ -474,9 +476,11 @@ CREATE TABLE xero_invoices (
     discount_amount INTEGER DEFAULT 0, -- in cents, total discounts
     net_amount INTEGER NOT NULL, -- in cents, amount after discounts
     stripe_fee_amount INTEGER DEFAULT 0, -- in cents, Stripe processing fees
-    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'synced', 'failed', 'needs_update')),
+    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'staged', 'synced', 'failed', 'needs_update')),
     last_synced_at TIMESTAMP WITH TIME ZONE,
     sync_error TEXT, -- Error message if sync failed
+    staged_at TIMESTAMP WITH TIME ZONE,
+    staging_metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -512,9 +516,11 @@ CREATE TABLE xero_payments (
     amount_paid INTEGER NOT NULL, -- in cents, net amount (after Stripe fees)
     stripe_fee_amount INTEGER DEFAULT 0, -- in cents, recorded as separate expense
     reference TEXT, -- Payment reference for reconciliation
-    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'synced', 'failed')),
+    sync_status TEXT NOT NULL CHECK (sync_status IN ('pending', 'staged', 'synced', 'failed', 'needs_update')),
     last_synced_at TIMESTAMP WITH TIME ZONE,
     sync_error TEXT, -- Error message if sync failed
+    staged_at TIMESTAMP WITH TIME ZONE,
+    staging_metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -1016,4 +1022,61 @@ CREATE TRIGGER update_xero_oauth_tokens_updated_at BEFORE UPDATE ON xero_oauth_t
 CREATE TRIGGER update_xero_contacts_updated_at BEFORE UPDATE ON xero_contacts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_xero_invoices_updated_at BEFORE UPDATE ON xero_invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_xero_payments_updated_at BEFORE UPDATE ON xero_payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Payment refactor indexes
+CREATE INDEX idx_user_memberships_payment_id ON user_memberships(payment_id);
+CREATE INDEX idx_user_registrations_payment_id ON user_registrations(payment_id);
+CREATE INDEX idx_xero_invoices_staging ON xero_invoices(sync_status, staged_at) WHERE sync_status IN ('pending', 'staged');
+CREATE INDEX idx_xero_payments_staging ON xero_payments(sync_status, staged_at) WHERE sync_status IN ('pending', 'staged');
+
+-- Payment completion notification system
+CREATE OR REPLACE FUNCTION notify_payment_completion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Emit PostgreSQL notification for async processing
+    PERFORM pg_notify(
+        'payment_completed',
+        json_build_object(
+            'event_type', TG_TABLE_NAME,
+            'record_id', NEW.id,
+            'user_id', NEW.user_id,
+            'payment_id', CASE 
+                WHEN TG_TABLE_NAME = 'payments' THEN NEW.id 
+                ELSE NEW.payment_id 
+            END,
+            'amount', CASE 
+                WHEN TG_TABLE_NAME = 'payments' THEN NEW.final_amount
+                WHEN TG_TABLE_NAME = 'user_memberships' THEN COALESCE(NEW.amount_paid, 0)
+                WHEN TG_TABLE_NAME = 'user_registrations' THEN COALESCE(NEW.amount_paid, 0)
+                ELSE 0
+            END,
+            'trigger_source', TG_TABLE_NAME,
+            'timestamp', NOW()
+        )::text
+    );
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for paid purchases (amount > 0) - fires when payments.status = 'completed'
+CREATE TRIGGER payment_completed_trigger
+    AFTER UPDATE OF status ON payments
+    FOR EACH ROW 
+    WHEN (OLD.status != 'completed' AND NEW.status = 'completed' AND NEW.final_amount > 0)
+    EXECUTE FUNCTION notify_payment_completion();
+
+-- Trigger for free memberships (amount = 0) - fires when payment_status = 'paid'
+CREATE TRIGGER membership_completed_trigger
+    AFTER INSERT OR UPDATE OF payment_status ON user_memberships
+    FOR EACH ROW 
+    WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
+    EXECUTE FUNCTION notify_payment_completion();
+
+-- Trigger for free registrations (amount = 0) - fires when payment_status = 'paid'
+CREATE TRIGGER registration_completed_trigger
+    AFTER INSERT OR UPDATE OF payment_status ON user_registrations
+    FOR EACH ROW 
+    WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
+    EXECUTE FUNCTION notify_payment_completion();
 

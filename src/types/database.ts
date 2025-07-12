@@ -128,30 +128,48 @@ export type Database = {
           id: string
           user_id: string
           membership_id: string
+          payment_id: string | null
+          valid_from: string
+          valid_until: string
+          months_purchased: number | null
           payment_status: 'pending' | 'paid' | 'refunded'
           stripe_payment_intent_id: string | null
           amount_paid: number | null
           purchased_at: string | null
+          xero_synced: boolean
+          xero_sync_error: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
           membership_id: string
+          payment_id?: string | null
+          valid_from: string
+          valid_until: string
+          months_purchased?: number | null
           payment_status: 'pending' | 'paid' | 'refunded'
           stripe_payment_intent_id?: string | null
           amount_paid?: number | null
           purchased_at?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           membership_id?: string
+          payment_id?: string | null
+          valid_from?: string
+          valid_until?: string
+          months_purchased?: number | null
           payment_status?: 'pending' | 'paid' | 'refunded'
           stripe_payment_intent_id?: string | null
           amount_paid?: number | null
           purchased_at?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
           created_at?: string
         }
       }
@@ -160,33 +178,260 @@ export type Database = {
           id: string
           user_id: string
           registration_id: string
+          registration_category_id: string | null
           user_membership_id: string | null
-          payment_status: 'pending' | 'paid' | 'refunded'
+          payment_id: string | null
+          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee: number | null
           amount_paid: number | null
+          presale_code_used: string | null
+          stripe_payment_intent_id: string | null
+          reservation_expires_at: string | null
           registered_at: string | null
+          xero_synced: boolean
+          xero_sync_error: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
           registration_id: string
+          registration_category_id?: string | null
           user_membership_id?: string | null
-          payment_status: 'pending' | 'paid' | 'refunded'
+          payment_id?: string | null
+          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee?: number | null
           amount_paid?: number | null
+          presale_code_used?: string | null
+          stripe_payment_intent_id?: string | null
+          reservation_expires_at?: string | null
           registered_at?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           registration_id?: string
+          registration_category_id?: string | null
           user_membership_id?: string | null
-          payment_status?: 'pending' | 'paid' | 'refunded'
+          payment_id?: string | null
+          payment_status?: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee?: number | null
           amount_paid?: number | null
+          presale_code_used?: string | null
+          stripe_payment_intent_id?: string | null
+          reservation_expires_at?: string | null
           registered_at?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          created_at?: string
+        }
+      }
+      payments: {
+        Row: {
+          id: string
+          user_id: string
+          total_amount: number
+          discount_amount: number
+          final_amount: number
+          stripe_payment_intent_id: string | null
+          status: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
+          payment_method: string
+          xero_synced: boolean
+          xero_sync_error: string | null
+          created_at: string
+          completed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          total_amount: number
+          discount_amount?: number
+          final_amount: number
+          stripe_payment_intent_id?: string | null
+          status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
+          payment_method?: string
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          created_at?: string
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          total_amount?: number
+          discount_amount?: number
+          final_amount?: number
+          stripe_payment_intent_id?: string | null
+          status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
+          payment_method?: string
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          created_at?: string
+          completed_at?: string | null
+          updated_at?: string
+        }
+      }
+      xero_invoices: {
+        Row: {
+          id: string
+          payment_id: string
+          tenant_id: string
+          xero_invoice_id: string
+          invoice_number: string
+          invoice_type: string
+          invoice_status: string
+          total_amount: number
+          discount_amount: number
+          net_amount: number
+          stripe_fee_amount: number
+          sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at: string | null
+          sync_error: string | null
+          staged_at: string | null
+          staging_metadata: any | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          payment_id: string
+          tenant_id: string
+          xero_invoice_id: string
+          invoice_number: string
+          invoice_type?: string
+          invoice_status: string
+          total_amount: number
+          discount_amount?: number
+          net_amount: number
+          stripe_fee_amount?: number
+          sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at?: string | null
+          sync_error?: string | null
+          staged_at?: string | null
+          staging_metadata?: any | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string
+          tenant_id?: string
+          xero_invoice_id?: string
+          invoice_number?: string
+          invoice_type?: string
+          invoice_status?: string
+          total_amount?: number
+          discount_amount?: number
+          net_amount?: number
+          stripe_fee_amount?: number
+          sync_status?: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at?: string | null
+          sync_error?: string | null
+          staged_at?: string | null
+          staging_metadata?: any | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      xero_payments: {
+        Row: {
+          id: string
+          xero_invoice_id: string
+          tenant_id: string
+          xero_payment_id: string
+          payment_method: string
+          bank_account_code: string | null
+          amount_paid: number
+          stripe_fee_amount: number
+          reference: string | null
+          sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at: string | null
+          sync_error: string | null
+          staged_at: string | null
+          staging_metadata: any | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          xero_invoice_id: string
+          tenant_id: string
+          xero_payment_id: string
+          payment_method?: string
+          bank_account_code?: string | null
+          amount_paid: number
+          stripe_fee_amount?: number
+          reference?: string | null
+          sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at?: string | null
+          sync_error?: string | null
+          staged_at?: string | null
+          staging_metadata?: any | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          xero_invoice_id?: string
+          tenant_id?: string
+          xero_payment_id?: string
+          payment_method?: string
+          bank_account_code?: string | null
+          amount_paid?: number
+          stripe_fee_amount?: number
+          reference?: string | null
+          sync_status?: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+          last_synced_at?: string | null
+          sync_error?: string | null
+          staged_at?: string | null
+          staging_metadata?: any | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      xero_invoice_line_items: {
+        Row: {
+          id: string
+          xero_invoice_id: string
+          line_item_type: 'membership' | 'registration' | 'discount' | 'donation'
+          item_id: string | null
+          description: string
+          quantity: number
+          unit_amount: number
+          account_code: string | null
+          tax_type: string
+          line_amount: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          xero_invoice_id: string
+          line_item_type: 'membership' | 'registration' | 'discount' | 'donation'
+          item_id?: string | null
+          description: string
+          quantity?: number
+          unit_amount: number
+          account_code?: string | null
+          tax_type?: string
+          line_amount: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          xero_invoice_id?: string
+          line_item_type?: 'membership' | 'registration' | 'discount' | 'donation'
+          item_id?: string | null
+          description?: string
+          quantity?: number
+          unit_amount?: number
+          account_code?: string | null
+          tax_type?: string
+          line_amount?: number
           created_at?: string
         }
       }

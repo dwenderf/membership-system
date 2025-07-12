@@ -7,7 +7,7 @@
  * 3. Admin recovery for failed syncs
  */
 
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 import { getActiveXeroTenants } from './xero-client'
 import { PaymentInvoiceData, PrePaymentInvoiceData } from './xero-invoices'
 import { Database } from '@/types/database'
@@ -35,10 +35,10 @@ type StagingPaymentData = {
 }
 
 export class XeroStagingManager {
-  private supabase: ReturnType<typeof createClient<Database>>
+  private supabase: ReturnType<typeof createAdminClient>
 
   constructor() {
-    this.supabase = createClient()
+    this.supabase = createAdminClient()
   }
 
   /**

@@ -5,7 +5,7 @@
  * and monitoring for batch operations.
  */
 
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
 
 export interface BatchJob {
@@ -30,7 +30,7 @@ export interface RetryStrategy {
 }
 
 export class BatchProcessor {
-  private supabase: ReturnType<typeof createClient<Database>>
+  private supabase: ReturnType<typeof createAdminClient>
   private isProcessing = false
   private processingInterval?: NodeJS.Timeout
 
@@ -60,7 +60,7 @@ export class BatchProcessor {
   }
 
   constructor() {
-    this.supabase = createClient()
+    this.supabase = createAdminClient()
   }
 
   /**

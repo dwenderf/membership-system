@@ -7,7 +7,7 @@
 
 import { batchProcessor } from './batch-processor'
 import { xeroBatchSyncManager } from './xero-batch-sync'
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
 
 export interface ProcessingSchedule {
@@ -29,7 +29,7 @@ export interface ProcessingSchedule {
 }
 
 export class ScheduledBatchProcessor {
-  private supabase: ReturnType<typeof createClient<Database>>
+  private supabase: ReturnType<typeof createAdminClient>
   private isRunning = false
   private intervals: Map<string, NodeJS.Timeout> = new Map()
 
@@ -53,7 +53,7 @@ export class ScheduledBatchProcessor {
   }
 
   constructor() {
-    this.supabase = createClient()
+    this.supabase = createAdminClient()
   }
 
   /**

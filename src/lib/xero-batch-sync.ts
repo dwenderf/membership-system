@@ -7,7 +7,7 @@
 import { Invoice, LineItem, Payment } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
 import { getOrCreateXeroContact } from './xero-contacts'
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
 import { batchProcessor } from './batch-processor'
 import * as Sentry from '@sentry/nextjs'
@@ -19,10 +19,10 @@ type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & 
 type XeroPaymentRecord = Database['public']['Tables']['xero_payments']['Row']
 
 export class XeroBatchSyncManager {
-  private supabase: ReturnType<typeof createClient<Database>>
+  private supabase: ReturnType<typeof createAdminClient>
 
   constructor() {
-    this.supabase = createClient()
+    this.supabase = createAdminClient()
   }
 
   /**

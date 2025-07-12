@@ -28,6 +28,11 @@ user_memberships.payment_status = 'paid' -- Business record level
 - ✅ Implemented for registrations (both paid/free)  
 - ❌ Missing for membership purchases
 
+### 5. Xero Sync Risk
+- Current flow: Payment completes → Immediately sync to Xero → Record success/failure
+- **Risk**: If Xero API is down, sync data is lost and requires manual recovery
+- **Missing**: Robust staging system to ensure zero data loss
+
 ## Proposed Architecture
 
 ### Core Principle: Database Triggers for Consolidation
@@ -46,7 +51,7 @@ user_memberships.payment_status = 'paid' -- Business record level
 2. **Webhook** (async processing):
    ```typescript
    // Updates payments.status = 'completed'
-   // Triggers database function for emails/Xero
+   // Triggers database function for emails/Xero staging
    ```
 
 #### For Free Purchases (amount = 0)
@@ -54,7 +59,7 @@ user_memberships.payment_status = 'paid' -- Business record level
    ```typescript
    // Create user_membership/user_registration with:
    // payment_status = 'paid' AND amount_paid = 0
-   // Immediately triggers database function for emails/Xero
+   // Immediately triggers database function for emails/Xero staging
    ```
 
 ### Database Trigger Architecture
@@ -106,10 +111,59 @@ supabase
   })
 
 async function processPurchaseCompletion(notification) {
-  // Send confirmation emails
-  // Sync to Xero
-  // Update discount usage tracking
-  // Any other external integrations
+  // Phase 1: Always create staging records (immediate, never fails)
+  await createXeroStagingRecords(notification)
+  
+  // Phase 2: Send confirmation emails
+  await sendConfirmationEmail(notification)
+  
+  // Phase 3: Batch sync all pending Xero records
+  await syncPendingXeroRecords()
+  
+  // Phase 4: Update discount usage tracking
+  await updateDiscountUsage(notification)
+}
+
+async function createXeroStagingRecords(notification) {
+  // Always insert to staging tables with 'pending' status
+  await supabase.from('xero_invoices').insert({
+    payment_id: notification.payment_id,
+    sync_status: 'pending',
+    invoice_data: invoicePayload
+  })
+  
+  await supabase.from('xero_invoice_line_items').insert(lineItems)
+  
+  await supabase.from('xero_payments').insert({
+    payment_id: notification.payment_id,
+    sync_status: 'pending',
+    payment_data: paymentPayload
+  })
+}
+
+async function syncPendingXeroRecords() {
+  // Process all records with sync_status = 'pending'
+  const pendingInvoices = await getPendingXeroInvoices()
+  const pendingPayments = await getPendingXeroPayments()
+  
+  // Batch sync to Xero API
+  for (const invoice of pendingInvoices) {
+    try {
+      await syncInvoiceToXero(invoice)
+      await markInvoiceAsSynced(invoice.id)
+    } catch (error) {
+      await markInvoiceAsFailed(invoice.id, error)
+    }
+  }
+  
+  for (const payment of pendingPayments) {
+    try {
+      await syncPaymentToXero(payment)
+      await markPaymentAsSynced(payment.id)
+    } catch (error) {
+      await markPaymentAsFailed(payment.id, error)
+    }
+  }
 }
 ```
 
@@ -135,15 +189,27 @@ async function processPurchaseCompletion(notification) {
 - ✅ Async processing doesn't block UI
 - ✅ No duplicate processing concerns
 
+### 5. Zero Data Loss Xero Integration
+- ✅ **Always create staging records first** - never lose invoice/payment data
+- ✅ **Batch processing** - efficient sync of multiple records
+- ✅ **Admin recovery** - manual retry of failed syncs from admin interface
+- ✅ **Robust error handling** - failed syncs don't affect payment processing
+
 ## Implementation Steps
 
 1. **Create database triggers** for purchase completion
 2. **Set up PostgreSQL NOTIFY/LISTEN** system
 3. **Refactor sync APIs** to only create business records
 4. **Update webhook logic** to only handle payment status
-5. **Move email/Xero logic** to async processor
-6. **Add discount usage tracking** for memberships
-7. **Test both paid and free purchase flows**
+5. **Implement Xero staging-first approach**:
+   - Always insert to `xero_invoices` (sync_status: 'pending')
+   - Always insert to `xero_invoice_line_items` 
+   - Always insert to `xero_payments` (sync_status: 'pending')
+   - Batch sync all pending records after staging
+6. **Move email logic** to async processor
+7. **Add discount usage tracking** for memberships
+8. **Enhance admin interface** for manual Xero sync recovery
+9. **Test both paid and free purchase flows**
 
 ## Risk Mitigation
 
@@ -162,12 +228,100 @@ async function processPurchaseCompletion(notification) {
 - Retry mechanisms for email/Xero operations
 - Comprehensive logging and monitoring
 
-## Open Questions
+## Xero Staging Enhancement Details
 
-1. Should we add foreign keys linking `payments` to `user_memberships`/`user_registrations`?
-2. How to handle existing payments that need migration?
-3. Should we implement a job queue system instead of direct NOTIFY/LISTEN?
-4. Timeline for implementing this refactor?
+### Two-Phase Xero Processing
+
+**Phase 1: Staging (Always succeeds)**
+```typescript
+// Triggered by payment completion webhook
+await createXeroStagingRecords({
+  payment_id,
+  user_id,
+  invoice_data: {...},
+  line_items: [...],
+  payment_data: {...}
+})
+```
+
+**Phase 2: Batch Sync (Retryable)**
+```typescript
+// Process all sync_status = 'pending' records
+await syncPendingXeroRecords()
+```
+
+### Admin Interface Enhancements
+
+**New Admin Features**:
+- **Unsynced Records Dashboard**: View all pending invoices and payments
+- **Manual Sync Buttons**: Retry specific failed records
+- **Bulk Retry**: Process all pending records at once
+- **Sync History**: View detailed logs of sync attempts
+- **Status Overview**: Quick stats on pending/synced/failed records
+
+### Xero Sync Status Flow
+```
+pending → synced (success)
+pending → failed (retry available)
+failed → pending (admin retry)
+```
+
+## Implementation Decisions
+
+### 1. Foreign Key Relationships ✅ **Feasible**
+**Option A**: Add `payment_id` to business tables
+```sql
+ALTER TABLE user_memberships ADD COLUMN payment_id UUID REFERENCES payments(id);
+ALTER TABLE user_registrations ADD COLUMN payment_id UUID REFERENCES payments(id);
+```
+
+**Option B**: Use existing `stripe_payment_intent_id` as natural key
+- Both tables already have this field
+- Links to `payments.stripe_payment_intent_id`
+- NULL for free purchases (could use a generated ID)
+
+**Recommendation**: Option A provides cleaner relationships and handles free purchases better.
+
+### 2. Migration Strategy ✅ **Not needed**
+- System not in production yet
+- Fresh implementation without legacy concerns
+
+### 3. Processing Architecture ✅ **Hybrid Approach Selected**
+
+**Selected: Option C - Triggers + Scheduled Processing**
+- ✅ Immediate processing attempt via triggers
+- ✅ Fallback batch processing for failures  
+- ✅ Simple implementation, no external dependencies
+- ✅ No persistent connections needed
+- ✅ Guarantees nothing gets missed (the whole point!)
+
+**Implementation Flow**:
+1. **Trigger fires** → Attempts immediate async processing
+2. **If successful** → Records processed, done
+3. **If fails** → Records remain in 'pending' state
+4. **Batch processor** → Periodically retries all 'pending' records
+
+### 4. Implementation Timeline ✅ **Ready to start**
+- Implement in feature branch: `feature/payment-refactor`
+- Allows testing without affecting main development
+
+### 5. Automated Retry Strategy ✅ **Timer-based approach**
+```typescript
+// Client-side retry logic (no cron needed)
+setInterval(async () => {
+  if (hasFailedXeroRecords()) {
+    await retryFailedXeroSyncs()
+  }
+}, 5 * 60 * 1000) // Every 5 minutes
+
+// Or trigger on admin page load
+useEffect(() => {
+  checkAndRetryFailedSyncs()
+}, [])
+```
+- No Vercel cron job required
+- Runs when application is active
+- Admin dashboard can trigger manual retries
 
 ## Next Steps
 

@@ -83,6 +83,16 @@ async function handleFreeMembership({
     )
 
     const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+    
+    // Get accounting codes from system_accounting_codes
+    const { data: accountingCodes } = await supabase
+      .from('system_accounting_codes')
+      .select('code_type, accounting_code')
+      .in('code_type', ['donation_given_default', 'donation_received_default'])
+    
+    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code || 'DISCOUNT'
+    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code || 'DONATION'
+    
     const stagingData = {
       user_id: user.id,
       total_amount: membershipAmount,
@@ -92,12 +102,19 @@ async function handleFreeMembership({
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: 0, // Free membership
+          amount: membershipAmount, // Full membership price
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code || 'MEMBERSHIP'
         }
       ],
-      discount_codes_used: [],
+      discount_codes_used: [
+        {
+          code: 'FREE_MEMBERSHIP',
+          amount_saved: membershipAmount,
+          category_name: 'Free Membership Discount',
+          accounting_code: discountAccountingCode
+        }
+      ],
       stripe_payment_intent_id: null
     }
 
@@ -108,7 +125,7 @@ async function handleFreeMembership({
         item_id: membershipId,
         amount: donationAmount,
         description: `Donation - ${membership.name}`,
-        accounting_code: 'DONATION'
+        accounting_code: donationAccountingCode
       })
     }
 
@@ -369,6 +386,15 @@ export async function POST(request: NextRequest) {
 
     const membershipAmount = getMembershipAmount()
 
+    // Get accounting codes from system_accounting_codes for donations
+    const { data: accountingCodes } = await supabase
+      .from('system_accounting_codes')
+      .select('code_type, accounting_code')
+      .eq('code_type', 'donation_received_default')
+      .single()
+    
+    const donationAccountingCode = accountingCodes?.accounting_code || 'DONATION'
+
     // Stage Xero records FIRST - fail fast if this fails
     logger.logPaymentProcessing(
       'staging-creation-start',
@@ -407,7 +433,7 @@ export async function POST(request: NextRequest) {
         item_id: membershipId,
         amount: donationAmount,
         description: `Donation - ${membership.name}`,
-        accounting_code: 'DONATION'
+        accounting_code: donationAccountingCode
       })
     }
 

@@ -466,7 +466,7 @@ CREATE TABLE xero_contacts (
 -- Tracks which payments have been synced to Xero as invoices
 CREATE TABLE xero_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    payment_id UUID REFERENCES payments(id) ON DELETE CASCADE, -- Nullable during staging, populated when payment record is created
     tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
     xero_invoice_id UUID NOT NULL, -- Xero's invoice ID
     invoice_number TEXT NOT NULL, -- Xero's invoice number

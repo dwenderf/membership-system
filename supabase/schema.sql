@@ -1059,24 +1059,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger for paid purchases (amount > 0) - fires when payments.status = 'completed'
-CREATE TRIGGER payment_completed_trigger
-    AFTER UPDATE OF status ON payments
-    FOR EACH ROW 
-    WHEN (OLD.status != 'completed' AND NEW.status = 'completed' AND NEW.final_amount > 0)
-    EXECUTE FUNCTION notify_payment_completion();
-
--- Trigger for free memberships (amount = 0) - fires when payment_status = 'paid'
-CREATE TRIGGER membership_completed_trigger
-    AFTER INSERT OR UPDATE OF payment_status ON user_memberships
-    FOR EACH ROW 
-    WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
-    EXECUTE FUNCTION notify_payment_completion();
-
--- Trigger for free registrations (amount = 0) - fires when payment_status = 'paid'
-CREATE TRIGGER registration_completed_trigger
-    AFTER INSERT OR UPDATE OF payment_status ON user_registrations
-    FOR EACH ROW 
-    WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
-    EXECUTE FUNCTION notify_payment_completion();
+-- Payment completion triggers removed (moved to synchronous staging approach)
+-- Functions kept for potential manual use:
+-- - notify_payment_completion() 
+-- - notify_membership_completion()
+-- - notify_registration_completion()
 

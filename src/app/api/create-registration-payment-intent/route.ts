@@ -136,18 +136,7 @@ async function handleFreeRegistration({
           discount_codes_used: discountCodesUsed
         }, { isFree: true })
         
-        if (stagingResult) {
-          logger.logPaymentProcessing(
-            'staging-creation-success',
-            'Successfully created Xero staging record for free registration',
-            { 
-              userId: user.id, 
-              registrationId,
-              categoryId
-            },
-            'info'
-          )
-        } else {
+        if (!stagingResult) {
           logger.logPaymentProcessing(
             'staging-creation-failed',
             'Failed to create Xero staging record for free registration',
@@ -156,9 +145,22 @@ async function handleFreeRegistration({
               registrationId,
               categoryId
             },
-            'warn'
+            'error'
           )
+          capturePaymentError(new Error('Failed to stage Xero records'), paymentContext, 'error')
+          return NextResponse.json({ error: 'Failed to process registration - Xero staging failed' }, { status: 500 })
         }
+
+        logger.logPaymentProcessing(
+          'staging-creation-success',
+          'Successfully created Xero staging record for free registration',
+          { 
+            userId: user.id, 
+            registrationId,
+            categoryId
+          },
+          'info'
+        )
       }
     } catch (error) {
       logger.logPaymentProcessing(
@@ -170,9 +172,10 @@ async function handleFreeRegistration({
           categoryId,
           error: error instanceof Error ? error.message : String(error)
         },
-        'warn'
+        'error'
       )
-      // Continue with registration creation even if staging fails
+      capturePaymentError(error, paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to process registration - Xero staging failed' }, { status: 500 })
     }
 
     // Create payment record with $0 amount and completed status
@@ -194,6 +197,39 @@ async function handleFreeRegistration({
     if (paymentError) {
       capturePaymentError(paymentError, paymentContext, 'error')
       return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
+    }
+
+    // Update staging records with payment_id now that we have it
+    logger.logPaymentProcessing(
+      'staging-payment-link',
+      'Linking payment record to staging records',
+      { 
+        userId: user.id, 
+        paymentId: paymentRecord.id,
+        registrationId
+      },
+      'info'
+    )
+
+    const { error: stagingUpdateError } = await supabase
+      .from('xero_invoices')
+      .update({ payment_id: paymentRecord.id })
+      .eq('staging_metadata->user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+
+    if (stagingUpdateError) {
+      logger.logPaymentProcessing(
+        'staging-payment-link-failed',
+        'Failed to link payment to staging records',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          error: stagingUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the whole transaction, but log the issue
     }
 
     // Create payment item record
@@ -895,6 +931,71 @@ export async function POST(request: NextRequest) {
       return baseName
     }
 
+    // Stage Xero records FIRST - fail fast if this fails
+    logger.logPaymentProcessing(
+      'staging-creation-start',
+      'Creating Xero staging record for paid registration',
+      { 
+        userId: user.id, 
+        registrationId,
+        categoryId,
+        amount: finalAmount
+      },
+      'info'
+    )
+
+    const stagingData = {
+      user_id: user.id,
+      total_amount: amount, // Original amount before discount
+      discount_amount: discountAmount, // Discount amount
+      final_amount: finalAmount, // Final amount being charged
+      payment_items: [
+        {
+          item_type: 'registration' as const,
+          item_id: registrationId,
+          amount: finalAmount,
+          description: `Registration: ${registration.name} - ${categoryName}`,
+          accounting_code: 'REGISTRATION'
+        }
+      ],
+      discount_codes_used: validatedDiscountCode ? [{
+        code: discountCode!,
+        amount_saved: discountAmount,
+        category_name: validatedDiscountCode.category?.name || 'Registration Discount',
+        accounting_code: validatedDiscountCode.category?.accounting_code
+      }] : [],
+      stripe_payment_intent_id: null // Will be updated after Stripe intent creation
+    }
+
+    const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
+    if (!stagingSuccess) {
+      logger.logPaymentProcessing(
+        'staging-creation-failed',
+        'Failed to create Xero staging record for paid registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          amount: finalAmount
+        },
+        'error'
+      )
+      capturePaymentError(new Error('Failed to stage Xero records'), paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to process registration - Xero staging failed' }, { status: 500 })
+    }
+
+    logger.logPaymentProcessing(
+      'staging-creation-success',
+      'Successfully created Xero staging record for paid registration',
+      { 
+        userId: user.id, 
+        registrationId,
+        categoryId,
+        amount: finalAmount
+      },
+      'info'
+    )
+
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
       amount: finalAmount, // Final amount after discount in cents
@@ -934,6 +1035,41 @@ export async function POST(request: NextRequest) {
 
     // Update payment context with payment intent ID
     paymentContext.paymentIntentId = paymentIntent.id
+
+    // Update staging records with Stripe payment intent ID
+    logger.logPaymentProcessing(
+      'staging-stripe-link',
+      'Linking Stripe payment intent to staging records',
+      { 
+        userId: user.id, 
+        paymentIntentId: paymentIntent.id,
+        registrationId
+      },
+      'info'
+    )
+
+    const { error: stagingStripeUpdateError } = await supabase
+      .from('xero_invoices')
+      .update({ 
+        'staging_metadata': supabase.raw(`staging_metadata || '{"stripe_payment_intent_id": "${paymentIntent.id}"}'::jsonb`)
+      })
+      .eq('staging_metadata->user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+
+    if (stagingStripeUpdateError) {
+      logger.logPaymentProcessing(
+        'staging-stripe-link-failed',
+        'Failed to link Stripe payment intent to staging records',
+        { 
+          userId: user.id, 
+          paymentIntentId: paymentIntent.id,
+          error: stagingStripeUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the transaction, but log the issue
+    }
 
     // Create payment record in database
     const { data: paymentRecord, error: paymentError } = await supabase
@@ -979,6 +1115,40 @@ export async function POST(request: NextRequest) {
         },
         'info'
       )
+      
+      // Link payment record to staging records
+      logger.logPaymentProcessing(
+        'staging-payment-link',
+        'Linking payment record to staging records',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          paymentIntentId: paymentIntent.id
+        },
+        'info'
+      )
+
+      const { error: stagingPaymentUpdateError } = await supabase
+        .from('xero_invoices')
+        .update({ payment_id: paymentRecord.id })
+        .eq('staging_metadata->user_id', user.id)
+        .eq('sync_status', 'staged')
+        .is('payment_id', null)
+
+      if (stagingPaymentUpdateError) {
+        logger.logPaymentProcessing(
+          'staging-payment-link-failed',
+          'Failed to link payment to staging records',
+          { 
+            userId: user.id, 
+            paymentId: paymentRecord.id,
+            error: stagingPaymentUpdateError.message
+          },
+          'error'
+        )
+        // Don't fail the transaction, but log the issue
+      }
+      
       // Create payment item record for the registration
       const { error: paymentItemError } = await supabase
         .from('payment_items')

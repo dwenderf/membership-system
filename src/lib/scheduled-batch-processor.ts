@@ -62,7 +62,12 @@ export class ScheduledBatchProcessor {
    */
   async startScheduledProcessing(customSchedule?: Partial<ProcessingSchedule>): Promise<void> {
     if (this.isRunning) {
-      console.log('📋 Scheduled batch processing already running')
+      logger.logBatchProcessing(
+        'scheduled-already-running',
+        'Scheduled batch processing already running',
+        {},
+        'warn'
+      )
       return
     }
 
@@ -98,7 +103,11 @@ export class ScheduledBatchProcessor {
       this.startCleanupProcessor()
     }
 
-    console.log('✅ All scheduled processors started')
+    logger.logBatchProcessing(
+      'all-processors-started',
+      'All scheduled processors started',
+      { processorsEnabled: Object.keys(this.schedule).filter(key => this.schedule[key as keyof ProcessingSchedule].enabled) }
+    )
   }
 
   /**
@@ -106,21 +115,38 @@ export class ScheduledBatchProcessor {
    */
   async stopScheduledProcessing(): Promise<void> {
     if (!this.isRunning) {
-      console.log('📋 Scheduled batch processing not running')
+      logger.logBatchProcessing(
+        'not-running',
+        'Scheduled batch processing not running',
+        {},
+        'warn'
+      )
       return
     }
 
-    console.log('🛑 Stopping scheduled batch processing')
+    logger.logBatchProcessing(
+      'stopping-processors',
+      'Stopping scheduled batch processing',
+      { activeProcessors: Array.from(this.intervals.keys()) }
+    )
     this.isRunning = false
 
     // Clear all intervals
     for (const [name, interval] of this.intervals) {
       clearInterval(interval)
-      console.log(`🛑 Stopped ${name} processor`)
+      logger.logBatchProcessing(
+        'processor-stopped',
+        `Stopped ${name} processor`,
+        { processorName: name }
+      )
     }
     this.intervals.clear()
 
-    console.log('✅ All scheduled processors stopped')
+    logger.logBatchProcessing(
+      'all-processors-stopped',
+      'All scheduled processors stopped',
+      { stoppedCount: this.intervals.size }
+    )
   }
 
   /**
@@ -131,12 +157,21 @@ export class ScheduledBatchProcessor {
       try {
         await this.processXeroSync()
       } catch (error) {
-        console.error('❌ Error in scheduled Xero sync:', error)
+        logger.logXeroSync(
+          'scheduled-sync-error',
+          'Error in scheduled Xero sync',
+          { error: error instanceof Error ? error.message : String(error) },
+          'error'
+        )
       }
     }, this.schedule.xeroSync.intervalMs)
 
     this.intervals.set('xero-sync', interval)
-    console.log('📊 Started Xero sync processor')
+    logger.logBatchProcessing(
+      'xero-processor-started',
+      'Started Xero sync processor',
+      { intervalMs: this.schedule.xeroSync.intervalMs }
+    )
   }
 
   /**
@@ -147,12 +182,21 @@ export class ScheduledBatchProcessor {
       try {
         await this.processEmailRetries()
       } catch (error) {
-        console.error('❌ Error in scheduled email retry:', error)
+        logger.logBatchProcessing(
+          'email-retry-error',
+          'Error in scheduled email retry',
+          { error: error instanceof Error ? error.message : String(error) },
+          'error'
+        )
       }
     }, this.schedule.emailRetry.intervalMs)
 
     this.intervals.set('email-retry', interval)
-    console.log('📧 Started email retry processor')
+    logger.logBatchProcessing(
+      'email-processor-started',
+      'Started email retry processor',
+      { intervalMs: this.schedule.emailRetry.intervalMs }
+    )
   }
 
   /**
@@ -163,26 +207,43 @@ export class ScheduledBatchProcessor {
       try {
         await this.processCleanup()
       } catch (error) {
-        console.error('❌ Error in scheduled cleanup:', error)
+        logger.logBatchProcessing(
+          'cleanup-error',
+          'Error in scheduled cleanup',
+          { error: error instanceof Error ? error.message : String(error) },
+          'error'
+        )
       }
     }, this.schedule.cleanup.intervalMs)
 
     this.intervals.set('cleanup', interval)
-    console.log('🧹 Started cleanup processor')
+    logger.logBatchProcessing(
+      'cleanup-processor-started',
+      'Started cleanup processor',
+      { intervalMs: this.schedule.cleanup.intervalMs }
+    )
   }
 
   /**
    * Process pending Xero syncs
    */
   private async processXeroSync(): Promise<void> {
-    console.log('🔄 Running scheduled Xero sync...')
+    logger.logXeroSync(
+      'scheduled-sync-start',
+      'Running scheduled Xero sync',
+      { processor: 'scheduled' }
+    )
 
     try {
       // Check if there are any pending records before processing
       const pendingCount = await this.getPendingXeroCount()
       
       if (pendingCount === 0) {
-        console.log('📋 No pending Xero records to sync')
+        logger.logXeroSync(
+          'scheduled-sync-skip',
+          'No pending Xero records to sync',
+          { pendingCount: 0 }
+        )
         return
       }
 
@@ -195,10 +256,16 @@ export class ScheduledBatchProcessor {
       // Run the batch sync
       const results = await xeroBatchSyncManager.syncAllPendingRecords()
       
-      console.log('📈 Scheduled Xero sync results:', {
-        invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
-        payments: `${results.payments.synced} synced, ${results.payments.failed} failed`
-      })
+      logger.logXeroSync(
+        'scheduled-sync-results',
+        'Scheduled Xero sync completed',
+        {
+          invoices: { synced: results.invoices.synced, failed: results.invoices.failed },
+          payments: { synced: results.payments.synced, failed: results.payments.failed },
+          totalSynced: results.invoices.synced + results.payments.synced,
+          totalFailed: results.invoices.failed + results.payments.failed
+        }
+      )
 
       // Log metrics for monitoring using batch processor
       await batchProcessor.logProcessingMetrics('xero_sync', {
@@ -210,7 +277,12 @@ export class ScheduledBatchProcessor {
       })
 
     } catch (error) {
-      console.error('❌ Error in scheduled Xero sync:', error)
+      logger.logXeroSync(
+        'scheduled-sync-outer-error',
+        'Error in scheduled Xero sync',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       await this.logProcessingMetrics('xero_sync', { error: error instanceof Error ? error.message : String(error) })
     }
   }
@@ -219,7 +291,11 @@ export class ScheduledBatchProcessor {
    * Process email retries
    */
   private async processEmailRetries(): Promise<void> {
-    console.log('🔄 Running scheduled email retries...')
+    logger.logBatchProcessing(
+      'scheduled-email-retry',
+      'Running scheduled email retries',
+      { processor: 'scheduled' }
+    )
 
     try {
       // TODO: Implement email retry logic
@@ -228,12 +304,22 @@ export class ScheduledBatchProcessor {
       // 2. Retry emails that haven't exceeded max retry count
       // 3. Use intelligent backoff for retries
       
-      console.log('🚧 Email retry processing - to be implemented')
+      logger.logBatchProcessing(
+        'email-retry-placeholder',
+        'Email retry processing - to be implemented',
+        { status: 'placeholder' },
+        'warn'
+      )
       
       await this.logProcessingMetrics('email_retry', { processed: 0 })
 
     } catch (error) {
-      console.error('❌ Error in scheduled email retries:', error)
+      logger.logBatchProcessing(
+        'email-retry-outer-error',
+        'Error in scheduled email retries',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       await this.logProcessingMetrics('email_retry', { error: error instanceof Error ? error.message : String(error) })
     }
   }
@@ -242,7 +328,11 @@ export class ScheduledBatchProcessor {
    * Process cleanup tasks
    */
   private async processCleanup(): Promise<void> {
-    console.log('🔄 Running scheduled cleanup...')
+    logger.logBatchProcessing(
+      'scheduled-cleanup',
+      'Running scheduled cleanup',
+      { processor: 'scheduled' }
+    )
 
     try {
       let totalCleaned = 0
@@ -255,7 +345,15 @@ export class ScheduledBatchProcessor {
       const logCleanupResults = await this.cleanupOldLogEntries()
       totalCleaned += logCleanupResults.cleaned
 
-      console.log(`🧹 Cleanup completed: ${totalCleaned} records cleaned`)
+      logger.logBatchProcessing(
+        'cleanup-complete',
+        `Cleanup completed: ${totalCleaned} records cleaned`,
+        { 
+          totalCleaned,
+          stagingRecordsCleaned: cleanupResults.cleaned,
+          logEntriesCleaned: logCleanupResults.cleaned
+        }
+      )
       
       await this.logProcessingMetrics('cleanup', {
         staging_records_cleaned: cleanupResults.cleaned,
@@ -264,7 +362,12 @@ export class ScheduledBatchProcessor {
       })
 
     } catch (error) {
-      console.error('❌ Error in scheduled cleanup:', error)
+      logger.logBatchProcessing(
+        'cleanup-outer-error',
+        'Error in scheduled cleanup',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       await this.logProcessingMetrics('cleanup', { error: error instanceof Error ? error.message : String(error) })
     }
   }
@@ -286,7 +389,12 @@ export class ScheduledBatchProcessor {
 
       return (invoiceCount || 0) + (paymentCount || 0)
     } catch (error) {
-      console.error('❌ Error getting pending Xero count:', error)
+      logger.logXeroSync(
+        'pending-count-error',
+        'Error getting pending Xero count',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       return 0
     }
   }
@@ -314,12 +422,21 @@ export class ScheduledBatchProcessor {
       const totalCleaned = (invoicesDeleted || 0) + (paymentsDeleted || 0)
       
       if (totalCleaned > 0) {
-        console.log(`🧹 Cleaned up ${totalCleaned} old staging records`)
+        logger.logBatchProcessing(
+          'cleanup-staging-records',
+          `Cleaned up ${totalCleaned} old staging records`,
+          { recordsCleaned: totalCleaned }
+        )
       }
 
       return { cleaned: totalCleaned }
     } catch (error) {
-      console.error('❌ Error cleaning up staging records:', error)
+      logger.logBatchProcessing(
+        'staging-cleanup-error',
+        'Error cleaning up staging records',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       return { cleaned: 0 }
     }
   }
@@ -338,12 +455,21 @@ export class ScheduledBatchProcessor {
         .lt('created_at', cutoffDate)
 
       if (logsDeleted && logsDeleted > 0) {
-        console.log(`🧹 Cleaned up ${logsDeleted} old log entries`)
+        logger.logBatchProcessing(
+          'cleanup-log-entries',
+          `Cleaned up ${logsDeleted} old log entries`,
+          { logEntriesCleaned: logsDeleted }
+        )
       }
 
       return { cleaned: logsDeleted || 0 }
     } catch (error) {
-      console.error('❌ Error cleaning up log entries:', error)
+      logger.logBatchProcessing(
+        'log-cleanup-error',
+        'Error cleaning up log entries',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       return { cleaned: 0 }
     }
   }
@@ -356,13 +482,17 @@ export class ScheduledBatchProcessor {
     metrics: Record<string, any>
   ): Promise<void> {
     try {
-      // This could be enhanced to write to a metrics table or external monitoring service
-      console.log(`📊 Processing metrics [${operation}]:`, metrics)
+      // Log processing metrics using structured logging
+      logger.logBatchProcessing(
+        'processing-metrics',
+        `Processing metrics for ${operation}`,
+        { operation, metrics }
+      )
       
       // TODO: Implement metrics logging to database or external service
-      // For now, just console logging for debugging
       
     } catch (error) {
+      // Avoid circular logging - use console for logger errors
       console.error('❌ Error logging processing metrics:', error)
     }
   }
@@ -383,7 +513,11 @@ export class ScheduledBatchProcessor {
    */
   updateSchedule(newSchedule: Partial<ProcessingSchedule>): void {
     this.schedule = { ...this.schedule, ...newSchedule }
-    console.log('📋 Updated processing schedule:', this.schedule)
+    logger.logBatchProcessing(
+      'schedule-updated',
+      'Updated processing schedule',
+      { newSchedule: this.schedule }
+    )
   }
 }
 

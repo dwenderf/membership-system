@@ -52,7 +52,12 @@ export class ServiceManager {
    */
   async startServices() {
     if (this.isStarted) {
-      console.log('🔄 Services already started')
+      logger.logServiceManagement(
+        'services-already-started',
+        'Services already started',
+        {},
+        'warn'
+      )
       return
     }
 
@@ -64,7 +69,11 @@ export class ServiceManager {
 
     for (const [name, service] of this.services) {
       try {
-        console.log(`🔧 Starting ${name}...`)
+        logger.logServiceManagement(
+          'service-starting',
+          `Starting service ${name}`,
+          { serviceName: name }
+        )
         const success = await service.start()
         
         if (success) {

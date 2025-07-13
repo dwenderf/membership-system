@@ -670,3 +670,34 @@ email_logs (
 2. **Content Management** - Admin interface for Terms & Conditions updates
 3. **User Management System** - Complete admin interface for managing user accounts and roles
 4. **Email Marketing** - Send team/event emails through admin interface
+
+## 📋 Pending Technical Improvements
+
+### Comprehensive Console Log Migration (Option B)
+**Issue**: Mixed console.log statements and structured logging throughout the codebase causing inconsistent log output and reduced observability.
+
+**Current Status**: 
+- ✅ Core system files (xero-client.ts, scheduled-batch-processor.ts, startup.ts) migrated to structured logging
+- ⚠️ 70+ remaining files still contain console.log statements throughout API routes, components, and services
+
+**Scope of Work**:
+1. **API Routes** (30+ files): Convert console.log/error statements to structured logger calls
+2. **Service Layer** (15+ files): Migrate remaining business logic logging to centralized system  
+3. **Component Layer** (20+ files): Replace debug console.log with appropriate logging levels
+4. **Utility Functions** (10+ files): Standardize error and debug logging patterns
+
+**Benefits**:
+- **Consistent Log Output**: All logs appear in admin log viewer with proper categorization
+- **Better Observability**: Structured metadata makes debugging and monitoring more effective
+- **Production Ready**: File-based logs in local environments, cloud logging in production
+- **Centralized Control**: Single configuration point for log levels and output formats
+
+**Implementation Strategy**:
+1. Create automated script to identify all console.log usage patterns
+2. Replace with appropriate logger category calls (payment-processing, xero-sync, etc.)
+3. Add proper error context and metadata to each log statement
+4. Update any remaining services to import and use centralized logger
+5. Add log level configuration for different environments
+
+**Estimated Effort**: 1-2 development sessions for comprehensive migration
+**Priority**: Medium (improves observability but doesn't affect core functionality)

@@ -214,7 +214,7 @@ async function handleFreeRegistration({
     const { error: stagingUpdateError } = await supabase
       .from('xero_invoices')
       .update({ payment_id: paymentRecord.id })
-      .eq('staging_metadata->user_id', user.id)
+      .eq('staging_metadata->>user_id', user.id)
       .eq('sync_status', 'staged')
       .is('payment_id', null)
 
@@ -1048,12 +1048,24 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
+    // First get the current staging metadata, then update it
+    const { data: existingRecord } = await supabase
+      .from('xero_invoices')
+      .select('staging_metadata')
+      .eq('staging_metadata->>user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+      .single()
+
+    const updatedMetadata = {
+      ...existingRecord?.staging_metadata,
+      stripe_payment_intent_id: paymentIntent.id
+    }
+
     const { error: stagingStripeUpdateError } = await supabase
       .from('xero_invoices')
-      .update({ 
-        'staging_metadata': supabase.raw(`staging_metadata || '{"stripe_payment_intent_id": "${paymentIntent.id}"}'::jsonb`)
-      })
-      .eq('staging_metadata->user_id', user.id)
+      .update({ staging_metadata: updatedMetadata })
+      .eq('staging_metadata->>user_id', user.id)
       .eq('sync_status', 'staged')
       .is('payment_id', null)
 
@@ -1131,7 +1143,7 @@ export async function POST(request: NextRequest) {
       const { error: stagingPaymentUpdateError } = await supabase
         .from('xero_invoices')
         .update({ payment_id: paymentRecord.id })
-        .eq('staging_metadata->user_id', user.id)
+        .eq('staging_metadata->>user_id', user.id)
         .eq('sync_status', 'staged')
         .is('payment_id', null)
 

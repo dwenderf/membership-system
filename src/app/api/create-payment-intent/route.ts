@@ -90,8 +90,8 @@ async function handleFreeMembership({
       .select('code_type, accounting_code')
       .in('code_type', ['donation_given_default', 'donation_received_default'])
     
-    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code || 'DISCOUNT'
-    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code || 'DONATION'
+    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code
+    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code
     
     const stagingData = {
       user_id: user.id,
@@ -104,7 +104,7 @@ async function handleFreeMembership({
           item_id: membershipId,
           amount: membershipAmount, // Full membership price
           description: `Membership: ${membership.name} - ${durationMonths} months`,
-          accounting_code: membership.accounting_code || 'MEMBERSHIP'
+          accounting_code: membership.accounting_code
         }
       ],
       discount_codes_used: [
@@ -190,7 +190,7 @@ async function handleFreeMembership({
     const { error: stagingUpdateError } = await supabase
       .from('xero_invoices')
       .update({ payment_id: paymentRecord.id })
-      .eq('staging_metadata->user_id', user.id)
+      .eq('staging_metadata->>user_id', user.id)
       .eq('sync_status', 'staged')
       .is('payment_id', null)
 
@@ -385,15 +385,20 @@ export async function POST(request: NextRequest) {
     }
 
     const membershipAmount = getMembershipAmount()
+    
+    // Calculate full membership price for assistance scenarios
+    const fullMembershipPrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+    const discountAmount = paymentOption === 'assistance' ? (fullMembershipPrice - (assistanceAmount || 0)) : 0
 
-    // Get accounting codes from system_accounting_codes for donations
-    const { data: accountingCodes } = await supabase
+    // Get accounting codes from system_accounting_codes
+    const { data: accountingCodes, error: accountingError } = await supabase
       .from('system_accounting_codes')
       .select('code_type, accounting_code')
-      .eq('code_type', 'donation_received_default')
-      .single()
+      .in('code_type', ['donation_received_default', 'donation_given_default'])
     
-    const donationAccountingCode = accountingCodes?.accounting_code || 'DONATION'
+    
+    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code
+    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code
 
     // Stage Xero records FIRST - fail fast if this fails
     logger.logPaymentProcessing(
@@ -410,19 +415,26 @@ export async function POST(request: NextRequest) {
 
     const stagingData = {
       user_id: user.id,
-      total_amount: amount, // Total amount being charged
-      discount_amount: 0, // No discount for paid purchases (handled by assistance amount)
+      total_amount: paymentOption === 'assistance' ? fullMembershipPrice : amount,
+      discount_amount: discountAmount,
       final_amount: amount,
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: membershipAmount,
+          amount: paymentOption === 'assistance' ? fullMembershipPrice : membershipAmount,
           description: `Membership: ${membership.name} - ${durationMonths} months`,
-          accounting_code: membership.accounting_code || 'MEMBERSHIP'
+          accounting_code: membership.accounting_code
         }
       ],
-      discount_codes_used: [],
+      discount_codes_used: paymentOption === 'assistance' && discountAmount > 0 ? [
+        {
+          code: 'FINANCIAL_ASSISTANCE',
+          amount_saved: discountAmount,
+          category_name: 'Financial Assistance',
+          accounting_code: discountAccountingCode
+        }
+      ] : [],
       stripe_payment_intent_id: null // Will be updated after Stripe intent creation
     }
 
@@ -523,12 +535,24 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
+    // First get the current staging metadata, then update it
+    const { data: existingRecord } = await supabase
+      .from('xero_invoices')
+      .select('staging_metadata')
+      .eq('staging_metadata->>user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+      .single()
+
+    const updatedMetadata = {
+      ...existingRecord?.staging_metadata,
+      stripe_payment_intent_id: paymentIntent.id
+    }
+
     const { error: stagingStripeUpdateError } = await supabase
       .from('xero_invoices')
-      .update({ 
-        'staging_metadata': supabase.raw(`staging_metadata || '{"stripe_payment_intent_id": "${paymentIntent.id}"}'::jsonb`)
-      })
-      .eq('staging_metadata->user_id', user.id)
+      .update({ staging_metadata: updatedMetadata })
+      .eq('staging_metadata->>user_id', user.id)
       .eq('sync_status', 'staged')
       .is('payment_id', null)
 
@@ -593,7 +617,7 @@ export async function POST(request: NextRequest) {
       const { error: stagingPaymentUpdateError } = await supabase
         .from('xero_invoices')
         .update({ payment_id: paymentRecord.id })
-        .eq('staging_metadata->user_id', user.id)
+        .eq('staging_metadata->>user_id', user.id)
         .eq('sync_status', 'staged')
         .is('payment_id', null)
 

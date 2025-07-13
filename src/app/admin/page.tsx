@@ -190,6 +190,14 @@ export default async function AdminDashboard() {
                   <div className="text-gray-900 font-medium">Reports</div>
                   <div className="mt-1 text-sm text-gray-500">View system reports and analytics</div>
                 </Link>
+
+                <Link
+                  href="/admin/logs"
+                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <div className="text-gray-900 font-medium">📊 System Logs</div>
+                  <div className="mt-1 text-sm text-gray-500">Monitor application logs and system events</div>
+                </Link>
               </div>
             </div>
           </div>

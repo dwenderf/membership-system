@@ -7,6 +7,7 @@
 
 import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
+import { logger } from './logging/logger'
 
 export interface BatchJob {
   id: string
@@ -174,7 +175,11 @@ export class BatchProcessor {
     const failed: { item: T; error: string }[] = []
     let peakMemoryUsageMB = 0
 
-    console.log(`🔄 Processing ${items.length} items in batches of ${batchSize} with concurrency ${concurrency}`)
+    logger.logBatchProcessing(
+      'batch-start',
+      `Processing ${items.length} items in batches of ${batchSize} with concurrency ${concurrency}`,
+      { totalItems: items.length, batchSize, concurrency, operationType }
+    )
 
     // Sort items by priority if specified
     let sortedItems = [...items]
@@ -188,14 +193,22 @@ export class BatchProcessor {
         if (aVal > bVal) return 1 * multiplier
         return 0
       })
-      console.log(`📊 Sorted ${items.length} items by ${String(priorityField)} (${sortOrder})`)
+      logger.logBatchProcessing(
+        'batch-sort',
+        `Sorted ${items.length} items by ${String(priorityField)} (${sortOrder})`,
+        { priorityField: String(priorityField), sortOrder }
+      )
     }
 
     // Optimize batch size for large datasets
     const optimizedBatchSize = this.optimizeBatchSize(sortedItems.length, batchSize)
     const optimizedConcurrency = Math.min(concurrency, Math.ceil(optimizedBatchSize / 2))
 
-    console.log(`🎯 Optimized batch size: ${optimizedBatchSize}, concurrency: ${optimizedConcurrency}`)
+    logger.logBatchProcessing(
+      'batch-optimize',
+      `Optimized batch size: ${optimizedBatchSize}, concurrency: ${optimizedConcurrency}`,
+      { originalBatchSize: batchSize, optimizedBatchSize, originalConcurrency: concurrency, optimizedConcurrency }
+    )
 
     // Split items into batches
     const batches = this.chunkArray(sortedItems, optimizedBatchSize)
@@ -279,7 +292,12 @@ export class BatchProcessor {
       peakMemoryUsageMB: peakMemoryUsageMB > 0 ? peakMemoryUsageMB : undefined
     }
 
-    console.log(`✅ Batch processing completed:`, metrics)
+    logger.logBatchProcessing(
+      'batch-complete',
+      `Batch processing completed: ${metrics.successCount} successful, ${metrics.failureCount} failed`,
+      metrics
+    )
+    
     return { successful, failed, metrics }
   }
 

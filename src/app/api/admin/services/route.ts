@@ -13,6 +13,7 @@ import { serviceManager } from '@/lib/services/startup'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { xeroBatchSyncManager } from '@/lib/xero-batch-sync'
 import { scheduledBatchProcessor } from '@/lib/scheduled-batch-processor'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,6 +80,12 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'start':
+        logger.logAdminAction(
+          'start-services',
+          'Admin initiated service start',
+          { action },
+          user.id
+        )
         await serviceManager.startServices()
         return NextResponse.json({ 
           message: 'Services started',
@@ -86,6 +93,12 @@ export async function POST(request: NextRequest) {
         })
 
       case 'stop':
+        logger.logAdminAction(
+          'stop-services',
+          'Admin initiated service stop',
+          { action },
+          user.id
+        )
         await serviceManager.stopServices()
         return NextResponse.json({ 
           message: 'Services stopped',
@@ -93,6 +106,12 @@ export async function POST(request: NextRequest) {
         })
 
       case 'restart':
+        logger.logAdminAction(
+          'restart-services',
+          'Admin initiated service restart',
+          { action },
+          user.id
+        )
         await serviceManager.restartServices()
         return NextResponse.json({ 
           message: 'Services restarted',
@@ -100,12 +119,24 @@ export async function POST(request: NextRequest) {
         })
 
       case 'process-pending':
+        logger.logAdminAction(
+          'process-pending',
+          'Admin triggered manual payment processing',
+          { action },
+          user.id
+        )
         await paymentProcessor.processPendingRecords()
         return NextResponse.json({ 
           message: 'Pending records processed'
         })
 
       case 'sync-xero':
+        logger.logAdminAction(
+          'sync-xero',
+          'Admin triggered manual Xero sync',
+          { action },
+          user.id
+        )
         const syncResults = await xeroBatchSyncManager.syncAllPendingRecords()
         return NextResponse.json({ 
           message: 'Xero batch sync completed',
@@ -113,6 +144,12 @@ export async function POST(request: NextRequest) {
         })
 
       case 'start-batch-processor':
+        logger.logAdminAction(
+          'start-batch-processor',
+          'Admin started scheduled batch processor',
+          { action },
+          user.id
+        )
         await scheduledBatchProcessor.startScheduledProcessing()
         return NextResponse.json({ 
           message: 'Scheduled batch processor started',
@@ -120,6 +157,12 @@ export async function POST(request: NextRequest) {
         })
 
       case 'stop-batch-processor':
+        logger.logAdminAction(
+          'stop-batch-processor',
+          'Admin stopped scheduled batch processor',
+          { action },
+          user.id
+        )
         await scheduledBatchProcessor.stopScheduledProcessing()
         return NextResponse.json({ 
           message: 'Scheduled batch processor stopped',

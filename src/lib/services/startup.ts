@@ -7,6 +7,7 @@
 
 import { paymentProcessor } from '../payment-completion-processor'
 import { scheduledBatchProcessor } from '../scheduled-batch-processor'
+import { logger } from '../logging/logger'
 
 export class ServiceManager {
   private static instance: ServiceManager
@@ -55,7 +56,11 @@ export class ServiceManager {
       return
     }
 
-    console.log('🚀 Starting background services...')
+    logger.logServiceManagement(
+      'services-start',
+      'Starting background services',
+      { serviceCount: this.services.size, services: Array.from(this.services.keys()) }
+    )
 
     for (const [name, service] of this.services) {
       try {
@@ -63,17 +68,35 @@ export class ServiceManager {
         const success = await service.start()
         
         if (success) {
-          console.log(`✅ ${name} started successfully`)
+          logger.logServiceManagement(
+            'service-started',
+            `Service ${name} started successfully`,
+            { serviceName: name }
+          )
         } else {
-          console.log(`⚠️ ${name} failed to start`)
+          logger.logServiceManagement(
+            'service-start-failed',
+            `Service ${name} failed to start`,
+            { serviceName: name },
+            'warn'
+          )
         }
       } catch (error) {
-        console.error(`❌ Error starting ${name}:`, error)
+        logger.logServiceManagement(
+          'service-start-error',
+          `Error starting service ${name}`,
+          { serviceName: name, error: error instanceof Error ? error.message : String(error) },
+          'error'
+        )
       }
     }
 
     this.isStarted = true
-    console.log('🎉 All background services startup complete')
+    logger.logServiceManagement(
+      'services-started',
+      'All background services startup complete',
+      { totalServices: this.services.size }
+    )
   }
 
   /**

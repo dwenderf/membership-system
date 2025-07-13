@@ -9,6 +9,7 @@ import { batchProcessor } from './batch-processor'
 import { xeroBatchSyncManager } from './xero-batch-sync'
 import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
+import { logger } from './logging/logger'
 
 export interface ProcessingSchedule {
   xeroSync: {
@@ -70,11 +71,15 @@ export class ScheduledBatchProcessor {
       this.schedule = { ...this.schedule, ...customSchedule }
     }
 
-    console.log('⏰ Starting scheduled batch processing with schedule:', {
-      xeroSync: `${this.schedule.xeroSync.intervalMs}ms`,
-      emailRetry: `${this.schedule.emailRetry.intervalMs}ms`,
-      cleanup: `${this.schedule.cleanup.intervalMs}ms`
-    })
+    logger.logBatchProcessing(
+      'scheduled-start',
+      'Starting scheduled batch processing',
+      {
+        xeroSync: `${this.schedule.xeroSync.intervalMs}ms`,
+        emailRetry: `${this.schedule.emailRetry.intervalMs}ms`,
+        cleanup: `${this.schedule.cleanup.intervalMs}ms`
+      }
+    )
 
     this.isRunning = true
 
@@ -181,7 +186,11 @@ export class ScheduledBatchProcessor {
         return
       }
 
-      console.log(`📊 Found ${pendingCount} pending Xero records, starting sync...`)
+      logger.logXeroSync(
+        'scheduled-sync-start',
+        `Found ${pendingCount} pending Xero records, starting sync`,
+        { pendingCount }
+      )
 
       // Run the batch sync
       const results = await xeroBatchSyncManager.syncAllPendingRecords()

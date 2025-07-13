@@ -236,7 +236,7 @@ export class XeroStagingManager {
           discount_amount: data.discount_amount,
           net_amount: data.final_amount,
           stripe_fee_amount: 0, // Calculate from payment data if needed
-          sync_status: 'staged',
+          sync_status: options?.isFree ? 'AUTHORIZED' : 'staged',
           staged_at: new Date().toISOString(),
           staging_metadata: {
             user_id: data.user_id,

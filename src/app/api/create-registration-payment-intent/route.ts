@@ -531,6 +531,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle registration that becomes free after discount - route to free registration flow
+    if (finalAmount === 0) {
+      return await handleFreeRegistration({
+        supabase,
+        user,
+        registrationId,
+        categoryId,
+        presaleCode,
+        discountCode,
+        paymentContext,
+        startTime
+      })
+    }
+
     // STEP 1: Clean up any existing processing records for this user/registration first
     // This allows users to retry payments without being locked out for 5 minutes
     let reservationId: string | null = null // Declare here so it's accessible throughout
@@ -953,9 +967,9 @@ export async function POST(request: NextRequest) {
         {
           item_type: 'registration' as const,
           item_id: registrationId,
-          amount: finalAmount,
+          amount: amount, // Use original amount, not final amount after discount
           description: `Registration: ${registration.name} - ${categoryName}`,
-          accounting_code: 'REGISTRATION'
+          accounting_code: selectedCategory.accounting_code || registration.accounting_code
         }
       ],
       discount_codes_used: validatedDiscountCode ? [{

@@ -237,7 +237,9 @@ export class ScheduledBatchProcessor {
 
     try {
       // Step 1: Create staging records for completed payments that don't have them
-      const stagingCreated = await this.createMissingStagingRecords()
+      // DISABLED: With staging-first approach, all payments should already have staging records
+      // const stagingCreated = await this.createMissingStagingRecords()
+      const stagingCreated = 0
 
       // Step 2: Check if there are any pending records to sync
       const pendingCount = await this.getPendingXeroCount()
@@ -405,6 +407,11 @@ export class ScheduledBatchProcessor {
 
   /**
    * Create staging records for completed payments that don't have them
+   * 
+   * DISABLED: This function is no longer needed with the staging-first approach.
+   * With synchronous staging creation during purchase, all payments should already 
+   * have staging records. This function should only be used for manual admin recovery
+   * in exceptional circumstances, not as part of scheduled processing.
    */
   private async createMissingStagingRecords(): Promise<number> {
     try {

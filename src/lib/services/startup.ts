@@ -104,24 +104,70 @@ export class ServiceManager {
    */
   async stopServices() {
     if (!this.isStarted) {
-      console.log('🛑 Services not started')
+      logger.logServiceManagement(
+        'services-stop-skip',
+        'Services not started, skipping stop',
+        { isStarted: this.isStarted }
+      )
       return
     }
 
-    console.log('🛑 Stopping background services...')
+    logger.logServiceManagement(
+      'services-stop',
+      'Stopping background services',
+      { serviceCount: this.services.size, services: Array.from(this.services.keys()) }
+    )
+
+    const stopResults = { successful: 0, failed: 0, errors: [] as string[] }
 
     for (const [name, service] of this.services) {
       try {
-        console.log(`🔧 Stopping ${name}...`)
+        logger.logServiceManagement(
+          'service-stopping',
+          `Stopping service ${name}`,
+          { serviceName: name }
+        )
+        
         await service.stop()
-        console.log(`✅ ${name} stopped successfully`)
+        
+        logger.logServiceManagement(
+          'service-stopped',
+          `Service ${name} stopped successfully`,
+          { serviceName: name }
+        )
+        
+        stopResults.successful++
       } catch (error) {
-        console.error(`❌ Error stopping ${name}:`, error)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        stopResults.failed++
+        stopResults.errors.push(`${name}: ${errorMessage}`)
+        
+        logger.logServiceManagement(
+          'service-stop-error',
+          `Error stopping service ${name}`,
+          { 
+            serviceName: name, 
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined
+          },
+          'error'
+        )
       }
     }
 
     this.isStarted = false
-    console.log('🎉 All background services stopped')
+    
+    logger.logServiceManagement(
+      'services-stopped',
+      'Background services stop completed',
+      {
+        successful: stopResults.successful,
+        failed: stopResults.failed,
+        totalServices: this.services.size,
+        errors: stopResults.errors
+      },
+      stopResults.failed > 0 ? 'warn' : 'info'
+    )
   }
 
   /**
@@ -154,31 +200,185 @@ export const serviceManager = ServiceManager.getInstance()
 export async function initializeServices() {
   // Only start services in server environment
   if (typeof window !== 'undefined') {
-    console.log('🌐 Client-side detected, skipping service initialization')
+    logger.logSystem(
+      'service-init-skip',
+      'Client-side detected, skipping service initialization',
+      { environment: 'browser' }
+    )
     return
   }
 
-  await serviceManager.startServices()
+  logger.logSystem(
+    'service-init-start',
+    'Initializing background services for server environment',
+    {
+      environment: 'server',
+      nodeEnv: process.env.NODE_ENV,
+      processId: process.pid
+    }
+  )
+
+  try {
+    await serviceManager.startServices()
+    
+    logger.logSystem(
+      'service-init-complete',
+      'All background services initialized successfully'
+    )
+  } catch (error) {
+    logger.logSystem(
+      'service-init-error',
+      'Failed to initialize background services',
+      { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
+      'error'
+    )
+    throw error
+  }
 }
 
 /**
  * Graceful shutdown handler
  */
 export async function shutdownServices() {
-  await serviceManager.stopServices()
+  logger.logSystem(
+    'server-shutdown-start',
+    'Initiating graceful server shutdown',
+    {
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      pid: process.pid
+    }
+  )
+
+  try {
+    await serviceManager.stopServices()
+    
+    logger.logSystem(
+      'server-shutdown-complete',
+      'Graceful shutdown completed successfully',
+      { totalUptime: process.uptime() }
+    )
+  } catch (error) {
+    logger.logSystem(
+      'server-shutdown-error',
+      'Error during graceful shutdown',
+      { 
+        error: error instanceof Error ? error.message : String(error),
+        uptime: process.uptime()
+      },
+      'error'
+    )
+    throw error
+  }
 }
 
 // Handle process termination
 if (typeof process !== 'undefined') {
   process.on('SIGINT', async () => {
-    console.log('🛑 Received SIGINT, shutting down services...')
-    await shutdownServices()
-    process.exit(0)
+    logger.logSystem(
+      'signal-sigint',
+      'Received SIGINT signal, initiating graceful shutdown',
+      { signal: 'SIGINT', pid: process.pid }
+    )
+    
+    try {
+      await shutdownServices()
+      logger.logSystem(
+        'signal-sigint-complete',
+        'SIGINT shutdown completed, exiting process'
+      )
+      process.exit(0)
+    } catch (error) {
+      logger.logSystem(
+        'signal-sigint-error',
+        'Error during SIGINT shutdown',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
+      process.exit(1)
+    }
   })
 
   process.on('SIGTERM', async () => {
-    console.log('🛑 Received SIGTERM, shutting down services...')
-    await shutdownServices()
-    process.exit(0)
+    logger.logSystem(
+      'signal-sigterm',
+      'Received SIGTERM signal, initiating graceful shutdown',
+      { signal: 'SIGTERM', pid: process.pid }
+    )
+    
+    try {
+      await shutdownServices()
+      logger.logSystem(
+        'signal-sigterm-complete',
+        'SIGTERM shutdown completed, exiting process'
+      )
+      process.exit(0)
+    } catch (error) {
+      logger.logSystem(
+        'signal-sigterm-error',
+        'Error during SIGTERM shutdown',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
+      process.exit(1)
+    }
+  })
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.logSystem(
+      'uncaught-exception',
+      'Uncaught exception detected',
+      {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      'error'
+    )
+    
+    // Try to shutdown gracefully, but don't wait too long
+    setTimeout(() => {
+      logger.logSystem(
+        'force-exit',
+        'Forcing process exit after uncaught exception',
+        {},
+        'error'
+      )
+      process.exit(1)
+    }, 5000)
+    
+    shutdownServices().finally(() => process.exit(1))
+  })
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.logSystem(
+      'unhandled-rejection',
+      'Unhandled promise rejection detected',
+      {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+        promise: promise.toString()
+      },
+      'error'
+    )
+  })
+
+  // Log memory warnings
+  process.on('warning', (warning) => {
+    logger.logSystem(
+      'process-warning',
+      'Process warning detected',
+      {
+        name: warning.name,
+        message: warning.message,
+        stack: warning.stack
+      },
+      'warn'
+    )
   })
 }

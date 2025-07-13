@@ -6,13 +6,14 @@
 
 // Test the logging system
 async function testLoggingSystem() {
-  console.log('🧪 Testing Enhanced Logging System...')
+  console.log('🧪 Testing Enhanced Logging System with Terminal Colors...')
   
   try {
     // Import the logger
     const { logger } = await import('./src/lib/logging/logger.ts')
     
     console.log('📦 Logger module loaded successfully')
+    console.log('\n🎨 Testing colorized console output across all categories and levels:\n')
     
     // Test different log levels and categories
     logger.logSystem('system-startup', 'Testing logging system initialization')
@@ -43,11 +44,32 @@ async function testLoggingSystem() {
       'test-user-id'
     )
     
+    logger.logServiceManagement(
+      'test-service',
+      'Testing service management logging',
+      { serviceName: 'test-service', action: 'start' }
+    )
+    
+    // Test different log levels with colors
+    logger.debug(
+      'system',
+      'test-debug',
+      'This is a debug message with gray coloring',
+      { debugInfo: 'detailed debug data' }
+    )
+    
+    logger.warn(
+      'payment-processing',
+      'test-warning',
+      'This is a warning message with yellow coloring',
+      { warningType: 'rate_limit_approaching' }
+    )
+    
     // Test error logging
     logger.error(
       'system',
       'test-error',
-      'Testing error logging functionality',
+      'This is an error message with red coloring',
       { errorCode: 'TEST_ERROR', severity: 'low' }
     )
     
@@ -62,6 +84,26 @@ async function testLoggingSystem() {
     // Test stats
     const stats = await logger.getLogStats()
     console.log('📊 Log statistics:', stats)
+    
+    // Test server lifecycle logging
+    console.log('\n🔄 Testing server lifecycle logging...')
+    logger.logSystem(
+      'test-lifecycle',
+      'Testing server lifecycle logging',
+      {
+        nodeVersion: process.version,
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        pid: process.pid
+      }
+    )
+    
+    // Test service management logging
+    logger.logServiceManagement(
+      'test-service',
+      'Testing service management logging',
+      { serviceName: 'test-service', action: 'start' }
+    )
     
   } catch (error) {
     console.log('⚠️ Test failed:', error.message)

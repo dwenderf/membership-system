@@ -160,7 +160,39 @@ export class Logger {
   }
 
   /**
-   * Format console output with emojis
+   * ANSI color codes for terminal output
+   */
+  private readonly colors = {
+    // Reset
+    reset: '\x1b[0m',
+    
+    // Text colors
+    black: '\x1b[30m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    white: '\x1b[37m',
+    gray: '\x1b[90m',
+    
+    // Bright colors
+    brightRed: '\x1b[91m',
+    brightGreen: '\x1b[92m',
+    brightYellow: '\x1b[93m',
+    brightBlue: '\x1b[94m',
+    brightMagenta: '\x1b[95m',
+    brightCyan: '\x1b[96m',
+    
+    // Text styles
+    bold: '\x1b[1m',
+    dim: '\x1b[2m',
+    underline: '\x1b[4m'
+  }
+
+  /**
+   * Format console output with colors and emojis
    */
   private formatConsoleOutput(entry: LogEntry): string {
     const emojis = {
@@ -179,14 +211,57 @@ export class Logger {
       'system': '🖥️'
     }
 
+    // Level-based colors
+    const levelColors = {
+      debug: this.colors.gray,
+      info: this.colors.blue,
+      warn: this.colors.yellow,
+      error: this.colors.red
+    }
+
+    // Category-based colors
+    const categoryColors = {
+      'payment-processing': this.colors.green,
+      'xero-sync': this.colors.cyan,
+      'batch-processing': this.colors.magenta,
+      'service-management': this.colors.blue,
+      'admin-action': this.colors.brightYellow,
+      'system': this.colors.brightBlue
+    }
+
     const emoji = emojis[entry.level]
     const categoryEmoji = categoryEmojis[entry.category]
     const timestamp = new Date(entry.timestamp).toLocaleTimeString()
     
-    let output = `${emoji} ${categoryEmoji} [${timestamp}] ${entry.operation}: ${entry.message}`
+    // Build colored output
+    const levelColor = levelColors[entry.level]
+    const categoryColor = categoryColors[entry.category]
     
+    let output = ''
+    
+    // Emoji and timestamp
+    output += `${emoji} ${categoryEmoji} `
+    output += `${this.colors.gray}[${timestamp}]${this.colors.reset} `
+    
+    // Operation name with category color
+    output += `${categoryColor}${this.colors.bold}${entry.operation}${this.colors.reset}: `
+    
+    // Message with level color
+    output += `${levelColor}${entry.message}${this.colors.reset}`
+    
+    // Metadata in dim gray
     if (entry.metadata && Object.keys(entry.metadata).length > 0) {
-      output += ` | ${JSON.stringify(entry.metadata)}`
+      output += ` ${this.colors.gray}| ${JSON.stringify(entry.metadata)}${this.colors.reset}`
+    }
+    
+    // User ID if present
+    if (entry.userId) {
+      output += ` ${this.colors.dim}[user: ${entry.userId}]${this.colors.reset}`
+    }
+    
+    // Request ID if present
+    if (entry.requestId) {
+      output += ` ${this.colors.dim}[req: ${entry.requestId}]${this.colors.reset}`
     }
     
     return output

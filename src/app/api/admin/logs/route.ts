@@ -38,14 +38,56 @@ export async function GET(request: NextRequest) {
     const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
     const action = url.searchParams.get('action') || 'logs'
 
+    // Check if we're in serverless environment
+    const isServerless = !!(
+      process.env.VERCEL ||
+      process.env.NETLIFY ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME
+    )
+
     // Handle different actions
     switch (action) {
       case 'stats':
+        if (isServerless) {
+          return NextResponse.json({ 
+            stats: {
+              totalEntries: 0,
+              entriesByLevel: { debug: 0, info: 0, warn: 0, error: 0 },
+              entriesByCategory: {
+                'payment-processing': 0,
+                'xero-sync': 0,
+                'batch-processing': 0,
+                'service-management': 0,
+                'admin-action': 0,
+                'system': 0
+              }
+            },
+            serverless: true,
+            message: 'File-based logs not available in serverless environment. Check Vercel logs instead.'
+          })
+        }
+        
         const stats = await logger.getLogStats()
         return NextResponse.json({ stats })
 
       case 'logs':
       default:
+        if (isServerless) {
+          return NextResponse.json({ 
+            logs: [],
+            filters: {
+              category,
+              level,
+              startDate,
+              endDate,
+              limit
+            },
+            total: 0,
+            serverless: true,
+            message: 'File-based logs not available in serverless environment. Check Vercel Function Logs in your Vercel dashboard.'
+          })
+        }
+
         const logs = await logger.readLogs(
           category || undefined,
           level || undefined,

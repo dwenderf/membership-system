@@ -43,7 +43,26 @@ export class Logger {
 
   constructor() {
     this.logDir = join(process.cwd(), 'logs')
-    this.ensureLogDirectory()
+    
+    // Check if we're running on Vercel or similar serverless environment
+    if (this.isServerlessEnvironment()) {
+      console.log('🌐 Serverless environment detected, using console-only logging')
+    } else {
+      this.ensureLogDirectory()
+    }
+  }
+
+  /**
+   * Check if running in serverless environment (Vercel, Netlify, etc.)
+   */
+  private isServerlessEnvironment(): boolean {
+    return !!(
+      process.env.VERCEL ||
+      process.env.NETLIFY ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT ||
+      process.env.FUNCTION_NAME
+    )
   }
 
   /**
@@ -88,9 +107,14 @@ export class Logger {
   }
 
   /**
-   * Write log entry to file
+   * Write log entry to file (skipped in serverless environments)
    */
   private writeToFile(entry: LogEntry): void {
+    // Skip file writing in serverless environments
+    if (this.isServerlessEnvironment()) {
+      return
+    }
+
     try {
       const filePath = this.getLogFilePath(entry.category)
       const logLine = JSON.stringify(entry) + '\n'
@@ -405,7 +429,7 @@ export class Logger {
   }
 
   /**
-   * Read log entries from files
+   * Read log entries from files (returns empty array in serverless environments)
    */
   async readLogs(
     category?: LogCategory,
@@ -414,6 +438,12 @@ export class Logger {
     endDate?: string,
     limit?: number
   ): Promise<LogEntry[]> {
+    // Return empty array in serverless environments
+    if (this.isServerlessEnvironment()) {
+      console.warn('📁 File-based log reading not available in serverless environment')
+      return []
+    }
+
     try {
       const logs: LogEntry[] = []
       const files = readdirSync(this.logDir)

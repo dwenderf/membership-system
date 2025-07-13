@@ -17,6 +17,14 @@ interface LogStats {
   newestEntry?: string
 }
 
+interface LogResponse {
+  logs: LogEntry[]
+  filters: any
+  total: number
+  serverless?: boolean
+  message?: string
+}
+
 interface LogFilters {
   category: LogCategory | 'all'
   level: LogLevel | 'all'
@@ -32,6 +40,8 @@ export default function LogViewer() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [isServerless, setIsServerless] = useState(false)
+  const [serverlessMessage, setServerlessMessage] = useState('')
   const [filters, setFilters] = useState<LogFilters>({
     category: 'all',
     level: 'all',
@@ -62,8 +72,13 @@ export default function LogViewer() {
         throw new Error('Failed to load logs')
       }
       
-      const data = await response.json()
+      const data: LogResponse = await response.json()
       setLogs(data.logs)
+      
+      if (data.serverless) {
+        setIsServerless(true)
+        setServerlessMessage(data.message || '')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -267,6 +282,30 @@ export default function LogViewer() {
           />
         </div>
       </div>
+
+      {/* Serverless Environment Notice */}
+      {isServerless && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-blue-400 text-xl">☁️</span>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                Serverless Environment Detected
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>{serverlessMessage}</p>
+                <p className="mt-2">
+                  <strong>Console logs are still working!</strong> Check your terminal during development 
+                  or visit your <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" 
+                  className="underline hover:text-blue-900">Vercel Dashboard → Functions → Logs</a> for production logs.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (

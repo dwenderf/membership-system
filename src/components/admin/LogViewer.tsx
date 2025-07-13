@@ -322,7 +322,7 @@ export default function LogViewer() {
           </h2>
         </div>
         
-        <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
+        <div className="divide-y divide-gray-200">
           {filteredLogs.map((log, index) => (
             <div key={index} className="p-4 hover:bg-gray-50">
               <div className="flex items-start justify-between">

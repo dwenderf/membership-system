@@ -54,6 +54,137 @@ Console.log is acceptable only in these specific cases:
 - **Circular Logging Prevention**: Avoiding infinite loops in logger error handling
 - **Development Debugging**: Temporary debugging (must be removed before commit)
 
+## 🗃️ Database Migrations
+
+### Migration File Location
+All database migrations are stored in:
+```
+supabase/migrations/
+```
+
+### Migration Naming Convention
+Use this precise format for all migration files:
+```
+YYYY-MM-DD-descriptive-action-name.sql
+```
+
+**Examples:**
+```
+2025-07-13-add-user-tags-column.sql
+2025-07-13-fix-payment-rls-policies.sql  
+2025-07-13-refactor-membership-pricing.sql
+2025-07-13-enhance-xero-integration.sql
+```
+
+### Naming Guidelines
+
+**Date Format**: Always use `YYYY-MM-DD` (ISO format)
+- Use the date when you create the migration
+- Multiple migrations on same day get same date prefix
+- Supabase applies migrations in alphabetical order
+
+**Action Verbs**: Use clear, specific action verbs
+- `add-` - Adding new tables, columns, indexes
+- `fix-` - Fixing bugs, policies, constraints  
+- `refactor-` - Restructuring existing schema
+- `enhance-` - Improving existing functionality
+- `remove-` - Dropping tables, columns, features
+- `update-` - Modifying existing data or schema
+
+**Description**: Be specific and concise
+- ✅ `add-payment-foreign-keys.sql` 
+- ✅ `fix-admin-rls-policies.sql`
+- ✅ `refactor-membership-pricing-model.sql`
+- ❌ `update-database.sql` (too vague)
+- ❌ `fix-stuff.sql` (not descriptive)
+
+### Migration Content Structure
+```sql
+-- Migration: Brief description of what this migration does
+-- Date: YYYY-MM-DD
+-- Author: Your Name
+
+-- Add helpful comments explaining the business logic
+-- Especially for complex changes or policy updates
+
+BEGIN;
+
+-- Your migration SQL here
+-- Use transactions to ensure atomicity
+
+COMMIT;
+```
+
+### Migration Best Practices
+
+**Always Include Rollback Instructions**
+```sql
+-- To rollback this migration:
+-- DROP TABLE IF EXISTS new_table;
+-- ALTER TABLE existing_table DROP COLUMN IF EXISTS new_column;
+```
+
+**Test Migrations Thoroughly**
+- Test on development database first
+- Verify data integrity after migration
+- Check that RLS policies work correctly
+- Ensure application functionality remains intact
+
+**Breaking Changes**
+- Document any breaking changes in the migration file
+- Update TypeScript types if schema changes affect them
+- Coordinate with team before applying breaking migrations
+
+### RLS (Row Level Security) Migrations
+When creating or modifying RLS policies:
+
+```sql
+-- Enable RLS on new tables
+ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;
+
+-- Create policies with descriptive names
+CREATE POLICY "Users can read their own data" ON table_name
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage all data" ON table_name
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE users.id = auth.uid() 
+      AND users.is_admin = true
+    )
+  );
+```
+
+### Common Migration Patterns
+
+**Adding Foreign Keys:**
+```sql
+-- Add foreign key with proper constraint naming
+ALTER TABLE child_table 
+ADD CONSTRAINT fk_child_parent 
+FOREIGN KEY (parent_id) REFERENCES parent_table(id);
+```
+
+**Adding Indexes for Performance:**
+```sql
+-- Add index with descriptive name
+CREATE INDEX idx_payments_user_status 
+ON payments(user_id, status) 
+WHERE status IN ('pending', 'completed');
+```
+
+**Adding Enum Values:**
+```sql
+-- Add new enum values (PostgreSQL-safe way)
+ALTER TYPE payment_status_enum ADD VALUE 'refund_pending';
+```
+
+### Schema.sql Maintenance
+- The `schema.sql` file represents the current state of the database
+- Don't edit `schema.sql` directly - it's generated from migrations
+- Use `supabase db diff` to generate new migrations from schema changes
+
 ## 🗄️ Database Access Patterns
 
 ### ✅ Preferred: API-First Architecture

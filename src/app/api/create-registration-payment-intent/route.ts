@@ -4,6 +4,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
+import { xeroStagingManager } from '@/lib/xero-staging'
+import { logger } from '@/lib/logging/logger'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -86,86 +88,95 @@ async function handleFreeRegistration({
       return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
     }
 
-    // Create Xero invoice for zero payment
-    let invoiceNumber = null
-    let xeroInvoiceId = null
-    
+    // Create staging record immediately with invoice line items
     try {
-      // Get registration and category details for invoice
+      logger.logPaymentProcessing(
+        'staging-creation-start',
+        'Creating Xero staging record for free registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId
+        },
+        'info'
+      )
+      
+      // Get registration and category details for invoice line items
       const registrationCategory = registration.registration_categories.find((rc: any) => rc.id === categoryId)
       
-      if (!registrationCategory) {
-        throw new Error('Registration category not found')
-      }
-      
-      // Build invoice data for Xero - always show full registration price
-      const fullPrice = registrationCategory.price || 0
-      const paymentItems = [{
-        item_type: 'registration' as const,
-        item_id: registrationId,
-        amount: fullPrice, // Full registration price
-        description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
-        accounting_code: registrationCategory.accounting_code || registration.accounting_code
-      }]
+      if (registrationCategory) {
+        // Build invoice data with line items
+        const fullPrice = registrationCategory.price || 0
+        const paymentItems = [{
+          item_type: 'registration' as const,
+          item_id: registrationId,
+          amount: fullPrice, // Full registration price
+          description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
+          accounting_code: registrationCategory.accounting_code || registration.accounting_code
+        }]
 
-      // Add discount line items if applicable
-      const discountItems = []
-      if (discountCode && fullPrice > 0) {
-        // For free registrations, the discount amount equals the full price
-        discountItems.push({
-          code: discountCode,
-          amount_saved: fullPrice, // Full price was discounted
-          category_name: 'Registration Discount',
-          accounting_code: undefined // Will use donation_given_default from system codes
-        })
-      }
+        // Add discount line items if applicable
+        const discountCodesUsed = []
+        if (discountCode && fullPrice > 0) {
+          discountCodesUsed.push({
+            code: discountCode,
+            amount_saved: fullPrice, // Full price was discounted
+            category_name: 'Registration Discount',
+            accounting_code: undefined // Will use system default
+          })
+        }
 
-      const xeroInvoiceData: PrePaymentInvoiceData = {
-        user_id: user.id,
-        total_amount: fullPrice, // Original price
-        discount_amount: fullPrice, // Full discount
-        final_amount: 0, // $0 after discount
-        payment_items: paymentItems,
-        discount_codes_used: discountItems
-      }
-
-      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
-        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0)
-      })
-      
-      if (invoiceResult.success) {
-        invoiceNumber = invoiceResult.invoiceNumber
-        xeroInvoiceId = invoiceResult.xeroInvoiceId
-        console.log(`✅ Created Xero invoice ${invoiceNumber} for free registration (marked as AUTHORISED)`)
-      } else {
-        console.warn(`⚠️ Failed to create Xero invoice for free registration: ${invoiceResult.error}`)
+        // Create staging record
+        const stagingResult = await xeroStagingManager.createImmediateStaging({
+          user_id: user.id,
+          total_amount: fullPrice,
+          discount_amount: fullPrice, // Full discount for free registration
+          final_amount: 0,
+          payment_items: paymentItems,
+          discount_codes_used: discountCodesUsed
+        }, { isFree: true })
+        
+        if (stagingResult) {
+          logger.logPaymentProcessing(
+            'staging-creation-success',
+            'Successfully created Xero staging record for free registration',
+            { 
+              userId: user.id, 
+              registrationId,
+              categoryId
+            },
+            'info'
+          )
+        } else {
+          logger.logPaymentProcessing(
+            'staging-creation-failed',
+            'Failed to create Xero staging record for free registration',
+            { 
+              userId: user.id, 
+              registrationId,
+              categoryId
+            },
+            'warn'
+          )
+        }
       }
     } catch (error) {
-      console.warn('⚠️ Error creating Xero invoice for free registration:', error)
-      
-      // Capture Xero invoice creation errors in Sentry for visibility
-      Sentry.withScope((scope) => {
-        scope.setTag('integration', 'xero')
-        scope.setTag('operation', 'free_registration_invoice')
-        scope.setTag('user_id', user.id)
-        scope.setLevel('warning') // Non-critical since payment still succeeds
-        scope.setContext('free_registration_invoice_error', {
-          user_id: user.id,
-          registration_id: registrationId,
-          category_id: categoryId,
-          discount_code: discountCode,
-          error_message: error instanceof Error ? error.message : 'Unknown error'
-        })
-        
-        if (error instanceof Error) {
-          Sentry.captureException(error)
-        } else {
-          Sentry.captureMessage(`Free registration Xero invoice creation failed: ${error}`, 'warning')
-        }
-      })
+      logger.logPaymentProcessing(
+        'staging-creation-error',
+        'Error creating Xero staging record for free registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'warn'
+      )
+      // Continue with registration creation even if staging fails
     }
 
     // Create payment record with $0 amount and completed status
+    const now = new Date().toISOString()
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
@@ -175,6 +186,7 @@ async function handleFreeRegistration({
         stripe_payment_intent_id: null, // No Stripe payment for free
         status: 'completed',
         payment_method: 'free',
+        completed_at: now, // Critical: needed for payment completion triggers
       })
       .select()
       .single()
@@ -195,7 +207,17 @@ async function handleFreeRegistration({
       })
 
     if (paymentItemError) {
-      console.error('Error creating payment item record:', paymentItemError)
+      logger.logPaymentProcessing(
+        'payment-items-error',
+        'Error creating payment item record for free registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          paymentId: paymentRecord.id,
+          error: paymentItemError.message
+        },
+        'error'
+      )
       capturePaymentError(paymentItemError, paymentContext, 'warning')
     }
 
@@ -252,13 +274,21 @@ async function handleFreeRegistration({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free registration completed successfully',
-      invoiceNumber: invoiceNumber || undefined,
-      xeroInvoiceId: xeroInvoiceId || undefined
+      message: 'Free registration completed successfully - Xero invoice will be created via batch processing'
     })
 
   } catch (error) {
-    console.error('Error handling free registration:', error)
+    logger.logPaymentProcessing(
+      'free-registration-error',
+      'Error handling free registration',
+      { 
+        userId: user.id, 
+        registrationId,
+        categoryId,
+        error: error instanceof Error ? error.message : String(error)
+      },
+      'error'
+    )
     capturePaymentError(error, paymentContext, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -447,7 +477,17 @@ export async function POST(request: NextRequest) {
           }, { status: 400 })
         }
       } catch (discountError) {
-        console.error('Error validating discount code:', discountError)
+        logger.logPaymentProcessing(
+          'discount-validation-error',
+          'Error validating discount code',
+          { 
+            userId: user.id, 
+            registrationId,
+            discountCode,
+            error: discountError instanceof Error ? discountError.message : String(discountError)
+          },
+          'error'
+        )
         capturePaymentError(discountError, paymentContext, 'warning')
         return NextResponse.json({ 
           error: 'Failed to validate discount code' 
@@ -482,12 +522,30 @@ export async function POST(request: NextRequest) {
         // If there's a Stripe payment intent ID, check its status
         if (processingRecord.stripe_payment_intent_id) {
           try {
-            console.log(`🔍 Checking Stripe status for payment intent: ${processingRecord.stripe_payment_intent_id}`)
+            logger.logPaymentProcessing(
+              'stripe-status-check',
+              'Checking Stripe status for payment intent',
+              { 
+                userId: user.id, 
+                registrationId,
+                paymentIntentId: processingRecord.stripe_payment_intent_id
+              },
+              'info'
+            )
             const paymentIntent = await stripe.paymentIntents.retrieve(processingRecord.stripe_payment_intent_id)
             
             if (paymentIntent.status === 'succeeded') {
               // Payment succeeded but our DB wasn't updated - fix it
-              console.log(`✅ Payment succeeded, updating DB to paid status`)
+              logger.logPaymentProcessing(
+                'payment-succeeded-db-update',
+                'Payment succeeded, updating DB to paid status',
+                { 
+                  userId: user.id, 
+                  registrationId,
+                  paymentIntentId: processingRecord.stripe_payment_intent_id
+                },
+                'info'
+              )
               await fetch(`${getBaseUrl()}/api/update-registration-status`, {
                 method: 'POST',
                 headers: {
@@ -507,14 +565,33 @@ export async function POST(request: NextRequest) {
               
             } else if (['failed', 'canceled', 'requires_payment_method'].includes(paymentIntent.status)) {
               // Payment failed - clean up and allow retry
-              console.log(`❌ Payment ${paymentIntent.status}, cleaning up processing record`)
+              logger.logPaymentProcessing(
+                'payment-failed-cleanup',
+                'Payment failed, cleaning up processing record',
+                { 
+                  userId: user.id, 
+                  registrationId,
+                  paymentIntentId: processingRecord.stripe_payment_intent_id,
+                  status: paymentIntent.status
+                },
+                'info'
+              )
               await adminSupabase
                 .from('user_registrations')
                 .delete()
                 .eq('id', processingRecord.id)
                 .eq('payment_status', 'processing')
               
-              console.log(`🔄 Payment failed in Stripe, allowing user to retry`)
+              logger.logPaymentProcessing(
+                'payment-retry-allowed',
+                'Payment failed in Stripe, allowing user to retry',
+                { 
+                  userId: user.id, 
+                  registrationId,
+                  status: paymentIntent.status
+                },
+                'info'
+              )
               // Continue with new payment attempt
               
             } else {
@@ -526,7 +603,17 @@ export async function POST(request: NextRequest) {
             }
             
           } catch (stripeError) {
-            console.error('Error checking Stripe payment intent status:', stripeError)
+            logger.logPaymentProcessing(
+              'stripe-status-check-error',
+              'Error checking Stripe payment intent status',
+              { 
+                userId: user.id, 
+                registrationId,
+                paymentIntentId: processingRecord.stripe_payment_intent_id,
+                error: stripeError instanceof Error ? stripeError.message : String(stripeError)
+              },
+              'error'
+            )
             // If we can't check Stripe, be conservative and block
             capturePaymentError(new Error('Unable to verify payment status'), paymentContext, 'warning')
             return NextResponse.json({ 
@@ -535,7 +622,16 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Processing record without Stripe ID - likely corrupted, clean it up
-          console.log(`🧹 Cleaning up processing record without Stripe payment intent ID`)
+          logger.logPaymentProcessing(
+            'cleanup-orphaned-record',
+            'Cleaning up processing record without Stripe payment intent ID',
+            { 
+              userId: user.id, 
+              registrationId,
+              recordId: processingRecord.id
+            },
+            'info'
+          )
           await adminSupabase
             .from('user_registrations')
             .delete()
@@ -547,7 +643,16 @@ export async function POST(request: NextRequest) {
       // Handle 'awaiting_payment' records - update existing record with fresh timer
       if (awaitingPaymentRecords.length > 0) {
         const existingRecord = awaitingPaymentRecords[0]
-        console.log(`🔄 Updating existing awaiting_payment record with fresh timer: ${existingRecord.id}`)
+        logger.logPaymentProcessing(
+          'update-awaiting-payment',
+          'Updating existing awaiting_payment record with fresh timer',
+          { 
+            userId: user.id, 
+            registrationId,
+            recordId: existingRecord.id
+          },
+          'info'
+        )
         
         const { data: updatedRecord, error: updateError } = await adminSupabase
           .from('user_registrations')
@@ -561,10 +666,29 @@ export async function POST(request: NextRequest) {
           .single()
         
         if (updateError) {
-          console.error(`Error updating awaiting_payment record:`, updateError)
+          logger.logPaymentProcessing(
+            'update-awaiting-payment-error',
+            'Error updating awaiting_payment record',
+            { 
+              userId: user.id, 
+              registrationId,
+              recordId: existingRecord.id,
+              error: updateError.message
+            },
+            'error'
+          )
           // Fall through to create new record
         } else {
-          console.log(`✅ Updated awaiting_payment record with fresh timer`)
+          logger.logPaymentProcessing(
+            'update-awaiting-payment-success',
+            'Updated awaiting_payment record with fresh timer',
+            { 
+              userId: user.id, 
+              registrationId,
+              recordId: existingRecord.id
+            },
+            'info'
+          )
           // Skip creating new record, continue with payment intent creation for existing record
           reservationId = existingRecord.id
         }
@@ -573,7 +697,16 @@ export async function POST(request: NextRequest) {
       // Handle 'failed' records - reuse the most recent failed record for retry
       if (failedRecords.length > 0) {
         const failedRecord = failedRecords[0] // Use most recent failed record
-        console.log(`🔄 Found failed payment record - reusing for retry attempt: ${failedRecord.id}`)
+        logger.logPaymentProcessing(
+          'retry-failed-record',
+          'Found failed payment record - reusing for retry attempt',
+          { 
+            userId: user.id, 
+            registrationId,
+            recordId: failedRecord.id
+          },
+          'info'
+        )
         
         const { data: updatedRecord, error: updateError } = await adminSupabase
           .from('user_registrations')
@@ -588,16 +721,44 @@ export async function POST(request: NextRequest) {
           .single()
         
         if (updateError) {
-          console.error(`Error updating failed record:`, updateError)
+          logger.logPaymentProcessing(
+            'retry-failed-record-error',
+            'Error updating failed record',
+            { 
+              userId: user.id, 
+              registrationId,
+              recordId: failedRecord.id,
+              error: updateError.message
+            },
+            'error'
+          )
           // Fall through to create new record
         } else {
-          console.log(`✅ Updated failed record for retry with fresh timer`)
+          logger.logPaymentProcessing(
+            'retry-failed-record-success',
+            'Updated failed record for retry with fresh timer',
+            { 
+              userId: user.id, 
+              registrationId,
+              recordId: failedRecord.id
+            },
+            'info'
+          )
           // Skip creating new record, continue with payment intent creation for existing record
           reservationId = failedRecord.id
         }
       }
     } catch (cleanupError) {
-      console.error('Error cleaning up existing processing records:', cleanupError)
+      logger.logPaymentProcessing(
+        'cleanup-error',
+        'Error cleaning up existing processing records',
+        { 
+          userId: user.id, 
+          registrationId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        },
+        'error'
+      )
       // Continue anyway - the insert will handle duplicates
     }
 
@@ -637,7 +798,18 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (reservationError) {
-        console.error('Reservation creation error:', reservationError)
+        logger.logPaymentProcessing(
+          'reservation-creation-error',
+          'Reservation creation error',
+          { 
+            userId: user.id, 
+            registrationId,
+            categoryId,
+            error: reservationError.message,
+            code: reservationError.code
+          },
+          'error'
+        )
         
         // Check if this is a duplicate registration error
         if (reservationError.code === '23505') { // Unique constraint violation
@@ -649,7 +821,17 @@ export async function POST(request: NextRequest) {
             .eq('registration_id', registrationId)
             .single()
           
-          console.log('Existing registration found:', existingReg)
+          logger.logPaymentProcessing(
+            'existing-registration-found',
+            'Existing registration found during reservation creation',
+            { 
+              userId: user.id, 
+              registrationId,
+              categoryId,
+              existingPaymentStatus: existingReg?.payment_status
+            },
+            'info'
+          )
           
           return NextResponse.json({ 
             error: existingReg?.payment_status === 'paid' 
@@ -673,7 +855,17 @@ export async function POST(request: NextRequest) {
           reservationId = reservation.id
         }
       } else {
-        console.log(`✅ Using existing updated record as reservation: ${reservationId}`)
+        logger.logPaymentProcessing(
+          'using-existing-reservation',
+          'Using existing updated record as reservation',
+          { 
+            userId: user.id, 
+            registrationId,
+            categoryId,
+            reservationId
+          },
+          'info'
+        )
       }
     }
 
@@ -760,11 +952,33 @@ export async function POST(request: NextRequest) {
 
 
     if (paymentError) {
-      console.error('Error creating payment record:', paymentError)
+      logger.logPaymentProcessing(
+        'payment-record-error',
+        'Error creating payment record for paid registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          paymentIntentId: paymentIntent.id,
+          error: paymentError.message
+        },
+        'error'
+      )
       // Log warning but don't fail the request since Stripe intent was created
       capturePaymentError(paymentError, paymentContext, 'warning')
     } else if (paymentRecord) {
-      console.log(`✅ Created payment record: ${paymentRecord.id} for Stripe payment intent: ${paymentIntent.id}`)
+      logger.logPaymentProcessing(
+        'payment-record-success',
+        'Created payment record for Stripe payment intent',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          paymentId: paymentRecord.id,
+          paymentIntentId: paymentIntent.id
+        },
+        'info'
+      )
       // Create payment item record for the registration
       const { error: paymentItemError } = await supabase
         .from('payment_items')
@@ -776,7 +990,19 @@ export async function POST(request: NextRequest) {
         })
 
       if (paymentItemError) {
-        console.error('Error creating payment item record:', paymentItemError)
+        logger.logPaymentProcessing(
+          'payment-items-error',
+          'Error creating payment item record for paid registration',
+          { 
+            userId: user.id, 
+            registrationId,
+            categoryId,
+            paymentId: paymentRecord.id,
+            paymentIntentId: paymentIntent.id,
+            error: paymentItemError.message
+          },
+          'error'
+        )
         capturePaymentError(paymentItemError, paymentContext, 'warning')
       }
     }
@@ -795,7 +1021,14 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error creating registration payment intent:', error)
+    logger.logPaymentProcessing(
+      'registration-payment-intent-error',
+      'Error creating registration payment intent',
+      { 
+        error: error instanceof Error ? error.message : String(error)
+      },
+      'error'
+    )
     
     // Capture error in Sentry
     capturePaymentError(error, {

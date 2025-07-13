@@ -11,6 +11,7 @@ import { createAdminClient } from './supabase/server'
 import { getActiveXeroTenants } from './xero-client'
 import { PaymentInvoiceData, PrePaymentInvoiceData } from './xero-invoices'
 import { Database } from '@/types/database'
+import { logger } from './logging/logger'
 
 type StagingPaymentData = {
   payment_id?: string
@@ -46,12 +47,22 @@ export class XeroStagingManager {
    */
   async createPaidPurchaseStaging(paymentId: string): Promise<boolean> {
     try {
-      console.log('📊 Creating Xero staging for paid purchase:', paymentId)
+      logger.logXeroSync(
+        'staging-paid-purchase-start',
+        'Creating Xero staging for paid purchase',
+        { paymentId },
+        'info'
+      )
 
       // Get payment data with all items
       const paymentData = await this.getPaymentDataForStaging(paymentId)
       if (!paymentData) {
-        console.error('❌ No payment data found for staging:', paymentId)
+        logger.logXeroSync(
+          'staging-paid-purchase-no-data',
+          'No payment data found for staging',
+          { paymentId },
+          'error'
+        )
         return false
       }
 
@@ -71,7 +82,62 @@ export class XeroStagingManager {
 
       return allSucceeded
     } catch (error) {
-      console.error('❌ Error creating paid purchase staging:', error)
+      logger.logXeroSync(
+        'staging-paid-purchase-error',
+        'Error creating paid purchase staging',
+        { 
+          paymentId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  /**
+   * Create staging records immediately with provided invoice data
+   * (for immediate staging at purchase time)
+   */
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<boolean> {
+    try {
+      logger.logXeroSync(
+        'staging-immediate-start',
+        'Creating immediate Xero staging for user',
+        { userId: data.user_id },
+        'info'
+      )
+
+      // Get active tenants
+      const tenants = await getActiveXeroTenants()
+      if (tenants.length === 0) {
+        logger.logXeroSync(
+          'staging-no-tenants',
+          'No active Xero tenants, skipping staging',
+          { source: 'immediate' },
+          'warn'
+        )
+        return true // Not a failure - just no Xero configured
+      }
+
+      // Create staging records for each tenant
+      let allSucceeded = true
+      for (const tenant of tenants) {
+        const success = await this.createInvoiceStaging(data, tenant.tenant_id, options)
+        if (!success) allSucceeded = false
+      }
+
+      return allSucceeded
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-immediate-error',
+        'Error creating immediate staging',
+        { 
+          userId: data.user_id,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return false
     }
   }
@@ -87,12 +153,22 @@ export class XeroStagingManager {
     }
   ): Promise<boolean> {
     try {
-      console.log('🆓 Creating Xero staging for free purchase:', event.record_id)
+      logger.logXeroSync(
+        'staging-free-purchase-start',
+        'Creating Xero staging for free purchase',
+        { recordId: event.record_id, source: event.trigger_source },
+        'info'
+      )
 
       // Get the purchase data based on type
       const purchaseData = await this.getFreePurchaseData(event)
       if (!purchaseData) {
-        console.error('❌ No purchase data found for free staging:', event.record_id)
+        logger.logXeroSync(
+          'staging-free-purchase-no-data',
+          'No purchase data found for free staging',
+          { recordId: event.record_id, source: event.trigger_source },
+          'error'
+        )
         return false
       }
 
@@ -102,7 +178,12 @@ export class XeroStagingManager {
       // Get active tenants
       const tenants = await getActiveXeroTenants()
       if (tenants.length === 0) {
-        console.log('⚠️ No active Xero tenants, skipping staging')
+        logger.logXeroSync(
+          'staging-no-tenants',
+          'No active Xero tenants, skipping staging',
+          { source: 'free-purchase' },
+          'warn'
+        )
         return true // Not a failure - just no Xero configured
       }
 
@@ -115,7 +196,16 @@ export class XeroStagingManager {
 
       return allSucceeded
     } catch (error) {
-      console.error('❌ Error creating free purchase staging:', error)
+      logger.logXeroSync(
+        'staging-free-purchase-error',
+        'Error creating free purchase staging',
+        { 
+          recordId: event.record_id,
+          source: event.trigger_source,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return false
     }
   }
@@ -125,7 +215,8 @@ export class XeroStagingManager {
    */
   private async createInvoiceStaging(
     data: StagingPaymentData, 
-    tenantId: string
+    tenantId: string,
+    options?: { isFree?: boolean }
   ): Promise<boolean> {
     try {
       // Generate unique invoice number for staging
@@ -140,7 +231,7 @@ export class XeroStagingManager {
           xero_invoice_id: '00000000-0000-0000-0000-000000000000', // Placeholder until synced
           invoice_number: invoiceNumber,
           invoice_type: 'ACCREC',
-          invoice_status: 'DRAFT',
+          invoice_status: options?.isFree ? 'AUTHORISED' : 'DRAFT',
           total_amount: data.total_amount,
           discount_amount: data.discount_amount,
           net_amount: data.final_amount,
@@ -159,7 +250,16 @@ export class XeroStagingManager {
         .single()
 
       if (invoiceError || !invoiceStaging) {
-        console.error('❌ Failed to create invoice staging:', invoiceError)
+        logger.logXeroSync(
+          'staging-invoice-create-error',
+          'Failed to create invoice staging',
+          { 
+            tenantId,
+            invoiceNumber,
+            error: invoiceError?.message || 'No staging record returned'
+          },
+          'error'
+        )
         return false
       }
 
@@ -181,7 +281,17 @@ export class XeroStagingManager {
           })
 
         if (lineError) {
-          console.error('❌ Failed to create line item staging:', lineError)
+          logger.logXeroSync(
+            'staging-line-item-error',
+            'Failed to create line item staging',
+            { 
+              tenantId,
+              invoiceNumber,
+              itemType: lineItem.item_type,
+              error: lineError.message
+            },
+            'error'
+          )
           // Continue with other line items
         }
       }
@@ -209,16 +319,43 @@ export class XeroStagingManager {
           })
 
         if (paymentError) {
-          console.error('❌ Failed to create payment staging:', paymentError)
+          logger.logXeroSync(
+            'staging-payment-create-error',
+            'Failed to create payment staging',
+            { 
+              tenantId,
+              invoiceNumber,
+              amount: data.final_amount,
+              error: paymentError.message
+            },
+            'error'
+          )
           return false
         }
       }
 
-      console.log('✅ Staging records created for tenant:', tenantId, 'invoice:', invoiceNumber)
+      logger.logXeroSync(
+        'staging-records-created',
+        'Staging records created for tenant',
+        { 
+          tenantId,
+          invoiceNumber,
+          isFree: options?.isFree || false
+        },
+        'info'
+      )
       return true
       
     } catch (error) {
-      console.error('❌ Error creating staging records:', error)
+      logger.logXeroSync(
+        'staging-records-error',
+        'Error creating staging records',
+        { 
+          tenantId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return false
     }
   }
@@ -272,7 +409,15 @@ export class XeroStagingManager {
         stripe_payment_intent_id: payment.stripe_payment_intent_id
       }
     } catch (error) {
-      console.error('❌ Error getting payment data for staging:', error)
+      logger.logXeroSync(
+        'staging-payment-data-error',
+        'Error getting payment data for staging',
+        { 
+          paymentId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return null
     }
   }
@@ -287,7 +432,12 @@ export class XeroStagingManager {
   }) {
     // This will get the membership or registration data for free purchases
     // TODO: Implement based on trigger_source
-    console.log('🚧 Get free purchase data - to be implemented')
+    logger.logXeroSync(
+      'staging-free-data-placeholder',
+      'Get free purchase data - to be implemented',
+      { recordId: event.record_id, source: event.trigger_source },
+      'warn'
+    )
     return null
   }
 
@@ -299,7 +449,12 @@ export class XeroStagingManager {
     type: 'user_memberships' | 'user_registrations'
   ): Promise<StagingPaymentData> {
     // TODO: Convert membership/registration data to staging format
-    console.log('🚧 Convert to staging data - to be implemented')
+    logger.logXeroSync(
+      'staging-convert-data-placeholder',
+      'Convert to staging data - to be implemented',
+      { type },
+      'warn'
+    )
     return {
       user_id: purchaseData.user_id,
       total_amount: 0,
@@ -342,7 +497,16 @@ export class XeroStagingManager {
       
       return null
     } catch (error) {
-      console.error('❌ Error getting item details:', error)
+      logger.logXeroSync(
+        'staging-item-details-error',
+        'Error getting item details',
+        { 
+          itemType,
+          itemId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return null
     }
   }
@@ -409,7 +573,14 @@ export class XeroStagingManager {
         payments: pendingPayments || []
       }
     } catch (error) {
-      console.error('❌ Error getting pending staging records:', error)
+      logger.logXeroSync(
+        'staging-pending-records-error',
+        'Error getting pending staging records',
+        { 
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
       return { invoices: [], payments: [] }
     }
   }

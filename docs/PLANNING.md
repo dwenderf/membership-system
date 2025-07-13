@@ -673,18 +673,26 @@ email_logs (
 
 ## 📋 Pending Technical Improvements
 
-### Comprehensive Console Log Migration (Option B)
+### Console Log Migration Progress
 **Issue**: Mixed console.log statements and structured logging throughout the codebase causing inconsistent log output and reduced observability.
 
 **Current Status**: 
-- ✅ Core system files (xero-client.ts, scheduled-batch-processor.ts, startup.ts) migrated to structured logging
-- ⚠️ 70+ remaining files still contain console.log statements throughout API routes, components, and services
+- ✅ **Option A (Main Offenders) - COMPLETED**: Core system files and critical APIs migrated to structured logging
+  - ✅ xero-client.ts, scheduled-batch-processor.ts, startup.ts
+  - ✅ /api/create-payment-intent/route.ts - Fixed free membership payment completion and migrated all logging
+  - ✅ /api/create-registration-payment-intent/route.ts - Migrated payment processing and Stripe integration logging
+  - ✅ xero-staging.ts - Migrated all staging record creation and management logging
+  - ✅ All major terminal output clutter eliminated from startup and operation logs
+- ⚠️ **Option B (Comprehensive Migration)**: 60+ remaining files still contain console.log statements throughout debug scripts, admin tools, and minor components
 
-**Scope of Work**:
-1. **API Routes** (30+ files): Convert console.log/error statements to structured logger calls
-2. **Service Layer** (15+ files): Migrate remaining business logic logging to centralized system  
-3. **Component Layer** (20+ files): Replace debug console.log with appropriate logging levels
-4. **Utility Functions** (10+ files): Standardize error and debug logging patterns
+**Remaining Scope of Work (Option B)**:
+1. **Debug Scripts** (5+ files): Convert debugging tools and admin utilities to structured logging
+2. **API Routes** (20+ files): Convert remaining console.log/error statements to structured logger calls
+3. **Service Layer** (10+ files): Migrate remaining business logic logging to centralized system  
+4. **Component Layer** (15+ files): Replace debug console.log with appropriate logging levels
+5. **Utility Functions** (10+ files): Standardize error and debug logging patterns
+
+**Current Terminal Output**: Clean startup and operation with all major noise eliminated. Remaining console.log statements are primarily in debug scripts and less frequently used components.
 
 **Benefits**:
 - **Consistent Log Output**: All logs appear in admin log viewer with proper categorization
@@ -701,3 +709,31 @@ email_logs (
 
 **Estimated Effort**: 1-2 development sessions for comprehensive migration
 **Priority**: Medium (improves observability but doesn't affect core functionality)
+
+### Real-time Payment Processing (Option A Upgrade)
+**Issue**: Payment completion processor uses realtime subscriptions that aren't triggering properly in current environment.
+
+**Current Status**: 
+- ✅ Scheduled processing working (2-minute delay)
+- ❌ Real-time processing (immediate) not functioning
+- ✅ Fallback batch processor handles everything correctly
+
+**Scope of Work**:
+1. **Debug Supabase Realtime**: Investigate why realtime subscriptions aren't triggering
+2. **Connection Management**: Ensure persistent connections work in production environment
+3. **Fallback Strategy**: Verify scheduled processing continues when realtime fails
+4. **Testing**: Create test cases for both realtime and scheduled flows
+
+**Benefits**:
+- **Immediate Processing**: Staging records created instantly vs. 2-minute delay
+- **Better UX**: Faster email confirmations and Xero sync initiation
+- **Redundancy**: Two processing paths ensure nothing gets missed
+
+**Implementation Strategy**:
+1. Investigate Supabase realtime connection issues in development
+2. Test realtime subscriptions work correctly in different environments
+3. Add connection health monitoring and automatic fallback
+4. Create admin interface to view realtime connection status
+
+**Estimated Effort**: 1 development session for troubleshooting and fixes  
+**Priority**: Low (scheduled processing provides reliable fallback)

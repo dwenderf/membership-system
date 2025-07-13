@@ -7,6 +7,7 @@
 
 import { batchProcessor } from './batch-processor'
 import { xeroBatchSyncManager } from './xero-batch-sync'
+import { xeroStagingManager } from './xero-staging'
 import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
 import { logger } from './logging/logger'
@@ -235,25 +236,28 @@ export class ScheduledBatchProcessor {
     )
 
     try {
-      // Check if there are any pending records before processing
+      // Step 1: Create staging records for completed payments that don't have them
+      const stagingCreated = await this.createMissingStagingRecords()
+
+      // Step 2: Check if there are any pending records to sync
       const pendingCount = await this.getPendingXeroCount()
       
-      if (pendingCount === 0) {
+      if (pendingCount === 0 && stagingCreated === 0) {
         logger.logXeroSync(
           'scheduled-sync-skip',
-          'No pending Xero records to sync',
-          { pendingCount: 0 }
+          'No pending Xero records to sync and no new staging records created',
+          { pendingCount: 0, stagingCreated: 0 }
         )
         return
       }
 
       logger.logXeroSync(
-        'scheduled-sync-start',
-        `Found ${pendingCount} pending Xero records, starting sync`,
-        { pendingCount }
+        'scheduled-sync-processing',
+        `Processing Xero sync: ${stagingCreated} staging records created, ${pendingCount} pending records to sync`,
+        { pendingCount, stagingCreated }
       )
 
-      // Run the batch sync
+      // Step 3: Run the batch sync
       const results = await xeroBatchSyncManager.syncAllPendingRecords()
       
       logger.logXeroSync(
@@ -392,6 +396,213 @@ export class ScheduledBatchProcessor {
       logger.logXeroSync(
         'pending-count-error',
         'Error getting pending Xero count',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
+      return 0
+    }
+  }
+
+  /**
+   * Create staging records for completed payments that don't have them
+   */
+  private async createMissingStagingRecords(): Promise<number> {
+    try {
+      logger.logXeroSync(
+        'staging-creation-start',
+        'Checking for completed payments without staging records',
+        { processor: 'scheduled' }
+      )
+
+      let totalCreated = 0
+
+      // Find completed payments without staging records
+      // First get all payment IDs that already have staging records
+      const { data: existingStagingPayments } = await this.supabase
+        .from('xero_invoices')
+        .select('payment_id')
+        .not('payment_id', 'is', null)
+
+      const existingPaymentIds = existingStagingPayments?.map(record => record.payment_id) || []
+
+      // Then find completed payments not in that list
+      const query = this.supabase
+        .from('payments')
+        .select('id, user_id, final_amount, completed_at')
+        .eq('status', 'completed')
+
+      // Only add the filter if there are existing payment IDs
+      const { data: paymentsWithoutStaging, error: paymentError } = existingPaymentIds.length > 0
+        ? await query.not('id', 'in', `(${existingPaymentIds.map(id => `'${id}'`).join(',')})`)
+        : await query
+
+      if (paymentError) {
+        logger.logXeroSync(
+          'staging-query-error',
+          'Error querying payments without staging',
+          { error: paymentError.message },
+          'error'
+        )
+        return 0
+      }
+
+      if (paymentsWithoutStaging && paymentsWithoutStaging.length > 0) {
+        logger.logXeroSync(
+          'staging-payments-found',
+          `Found ${paymentsWithoutStaging.length} completed payments without staging records`,
+          { count: paymentsWithoutStaging.length }
+        )
+
+        for (const payment of paymentsWithoutStaging) {
+          try {
+            const success = await xeroStagingManager.createPaidPurchaseStaging(payment.id)
+            if (success) {
+              totalCreated++
+              logger.logXeroSync(
+                'staging-payment-created',
+                `Created staging records for payment ${payment.id}`,
+                { paymentId: payment.id, amount: payment.final_amount }
+              )
+            }
+          } catch (error) {
+            logger.logXeroSync(
+              'staging-payment-error',
+              `Failed to create staging for payment ${payment.id}`,
+              { 
+                paymentId: payment.id, 
+                error: error instanceof Error ? error.message : String(error) 
+              },
+              'error'
+            )
+          }
+        }
+      }
+
+      // Find free memberships without staging records
+      // First get all user IDs that already have staging records for free memberships
+      const { data: existingFreeMembershipStaging } = await this.supabase
+        .from('xero_invoices')
+        .select('user_id')
+        .not('user_id', 'is', null)
+        .is('payment_id', null)
+
+      const existingFreeMembershipUserIds = existingFreeMembershipStaging?.map(record => record.user_id) || []
+
+      // Then find free memberships not in that list
+      const membershipQuery = this.supabase
+        .from('user_memberships')
+        .select('id, user_id, amount_paid')
+        .eq('payment_status', 'paid')
+        .eq('amount_paid', 0)
+
+      const { data: freeMemberships, error: membershipError } = existingFreeMembershipUserIds.length > 0
+        ? await membershipQuery.not('user_id', 'in', `(${existingFreeMembershipUserIds.map(id => `'${id}'`).join(',')})`)
+        : await membershipQuery
+
+      if (!membershipError && freeMemberships && freeMemberships.length > 0) {
+        logger.logXeroSync(
+          'staging-free-memberships-found',
+          `Found ${freeMemberships.length} free memberships without staging records`,
+          { count: freeMemberships.length }
+        )
+
+        for (const membership of freeMemberships) {
+          try {
+            const success = await xeroStagingManager.createFreePurchaseStaging({
+              user_id: membership.user_id,
+              record_id: membership.id,
+              trigger_source: 'user_memberships'
+            })
+            if (success) {
+              totalCreated++
+              logger.logXeroSync(
+                'staging-free-membership-created',
+                `Created staging records for free membership ${membership.id}`,
+                { membershipId: membership.id, userId: membership.user_id }
+              )
+            }
+          } catch (error) {
+            logger.logXeroSync(
+              'staging-free-membership-error',
+              `Failed to create staging for free membership ${membership.id}`,
+              { 
+                membershipId: membership.id, 
+                error: error instanceof Error ? error.message : String(error) 
+              },
+              'error'
+            )
+          }
+        }
+      }
+
+      // Find free registrations without staging records
+      // We can reuse the same existingFreeMembershipUserIds list since the logic is the same
+      const registrationQuery = this.supabase
+        .from('user_registrations')
+        .select('id, user_id, amount_paid')
+        .eq('payment_status', 'paid')
+        .eq('amount_paid', 0)
+
+      const { data: freeRegistrations, error: registrationError } = existingFreeMembershipUserIds.length > 0
+        ? await registrationQuery.not('user_id', 'in', `(${existingFreeMembershipUserIds.map(id => `'${id}'`).join(',')})`)
+        : await registrationQuery
+
+      if (!registrationError && freeRegistrations && freeRegistrations.length > 0) {
+        logger.logXeroSync(
+          'staging-free-registrations-found',
+          `Found ${freeRegistrations.length} free registrations without staging records`,
+          { count: freeRegistrations.length }
+        )
+
+        for (const registration of freeRegistrations) {
+          try {
+            const success = await xeroStagingManager.createFreePurchaseStaging({
+              user_id: registration.user_id,
+              record_id: registration.id,
+              trigger_source: 'user_registrations'
+            })
+            if (success) {
+              totalCreated++
+              logger.logXeroSync(
+                'staging-free-registration-created',
+                `Created staging records for free registration ${registration.id}`,
+                { registrationId: registration.id, userId: registration.user_id }
+              )
+            }
+          } catch (error) {
+            logger.logXeroSync(
+              'staging-free-registration-error',
+              `Failed to create staging for free registration ${registration.id}`,
+              { 
+                registrationId: registration.id, 
+                error: error instanceof Error ? error.message : String(error) 
+              },
+              'error'
+            )
+          }
+        }
+      }
+
+      if (totalCreated > 0) {
+        logger.logXeroSync(
+          'staging-creation-complete',
+          `Created ${totalCreated} staging records for completed transactions`,
+          { totalCreated }
+        )
+      } else {
+        logger.logXeroSync(
+          'staging-creation-none',
+          'No new staging records needed - all completed transactions already have staging records',
+          { totalCreated: 0 }
+        )
+      }
+
+      return totalCreated
+
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-creation-error',
+        'Error creating missing staging records',
         { error: error instanceof Error ? error.message : String(error) },
         'error'
       )

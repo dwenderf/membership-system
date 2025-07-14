@@ -74,6 +74,19 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('sync_status', 'pending')
 
+    // Get failed invoices and payments
+    const { data: failedInvoices } = await supabase
+      .from('xero_invoices')
+      .select('id, tenant_id, sync_status, error_message, last_synced_at, staging_metadata')
+      .eq('sync_status', 'failed')
+      .order('last_synced_at', { ascending: false })
+
+    const { data: failedPayments } = await supabase
+      .from('xero_payments')
+      .select('id, tenant_id, sync_status, error_message, last_synced_at, payment_id')
+      .eq('sync_status', 'failed')
+      .order('last_synced_at', { ascending: false })
+
     const stats = {
       total_operations: syncStats?.length || 0,
       successful_operations: syncStats?.filter(s => s.status === 'success').length || 0,
@@ -81,7 +94,10 @@ export async function GET(request: NextRequest) {
       recent_operations: syncStats?.slice(0, 10) || [],
       pending_invoices: pendingInvoicesCount || 0,
       pending_payments: pendingPaymentsCount || 0,
-      total_pending: (pendingInvoicesCount || 0) + (pendingPaymentsCount || 0)
+      total_pending: (pendingInvoicesCount || 0) + (pendingPaymentsCount || 0),
+      failed_invoices: failedInvoices || [],
+      failed_payments: failedPayments || [],
+      failed_count: (failedInvoices?.length || 0) + (failedPayments?.length || 0)
     }
 
     return NextResponse.json({

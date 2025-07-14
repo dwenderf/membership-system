@@ -24,6 +24,16 @@ interface SyncLog {
   created_at: string
 }
 
+interface FailedItem {
+  id: string
+  tenant_id: string
+  sync_status: string
+  error_message: string | null
+  last_synced_at: string
+  staging_metadata?: any
+  payment_id?: string
+}
+
 interface SyncStats {
   total_operations: number
   successful_operations: number
@@ -32,6 +42,9 @@ interface SyncStats {
   pending_invoices: number
   pending_payments: number
   total_pending: number
+  failed_invoices: FailedItem[]
+  failed_payments: FailedItem[]
+  failed_count: number
 }
 
 function XeroIntegrationContent() {
@@ -41,6 +54,8 @@ function XeroIntegrationContent() {
   const [loading, setLoading] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const [selectedFailedItems, setSelectedFailedItems] = useState<Set<string>>(new Set())
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
   
   const router = useRouter()
@@ -161,6 +176,67 @@ function XeroIntegrationContent() {
       showError('Failed to trigger manual sync')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleRetryFailed = async (type: 'all' | 'selected') => {
+    setRetrying(true)
+    
+    try {
+      const items = type === 'selected' ? Array.from(selectedFailedItems) : []
+      
+      const response = await fetch('/api/xero/retry-failed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type, items }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const resetCount = data.reset_results.invoices + data.reset_results.payments
+        const syncedCount = data.sync_results.total_synced
+        showSuccess(`Retry completed: ${resetCount} items reset, ${syncedCount} synced successfully`)
+        
+        // Clear selections
+        setSelectedFailedItems(new Set())
+        
+        // Refresh the status to get updated counts
+        await fetchXeroStatus()
+      } else {
+        const errorData = await response.json()
+        showError(errorData.error || 'Failed to retry failed items')
+      }
+    } catch (error) {
+      showError('Failed to retry failed items')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  const handleFailedItemToggle = (itemId: string) => {
+    const newSelection = new Set(selectedFailedItems)
+    if (newSelection.has(itemId)) {
+      newSelection.delete(itemId)
+    } else {
+      newSelection.add(itemId)
+    }
+    setSelectedFailedItems(newSelection)
+  }
+
+  const handleSelectAllFailed = () => {
+    if (!syncStats) return
+    
+    const allFailedIds = [
+      ...syncStats.failed_invoices.map(item => `inv_${item.id}`),
+      ...syncStats.failed_payments.map(item => `pay_${item.id}`)
+    ]
+    
+    if (selectedFailedItems.size === allFailedIds.length) {
+      setSelectedFailedItems(new Set()) // Deselect all
+    } else {
+      setSelectedFailedItems(new Set(allFailedIds)) // Select all
     }
   }
 
@@ -398,6 +474,161 @@ function XeroIntegrationContent() {
                 </div>
               )}
             </div>
+
+            {/* Failed Sync Items Section - only show if there are failed items */}
+            {syncStats.failed_count > 0 && (
+              <div className="bg-white rounded-lg border border-red-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <h2 className="text-lg font-semibold text-gray-900">Failed Sync Items</h2>
+                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      {syncStats.failed_count} failed
+                    </span>
+                  </div>
+                  <div className="flex space-x-2">
+                    {selectedFailedItems.size > 0 && (
+                      <button
+                        onClick={() => handleRetryFailed('selected')}
+                        disabled={retrying}
+                        className="inline-flex items-center px-3 py-2 border border-orange-300 text-sm font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {retrying ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Retrying...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            Retry Selected ({selectedFailedItems.size})
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleRetryFailed('all')}
+                      disabled={retrying}
+                      className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {retrying ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                          </svg>
+                          Retry All
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Failed Items List */}
+                <div className="space-y-3">
+                  {/* Select All Checkbox */}
+                  <div className="flex items-center pb-2 border-b border-gray-200">
+                    <input
+                      type="checkbox"
+                      checked={selectedFailedItems.size === syncStats.failed_count && syncStats.failed_count > 0}
+                      onChange={handleSelectAllFailed}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 text-sm font-medium text-gray-700">
+                      Select All ({syncStats.failed_count} items)
+                    </label>
+                  </div>
+
+                  {/* Failed Invoices */}
+                  {syncStats.failed_invoices.map((item) => {
+                    const itemId = `inv_${item.id}`
+                    const isSelected = selectedFailedItems.has(itemId)
+                    const metadata = item.staging_metadata as any
+                    
+                    return (
+                      <div key={itemId} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleFailedItemToggle(itemId)}
+                          className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <div className="ml-3 flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                Invoice
+                              </span>
+                              <span className="ml-2 text-sm font-medium text-gray-900">
+                                {metadata?.invoice_number || `Invoice ${item.id.substring(0, 8)}`}
+                              </span>
+                            </div>
+                            <time className="text-xs text-gray-500">
+                              {new Date(item.last_synced_at).toLocaleString()}
+                            </time>
+                          </div>
+                          {item.error_message && (
+                            <p className="mt-1 text-sm text-red-600">{item.error_message}</p>
+                          )}
+                          {metadata?.user_id && (
+                            <p className="mt-1 text-xs text-gray-500">User: {metadata.user_id}</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Failed Payments */}
+                  {syncStats.failed_payments.map((item) => {
+                    const itemId = `pay_${item.id}`
+                    const isSelected = selectedFailedItems.has(itemId)
+                    
+                    return (
+                      <div key={itemId} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleFailedItemToggle(itemId)}
+                          className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <div className="ml-3 flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                Payment
+                              </span>
+                              <span className="ml-2 text-sm font-medium text-gray-900">
+                                Payment {item.id.substring(0, 8)}
+                              </span>
+                            </div>
+                            <time className="text-xs text-gray-500">
+                              {new Date(item.last_synced_at).toLocaleString()}
+                            </time>
+                          </div>
+                          {item.error_message && (
+                            <p className="mt-1 text-sm text-red-600">{item.error_message}</p>
+                          )}
+                          {item.payment_id && (
+                            <p className="mt-1 text-xs text-gray-500">Payment ID: {item.payment_id}</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
 

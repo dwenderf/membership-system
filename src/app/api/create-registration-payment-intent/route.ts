@@ -6,6 +6,7 @@ import { getBaseUrl } from '@/lib/url-utils'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 import { xeroStagingManager } from '@/lib/xero-staging'
 import { logger } from '@/lib/logging/logger'
+import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -108,52 +109,31 @@ async function handleFreeRegistration({
       if (registrationCategory) {
         // Build invoice data with line items
         const fullPrice = registrationCategory.price || 0
+        
+        // Get accounting codes using the centralized helper
+        const accountingCodes = await getRegistrationAccountingCodes(
+          registrationId,
+          categoryId,
+          discountCode
+        )
+
         const paymentItems = [{
           item_type: 'registration' as const,
           item_id: registrationId,
           amount: fullPrice, // Full registration price
           description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
-          accounting_code: registrationCategory.accounting_code || registration.accounting_code
+          accounting_code: accountingCodes.registration
         }]
 
         // Add discount line items if applicable
         const discountCodesUsed = []
         if (discountCode && fullPrice > 0) {
-          // Validate discount code to get proper accounting_code
-          try {
-            const discountResponse = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cookie': request.headers.get('cookie') || '',
-              },
-              body: JSON.stringify({
-                code: discountCode,
-                registrationId: registrationId,
-                amount: fullPrice
-              })
-            })
-
-            if (discountResponse.ok) {
-              const discountResult = await discountResponse.json()
-              if (discountResult.isValid && discountResult.discountCode) {
-                discountCodesUsed.push({
-                  code: discountCode,
-                  amount_saved: fullPrice, // Full price was discounted
-                  category_name: discountResult.discountCode.category?.name || 'Registration Discount',
-                  accounting_code: discountResult.discountCode.category?.accounting_code
-                })
-              }
-            }
-          } catch (error) {
-            // If discount validation fails, still proceed but use fallback values
-            discountCodesUsed.push({
-              code: discountCode,
-              amount_saved: fullPrice,
-              category_name: 'Registration Discount',
-              accounting_code: undefined // Will fallback to 'DISCOUNT'
-            })
-          }
+          discountCodesUsed.push({
+            code: discountCode,
+            amount_saved: fullPrice, // Full price was discounted
+            category_name: 'Registration Discount',
+            accounting_code: accountingCodes.discount
+          })
         }
 
         // Create staging record
@@ -986,6 +966,13 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
+    // Get accounting codes using the centralized helper
+    const accountingCodes = await getRegistrationAccountingCodes(
+      registrationId,
+      categoryId,
+      discountCode
+    )
+
     const stagingData = {
       user_id: user.id,
       total_amount: amount, // Original amount before discount
@@ -997,14 +984,14 @@ export async function POST(request: NextRequest) {
           item_id: registrationId,
           amount: amount, // Use original amount, not final amount after discount
           description: `Registration: ${registration.name} - ${categoryName}`,
-          accounting_code: selectedCategory.accounting_code || registration.accounting_code
+          accounting_code: accountingCodes.registration
         }
       ],
       discount_codes_used: validatedDiscountCode ? [{
         code: discountCode!,
         amount_saved: discountAmount,
         category_name: validatedDiscountCode.category?.name || 'Registration Discount',
-        accounting_code: validatedDiscountCode.category?.accounting_code
+        accounting_code: accountingCodes.discount
       }] : [],
       stripe_payment_intent_id: null // Will be updated after Stripe intent creation
     }

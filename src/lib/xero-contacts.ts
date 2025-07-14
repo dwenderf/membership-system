@@ -1,6 +1,6 @@
 import { Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
 export interface UserContactData {
@@ -19,7 +19,7 @@ export async function syncUserToXeroContact(
   userData: UserContactData
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
 
     if (!xeroApi) {
@@ -482,7 +482,7 @@ export async function syncUserToXeroContact(
     })
 
     // Update sync status to failed
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     await supabase
       .from('xero_contacts')
       .upsert({
@@ -514,7 +514,7 @@ export async function getOrCreateXeroContact(
   tenantId: string
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Get user data
     const { data: userData, error: userError } = await supabase
@@ -596,7 +596,7 @@ export async function bulkSyncMissingContacts(tenantId: string): Promise<{
   errors: string[]
 }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Get users who have made payments but aren't synced to Xero
     const { data: usersNeedingSync, error: usersError } = await supabase

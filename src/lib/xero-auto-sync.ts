@@ -1,12 +1,12 @@
 import { createXeroInvoiceForPayment } from './xero-invoices'
 import { recordStripePaymentInXero } from './xero-payments'
 import { getActiveXeroTenants } from './xero-client'
-import { createClient } from './supabase/server'
+import { createAdminClient } from './supabase/server'
 
 // Automatically sync a payment to all active Xero tenants
 export async function autoSyncPaymentToXero(paymentId: string): Promise<void> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Check if payment is completed
     const { data: payment, error: paymentError } = await supabase

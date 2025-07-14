@@ -176,6 +176,23 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
           },
           'error'
         )
+        
+        // Deactivate the invalid tokens to prevent repeated refresh attempts
+        await supabase
+          .from('xero_oauth_tokens')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('tenant_id', tenantId)
+        
+        logger.logXeroSync(
+          'token-deactivated',
+          'Deactivated invalid Xero tokens for tenant',
+          { tenantId },
+          'info'
+        )
+        
         return null
       }
 
@@ -240,9 +257,37 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
       return null
     }
 
+    // Log what Xero actually returned for debugging
+    const { logger } = await import('./logging/logger')
+    logger.logXeroSync(
+      'token-refresh-response',
+      'Xero token refresh response details',
+      {
+        tenantId,
+        hasAccessToken: !!refreshedTokenSet.access_token,
+        hasRefreshToken: !!refreshedTokenSet.refresh_token,
+        hasIdToken: !!refreshedTokenSet.id_token,
+        expiresAt: refreshedTokenSet.expires_at,
+        tokenType: refreshedTokenSet.token_type
+      },
+      'info'
+    )
+
+    // Xero should always return a new refresh token when refreshing
+    // If it doesn't, this indicates an error condition
+    if (!refreshedTokenSet.refresh_token) {
+      logger.logXeroSync(
+        'token-refresh-missing-refresh-token',
+        'Xero did not return a new refresh token - this may indicate an authentication issue',
+        { tenantId, oldRefreshTokenPrefix: refreshToken.substring(0, 10) + '...' },
+        'warning'
+      )
+      return null // Force re-authentication rather than using invalid token
+    }
+
     return {
       access_token: refreshedTokenSet.access_token,
-      refresh_token: refreshedTokenSet.refresh_token || refreshToken,
+      refresh_token: refreshedTokenSet.refresh_token, // Always use the new refresh token
       expires_at: refreshedTokenSet.expires_at?.toString() || 
                   new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
     }

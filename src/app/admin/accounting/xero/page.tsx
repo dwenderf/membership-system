@@ -24,14 +24,23 @@ interface SyncLog {
   created_at: string
 }
 
+interface SyncStats {
+  total_operations: number
+  successful_operations: number
+  failed_operations: number
+  recent_operations: SyncLog[]
+  pending_invoices: number
+  pending_payments: number
+  total_pending: number
+}
+
 function XeroIntegrationContent() {
   const [isXeroConnected, setIsXeroConnected] = useState(false)
   const [currentToken, setCurrentToken] = useState<XeroToken | null>(null)
-  const [recentSyncLogs, setRecentSyncLogs] = useState<SyncLog[]>([])
-  const [successfulSyncs, setSuccessfulSyncs] = useState(0)
-  const [errorSyncs, setErrorSyncs] = useState(0)
+  const [syncStats, setSyncStats] = useState<SyncStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
   
   const router = useRouter()
@@ -47,9 +56,7 @@ function XeroIntegrationContent() {
         if (data.connections && data.connections.length > 0) {
           setCurrentToken(data.connections[0])
         }
-        setSuccessfulSyncs(data.stats.successful_operations)
-        setErrorSyncs(data.stats.failed_operations)
-        setRecentSyncLogs(data.stats.recent_operations)
+        setSyncStats(data.stats)
       }
     } catch (error) {
       console.error('Error fetching Xero status:', error)
@@ -118,9 +125,7 @@ function XeroIntegrationContent() {
         // Refresh the page state
         setIsXeroConnected(false)
         setCurrentToken(null)
-        setRecentSyncLogs([])
-        setSuccessfulSyncs(0)
-        setErrorSyncs(0)
+        setSyncStats(null)
       } else {
         const errorData = await response.json()
         showError(errorData.error || 'Failed to disconnect from Xero')
@@ -129,6 +134,33 @@ function XeroIntegrationContent() {
       showError('Failed to disconnect from Xero')
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  const handleManualSync = async () => {
+    setSyncing(true)
+    
+    try {
+      const response = await fetch('/api/xero/manual-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        showSuccess(`Manual sync completed: ${data.results.total_synced} synced, ${data.results.total_failed} failed`)
+        // Refresh the status to get updated counts
+        await fetchXeroStatus()
+      } else {
+        const errorData = await response.json()
+        showError(errorData.error || 'Failed to trigger manual sync')
+      }
+    } catch (error) {
+      showError('Failed to trigger manual sync')
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -267,52 +299,106 @@ function XeroIntegrationContent() {
           )}
         </div>
 
-        {/* Sync Activity (only show if connected) */}
-        {isXeroConnected && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Sync Activity (Last 24 Hours)</h2>
-            
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{successfulSyncs}</div>
-                <div className="text-sm text-green-800">Successful Syncs</div>
+        {/* Pending Items & Sync Activity (only show if connected) */}
+        {isXeroConnected && syncStats && (
+          <>
+            {/* Pending Items Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Pending Sync Items</h2>
+                <button
+                  onClick={handleManualSync}
+                  disabled={syncing || syncStats.total_pending === 0}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {syncing ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                      Sync Now
+                    </>
+                  )}
+                </button>
               </div>
-              <div className="bg-red-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">{errorSyncs}</div>
-                <div className="text-sm text-red-800">Failed Syncs</div>
-              </div>
-            </div>
-
-            {recentSyncLogs && recentSyncLogs.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Activity</h3>
-                <div className="space-y-2">
-                  {recentSyncLogs.slice(0, 3).map((log, index) => (
-                    <div key={log.id || `log-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <div className={`w-2 h-2 rounded-full mr-3 ${
-                          log.status === 'success' ? 'bg-green-400' : 
-                          log.status === 'error' ? 'bg-red-400' : 
-                          'bg-yellow-400'
-                        }`}></div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {log.operation_type.replace('_', ' ')} - {log.entity_type}
-                          </div>
-                          {log.error_message && (
-                            <div className="text-xs text-red-600">{log.error_message}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(log.created_at).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  ))}
+              
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{syncStats.pending_invoices}</div>
+                  <div className="text-sm text-blue-800">Pending Invoices</div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">{syncStats.pending_payments}</div>
+                  <div className="text-sm text-purple-800">Pending Payments</div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">{syncStats.total_pending}</div>
+                  <div className="text-sm text-orange-800">Total Pending</div>
                 </div>
               </div>
-            )}
-          </div>
+
+              {syncStats.total_pending === 0 && (
+                <div className="text-center py-4">
+                  <div className="text-green-600 text-sm font-medium">✅ All items are synced to Xero</div>
+                  <div className="text-gray-500 text-xs mt-1">The automatic sync service runs every 2 minutes</div>
+                </div>
+              )}
+            </div>
+
+            {/* Sync Activity Section */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sync Activity (Last 24 Hours)</h2>
+              
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{syncStats.successful_operations}</div>
+                  <div className="text-sm text-green-800">Successful Syncs</div>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-red-600">{syncStats.failed_operations}</div>
+                  <div className="text-sm text-red-800">Failed Syncs</div>
+                </div>
+              </div>
+
+              {syncStats.recent_operations && syncStats.recent_operations.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Activity</h3>
+                  <div className="space-y-2">
+                    {syncStats.recent_operations.slice(0, 3).map((log, index) => (
+                      <div key={log.id || `log-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-3 ${
+                            log.status === 'success' ? 'bg-green-400' : 
+                            log.status === 'error' ? 'bg-red-400' : 
+                            'bg-yellow-400'
+                          }`}></div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {log.operation_type.replace('_', ' ')} - {log.entity_type}
+                            </div>
+                            {log.error_message && (
+                              <div className="text-xs text-red-600">{log.error_message}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(log.created_at).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Management Actions */}

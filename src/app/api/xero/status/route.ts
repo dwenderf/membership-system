@@ -62,11 +62,26 @@ export async function GET(request: NextRequest) {
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
       .order('created_at', { ascending: false })
 
+    // Get pending invoices count
+    const { count: pendingInvoicesCount } = await supabase
+      .from('xero_invoices')
+      .select('*', { count: 'exact', head: true })
+      .in('sync_status', ['pending', 'staged'])
+
+    // Get pending payments count  
+    const { count: pendingPaymentsCount } = await supabase
+      .from('xero_payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('sync_status', 'pending')
+
     const stats = {
       total_operations: syncStats?.length || 0,
       successful_operations: syncStats?.filter(s => s.status === 'success').length || 0,
       failed_operations: syncStats?.filter(s => s.status === 'error').length || 0,
-      recent_operations: syncStats?.slice(0, 10) || []
+      recent_operations: syncStats?.slice(0, 10) || [],
+      pending_invoices: pendingInvoicesCount || 0,
+      pending_payments: pendingPaymentsCount || 0,
+      total_pending: (pendingInvoicesCount || 0) + (pendingPaymentsCount || 0)
     }
 
     return NextResponse.json({

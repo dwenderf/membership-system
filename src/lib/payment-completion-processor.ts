@@ -13,12 +13,17 @@ import { xeroBatchSyncManager } from './xero-batch-sync'
 
 type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'
-  record_id: string
+  record_id: string | null
   user_id: string
   payment_id: string | null
   amount: number
   trigger_source: string
   timestamp: string
+  metadata?: {
+    payment_intent_id?: string
+    failure_reason?: string
+    failed?: boolean
+  }
 }
 
 export class PaymentCompletionProcessor {
@@ -188,6 +193,14 @@ export class PaymentCompletionProcessor {
     try {
       console.log(`🔄 Processing ${event.trigger_source} completion...`)
 
+      // Handle failed payments differently
+      if (event.metadata?.failed) {
+        console.log('❌ Processing failed payment event')
+        await this.sendFailedPaymentEmails(event)
+        console.log(`✅ Completed processing failed ${event.trigger_source}`)
+        return
+      }
+
       // Phase 1: Create Xero staging records (always succeeds)
       await this.createXeroStagingRecords(event)
 
@@ -216,6 +229,12 @@ export class PaymentCompletionProcessor {
     console.log('📊 Creating Xero staging records...')
     
     try {
+      // Skip Xero staging if no record_id (e.g., failed payments)
+      if (!event.record_id) {
+        console.log('⚠️ No record ID, skipping Xero staging')
+        return
+      }
+
       // Get payment details
       const paymentData = await this.getPaymentData(event)
       if (!paymentData && event.amount > 0) {
@@ -297,14 +316,60 @@ export class PaymentCompletionProcessor {
         return
       }
 
-      if (event.trigger_source === 'user_memberships') {
+      if (event.trigger_source === 'user_memberships' || event.trigger_source === 'stripe_webhook_membership') {
         await this.sendMembershipConfirmationEmail(event, user)
-      } else if (event.trigger_source === 'user_registrations') {
+      } else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration') {
         await this.sendRegistrationConfirmationEmail(event, user)
       }
 
     } catch (error) {
       console.error('❌ Failed to send confirmation emails:', error)
+      // Don't throw - email failures shouldn't break the process
+    }
+  }
+
+  /**
+   * Send failed payment emails
+   */
+  private async sendFailedPaymentEmails(event: PaymentCompletionEvent) {
+    console.log('📧 Sending failed payment emails...')
+    
+    try {
+      // Get user details
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('id', event.user_id)
+        .single()
+
+      if (!user) {
+        console.error('❌ User not found for failed payment email:', event.user_id)
+        return
+      }
+
+      console.log('📧 Sending payment failure email to:', user.email)
+
+      // Send payment failure email using LOOPS_PAYMENT_FAILED_TEMPLATE_ID
+      await emailService.sendEmail({
+        userId: event.user_id,
+        email: user.email,
+        eventType: 'payment.failed',
+        subject: 'Payment Failed - Please Try Again',
+        triggeredBy: 'automated',
+        templateId: process.env.LOOPS_PAYMENT_FAILED_TEMPLATE_ID,
+        data: {
+          userName: `${user.first_name} ${user.last_name}`,
+          paymentIntentId: event.metadata?.payment_intent_id || 'unknown',
+          failureReason: event.metadata?.failure_reason || 'Unknown error',
+          retryUrl: `${process.env.NEXTAUTH_URL}/user/memberships`,
+          amount: event.amount
+        }
+      })
+
+      console.log('✅ Failed payment email sent successfully')
+
+    } catch (error) {
+      console.error('❌ Failed to send payment failure email:', error)
       // Don't throw - email failures shouldn't break the process
     }
   }

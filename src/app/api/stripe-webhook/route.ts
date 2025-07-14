@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
 import { autoSyncPaymentToXero } from '@/lib/xero-auto-sync'
 import { deleteXeroDraftInvoice } from '@/lib/xero-invoices'
+import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -44,7 +45,7 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
   endDate.setMonth(endDate.getMonth() + durationMonths)
 
   // Create user membership record
-  const { error: membershipError } = await supabase
+  const { data: membershipRecord, error: membershipError } = await supabase
     .from('user_memberships')
     .insert({
       user_id: userId,
@@ -57,8 +58,10 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
       amount_paid: paymentIntent.amount,
       purchased_at: new Date().toISOString(),
     })
+    .select()
+    .single()
 
-  if (membershipError) {
+  if (membershipError || !membershipRecord) {
     console.error('Error creating user membership:', membershipError)
     throw new Error('Failed to create membership')
   }
@@ -153,6 +156,23 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     }
   } catch (xeroError) {
     console.error('❌ Webhook: Failed to sync membership payment to Xero:', xeroError)
+    // Don't fail the webhook - membership was created successfully
+  }
+
+  // Trigger payment completion processor for emails and post-processing
+  try {
+    await paymentProcessor.processPaymentCompletion({
+      event_type: 'user_memberships',
+      record_id: membershipRecord.id,
+      user_id: userId,
+      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+      amount: paymentIntent.amount,
+      trigger_source: 'stripe_webhook_membership',
+      timestamp: new Date().toISOString()
+    })
+    console.log('✅ Triggered payment completion processor for membership')
+  } catch (processorError) {
+    console.error('❌ Failed to trigger payment completion processor for membership:', processorError)
     // Don't fail the webhook - membership was created successfully
   }
 
@@ -340,6 +360,23 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     // Don't fail the webhook - registration was processed successfully
   }
 
+  // Trigger payment completion processor for emails and post-processing
+  try {
+    await paymentProcessor.processPaymentCompletion({
+      event_type: 'user_registrations',
+      record_id: userRegistration.id,
+      user_id: userId,
+      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+      amount: paymentIntent.amount,
+      trigger_source: 'stripe_webhook_registration',
+      timestamp: new Date().toISOString()
+    })
+    console.log('✅ Triggered payment completion processor for registration')
+  } catch (processorError) {
+    console.error('❌ Failed to trigger payment completion processor for registration:', processorError)
+    // Don't fail the webhook - registration was processed successfully
+  }
+
   console.log('Successfully processed registration payment intent:', paymentIntent.id)
 }
 
@@ -431,35 +468,36 @@ export async function POST(request: NextRequest) {
           // Don't fail the webhook over cleanup issues
         }
 
-        // Send payment failure notification email
+        // Trigger payment completion processor for failed payment emails
         try {
           const userId = paymentIntent.metadata.userId
-          if (userId) {
-            const { data: userProfile } = await supabase
-              .from('users')
-              .select('first_name, last_name, email')
-              .eq('id', userId)
-              .single()
+          const membershipId = paymentIntent.metadata.membershipId
+          const registrationId = paymentIntent.metadata.registrationId
 
-            if (userProfile) {
-              await emailService.sendEmail({
-                userId: userId,
-                email: userProfile.email,
-                eventType: 'payment.failed',
-                subject: 'Payment Failed - Please Try Again',
-                triggeredBy: 'automated',
-                data: {
-                  userName: `${userProfile.first_name} ${userProfile.last_name}`,
-                  paymentIntentId: paymentIntent.id,
-                  failureReason: paymentIntent.last_payment_error?.message || 'Unknown error',
-                  retryUrl: `${process.env.NEXTAUTH_URL}/user/memberships`
+          if (userId) {
+            const eventType = membershipId ? 'user_memberships' : (registrationId ? 'user_registrations' : null)
+            
+            if (eventType) {
+              await paymentProcessor.processPaymentCompletion({
+                event_type: eventType,
+                record_id: null, // No record created for failed payment
+                user_id: userId,
+                payment_id: null, // No successful payment record
+                amount: paymentIntent.amount,
+                trigger_source: 'stripe_webhook_payment_failed',
+                timestamp: new Date().toISOString(),
+                metadata: {
+                  payment_intent_id: paymentIntent.id,
+                  failure_reason: paymentIntent.last_payment_error?.message || 'Unknown error',
+                  failed: true
                 }
               })
-              console.log('✅ Webhook: Payment failure email sent successfully')
+              console.log('✅ Triggered payment completion processor for failed payment')
             }
           }
-        } catch (emailError) {
-          console.error('❌ Webhook: Failed to send payment failure email:', emailError)
+        } catch (processorError) {
+          console.error('❌ Failed to trigger payment completion processor for failed payment:', processorError)
+          // Don't fail the webhook - payment failure was already recorded
         }
 
         console.log('Payment failed for payment intent:', paymentIntent.id)

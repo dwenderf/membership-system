@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager } from '@/lib/xero-staging'
+import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -217,7 +218,7 @@ async function handleFreeMembership({
     const endDate = new Date(startDate)
     endDate.setMonth(endDate.getMonth() + durationMonths)
 
-    const { error: membershipError } = await supabase
+    const { data: membershipRecord, error: membershipError } = await supabase
       .from('user_memberships')
       .insert({
         user_id: user.id,
@@ -230,10 +231,38 @@ async function handleFreeMembership({
         amount_paid: 0,
         purchased_at: new Date().toISOString(),
       })
+      .select()
+      .single()
 
-    if (membershipError) {
-      capturePaymentError(membershipError, paymentContext, 'error')
+    if (membershipError || !membershipRecord) {
+      capturePaymentError(membershipError || new Error('No membership record returned'), paymentContext, 'error')
       return NextResponse.json({ error: 'Failed to create membership' }, { status: 500 })
+    }
+
+    // Trigger payment completion processor for emails and post-processing
+    try {
+      await paymentProcessor.processPaymentCompletion({
+        event_type: 'user_memberships',
+        record_id: membershipRecord.id,
+        user_id: user.id,
+        payment_id: null, // No payment for free membership
+        amount: 0,
+        trigger_source: 'free_membership',
+        timestamp: new Date().toISOString()
+      })
+    } catch (emailError) {
+      // Don't fail the whole transaction if email fails
+      logger.logPaymentProcessing(
+        'free-membership-email-error',
+        'Failed to send confirmation email for free membership',
+        { 
+          userId: user.id, 
+          membershipId,
+          membershipRecordId: membershipRecord.id,
+          error: emailError instanceof Error ? emailError.message : String(emailError)
+        },
+        'warning'
+      )
     }
 
     // Log successful operation

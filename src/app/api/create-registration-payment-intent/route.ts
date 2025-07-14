@@ -7,6 +7,7 @@ import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xer
 import { xeroStagingManager } from '@/lib/xero-staging'
 import { logger } from '@/lib/logging/logger'
 import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
+import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -286,6 +287,33 @@ async function handleFreeRegistration({
             registration_id: registrationId,
           })
       }
+    }
+
+    // Trigger payment completion processor for emails and post-processing
+    try {
+      await paymentProcessor.processPaymentCompletion({
+        event_type: 'user_registrations',
+        record_id: reservationData.id,
+        user_id: user.id,
+        payment_id: null, // No payment for free registration
+        amount: 0,
+        trigger_source: 'free_registration',
+        timestamp: new Date().toISOString()
+      })
+    } catch (emailError) {
+      // Don't fail the whole transaction if email fails
+      logger.logPaymentProcessing(
+        'free-registration-email-error',
+        'Failed to send confirmation email for free registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          registrationRecordId: reservationData.id,
+          error: emailError instanceof Error ? emailError.message : String(emailError)
+        },
+        'warning'
+      )
     }
 
     // Log successful operation

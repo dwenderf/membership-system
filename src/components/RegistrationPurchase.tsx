@@ -213,18 +213,6 @@ export default function RegistrationPurchase({
     loadUserWaitlistEntries()
   }, [registration.id])
   
-  // Auto-select single category if eligible
-  useEffect(() => {
-    if (categories.length === 1 && !selectedCategoryId) {
-      const category = categories[0]
-      const hasRequiredMembership = !category.required_membership_id || 
-        activeMemberships.some(um => um.membership?.id === category.required_membership_id)
-      
-      if (hasRequiredMembership) {
-        setSelectedCategoryId(category.id)
-      }
-    }
-  }, [categories, selectedCategoryId, activeMemberships])
 
   // Check if selected category is eligible (basic membership check)
   const isCategoryEligible = selectedCategory ? 
@@ -532,73 +520,93 @@ export default function RegistrationPurchase({
           </div>
         </div>
       ) : categories.length === 1 ? (
-        // Single category - auto-select it
+        // Single category - make it selectable like multiple categories
         <div className="mb-4">
-          {(() => {
-            const category = categories[0]
-            const categoryName = getCategoryDisplayName(category)
-            const requiresMembership = category.required_membership_id
-            const hasRequiredMembership = !requiresMembership || 
-              activeMemberships.some(um => um.membership?.id === category.required_membership_id)
-            const categoryPricing = category.pricing || { price: 5000, tierName: 'Standard' }
-            
-            // Auto-selection handled by useEffect
-            
-            return (
-              <div className={`border rounded-lg p-3 ${
-                hasRequiredMembership ? 'border-green-300 bg-green-50' : 'border-yellow-300 bg-yellow-50'
-              }`}>
-                <div className="flex justify-between">
-                  <div>
-                    <div className={`font-medium text-sm ${
-                      hasRequiredMembership ? 'text-green-900' : 'text-yellow-800'
-                    }`}>
-                      {categoryName}
-                    </div>
-                    {requiresMembership && (
-                      <div className="text-xs text-gray-600">
-                        Requires: {category.memberships?.name}
+          <h4 className="text-sm font-medium text-gray-900 mb-3">Select Registration Category</h4>
+          <div className="space-y-2">
+            {categories.map((category) => {
+              const categoryName = getCategoryDisplayName(category)
+              const requiresMembership = category.required_membership_id
+              const hasRequiredMembership = !requiresMembership || 
+                activeMemberships.some(um => um.membership?.id === category.required_membership_id)
+              const categoryPricing = category.pricing || { price: 5000, tierName: 'Standard' }
+              
+              return (
+                <label key={category.id} className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="registrationCategory"
+                    value={category.id}
+                    checked={selectedCategoryId === category.id}
+                    onChange={() => setSelectedCategoryId(category.id)}
+                    className="sr-only"
+                  />
+                  <div className={`border rounded-lg p-3 transition-colors ${
+                    selectedCategoryId === category.id
+                      ? hasRequiredMembership 
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50' 
+                        : 'border-yellow-500 bg-yellow-50'
+                      : hasRequiredMembership
+                      ? 'border-gray-300 hover:border-gray-400'
+                      : 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                  }`}>
+                    <div className="flex justify-between">
+                      <div>
+                        <div className={`font-medium text-sm ${
+                          selectedCategoryId === category.id
+                            ? hasRequiredMembership ? 'text-blue-900' : 'text-yellow-800'
+                            : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
+                        }`}>
+                          {categoryName}
+                        </div>
+                        {requiresMembership && (
+                          <div className="text-xs text-gray-600">
+                            Requires: {category.memberships?.name}
+                          </div>
+                        )}
+                        {category.max_capacity && (
+                          <div className={`text-xs ${
+                            (() => {
+                              const remaining = category.max_capacity - (category.current_count || 0)
+                              const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                              
+                              if (remaining <= 0) {
+                                return categoryWaitlistEntry ? 'text-blue-500' : 'text-red-500'
+                              } else {
+                                return 'text-gray-500'
+                              }
+                            })()
+                          }`}>
+                            {(() => {
+                              const remaining = category.max_capacity - (category.current_count || 0)
+                              const categoryWaitlistEntry = userWaitlistEntries[category.id]
+                              
+                              if (remaining <= 0) {
+                                if (categoryWaitlistEntry) {
+                                  return `On waitlist - Position #${categoryWaitlistEntry.position}`
+                                } else {
+                                  return 'Full - No spots remaining'
+                                }
+                              } else if (remaining === 1) {
+                                return '1 spot remaining'
+                              } else {
+                                return `${remaining} spots remaining`
+                              }
+                            })()}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {category.max_capacity && (
-                      <div className={`text-xs ${
-                        (() => {
-                          const remaining = category.max_capacity - (category.current_count || 0)
-                          const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                          // For single category, it's auto-selected, so show colors appropriately
-                          if (remaining <= 0) {
-                            return categoryWaitlistEntry ? 'text-blue-500' : 'text-red-500'
-                          } else {
-                            return 'text-gray-500'
-                          }
-                        })()
+                      <div className={`text-sm font-medium ${
+                        selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                       }`}>
-                        {(() => {
-                          const remaining = category.max_capacity - (category.current_count || 0)
-                          const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                          
-                          if (remaining <= 0) {
-                            if (categoryWaitlistEntry) {
-                              return `On waitlist - Position #${categoryWaitlistEntry.position}`
-                            } else {
-                              return 'Full - No spots remaining'
-                            }
-                          } else if (remaining === 1) {
-                            return '1 spot remaining'
-                          } else {
-                            return `${remaining} spots remaining`
-                          }
-                        })()}
+                        ${(categoryPricing.price / 100).toFixed(2)}
                       </div>
-                    )}
+                    </div>
                   </div>
-                  <div className="text-sm font-medium text-gray-900">
-                    ${(categoryPricing.price / 100).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
+                </label>
+              )
+            })}
+          </div>
         </div>
       ) : (
         <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-md">

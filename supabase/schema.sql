@@ -324,15 +324,9 @@ CREATE TABLE payments (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Payment items table
-CREATE TABLE payment_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
-    item_type TEXT NOT NULL CHECK (item_type IN ('membership', 'registration')),
-    item_id UUID NOT NULL,
-    amount INTEGER NOT NULL, -- in cents
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Payment items table removed 2025-07-14
+-- Transaction details are now stored in xero_invoice_line_items table
+-- which serves as the single source of truth for all purchase line items
 
 -- Payment configurations table
 CREATE TABLE payment_configurations (
@@ -593,7 +587,7 @@ ALTER TABLE access_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE access_code_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waitlists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payment_items ENABLE ROW LEVEL SECURITY;
+-- payment_items table removed
 ALTER TABLE payment_configurations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
 
@@ -662,31 +656,7 @@ CREATE POLICY "Admins can view all payments" ON payments
     );
 
 -- Payment items table policies  
-CREATE POLICY "Users can view their own payment items" ON payment_items
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM payments 
-            WHERE payments.id = payment_items.payment_id 
-            AND payments.user_id = auth.uid()
-        )
-    );
-
-CREATE POLICY "Users can insert payment items for their payments" ON payment_items
-    FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM payments 
-            WHERE payments.id = payment_items.payment_id 
-            AND payments.user_id = auth.uid()
-        )
-    );
-
-CREATE POLICY "Admins can view all payment items" ON payment_items
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM users 
-            WHERE id = auth.uid() AND is_admin = TRUE
-        )
-    );
+-- payment_items RLS policies removed - table no longer exists
 
 -- User registrations policies
 CREATE POLICY "Users can view their own registrations" ON user_registrations

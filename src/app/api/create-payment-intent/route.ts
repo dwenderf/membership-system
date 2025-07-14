@@ -208,41 +208,8 @@ async function handleFreeMembership({
       // Don't fail the whole transaction, but log the issue
     }
 
-    // Create payment item records
-    const paymentItems = [{
-      payment_id: paymentRecord.id,
-      item_type: 'membership',
-      item_id: membershipId,
-      amount: 0,
-    }]
-
-    // Add donation item if applicable
-    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
-      paymentItems.push({
-        payment_id: paymentRecord.id,
-        item_type: 'donation',
-        item_id: membershipId,
-        amount: donationAmount,
-      })
-    }
-
-    const { error: paymentItemError } = await supabase
-      .from('payment_items')
-      .insert(paymentItems)
-
-    if (paymentItemError) {
-      logger.logPaymentProcessing(
-        'payment-items-error',
-        'Error creating payment item records for free membership',
-        { 
-          userId: user.id, 
-          paymentId: paymentRecord.id,
-          error: paymentItemError.message
-        },
-        'error'
-      )
-      capturePaymentError(paymentItemError, paymentContext, 'warning')
-    }
+    // Payment items are now tracked in xero_invoice_line_items via the staging system
+    // No need to create separate payment_items records
 
 
     // Create the membership record directly (similar to webhook processing)
@@ -634,45 +601,8 @@ export async function POST(request: NextRequest) {
         )
         // Don't fail the transaction, but log the issue
       }
-      // Create payment item records
-      const paymentItems = []
-
-      // Always add membership item
-      paymentItems.push({
-        payment_id: paymentRecord.id,
-        item_type: 'membership',
-        item_id: membershipId,
-        amount: membershipAmount,
-      })
-
-      // Add donation item if applicable
-      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
-        paymentItems.push({
-          payment_id: paymentRecord.id,
-          item_type: 'donation',
-          item_id: membershipId, // Link to membership for context
-          amount: donationAmount,
-        })
-      }
-
-      const { error: paymentItemError } = await supabase
-        .from('payment_items')
-        .insert(paymentItems)
-
-      if (paymentItemError) {
-        logger.logPaymentProcessing(
-          'payment-items-error',
-          'Error creating payment item records for paid membership',
-          { 
-            userId: user.id, 
-            paymentId: paymentRecord.id,
-            paymentIntentId: paymentIntent.id,
-            error: paymentItemError.message
-          },
-          'error'
-        )
-        capturePaymentError(paymentItemError, paymentContext, 'warning')
-      }
+      // Payment items are now tracked in xero_invoice_line_items via the staging system
+      // No need to create separate payment_items records
     }
 
     // Log successful operation

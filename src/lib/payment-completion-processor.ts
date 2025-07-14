@@ -359,14 +359,7 @@ export class PaymentCompletionProcessor {
     if (event.payment_id) {
       const { data } = await this.supabase
         .from('payments')
-        .select(`
-          *,
-          payment_items (
-            item_type,
-            item_id,
-            amount
-          )
-        `)
+        .select('*')
         .eq('id', event.payment_id)
         .single()
       return data

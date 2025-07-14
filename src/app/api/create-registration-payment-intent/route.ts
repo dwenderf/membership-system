@@ -254,30 +254,8 @@ async function handleFreeRegistration({
       // Don't fail the whole transaction, but log the issue
     }
 
-    // Create payment item record
-    const { error: paymentItemError } = await supabase
-      .from('payment_items')
-      .insert({
-        payment_id: paymentRecord.id,
-        item_type: 'registration',
-        item_id: registrationId,
-        amount: 0,
-      })
-
-    if (paymentItemError) {
-      logger.logPaymentProcessing(
-        'payment-items-error',
-        'Error creating payment item record for free registration',
-        { 
-          userId: user.id, 
-          registrationId,
-          paymentId: paymentRecord.id,
-          error: paymentItemError.message
-        },
-        'error'
-      )
-      capturePaymentError(paymentItemError, paymentContext, 'warning')
-    }
+    // Payment items are now tracked in xero_invoice_line_items via the staging system
+    // No need to create separate payment_items records
 
 
     // Registration already created with correct status (paid), no update needed
@@ -1190,32 +1168,8 @@ export async function POST(request: NextRequest) {
         // Don't fail the transaction, but log the issue
       }
       
-      // Create payment item record for the registration
-      const { error: paymentItemError } = await supabase
-        .from('payment_items')
-        .insert({
-          payment_id: paymentRecord.id,
-          item_type: 'registration',
-          item_id: registrationId,
-          amount: finalAmount,
-        })
-
-      if (paymentItemError) {
-        logger.logPaymentProcessing(
-          'payment-items-error',
-          'Error creating payment item record for paid registration',
-          { 
-            userId: user.id, 
-            registrationId,
-            categoryId,
-            paymentId: paymentRecord.id,
-            paymentIntentId: paymentIntent.id,
-            error: paymentItemError.message
-          },
-          'error'
-        )
-        capturePaymentError(paymentItemError, paymentContext, 'warning')
-      }
+      // Payment items are now tracked in xero_invoice_line_items via the staging system
+      // No need to create separate payment_items records
     }
 
     // Log successful operation

@@ -54,33 +54,34 @@ export class XeroStagingManager {
         'info'
       )
 
-      // Get payment data with all items
-      const paymentData = await this.getPaymentDataForStaging(paymentId)
-      if (!paymentData) {
+      // Check if staging data already exists for this payment
+      const { data: existingStaging } = await this.supabase
+        .from('xero_invoices')
+        .select('id')
+        .eq('payment_id', paymentId)
+        .eq('sync_status', 'staged')
+        .limit(1)
+
+      if (existingStaging && existingStaging.length > 0) {
         logger.logXeroSync(
-          'staging-paid-purchase-no-data',
-          'No payment data found for staging',
+          'staging-paid-purchase-exists',
+          'Staging data already exists for this payment',
           { paymentId },
-          'error'
+          'info'
         )
-        return false
+        return true
       }
 
-      // Get active tenants
-      const tenants = await getActiveXeroTenants()
-      if (tenants.length === 0) {
-        console.log('⚠️ No active Xero tenants, skipping staging')
-        return true // Not a failure - just no Xero configured
-      }
+      logger.logXeroSync(
+        'staging-paid-purchase-no-existing',
+        'No existing staging data found, but payment_items table has been removed. Staging should have been created during payment intent creation.',
+        { paymentId },
+        'warning'
+      )
 
-      // Create staging records for each tenant
-      let allSucceeded = true
-      for (const tenant of tenants) {
-        const success = await this.createInvoiceStaging(paymentData, tenant.tenant_id)
-        if (!success) allSucceeded = false
-      }
-
-      return allSucceeded
+      // In the new architecture, staging data should already exist from payment intent creation
+      // If it doesn't exist, this indicates a problem with the payment flow
+      return false
     } catch (error) {
       logger.logXeroSync(
         'staging-paid-purchase-error',
@@ -360,67 +361,8 @@ export class XeroStagingManager {
     }
   }
 
-  /**
-   * Get payment data for staging
-   */
-  private async getPaymentDataForStaging(paymentId: string): Promise<StagingPaymentData | null> {
-    try {
-      const { data: payment, error } = await this.supabase
-        .from('payments')
-        .select(`
-          *,
-          payment_items (
-            item_type,
-            item_id,
-            amount
-          )
-        `)
-        .eq('id', paymentId)
-        .single()
-
-      if (error || !payment) {
-        return null
-      }
-
-      // Get detailed item information and build descriptions
-      const paymentItems = []
-      for (const item of payment.payment_items) {
-        const itemDetails = await this.getItemDetails(item.item_type, item.item_id)
-        paymentItems.push({
-          item_type: item.item_type,
-          item_id: item.item_id,
-          amount: item.amount,
-          description: itemDetails?.description || `${item.item_type} purchase`,
-          accounting_code: itemDetails?.accounting_code || null
-        })
-      }
-
-      // TODO: Get discount codes used (from discount_usage table)
-      const discountCodesUsed = []
-
-      return {
-        payment_id: payment.id,
-        user_id: payment.user_id,
-        total_amount: payment.total_amount,
-        discount_amount: payment.discount_amount,
-        final_amount: payment.final_amount,
-        payment_items: paymentItems,
-        discount_codes_used: discountCodesUsed,
-        stripe_payment_intent_id: payment.stripe_payment_intent_id
-      }
-    } catch (error) {
-      logger.logXeroSync(
-        'staging-payment-data-error',
-        'Error getting payment data for staging',
-        { 
-          paymentId,
-          error: error instanceof Error ? error.message : String(error)
-        },
-        'error'
-      )
-      return null
-    }
-  }
+  // getPaymentDataForStaging method removed - staging data is now created during payment intent creation
+  // and stored in xero_invoices.staging_metadata with all necessary payment item details
 
   /**
    * Get free purchase data

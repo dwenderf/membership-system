@@ -66,15 +66,16 @@ async function handleFreeRegistration({
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Create atomic spot reservation first (same as paid flow)
+    // Create user registration record (free registration - mark as paid immediately)
     const { data: reservationData, error: reservationError } = await adminSupabase
       .from('user_registrations')
       .insert({
         user_id: user.id,
         registration_id: registrationId,
         registration_category_id: categoryId,
-        payment_status: 'awaiting_payment',
-        reservation_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
+        payment_status: 'paid',
+        amount_paid: 0,
+        registered_at: new Date().toISOString(),
         presale_code_used: presaleCode || null,
       })
       .select('id')
@@ -118,12 +119,41 @@ async function handleFreeRegistration({
         // Add discount line items if applicable
         const discountCodesUsed = []
         if (discountCode && fullPrice > 0) {
-          discountCodesUsed.push({
-            code: discountCode,
-            amount_saved: fullPrice, // Full price was discounted
-            category_name: 'Registration Discount',
-            accounting_code: undefined // Will use system default
-          })
+          // Validate discount code to get proper accounting_code
+          try {
+            const discountResponse = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': request.headers.get('cookie') || '',
+              },
+              body: JSON.stringify({
+                code: discountCode,
+                registrationId: registrationId,
+                amount: fullPrice
+              })
+            })
+
+            if (discountResponse.ok) {
+              const discountResult = await discountResponse.json()
+              if (discountResult.isValid && discountResult.discountCode) {
+                discountCodesUsed.push({
+                  code: discountCode,
+                  amount_saved: fullPrice, // Full price was discounted
+                  category_name: discountResult.discountCode.category?.name || 'Registration Discount',
+                  accounting_code: discountResult.discountCode.category?.accounting_code
+                })
+              }
+            }
+          } catch (error) {
+            // If discount validation fails, still proceed but use fallback values
+            discountCodesUsed.push({
+              code: discountCode,
+              amount_saved: fullPrice,
+              category_name: 'Registration Discount',
+              accounting_code: undefined // Will fallback to 'DISCOUNT'
+            })
+          }
         }
 
         // Create staging record
@@ -137,6 +167,12 @@ async function handleFreeRegistration({
         }, { isFree: true })
         
         if (!stagingResult) {
+          // Cleanup: Mark user_registrations as failed so it doesn't block future attempts
+          await adminSupabase
+            .from('user_registrations')
+            .update({ payment_status: 'failed' })
+            .eq('id', reservationData.id)
+
           logger.logPaymentProcessing(
             'staging-creation-failed',
             'Failed to create Xero staging record for free registration',
@@ -163,6 +199,12 @@ async function handleFreeRegistration({
         )
       }
     } catch (error) {
+      // Cleanup: Mark user_registrations as failed so it doesn't block future attempts
+      await adminSupabase
+        .from('user_registrations')
+        .update({ payment_status: 'failed' })
+        .eq('id', reservationData.id)
+
       logger.logPaymentProcessing(
         'staging-creation-error',
         'Error creating Xero staging record for free registration',
@@ -175,7 +217,7 @@ async function handleFreeRegistration({
         'error'
       )
       capturePaymentError(error, paymentContext, 'error')
-      return NextResponse.json({ error: 'Failed to process registration - Xero staging failed' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to process registration - Xero staging error' }, { status: 500 })
     }
 
     // Create payment record with $0 amount and completed status
@@ -258,21 +300,7 @@ async function handleFreeRegistration({
     }
 
 
-    // Update the registration to paid status (complete the reservation)
-    const { error: updateError } = await adminSupabase
-      .from('user_registrations')
-      .update({
-        payment_status: 'paid',
-        amount_paid: 0,
-        registered_at: new Date().toISOString(),
-        reservation_expires_at: null,
-      })
-      .eq('id', reservationData.id)
-
-    if (updateError) {
-      capturePaymentError(updateError, paymentContext, 'error')
-      return NextResponse.json({ error: 'Failed to complete registration' }, { status: 500 })
-    }
+    // Registration already created with correct status (paid), no update needed
 
     // Record discount usage if applicable
     if (discountCode) {
@@ -383,7 +411,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Fetch registration details with category and season info
+    // Fetch registration details with category and season info first (needed for discount calculation)
     const { data: registration, error: registrationError } = await supabase
       .from('registrations')
       .select(`

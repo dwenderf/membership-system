@@ -1,0 +1,249 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { getOrganizationName } from '@/lib/organization'
+
+interface User {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  is_admin: boolean
+  member_id?: number
+  tags?: string[]
+}
+
+interface AdminNavigationProps {
+  user: User | null
+}
+
+export default function AdminNavigation({ user }: AdminNavigationProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const pathname = usePathname()
+
+  const navigation = [
+    { 
+      name: 'Dashboard', 
+      href: '/admin', 
+      current: pathname === '/admin' 
+    },
+    { 
+      name: 'Management', 
+      href: '/admin/seasons', 
+      current: pathname.startsWith('/admin/seasons') || 
+               pathname.startsWith('/admin/memberships') || 
+               pathname.startsWith('/admin/registrations'),
+      submenu: [
+        { name: 'Seasons', href: '/admin/seasons' },
+        { name: 'Memberships', href: '/admin/memberships' },
+        { name: 'Registrations', href: '/admin/registrations' }
+      ]
+    },
+    { 
+      name: 'Configuration', 
+      href: '/admin/discount-categories', 
+      current: pathname.startsWith('/admin/discount-categories') || 
+               pathname.startsWith('/admin/accounting-codes') || 
+               pathname.startsWith('/admin/accounting'),
+      submenu: [
+        { name: 'Discount Categories', href: '/admin/discount-categories' },
+        { name: 'Accounting Codes', href: '/admin/accounting-codes' },
+        { name: 'Xero Integration', href: '/admin/accounting' }
+      ]
+    },
+    { 
+      name: 'Reports', 
+      href: '/admin/reports', 
+      current: pathname.startsWith('/admin/reports') 
+    },
+    { 
+      name: 'Logs', 
+      href: '/admin/logs', 
+      current: pathname.startsWith('/admin/logs') 
+    }
+  ]
+
+  return (
+    <nav className="bg-white shadow-sm border-b">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <div className="flex-shrink-0 flex items-center">
+              <Link href="/admin" className="text-xl font-bold text-gray-900">
+                {getOrganizationName('short')} Admin
+              </Link>
+            </div>
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              {navigation.map((item) => (
+                <div key={item.name} className="relative group">
+                  <Link
+                    href={item.href}
+                    className={`${
+                      item.current
+                        ? 'border-blue-500 text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-16`}
+                  >
+                    {item.name}
+                    {item.submenu && (
+                      <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </Link>
+                  
+                  {item.submenu && (
+                    <div className="absolute left-0 mt-0 w-48 bg-white shadow-lg border border-gray-200 rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                      <div className="py-1">
+                        {item.submenu.map((subItem) => (
+                          <Link
+                            key={subItem.name}
+                            href={subItem.href}
+                            className={`${
+                              pathname.startsWith(subItem.href)
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            } block px-4 py-2 text-sm`}
+                          >
+                            {subItem.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
+                <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
+                  Admin
+                </span>
+                <Link
+                  href="/user"
+                  className="px-3 py-1 rounded text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-800"
+                >
+                  Member
+                </Link>
+              </div>
+            </div>
+            <div className="flex items-center">
+              <Link 
+                href="/user/account"
+                className="text-sm text-gray-700 hover:text-gray-900 font-medium flex items-center space-x-2"
+              >
+                <span>{user?.first_name} {user?.last_name}</span>
+                {user?.member_id && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                    #{user.member_id}
+                  </span>
+                )}
+              </Link>
+            </div>
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="sm:hidden flex items-center">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            >
+              <span className="sr-only">Open admin menu</span>
+              {!isMenuOpen ? (
+                <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              ) : (
+                <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      {isMenuOpen && (
+        <div className="sm:hidden">
+          <div className="pt-2 pb-3 space-y-1">
+            {navigation.map((item) => (
+              <div key={item.name}>
+                <Link
+                  href={item.href}
+                  className={`${
+                    item.current
+                      ? 'bg-blue-50 border-blue-500 text-blue-700'
+                      : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+                  } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+                {item.submenu && (
+                  <div className="ml-4 space-y-1">
+                    {item.submenu.map((subItem) => (
+                      <Link
+                        key={subItem.name}
+                        href={subItem.href}
+                        className={`${
+                          pathname.startsWith(subItem.href)
+                            ? 'bg-blue-50 border-blue-500 text-blue-700'
+                            : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+                        } block pl-6 pr-4 py-1 border-l-4 text-sm`}
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        {subItem.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="pt-4 pb-3 border-t border-gray-200">
+            <div className="flex items-center px-4">
+              <div className="flex-shrink-0">
+                <Link 
+                  href="/user/account"
+                  className="text-sm font-medium text-gray-900 hover:text-gray-600 flex items-center space-x-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <span>{user?.first_name} {user?.last_name}</span>
+                  {user?.member_id && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                      #{user.member_id}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">(Account Settings)</span>
+                </Link>
+              </div>
+            </div>
+            <div className="mt-3 space-y-1">
+              <div className="px-4 py-2">
+                <p className="text-sm font-medium text-gray-900 mb-2">Switch View:</p>
+                <div className="flex space-x-2">
+                  <span className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-center text-sm font-medium">
+                    Admin
+                  </span>
+                  <Link
+                    href="/user"
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-center text-sm font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Member
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  )
+}

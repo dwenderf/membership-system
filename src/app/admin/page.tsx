@@ -1,27 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import AdminHeader from '@/components/AdminHeader'
 import { getOrganizationName } from '@/lib/organization'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    redirect('/auth/login')
-  }
-
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!userProfile?.is_admin) {
-    redirect('/dashboard')
-  }
 
   // Get some basic stats
   const { count: totalUsers } = await supabase
@@ -43,17 +25,16 @@ export default async function AdminDashboard() {
     .select('*', { count: 'exact', head: true })
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <AdminHeader 
-            title="Admin Dashboard"
-            description={`Manage your ${getOrganizationName('long').toLowerCase()} membership system`}
-            useToggle={true}
-          />
+    <>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Manage your {getOrganizationName('long').toLowerCase()} membership system
+        </p>
+      </div>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
@@ -127,8 +108,8 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white shadow rounded-lg">
+      {/* Quick Actions */}
+      <div className="bg-white shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                 Quick Actions
@@ -202,8 +183,6 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-        </div>
-      </div>
-    </div>
+    </>
   )
 }

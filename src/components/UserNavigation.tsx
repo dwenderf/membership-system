@@ -61,21 +61,17 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
             {user?.is_admin && (
               <div className="flex items-center space-x-3">
-                {useToggle ? (
-                  <AdminToggle isAdminView={false} />
-                ) : (
-                  <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
-                    <Link
-                      href="/admin"
-                      className="px-3 py-1 rounded text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-800"
-                    >
-                      Admin
-                    </Link>
-                    <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
-                      Member
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
+                  <Link
+                    href="/admin"
+                    className="px-3 py-1 rounded text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-800"
+                  >
+                    Admin
+                  </Link>
+                  <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
+                    Member
+                  </span>
+                </div>
               </div>
             )}
             <div className="flex items-center">
@@ -154,27 +150,19 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
             <div className="mt-3 space-y-1">
               {user?.is_admin && (
                 <div className="px-4 py-2">
-                  {useToggle ? (
-                    <div className="flex items-center justify-between">
-                      <AdminToggle isAdminView={false} />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm font-medium text-gray-900 mb-2">Switch View:</p>
-                      <div className="flex space-x-2">
-                        <Link
-                          href="/admin"
-                          className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-center text-sm font-medium"
-                          onClick={() => setIsMenuOpen(false)}
-                        >
-                          Admin
-                        </Link>
-                        <span className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-center text-sm font-medium">
-                          Member
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <p className="text-sm font-medium text-gray-900 mb-2">Switch View:</p>
+                  <div className="flex space-x-2">
+                    <Link
+                      href="/admin"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-center text-sm font-medium"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Admin
+                    </Link>
+                    <span className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-center text-sm font-medium">
+                      Member
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

@@ -372,15 +372,28 @@ export async function revokeXeroTokens(): Promise<boolean> {
     // Revoke each token on Xero's side
     for (const token of activeTokens) {
       try {
+        // Create a fresh XeroClient instance for revocation
+        const revokeClient = new XeroClient({
+          clientId: process.env.XERO_CLIENT_ID!,
+          clientSecret: process.env.XERO_CLIENT_SECRET!,
+          redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
+          scopes: process.env.XERO_SCOPES?.split(' ') || [
+            'accounting.transactions',
+            'accounting.contacts',
+            'accounting.settings',
+            'offline_access'
+          ]
+        })
+
         // Set the token on the client
-        await xero.setTokenSet({
+        await revokeClient.setTokenSet({
           access_token: token.access_token,
           refresh_token: token.refresh_token,
           token_type: 'Bearer'
         })
 
         // Revoke the connection on Xero's side
-        await xero.revokeToken()
+        await revokeClient.revokeToken()
         const { logger } = await import('./logging/logger')
         logger.logXeroSync(
           'token-revoked',

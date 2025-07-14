@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         .from('xero_invoices')
         .update({ 
           sync_status: 'pending',
-          error_message: null,
+          sync_error: null,
           retry_count: 0,
           updated_at: new Date().toISOString()
         })
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         .from('xero_payments')
         .update({ 
           sync_status: 'pending',
-          error_message: null,
+          sync_error: null,
           retry_count: 0,
           updated_at: new Date().toISOString()
         })

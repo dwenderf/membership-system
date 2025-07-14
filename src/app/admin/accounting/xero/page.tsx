@@ -28,10 +28,9 @@ interface FailedItem {
   id: string
   tenant_id: string
   sync_status: string
-  error_message: string | null
+  sync_error: string | null
   last_synced_at: string
   staging_metadata?: any
-  payment_id?: string
 }
 
 interface SyncStats {
@@ -578,8 +577,8 @@ function XeroIntegrationContent() {
                               {new Date(item.last_synced_at).toLocaleString()}
                             </time>
                           </div>
-                          {item.error_message && (
-                            <p className="mt-1 text-sm text-red-600">{item.error_message}</p>
+                          {item.sync_error && (
+                            <p className="mt-1 text-sm text-red-600">{item.sync_error}</p>
                           )}
                           {metadata?.user_id && (
                             <p className="mt-1 text-xs text-gray-500">User: {metadata.user_id}</p>
@@ -616,11 +615,8 @@ function XeroIntegrationContent() {
                               {new Date(item.last_synced_at).toLocaleString()}
                             </time>
                           </div>
-                          {item.error_message && (
-                            <p className="mt-1 text-sm text-red-600">{item.error_message}</p>
-                          )}
-                          {item.payment_id && (
-                            <p className="mt-1 text-xs text-gray-500">Payment ID: {item.payment_id}</p>
+                          {item.sync_error && (
+                            <p className="mt-1 text-sm text-red-600">{item.sync_error}</p>
                           )}
                         </div>
                       </div>

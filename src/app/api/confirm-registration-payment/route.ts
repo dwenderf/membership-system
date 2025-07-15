@@ -9,7 +9,7 @@ import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 })
 
 export async function POST(request: NextRequest) {
@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
       paymentIntentId: paymentIntentId,
       categoryId: categoryId,
       endpoint: '/api/confirm-registration-payment',
-      operation: 'registration_payment_confirmation'
+      operation: 'registration_payment_confirmation',
+      amountCents: 0, // Will be updated after payment intent retrieval
+      registrationId: '' // Will be updated after payment intent retrieval
     }
     setPaymentContext(paymentContext)
     

@@ -15,7 +15,7 @@ import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 })
 
 // Handle free registration purchases (amount = 0)

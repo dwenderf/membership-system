@@ -383,7 +383,7 @@ export async function createXeroInvoiceBeforePayment(
                 }
                 
                 xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-                response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                   invoices: [xeroInvoiceData]
                 })
               }
@@ -396,7 +396,7 @@ export async function createXeroInvoiceBeforePayment(
               }
               
               xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-              response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+              response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                 invoices: [xeroInvoiceData]
               })
             }
@@ -412,7 +412,7 @@ export async function createXeroInvoiceBeforePayment(
           }
           
           xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-          response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+          response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
             invoices: [xeroInvoiceData]
           })
         }

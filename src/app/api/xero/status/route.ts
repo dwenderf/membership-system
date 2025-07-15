@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('sync_status', 'pending')
 
-    // Get failed invoices and payments with user information
+    // Get failed invoices with user information
     const { data: failedInvoices } = await supabase
       .from('xero_invoices')
       .select(`
@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
         sync_error, 
         last_synced_at, 
         staging_metadata,
-        payments!inner (
-          users!inner (
+        payments (
+          users (
             first_name,
             last_name,
             member_id
@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('sync_status', 'failed')
+      .not('payment_id', 'is', null)
       .order('last_synced_at', { ascending: false })
 
     const { data: failedPayments } = await supabase
@@ -103,9 +104,9 @@ export async function GET(request: NextRequest) {
         sync_status, 
         sync_error, 
         last_synced_at,
-        xero_invoices!inner (
-          payments!inner (
-            users!inner (
+        xero_invoices (
+          payments (
+            users (
               first_name,
               last_name,
               member_id

@@ -37,7 +37,7 @@ interface FailedItem {
       last_name: string | null
       member_id: string | null
     }
-  }
+  } | null
   xero_invoices?: {
     payments: {
       users: {
@@ -45,8 +45,8 @@ interface FailedItem {
         last_name: string | null
         member_id: string | null
       }
-    }
-  }
+    } | null
+  } | null
 }
 
 interface SyncStats {

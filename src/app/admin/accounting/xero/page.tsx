@@ -31,11 +31,22 @@ interface FailedItem {
   sync_error: string | null
   last_synced_at: string
   staging_metadata?: any
-  users?: {
-    first_name: string | null
-    last_name: string | null
-    member_id: string | null
-  } | null
+  payments?: {
+    users: {
+      first_name: string | null
+      last_name: string | null
+      member_id: string | null
+    }
+  }
+  xero_invoices?: {
+    payments: {
+      users: {
+        first_name: string | null
+        last_name: string | null
+        member_id: string | null
+      }
+    }
+  }
 }
 
 interface SyncStats {
@@ -558,7 +569,7 @@ function XeroIntegrationContent() {
                   {syncStats.failed_invoices.map((item) => {
                     const itemId = `inv_${item.id}`
                     const isSelected = selectedFailedItems.has(itemId)
-                    const user = item.users
+                    const user = item.payments?.users
                     
                     // Use Xero contact naming convention: "First Last - MemberID"
                     const userDisplayName = user?.first_name && user?.last_name 
@@ -601,7 +612,7 @@ function XeroIntegrationContent() {
                   {syncStats.failed_payments.map((item) => {
                     const itemId = `pay_${item.id}`
                     const isSelected = selectedFailedItems.has(itemId)
-                    const user = item.users
+                    const user = item.xero_invoices?.payments?.users
                     
                     // Use Xero contact naming convention: "First Last - MemberID"
                     const userDisplayName = user?.first_name && user?.last_name 

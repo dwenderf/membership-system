@@ -84,10 +84,12 @@ export async function GET(request: NextRequest) {
         sync_error, 
         last_synced_at, 
         staging_metadata,
-        users:user_id (
-          first_name,
-          last_name,
-          member_id
+        payments!inner (
+          users!inner (
+            first_name,
+            last_name,
+            member_id
+          )
         )
       `)
       .eq('sync_status', 'failed')
@@ -101,10 +103,14 @@ export async function GET(request: NextRequest) {
         sync_status, 
         sync_error, 
         last_synced_at,
-        users:user_id (
-          first_name,
-          last_name,
-          member_id
+        xero_invoices!inner (
+          payments!inner (
+            users!inner (
+              first_name,
+              last_name,
+              member_id
+            )
+          )
         )
       `)
       .eq('sync_status', 'failed')

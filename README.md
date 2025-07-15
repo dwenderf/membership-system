@@ -553,7 +553,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 **Automatic Features (Vercel handles these):**
 - ✅ **Next.js Build**: Automatic build optimization
 - ✅ **Serverless Functions**: API routes automatically deployed
-- ✅ **Cron Jobs**: Background processing runs daily (Xero sync, email retry, cleanup, token refresh)
+- ✅ **Cron Jobs**: Background processing runs daily (Xero operations + maintenance tasks)
 - ✅ **SSL Certificate**: Automatic HTTPS with custom domain support
 - ✅ **CDN**: Global edge network for fast loading
 
@@ -596,11 +596,9 @@ The application uses Vercel Cron jobs for background processing. These are confi
 2. Navigate to **Settings** → **Functions**
 3. Scroll down to **Cron Jobs** section
 4. Click **Enable** to activate cron job functionality
-5. Verify that all 4 cron jobs are listed:
-   - `xero-keep-alive` - Daily at midnight (token refresh)
-   - `xero-sync` - Daily at 2 AM (sync pending records)
-   - `email-retry` - Daily at 4 AM (retry failed emails)
-   - `cleanup` - Daily at 6 AM (clean old data)
+5. Verify that all 2 cron jobs are listed:
+   - `xero-daily` - Daily at 6 AM (Xero keep-alive + sync)
+   - `maintenance` - Daily at 7 AM (email retry + cleanup)
 
 **2. Verify CRON_SECRET Environment Variable:**
 - Ensure `CRON_SECRET` is set in your Vercel environment variables
@@ -610,12 +608,12 @@ The application uses Vercel Cron jobs for background processing. These are confi
 **3. Test Cron Jobs (Optional):**
 You can manually test cron jobs using curl:
 ```bash
-# Test Xero sync (replace with your domain and secret)
-curl -X GET https://your-domain.vercel.app/api/cron/xero-sync \
+# Test Xero daily operations (replace with your domain and secret)
+curl -X GET https://your-domain.vercel.app/api/cron/xero-daily \
   -H "Authorization: Bearer your-cron-secret"
 
-# Test cleanup
-curl -X GET https://your-domain.vercel.app/api/cron/cleanup \
+# Test maintenance operations
+curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
   -H "Authorization: Bearer your-cron-secret"
 ```
 

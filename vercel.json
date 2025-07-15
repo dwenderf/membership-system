@@ -1,20 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/xero-keep-alive",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/xero-sync",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/email-retry",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/cleanup",
+      "path": "/api/cron/xero-daily",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/maintenance",
+      "schedule": "0 7 * * *"
     }
   ]
 }

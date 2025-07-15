@@ -1,7 +1,7 @@
 import { Invoice, LineItem, CurrencyCode, Contact, ContactPerson } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './xero-client'
-import { getOrCreateXeroContact, syncUserToXeroContact } from './xero-contacts'
-import { createClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
+import { getOrCreateXeroContact, syncUserToXeroContact } from './contacts'
+import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
 // Helper function to get system accounting codes

@@ -5,11 +5,11 @@
  */
 
 import { Invoice, LineItem, Payment, CurrencyCode } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
-import { getOrCreateXeroContact } from './xero-contacts'
-import { createAdminClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync } from './client'
+import { getOrCreateXeroContact } from './contacts'
+import { createAdminClient } from '../supabase/server'
 import { Database } from '@/types/database'
-import { batchProcessor } from './batch-processor'
+import { batchProcessor } from '../batch-processor'
 import * as Sentry from '@sentry/nextjs'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {

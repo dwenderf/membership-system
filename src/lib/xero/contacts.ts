@@ -1,6 +1,6 @@
 import { Contact, ContactPerson } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
-import { createAdminClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync } from './client'
+import { createAdminClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
 export interface UserContactData {

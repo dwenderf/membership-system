@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
-import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
+import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { logger } from '@/lib/logging/logger'
-import { xeroStagingManager } from '@/lib/xero-staging'
+import { xeroStagingManager } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config

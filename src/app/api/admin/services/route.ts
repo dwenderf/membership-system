@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { serviceManager } from '@/lib/services/startup'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
-import { xeroBatchSyncManager } from '@/lib/xero-batch-sync'
+import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
 import { scheduledBatchProcessor } from '@/lib/scheduled-batch-processor'
 import { logger } from '@/lib/logging/logger'
 

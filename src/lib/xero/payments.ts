@@ -1,6 +1,6 @@
 import { Payment } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
-import { createClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync } from './client'
+import { createClient } from '../supabase/server'
 
 export interface StripePaymentData {
   payment_id: string

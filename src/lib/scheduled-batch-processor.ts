@@ -6,8 +6,8 @@
  */
 
 import { batchProcessor } from './batch-processor'
-import { xeroBatchSyncManager } from './xero-batch-sync'
-import { xeroStagingManager } from './xero-staging'
+import { xeroBatchSyncManager } from './xero/batch-sync'
+import { xeroStagingManager } from './xero/staging'
 import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
 import { logger } from './logging/logger'

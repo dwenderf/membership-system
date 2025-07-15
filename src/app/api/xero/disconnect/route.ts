@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { logXeroSync, revokeXeroTokens } from '@/lib/xero-client'
+import { logXeroSync, revokeXeroTokens } from '@/lib/xero/client'
 
 export async function POST(request: NextRequest) {
   try {

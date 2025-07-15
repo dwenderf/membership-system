@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthenticatedXeroClient, withActiveTenant } from '@/lib/xero-client'
+import { getAuthenticatedXeroClient, withActiveTenant } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {

@@ -7,11 +7,11 @@
  * 3. Admin recovery for failed syncs
  */
 
-import { createAdminClient } from './supabase/server'
-import { getActiveXeroTenants } from './xero-client'
-import { PaymentInvoiceData, PrePaymentInvoiceData } from './xero-invoices'
+import { createAdminClient } from '../supabase/server'
+import { getActiveXeroTenants } from './client'
+import { PaymentInvoiceData, PrePaymentInvoiceData } from './invoices'
 import { Database } from '@/types/database'
-import { logger } from './logging/logger'
+import { logger } from '../logging/logger'
 
 type StagingPaymentData = {
   payment_id?: string

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
-import { autoSyncPaymentToXero } from '@/lib/xero-auto-sync'
-import { deleteXeroDraftInvoice } from '@/lib/xero-invoices'
+import { autoSyncPaymentToXero } from '@/lib/xero/auto-sync'
+import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

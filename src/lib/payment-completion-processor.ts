@@ -8,8 +8,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import { emailService } from './email-service'
-import { xeroStagingManager } from './xero-staging'
-import { xeroBatchSyncManager } from './xero-batch-sync'
+import { xeroStagingManager } from './xero/staging'
+import { xeroBatchSyncManager } from './xero/batch-sync'
 
 type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'

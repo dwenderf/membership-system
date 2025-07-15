@@ -592,11 +592,11 @@ export class PaymentCompletionProcessor {
         .from('user_registrations')
         .select(`
           *,
-          registrations (
+          registration:registrations (
             name,
-            seasons (name, start_date, end_date)
+            season:seasons (name, start_date, end_date)
           ),
-          registration_categories (
+          registration_category:registration_categories (
             name,
             price
           )
@@ -613,12 +613,12 @@ export class PaymentCompletionProcessor {
         user_id: event.user_id,
         email_address: user.email,
         event_type: 'registration.completed',
-        subject: `Registration Confirmation - ${registration.registrations.name}`,
+        subject: `Registration Confirmation - ${registration.registration.name}`,
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
-          registrationName: registration.registrations.name,
-          categoryName: registration.registration_categories?.[0]?.name || 'Standard',
-          seasonName: registration.registrations.seasons.name,
+          registrationName: registration.registration.name,
+          categoryName: registration.registration_category?.name || 'Standard',
+          seasonName: registration.registration.season.name,
           amount: registration.amount_paid || 0,
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown'
         },
@@ -643,11 +643,11 @@ export class PaymentCompletionProcessor {
         .from('user_registrations')
         .select(`
           *,
-          registrations (
+          registration:registrations (
             name,
-            seasons (name, start_date, end_date)
+            season:seasons (name, start_date, end_date)
           ),
-          registration_categories (
+          registration_category:registration_categories (
             name,
             price
           )
@@ -664,12 +664,12 @@ export class PaymentCompletionProcessor {
         user_id: event.user_id,
         email_address: user.email,
         event_type: 'registration.completed',
-        subject: `Registration Confirmation - ${registration.registrations.name}`,
+        subject: `Registration Confirmation - ${registration.registration.name}`,
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
-          registrationName: registration.registrations.name,
-          categoryName: registration.registration_categories?.[0]?.name || 'Standard',
-          seasonName: registration.registrations.seasons.name,
+          registrationName: registration.registration.name,
+          categoryName: registration.registration_category?.name || 'Standard',
+          seasonName: registration.registration.season.name,
           amount: registration.amount_paid || 0,
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown'
         },

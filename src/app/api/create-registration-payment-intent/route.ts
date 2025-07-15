@@ -27,7 +27,8 @@ async function handleFreeRegistration({
   presaleCode,
   discountCode,
   paymentContext,
-  startTime
+  startTime,
+  request
 }: {
   supabase: any
   user: any
@@ -37,6 +38,7 @@ async function handleFreeRegistration({
   discountCode?: string
   paymentContext: any
   startTime: number
+  request: NextRequest
 }) {
   try {
     const adminSupabase = createAdminClient()
@@ -286,7 +288,10 @@ async function handleFreeRegistration({
       // We should still track this usage for limit enforcement
       const discountValidation = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cookie': request.headers.get('cookie') || ''
+        },
         body: JSON.stringify({
           code: discountCode,
           registrationId: registrationId,
@@ -445,7 +450,8 @@ export async function POST(request: NextRequest) {
         presaleCode,
         discountCode,
         paymentContext,
-        startTime
+        startTime,
+        request
       })
     }
 
@@ -607,7 +613,8 @@ export async function POST(request: NextRequest) {
         presaleCode,
         discountCode,
         paymentContext,
-        startTime
+        startTime,
+        request
       })
     }
 

@@ -228,7 +228,7 @@ export async function syncUserToXeroContact(
           
           // Before creating new contact, check if there's another non-archived contact with same email
           try {
-            const emailSearchResponse = await xeroApi.getContacts(
+            const emailSearchResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `EmailAddress="${userData.email}"`
@@ -290,7 +290,7 @@ export async function syncUserToXeroContact(
                 contactData.contactID = nonArchivedContact.contactID
                 contactData.name = finalContactName
                 
-                response = await xeroApi.updateContact(tenantId, nonArchivedContact.contactID, {
+                response = await xeroApi.accountingApi.updateContact(tenantId, nonArchivedContact.contactID, {
                   contacts: [contactData]
                 })
                 
@@ -314,7 +314,7 @@ export async function syncUserToXeroContact(
           
           // Check for name uniqueness and add timestamp if needed
           try {
-            const nameCheckResponse = await xeroApi.getContacts(
+            const nameCheckResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `Name="${contactData.name}"`

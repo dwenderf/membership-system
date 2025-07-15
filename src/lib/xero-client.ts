@@ -280,7 +280,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
         'token-refresh-missing-refresh-token',
         'Xero did not return a new refresh token - this may indicate an authentication issue',
         { tenantId, oldRefreshTokenPrefix: refreshToken.substring(0, 10) + '...' },
-        'warning'
+        'warn'
       )
       return null // Force re-authentication rather than using invalid token
     }

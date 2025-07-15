@@ -261,7 +261,7 @@ async function handleFreeMembership({
           membershipRecordId: membershipRecord.id,
           error: emailError instanceof Error ? emailError.message : String(emailError)
         },
-        'warning'
+        'warn'
       )
     }
 

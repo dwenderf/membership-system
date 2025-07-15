@@ -76,7 +76,7 @@ export class XeroStagingManager {
         'staging-paid-purchase-no-existing',
         'No existing staging data found, but payment_items table has been removed. Staging should have been created during payment intent creation.',
         { paymentId },
-        'warning'
+        'warn'
       )
 
       // In the new architecture, staging data should already exist from payment intent creation

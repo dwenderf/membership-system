@@ -312,7 +312,7 @@ async function handleFreeRegistration({
           registrationRecordId: reservationData.id,
           error: emailError instanceof Error ? emailError.message : String(emailError)
         },
-        'warning'
+        'warn'
       )
     }
 

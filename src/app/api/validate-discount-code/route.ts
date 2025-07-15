@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         is_active,
         valid_from,
         valid_until,
-        discount_categories (
+        discount_categories!inner (
           id,
           name,
           accounting_code,
@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if category is active
-    if (!discountCode.discount_categories?.[0]?.is_active) {
+    const discountCategory = discountCode.discount_categories?.[0]
+    if (!discountCategory?.is_active) {
       const result: DiscountValidationResult = {
         isValid: false,
         error: 'Discount code category is not active'
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
     let isPartialDiscount = false
     let partialDiscountMessage = ''
     
-    const category = discountCode.discount_categories?.[0]
+    const category = discountCategory
     
     if (category?.max_discount_per_user_per_season) {
       const { data: usageData, error: usageError } = await supabase

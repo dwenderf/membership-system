@@ -188,8 +188,6 @@ export type Database = {
           stripe_payment_intent_id: string | null
           reservation_expires_at: string | null
           registered_at: string | null
-          xero_synced: boolean
-          xero_sync_error: string | null
           created_at: string
         }
         Insert: {
@@ -206,8 +204,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           reservation_expires_at?: string | null
           registered_at?: string | null
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
         }
         Update: {
@@ -224,8 +220,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           reservation_expires_at?: string | null
           registered_at?: string | null
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
         }
       }

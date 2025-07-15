@@ -388,7 +388,7 @@ CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
 CREATE INDEX idx_payments_xero_synced ON payments(xero_synced);
 CREATE INDEX idx_user_memberships_xero_synced ON user_memberships(xero_synced);
-CREATE INDEX idx_user_registrations_xero_synced ON user_registrations(xero_synced);
+-- Xero sync status is tracked in xero_invoices staging table
 CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);
 CREATE INDEX idx_email_logs_event_time ON email_logs(event_type, sent_at);
 CREATE INDEX idx_email_logs_status_time ON email_logs(status, sent_at);
@@ -565,8 +565,8 @@ ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAUL
 ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
 
 -- Add Xero tracking fields to user_registrations table
-ALTER TABLE user_registrations ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
-ALTER TABLE user_registrations ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
+-- Xero sync status is tracked in dedicated staging tables (xero_invoices, xero_payments)
+-- The xero_synced and xero_sync_error columns in user_registrations were removed as redundant
 
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

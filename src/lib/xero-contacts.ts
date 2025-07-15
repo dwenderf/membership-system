@@ -336,7 +336,7 @@ export async function syncUserToXeroContact(
           // Remove contactID since we're creating new
           delete contactData.contactID
           
-          response = await xeroApi.createContacts(tenantId, {
+          response = await xeroApi.accountingApi.createContacts(tenantId, {
             contacts: [contactData]
           })
           
@@ -349,7 +349,7 @@ export async function syncUserToXeroContact(
       }
     } else {
       // Create new contact
-      response = await xeroApi.createContacts(tenantId, {
+      response = await xeroApi.accountingApi.createContacts(tenantId, {
         contacts: [contactData]
       })
     }
@@ -555,7 +555,7 @@ export async function findDuplicateContactsByEmail(
       return { success: false, error: 'Unable to authenticate with Xero' }
     }
 
-    const searchResponse = await xeroApi.getContacts(
+    const searchResponse = await xeroApi.accountingApi.getContacts(
       tenantId,
       undefined,
       `EmailAddress="${email}"`

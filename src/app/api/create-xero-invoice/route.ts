@@ -119,7 +119,13 @@ export async function POST(request: NextRequest) {
       const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
       
       // Build payment items - always show full membership price
-      const paymentItems = [{
+      const paymentItems: Array<{
+        item_type: 'membership' | 'registration' | 'discount' | 'donation'
+        item_id: string | null
+        amount: number
+        description?: string
+        accounting_code?: string
+      }> = [{
         item_type: 'membership' as const,
         item_id: membershipId,
         amount: basePrice,

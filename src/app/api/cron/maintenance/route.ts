@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const startTime = Date.now()
   const results = {
-    emailRetry: { success: false, error: null as string | null, retried: 0 },
+    emailRetry: { success: false, error: null as string | null, retried: 0, successful: 0, failed: 0 },
     cleanup: { success: false, error: null as string | null, cleaned: 0 }
   }
 
@@ -27,75 +27,41 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Step 1: Email Retry
+    // Step 1: Email Processing
     try {
       logger.logPaymentProcessing(
-        'cron-email-retry-start',
-        'Starting email retry process',
+        'cron-email-processing-start',
+        'Starting email processing',
         {},
         'info'
       )
 
-      // Get failed email logs from the last 24 hours
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
+      // Process staged emails
+      const { emailStagingManager } = await import('@/lib/email-staging')
+      const emailResults = await emailStagingManager.processStagedEmails()
 
-      const { data: failedEmails, error: emailError } = await supabase
-        .from('email_logs')
-        .select('*')
-        .eq('status', 'failed')
-        .gte('created_at', yesterday.toISOString())
-        .order('created_at', { ascending: true })
+      results.emailRetry.retried = emailResults.processed
+      results.emailRetry.successful = emailResults.successful
+      results.emailRetry.failed = emailResults.failed
 
-      if (emailError) {
-        results.emailRetry.error = emailError.message
-        logger.logPaymentProcessing(
-          'cron-email-retry-error',
-          'Failed to fetch failed emails',
-          { error: results.emailRetry.error },
-          'error'
-        )
-      } else {
-        results.emailRetry.retried = failedEmails?.length || 0
-        
-        if (failedEmails && failedEmails.length > 0) {
-          logger.logPaymentProcessing(
-            'cron-email-retry-found',
-            `Found ${failedEmails.length} failed emails to retry`,
-            { count: failedEmails.length },
-            'info'
-          )
+      logger.logPaymentProcessing(
+        'cron-email-processing-complete',
+        'Email processing completed',
+        { 
+          processed: emailResults.processed, 
+          successful: emailResults.successful, 
+          failed: emailResults.failed,
+          errors: emailResults.errors
+        },
+        'info'
+      )
 
-          // For now, just log them - actual retry logic would go here
-          // In a real implementation, you'd resend the emails
-          for (const email of failedEmails) {
-            logger.logPaymentProcessing(
-              'cron-email-retry-item',
-              'Would retry failed email',
-              { 
-                emailId: email.id,
-                recipient: email.recipient_email,
-                subject: email.subject,
-                originalError: email.error_message
-              },
-              'info'
-            )
-          }
-        }
-
-        results.emailRetry.success = true
-        logger.logPaymentProcessing(
-          'cron-email-retry-success',
-          'Email retry process completed',
-          { retried: results.emailRetry.retried },
-          'info'
-        )
-      }
+      results.emailRetry.success = true
     } catch (error) {
       results.emailRetry.error = error instanceof Error ? error.message : String(error)
       logger.logPaymentProcessing(
-        'cron-email-retry-exception',
-        'Email retry process threw exception',
+        'cron-email-processing-exception',
+        'Email processing threw exception',
         { error: results.emailRetry.error },
         'error'
       )

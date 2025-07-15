@@ -250,16 +250,16 @@ async function handleFreeMembership({
         trigger_source: 'free_membership',
         timestamp: new Date().toISOString()
       })
-    } catch (emailError) {
-      // Don't fail the whole transaction if email fails
+    } catch (error) {
+      // Email staging failures are non-critical - don't fail the transaction
       logger.logPaymentProcessing(
         'free-membership-email-error',
-        'Failed to send confirmation email for free membership',
+        'Failed to stage confirmation email for free membership',
         { 
           userId: user.id, 
           membershipId,
           membershipRecordId: membershipRecord.id,
-          error: emailError instanceof Error ? emailError.message : String(emailError)
+          error: error instanceof Error ? error.message : String(error)
         },
         'warn'
       )

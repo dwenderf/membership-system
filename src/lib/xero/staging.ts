@@ -114,11 +114,11 @@ export class XeroStagingManager {
       if (tenants.length === 0) {
         logger.logXeroSync(
           'staging-no-tenants',
-          'No active Xero tenants, skipping staging',
+          'No active Xero tenants found - CRITICAL ERROR',
           { source: 'immediate' },
-          'warn'
+          'error'
         )
-        return true // Not a failure - just no Xero configured
+        return false // Critical failure - Xero must be configured
       }
 
       // Create staging records for each tenant
@@ -181,11 +181,11 @@ export class XeroStagingManager {
       if (tenants.length === 0) {
         logger.logXeroSync(
           'staging-no-tenants',
-          'No active Xero tenants, skipping staging',
+          'No active Xero tenants found - CRITICAL ERROR',
           { source: 'free-purchase' },
-          'warn'
+          'error'
         )
-        return true // Not a failure - just no Xero configured
+        return false // Critical failure - Xero must be configured
       }
 
       // Create staging records for each tenant

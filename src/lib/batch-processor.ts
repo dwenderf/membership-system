@@ -346,13 +346,27 @@ export class BatchProcessor {
   protected async processScheduledBatches(): Promise<void> {
     console.log('🔄 Running scheduled batch processing...')
     
-    // This would typically:
-    // 1. Query for pending jobs/records
-    // 2. Group by priority and type
-    // 3. Process high-priority items first
-    // 4. Use processBatch() for efficient processing
-    
-    console.log('🚧 Scheduled batch processing - to be implemented by specific processors')
+    try {
+      // Process staged emails
+      const { emailStagingManager } = await import('./email-staging')
+      const emailResults = await emailStagingManager.processStagedEmails()
+      
+      console.log('📧 Email batch processing results:', {
+        processed: emailResults.processed,
+        successful: emailResults.successful,
+        failed: emailResults.failed,
+        errors: emailResults.errors
+      })
+
+      // TODO: Add other batch processing operations:
+      // - Processing pending Xero sync records
+      // - Retrying failed operations
+      // - Cleaning up old records
+      
+      console.log('✅ Scheduled batch processing completed')
+    } catch (error) {
+      console.error('❌ Scheduled batch processing failed:', error)
+    }
   }
 
   /**

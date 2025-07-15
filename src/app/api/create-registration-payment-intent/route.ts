@@ -323,17 +323,17 @@ async function handleFreeRegistration({
         trigger_source: 'free_registration',
         timestamp: new Date().toISOString()
       })
-    } catch (emailError) {
-      // Don't fail the whole transaction if email fails
+    } catch (error) {
+      // Email staging failures are non-critical - don't fail the transaction
       logger.logPaymentProcessing(
         'free-registration-email-error',
-        'Failed to send confirmation email for free registration',
+        'Failed to stage confirmation email for free registration',
         { 
           userId: user.id, 
           registrationId,
           categoryId,
           registrationRecordId: reservationData.id,
-          error: emailError instanceof Error ? emailError.message : String(emailError)
+          error: error instanceof Error ? error.message : String(error)
         },
         'warn'
       )

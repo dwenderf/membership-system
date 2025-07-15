@@ -279,7 +279,7 @@ export async function createXeroInvoiceBeforePayment(
             .single()
           
           if (userData?.email) {
-            const emailSearchResponse = await xeroApi.getContacts(
+            const emailSearchResponse = await xeroApi.accountingApi.getContacts(
               activeTenant.tenant_id,
               undefined,
               `EmailAddress="${userData.email}"`
@@ -352,7 +352,7 @@ export async function createXeroInvoiceBeforePayment(
                   console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
                   
                   // Update the contact name to follow our convention
-                  await xeroApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
+                  await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
                     contacts: [{
                       contactID: nonArchivedContact.contactID,
                       name: finalContactName,
@@ -369,7 +369,7 @@ export async function createXeroInvoiceBeforePayment(
                 
                 // Use the non-archived contact for invoice
                 xeroInvoiceData.contact = { contactID: nonArchivedContact.contactID }
-                response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                   invoices: [xeroInvoiceData]
                 })
                 

@@ -80,21 +80,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
-    // Debug logging
-    console.log('Discount code found:', {
-      id: discountCode.id,
-      code: discountCode.code,
-      is_active: discountCode.is_active,
-      discount_categories: discountCode.discount_categories
-    })
-
     // Check if category is active
-    const discountCategory = discountCode.discount_categories?.[0]
-    console.log('Category check:', {
-      discount_categories_length: discountCode.discount_categories?.length,
-      discountCategory,
-      category_is_active: discountCategory?.is_active
-    })
+    const discountCategory = discountCode.discount_categories as any
     
     if (!discountCategory?.is_active) {
       const result: DiscountValidationResult = {
@@ -129,7 +116,7 @@ export async function POST(request: NextRequest) {
     let isPartialDiscount = false
     let partialDiscountMessage = ''
     
-    const category = discountCategory
+    const category = discountCategory as any
     
     if (category?.max_discount_per_user_per_season) {
       const { data: usageData, error: usageError } = await supabase

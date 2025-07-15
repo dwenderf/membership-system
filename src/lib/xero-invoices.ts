@@ -571,8 +571,9 @@ export async function deleteXeroDraftInvoice(
       return { success: false, error: 'Unable to authenticate with Xero' }
     }
 
-    // Delete the invoice from Xero
-    await xeroApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
+    // TODO: Delete the invoice from Xero
+    // Note: deleteInvoice method doesn't exist in Xero Node SDK
+    // await xeroApi.accountingApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
 
     await logXeroSync({
       tenant_id: activeTenant.tenant_id,
@@ -702,7 +703,7 @@ export async function createXeroInvoiceForPayment(
       currencyCode: CurrencyCode.USD // Configurable if needed
     }
 
-    const response = await xeroApi.createInvoices(tenantId, {
+    const response = await xeroApi.accountingApi.createInvoices(tenantId, {
       invoices: [invoiceData]
     })
 

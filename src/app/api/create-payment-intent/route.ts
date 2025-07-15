@@ -9,7 +9,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 // Force import server config
 import '../../../../sentry.server.config'
 import * as Sentry from '@sentry/nextjs'
-import { setPaymentContext, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
+import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -308,11 +308,12 @@ export async function POST(request: NextRequest) {
     const { membershipId, durationMonths, amount, paymentOption, assistanceAmount, donationAmount } = body
     
     // Set payment context for Sentry
-    const paymentContext = {
+    const paymentContext: PaymentContext = {
       userId: user.id,
       userEmail: user.email,
       membershipId: membershipId,
       amountCents: amount,
+      paymentIntentId: undefined, // Will be set after Stripe payment intent creation
       endpoint: '/api/create-payment-intent',
       operation: 'payment_intent_creation'
     }

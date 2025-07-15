@@ -20,7 +20,7 @@ type StagingPaymentData = {
   discount_amount: number
   final_amount: number
   payment_items: Array<{
-    item_type: 'membership' | 'registration' | 'donation'
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
     amount: number
     description?: string
@@ -32,7 +32,7 @@ type StagingPaymentData = {
     category_name: string
     accounting_code?: string
   }>
-  stripe_payment_intent_id?: string
+  stripe_payment_intent_id?: string | null
 }
 
 export class XeroStagingManager {

@@ -1,11 +1,14 @@
 import * as Sentry from "@sentry/nextjs";
 
 export interface PaymentContext {
-  paymentIntentId?: string;
+  paymentIntentId?: string | undefined;
   userId?: string;
   userEmail?: string;
   membershipId?: string;
+  registrationId?: string;
+  categoryId?: string;
   amountCents?: number;
+  discountCode?: string;
   endpoint?: string;
   operation?: string;
 }
@@ -104,13 +107,8 @@ export function setPaymentContext(context: PaymentContext) {
  * Create a Sentry transaction for payment operations
  */
 export function createPaymentTransaction(name: string, operation: string) {
-  return Sentry.startTransaction({
-    name,
-    op: operation,
-    tags: {
-      payment_related: 'true'
-    }
-  });
+  // Sentry transactions are not available in this version
+  return null;
 }
 
 /**

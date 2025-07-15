@@ -12,7 +12,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 // Force import server config
 import '../../../../sentry.server.config'
 import * as Sentry from '@sentry/nextjs'
-import { setPaymentContext, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
+import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -372,13 +372,14 @@ export async function POST(request: NextRequest) {
     const { registrationId, categoryId, amount, presaleCode, discountCode } = body
     
     // Set payment context for Sentry
-    const paymentContext = {
+    const paymentContext: PaymentContext = {
       userId: user.id,
       userEmail: user.email,
       registrationId: registrationId,
       categoryId: categoryId,
       amountCents: amount,
       discountCode: discountCode,
+      paymentIntentId: undefined, // Will be set after Stripe payment intent creation
       endpoint: '/api/create-registration-payment-intent',
       operation: 'registration_payment_intent_creation'
     }
@@ -431,7 +432,7 @@ export async function POST(request: NextRequest) {
 
     // Find the specific category
     const selectedCategory = registration.registration_categories?.find(
-      cat => cat.id === categoryId
+      (cat: { id: string }) => cat.id === categoryId
     )
 
     if (!selectedCategory) {

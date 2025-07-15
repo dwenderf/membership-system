@@ -33,7 +33,7 @@ export interface PaymentInvoiceData {
   discount_amount: number // in cents
   final_amount: number // in cents
   payment_items: Array<{
-    item_type: 'membership' | 'registration' | 'donation'
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
     amount: number // in cents
     description?: string
@@ -54,7 +54,7 @@ export interface PrePaymentInvoiceData {
   discount_amount?: number // in cents
   final_amount: number // in cents
   payment_items: Array<{
-    item_type: 'membership' | 'registration' | 'donation'
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
     amount: number // in cents
     description?: string

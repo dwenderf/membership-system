@@ -276,6 +276,8 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }
 
+
+
     // Get user and registration details for email
     const { data: userProfile } = await supabase
       .from('users')
@@ -295,6 +297,65 @@ export async function POST(request: NextRequest) {
       `)
       .eq('id', registrationId)
       .single()
+
+    // Record discount usage if applicable (same logic as webhook)
+    const discountCode = paymentIntent.metadata.discountCode
+    const discountAmount = parseInt(paymentIntent.metadata.discountAmount || '0')
+    const discountCategoryId = paymentIntent.metadata.discountCategoryId
+
+    if (discountCode && discountAmount > 0 && discountCategoryId) {
+      try {
+        // Get the discount code record
+        const { data: discountCodeRecord } = await supabase
+          .from('discount_codes')
+          .select(`
+            id,
+            category:discount_categories(id, name)
+          `)
+          .eq('code', discountCode)
+          .eq('is_active', true)
+          .single()
+
+        if (discountCodeRecord) {
+          // Check if discount usage already exists to prevent duplicates
+          const { data: existingUsage } = await supabase
+            .from('discount_usage')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('discount_code_id', discountCodeRecord.id)
+            .eq('registration_id', registrationId)
+            .single()
+
+          if (!existingUsage) {
+            // Record discount usage only if it doesn't already exist
+            const { error: usageError } = await supabase
+              .from('discount_usage')
+              .insert({
+                user_id: user.id,
+                discount_code_id: discountCodeRecord.id,
+                discount_category_id: discountCategoryId,
+                season_id: registrationDetails?.season?.id,
+                amount_saved: discountAmount,
+                registration_id: registrationId,
+              })
+
+            if (usageError) {
+              console.error('Error recording discount usage:', usageError)
+              // Don't fail the payment - just log the error
+              capturePaymentError(usageError, paymentContext, 'warning')
+            } else {
+              console.log('✅ Recorded discount usage for payment intent:', paymentIntentId)
+            }
+          } else {
+            console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntentId)
+          }
+        }
+      } catch (discountError) {
+        console.error('Error processing discount usage:', discountError)
+        // Don't fail the payment - just log the error
+        capturePaymentError(discountError, paymentContext, 'warning')
+      }
+    }
 
     // Send confirmation email
     if (userProfile && registrationDetails) {

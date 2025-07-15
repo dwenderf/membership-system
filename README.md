@@ -535,7 +535,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 
 **Stripe Webhooks:**
 1. Go to your Stripe Dashboard → Webhooks
-2. Update endpoint URL to: `https://your-domain.vercel.app/api/webhooks/stripe`
+2. Update endpoint URL to: `https://your-domain.vercel.app/api/stripe-webhook`
 3. Copy the new webhook secret to `STRIPE_WEBHOOK_SECRET`
 
 **Google OAuth:**

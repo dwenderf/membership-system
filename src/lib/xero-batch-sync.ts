@@ -4,7 +4,7 @@
  * Handles syncing staged records to Xero API with retry logic and error handling
  */
 
-import { Invoice, LineItem, Payment } from 'xero-node'
+import { Invoice, LineItem, Payment, CurrencyCode } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
 import { getOrCreateXeroContact } from './xero-contacts'
 import { createAdminClient } from './supabase/server'
@@ -181,7 +181,7 @@ export class XeroBatchSyncManager {
         invoiceNumber: invoiceRecord.invoice_number,
         reference: metadata.stripe_payment_intent_id || '',
         status: invoiceRecord.net_amount === 0 ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
-        currencyCode: Invoice.CurrencyCodeEnum.USD
+        currencyCode: CurrencyCode.USD
       }
 
       // Create invoice in Xero

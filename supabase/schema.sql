@@ -777,6 +777,21 @@ CREATE POLICY "Users can view their own email logs" ON email_logs
     FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "System can insert email logs" ON email_logs
+
+-- Discount usage policies
+CREATE POLICY "Users can view their own discount usage" ON discount_usage
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own discount usage" ON discount_usage
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all discount usage" ON discount_usage
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
     FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "System can update email logs" ON email_logs

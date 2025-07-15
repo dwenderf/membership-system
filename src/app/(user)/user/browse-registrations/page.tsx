@@ -102,7 +102,7 @@ export default async function BrowseRegistrationsPage() {
   if (availableRegistrations) {
     availableRegistrations.forEach(reg => {
       if (reg.registration_categories) {
-        reg.registration_categories.forEach(cat => {
+        reg.registration_categories.forEach((cat: any) => {
           allCategoryIds.push(cat.id)
         })
       }
@@ -272,9 +272,9 @@ export default async function BrowseRegistrationsPage() {
               })
               .map((registration) => {
                 // Check if user has required memberships for any category
-                const hasEligibleMembership = registration.registration_categories?.some(cat => {
+                const hasEligibleMembership = registration.registration_categories?.some((cat: any) => {
                   if (!cat.memberships?.name) return true // No membership required
-                  return consolidatedMembershipList.some(cm => cm.membership?.name === cat.memberships?.name)
+                  return consolidatedMembershipList.some((cm: any) => cm.membership?.name === cat.memberships?.name)
                 })
 
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
@@ -393,7 +393,7 @@ export default async function BrowseRegistrationsPage() {
                             registration={{
                               ...registration,
                               // Pre-calculate pricing for all categories
-                              registration_categories: registration.registration_categories?.map(cat => ({
+                              registration_categories: registration.registration_categories?.map((cat: any) => ({
                                 ...cat,
                                 pricing: getCategoryPrice(cat),
                                 current_count: categoryRegistrationCounts[cat.id] || 0

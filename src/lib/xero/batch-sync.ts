@@ -143,6 +143,12 @@ export class XeroBatchSyncManager {
     try {
       console.log('📄 Syncing invoice to Xero:', invoiceRecord.invoice_number)
 
+      // Check if tenant_id is available
+      if (!invoiceRecord.tenant_id) {
+        await this.markInvoiceAsFailed(invoiceRecord.id, 'No tenant_id available for Xero sync')
+        return false
+      }
+
       // Get authenticated Xero client
       const xeroApi = await getAuthenticatedXeroClient(invoiceRecord.tenant_id)
       if (!xeroApi) {
@@ -228,7 +234,7 @@ export class XeroBatchSyncManager {
       
       // Log to Xero sync logs
       await logXeroSync({
-        tenant_id: invoiceRecord.tenant_id,
+        tenant_id: invoiceRecord.tenant_id || '',
         operation: 'create_invoice',
         record_type: 'invoice',
         record_id: invoiceRecord.id,
@@ -256,6 +262,12 @@ export class XeroBatchSyncManager {
 
       if (!invoiceRecord || !invoiceRecord.xero_invoice_id) {
         await this.markPaymentAsFailed(paymentRecord.id, 'Associated invoice not synced to Xero yet')
+        return false
+      }
+
+      // Check if tenant_id is available
+      if (!paymentRecord.tenant_id) {
+        await this.markPaymentAsFailed(paymentRecord.id, 'No tenant_id available for Xero sync')
         return false
       }
 
@@ -319,7 +331,7 @@ export class XeroBatchSyncManager {
       
       // Log to Xero sync logs
       await logXeroSync({
-        tenant_id: paymentRecord.tenant_id,
+        tenant_id: paymentRecord.tenant_id || '',
         operation: 'create_payment',
         record_type: 'payment',
         record_id: paymentRecord.id,

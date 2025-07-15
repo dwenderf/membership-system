@@ -203,12 +203,12 @@ export class XeroBatchSyncManager {
 
           // Log success
           await logXeroSync({
-            operation: 'create_invoice',
             tenant_id: invoiceRecord.tenant_id,
+            operation: 'create_invoice',
             record_type: 'invoice',
             record_id: invoiceRecord.id,
-            success: true,
             xero_id: xeroInvoice.invoiceID,
+            success: true,
             details: `Invoice ${xeroInvoice.invoiceNumber} created successfully`
           })
 
@@ -228,8 +228,8 @@ export class XeroBatchSyncManager {
       
       // Log to Xero sync logs
       await logXeroSync({
-        operation: 'create_invoice',
         tenant_id: invoiceRecord.tenant_id,
+        operation: 'create_invoice',
         record_type: 'invoice',
         record_id: invoiceRecord.id,
         success: false,
@@ -294,12 +294,12 @@ export class XeroBatchSyncManager {
 
           // Log success
           await logXeroSync({
-            operation: 'create_payment',
             tenant_id: paymentRecord.tenant_id,
+            operation: 'create_payment',
             record_type: 'payment',
             record_id: paymentRecord.id,
-            success: true,
             xero_id: xeroPayment.paymentID,
+            success: true,
             details: `Payment ${xeroPayment.paymentID} created successfully`
           })
 
@@ -319,8 +319,8 @@ export class XeroBatchSyncManager {
       
       // Log to Xero sync logs
       await logXeroSync({
-        operation: 'create_payment',
         tenant_id: paymentRecord.tenant_id,
+        operation: 'create_payment',
         record_type: 'payment',
         record_id: paymentRecord.id,
         success: false,

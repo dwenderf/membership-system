@@ -422,16 +422,15 @@ export async function createXeroInvoiceBeforePayment(
     }
 
     if (!response.body.invoices || response.body.invoices.length === 0) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        'no_invoice_returned',
-        'No invoice returned from Xero API during pre-payment creation'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice returned from Xero API during pre-payment creation'
+      })
       return { success: false, error: 'No invoice returned from Xero API' }
     }
 
@@ -440,16 +439,15 @@ export async function createXeroInvoiceBeforePayment(
     const invoiceNumber = xeroInvoice.invoiceNumber
 
     if (!xeroInvoiceId || !invoiceNumber) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        'no_invoice_id',
-        'No invoice ID or number returned from Xero API during pre-payment creation'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice ID or number returned from Xero API during pre-payment creation'
+      })
       return { success: false, error: 'No invoice ID or number returned from Xero API' }
     }
 
@@ -474,16 +472,15 @@ export async function createXeroInvoiceBeforePayment(
       .from('xero_invoices')
       .insert(invoiceRecord)
 
-    await logXeroSync(
-      activeTenant.tenant_id,
-      'invoice_sync',
-      'payment',
-      null,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Pre-payment invoice created successfully: ${invoiceNumber}`
-    )
+    await logXeroSync({
+      tenant_id: activeTenant.tenant_id,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: xeroInvoiceId,
+      success: true,
+      details: `Pre-payment invoice created successfully: ${invoiceNumber}`
+    })
 
     return { 
       success: true, 
@@ -541,16 +538,15 @@ export async function createXeroInvoiceBeforePayment(
     
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        errorCode,
-        errorMessage
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: errorMessage
+      })
     }
 
     return { 
@@ -578,16 +574,15 @@ export async function deleteXeroDraftInvoice(
     // Delete the invoice from Xero
     await xeroApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
 
-    await logXeroSync(
-      activeTenant.tenant_id,
-      'invoice_sync',
-      'payment',
-      null,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Draft invoice deleted after payment failure: ${xeroInvoiceId}`
-    )
+    await logXeroSync({
+      tenant_id: activeTenant.tenant_id,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: undefined,
+      success: true,
+      details: `Draft invoice deleted after payment failure: ${xeroInvoiceId}`
+    })
 
     return { success: true }
 
@@ -596,16 +591,15 @@ export async function deleteXeroDraftInvoice(
     
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        xeroInvoiceId,
-        'error',
-        'invoice_deletion_failed',
-        error instanceof Error ? error.message : 'Unknown error during invoice deletion'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: xeroInvoiceId,
+        success: false,
+        error_message: error instanceof Error ? error.message : 'Unknown error during invoice deletion'
+      })
     }
 
     return { 
@@ -713,16 +707,15 @@ export async function createXeroInvoiceForPayment(
     })
 
     if (!response.body.invoices || response.body.invoices.length === 0) {
-      await logXeroSync(
-        tenantId,
-        'invoice_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_invoice_returned',
-        'No invoice returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice returned from Xero API'
+      })
       return { success: false, error: 'No invoice returned from Xero API' }
     }
 
@@ -731,16 +724,15 @@ export async function createXeroInvoiceForPayment(
     const invoiceNumber = xeroInvoice.invoiceNumber
 
     if (!xeroInvoiceId || !invoiceNumber) {
-      await logXeroSync(
-        tenantId,
-        'invoice_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_invoice_id',
-        'No invoice ID or number returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice ID or number returned from Xero API'
+      })
       return { success: false, error: 'No invoice ID or number returned from Xero API' }
     }
 
@@ -816,16 +808,15 @@ export async function createXeroInvoiceForPayment(
       })
       .eq('id', paymentId)
 
-    await logXeroSync(
-      tenantId,
-      'invoice_sync',
-      'payment',
-      paymentId,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Invoice created successfully: ${invoiceNumber}`
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: xeroInvoiceId,
+      success: true,
+      details: `Invoice created successfully: ${invoiceNumber}`
+    })
 
     return { 
       success: true, 
@@ -849,16 +840,15 @@ export async function createXeroInvoiceForPayment(
       })
       .eq('id', paymentId)
 
-    await logXeroSync(
-      tenantId,
-      'invoice_sync',
-      'payment',
-      paymentId,
-      null,
-      'error',
-      errorCode,
-      errorMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: undefined,
+      success: false,
+      error_message: errorMessage
+    })
 
     return { success: false, error: errorMessage }
   }

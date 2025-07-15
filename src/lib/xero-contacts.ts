@@ -355,16 +355,15 @@ export async function syncUserToXeroContact(
     }
 
     if (!response.body.contacts || response.body.contacts.length === 0) {
-      await logXeroSync(
-        tenantId,
-        'contact_sync',
-        'user',
-        userId,
-        null,
-        'error',
-        'no_contact_returned',
-        'No contact returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'contact_sync',
+        record_type: 'user',
+        record_id: userId,
+        xero_id: undefined,
+        success: false,
+        error_message: 'No contact returned from Xero API'
+      })
       return { success: false, error: 'No contact returned from Xero API' }
     }
 
@@ -372,16 +371,15 @@ export async function syncUserToXeroContact(
     xeroContactId = xeroContact.contactID
 
     if (!xeroContactId) {
-      await logXeroSync(
-        tenantId,
-        'contact_sync',
-        'user',
-        userId,
-        null,
-        'error',
-        'no_contact_id',
-        'No contact ID returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'contact_sync',
+        record_type: 'user',
+        record_id: userId,
+        xero_id: undefined,
+        success: false,
+        error_message: 'No contact ID returned from Xero API'
+      })
       return { success: false, error: 'No contact ID returned from Xero API' }
     }
 
@@ -417,16 +415,15 @@ export async function syncUserToXeroContact(
       ? `Contact updated successfully (ID: ${xeroContactId})`
       : `Contact created successfully (ID: ${xeroContactId})`
     
-    await logXeroSync(
-      tenantId,
-      'contact_sync',
-      'user',
-      userId,
-      xeroContactId,
-      'success',
-      undefined,
-      logMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'contact_sync',
+      record_type: 'user',
+      record_id: userId,
+      xero_id: xeroContactId,
+      success: true,
+      details: logMessage
+    })
 
     return { success: true, xeroContactId }
 
@@ -493,16 +490,15 @@ export async function syncUserToXeroContact(
         updated_at: new Date().toISOString()
       })
 
-    await logXeroSync(
-      tenantId,
-      'contact_sync',
-      'user',
-      userId,
-      null,
-      'error',
-      errorCode,
-      errorMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'contact_sync',
+      record_type: 'user',
+      record_id: userId,
+      xero_id: undefined,
+      success: false,
+      error_message: errorMessage
+    })
 
     return { success: false, error: errorMessage }
   }

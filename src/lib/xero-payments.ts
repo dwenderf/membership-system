@@ -96,16 +96,15 @@ export async function recordStripePaymentInXero(
     })
 
     if (!paymentResponse.body.payments || paymentResponse.body.payments.length === 0) {
-      await logXeroSync(
-        tenantId,
-        'payment_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_payment_returned',
-        'No payment returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'payment_sync',
+        record_type: 'payment',
+        record_id: paymentId || '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No payment returned from Xero API'
+      })
       return { success: false, error: 'No payment returned from Xero API' }
     }
 
@@ -113,16 +112,15 @@ export async function recordStripePaymentInXero(
     const xeroPaymentId = xeroPayment.paymentID
 
     if (!xeroPaymentId) {
-      await logXeroSync(
-        tenantId,
-        'payment_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_payment_id',
-        'No payment ID returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'payment_sync',
+        record_type: 'payment',
+        record_id: paymentId || '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No payment ID returned from Xero API'
+      })
       return { success: false, error: 'No payment ID returned from Xero API' }
     }
 
@@ -163,16 +161,15 @@ export async function recordStripePaymentInXero(
         .insert(paymentRecord)
     }
 
-    await logXeroSync(
-      tenantId,
-      'payment_sync',
-      'payment',
-      paymentId,
-      xeroPaymentId,
-      'success',
-      undefined,
-      `Payment recorded successfully: ${xeroPaymentId}`
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'payment_sync',
+      record_type: 'payment',
+      record_id: paymentId,
+      xero_id: xeroPaymentId,
+      success: true,
+      details: `Payment recorded successfully: ${xeroPaymentId}`
+    })
 
     return { 
       success: true, 
@@ -185,16 +182,15 @@ export async function recordStripePaymentInXero(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'payment_recording_failed'
 
-    await logXeroSync(
-      tenantId,
-      'payment_sync',
-      'payment',
-      paymentId,
-      null,
-      'error',
-      errorCode,
-      errorMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'payment_sync',
+      record_type: 'payment',
+      record_id: paymentId,
+      xero_id: undefined,
+      success: false,
+      error_message: errorMessage
+    })
 
     return { success: false, error: errorMessage }
   }
@@ -239,29 +235,27 @@ async function recordStripeFeeExpense(
     console.log(`Recording Stripe fee of $${feeAmount / 100} for payment ${paymentIntentId}`)
     
     // For now, we'll just log this - the actual implementation depends on your accounting preferences
-    await logXeroSync(
-      tenantId,
-      'payment_sync',
-      'payment',
-      paymentIntentId,
-      null,
-      'success',
-      undefined,
-      `Stripe fee recorded: $${feeAmount / 100}`
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'payment_sync',
+      record_type: 'payment',
+      record_id: paymentIntentId,
+      xero_id: undefined,
+      success: true,
+      details: `Stripe fee recorded: $${feeAmount / 100}`
+    })
 
   } catch (error) {
     console.error('Error recording Stripe fee expense:', error)
-    await logXeroSync(
-      tenantId,
-      'payment_sync',
-      'payment',
-      paymentIntentId,
-      null,
-      'warning',
-      'fee_recording_failed',
-      `Failed to record Stripe fee: ${error instanceof Error ? error.message : 'Unknown error'}`
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'payment_sync',
+      record_type: 'payment',
+      record_id: paymentIntentId,
+      xero_id: undefined,
+      success: false,
+      error_message: `Failed to record Stripe fee: ${error instanceof Error ? error.message : 'Unknown error'}`
+    })
   }
 }
 

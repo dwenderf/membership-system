@@ -2,7 +2,29 @@
  * Centralized Logging Service
  * 
  * Provides structured logging with console output, file persistence,
- * and integration with the admin log viewer.
+ * integration with the admin log viewer, and automatic Sentry error reporting.
+ * 
+ * FEATURES:
+ * - Automatic Sentry reporting for all 'error' level logs
+ * - Manual Sentry reporting for critical warnings
+ * - Category-based filtering for different types of operations
+ * - Rich context and metadata support
+ * - Production-only Sentry integration (development safe)
+ * 
+ * USAGE EXAMPLES:
+ * 
+ * // Basic error logging (automatically reported to Sentry)
+ * logger.error('payment-processing', 'stripe-webhook', 'Payment failed', { paymentId: 'pi_123' })
+ * 
+ * // Critical warning (manually reported to Sentry)
+ * logger.reportWarningToSentry('xero-sync', 'invoice-creation', 'Xero API rate limit approaching')
+ * 
+ * // Manual Sentry reporting for any level
+ * logger.reportToSentryManual('info', 'system', 'maintenance', 'Database backup completed')
+ * 
+ * // Category-based logging methods
+ * logger.logPaymentProcessing('webhook-received', 'Stripe webhook processed', { amount: 5000 })
+ * logger.logXeroSync('contact-sync', 'Contact synced to Xero', { contactId: 'xero_123' })
  */
 
 import { writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
@@ -353,6 +375,130 @@ export class Logger {
     const entry = this.createLogEntry('error', category, operation, message, metadata, userId, requestId)
     console.error(this.formatConsoleOutput(entry))
     this.writeToFile(entry)
+    
+    // Automatically report errors to Sentry
+    this.reportToSentry(entry)
+  }
+
+  /**
+   * Report error to Sentry with enhanced context
+   */
+  private reportToSentry(entry: LogEntry): void {
+    try {
+      // Only import Sentry if it's available (to avoid issues in development)
+      if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+        import('@sentry/nextjs').then((Sentry) => {
+          // Create error object from log entry
+          const error = new Error(entry.message)
+          
+          // Set Sentry context with log entry details
+          Sentry.setContext('log_entry', {
+            category: entry.category,
+            operation: entry.operation,
+            timestamp: entry.timestamp,
+            requestId: entry.requestId,
+            ...entry.metadata
+          })
+
+          // Set user context if available
+          if (entry.userId) {
+            Sentry.setUser({ id: entry.userId })
+          }
+
+          // Add tags for better filtering
+          Sentry.setTag('log_category', entry.category)
+          Sentry.setTag('log_operation', entry.operation)
+          Sentry.setTag('log_level', entry.level)
+
+          // Report to Sentry
+          Sentry.captureException(error, {
+            level: 'error',
+            tags: {
+              source: 'logger',
+              category: entry.category,
+              operation: entry.operation
+            }
+          })
+        }).catch(() => {
+          // Silently fail if Sentry is not available
+        })
+      }
+    } catch (error) {
+      // Don't let Sentry reporting break the logging
+      console.warn('Failed to report to Sentry:', error)
+    }
+  }
+
+  /**
+   * Report warning to Sentry for critical categories
+   * This can be called manually for important warnings that should be tracked
+   */
+  reportWarningToSentry(
+    category: LogCategory,
+    operation: string,
+    message: string,
+    metadata?: Record<string, any>,
+    userId?: string,
+    requestId?: string
+  ): void {
+    // Only report warnings for critical categories
+    const criticalCategories: LogCategory[] = ['payment-processing', 'xero-sync', 'system']
+    
+    if (criticalCategories.includes(category)) {
+      this.reportToSentryManual('warn', category, operation, message, metadata, userId, requestId)
+    }
+  }
+
+  /**
+   * Manually report any log entry to Sentry
+   * Useful for critical operations that should be tracked regardless of log level
+   */
+  reportToSentryManual(
+    level: LogLevel,
+    category: LogCategory,
+    operation: string,
+    message: string,
+    metadata?: Record<string, any>,
+    userId?: string,
+    requestId?: string
+  ): void {
+    try {
+      if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+        import('@sentry/nextjs').then((Sentry) => {
+          const error = new Error(`${level.toUpperCase()}: ${message}`)
+          
+          Sentry.setContext('log_entry', {
+            category,
+            operation,
+            timestamp: new Date().toISOString(),
+            requestId,
+            ...metadata
+          })
+
+          if (userId) {
+            Sentry.setUser({ id: userId })
+          }
+
+          Sentry.setTag('log_category', category)
+          Sentry.setTag('log_operation', operation)
+          Sentry.setTag('log_level', level)
+          Sentry.setTag('source', 'logger')
+
+          Sentry.captureException(error, {
+            level: level === 'error' ? 'error' : level === 'warn' ? 'warning' : 'info',
+            tags: {
+              source: 'logger',
+              category,
+              operation
+            }
+          })
+        }).catch(() => {
+          // Silently fail if Sentry is not available
+        })
+      }
+    } catch (error) {
+      console.warn('Failed to report to Sentry manually:', error)
+    }
   }
 
   /**
@@ -459,11 +605,11 @@ export class Logger {
         const fs = require('fs')
         const content = fs.readFileSync(filePath, 'utf8')
         
-        const lines = content.trim().split('\n').filter(line => line.trim())
+        const lines = content.trim().split('\n').filter((line: string) => line.trim())
         
         for (const line of lines) {
           try {
-            const entry: LogEntry = JSON.parse(line)
+            const entry: LogEntry = JSON.parse(line as string)
             
             // Apply filters
             if (level && entry.level !== level) continue

@@ -117,13 +117,13 @@ class EmailService {
       // Update log with Loops event ID if available
       if (loopsResponse && 'success' in loopsResponse && loopsResponse.success) {
         await this.updateEmailLog(logId, {
-          loops_event_id: loopsResponse.id || 'sent',
+          loops_event_id: (loopsResponse as any).id || 'sent',
           status: 'delivered'
         })
         
         return {
           success: true,
-          loopsEventId: loopsResponse.id
+          loopsEventId: (loopsResponse as any).id
         }
       } else {
         await this.updateEmailLog(logId, {

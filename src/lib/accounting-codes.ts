@@ -107,7 +107,7 @@ export async function getDiscountAccountingCode(discountCode: string): Promise<s
       .eq('code', discountCode)
       .single()
 
-    return discount?.discount_categories?.accounting_code || null
+    return discount?.discount_categories?.[0]?.accounting_code || null
 
   } catch (error) {
     logger.logPaymentProcessing(

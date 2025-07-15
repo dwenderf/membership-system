@@ -180,7 +180,7 @@ export class XeroBatchSyncManager {
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
         invoiceNumber: invoiceRecord.invoice_number,
         reference: metadata.stripe_payment_intent_id || '',
-        status: invoiceRecord.final_amount === 0 ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
+        status: invoiceRecord.net_amount === 0 ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
         currencyCode: Invoice.CurrencyCodeEnum.USD
       }
 

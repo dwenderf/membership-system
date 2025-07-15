@@ -1,4 +1,4 @@
-import { Payment, ExpenseClaimReceipt } from 'xero-node'
+import { Payment } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
 import { createClient } from './supabase/server'
 
@@ -91,7 +91,7 @@ export async function recordStripePaymentInXero(
       reference: stripePaymentData.reference || `Stripe: ${stripePaymentData.stripe_payment_intent_id}`
     }
 
-    const paymentResponse = await xeroApi.createPayments(tenantId, {
+    const paymentResponse = await xeroApi.accountingApi.createPayments(tenantId, {
       payments: [paymentData]
     })
 

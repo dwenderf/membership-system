@@ -74,16 +74,39 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('sync_status', 'pending')
 
-    // Get failed invoices and payments
+    // Get failed invoices and payments with user information
     const { data: failedInvoices } = await supabase
       .from('xero_invoices')
-      .select('id, tenant_id, sync_status, sync_error, last_synced_at, staging_metadata')
+      .select(`
+        id, 
+        tenant_id, 
+        sync_status, 
+        sync_error, 
+        last_synced_at, 
+        staging_metadata,
+        users:user_id (
+          first_name,
+          last_name,
+          member_id
+        )
+      `)
       .eq('sync_status', 'failed')
       .order('last_synced_at', { ascending: false })
 
     const { data: failedPayments } = await supabase
       .from('xero_payments')
-      .select('id, tenant_id, sync_status, sync_error, last_synced_at')
+      .select(`
+        id, 
+        tenant_id, 
+        sync_status, 
+        sync_error, 
+        last_synced_at,
+        users:user_id (
+          first_name,
+          last_name,
+          member_id
+        )
+      `)
       .eq('sync_status', 'failed')
       .order('last_synced_at', { ascending: false })
 

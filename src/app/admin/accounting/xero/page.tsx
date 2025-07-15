@@ -31,6 +31,11 @@ interface FailedItem {
   sync_error: string | null
   last_synced_at: string
   staging_metadata?: any
+  users?: {
+    first_name: string | null
+    last_name: string | null
+    member_id: string | null
+  } | null
 }
 
 interface SyncStats {
@@ -553,7 +558,14 @@ function XeroIntegrationContent() {
                   {syncStats.failed_invoices.map((item) => {
                     const itemId = `inv_${item.id}`
                     const isSelected = selectedFailedItems.has(itemId)
-                    const metadata = item.staging_metadata as any
+                    const user = item.users
+                    
+                    // Use Xero contact naming convention: "First Last - MemberID"
+                    const userDisplayName = user?.first_name && user?.last_name 
+                      ? user.member_id 
+                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
+                        : `${user.first_name} ${user.last_name}`
+                      : 'Unknown User'
                     
                     return (
                       <div key={itemId} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
@@ -570,7 +582,7 @@ function XeroIntegrationContent() {
                                 Invoice
                               </span>
                               <span className="ml-2 text-sm font-medium text-gray-900">
-                                {metadata?.invoice_number || `Invoice ${item.id.substring(0, 8)}`}
+                                {userDisplayName}
                               </span>
                             </div>
                             <time className="text-xs text-gray-500">
@@ -579,9 +591,6 @@ function XeroIntegrationContent() {
                           </div>
                           {item.sync_error && (
                             <p className="mt-1 text-sm text-red-600">{item.sync_error}</p>
-                          )}
-                          {metadata?.user_id && (
-                            <p className="mt-1 text-xs text-gray-500">User: {metadata.user_id}</p>
                           )}
                         </div>
                       </div>
@@ -592,6 +601,14 @@ function XeroIntegrationContent() {
                   {syncStats.failed_payments.map((item) => {
                     const itemId = `pay_${item.id}`
                     const isSelected = selectedFailedItems.has(itemId)
+                    const user = item.users
+                    
+                    // Use Xero contact naming convention: "First Last - MemberID"
+                    const userDisplayName = user?.first_name && user?.last_name 
+                      ? user.member_id 
+                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
+                        : `${user.first_name} ${user.last_name}`
+                      : 'Unknown User'
                     
                     return (
                       <div key={itemId} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
@@ -608,7 +625,7 @@ function XeroIntegrationContent() {
                                 Payment
                               </span>
                               <span className="ml-2 text-sm font-medium text-gray-900">
-                                Payment {item.id.substring(0, 8)}
+                                {userDisplayName}
                               </span>
                             </div>
                             <time className="text-xs text-gray-500">

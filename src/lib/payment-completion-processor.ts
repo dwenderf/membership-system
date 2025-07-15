@@ -558,7 +558,7 @@ export class PaymentCompletionProcessor {
         email: user.email,
         userName: `${user.first_name} ${user.last_name}`,
         registrationName: registration.registrations.name,
-        categoryName: registration.registration_categories?.name || 'Standard',
+        categoryName: registration.registration_categories?.[0]?.name || 'Standard',
         seasonName: registration.registrations.seasons.name,
         amount: registration.amount_paid || 0,
         paymentIntentId: registration.stripe_payment_intent_id || 'unknown'

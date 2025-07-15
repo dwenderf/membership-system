@@ -792,7 +792,6 @@ CREATE POLICY "Admins can view all discount usage" ON discount_usage
             WHERE id = auth.uid() AND is_admin = TRUE
         )
     );
-    FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "System can update email logs" ON email_logs
     FOR UPDATE USING (true);

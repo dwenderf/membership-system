@@ -107,7 +107,7 @@ async function createNewContactForArchivedContact(
     
     // Verify the name is unique in Xero
     try {
-      const nameCheckResponse = await xeroApi.getContacts(
+      const nameCheckResponse = await xeroApi.accountingApi.getContacts(
         tenantId,
         undefined,
         `Name="${contactName}"`
@@ -141,7 +141,7 @@ async function createNewContactForArchivedContact(
       } as ContactPerson] : undefined
     }
 
-    const response = await xeroApi.createContacts(tenantId, {
+    const response = await xeroApi.accountingApi.createContacts(tenantId, {
       contacts: [contactData]
     })
 
@@ -247,7 +247,7 @@ export async function createXeroInvoiceBeforePayment(
     let response
     try {
       console.log('📄 Creating Xero invoice with data:', JSON.stringify(xeroInvoiceData, null, 2))
-      response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+      response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
         invoices: [xeroInvoiceData]
       })
       console.log('✅ Invoice creation successful')

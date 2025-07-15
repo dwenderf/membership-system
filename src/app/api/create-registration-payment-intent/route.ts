@@ -68,6 +68,16 @@ async function handleFreeRegistration({
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
+    // Get user's active membership for eligibility (if any)
+    const { data: activeMembership } = await supabase
+      .from('user_memberships')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('payment_status', 'paid')
+      .gte('valid_until', new Date().toISOString().split('T')[0])
+      .limit(1)
+      .single()
+
     // Create user registration record (free registration - mark as paid immediately)
     const { data: reservationData, error: reservationError } = await adminSupabase
       .from('user_registrations')
@@ -75,8 +85,10 @@ async function handleFreeRegistration({
         user_id: user.id,
         registration_id: registrationId,
         registration_category_id: categoryId,
+        user_membership_id: activeMembership?.id || null,
         payment_status: 'paid',
-        amount_paid: 0,
+        registration_fee: selectedCategory.price || 0, // Original price before discount
+        amount_paid: 0, // Amount actually paid (0 for free registration)
         registered_at: new Date().toISOString(),
         presale_code_used: presaleCode || null,
       })
@@ -123,7 +135,7 @@ async function handleFreeRegistration({
           item_id: registrationId,
           amount: fullPrice, // Full registration price
           description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
-          accounting_code: accountingCodes.registration
+          accounting_code: accountingCodes.registration || undefined
         }]
 
         // Add discount line items if applicable
@@ -133,7 +145,7 @@ async function handleFreeRegistration({
             code: discountCode,
             amount_saved: fullPrice, // Full price was discounted
             category_name: 'Registration Discount',
-            accounting_code: accountingCodes.discount
+            accounting_code: accountingCodes.discount || undefined
           })
         }
 
@@ -990,16 +1002,16 @@ export async function POST(request: NextRequest) {
           item_id: registrationId,
           amount: amount, // Use original amount, not final amount after discount
           description: `Registration: ${registration.name} - ${categoryName}`,
-          accounting_code: accountingCodes.registration
+          accounting_code: accountingCodes.registration || undefined
         }
       ],
       discount_codes_used: validatedDiscountCode ? [{
         code: discountCode!,
         amount_saved: discountAmount,
         category_name: validatedDiscountCode.category?.name || 'Registration Discount',
-        accounting_code: accountingCodes.discount
+        accounting_code: accountingCodes.discount || undefined
       }] : [],
-      stripe_payment_intent_id: null // Will be updated after Stripe intent creation
+      stripe_payment_intent_id: undefined // Will be updated after Stripe intent creation
     }
 
     const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })

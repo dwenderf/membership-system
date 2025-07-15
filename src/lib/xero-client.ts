@@ -1,4 +1,4 @@
-import { XeroApi, XeroClient } from 'xero-node'
+import { XeroClient, AccountingApi } from 'xero-node'
 
 if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
   throw new Error('Missing Xero environment variables')
@@ -121,7 +121,7 @@ export async function withActiveTenant<T>(
 }
 
 // Helper function to get authenticated Xero client with token refresh
-export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroApi | null> {
+export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroClient | null> {
   try {
     // Import supabase here to avoid circular dependency
     const { createAdminClient } = await import('./supabase/server')
@@ -211,7 +211,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       await xero.setTokenSet({
         access_token: refreshedTokens.access_token,
         refresh_token: refreshedTokens.refresh_token,
-        expires_at: refreshedTokens.expires_at,
+        expires_at: parseInt(refreshedTokens.expires_at),
         token_type: 'Bearer',
         scope: tokenData.scope
       })
@@ -226,7 +226,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       })
     }
 
-    return xero.accountingApi
+    return xero
 
   } catch (error) {
     const { logger } = await import('./logging/logger')
@@ -517,8 +517,8 @@ export async function validateXeroConnection(tenantId: string): Promise<boolean>
     }
 
     // Try to get organization details as a connection test
-    const response = await xeroApi.getOrganisations(tenantId)
-    return response.body.organisations && response.body.organisations.length > 0
+    const response = await xeroApi.accountingApi.getOrganisations(tenantId)
+    return !!(response.body.organisations && response.body.organisations.length > 0)
   } catch (error) {
     const { logger } = await import('./logging/logger')
     logger.logXeroSync(

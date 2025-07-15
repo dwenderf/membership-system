@@ -6,7 +6,7 @@
  */
 
 import { createAdminClient } from './supabase/server'
-import { Database } from '@/types/database'
+import { Database } from '../types/database'
 import { logger } from './logging/logger'
 
 export interface BatchJob {
@@ -142,7 +142,7 @@ export class BatchProcessor {
       concurrency?: number
       delayBetweenBatches?: number
       retryFailures?: boolean
-      operationType?: keyof typeof this.retryStrategies
+      operationType?: string
       priorityField?: keyof T
       sortOrder?: 'asc' | 'desc'
       progressCallback?: (progress: { completed: number; total: number; successCount: number; failureCount: number }) => void
@@ -225,7 +225,7 @@ export class BatchProcessor {
           if (retryFailures) {
             const retryResult = await this.retryWithBackoff(
               () => processor(item),
-              operationType,
+              operationType as keyof typeof this.retryStrategies,
               `Processing item ${items.indexOf(item) + 1}`
             )
 
@@ -425,7 +425,7 @@ export class BatchProcessor {
       concurrency?: number
       delayBetweenBatches?: number
       retryFailures?: boolean
-      operationType?: keyof typeof this.retryStrategies
+      operationType?: string
       progressCallback?: (progress: { completed: number; total: number; successCount: number; failureCount: number }) => void
     } = {}
   ): Promise<{

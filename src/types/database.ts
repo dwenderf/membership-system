@@ -279,10 +279,10 @@ export type Database = {
       xero_invoices: {
         Row: {
           id: string
-          payment_id: string
+          payment_id: string | null
           tenant_id: string
-          xero_invoice_id: string
-          invoice_number: string
+          xero_invoice_id: string | null
+          invoice_number: string | null
           invoice_type: string
           invoice_status: string
           total_amount: number
@@ -299,10 +299,10 @@ export type Database = {
         }
         Insert: {
           id?: string
-          payment_id: string
+          payment_id?: string | null
           tenant_id: string
-          xero_invoice_id: string
-          invoice_number: string
+          xero_invoice_id?: string
+          invoice_number?: string | null
           invoice_type?: string
           invoice_status: string
           total_amount: number
@@ -319,10 +319,10 @@ export type Database = {
         }
         Update: {
           id?: string
-          payment_id?: string
+          payment_id?: string | null
           tenant_id?: string
           xero_invoice_id?: string
-          invoice_number?: string
+          invoice_number?: string | null
           invoice_type?: string
           invoice_status?: string
           total_amount?: number
@@ -343,7 +343,7 @@ export type Database = {
           id: string
           xero_invoice_id: string
           tenant_id: string
-          xero_payment_id: string
+          xero_payment_id: string | null
           payment_method: string
           bank_account_code: string | null
           amount_paid: number
@@ -361,7 +361,7 @@ export type Database = {
           id?: string
           xero_invoice_id: string
           tenant_id: string
-          xero_payment_id: string
+          xero_payment_id?: string | null
           payment_method?: string
           bank_account_code?: string | null
           amount_paid: number
@@ -379,7 +379,7 @@ export type Database = {
           id?: string
           xero_invoice_id?: string
           tenant_id?: string
-          xero_payment_id?: string
+          xero_payment_id?: string | null
           payment_method?: string
           bank_account_code?: string | null
           amount_paid?: number

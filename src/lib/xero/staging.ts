@@ -10,7 +10,7 @@
 import { createAdminClient } from '../supabase/server'
 import { getActiveXeroTenants } from './client'
 import { PaymentInvoiceData, PrePaymentInvoiceData } from './invoices'
-import { Database } from '@/types/database'
+import { Database } from '../../types/database'
 import { logger } from '../logging/logger'
 
 type StagingPaymentData = {
@@ -220,8 +220,7 @@ export class XeroStagingManager {
     options?: { isFree?: boolean }
   ): Promise<boolean> {
     try {
-      // Generate unique invoice number for staging
-      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      // Let Xero generate its own invoice number - don't set one here
       
       // Create invoice staging record
       const { data: invoiceStaging, error: invoiceError } = await this.supabase
@@ -229,8 +228,8 @@ export class XeroStagingManager {
         .insert({
           payment_id: data.payment_id || null,
           tenant_id: tenantId,
-          xero_invoice_id: '00000000-0000-0000-0000-000000000000', // Placeholder until synced
-          invoice_number: invoiceNumber,
+          xero_invoice_id: null, // Will be populated when synced to Xero
+          invoice_number: null, // Let Xero generate the invoice number
           invoice_type: 'ACCREC',
           invoice_status: options?.isFree ? 'AUTHORISED' : 'DRAFT',
           total_amount: data.total_amount,
@@ -256,7 +255,6 @@ export class XeroStagingManager {
           'Failed to create invoice staging',
           { 
             tenantId,
-            invoiceNumber,
             error: invoiceError?.message || 'No staging record returned'
           },
           'error'
@@ -287,7 +285,6 @@ export class XeroStagingManager {
             'Failed to create line item staging',
             { 
               tenantId,
-              invoiceNumber,
               itemType: lineItem.item_type,
               error: lineError.message
             },
@@ -304,7 +301,7 @@ export class XeroStagingManager {
           .insert({
             xero_invoice_id: invoiceStaging.id,
             tenant_id: tenantId,
-            xero_payment_id: '00000000-0000-0000-0000-000000000000', // Placeholder until synced
+            xero_payment_id: null, // Will be populated when synced to Xero
             payment_method: 'stripe',
             bank_account_code: 'STRIPE', // Default - should be configurable
             amount_paid: data.final_amount,
@@ -325,7 +322,6 @@ export class XeroStagingManager {
             'Failed to create payment staging',
             { 
               tenantId,
-              invoiceNumber,
               amount: data.final_amount,
               error: paymentError.message
             },
@@ -340,7 +336,6 @@ export class XeroStagingManager {
         'Staging records created for tenant',
         { 
           tenantId,
-          invoiceNumber,
           isFree: options?.isFree || false
         },
         'info'

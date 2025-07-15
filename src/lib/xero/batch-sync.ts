@@ -178,7 +178,7 @@ export class XeroBatchSyncManager {
         lineItems,
         date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-        invoiceNumber: invoiceRecord.invoice_number,
+        // Let Xero generate its own invoice number - don't set invoiceNumber here
         reference: metadata.stripe_payment_intent_id || '',
         status: invoiceRecord.net_amount === 0 ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
         currencyCode: CurrencyCode.USD
@@ -254,7 +254,7 @@ export class XeroBatchSyncManager {
         .eq('id', paymentRecord.xero_invoice_id)
         .single()
 
-      if (!invoiceRecord || !invoiceRecord.xero_invoice_id || invoiceRecord.xero_invoice_id === '00000000-0000-0000-0000-000000000000') {
+      if (!invoiceRecord || !invoiceRecord.xero_invoice_id) {
         await this.markPaymentAsFailed(paymentRecord.id, 'Associated invoice not synced to Xero yet')
         return false
       }

@@ -439,7 +439,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const { createAdminClient } = await import('@/lib/supabase/server')
+  const supabase = createAdminClient()
 
   try {
     switch (event.type) {

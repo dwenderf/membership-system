@@ -2,9 +2,15 @@
  * Admin Services Management API
  * 
  * Provides admin interface for managing background services:
- * - Start/stop payment processing
- * - Manual batch processing
+ * - Manual Xero sync (immediate processing)
+ * - Manual payment processing
  * - Service status monitoring
+ * 
+ * NOTE: Scheduled processing is handled by Vercel Cron jobs:
+ * - Xero sync: Daily at 2 AM
+ * - Email retry: Daily at 4 AM
+ * - Cleanup: Daily at 6 AM
+ * - Xero keep-alive: Daily at midnight
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,7 +18,6 @@ import { createClient } from '@/lib/supabase/server'
 import { serviceManager } from '@/lib/services/startup'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
-import { scheduledBatchProcessor } from '@/lib/scheduled-batch-processor'
 import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
@@ -38,11 +43,15 @@ export async function GET(request: NextRequest) {
 
     // Return service status
     const status = serviceManager.getStatus()
-    const batchProcessorStatus = scheduledBatchProcessor.getStatus()
     
     return NextResponse.json({
       services: status,
-      batchProcessor: batchProcessorStatus,
+      cronJobs: {
+        xeroSync: 'Daily at 2 AM',
+        emailRetry: 'Daily at 4 AM',
+        cleanup: 'Daily at 6 AM',
+        xeroKeepAlive: 'Daily at midnight'
+      },
       timestamp: new Date().toISOString()
     })
 
@@ -143,35 +152,9 @@ export async function POST(request: NextRequest) {
           results: syncResults
         })
 
-      case 'start-batch-processor':
-        logger.logAdminAction(
-          'start-batch-processor',
-          'Admin started scheduled batch processor',
-          { action },
-          user.id
-        )
-        await scheduledBatchProcessor.startScheduledProcessing()
-        return NextResponse.json({ 
-          message: 'Scheduled batch processor started',
-          status: scheduledBatchProcessor.getStatus()
-        })
-
-      case 'stop-batch-processor':
-        logger.logAdminAction(
-          'stop-batch-processor',
-          'Admin stopped scheduled batch processor',
-          { action },
-          user.id
-        )
-        await scheduledBatchProcessor.stopScheduledProcessing()
-        return NextResponse.json({ 
-          message: 'Scheduled batch processor stopped',
-          status: scheduledBatchProcessor.getStatus()
-        })
-
       default:
         return NextResponse.json(
-          { error: 'Invalid action. Use: start, stop, restart, process-pending, sync-xero, start-batch-processor, or stop-batch-processor' },
+          { error: 'Invalid action. Use: start, stop, restart, process-pending, or sync-xero' },
           { status: 400 }
         )
     }

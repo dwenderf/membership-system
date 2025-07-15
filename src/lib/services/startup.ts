@@ -2,11 +2,16 @@
  * Service Startup Manager
  * 
  * Initializes and manages background services for the application.
- * Handles payment completion processing, batch jobs, and other async services.
+ * 
+ * NOTE: This service manager is primarily for development/testing.
+ * In production (Vercel), scheduled tasks are handled by Vercel Cron jobs:
+ * - Xero sync: /api/cron/xero-sync (daily at 2 AM)
+ * - Email retry: /api/cron/email-retry (daily at 4 AM) 
+ * - Cleanup: /api/cron/cleanup (daily at 6 AM)
+ * - Xero keep-alive: /api/cron/xero-keep-alive (daily at midnight)
  */
 
 import { paymentProcessor } from '../payment-completion-processor'
-import { scheduledBatchProcessor } from '../scheduled-batch-processor'
 import { logger } from '../logging/logger'
 
 export class ServiceManager {
@@ -22,18 +27,18 @@ export class ServiceManager {
   }
 
   constructor() {
-    // Register all background services
+    // Register background services (development/testing only)
+    // Note: Scheduled processing is handled by Vercel Cron in production
     this.registerService('payment-processor', {
-      start: () => paymentProcessor.startListening(),
-      stop: () => paymentProcessor.stopListening()
-    })
-    
-    this.registerService('scheduled-batch-processor', {
       start: async () => {
-        await scheduledBatchProcessor.startScheduledProcessing()
+        // Payment processor no longer uses listeners, so just return success
+        logger.logServiceManagement('payment-processor-start', 'Payment processor ready (no listeners needed)')
         return true
       },
-      stop: () => scheduledBatchProcessor.stopScheduledProcessing()
+      stop: async () => {
+        // No cleanup needed since no listeners
+        logger.logServiceManagement('payment-processor-stop', 'Payment processor stopped')
+      }
     })
   }
 

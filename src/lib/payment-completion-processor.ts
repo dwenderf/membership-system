@@ -1,8 +1,40 @@
 /**
  * Payment Completion Processor
  * 
- * Handles async processing of completed payments via database triggers.
- * Implements hybrid approach: immediate processing + batch fallback.
+ * Handles the completion of payments and purchases by:
+ * - Creating or updating Xero staging records
+ * - Sending confirmation emails
+ * - Syncing pending Xero records
+ * - Updating discount usage tracking
+ * 
+ * ARCHITECTURE:
+ * This processor is called directly from webhooks and payment flows,
+ * not from database listeners (which don't work in serverless environments).
+ * 
+ * FLOW:
+ * 1. Stripe webhook receives payment completion → calls processPaymentCompletion
+ * 2. Zero-value purchase completes → calls processPaymentCompletion
+ * 3. Payment fails → calls processPaymentCompletion with failed metadata
+ * 
+ * USAGE:
+ * ```ts
+ * // From Stripe webhook
+ * const event = paymentProcessor.createPaymentEvent(payment)
+ * await paymentProcessor.processPaymentCompletion(event)
+ * 
+ * // From zero-value purchase
+ * const event = paymentProcessor.createMembershipEvent(membership)
+ * await paymentProcessor.processPaymentCompletion(event)
+ * 
+ * // From failed payment
+ * const event = paymentProcessor.createFailedPaymentEvent(payment, 'Card declined')
+ * await paymentProcessor.processPaymentCompletion(event)
+ * ```
+ * 
+ * XERO STAGING LOGIC:
+ * - Zero-value purchases: Create new staging records with AUTHORISED status
+ * - Paid purchases: Update existing staging records (created during purchase) to AUTHORISED
+ * - Failed payments: Update staging records to DRAFT with error details
  */
 
 import { createClient } from '@/lib/supabase/server'
@@ -29,7 +61,6 @@ type PaymentCompletionEvent = {
 
 export class PaymentCompletionProcessor {
   private supabase: any
-  private isListening = false
   private logger: Logger
 
   constructor() {
@@ -46,159 +77,12 @@ export class PaymentCompletionProcessor {
   }
 
   /**
-   * Start listening for payment completion events
-   */
-  async startListening() {
-    if (this.isListening) return
-
-    await this.initialize()
-    this.logger.logPaymentProcessing('start-listener', '🎧 Starting payment completion listener...')
-    
-    try {
-      // Listen for payment completions
-      this.supabase
-        .channel('payment-completions')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'payments',
-            filter: 'status=eq.completed'
-          },
-          (payload: any) => this.handlePaymentCompleted(payload)
-        )
-        .subscribe()
-
-      // Listen for free membership completions
-      this.supabase
-        .channel('membership-completions')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'user_memberships',
-            filter: 'amount_paid=eq.0'
-          },
-          (payload: any) => this.handleMembershipCompleted(payload)
-        )
-        .subscribe()
-
-      // Listen for free registration completions
-      this.supabase
-        .channel('registration-completions')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'user_registrations',
-            filter: 'amount_paid=eq.0'
-          },
-          (payload: any) => this.handleRegistrationCompleted(payload)
-        )
-        .subscribe()
-
-      this.isListening = true
-      this.logger.logPaymentProcessing('start-listener', '✅ Payment completion listener started')
-      return true
-    } catch (error) {
-      this.logger.logPaymentProcessing('start-listener', '❌ Error starting payment listener', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-      return false
-    }
-  }
-
-  /**
-   * Stop listening for payment completion events
-   */
-  async stopListening() {
-    await this.initialize()
-    await this.supabase.removeAllChannels()
-    this.isListening = false
-    this.logger.logPaymentProcessing('stop-listener', '🛑 Payment completion listener stopped')
-  }
-
-  /**
-   * Handle payment completed event
-   */
-  private async handlePaymentCompleted(payload: any) {
-    try {
-      const payment = payload.new
-      if (!payment.final_amount || payment.final_amount <= 0) return
-
-      this.logger.logPaymentProcessing('handle-payment-completed', `🔔 Payment completed: ${payment.id}, $${payment.final_amount / 100}`)
-
-      const event: PaymentCompletionEvent = {
-        event_type: 'payments',
-        record_id: null,
-        user_id: payment.user_id,
-        payment_id: payment.id,
-        amount: payment.final_amount / 100,
-        trigger_source: 'payments',
-        timestamp: new Date().toISOString()
-      }
-
-      await this.processPaymentCompletion(event)
-    } catch (error) {
-      this.logger.logPaymentProcessing('handle-payment-completed', '❌ Error handling payment completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-    }
-  }
-
-  /**
-   * Handle membership completed event
-   */
-  private async handleMembershipCompleted(payload: any) {
-    try {
-      const membership = payload.new
-      if (membership.amount_paid && membership.amount_paid > 0) return
-
-      this.logger.logPaymentProcessing('handle-membership-completed', `🔔 Free membership completed: ${membership.id}`)
-
-      const event: PaymentCompletionEvent = {
-        event_type: 'user_memberships',
-        record_id: membership.id,
-        user_id: membership.user_id,
-        payment_id: null,
-        amount: 0,
-        trigger_source: 'user_memberships',
-        timestamp: new Date().toISOString()
-      }
-
-      await this.processPaymentCompletion(event)
-    } catch (error) {
-      this.logger.logPaymentProcessing('handle-membership-completed', '❌ Error handling membership completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-    }
-  }
-
-  /**
-   * Handle registration completed event
-   */
-  private async handleRegistrationCompleted(payload: any) {
-    try {
-      const registration = payload.new
-      if (registration.amount_paid && registration.amount_paid > 0) return
-
-      this.logger.logPaymentProcessing('handle-registration-completed', `🔔 Free registration completed: ${registration.id}`)
-
-      const event: PaymentCompletionEvent = {
-        event_type: 'user_registrations',
-        record_id: registration.id,
-        user_id: registration.user_id,
-        payment_id: null,
-        amount: 0,
-        trigger_source: 'user_registrations',
-        timestamp: new Date().toISOString()
-      }
-
-      await this.processPaymentCompletion(event)
-    } catch (error) {
-      this.logger.logPaymentProcessing('handle-registration-completed', '❌ Error handling registration completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-    }
-  }
-
-  /**
    * Process a payment completion event (core logic)
+   * 
+   * This is the main entry point called from:
+   * - Stripe webhooks for paid purchases
+   * - Direct calls for zero-value purchases
+   * - Failed payment handling
    */
   async processPaymentCompletion(event: PaymentCompletionEvent) {
     try {
@@ -700,7 +584,97 @@ export class PaymentCompletionProcessor {
       this.logger.logPaymentProcessing('process-pending-records', '❌ Manual batch processing failed:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
+
+  /**
+   * Helper: Create event from payment completion
+   */
+  createPaymentEvent(payment: any): PaymentCompletionEvent {
+    return {
+      event_type: 'payments',
+      record_id: null,
+      user_id: payment.user_id,
+      payment_id: payment.id,
+      amount: payment.final_amount / 100,
+      trigger_source: 'payments',
+      timestamp: new Date().toISOString()
+    }
+  }
+
+  /**
+   * Helper: Create event from membership completion
+   */
+  createMembershipEvent(membership: any): PaymentCompletionEvent {
+    return {
+      event_type: 'user_memberships',
+      record_id: membership.id,
+      user_id: membership.user_id,
+      payment_id: membership.payment_id || null,
+      amount: membership.amount_paid || 0,
+      trigger_source: 'user_memberships',
+      timestamp: new Date().toISOString()
+    }
+  }
+
+  /**
+   * Helper: Create event from registration completion
+   */
+  createRegistrationEvent(registration: any): PaymentCompletionEvent {
+    return {
+      event_type: 'user_registrations',
+      record_id: registration.id,
+      user_id: registration.user_id,
+      payment_id: registration.payment_id || null,
+      amount: registration.amount_paid || 0,
+      trigger_source: 'user_registrations',
+      timestamp: new Date().toISOString()
+    }
+  }
+
+  /**
+   * Helper: Create failed payment event
+   */
+  createFailedPaymentEvent(payment: any, failureReason: string): PaymentCompletionEvent {
+    return {
+      event_type: 'payments',
+      record_id: null,
+      user_id: payment.user_id,
+      payment_id: payment.id,
+      amount: payment.final_amount / 100,
+      trigger_source: 'payments',
+      timestamp: new Date().toISOString(),
+      metadata: {
+        failed: true,
+        failure_reason: failureReason,
+        payment_intent_id: payment.stripe_payment_intent_id
+      }
+    }
+  }
 }
 
-// Export singleton instance
+// Export singleton instance for direct usage
+// 
+// Usage examples:
+// 
+// From Stripe webhook:
+// const event = paymentProcessor.createPaymentEvent(payment)
+// await paymentProcessor.processPaymentCompletion(event)
+// 
+// From zero-value purchase:
+// const event = paymentProcessor.createMembershipEvent(membership)
+// await paymentProcessor.processPaymentCompletion(event)
+// 
+// From failed payment:
+// const event = paymentProcessor.createFailedPaymentEvent(payment, 'Card declined')
+// await paymentProcessor.processPaymentCompletion(event)
+// 
+// Direct event creation:
+// await paymentProcessor.processPaymentCompletion({
+//   event_type: 'payments',
+//   record_id: null,
+//   user_id: 'user-id',
+//   payment_id: 'payment-id',
+//   amount: 50.00,
+//   trigger_source: 'stripe_webhook',
+//   timestamp: new Date().toISOString()
+// })
 export const paymentProcessor = new PaymentCompletionProcessor()

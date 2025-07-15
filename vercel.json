@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/xero-keep-alive",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/xero-sync",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/email-retry",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 6 * * *"
     }
   ]
 }

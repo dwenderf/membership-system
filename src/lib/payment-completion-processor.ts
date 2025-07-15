@@ -5,11 +5,12 @@
  * Implements hybrid approach: immediate processing + batch fallback.
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
-import { emailService } from './email-service'
-import { xeroStagingManager } from './xero/staging'
-import { xeroBatchSyncManager } from './xero/batch-sync'
+import { emailService } from '@/lib/email-service'
+import { xeroStagingManager } from '@/lib/xero/staging'
+import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
+import { Logger } from '@/lib/logging/logger'
 
 type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'
@@ -27,126 +28,138 @@ type PaymentCompletionEvent = {
 }
 
 export class PaymentCompletionProcessor {
-  private supabase: ReturnType<typeof createClient<Database>>
+  private supabase: any
   private isListening = false
+  private logger: Logger
 
   constructor() {
-    this.supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    this.logger = Logger.getInstance()
   }
 
   /**
-   * Start listening to payment completion notifications
-   * Note: PostgreSQL NOTIFY/LISTEN requires a persistent connection
+   * Initialize the processor
+   */
+  private async initialize() {
+    if (!this.supabase) {
+      this.supabase = await createClient()
+    }
+  }
+
+  /**
+   * Start listening for payment completion events
    */
   async startListening() {
     if (this.isListening) return
 
-    console.log('🎧 Starting payment completion listener...')
+    await this.initialize()
+    this.logger.logPaymentProcessing('start-listener', '🎧 Starting payment completion listener...')
     
     try {
-      // For this implementation, we'll use a different approach since
-      // Supabase client doesn't support PostgreSQL NOTIFY/LISTEN directly
-      // Instead, we'll use realtime subscriptions on key tables
-      
-      const channel = this.supabase
-        .channel('payment_processing')
-        .on('postgres_changes', 
-          { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'payments',
-            filter: 'status=eq.completed'
-          }, 
-          (payload) => this.handlePaymentCompleted(payload)
-        )
-        .on('postgres_changes',
+      // Listen for payment completions
+      this.supabase
+        .channel('payment-completions')
+        .on(
+          'postgres_changes',
           {
             event: 'INSERT',
-            schema: 'public', 
-            table: 'user_memberships',
-            filter: 'payment_status=eq.paid'
+            schema: 'public',
+            table: 'payments',
+            filter: 'status=eq.completed'
           },
-          (payload) => this.handleMembershipCompleted(payload)
+          (payload: any) => this.handlePaymentCompleted(payload)
         )
-        .on('postgres_changes',
+        .subscribe()
+
+      // Listen for free membership completions
+      this.supabase
+        .channel('membership-completions')
+        .on(
+          'postgres_changes',
           {
-            event: 'INSERT', 
+            event: 'INSERT',
+            schema: 'public',
+            table: 'user_memberships',
+            filter: 'amount_paid=eq.0'
+          },
+          (payload: any) => this.handleMembershipCompleted(payload)
+        )
+        .subscribe()
+
+      // Listen for free registration completions
+      this.supabase
+        .channel('registration-completions')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
             schema: 'public',
             table: 'user_registrations',
-            filter: 'payment_status=eq.paid'
+            filter: 'amount_paid=eq.0'
           },
-          (payload) => this.handleRegistrationCompleted(payload)
+          (payload: any) => this.handleRegistrationCompleted(payload)
         )
         .subscribe()
 
       this.isListening = true
-      console.log('✅ Payment completion listener started')
+      this.logger.logPaymentProcessing('start-listener', '✅ Payment completion listener started')
       return true
     } catch (error) {
-      console.error('❌ Error starting payment listener:', error)
+      this.logger.logPaymentProcessing('start-listener', '❌ Error starting payment listener', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       return false
     }
   }
 
   /**
-   * Stop listening to notifications
+   * Stop listening for payment completion events
    */
   async stopListening() {
-    if (!this.isListening) return
-
+    await this.initialize()
     await this.supabase.removeAllChannels()
     this.isListening = false
-    console.log('🛑 Payment completion listener stopped')
+    this.logger.logPaymentProcessing('stop-listener', '🛑 Payment completion listener stopped')
   }
 
   /**
-   * Handle payment completion (from payments table)
+   * Handle payment completed event
    */
   private async handlePaymentCompleted(payload: any) {
     try {
       const payment = payload.new
-      
-      // Only process if amount > 0 (paid purchases)
       if (!payment.final_amount || payment.final_amount <= 0) return
 
-      console.log('🔔 Payment completed:', payment.id, `$${payment.final_amount / 100}`)
+      this.logger.logPaymentProcessing('handle-payment-completed', `🔔 Payment completed: ${payment.id}, $${payment.final_amount / 100}`)
 
       const event: PaymentCompletionEvent = {
         event_type: 'payments',
-        record_id: payment.id,
+        record_id: null,
         user_id: payment.user_id,
         payment_id: payment.id,
-        amount: payment.final_amount,
+        amount: payment.final_amount / 100,
         trigger_source: 'payments',
         timestamp: new Date().toISOString()
       }
 
       await this.processPaymentCompletion(event)
     } catch (error) {
-      console.error('❌ Error handling payment completion:', error)
+      this.logger.logPaymentProcessing('handle-payment-completed', '❌ Error handling payment completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
   /**
-   * Handle membership completion (free memberships)
+   * Handle membership completed event
    */
   private async handleMembershipCompleted(payload: any) {
     try {
       const membership = payload.new
-      
-      // Only process if amount = 0 (free memberships)
       if (membership.amount_paid && membership.amount_paid > 0) return
 
-      console.log('🔔 Free membership completed:', membership.id)
+      this.logger.logPaymentProcessing('handle-membership-completed', `🔔 Free membership completed: ${membership.id}`)
 
       const event: PaymentCompletionEvent = {
         event_type: 'user_memberships',
         record_id: membership.id,
         user_id: membership.user_id,
-        payment_id: membership.payment_id,
+        payment_id: null,
         amount: 0,
         trigger_source: 'user_memberships',
         timestamp: new Date().toISOString()
@@ -154,27 +167,25 @@ export class PaymentCompletionProcessor {
 
       await this.processPaymentCompletion(event)
     } catch (error) {
-      console.error('❌ Error handling membership completion:', error)
+      this.logger.logPaymentProcessing('handle-membership-completed', '❌ Error handling membership completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
   /**
-   * Handle registration completion (free registrations)
+   * Handle registration completed event
    */
   private async handleRegistrationCompleted(payload: any) {
     try {
       const registration = payload.new
-      
-      // Only process if amount = 0 (free registrations)
       if (registration.amount_paid && registration.amount_paid > 0) return
 
-      console.log('🔔 Free registration completed:', registration.id)
+      this.logger.logPaymentProcessing('handle-registration-completed', `🔔 Free registration completed: ${registration.id}`)
 
       const event: PaymentCompletionEvent = {
         event_type: 'user_registrations',
         record_id: registration.id,
         user_id: registration.user_id,
-        payment_id: registration.payment_id,
+        payment_id: null,
         amount: 0,
         trigger_source: 'user_registrations',
         timestamp: new Date().toISOString()
@@ -182,7 +193,7 @@ export class PaymentCompletionProcessor {
 
       await this.processPaymentCompletion(event)
     } catch (error) {
-      console.error('❌ Error handling registration completion:', error)
+      this.logger.logPaymentProcessing('handle-registration-completed', '❌ Error handling registration completion', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
@@ -191,18 +202,18 @@ export class PaymentCompletionProcessor {
    */
   async processPaymentCompletion(event: PaymentCompletionEvent) {
     try {
-      console.log(`🔄 Processing ${event.trigger_source} completion...`)
+      this.logger.logPaymentProcessing('process-payment-completion', `🔄 Processing ${event.trigger_source} completion...`)
 
       // Handle failed payments differently
       if (event.metadata?.failed) {
-        console.log('❌ Processing failed payment event')
+        this.logger.logPaymentProcessing('process-payment-completion', '❌ Processing failed payment event')
         await this.sendFailedPaymentEmails(event)
-        console.log(`✅ Completed processing failed ${event.trigger_source}`)
+        this.logger.logPaymentProcessing('process-payment-completion', `✅ Completed processing failed ${event.trigger_source}`)
         return
       }
 
-      // Phase 1: Create Xero staging records (always succeeds)
-      await this.createXeroStagingRecords(event)
+      // Phase 1: Handle Xero staging records (create new or update existing)
+      await this.handleXeroStagingRecords(event)
 
       // Phase 2: Send confirmation emails
       await this.sendConfirmationEmails(event)
@@ -213,9 +224,9 @@ export class PaymentCompletionProcessor {
       // Phase 4: Update discount usage tracking
       await this.updateDiscountUsage(event)
 
-      console.log(`✅ Completed processing ${event.trigger_source}`)
+      this.logger.logPaymentProcessing('process-payment-completion', `✅ Completed processing ${event.trigger_source}`)
     } catch (error) {
-      console.error(`❌ Error processing payment completion:`, error)
+      this.logger.logPaymentProcessing('process-payment-completion', `❌ Error processing payment completion`, { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       
       // TODO: Log to Sentry for monitoring
       // await logToSentry(error, { event })
@@ -223,34 +234,182 @@ export class PaymentCompletionProcessor {
   }
 
   /**
-   * Phase 1: Create Xero staging records
+   * Phase 1: Handle Xero staging records (create new or update existing)
+   * 
+   * Flow:
+   * - Zero-value purchases (amount = 0): Create new staging records immediately
+   * - Paid purchases (amount > 0): Update existing staging records created during purchase
+   * 
+   * ID Relationships:
+   * - record_id: ID from user_memberships or user_registrations tables
+   * - payment_id: ID from payments table (null for zero-value purchases)
+   * - xero_invoices.id: Primary key of the Xero staging record itself
    */
-  private async createXeroStagingRecords(event: PaymentCompletionEvent) {
-    console.log('📊 Creating Xero staging records...')
+  private async handleXeroStagingRecords(event: PaymentCompletionEvent) {
+    this.logger.logPaymentProcessing('handle-xero-staging-records', '📊 Handling Xero staging records...')
     
     try {
-      // Skip Xero staging if no record_id (e.g., failed payments)
-      if (!event.record_id) {
-        console.log('⚠️ No record ID, skipping Xero staging')
-        return
-      }
-
-      // Get payment details
-      const paymentData = await this.getPaymentData(event)
-      if (!paymentData && event.amount > 0) {
-        console.log('⚠️ No payment data found for paid purchase, skipping Xero staging')
-        return
-      }
-
-      // For free purchases, we still want to create invoices
+      // For zero-value purchases: Always create new staging records
       if (event.amount === 0) {
-        await this.createFreeXeroStaging(event)
+        if (!event.record_id) {
+          this.logger.logPaymentProcessing('handle-xero-staging-records', '⚠️ No record_id for zero-value purchase, skipping Xero staging', undefined, 'warn')
+          return
+        }
+        this.logger.logPaymentProcessing('handle-xero-staging-records', '🆓 Creating new Xero staging records for zero-value purchase')
+        await this.createXeroStagingRecords(event)
+        return
+      }
+
+      // For paid purchases: Update existing staging records
+      if (!event.payment_id) {
+        this.logger.logPaymentProcessing('handle-xero-staging-records', '⚠️ No payment_id for paid purchase, skipping Xero staging', undefined, 'warn')
+        return
+      }
+
+      // Check if staging records already exist for this payment
+      const existingStagingRecords = await this.findExistingStagingRecords(event)
+      
+      if (existingStagingRecords) {
+        this.logger.logPaymentProcessing('handle-xero-staging-records', '💰 Updating existing Xero staging records for paid purchase')
+        await this.updateXeroStagingRecords(event, existingStagingRecords, { success: true })
       } else {
-        await this.createPaidXeroStaging(event, paymentData!)
+        this.logger.logPaymentProcessing('handle-xero-staging-records', '⚠️ No existing staging records found for paid purchase - this should not happen in normal flow', undefined, 'warn')
+        // Fallback: create staging records (this shouldn't happen in normal flow)
+        await this.createXeroStagingRecords(event)
       }
       
     } catch (error) {
-      console.error('❌ Failed to create Xero staging records:', error)
+      this.logger.logPaymentProcessing('handle-xero-staging-records', '❌ Failed to handle Xero staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      throw error
+    }
+  }
+
+  /**
+   * Find existing staging records for this event
+   * 
+   * Looks for Xero staging records by:
+   * - payment_id (for paid purchases that have staging records)
+   * - record_id (for zero-value purchases that might have staging records)
+   * 
+   * Returns the first matching record or null if none found.
+   */
+  private async findExistingStagingRecords(event: PaymentCompletionEvent) {
+    try {
+      await this.initialize()
+      let query = this.supabase
+        .from('xero_invoices')
+        .select('*')
+        .in('sync_status', ['staged', 'pending', 'synced'])
+
+      // Build query based on available IDs
+      if (event.payment_id && event.record_id) {
+        // Look for records matching either payment_id OR record_id
+        query = query.or(`payment_id.eq.${event.payment_id},record_id.eq.${event.record_id}`)
+      } else if (event.payment_id) {
+        // Only payment_id available
+        query = query.eq('payment_id', event.payment_id)
+      } else if (event.record_id) {
+        // Only record_id available (for zero-value purchases)
+        query = query.eq('record_id', event.record_id)
+      } else {
+        // No IDs available - can't find records
+        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No payment_id or record_id available for staging record lookup', undefined, 'warn')
+        return null
+      }
+
+      const { data: existingInvoices } = await query.limit(1)
+      return existingInvoices && existingInvoices.length > 0 ? existingInvoices[0] : null
+    } catch (error) {
+      this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Error finding existing staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      return null
+    }
+  }
+
+  /**
+   * Update existing Xero staging records after payment completion
+   * 
+   * This method is called for paid purchases (amount > 0) when staging records
+   * already exist from the initial purchase flow. It updates the records to reflect
+   * the payment outcome.
+   * 
+   * @param event - The payment completion event
+   * @param existingRecords - The existing Xero staging record to update
+   * @param options - Update options including success status and error message
+   */
+  private async updateXeroStagingRecords(
+    event: PaymentCompletionEvent, 
+    existingRecords: any,
+    options: {
+      success: boolean
+      error?: string
+    }
+  ) {
+    this.logger.logPaymentProcessing('update-xero-staging-records', '🔄 Updating Xero staging records...')
+    
+    try {
+      await this.initialize()
+      const updateData = {
+        sync_status: options.success ? 'pending' : 'failed',
+        invoice_status: options.success ? 'AUTHORISED' : 'DRAFT',
+        payment_id: options.success ? event.payment_id : null,
+        sync_error: options.success ? null : options.error,
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      // Update the invoice record
+      const { error: updateError } = await this.supabase
+        .from('xero_invoices')
+        .update(updateData)
+        .eq('id', existingRecords.id)
+
+      if (updateError) {
+        this.logger.logPaymentProcessing('update-xero-staging-records', '❌ Error updating Xero staging records', { error: updateError }, 'error')
+        throw updateError
+      }
+
+      this.logger.logPaymentProcessing('update-xero-staging-records', `✅ Xero staging records updated successfully (${options.success ? 'success' : 'failed'})`)
+      
+    } catch (error) {
+      this.logger.logPaymentProcessing('update-xero-staging-records', '❌ Failed to update Xero staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      throw error
+    }
+  }
+
+  /**
+   * Create Xero staging records (primarily for zero-value purchases)
+   * 
+   * This method is called when:
+   * - Zero-value purchases (amount = 0): Create new staging records with AUTHORISED status
+   * - Fallback for paid purchases: If no existing staging records found (shouldn't happen in normal flow)
+   * 
+   * For zero-value purchases, this creates staging records that will be immediately synced to Xero
+   * with AUTHORISED status since no payment processing is needed.
+   */
+  private async createXeroStagingRecords(event: PaymentCompletionEvent) {
+    this.logger.logPaymentProcessing('create-xero-staging-records', '📊 Creating Xero staging records...')
+    
+    try {
+      // Skip Xero staging if no record_id (e.g., malformed events)
+      if (!event.record_id) {
+        this.logger.logPaymentProcessing('create-xero-staging-records', '⚠️ No record_id, skipping Xero staging creation', undefined, 'warn')
+        return
+      }
+
+      // For zero-value purchases, create staging records with AUTHORISED status
+      if (event.amount === 0) {
+        await this.createFreeXeroStaging(event)
+      } else {
+        // This shouldn't happen in the new flow, but keep as fallback
+        this.logger.logPaymentProcessing('create-xero-staging-records', '⚠️ Unexpected: Creating staging for paid purchase in createXeroStagingRecords', undefined, 'warn')
+        const paymentData = await this.getPaymentData(event)
+        if (paymentData) {
+          await this.createPaidXeroStaging(event, paymentData)
+        }
+      }
+      
+    } catch (error) {
+      this.logger.logPaymentProcessing('create-xero-staging-records', '❌ Failed to create Xero staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       throw error
     }
   }
@@ -259,9 +418,15 @@ export class PaymentCompletionProcessor {
    * Create Xero staging for free purchases
    */
   private async createFreeXeroStaging(event: PaymentCompletionEvent) {
-    console.log('🆓 Creating Xero staging for free purchase...')
+    this.logger.logPaymentProcessing('create-free-xero-staging', '🆓 Creating Xero staging for free purchase...')
     
     try {
+      // Ensure record_id is not null
+      if (!event.record_id) {
+        this.logger.logPaymentProcessing('create-free-xero-staging', '⚠️ No record ID for free purchase staging', undefined, 'warn')
+        return
+      }
+
       const success = await xeroStagingManager.createFreePurchaseStaging({
         user_id: event.user_id,
         record_id: event.record_id,
@@ -269,12 +434,12 @@ export class PaymentCompletionProcessor {
       })
       
       if (success) {
-        console.log('✅ Free purchase Xero staging created successfully')
+        this.logger.logPaymentProcessing('create-free-xero-staging', '✅ Free purchase Xero staging created successfully')
       } else {
-        console.log('⚠️ Free purchase Xero staging failed (non-critical)')
+        this.logger.logPaymentProcessing('create-free-xero-staging', '⚠️ Free purchase Xero staging failed (non-critical)', undefined, 'warn')
       }
     } catch (error) {
-      console.error('❌ Error creating free Xero staging:', error)
+      this.logger.logPaymentProcessing('create-free-xero-staging', '❌ Error creating free Xero staging', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
@@ -282,18 +447,18 @@ export class PaymentCompletionProcessor {
    * Create Xero staging for paid purchases
    */
   private async createPaidXeroStaging(event: PaymentCompletionEvent, paymentData: any) {
-    console.log('💰 Creating Xero staging for paid purchase...')
+    this.logger.logPaymentProcessing('create-paid-xero-staging', '💰 Creating Xero staging for paid purchase...')
     
     try {
       const success = await xeroStagingManager.createPaidPurchaseStaging(event.payment_id!)
       
       if (success) {
-        console.log('✅ Paid purchase Xero staging created successfully')
+        this.logger.logPaymentProcessing('create-paid-xero-staging', '✅ Paid purchase Xero staging created successfully')
       } else {
-        console.log('⚠️ Paid purchase Xero staging failed (non-critical)')
+        this.logger.logPaymentProcessing('create-paid-xero-staging', '⚠️ Paid purchase Xero staging failed (non-critical)', undefined, 'warn')
       }
     } catch (error) {
-      console.error('❌ Error creating paid Xero staging:', error)
+      this.logger.logPaymentProcessing('create-paid-xero-staging', '❌ Error creating paid Xero staging', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
@@ -301,7 +466,7 @@ export class PaymentCompletionProcessor {
    * Phase 2: Send confirmation emails
    */
   private async sendConfirmationEmails(event: PaymentCompletionEvent) {
-    console.log('📧 Sending confirmation emails...')
+    this.logger.logPaymentProcessing('send-confirmation-emails', '📧 Sending confirmation emails...')
     
     try {
       // Get user details
@@ -312,7 +477,7 @@ export class PaymentCompletionProcessor {
         .single()
 
       if (!user) {
-        console.error('❌ User not found for email:', event.user_id)
+        this.logger.logPaymentProcessing('send-confirmation-emails', '❌ User not found for email', { userId: event.user_id })
         return
       }
 
@@ -323,7 +488,7 @@ export class PaymentCompletionProcessor {
       }
 
     } catch (error) {
-      console.error('❌ Failed to send confirmation emails:', error)
+      this.logger.logPaymentProcessing('send-confirmation-emails', '❌ Failed to send confirmation emails', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       // Don't throw - email failures shouldn't break the process
     }
   }
@@ -332,9 +497,10 @@ export class PaymentCompletionProcessor {
    * Send failed payment emails
    */
   private async sendFailedPaymentEmails(event: PaymentCompletionEvent) {
-    console.log('📧 Sending failed payment emails...')
+    this.logger.logPaymentProcessing('send-failed-payment-emails', '📧 Sending failed payment emails...')
     
     try {
+      await this.initialize()
       // Get user details
       const { data: user } = await this.supabase
         .from('users')
@@ -343,11 +509,11 @@ export class PaymentCompletionProcessor {
         .single()
 
       if (!user) {
-        console.error('❌ User not found for failed payment email:', event.user_id)
+        this.logger.logPaymentProcessing('send-failed-payment-emails', '❌ User not found for failed payment email', { userId: event.user_id })
         return
       }
 
-      console.log('📧 Sending payment failure email to:', user.email)
+      this.logger.logPaymentProcessing('send-failed-payment-emails', '📧 Sending payment failure email', { email: user.email })
 
       // Send payment failure email using LOOPS_PAYMENT_FAILED_TEMPLATE_ID
       await emailService.sendEmail({
@@ -366,10 +532,10 @@ export class PaymentCompletionProcessor {
         }
       })
 
-      console.log('✅ Failed payment email sent successfully')
+      this.logger.logPaymentProcessing('send-failed-payment-emails', '✅ Failed payment email sent successfully')
 
     } catch (error) {
-      console.error('❌ Failed to send payment failure email:', error)
+      this.logger.logPaymentProcessing('send-failed-payment-emails', '❌ Failed to send payment failure email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       // Don't throw - email failures shouldn't break the process
     }
   }
@@ -378,19 +544,19 @@ export class PaymentCompletionProcessor {
    * Phase 3: Batch sync pending Xero records
    */
   private async syncPendingXeroRecords() {
-    console.log('🔄 Syncing pending Xero records...')
+    this.logger.logPaymentProcessing('sync-pending-xero-records', '🔄 Syncing pending Xero records...')
     
     try {
       // Use the batch sync manager to sync all pending records
       const results = await xeroBatchSyncManager.syncAllPendingRecords()
       
-      console.log('📊 Xero sync results:', {
+      this.logger.logPaymentProcessing('sync-pending-xero-records', '📊 Xero sync results:', {
         invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
         payments: `${results.payments.synced} synced, ${results.payments.failed} failed`
       })
       
     } catch (error) {
-      console.error('❌ Failed to sync Xero records:', error)
+      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to sync Xero records:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       // Don't throw - Xero sync failures shouldn't break other processing
     }
   }
@@ -399,20 +565,20 @@ export class PaymentCompletionProcessor {
    * Phase 4: Update discount usage tracking
    */
   private async updateDiscountUsage(event: PaymentCompletionEvent) {
-    console.log('🎫 Updating discount usage...')
+    this.logger.logPaymentProcessing('update-discount-usage', '🎫 Updating discount usage...')
     
     try {
       // TODO: Implement discount usage tracking for memberships
       // Registrations already have this implemented in their flow
       
       if (event.trigger_source === 'user_memberships') {
-        console.log('🚧 Membership discount usage tracking - to be implemented')
+        this.logger.logPaymentProcessing('update-discount-usage', '🚧 Membership discount usage tracking - to be implemented', undefined, 'warn')
       } else {
-        console.log('✅ Registration discount usage already handled in registration flow')
+        this.logger.logPaymentProcessing('update-discount-usage', '✅ Registration discount usage already handled in registration flow')
       }
       
     } catch (error) {
-      console.error('❌ Failed to update discount usage:', error)
+      this.logger.logPaymentProcessing('update-discount-usage', '❌ Failed to update discount usage:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       // Don't throw - discount tracking failures shouldn't break other processing
     }
   }
@@ -455,30 +621,23 @@ export class PaymentCompletionProcessor {
 
       if (!membership) return
 
-      console.log('📧 Sending membership confirmation email to:', user.email)
+      this.logger.logPaymentProcessing('send-membership-confirmation-email', '📧 Sending membership confirmation email', { email: user.email })
 
       // Use existing email service
       await emailService.sendMembershipPurchaseConfirmation({
-        user: {
-          email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name
-        },
-        membership: {
-          name: membership.memberships.name,
-          price: membership.memberships.price,
-          season_name: membership.memberships.seasons.name
-        },
-        amount_paid: membership.amount_paid || 0,
-        valid_from: membership.valid_from,
-        valid_until: membership.valid_until,
-        months_purchased: membership.months_purchased || 1,
-        purchase_date: membership.created_at,
-        payment_intent_id: membership.stripe_payment_intent_id
+        userId: event.user_id,
+        email: user.email,
+        userName: `${user.first_name} ${user.last_name}`,
+        membershipName: membership.memberships.name,
+        amount: membership.amount_paid || 0,
+        durationMonths: membership.months_purchased || 1,
+        validFrom: membership.valid_from,
+        validUntil: membership.valid_until,
+        paymentIntentId: membership.stripe_payment_intent_id || 'unknown'
       })
       
     } catch (error) {
-      console.error('❌ Failed to send membership email:', error)
+      this.logger.logPaymentProcessing('send-membership-confirmation-email', '❌ Failed to send membership email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
@@ -487,6 +646,7 @@ export class PaymentCompletionProcessor {
    */
   private async sendRegistrationConfirmationEmail(event: PaymentCompletionEvent, user: any) {
     try {
+      await this.initialize()
       // Get registration details
       const { data: registration } = await this.supabase
         .from('user_registrations')
@@ -506,28 +666,22 @@ export class PaymentCompletionProcessor {
 
       if (!registration) return
 
-      console.log('📧 Sending registration confirmation email to:', user.email)
+      this.logger.logPaymentProcessing('send-registration-confirmation-email', '📧 Sending registration confirmation email', { email: user.email })
 
       // Use existing email service
       await emailService.sendRegistrationConfirmation({
-        user: {
-          email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name
-        },
-        registration: {
-          name: registration.registrations.name,
-          category_name: registration.registration_categories?.name || 'Standard',
-          season_name: registration.registrations.seasons.name,
-          season_dates: `${registration.registrations.seasons.start_date} - ${registration.registrations.seasons.end_date}`
-        },
-        amount_paid: registration.amount_paid || 0,
-        registration_date: registration.registered_at || registration.created_at,
-        payment_intent_id: registration.stripe_payment_intent_id
+        userId: event.user_id,
+        email: user.email,
+        userName: `${user.first_name} ${user.last_name}`,
+        registrationName: registration.registrations.name,
+        categoryName: registration.registration_categories?.name || 'Standard',
+        seasonName: registration.registrations.seasons.name,
+        amount: registration.amount_paid || 0,
+        paymentIntentId: registration.stripe_payment_intent_id || 'unknown'
       })
       
     } catch (error) {
-      console.error('❌ Failed to send registration email:', error)
+      this.logger.logPaymentProcessing('send-registration-confirmation-email', '❌ Failed to send registration email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 
@@ -535,15 +689,15 @@ export class PaymentCompletionProcessor {
    * Manual batch processing for failed records
    */
   async processPendingRecords() {
-    console.log('🔄 Starting manual batch processing...')
+    this.logger.logPaymentProcessing('process-pending-records', '🔄 Starting manual batch processing...')
     
     try {
       // Find all pending Xero records and retry them
       await this.syncPendingXeroRecords()
       
-      console.log('✅ Manual batch processing completed')
+      this.logger.logPaymentProcessing('process-pending-records', '✅ Manual batch processing completed')
     } catch (error) {
-      console.error('❌ Manual batch processing failed:', error)
+      this.logger.logPaymentProcessing('process-pending-records', '❌ Manual batch processing failed:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 }

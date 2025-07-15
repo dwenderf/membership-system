@@ -13,7 +13,7 @@ import { PaymentInvoiceData, PrePaymentInvoiceData } from './invoices'
 import { Database } from '../../types/database'
 import { logger } from '../logging/logger'
 
-type StagingPaymentData = {
+export type StagingPaymentData = {
   payment_id?: string
   user_id: string
   total_amount: number

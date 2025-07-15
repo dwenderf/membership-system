@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { logger } from '@/lib/logging/logger'
-import { xeroStagingManager } from '@/lib/xero/staging'
+import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config
@@ -91,10 +91,10 @@ async function handleFreeMembership({
       .select('code_type, accounting_code')
       .in('code_type', ['donation_given_default', 'donation_received_default'])
     
-    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code
-    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code
+    const discountAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_given_default')?.accounting_code
+    const donationAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_received_default')?.accounting_code
     
-    const stagingData = {
+    const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: membershipAmount,
       discount_amount: membershipAmount, // Full discount for free membership
@@ -410,7 +410,7 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
-    const stagingData = {
+    const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: paymentOption === 'assistance' ? fullMembershipPrice : amount,
       discount_amount: discountAmount,

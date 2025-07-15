@@ -14,7 +14,7 @@ async function runXeroStartupTest() {
   // Only run on server side
   if (typeof window !== 'undefined') return
 
-  const { logger } = await import('./logging/logger')
+  const { logger } = await import('../logging/logger')
   logger.logXeroSync(
     'startup-test-initiated',
     'Xero startup connection test initiated',
@@ -28,7 +28,7 @@ async function runXeroStartupTest() {
         const activeXeroTenants = await getActiveXeroTenants()
         
         if (activeXeroTenants.length > 0) {
-          const { logger } = await import('./logging/logger')
+          const { logger } = await import('../logging/logger')
           logger.logXeroSync(
             'startup-connection-test',
             `Found ${activeXeroTenants.length} active Xero tenant(s), testing connection`,
@@ -39,7 +39,7 @@ async function runXeroStartupTest() {
           const isConnected = await validateXeroConnection(activeXeroTenants[0].tenant_id)
           
           if (isConnected) {
-            const { logger } = await import('./logging/logger')
+            const { logger } = await import('../logging/logger')
             logger.logXeroSync(
               'startup-connection-success',
               `Xero connection verified for: ${activeXeroTenants[0].tenant_name}`,

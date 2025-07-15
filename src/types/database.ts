@@ -36,6 +36,32 @@ export type Database = {
           updated_at?: string
         }
       }
+      categories: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          category_type: 'system' | 'user'
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          category_type: 'system' | 'user'
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          category_type?: 'system' | 'user'
+          created_by?: string | null
+          created_at?: string
+        }
+      }
       seasons: {
         Row: {
           id: string

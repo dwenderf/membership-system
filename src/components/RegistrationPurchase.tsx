@@ -172,11 +172,11 @@ export default function RegistrationPurchase({
   const finalAmount = originalAmount - discountAmount
   
   // Check registration timing status
-  const registrationStatus = getRegistrationStatus(registration)
+  const registrationStatus = getRegistrationStatus(registration as any)
   const isPresale = registrationStatus === 'presale'
   const hasValidPresaleCode = isPresale && 
     presaleCode.trim().toUpperCase() === registration.presale_code?.toUpperCase()
-  const isTimingAvailable = isRegistrationAvailable(registration, hasValidPresaleCode)
+  const isTimingAvailable = isRegistrationAvailable(registration as any, hasValidPresaleCode)
   
   // Check if selected category is at capacity
   const isCategoryAtCapacity = selectedCategory?.max_capacity ? 
@@ -436,7 +436,7 @@ export default function RegistrationPurchase({
           </label>
           <div className="grid grid-cols-1 gap-2">
             {categories.map((category) => {
-              const categoryName = getCategoryDisplayName(category)
+              const categoryName = getCategoryDisplayName(category as any)
               const requiresMembership = category.required_membership_id
               const hasRequiredMembership = !requiresMembership || 
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
@@ -525,7 +525,7 @@ export default function RegistrationPurchase({
           <h4 className="text-sm font-medium text-gray-900 mb-3">Select Registration Category</h4>
           <div className="space-y-2">
             {categories.map((category) => {
-              const categoryName = getCategoryDisplayName(category)
+              const categoryName = getCategoryDisplayName(category as any)
               const requiresMembership = category.required_membership_id
               const hasRequiredMembership = !requiresMembership || 
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
@@ -635,7 +635,7 @@ export default function RegistrationPurchase({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Category:</span>
-              <span className="text-gray-900">{getCategoryDisplayName(selectedCategory)}</span>
+              <span className="text-gray-900">{getCategoryDisplayName(selectedCategory as any)}</span>
             </div>
             {registration.season && (
               <div className="flex justify-between">
@@ -858,7 +858,7 @@ export default function RegistrationPurchase({
             </div>
             
             <div className="mb-4 p-3 bg-gray-50 rounded">
-              <div className="text-sm text-gray-600">{registration.name} - {selectedCategory ? getCategoryDisplayName(selectedCategory) : ''}</div>
+              <div className="text-sm text-gray-600">{registration.name} - {selectedCategory ? getCategoryDisplayName(selectedCategory as any) : ''}</div>
               
               {/* Pricing Breakdown */}
               {discountValidation?.isValid ? (

@@ -189,7 +189,7 @@ export default function PaymentForm({
 
         // Update payment record status to 'failed' 
         // Use payment intent ID from either the error response or the prop passed from parent
-        const intentId = paymentIntent?.id || paymentIntentId
+        const intentId = (paymentIntent as any)?.id || paymentIntentId
         
         if (intentId) {
           try {

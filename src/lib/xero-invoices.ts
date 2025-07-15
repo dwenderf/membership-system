@@ -287,8 +287,8 @@ export async function createXeroInvoiceBeforePayment(
             
             if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
               console.log(`🔍 Found ${emailSearchResponse.body.contacts.length} contacts with email ${userData.email}:`)
-              emailSearchResponse.body.contacts.forEach((contact, index) => {
-                console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || 'ACTIVE'}`)
+              emailSearchResponse.body.contacts.forEach((contact: Contact, index: number) => {
+                console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
               })
               
               // Send Sentry warning if multiple contacts found with same email
@@ -302,10 +302,10 @@ export async function createXeroInvoiceBeforePayment(
                   extra: {
                     email: userData.email,
                     contactCount: emailSearchResponse.body.contacts.length,
-                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                    contacts: emailSearchResponse.body.contacts.map((contact: Contact) => ({
                       name: contact.name,
                       contactID: contact.contactID,
-                      status: contact.contactStatus || 'ACTIVE'
+                      status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                     })),
                     userID: invoiceData.user_id,
                     archivedContactID: contactResult.xeroContactId
@@ -318,16 +318,16 @@ export async function createXeroInvoiceBeforePayment(
                 ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
                 : `${userData.first_name} ${userData.last_name}`
               
-              const exactNameMatch = emailSearchResponse.body.contacts.find(contact => 
+              const exactNameMatch = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                contact.contactStatus !== 'ARCHIVED' &&             // Must be non-archived
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED &&             // Must be non-archived
                 contact.name === expectedNamePrefix                  // Exact name match
               )
               
               // If no exact match, look for any non-archived contact
-              const anyNonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+              const anyNonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                contact.contactStatus !== 'ARCHIVED'               // Find non-archived contacts
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED               // Find non-archived contacts
               )
               
               const nonArchivedContact = exactNameMatch || anyNonArchivedContact

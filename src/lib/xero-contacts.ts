@@ -67,12 +67,12 @@ export async function syncUserToXeroContact(
               extra: {
                 email: userData.email,
                 contactCount: foundContacts.length,
-                contacts: foundContacts.map(contact => ({
+                contacts: foundContacts.map((contact: Contact) => ({
                   name: contact.name,
                   contactID: contact.contactID,
                   firstName: contact.firstName,
                   lastName: contact.lastName,
-                  status: contact.contactStatus || 'ACTIVE'
+                  status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                 })),
                 userID: userData.id,
                 searchContext: 'initial-contact-lookup'
@@ -80,7 +80,7 @@ export async function syncUserToXeroContact(
             })
             
             // Try to find exact name match first
-            const exactNameMatch = foundContacts.find(contact => 
+            const exactNameMatch = foundContacts.find((contact: Contact) => 
               contact.firstName === userData.first_name && 
               contact.lastName === userData.last_name
             )
@@ -90,7 +90,7 @@ export async function syncUserToXeroContact(
               console.log(`✅ Found exact name match for ${userData.first_name} ${userData.last_name}`)
             } else {
               // Try partial name matching as fallback
-              const partialMatch = foundContacts.find(contact => {
+              const partialMatch = foundContacts.find((contact: Contact) => {
                 const contactFullName = `${contact.firstName || ''} ${contact.lastName || ''}`.trim().toLowerCase()
                 const userFullName = `${userData.first_name} ${userData.last_name}`.toLowerCase()
                 return contactFullName === userFullName
@@ -129,7 +129,7 @@ export async function syncUserToXeroContact(
               const nameFoundContacts = nameSearchResponse.body.contacts
               
               // Check if any of the name matches also have matching email
-              const emailAndNameMatch = nameFoundContacts.find(contact => 
+              const emailAndNameMatch = nameFoundContacts.find((contact: Contact) => 
                 contact.emailAddress === userData.email
               )
               
@@ -142,7 +142,7 @@ export async function syncUserToXeroContact(
                 console.log(`⚠️ Found existing contact with name "${userData.first_name} ${userData.last_name}" but different email`)
                 
                 // Try to find if there's a contact with same name but no email
-                const noEmailMatch = nameFoundContacts.find(contact => 
+                const noEmailMatch = nameFoundContacts.find((contact: Contact) => 
                   !contact.emailAddress || contact.emailAddress === ''
                 )
                 
@@ -202,7 +202,7 @@ export async function syncUserToXeroContact(
       firstName: userData.first_name,
       lastName: userData.last_name,
       emailAddress: userData.email,
-      contactStatus: 'ACTIVE' as any, // Try to unarchive if archived
+      contactStatus: Contact.ContactStatusEnum.ACTIVE, // Try to unarchive if archived
       contactPersons: userData.phone ? [{
         firstName: userData.first_name,
         lastName: userData.last_name,
@@ -246,10 +246,10 @@ export async function syncUserToXeroContact(
                   extra: {
                     email: userData.email,
                     contactCount: emailSearchResponse.body.contacts.length,
-                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                    contacts: emailSearchResponse.body.contacts.map((contact: Contact) => ({
                       name: contact.name,
                       contactID: contact.contactID,
-                      status: contact.contactStatus || 'ACTIVE'
+                      status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                     })),
                     userID: userData.id,
                     archivedContactID: xeroContactId,
@@ -259,9 +259,9 @@ export async function syncUserToXeroContact(
               }
               
               // Look for any non-archived contact with same email
-              const nonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+              const nonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== xeroContactId && // Exclude the archived one we just tried
-                contact.contactStatus !== 'ARCHIVED'   // Find non-archived contacts
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED   // Find non-archived contacts
               )
               
               if (nonArchivedContact && nonArchivedContact.contactID) {
@@ -295,7 +295,7 @@ export async function syncUserToXeroContact(
                 })
                 
                 console.log(`✅ Successfully updated existing non-archived contact: ${nonArchivedContact.contactID} with name: ${finalContactName}`)
-                return
+                return { success: true, xeroContactId: nonArchivedContact.contactID }
               }
             }
           } catch (emailSearchError) {
@@ -568,7 +568,7 @@ export async function findDuplicateContactsByEmail(
     if (searchResponse.body.contacts) {
       return { 
         success: true, 
-        contacts: searchResponse.body.contacts.map(contact => ({
+        contacts: searchResponse.body.contacts.map((contact: Contact) => ({
           contactID: contact.contactID,
           name: contact.name,
           firstName: contact.firstName,

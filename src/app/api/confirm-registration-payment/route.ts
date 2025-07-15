@@ -149,39 +149,47 @@ export async function POST(request: NextRequest) {
       
       console.log(`Existing record for reservation ${reservationId}:`, existingRecord)
       
-      // Update existing reservation to paid status via standardized API
-      try {
-        const { getBaseUrl } = await import('@/lib/url-utils')
-        const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cookie': request.headers.get('cookie') || '',
-          },
-          body: JSON.stringify({
-            registrationId: registrationId,
-            categoryId: categoryId,
-            status: 'paid',
-            userMembershipId: activeMembership?.id || null
-          }),
-        })
+      // Check if webhook has already processed this payment
+      if (existingRecord?.payment_status === 'paid') {
+        console.log('✅ Payment already processed by webhook, using existing record')
+        userRegistration = existingRecord
+        registrationError = null
+        // Skip the API call since webhook already handled it
+              } else {
+          // Update existing reservation to paid status via standardized API
+          try {
+            const { getBaseUrl } = await import('@/lib/url-utils')
+            const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': request.headers.get('cookie') || '',
+              },
+              body: JSON.stringify({
+                registrationId: registrationId,
+                categoryId: categoryId,
+                status: 'paid',
+                userMembershipId: activeMembership?.id || null
+              }),
+            })
 
-        console.log(`Status update response:`, statusResponse.status)
-        
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          userRegistration = statusData.registration
-          registrationError = null
-          console.log(`✅ Updated registration to paid via API`)
-        } else {
-          const statusError = await statusResponse.json()
-          registrationError = new Error(statusError.error || 'Failed to update status')
-          console.log(`❌ Failed to update status:`, statusError)
+            console.log(`Status update response:`, statusResponse.status)
+            
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json()
+              userRegistration = statusData.registration
+              registrationError = null
+              console.log(`✅ Updated registration to paid via API`)
+            } else {
+              const statusError = await statusResponse.json()
+              registrationError = new Error(statusError.error || 'Failed to update status')
+              console.log(`❌ Failed to update status:`, statusError)
+            }
+          } catch (apiError) {
+            registrationError = apiError as Error
+            console.log(`❌ API call error:`, apiError)
+          }
         }
-      } catch (apiError) {
-        registrationError = apiError as Error
-        console.log(`❌ API call error:`, apiError)
-      }
 
       // If reservation not found or expired, check if it was already processed
       if (registrationError) {

@@ -185,22 +185,50 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
   // Note: Webhook doesn't have access to categoryId, so we'll need to get it from the registration
   // For now, let's keep the direct database update in webhooks since they're backup/redundancy
   
-  // Update user registration record from awaiting_payment/processing to paid
-  const { data: userRegistration, error: registrationError } = await supabase
+  let userRegistration: any
+  
+  // First, check if registration already exists and is paid
+  const { data: existingPaidRegistration } = await supabase
     .from('user_registrations')
-    .update({
-      payment_status: 'paid',
-      registered_at: new Date().toISOString(),
-    })
+    .select('*')
     .eq('user_id', userId)
     .eq('registration_id', registrationId)
-    .in('payment_status', ['awaiting_payment', 'processing'])
-    .select()
+    .eq('payment_status', 'paid')
     .single()
 
-  if (registrationError || !userRegistration) {
-    console.error('Error updating user registration:', registrationError)
-    throw new Error('Failed to update registration')
+  if (existingPaidRegistration) {
+    console.log('Registration already paid, using existing record:', existingPaidRegistration.id)
+    userRegistration = existingPaidRegistration
+  } else {
+    // Update user registration record from awaiting_payment/processing to paid
+    const { data: updatedRegistration, error: registrationError } = await supabase
+      .from('user_registrations')
+      .update({
+        payment_status: 'paid',
+        registered_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('registration_id', registrationId)
+      .in('payment_status', ['awaiting_payment', 'processing'])
+      .select()
+      .single()
+
+    if (registrationError || !updatedRegistration) {
+      console.error('Error updating user registration:', registrationError)
+      console.error('Registration update failed for:', { userId, registrationId })
+      
+      // Try to find any registration record for debugging
+      const { data: allRegistrations } = await supabase
+        .from('user_registrations')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('registration_id', registrationId)
+      
+      console.error('All registration records found:', allRegistrations)
+      throw new Error('Failed to update registration')
+    }
+    
+    userRegistration = updatedRegistration
   }
 
   // Record discount usage if discount was applied

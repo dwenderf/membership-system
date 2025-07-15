@@ -385,8 +385,9 @@ export class Logger {
    */
   private reportToSentry(entry: LogEntry): void {
     try {
-      // Only import Sentry if it's available (to avoid issues in development)
-      if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+      // Only import Sentry if it's available (to avoid issues in local development)
+      // Include both production and preview deployments (Vercel)
+      if (typeof window === 'undefined' && (process.env.NODE_ENV === 'production' || process.env.VERCEL)) {
         import('@sentry/nextjs').then((Sentry) => {
           // Create error object from log entry
           const error = new Error(entry.message)
@@ -463,7 +464,7 @@ export class Logger {
     requestId?: string
   ): void {
     try {
-      if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+      if (typeof window === 'undefined' && (process.env.NODE_ENV === 'production' || process.env.VERCEL)) {
         import('@sentry/nextjs').then((Sentry) => {
           const error = new Error(`${level.toUpperCase()}: ${message}`)
           

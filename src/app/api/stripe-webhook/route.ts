@@ -224,23 +224,36 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
         .single()
 
       if (registration) {
-        // Record discount usage
-        const { error: usageError } = await supabase
+        // Check if discount usage already exists to prevent duplicates
+        const { data: existingUsage } = await supabase
           .from('discount_usage')
-          .insert({
-            user_id: userId,
-            discount_code_id: discountCodeRecord.id,
-            discount_category_id: discountCategoryId,
-            season_id: registration.season_id,
-            amount_saved: discountAmount,
-            registration_id: registrationId,
-          })
+          .select('id')
+          .eq('user_id', userId)
+          .eq('discount_code_id', discountCodeRecord.id)
+          .eq('registration_id', registrationId)
+          .single()
 
-        if (usageError) {
-          console.error('Error recording discount usage:', usageError)
-          // Don't fail the payment - just log the error
+        if (!existingUsage) {
+          // Record discount usage only if it doesn't already exist
+          const { error: usageError } = await supabase
+            .from('discount_usage')
+            .insert({
+              user_id: userId,
+              discount_code_id: discountCodeRecord.id,
+              discount_category_id: discountCategoryId,
+              season_id: registration.season_id,
+              amount_saved: discountAmount,
+              registration_id: registrationId,
+            })
+
+          if (usageError) {
+            console.error('Error recording discount usage:', usageError)
+            // Don't fail the payment - just log the error
+          } else {
+            console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
+          }
         } else {
-          console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
+          console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntent.id)
         }
       }
     }

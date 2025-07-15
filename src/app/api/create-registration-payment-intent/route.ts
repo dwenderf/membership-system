@@ -288,16 +288,27 @@ async function handleFreeRegistration({
       }).then(res => res.json()).catch(() => ({ isValid: false }))
 
       if (discountValidation?.isValid && discountValidation.discountCode) {
-        await supabase
+        // Check if discount usage already exists to prevent duplicates
+        const { data: existingUsage } = await supabase
           .from('discount_usage')
-          .insert({
-            user_id: user.id,
-            discount_code_id: discountValidation.discountCode.id,
-            discount_category_id: discountValidation.discountCode.category.id,
-            season_id: registration.season.id,
-            amount_saved: selectedCategory.price || 0, // Full price was saved
-            registration_id: registrationId,
-          })
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('discount_code_id', discountValidation.discountCode.id)
+          .eq('registration_id', registrationId)
+          .single()
+
+        if (!existingUsage) {
+          await supabase
+            .from('discount_usage')
+            .insert({
+              user_id: user.id,
+              discount_code_id: discountValidation.discountCode.id,
+              discount_category_id: discountValidation.discountCode.category.id,
+              season_id: registration.season.id,
+              amount_saved: selectedCategory.price || 0, // Full price was saved
+              registration_id: registrationId,
+            })
+        }
       }
     }
 
@@ -1209,9 +1220,11 @@ export async function POST(request: NextRequest) {
         // Don't fail the transaction, but log the issue
       }
       
-      // Payment items are now tracked in xero_invoice_line_items via the staging system
-      // No need to create separate payment_items records
+          // Payment items are now tracked in xero_invoice_line_items via the staging system
+    // No need to create separate payment_items records
     }
+
+
 
     // Log successful operation
     capturePaymentSuccess('registration_payment_intent_creation', paymentContext, Date.now() - startTime)

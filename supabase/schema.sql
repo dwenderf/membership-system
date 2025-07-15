@@ -461,11 +461,11 @@ CREATE TABLE xero_contacts (
 CREATE TABLE xero_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     payment_id UUID REFERENCES payments(id) ON DELETE CASCADE, -- Nullable during staging, populated when payment record is created
-    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
-    xero_invoice_id UUID NOT NULL, -- Xero's invoice ID
-    invoice_number TEXT NOT NULL, -- Xero's invoice number
+    tenant_id TEXT REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE, -- NULL during staging, populated during sync
+    xero_invoice_id UUID, -- Xero's invoice ID (NULL during staging)
+    invoice_number TEXT, -- Xero's invoice number (NULL during staging)
     invoice_type TEXT NOT NULL DEFAULT 'ACCREC', -- ACCREC = Accounts Receivable
-    invoice_status TEXT NOT NULL, -- DRAFT, AUTHORISED, PAID, etc.
+    invoice_status TEXT NOT NULL DEFAULT 'DRAFT', -- DRAFT, AUTHORISED, PAID, etc.
     total_amount INTEGER NOT NULL, -- in cents, gross amount
     discount_amount INTEGER DEFAULT 0, -- in cents, total discounts
     net_amount INTEGER NOT NULL, -- in cents, amount after discounts
@@ -476,11 +476,13 @@ CREATE TABLE xero_invoices (
     staged_at TIMESTAMP WITH TIME ZONE,
     staging_metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure one invoice per payment per tenant
-    UNIQUE(payment_id, tenant_id)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Create unique index for tenant_id when it's not NULL
+CREATE UNIQUE INDEX xero_invoices_payment_tenant_unique 
+  ON xero_invoices (payment_id, tenant_id) 
+  WHERE tenant_id IS NOT NULL;
 
 -- Xero invoice line items tracking
 -- Tracks individual line items within invoices for detailed reconciliation
@@ -503,8 +505,8 @@ CREATE TABLE xero_invoice_line_items (
 CREATE TABLE xero_payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     xero_invoice_id UUID NOT NULL REFERENCES xero_invoices(id) ON DELETE CASCADE,
-    tenant_id TEXT NOT NULL REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE,
-    xero_payment_id UUID NOT NULL, -- Xero's payment ID
+    tenant_id TEXT REFERENCES xero_oauth_tokens(tenant_id) ON DELETE CASCADE, -- NULL during staging, populated during sync
+    xero_payment_id UUID, -- Xero's payment ID (NULL during staging)
     payment_method TEXT NOT NULL DEFAULT 'stripe',
     bank_account_code TEXT, -- Xero bank account code
     amount_paid INTEGER NOT NULL, -- in cents, net amount (after Stripe fees)
@@ -516,11 +518,13 @@ CREATE TABLE xero_payments (
     staged_at TIMESTAMP WITH TIME ZONE,
     staging_metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure one payment record per invoice per tenant
-    UNIQUE(xero_invoice_id, tenant_id)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Create unique index for tenant_id when it's not NULL
+CREATE UNIQUE INDEX xero_payments_invoice_tenant_unique 
+  ON xero_payments (xero_invoice_id, tenant_id) 
+  WHERE tenant_id IS NOT NULL;
 
 -- Xero synchronization error logs
 -- Detailed error logging for debugging and monitoring

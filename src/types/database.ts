@@ -300,7 +300,7 @@ export type Database = {
         Row: {
           id: string
           payment_id: string | null
-          tenant_id: string
+          tenant_id: string | null
           xero_invoice_id: string | null
           invoice_number: string | null
           invoice_type: string
@@ -320,7 +320,7 @@ export type Database = {
         Insert: {
           id?: string
           payment_id?: string | null
-          tenant_id: string
+          tenant_id?: string | null
           xero_invoice_id?: string
           invoice_number?: string | null
           invoice_type?: string
@@ -340,7 +340,7 @@ export type Database = {
         Update: {
           id?: string
           payment_id?: string | null
-          tenant_id?: string
+          tenant_id?: string | null
           xero_invoice_id?: string
           invoice_number?: string | null
           invoice_type?: string
@@ -362,7 +362,7 @@ export type Database = {
         Row: {
           id: string
           xero_invoice_id: string
-          tenant_id: string
+          tenant_id: string | null
           xero_payment_id: string | null
           payment_method: string
           bank_account_code: string | null
@@ -380,7 +380,7 @@ export type Database = {
         Insert: {
           id?: string
           xero_invoice_id: string
-          tenant_id: string
+          tenant_id?: string | null
           xero_payment_id?: string | null
           payment_method?: string
           bank_account_code?: string | null
@@ -398,7 +398,7 @@ export type Database = {
         Update: {
           id?: string
           xero_invoice_id?: string
-          tenant_id?: string
+          tenant_id?: string | null
           xero_payment_id?: string | null
           payment_method?: string
           bank_account_code?: string | null

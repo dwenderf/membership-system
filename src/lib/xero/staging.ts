@@ -109,26 +109,10 @@ export class XeroStagingManager {
         'info'
       )
 
-      // Get active tenants
-      const tenants = await getActiveXeroTenants()
-      if (tenants.length === 0) {
-        logger.logXeroSync(
-          'staging-no-tenants',
-          'No active Xero tenants found - CRITICAL ERROR',
-          { source: 'immediate' },
-          'error'
-        )
-        return false // Critical failure - Xero must be configured
-      }
-
-      // Create staging records for each tenant
-      let allSucceeded = true
-      for (const tenant of tenants) {
-        const success = await this.createInvoiceStaging(data, tenant.tenant_id, options)
-        if (!success) allSucceeded = false
-      }
-
-      return allSucceeded
+      // Create staging record without tenant_id - will be populated during sync
+      const success = await this.createInvoiceStaging(data, null, options)
+      
+      return success
     } catch (error) {
       logger.logXeroSync(
         'staging-immediate-error',
@@ -176,26 +160,10 @@ export class XeroStagingManager {
       // Convert to staging format
       const stagingData = await this.convertToStagingData(purchaseData, event.trigger_source)
       
-      // Get active tenants
-      const tenants = await getActiveXeroTenants()
-      if (tenants.length === 0) {
-        logger.logXeroSync(
-          'staging-no-tenants',
-          'No active Xero tenants found - CRITICAL ERROR',
-          { source: 'free-purchase' },
-          'error'
-        )
-        return false // Critical failure - Xero must be configured
-      }
-
-      // Create staging records for each tenant
-      let allSucceeded = true
-      for (const tenant of tenants) {
-        const success = await this.createInvoiceStaging(stagingData, tenant.tenant_id)
-        if (!success) allSucceeded = false
-      }
-
-      return allSucceeded
+      // Create staging record without tenant_id - will be populated during sync
+      const success = await this.createInvoiceStaging(stagingData, null)
+      
+      return success
     } catch (error) {
       logger.logXeroSync(
         'staging-free-purchase-error',
@@ -216,7 +184,7 @@ export class XeroStagingManager {
    */
   private async createInvoiceStaging(
     data: StagingPaymentData, 
-    tenantId: string,
+    tenantId: string | null,
     options?: { isFree?: boolean }
   ): Promise<boolean> {
     try {
@@ -227,7 +195,7 @@ export class XeroStagingManager {
         .from('xero_invoices')
         .insert({
           payment_id: data.payment_id || null,
-          tenant_id: tenantId,
+          tenant_id: tenantId, // Can be null during staging
           xero_invoice_id: null, // Will be populated when synced to Xero
           invoice_number: null, // Let Xero generate the invoice number
           invoice_type: 'ACCREC',
@@ -300,7 +268,7 @@ export class XeroStagingManager {
           .from('xero_payments')
           .insert({
             xero_invoice_id: invoiceStaging.id,
-            tenant_id: tenantId,
+            tenant_id: tenantId, // Can be null during staging
             xero_payment_id: null, // Will be populated when synced to Xero
             payment_method: 'stripe',
             bank_account_code: 'STRIPE', // Default - should be configurable

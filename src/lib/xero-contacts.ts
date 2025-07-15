@@ -44,7 +44,7 @@ export async function syncUserToXeroContact(
     } else {
       // Search for existing contact by email in Xero
       try {
-        const searchResponse = await xeroApi.getContacts(
+        const searchResponse = await xeroApi.accountingApi.getContacts(
           tenantId,
           undefined,
           `EmailAddress="${userData.email}"`
@@ -119,7 +119,7 @@ export async function syncUserToXeroContact(
           console.log(`No contacts found by email ${userData.email}, searching by name...`)
           
           try {
-            const nameSearchResponse = await xeroApi.getContacts(
+            const nameSearchResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `Name="${userData.first_name} ${userData.last_name}"`
@@ -178,7 +178,7 @@ export async function syncUserToXeroContact(
       // Fallback to old logic if member_id is not available (legacy users)
       if (!isUpdate && !xeroContactId) {
         try {
-          const duplicateCheckResponse = await xeroApi.getContacts(
+          const duplicateCheckResponse = await xeroApi.accountingApi.getContacts(
             tenantId,
             undefined,
             `Name="${contactName}"`
@@ -217,7 +217,7 @@ export async function syncUserToXeroContact(
       contactData.contactID = xeroContactId
       
       try {
-        response = await xeroApi.updateContact(tenantId, xeroContactId, {
+        response = await xeroApi.accountingApi.updateContact(tenantId, xeroContactId, {
           contacts: [contactData]
         })
       } catch (updateError: any) {

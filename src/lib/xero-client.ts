@@ -211,7 +211,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       await xero.setTokenSet({
         access_token: refreshedTokens.access_token,
         refresh_token: refreshedTokens.refresh_token,
-        expires_at: parseInt(refreshedTokens.expires_at),
+        expires_at: Math.floor(new Date(refreshedTokens.expires_at).getTime() / 1000),
         token_type: 'Bearer',
         scope: tokenData.scope
       })
@@ -220,7 +220,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       await xero.setTokenSet({
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
-        expires_at: tokenData.expires_at,
+        expires_at: Math.floor(new Date(tokenData.expires_at).getTime() / 1000),
         token_type: tokenData.token_type,
         scope: tokenData.scope
       })

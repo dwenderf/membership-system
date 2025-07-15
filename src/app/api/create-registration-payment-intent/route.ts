@@ -277,6 +277,19 @@ async function handleFreeRegistration({
     if (discountCode) {
       // Note: In free registration case, the full amount was discounted
       // We should still track this usage for limit enforcement
+      logger.logPaymentProcessing(
+        'free-registration-discount-start',
+        'Starting discount usage recording for free registration',
+        { 
+          userId: user.id, 
+          registrationId,
+          categoryId,
+          discountCode,
+          originalPrice: selectedCategory.price || 0
+        },
+        'info'
+      )
+
       const { data: discountValidation } = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,11 +298,40 @@ async function handleFreeRegistration({
           registrationId: registrationId,
           amount: selectedCategory.price || 0 // Use original price for tracking
         })
-      }).then(res => res.json()).catch(() => ({ isValid: false }))
+      }).then(res => res.json()).catch((error) => {
+        logger.logPaymentProcessing(
+          'free-registration-discount-validation-error',
+          'Error calling discount validation API',
+          { 
+            userId: user.id, 
+            registrationId,
+            discountCode,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          'error'
+        )
+        return { isValid: false }
+      })
+
+      logger.logPaymentProcessing(
+        'free-registration-discount-validation-result',
+        'Discount validation result',
+        { 
+          userId: user.id, 
+          registrationId,
+          discountCode,
+          isValid: discountValidation?.isValid,
+          discountCodeData: discountValidation?.discountCode ? {
+            id: discountValidation.discountCode.id,
+            categoryId: discountValidation.discountCode.category?.id
+          } : null
+        },
+        'info'
+      )
 
       if (discountValidation?.isValid && discountValidation.discountCode) {
         // Check if discount usage already exists to prevent duplicates
-        const { data: existingUsage } = await supabase
+        const { data: existingUsage, error: existingUsageError } = await supabase
           .from('discount_usage')
           .select('id')
           .eq('user_id', user.id)
@@ -297,8 +339,22 @@ async function handleFreeRegistration({
           .eq('registration_id', registrationId)
           .single()
 
+        if (existingUsageError && existingUsageError.code !== 'PGRST116') {
+          logger.logPaymentProcessing(
+            'free-registration-discount-usage-check-error',
+            'Error checking existing discount usage',
+            { 
+              userId: user.id, 
+              registrationId,
+              discountCode,
+              error: existingUsageError.message
+            },
+            'error'
+          )
+        }
+
         if (!existingUsage) {
-          await supabase
+          const { error: usageError } = await supabase
             .from('discount_usage')
             .insert({
               user_id: user.id,
@@ -308,7 +364,62 @@ async function handleFreeRegistration({
               amount_saved: selectedCategory.price || 0, // Full price was saved
               registration_id: registrationId,
             })
+
+          if (usageError) {
+            logger.logPaymentProcessing(
+              'free-registration-discount-usage-insert-error',
+              'Error inserting discount usage record',
+              { 
+                userId: user.id, 
+                registrationId,
+                discountCode,
+                discountCodeId: discountValidation.discountCode.id,
+                discountCategoryId: discountValidation.discountCode.category.id,
+                seasonId: registration.season.id,
+                amountSaved: selectedCategory.price || 0,
+                error: usageError.message
+              },
+              'error'
+            )
+          } else {
+            logger.logPaymentProcessing(
+              'free-registration-discount-usage-success',
+              'Successfully recorded discount usage for free registration',
+              { 
+                userId: user.id, 
+                registrationId,
+                discountCode,
+                discountCodeId: discountValidation.discountCode.id,
+                amountSaved: selectedCategory.price || 0
+              },
+              'info'
+            )
+          }
+        } else {
+          logger.logPaymentProcessing(
+            'free-registration-discount-usage-exists',
+            'Discount usage already exists for free registration',
+            { 
+              userId: user.id, 
+              registrationId,
+              discountCode,
+              existingUsageId: existingUsage.id
+            },
+            'info'
+          )
         }
+      } else {
+        logger.logPaymentProcessing(
+          'free-registration-discount-invalid',
+          'Discount validation failed for free registration',
+          { 
+            userId: user.id, 
+            registrationId,
+            discountCode,
+            validationResult: discountValidation
+          },
+          'warn'
+        )
       }
     }
 

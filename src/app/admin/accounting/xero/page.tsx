@@ -31,15 +31,20 @@ interface FailedItem {
   sync_error: string | null
   last_synced_at: string
   staging_metadata?: any
+  payment_id?: string | null
   payments?: {
+    user_id: string
     users: {
       first_name: string | null
       last_name: string | null
       member_id: string | null
     }
   } | null
+  xero_invoice_id?: string | null
   xero_invoices?: {
+    payment_id: string | null
     payments: {
+      user_id: string
       users: {
         first_name: string | null
         last_name: string | null

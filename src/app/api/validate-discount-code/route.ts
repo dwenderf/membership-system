@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if category is active
-    if (!discountCode.discount_categories?.is_active) {
+    if (!discountCode.discount_categories?.[0]?.is_active) {
       const result: DiscountValidationResult = {
         isValid: false,
         error: 'Discount code category is not active'
@@ -114,12 +114,14 @@ export async function POST(request: NextRequest) {
     let isPartialDiscount = false
     let partialDiscountMessage = ''
     
-    if (discountCode.discount_categories?.max_discount_per_user_per_season) {
+    const category = discountCode.discount_categories?.[0]
+    
+    if (category?.max_discount_per_user_per_season) {
       const { data: usageData, error: usageError } = await supabase
         .from('discount_usage')
         .select('amount_saved')
         .eq('user_id', user.id)
-        .eq('discount_category_id', discountCode.discount_categories.id)
+        .eq('discount_category_id', category.id)
         .eq('season_id', registration.season_id)
 
       if (usageError) {
@@ -128,14 +130,14 @@ export async function POST(request: NextRequest) {
       }
 
       const totalUsed = usageData?.reduce((sum, usage) => sum + usage.amount_saved, 0) || 0
-      const maxAllowed = discountCode.discount_categories.max_discount_per_user_per_season
+      const maxAllowed = category.max_discount_per_user_per_season
       const remaining = Math.max(0, maxAllowed - totalUsed)
       
       if (totalUsed >= maxAllowed) {
         // User has already reached their limit
         const result: DiscountValidationResult = {
           isValid: false,
-          error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${discountCode.discount_categories.name}. No additional discount can be applied.`
+          error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}. No additional discount can be applied.`
         }
         return NextResponse.json(result)
       }
@@ -144,7 +146,7 @@ export async function POST(request: NextRequest) {
         // Apply partial discount up to the remaining limit
         discountAmount = remaining
         isPartialDiscount = true
-        partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${discountCode.discount_categories.name}.`
+        partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}.`
       }
     }
 
@@ -156,10 +158,10 @@ export async function POST(request: NextRequest) {
         code: discountCode.code,
         percentage: discountCode.percentage,
         category: {
-          id: discountCode.discount_categories.id,
-          name: discountCode.discount_categories.name,
-          accounting_code: discountCode.discount_categories.accounting_code,
-          max_discount_per_user_per_season: discountCode.discount_categories.max_discount_per_user_per_season
+          id: category.id,
+          name: category.name,
+          accounting_code: category.accounting_code,
+          max_discount_per_user_per_season: category.max_discount_per_user_per_season
         }
       },
       discountAmount,

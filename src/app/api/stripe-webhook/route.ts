@@ -5,6 +5,7 @@ import { emailService } from '@/lib/email-service'
 import { autoSyncPaymentToXero } from '@/lib/xero/auto-sync'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
+import { logger } from '@/lib/logging/logger'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -292,18 +293,22 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
         name,
         type,
         season:seasons(name),
-        registration_categories!inner(
+        registration_categories(
           custom_name,
           category:categories(name)
         )
       `)
       .eq('id', registrationId)
-      .eq('registration_categories.id', userRegistration.registration_category_id)
       .single()
 
     if (userProfile && registrationDetails) {
-      const categoryName = registrationDetails.registration_categories.category?.name || 
-                          registrationDetails.registration_categories.custom_name || 
+      // Find the specific category that matches the user's registration
+      const userCategory = registrationDetails.registration_categories?.find(
+        (cat: any) => cat.id === userRegistration.registration_category_id
+      )
+      
+      const categoryName = userCategory?.category?.name || 
+                          userCategory?.custom_name || 
                           'Registration'
 
       await emailService.sendEmail({
@@ -417,10 +422,10 @@ export async function POST(request: NextRequest) {
         const userId = paymentIntent.metadata.userId
         const membershipId = paymentIntent.metadata.membershipId
         const registrationId = paymentIntent.metadata.registrationId
-        const durationMonths = parseInt(paymentIntent.metadata.durationMonths)
+        const durationMonths = paymentIntent.metadata.durationMonths ? parseInt(paymentIntent.metadata.durationMonths) : null
 
         // Handle membership payment
-        if (userId && membershipId && durationMonths) {
+        if (userId && membershipId && durationMonths && !isNaN(durationMonths)) {
           await handleMembershipPayment(supabase, paymentIntent, userId, membershipId, durationMonths)
         }
         // Handle registration payment  
@@ -428,7 +433,13 @@ export async function POST(request: NextRequest) {
           await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
         }
         else {
-          console.error('Missing required metadata in payment intent:', paymentIntent.id)
+          console.error('Missing required metadata in payment intent:', paymentIntent.id, {
+            userId,
+            membershipId,
+            registrationId,
+            durationMonths,
+            hasDurationMonths: !!paymentIntent.metadata.durationMonths
+          })
         }
         break
       }
@@ -524,6 +535,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error('Error processing webhook:', error)
+    console.error('Webhook error details:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      eventType: event.type,
+      paymentIntentId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
+    })
+    
+    // Report critical webhook error via Logger (automatically sends to Sentry)
+    logger.logPaymentProcessing(
+      'webhook-processing-error',
+      'Critical webhook processing error',
+      {
+        eventType: event.type,
+        paymentIntentId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown',
+        webhookBody: body.substring(0, 1000), // First 1000 chars for context
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
+      'error'
+    )
+    
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }

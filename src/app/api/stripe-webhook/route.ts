@@ -296,7 +296,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       await emailService.sendEmail({
         userId: userId,
         email: userProfile.email,
-        eventType: 'registration.confirmed',
+        eventType: 'registration.completed',
         subject: `Registration Confirmed - ${registrationDetails.name}`,
         triggeredBy: 'automated',
         data: {
@@ -393,7 +393,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     switch (event.type) {

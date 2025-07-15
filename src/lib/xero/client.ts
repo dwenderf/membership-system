@@ -46,7 +46,7 @@ async function runXeroStartupTest() {
               { tenantName: activeXeroTenants[0].tenant_name, tenantId: activeXeroTenants[0].tenant_id }
             )
           } else {
-            const { logger } = await import('./logging/logger')
+            const { logger } = await import('../logging/logger')
             logger.logXeroSync(
               'startup-connection-failed',
               `Xero connection test failed for: ${activeXeroTenants[0].tenant_name}`,
@@ -55,7 +55,7 @@ async function runXeroStartupTest() {
             )
           }
         } else {
-          const { logger } = await import('./logging/logger')
+          const { logger } = await import('../logging/logger')
           logger.logXeroSync(
             'startup-no-tenants',
             'No active Xero tenants found at startup',
@@ -64,7 +64,7 @@ async function runXeroStartupTest() {
           )
         }
       } catch (error) {
-        const { logger } = await import('./logging/logger')
+        const { logger } = await import('../logging/logger')
         logger.logXeroSync(
           'startup-test-error',
           'Xero startup test error',
@@ -75,7 +75,7 @@ async function runXeroStartupTest() {
     }, 2000) // 2 second delay to ensure everything is initialized
     
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'startup-test-outer-error',
       'Error during Xero startup test',
@@ -108,7 +108,7 @@ export async function withActiveTenant<T>(
 ): Promise<T | null> {
   const activeTenant = await getActiveTenant()
   if (!activeTenant) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'no-active-tenant',
       'No active Xero tenant found',
@@ -124,7 +124,7 @@ export async function withActiveTenant<T>(
 export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroClient | null> {
   try {
     // Import supabase here to avoid circular dependency
-    const { createAdminClient } = await import('./supabase/server')
+    const { createAdminClient } = await import('../supabase/server')
     const supabase = createAdminClient()
 
     // Get stored tokens for the tenant
@@ -136,7 +136,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       .single()
 
     if (error || !tokenData) {
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'no-active-tokens',
         'No active Xero tokens found for tenant',
@@ -153,7 +153,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
 
     if (isExpired) {
       // Try to refresh the token
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'token-refresh-attempt',
         `Attempting to refresh expired Xero token for tenant: ${tenantId}`,
@@ -229,7 +229,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     return xero
 
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'auth-client-error',
       'Error getting authenticated Xero client',
@@ -258,7 +258,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
     }
 
     // Log what Xero actually returned for debugging
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'token-refresh-response',
       'Xero token refresh response details',
@@ -292,7 +292,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
                   new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
     }
   } catch (error: any) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'token-refresh-error',
       'Error refreshing Xero token',
@@ -332,7 +332,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
         }
       })
     } catch (sentryError) {
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'sentry-alert-failed',
         'Failed to send Sentry alert for Xero token refresh failure',
@@ -350,7 +350,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
 // Helper function to revoke OAuth tokens on Xero's side
 export async function revokeXeroTokens(): Promise<boolean> {
   try {
-    const { createAdminClient } = await import('./supabase/server')
+    const { createAdminClient } = await import('../supabase/server')
     const supabase = createAdminClient()
 
     // Get all active tokens
@@ -360,7 +360,7 @@ export async function revokeXeroTokens(): Promise<boolean> {
       .eq('is_active', true)
 
     if (error || !activeTokens || activeTokens.length === 0) {
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'no-tokens-to-revoke',
         'No active tokens to revoke',
@@ -394,7 +394,7 @@ export async function revokeXeroTokens(): Promise<boolean> {
 
         // Revoke the connection on Xero's side
         await revokeClient.revokeToken()
-        const { logger } = await import('./logging/logger')
+        const { logger } = await import('../logging/logger')
         logger.logXeroSync(
           'token-revoked',
           'Successfully revoked token for tenant',
@@ -402,7 +402,7 @@ export async function revokeXeroTokens(): Promise<boolean> {
         )
         
       } catch (revokeError) {
-        const { logger } = await import('./logging/logger')
+        const { logger } = await import('../logging/logger')
         logger.logXeroSync(
           'token-revoke-error',
           'Error revoking token for tenant',
@@ -418,7 +418,7 @@ export async function revokeXeroTokens(): Promise<boolean> {
 
     return true
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'revoke-tokens-error',
       'Error revoking Xero tokens',
@@ -436,7 +436,7 @@ export async function getActiveTenant(): Promise<{
   expires_at: string
 } | null> {
   try {
-    const { createAdminClient } = await import('./supabase/server')
+    const { createAdminClient } = await import('../supabase/server')
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -446,7 +446,7 @@ export async function getActiveTenant(): Promise<{
       .single()
 
     if (error) {
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'fetch-active-tenant-error',
         'Error fetching active Xero tenant',
@@ -458,7 +458,7 @@ export async function getActiveTenant(): Promise<{
 
     return data
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'get-active-tenant-error',
       'Error getting active Xero tenant',
@@ -476,7 +476,7 @@ export async function getActiveXeroTenants(): Promise<Array<{
   expires_at: string
 }>> {
   try {
-    const { createAdminClient } = await import('./supabase/server')
+    const { createAdminClient } = await import('../supabase/server')
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -485,7 +485,7 @@ export async function getActiveXeroTenants(): Promise<Array<{
       .eq('is_active', true)
 
     if (error) {
-      const { logger } = await import('./logging/logger')
+      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'fetch-active-tenants-error',
         'Error fetching active Xero tenants',
@@ -497,7 +497,7 @@ export async function getActiveXeroTenants(): Promise<Array<{
 
     return data || []
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'get-active-tenants-error',
       'Error getting active Xero tenants',
@@ -520,7 +520,7 @@ export async function validateXeroConnection(tenantId: string): Promise<boolean>
     const response = await xeroApi.accountingApi.getOrganisations(tenantId)
     return !!(response.body.organisations && response.body.organisations.length > 0)
   } catch (error) {
-    const { logger } = await import('./logging/logger')
+    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'validate-connection-error',
       'Error validating Xero connection',
@@ -583,7 +583,7 @@ export async function logXeroSync(
   responseData?: any
 ): Promise<void> {
   try {
-    const { createAdminClient } = await import('./supabase/server')
+    const { createAdminClient } = await import('../supabase/server')
     const supabase = createAdminClient()
 
     // Handle both calling patterns

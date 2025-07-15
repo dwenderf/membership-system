@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         is_active,
         valid_from,
         valid_until,
-        discount_categories!inner (
+        discount_categories (
           id,
           name,
           accounting_code,
@@ -80,8 +80,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
+    // Debug logging
+    console.log('Discount code found:', {
+      id: discountCode.id,
+      code: discountCode.code,
+      is_active: discountCode.is_active,
+      discount_categories: discountCode.discount_categories
+    })
+
     // Check if category is active
     const discountCategory = discountCode.discount_categories?.[0]
+    console.log('Category check:', {
+      discount_categories_length: discountCode.discount_categories?.length,
+      discountCategory,
+      category_is_active: discountCategory?.is_active
+    })
+    
     if (!discountCategory?.is_active) {
       const result: DiscountValidationResult = {
         isValid: false,

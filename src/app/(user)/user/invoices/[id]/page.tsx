@@ -23,6 +23,7 @@ interface UserInvoice {
   date: string
   dueDate: string
   reference: string
+  url?: string // Public payment URL from Xero
   lineItems: Array<{
     description: string
     quantity: number
@@ -72,14 +73,12 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       redirect('/user/invoices')
     }
 
-    // Fetch the specific invoice by ID from Xero API, including payments
+    // Fetch the specific invoice by ID from Xero API
     logger.logXeroSync('invoice-fetch-start', 'Fetching single invoice from Xero', { invoiceId: id })
     
     const response = await xeroClient.accountingApi.getInvoice(
       tenant.tenant_id,
-      id,
-      undefined, // unitdp
-      true // includePayments
+      id
     )
     
     if (!response.body.invoices || response.body.invoices.length === 0) {
@@ -88,6 +87,30 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
     }
 
     const xeroInvoice = response.body.invoices[0]
+    
+    // Fetch the online invoice URL from the separate endpoint
+    let publicUrl = undefined;
+    try {
+      const onlineInvoiceResponse = await xeroClient.accountingApi.getOnlineInvoice(tenant.tenant_id, id);
+      logger.logXeroSync('online-invoice-response', 'Online invoice response', { 
+        invoiceId: id,
+        response: onlineInvoiceResponse.body
+      });
+      publicUrl = onlineInvoiceResponse.body.onlineInvoices?.[0]?.onlineInvoiceUrl || undefined;
+    } catch (error) {
+      logger.logXeroSync('online-invoice-error', 'Failed to get online invoice URL', { 
+        invoiceId: id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Don't fail the request if we can't get the online URL
+    }
+    
+    // Debug: Log the invoice fields to see what's available
+    logger.logXeroSync('invoice-debug', 'Raw invoice fields', { 
+      invoiceId: id,
+      fields: Object.keys(xeroInvoice),
+      publicUrl
+    })
     
     // Verify the invoice belongs to the current user
     if (xeroInvoice.contact?.contactID !== contact.xeroContactId) {
@@ -111,6 +134,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       date: xeroInvoice.date || '',
       dueDate: xeroInvoice.dueDate || '',
       reference: xeroInvoice.reference || '',
+      url: publicUrl, // Public payment URL from Xero
       lineItems: xeroInvoice.lineItems?.map((item: any) => ({
         description: item.description || '',
         quantity: item.quantity || 0,
@@ -167,7 +191,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         </div>
 
         {/* Invoice Details */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6 relative">
+          {/* Pay button in top-right corner */}
+          {!isPaid && invoice.url && (
+            <div className="absolute top-4 right-4">
+              <a
+                href={invoice.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Pay Now
+              </a>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <h3 className="text-sm font-medium text-gray-500">Invoice Number</h3>
@@ -262,6 +299,8 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                   </div>
                 </div>
               </div>
+              
+
             </div>
           </div>
         )}
@@ -297,17 +336,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Actions */}
-        {!isPaid && invoice.total > 0 && (
-          <div className="mt-6 flex justify-center">
-            <Link
-              href={`/user/invoices`}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Pay Now
-            </Link>
-          </div>
-        )}
+
       </div>
     )
   } catch (error) {

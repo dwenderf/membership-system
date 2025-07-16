@@ -47,6 +47,18 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
+    // Fetch the online invoice URL from the separate endpoint
+    let publicUrl = undefined;
+    try {
+      const onlineInvoiceResponse = await xeroClient.accountingApi.getOnlineInvoice(activeTenant.tenant_id, params.invoiceId);
+      console.log('Online invoice response:', JSON.stringify(onlineInvoiceResponse.body, null, 2));
+      publicUrl = onlineInvoiceResponse.body.onlineInvoices?.[0]?.onlineInvoiceUrl || undefined;
+    } catch (error) {
+      console.log('Failed to get online invoice URL:', error);
+      // Don't fail the request if we can't get the online URL
+    }
+    console.log('Extracted public URL:', publicUrl)
+
     // Format the invoice for the frontend
     const formattedInvoice = {
       id: invoice.invoiceID,
@@ -58,6 +70,7 @@ export async function GET(
       amountPaid: invoice.amountPaid,
       amountDue: invoice.amountDue,
       currency: invoice.currencyCode,
+      url: publicUrl, // Public payment URL from Xero
       contact: {
         name: invoice.contact?.name,
         email: invoice.contact?.emailAddress

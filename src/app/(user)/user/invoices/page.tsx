@@ -166,7 +166,7 @@ export default async function UserInvoicesPage() {
           })
           
           // Format the invoices for the frontend
-          const formattedInvoices = userInvoices.map((invoice: any) => {
+          const formattedInvoices = await Promise.all(userInvoices.map(async (invoice: any) => {
             // Sum up all payments and get the most recent payment date
             let totalPaid = 0
             let latestPaymentDate = null
@@ -179,6 +179,9 @@ export default async function UserInvoicesPage() {
                 return latest
               }, null)
             }
+
+
+
             return {
               id: invoice.invoiceID,
               number: invoice.invoiceNumber,
@@ -190,6 +193,7 @@ export default async function UserInvoicesPage() {
               date: invoice.date,
               dueDate: invoice.dueDate,
               reference: invoice.reference,
+              url: undefined, // No URL needed for list view
               lineItems: invoice.lineItems?.map((item: any) => ({
                 description: item.description,
                 quantity: item.quantity,
@@ -206,7 +210,7 @@ export default async function UserInvoicesPage() {
               totalPaid: Math.round(totalPaid * 100), // Convert dollars to cents
               latestPaymentDate
             }
-          })
+          }))
           
           // Sort invoices by date (newest first)
           invoices = formattedInvoices.sort((a, b) => {

@@ -280,6 +280,19 @@ export async function POST(request: NextRequest) {
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
       console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+      
+      // Update user_registrations record with payment_id
+      const { error: registrationUpdateError } = await supabase
+        .from('user_registrations')
+        .update({ payment_id: updatedPayment[0].id })
+        .eq('id', userRegistration.id)
+
+      if (registrationUpdateError) {
+        console.error('Error updating registration record with payment_id:', registrationUpdateError)
+        capturePaymentError(registrationUpdateError, paymentContext, 'warning')
+      } else {
+        console.log(`✅ Updated registration record with payment_id: ${updatedPayment[0].id}`)
+      }
     } else {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }

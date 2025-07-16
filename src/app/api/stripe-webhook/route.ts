@@ -82,6 +82,18 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     console.error('❌ Webhook: Error updating membership payment record:', paymentUpdateError)
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id}`)
+    
+    // Update user_memberships record with payment_id
+    const { error: membershipUpdateError } = await supabase
+      .from('user_memberships')
+      .update({ payment_id: updatedPayment[0].id })
+      .eq('id', membershipRecord.id)
+
+    if (membershipUpdateError) {
+      console.error('❌ Webhook: Error updating membership record with payment_id:', membershipUpdateError)
+    } else {
+      console.log(`✅ Webhook: Updated membership record with payment_id: ${updatedPayment[0].id}`)
+    }
   } else {
     console.warn(`⚠️ Webhook: No membership payment record found for payment intent: ${paymentIntent.id}`)
   }
@@ -303,6 +315,18 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     console.error('❌ Webhook: Error updating payment record:', paymentUpdateError)
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id}`)
+    
+    // Update user_registrations record with payment_id
+    const { error: registrationUpdateError } = await supabase
+      .from('user_registrations')
+      .update({ payment_id: updatedPayment[0].id })
+      .eq('id', userRegistration.id)
+
+    if (registrationUpdateError) {
+      console.error('❌ Webhook: Error updating registration record with payment_id:', registrationUpdateError)
+    } else {
+      console.log(`✅ Webhook: Updated registration record with payment_id: ${updatedPayment[0].id}`)
+    }
   } else {
     console.warn(`⚠️ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
   }

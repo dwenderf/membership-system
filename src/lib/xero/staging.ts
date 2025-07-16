@@ -134,7 +134,7 @@ export class XeroStagingManager {
     event: {
       user_id: string
       record_id: string
-      trigger_source: 'user_memberships' | 'user_registrations'
+      trigger_source: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
     }
   ): Promise<boolean> {
     try {
@@ -333,17 +333,108 @@ export class XeroStagingManager {
   private async getFreePurchaseData(event: {
     user_id: string
     record_id: string
-    trigger_source: 'user_memberships' | 'user_registrations'
+    trigger_source: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
   }) {
-    // This will get the membership or registration data for free purchases
-    // TODO: Implement based on trigger_source
-    logger.logXeroSync(
-      'staging-free-data-placeholder',
-      'Get free purchase data - to be implemented',
-      { recordId: event.record_id, source: event.trigger_source },
-      'warn'
-    )
-    return null
+    try {
+      if (event.trigger_source === 'user_registrations' || event.trigger_source === 'free_registration') {
+        // Get registration data
+        const { data: registration, error } = await this.supabase
+          .from('user_registrations')
+          .select(`
+            *,
+            registration:registrations (
+              name,
+              season:seasons (name, start_date, end_date)
+            ),
+            registration_category:registration_categories (
+              name,
+              price,
+              accounting_code
+            ),
+            payment:payments (
+              id,
+              final_amount,
+              discount_amount,
+              stripe_payment_intent_id
+            )
+          `)
+          .eq('id', event.record_id)
+          .single()
+
+        if (error || !registration) {
+          logger.logXeroSync(
+            'staging-free-registration-not-found',
+            'Registration not found for free staging',
+            { recordId: event.record_id, error },
+            'error'
+          )
+          return null
+        }
+
+        return {
+          type: 'registration',
+          data: registration,
+          user_id: event.user_id
+        }
+      } else if (event.trigger_source === 'user_memberships' || event.trigger_source === 'free_membership') {
+        // Get membership data
+        const { data: membership, error } = await this.supabase
+          .from('user_memberships')
+          .select(`
+            *,
+            membership:memberships (
+              name,
+              price,
+              accounting_code,
+              season:seasons (name, start_date, end_date)
+            ),
+            payment:payments (
+              id,
+              final_amount,
+              discount_amount,
+              stripe_payment_intent_id
+            )
+          `)
+          .eq('id', event.record_id)
+          .single()
+
+        if (error || !membership) {
+          logger.logXeroSync(
+            'staging-free-membership-not-found',
+            'Membership not found for free staging',
+            { recordId: event.record_id, error },
+            'error'
+          )
+          return null
+        }
+
+        return {
+          type: 'membership',
+          data: membership,
+          user_id: event.user_id
+        }
+      }
+
+      logger.logXeroSync(
+        'staging-free-unknown-source',
+        'Unknown trigger source for free purchase',
+        { recordId: event.record_id, source: event.trigger_source },
+        'error'
+      )
+      return null
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-free-data-error',
+        'Error getting free purchase data',
+        { 
+          recordId: event.record_id,
+          source: event.trigger_source,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return null
+    }
   }
 
   /**
@@ -351,21 +442,81 @@ export class XeroStagingManager {
    */
   private async convertToStagingData(
     purchaseData: any, 
-    type: 'user_memberships' | 'user_registrations'
+    type: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
   ): Promise<StagingPaymentData> {
-    // TODO: Convert membership/registration data to staging format
-    logger.logXeroSync(
-      'staging-convert-data-placeholder',
-      'Convert to staging data - to be implemented',
-      { type },
-      'warn'
-    )
-    return {
-      user_id: purchaseData.user_id,
-      total_amount: 0,
-      discount_amount: 0,
-      final_amount: 0,
-      payment_items: []
+    try {
+      if (type === 'user_registrations' || type === 'free_registration') {
+        const registration = purchaseData.data
+        const payment = registration.payment
+        
+        return {
+          payment_id: payment?.id || null,
+          user_id: purchaseData.user_id,
+          total_amount: registration.registration_category?.price || 0,
+          discount_amount: payment?.discount_amount || 0,
+          final_amount: payment?.final_amount || 0,
+          payment_items: [{
+            item_type: 'registration',
+            item_id: registration.registration_id,
+            amount: registration.amount_paid || 0,
+            description: `${registration.registration.name} - ${registration.registration_category?.name || 'Standard'}`,
+            accounting_code: registration.registration_category?.accounting_code || 'REGISTRATION'
+          }],
+          stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
+        }
+      } else if (type === 'user_memberships' || type === 'free_membership') {
+        const membership = purchaseData.data
+        const payment = membership.payment
+        
+        return {
+          payment_id: payment?.id || null,
+          user_id: purchaseData.user_id,
+          total_amount: membership.membership?.price || 0,
+          discount_amount: payment?.discount_amount || 0,
+          final_amount: payment?.final_amount || 0,
+          payment_items: [{
+            item_type: 'membership',
+            item_id: membership.membership_id,
+            amount: membership.amount_paid || 0,
+            description: `${membership.membership.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
+            accounting_code: membership.membership?.accounting_code || 'MEMBERSHIP'
+          }],
+          stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
+        }
+      }
+
+      logger.logXeroSync(
+        'staging-convert-unknown-type',
+        'Unknown type for staging data conversion',
+        { type },
+        'error'
+      )
+      
+      return {
+        user_id: purchaseData.user_id,
+        total_amount: 0,
+        discount_amount: 0,
+        final_amount: 0,
+        payment_items: []
+      }
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-convert-data-error',
+        'Error converting purchase data to staging format',
+        { 
+          type,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      
+      return {
+        user_id: purchaseData.user_id,
+        total_amount: 0,
+        discount_amount: 0,
+        final_amount: 0,
+        payment_items: []
+      }
     }
   }
 

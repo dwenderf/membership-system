@@ -239,13 +239,34 @@ async function handleFreeMembership({
       return NextResponse.json({ error: 'Failed to create membership' }, { status: 500 })
     }
 
+    // Update user_memberships record with payment_id
+    const { error: membershipUpdateError } = await supabase
+      .from('user_memberships')
+      .update({ payment_id: paymentRecord.id })
+      .eq('id', membershipRecord.id)
+
+    if (membershipUpdateError) {
+      logger.logPaymentProcessing(
+        'membership-payment-link-failed',
+        'Failed to link payment to membership record',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          membershipId: membershipRecord.id,
+          error: membershipUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the whole transaction, but log the issue
+    }
+
     // Trigger payment completion processor for emails and post-processing
     try {
       await paymentProcessor.processPaymentCompletion({
         event_type: 'user_memberships',
         record_id: membershipRecord.id,
         user_id: user.id,
-        payment_id: null, // No payment for free membership
+        payment_id: paymentRecord.id, // Now we have the payment_id
         amount: 0,
         trigger_source: 'free_membership',
         timestamp: new Date().toISOString()

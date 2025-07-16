@@ -269,6 +269,27 @@ async function handleFreeRegistration({
       // Don't fail the whole transaction, but log the issue
     }
 
+    // Update user_registrations record with payment_id
+    const { error: registrationUpdateError } = await supabase
+      .from('user_registrations')
+      .update({ payment_id: paymentRecord.id })
+      .eq('id', reservationData.id)
+
+    if (registrationUpdateError) {
+      logger.logPaymentProcessing(
+        'registration-payment-link-failed',
+        'Failed to link payment to registration record',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          registrationId: reservationData.id,
+          error: registrationUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the whole transaction, but log the issue
+    }
+
     // Payment items are now tracked in xero_invoice_line_items via the staging system
     // No need to create separate payment_items records
 
@@ -351,7 +372,7 @@ async function handleFreeRegistration({
         event_type: 'user_registrations',
         record_id: reservationData.id,
         user_id: user.id,
-        payment_id: null, // No payment for free registration
+        payment_id: paymentRecord.id, // Now we have the payment_id
         amount: 0,
         trigger_source: 'free_registration',
         timestamp: new Date().toISOString()

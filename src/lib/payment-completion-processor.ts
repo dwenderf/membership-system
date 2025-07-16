@@ -188,28 +188,64 @@ export class PaymentCompletionProcessor {
   private async findExistingStagingRecords(event: PaymentCompletionEvent) {
     try {
       await this.initialize()
-      let query = this.supabase
-        .from('xero_invoices')
-        .select('*')
-        .in('sync_status', ['staged', 'pending', 'synced'])
-
-      // Build query based on available IDs
-      if (event.payment_id && event.record_id) {
-        // Look for records matching either payment_id OR record_id
-        query = query.or(`payment_id.eq.${event.payment_id},record_id.eq.${event.record_id}`)
-      } else if (event.payment_id) {
-        // Only payment_id available
-        query = query.eq('payment_id', event.payment_id)
-      } else if (event.record_id) {
-        // Only record_id available (for zero-value purchases)
-        query = query.eq('record_id', event.record_id)
-      } else {
-        // No IDs available - can't find records
-        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No payment_id or record_id available for staging record lookup', undefined, 'warn')
+      
+      this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Searching for existing staging records', {
+        payment_id: event.payment_id,
+        record_id: event.record_id,
+        trigger_source: event.trigger_source
+      })
+      
+      // For zero-value purchases, we need to find the payment record first
+      let paymentId = event.payment_id
+      if (!paymentId && event.record_id) {
+        // Find the payment record associated with this registration/membership
+        const paymentQuery = event.trigger_source === 'user_registrations' || event.trigger_source === 'free_registration'
+          ? this.supabase.from('user_registrations').select('payment_id').eq('id', event.record_id).single()
+          : this.supabase.from('user_memberships').select('payment_id').eq('id', event.record_id).single()
+        
+        const { data: recordData, error: recordError } = await paymentQuery
+        
+        if (recordError) {
+          this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Error finding payment record', { error: recordError }, 'error')
+          return null
+        }
+        
+        paymentId = recordData?.payment_id
+        this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Found payment_id from record', {
+          record_id: event.record_id,
+          payment_id: paymentId
+        })
+      }
+      
+      if (!paymentId) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No payment_id available for staging record lookup', undefined, 'warn')
         return null
       }
-
-      const { data: existingInvoices } = await query.limit(1)
+      
+      // Search for staging records by payment_id
+      const { data: existingInvoices, error } = await this.supabase
+        .from('xero_invoices')
+        .select('*')
+        .eq('payment_id', paymentId)
+        .in('sync_status', ['staged', 'pending', 'synced'])
+        .limit(1)
+      
+      if (error) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding staging records', { error }, 'error')
+        return null
+      }
+      
+      this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Search results', {
+        found: existingInvoices && existingInvoices.length > 0,
+        count: existingInvoices?.length || 0,
+        firstRecord: existingInvoices?.[0] ? {
+          id: existingInvoices[0].id,
+          payment_id: existingInvoices[0].payment_id,
+          sync_status: existingInvoices[0].sync_status,
+          invoice_status: existingInvoices[0].invoice_status
+        } : null
+      })
+      
       return existingInvoices && existingInvoices.length > 0 ? existingInvoices[0] : null
     } catch (error) {
       this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Error finding existing staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')

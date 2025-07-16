@@ -13,6 +13,8 @@ CREATE TABLE users (
     phone TEXT,
     is_admin BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT '{}',
+    is_lgbtq BOOLEAN, -- Whether user identifies as LGBTQ (nullable for "prefer not to answer")
+    is_goalie BOOLEAN NOT NULL DEFAULT FALSE, -- Whether user plays goalie (including if primarily plays out)
     member_id INTEGER UNIQUE, -- Auto-generated unique member ID starting from 1000. Used for Xero contact identification.
     onboarding_completed_at TIMESTAMP WITH TIME ZONE,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
@@ -51,6 +53,10 @@ CREATE TRIGGER set_member_id_trigger
 
 -- Index for member_id performance
 CREATE INDEX IF NOT EXISTS idx_users_member_id ON users(member_id);
+
+-- Indexes for user attributes (for efficient filtering)
+CREATE INDEX IF NOT EXISTS idx_users_is_lgbtq ON users(is_lgbtq) WHERE is_lgbtq = true;
+CREATE INDEX IF NOT EXISTS idx_users_is_goalie ON users(is_goalie) WHERE is_goalie = true;
 
 -- Login attempts table
 CREATE TABLE login_attempts (

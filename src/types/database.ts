@@ -10,6 +10,8 @@ export type Database = {
           phone: string | null
           is_admin: boolean
           tags: string[] | null
+          is_lgbtq: boolean | null
+          is_goalie: boolean
           created_at: string
           updated_at: string
         }
@@ -21,6 +23,8 @@ export type Database = {
           phone?: string | null
           is_admin?: boolean
           tags?: string[] | null
+          is_lgbtq?: boolean | null
+          is_goalie?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -32,6 +36,8 @@ export type Database = {
           phone?: string | null
           is_admin?: boolean
           tags?: string[] | null
+          is_lgbtq?: boolean | null
+          is_goalie?: boolean
           created_at?: string
           updated_at?: string
         }

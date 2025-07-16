@@ -122,6 +122,14 @@ registration_categories (
 - `memberships` → `user_memberships` (1:many)
 - `seasons` → `registrations` (1:many)
 
+### User Attributes
+The `users` table includes attributes for registration filtering and team organization:
+- `is_goalie`: Boolean indicating if user plays goalie (required, defaults to false)
+- `is_lgbtq`: Boolean indicating LGBTQ identity (nullable for "prefer not to answer")
+- `tags`: Array of custom tags for additional categorization
+
+These attributes are collected during onboarding and can be updated through the profile editing interface. They're displayed as color-coded tags in the user interface and can be used for registration filtering and team organization.
+
 ### Payment System
 - `users` → `payments` (1:many)
 - `payments` → `payment_items` (1:many)
@@ -232,6 +240,7 @@ const { data } = await supabase.from('table').select('*')
 - Payment lookups by Stripe ID for webhook processing
 - Deleted user queries: `idx_users_deleted_at`
 - Member ID lookups: `idx_users_member_id`
+- User attribute filtering: `idx_users_is_lgbtq`, `idx_users_is_goalie`
 
 ### Query Patterns
 Database schema optimized for common queries:
@@ -240,6 +249,7 @@ Database schema optimized for common queries:
 - Payment reconciliation (Stripe ID lookups)
 - Account deletion filtering (`WHERE deleted_at IS NULL`)
 - Orphaned user record identification (`WHERE deleted_at IS NOT NULL`)
+- User attribute filtering for registration and team organization
 
 ## Data Integrity
 

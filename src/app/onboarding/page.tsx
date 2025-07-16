@@ -14,6 +14,8 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    isGoalie: null as boolean | null,
+    isLgbtq: null as boolean | null,
     termsAccepted: false,
     wantsMembership: true, // defaults to checked
   })
@@ -72,6 +74,14 @@ export default function OnboardingPage() {
       newErrors.lastName = 'Last name is required'
     }
     
+    if (formData.isGoalie === null) {
+      newErrors.isGoalie = 'Please answer whether you play goalie'
+    }
+    
+    if (formData.isLgbtq === null) {
+      newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ'
+    }
+    
     if (!formData.termsAccepted) {
       newErrors.termsAccepted = 'You must accept the terms and conditions to continue'
     }
@@ -85,6 +95,8 @@ export default function OnboardingPage() {
     return (
       !!formData.firstName?.trim() &&
       !!formData.lastName?.trim() &&
+      formData.isGoalie !== null &&
+      formData.isLgbtq !== null &&
       formData.termsAccepted
     )
   }
@@ -112,6 +124,8 @@ export default function OnboardingPage() {
         email: user.email!,
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
+        is_goalie: formData.isGoalie!,
+        is_lgbtq: formData.isLgbtq,
         is_admin: false,
         onboarding_completed_at: new Date().toISOString(),
         terms_accepted_at: new Date().toISOString(),
@@ -125,6 +139,8 @@ export default function OnboardingPage() {
           .update({
             first_name: userData.first_name,
             last_name: userData.last_name,
+            is_goalie: userData.is_goalie,
+            is_lgbtq: userData.is_lgbtq,
             onboarding_completed_at: userData.onboarding_completed_at,
             terms_accepted_at: userData.terms_accepted_at,
             terms_version: userData.terms_version,
@@ -242,6 +258,85 @@ export default function OnboardingPage() {
               />
               {errors.lastName && (
                 <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+              )}
+            </div>
+
+            {/* Goalie Question */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Do you play goalie? (select yes even if you primarily play out) *
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isGoalie"
+                    value="true"
+                    checked={formData.isGoalie === true}
+                    onChange={() => setFormData(prev => ({ ...prev, isGoalie: true }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Yes</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isGoalie"
+                    value="false"
+                    checked={formData.isGoalie === false}
+                    onChange={() => setFormData(prev => ({ ...prev, isGoalie: false }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">No</span>
+                </label>
+              </div>
+              {errors.isGoalie && (
+                <p className="mt-1 text-sm text-red-600">{errors.isGoalie}</p>
+              )}
+            </div>
+
+            {/* LGBTQ Question */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Do you identify as LGBTQ? *
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="true"
+                    checked={formData.isLgbtq === true}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: true }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Yes</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="false"
+                    checked={formData.isLgbtq === false}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: false }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">No</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="null"
+                    checked={formData.isLgbtq === null}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: null }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Prefer not to answer</span>
+                </label>
+              </div>
+              {errors.isLgbtq && (
+                <p className="mt-1 text-sm text-red-600">{errors.isLgbtq}</p>
               )}
             </div>
 

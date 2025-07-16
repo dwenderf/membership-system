@@ -1,21 +1,54 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
 
-export default async function AccountPage() {
-  const supabase = await createClient()
+export default function AccountPage() {
+  const [user, setUser] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
   
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    return null // Layout will handle redirect
+  const supabase = createClient()
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        return // Layout will handle redirect
+      }
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      setUser(user)
+      setUserProfile(profile)
+      setLoading(false)
+    }
+
+    getUser()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  if (!user || !userProfile) {
+    return null // Layout will handle redirect
+  }
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -73,22 +106,68 @@ export default async function AccountPage() {
               <dd className="mt-1 text-sm text-gray-900">{userProfile?.phone || 'Not provided'}</dd>
             </div>
             <div>
+              <dt className="text-sm font-medium text-gray-500">Plays Goalie</dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {userProfile?.is_goalie === true ? 'Yes' : userProfile?.is_goalie === false ? 'No' : 'Not specified'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">LGBTQ Identity</dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {userProfile?.is_lgbtq === true ? 'Yes' : userProfile?.is_lgbtq === false ? 'No' : userProfile?.is_lgbtq === null ? 'Prefer not to answer' : 'Not specified'}
+              </dd>
+            </div>
+            <div>
               <dt className="text-sm font-medium text-gray-500">Member Tags</dt>
               <dd className="mt-1 text-sm text-gray-900">
-                {userProfile?.tags && userProfile.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {userProfile.tags.map((tag: string, index: number) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  'No tags assigned'
-                )}
+                {(() => {
+                  const tags = []
+                  
+                  // Add existing tags from database
+                  if (userProfile?.tags && userProfile.tags.length > 0) {
+                    tags.push(...userProfile.tags)
+                  }
+                  
+                  // Add attribute-based tags
+                  if (userProfile?.is_goalie === true) {
+                    tags.push('Goalie')
+                  }
+                  
+                  if (userProfile?.is_lgbtq === true) {
+                    tags.push('LGBTQ')
+                  }
+                  
+                  if (tags.length > 0) {
+                    return (
+                      <div className="flex flex-wrap gap-1">
+                        {tags.map((tag: string, index: number) => {
+                          // Define colors for specific tags
+                          const getTagColors = (tagName: string) => {
+                            switch (tagName.toLowerCase()) {
+                              case 'goalie':
+                                return 'bg-blue-100 text-blue-800 border border-blue-200'
+                              case 'lgbtq':
+                                return 'bg-purple-100 text-purple-800 border border-purple-200'
+                              default:
+                                return 'bg-gray-100 text-gray-800 border border-gray-200'
+                            }
+                          }
+                          
+                          return (
+                            <span
+                              key={index}
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTagColors(tag)}`}
+                            >
+                              {tag}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )
+                  } else {
+                    return 'No tags assigned'
+                  }
+                })()}
               </dd>
             </div>
             <div>
@@ -114,18 +193,18 @@ export default async function AccountPage() {
         </div>
         <div className="px-6 py-4">
           <div className="space-y-4">
-            {/* Edit Profile - Coming Soon */}
+            {/* Edit Profile */}
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium text-gray-900">Edit Profile</h3>
                 <p className="text-sm text-gray-500">Update your personal information</p>
               </div>
-              <button
-                disabled
-                className="bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
+              <a
+                href="/user/account/edit"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors min-w-[120px] text-center"
               >
-                Coming Soon
-              </button>
+                Edit Profile
+              </a>
             </div>
 
             {/* Email Preferences - Coming Soon */}
@@ -136,7 +215,7 @@ export default async function AccountPage() {
               </div>
               <button
                 disabled
-                className="bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed"
+                className="bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed min-w-[120px] text-center"
               >
                 Coming Soon
               </button>
@@ -153,11 +232,14 @@ export default async function AccountPage() {
               </div>
             </div>
 
-            {/* Delete Account */}
-            <DeleteAccountSection user={userProfile} />
           </div>
         </div>
       </div>
+
+      {/* Delete Account Section - Only show when triggered */}
+      {showDeleteAccount && (
+        <DeleteAccountSection user={userProfile} />
+      )}
 
       {/* Security Information */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -167,7 +249,7 @@ export default async function AccountPage() {
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
           </div>
-          <div className="ml-3">
+          <div className="ml-3 flex-1">
             <h3 className="text-sm font-medium text-blue-800">
               Account Security
             </h3>
@@ -176,6 +258,18 @@ export default async function AccountPage() {
                 Your account is secured with passwordless authentication. 
                 You sign in using magic links or OAuth providers like Google.
               </p>
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <p className="text-sm text-blue-700">
+                  To delete your account and permanently remove all of your personal information,{' '}
+                  <button
+                    onClick={() => setShowDeleteAccount(true)}
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
+                  >
+                    click here
+                  </button>
+                  .
+                </p>
+              </div>
             </div>
           </div>
         </div>

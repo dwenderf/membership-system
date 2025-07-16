@@ -74,8 +74,8 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('sync_status', 'pending')
 
-    // Get failed invoices with user information using raw SQL
-    const { data: failedInvoices } = await supabase
+    // Get failed invoices with user information using a simpler query structure
+    const { data: failedInvoices, error: failedInvoicesError } = await supabase
       .from('xero_invoices')
       .select(`
         id, 
@@ -85,9 +85,9 @@ export async function GET(request: NextRequest) {
         last_synced_at, 
         staging_metadata,
         payment_id,
-        payments!left (
+        payments (
           user_id,
-          users!left (
+          users!payments_user_id_fkey (
             first_name,
             last_name,
             member_id
@@ -98,7 +98,11 @@ export async function GET(request: NextRequest) {
       .not('payment_id', 'is', null)
       .order('last_synced_at', { ascending: false })
 
-    const { data: failedPayments } = await supabase
+    if (failedInvoicesError) {
+      console.error('Error fetching failed invoices:', failedInvoicesError)
+    }
+
+    const { data: failedPayments, error: failedPaymentsError } = await supabase
       .from('xero_payments')
       .select(`
         id, 
@@ -107,11 +111,11 @@ export async function GET(request: NextRequest) {
         sync_error, 
         last_synced_at,
         xero_invoice_id,
-        xero_invoices!left (
+        xero_invoices (
           payment_id,
-          payments!left (
+          payments (
             user_id,
-            users!left (
+            users!payments_user_id_fkey (
               first_name,
               last_name,
               member_id
@@ -121,6 +125,10 @@ export async function GET(request: NextRequest) {
       `)
       .eq('sync_status', 'failed')
       .order('last_synced_at', { ascending: false })
+
+    if (failedPaymentsError) {
+      console.error('Error fetching failed payments:', failedPaymentsError)
+    }
 
     const stats = {
       total_operations: syncStats?.length || 0,
@@ -134,6 +142,15 @@ export async function GET(request: NextRequest) {
       failed_payments: failedPayments || [],
       failed_count: (failedInvoices?.length || 0) + (failedPayments?.length || 0)
     }
+
+    // Add debugging information
+    console.log('Xero status API response:', {
+      failedInvoicesCount: failedInvoices?.length || 0,
+      failedPaymentsCount: failedPayments?.length || 0,
+      totalFailedCount: stats.failed_count,
+      failedInvoicesError: failedInvoicesError?.message,
+      failedPaymentsError: failedPaymentsError?.message
+    })
 
     return NextResponse.json({
       connections: connectionsWithStatus,

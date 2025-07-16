@@ -11,6 +11,7 @@ import { createAdminClient } from '../supabase/server'
 import { Database } from '../../types/database'
 import { batchProcessor } from '../batch-processor'
 import * as Sentry from '@sentry/nextjs'
+import { getActiveXeroTenants, validateXeroConnection } from './client'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   xero_invoice_line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
@@ -40,6 +41,28 @@ export class XeroBatchSyncManager {
     }
 
     try {
+      // Check if Xero is connected before attempting any sync
+      const activeTenants = await getActiveXeroTenants()
+      if (activeTenants.length === 0) {
+        console.log('⚠️ No active Xero tenants found - skipping sync to preserve pending status')
+        return results
+      }
+
+      // Validate connection to at least one tenant
+      let hasValidConnection = false
+      for (const tenant of activeTenants) {
+        const isValid = await validateXeroConnection(tenant.tenant_id)
+        if (isValid) {
+          hasValidConnection = true
+          break
+        }
+      }
+
+      if (!hasValidConnection) {
+        console.log('⚠️ No valid Xero connections found - skipping sync to preserve pending status')
+        return results
+      }
+
       // Get pending records, prioritizing older records first
       const { data: pendingInvoices } = await this.supabase
         .from('xero_invoices')
@@ -140,27 +163,45 @@ export class XeroBatchSyncManager {
    * Sync a single invoice to Xero (core implementation)
    */
   async syncInvoiceToXero(invoiceRecord: XeroInvoiceRecord): Promise<boolean> {
+    let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
+    
     try {
-      console.log('📄 Syncing invoice to Xero:', invoiceRecord.invoice_number)
+      console.log('📄 Syncing invoice to Xero:', {
+        id: invoiceRecord.id,
+        invoiceNumber: invoiceRecord.invoice_number,
+        tenantId: invoiceRecord.tenant_id,
+        syncStatus: invoiceRecord.sync_status,
+        paymentId: invoiceRecord.payment_id
+      })
 
-      // Check if tenant_id is available
-      if (!invoiceRecord.tenant_id) {
-        await this.markInvoiceAsFailed(invoiceRecord.id, 'No tenant_id available for Xero sync')
+      // Get the active tenant for Xero sync
+      const { getActiveTenant } = await import('./client')
+      activeTenant = await getActiveTenant()
+      
+      if (!activeTenant) {
+        console.log('❌ No active Xero tenant available for sync')
+        // Don't mark as failed - leave as pending for when Xero is reconnected
         return false
       }
 
-      // Get authenticated Xero client
-      const xeroApi = await getAuthenticatedXeroClient(invoiceRecord.tenant_id)
+      console.log('🏢 Using active tenant for sync:', activeTenant.tenant_name)
+
+      // Get authenticated Xero client using active tenant
+      const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
       if (!xeroApi) {
-        await this.markInvoiceAsFailed(invoiceRecord.id, 'Unable to authenticate with Xero')
+        // Don't mark as failed - leave as pending for when Xero is reconnected
+        console.log('⚠️ Unable to authenticate with Xero - leaving invoice as pending:', invoiceRecord.invoice_number)
         return false
       }
 
       // Get or create contact in Xero
       const metadata = invoiceRecord.staging_metadata as any
-      const contactResult = await getOrCreateXeroContact(metadata.user_id, invoiceRecord.tenant_id)
+      console.log('👤 Getting/creating Xero contact for user:', metadata?.user_id)
+      const contactResult = await getOrCreateXeroContact(metadata.user_id, activeTenant.tenant_id)
+      console.log('👤 Contact result:', contactResult)
       
       if (!contactResult.success || !contactResult.xeroContactId) {
+        console.log('❌ Contact sync failed:', contactResult.error)
         await this.markInvoiceAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
         return false
       }
@@ -174,6 +215,8 @@ export class XeroBatchSyncManager {
         taxType: item.tax_type || 'NONE',
         lineAmount: item.line_amount / 100 // Convert cents to dollars
       }))
+
+      console.log('📋 Line items prepared:', lineItems.length, 'items')
 
       // Create invoice object
       const invoice: Invoice = {
@@ -190,26 +233,39 @@ export class XeroBatchSyncManager {
         currencyCode: CurrencyCode.USD
       }
 
+      console.log('📤 Creating invoice in Xero...')
       // Create invoice in Xero
       const response = await xeroApi.accountingApi.createInvoices(
-        invoiceRecord.tenant_id,
+        activeTenant.tenant_id,
         { invoices: [invoice] }
       )
 
+      console.log('📥 Xero API response received:', {
+        hasInvoices: !!response.body.invoices,
+        invoiceCount: response.body.invoices?.length || 0
+      })
+
       if (response.body.invoices && response.body.invoices.length > 0) {
         const xeroInvoice = response.body.invoices[0]
+        console.log('📄 Xero invoice created:', {
+          xeroInvoiceId: xeroInvoice.invoiceID,
+          xeroInvoiceNumber: xeroInvoice.invoiceNumber,
+          status: xeroInvoice.status
+        })
         
         if (xeroInvoice.invoiceID && xeroInvoice.invoiceNumber) {
+          console.log('✅ Marking invoice as synced...')
           // Update staging record with Xero IDs
           await this.markInvoiceAsSynced(
             invoiceRecord.id,
             xeroInvoice.invoiceID,
-            xeroInvoice.invoiceNumber
+            xeroInvoice.invoiceNumber,
+            activeTenant.tenant_id
           )
 
           // Log success
           await logXeroSync({
-            tenant_id: invoiceRecord.tenant_id,
+            tenant_id: activeTenant.tenant_id,
             operation: 'create_invoice',
             record_type: 'invoice',
             record_id: invoiceRecord.id,
@@ -220,9 +276,15 @@ export class XeroBatchSyncManager {
 
           console.log('✅ Invoice synced successfully:', xeroInvoice.invoiceNumber)
           return true
+        } else {
+          console.log('❌ Missing Xero invoice ID or number:', {
+            xeroInvoiceId: xeroInvoice.invoiceID,
+            xeroInvoiceNumber: xeroInvoice.invoiceNumber
+          })
         }
       }
 
+      console.log('❌ Invalid response from Xero API')
       await this.markInvoiceAsFailed(invoiceRecord.id, 'Invalid response from Xero API')
       return false
 
@@ -234,7 +296,7 @@ export class XeroBatchSyncManager {
       
       // Log to Xero sync logs
       await logXeroSync({
-        tenant_id: invoiceRecord.tenant_id || '',
+        tenant_id: activeTenant?.tenant_id || '',
         operation: 'create_invoice',
         record_type: 'invoice',
         record_id: invoiceRecord.id,
@@ -274,7 +336,8 @@ export class XeroBatchSyncManager {
       // Get authenticated Xero client
       const xeroApi = await getAuthenticatedXeroClient(paymentRecord.tenant_id)
       if (!xeroApi) {
-        await this.markPaymentAsFailed(paymentRecord.id, 'Unable to authenticate with Xero')
+        // Don't mark as failed - leave as pending for when Xero is reconnected
+        console.log('⚠️ Unable to authenticate with Xero - leaving payment as pending:', paymentRecord.id)
         return false
       }
 
@@ -349,18 +412,40 @@ export class XeroBatchSyncManager {
   private async markInvoiceAsSynced(
     stagingId: string, 
     xeroInvoiceId: string, 
-    invoiceNumber: string
+    invoiceNumber: string,
+    tenantId?: string
   ) {
-    await this.supabase
+    console.log('💾 Marking invoice as synced:', {
+      stagingId,
+      xeroInvoiceId,
+      invoiceNumber,
+      tenantId
+    })
+    
+    const updateData: any = {
+      xero_invoice_id: xeroInvoiceId,
+      invoice_number: invoiceNumber,
+      sync_status: 'synced',
+      last_synced_at: new Date().toISOString(),
+      sync_error: null
+    }
+
+    // Set tenant_id if provided (for records that were staged without tenant_id)
+    if (tenantId) {
+      updateData.tenant_id = tenantId
+    }
+    
+    const { data, error } = await this.supabase
       .from('xero_invoices')
-      .update({
-        xero_invoice_id: xeroInvoiceId,
-        invoice_number: invoiceNumber,
-        sync_status: 'synced',
-        last_synced_at: new Date().toISOString(),
-        sync_error: null
-      })
+      .update(updateData)
       .eq('id', stagingId)
+      .select('id, sync_status')
+
+    if (error) {
+      console.error('❌ Error marking invoice as synced:', error)
+    } else {
+      console.log('✅ Invoice marked as synced successfully:', data)
+    }
   }
 
   /**

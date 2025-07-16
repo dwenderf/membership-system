@@ -1,6 +1,6 @@
 import { createXeroInvoiceForPayment } from './invoices'
 import { recordStripePaymentInXero } from './payments'
-import { getActiveXeroTenants } from './client'
+import { getActiveXeroTenants, validateXeroConnection } from './client'
 import { createAdminClient } from '../supabase/server'
 
 // Automatically sync a payment to all active Xero tenants
@@ -33,9 +33,23 @@ export async function autoSyncPaymentToXero(paymentId: string): Promise<void> {
       return
     }
 
-    // Sync to the first active tenant (most organizations have one tenant)
-    // For multiple tenants, you could add business logic to choose the right one
-    const primaryTenant = activeTenants[0]
+    // Validate connection to at least one tenant before attempting sync
+    let hasValidConnection = false
+    let primaryTenant = null
+    
+    for (const tenant of activeTenants) {
+      const isValid = await validateXeroConnection(tenant.tenant_id)
+      if (isValid) {
+        hasValidConnection = true
+        primaryTenant = tenant
+        break
+      }
+    }
+
+    if (!hasValidConnection || !primaryTenant) {
+      console.log('No valid Xero connections found, skipping sync for payment:', paymentId)
+      return
+    }
     
     console.log(`Auto-syncing payment ${paymentId} to Xero tenant: ${primaryTenant.tenant_name}`)
 

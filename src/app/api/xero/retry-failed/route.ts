@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
         .update({ 
           sync_status: 'pending',
           sync_error: null,
-          retry_count: 0,
           updated_at: new Date().toISOString()
         })
         .eq('sync_status', 'failed')
@@ -52,7 +51,6 @@ export async function POST(request: NextRequest) {
         .update({ 
           sync_status: 'pending',
           sync_error: null,
-          retry_count: 0,
           updated_at: new Date().toISOString()
         })
         .eq('sync_status', 'failed')
@@ -77,7 +75,6 @@ export async function POST(request: NextRequest) {
           .update({ 
             sync_status: 'pending',
             sync_error: null,
-            retry_count: 0,
             updated_at: new Date().toISOString()
           })
           .in('id', invoiceIds.map((id: string) => id.replace('inv_', '')))
@@ -93,7 +90,6 @@ export async function POST(request: NextRequest) {
           .update({ 
             sync_status: 'pending',
             sync_error: null,
-            retry_count: 0,
             updated_at: new Date().toISOString()
           })
           .in('id', paymentIds.map((id: string) => id.replace('pay_', '')))

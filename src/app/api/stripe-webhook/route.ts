@@ -50,20 +50,20 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
   let membershipRecord: any
   try {
     const { data: newMembership, error: membershipError } = await supabase
-      .from('user_memberships')
-      .insert({
-        user_id: userId,
-        membership_id: membershipId,
-        valid_from: startDate.toISOString().split('T')[0],
-        valid_until: endDate.toISOString().split('T')[0],
-        months_purchased: durationMonths,
-        payment_status: 'paid',
-        stripe_payment_intent_id: paymentIntent.id,
-        amount_paid: paymentIntent.amount,
-        purchased_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+    .from('user_memberships')
+    .insert({
+      user_id: userId,
+      membership_id: membershipId,
+      valid_from: startDate.toISOString().split('T')[0],
+      valid_until: endDate.toISOString().split('T')[0],
+      months_purchased: durationMonths,
+      payment_status: 'paid',
+      stripe_payment_intent_id: paymentIntent.id,
+      amount_paid: paymentIntent.amount,
+      purchased_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
 
     if (membershipError) {
       if (membershipError.code === '23505') { // Duplicate key error
@@ -81,8 +81,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
         
         membershipRecord = existingMembership
       } else {
-        console.error('Error creating user membership:', membershipError)
-        throw new Error('Failed to create membership')
+    console.error('Error creating user membership:', membershipError)
+    throw new Error('Failed to create membership')
       }
     } else {
       membershipRecord = newMembership
@@ -237,21 +237,21 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     console.log('Registration already paid, using existing record:', existingPaidRegistration.id)
     userRegistration = existingPaidRegistration
   } else {
-    // Update user registration record from awaiting_payment/processing to paid
+  // Update user registration record from awaiting_payment/processing to paid
     const { data: updatedRegistration, error: registrationError } = await supabase
-      .from('user_registrations')
-      .update({
-        payment_status: 'paid',
-        registered_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('registration_id', registrationId)
-      .in('payment_status', ['awaiting_payment', 'processing'])
-      .select()
-      .single()
+    .from('user_registrations')
+    .update({
+      payment_status: 'paid',
+      registered_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('registration_id', registrationId)
+    .in('payment_status', ['awaiting_payment', 'processing'])
+    .select()
+    .single()
 
     if (registrationError || !updatedRegistration) {
-      console.error('Error updating user registration:', registrationError)
+    console.error('Error updating user registration:', registrationError)
       console.error('Registration update failed for:', { userId, registrationId })
       
       // Try to find any registration record for debugging
@@ -262,7 +262,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
         .eq('registration_id', registrationId)
       
       console.error('All registration records found:', allRegistrations)
-      throw new Error('Failed to update registration')
+    throw new Error('Failed to update registration')
     }
     
     userRegistration = updatedRegistration
@@ -301,22 +301,22 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 
         if (!existingUsage) {
           // Record discount usage only if it doesn't already exist
-          const { error: usageError } = await supabase
-            .from('discount_usage')
-            .insert({
-              user_id: userId,
-              discount_code_id: discountCodeRecord.id,
-              discount_category_id: discountCategoryId,
-              season_id: registration.season_id,
-              amount_saved: discountAmount,
-              registration_id: registrationId,
-            })
+        const { error: usageError } = await supabase
+          .from('discount_usage')
+          .insert({
+            user_id: userId,
+            discount_code_id: discountCodeRecord.id,
+            discount_category_id: discountCategoryId,
+            season_id: registration.season_id,
+            amount_saved: discountAmount,
+            registration_id: registrationId,
+          })
 
-          if (usageError) {
-            console.error('Error recording discount usage:', usageError)
-            // Don't fail the payment - just log the error
-          } else {
-            console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
+        if (usageError) {
+          console.error('Error recording discount usage:', usageError)
+          // Don't fail the payment - just log the error
+        } else {
+          console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
           }
         } else {
           console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntent.id)

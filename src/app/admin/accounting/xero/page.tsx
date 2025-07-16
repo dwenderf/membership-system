@@ -600,6 +600,9 @@ function XeroIntegrationContent() {
                               <span className="ml-2 text-sm font-medium text-gray-900">
                                 {userDisplayName}
                               </span>
+                              <span className="ml-2 text-xs text-gray-500 font-mono">
+                                ID: {item.id}
+                              </span>
                             </div>
                             <time className="text-xs text-gray-500">
                               {new Date(item.last_synced_at).toLocaleString()}
@@ -642,6 +645,9 @@ function XeroIntegrationContent() {
                               </span>
                               <span className="ml-2 text-sm font-medium text-gray-900">
                                 {userDisplayName}
+                              </span>
+                              <span className="ml-2 text-xs text-gray-500 font-mono">
+                                ID: {item.id}
                               </span>
                             </div>
                             <time className="text-xs text-gray-500">

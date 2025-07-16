@@ -392,8 +392,61 @@ export async function revokeXeroTokens(): Promise<boolean> {
           token_type: 'Bearer'
         })
 
-        // Revoke the connection on Xero's side
-        await revokeClient.revokeToken()
+        // Revoke the connection on Xero's side using OAuth2 revocation endpoint
+        try {
+          // Xero uses the standard OAuth2 revocation endpoint
+          const revocationUrl = 'https://identity.xero.com/connect/revocation'
+          
+          const response = await fetch(revocationUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': `Basic ${Buffer.from(`${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`).toString('base64')}`
+            },
+            body: new URLSearchParams({
+              token: token.access_token,
+              token_type_hint: 'access_token'
+            })
+          })
+
+          if (response.ok) {
+            const { logger } = await import('../logging/logger')
+            logger.logXeroSync(
+              'token-revoked',
+              'Successfully revoked access token for tenant',
+              { tenantId: token.tenant_id }
+            )
+          } else {
+            console.warn(`Token revocation failed with status ${response.status}`)
+          }
+
+          // Also try to revoke the refresh token
+          const refreshResponse = await fetch(revocationUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': `Basic ${Buffer.from(`${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`).toString('base64')}`
+            },
+            body: new URLSearchParams({
+              token: token.refresh_token,
+              token_type_hint: 'refresh_token'
+            })
+          })
+
+          if (refreshResponse.ok) {
+            const { logger } = await import('../logging/logger')
+            logger.logXeroSync(
+              'refresh-token-revoked',
+              'Successfully revoked refresh token for tenant',
+              { tenantId: token.tenant_id }
+            )
+          } else {
+            console.warn(`Refresh token revocation failed with status ${refreshResponse.status}`)
+          }
+        } catch (revokeMethodError) {
+          console.warn('Token revocation method failed, but continuing:', revokeMethodError)
+        }
+
         const { logger } = await import('../logging/logger')
         logger.logXeroSync(
           'token-revoked',

@@ -104,10 +104,13 @@ export class PaymentCompletionProcessor {
       // Phase 2: Send confirmation emails
       await this.sendConfirmationEmails(event)
 
-      // Phase 3: Batch sync pending Xero records
+      // Phase 3: Process staged emails immediately
+      await this.processStagedEmails()
+
+      // Phase 4: Batch sync pending Xero records
       await this.syncPendingXeroRecords()
 
-      // Phase 4: Update discount usage tracking
+      // Phase 5: Update discount usage tracking
       await this.updateDiscountUsage(event)
 
       this.logger.logPaymentProcessing('process-payment-completion', `✅ Completed processing ${event.trigger_source}`)
@@ -396,7 +399,11 @@ export class PaymentCompletionProcessor {
    * Phase 2: Send confirmation emails
    */
   private async sendConfirmationEmails(event: PaymentCompletionEvent) {
-    this.logger.logPaymentProcessing('send-confirmation-emails', '📧 Staging confirmation emails...')
+    this.logger.logPaymentProcessing('send-confirmation-emails', '📧 Staging confirmation emails...', { 
+      triggerSource: event.trigger_source,
+      userId: event.user_id,
+      recordId: event.record_id
+    })
     
     try {
       // Get user details
@@ -411,10 +418,22 @@ export class PaymentCompletionProcessor {
         return
       }
 
-      if (event.trigger_source === 'user_memberships' || event.trigger_source === 'stripe_webhook_membership') {
+      this.logger.logPaymentProcessing('send-confirmation-emails', '✅ User found, checking trigger source', { 
+        triggerSource: event.trigger_source,
+        userEmail: user.email
+      })
+
+      if (event.trigger_source === 'user_memberships' || event.trigger_source === 'stripe_webhook_membership' || event.trigger_source === 'free_membership') {
+        this.logger.logPaymentProcessing('send-confirmation-emails', '📧 Triggering membership email staging', { triggerSource: event.trigger_source })
         await this.stageMembershipConfirmationEmail(event, user)
-      } else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration') {
+      } else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration' || event.trigger_source === 'free_registration') {
+        this.logger.logPaymentProcessing('send-confirmation-emails', '📧 Triggering registration email staging', { triggerSource: event.trigger_source })
         await this.stageRegistrationConfirmationEmail(event, user)
+      } else {
+        this.logger.logPaymentProcessing('send-confirmation-emails', '⚠️ Unknown trigger source, no email staged', { 
+          triggerSource: event.trigger_source,
+          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration']
+        }, 'warn')
       }
 
     } catch (error) {
@@ -491,7 +510,30 @@ export class PaymentCompletionProcessor {
   }
 
   /**
-   * Phase 4: Update discount usage tracking
+   * Phase 3: Process staged emails immediately
+   */
+  private async processStagedEmails() {
+    this.logger.logPaymentProcessing('process-staged-emails', '📧 Processing staged emails...')
+    
+    try {
+      // Use the email staging manager to process all staged emails
+      const results = await emailStagingManager.processStagedEmails()
+      
+      this.logger.logPaymentProcessing('process-staged-emails', '📊 Email processing results:', {
+        processed: results.processed,
+        successful: results.successful,
+        failed: results.failed,
+        errors: results.errors
+      })
+      
+    } catch (error) {
+      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to process staged emails:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      // Don't throw - email processing failures shouldn't break other processing
+    }
+  }
+
+  /**
+   * Phase 5: Update discount usage tracking
    */
   private async updateDiscountUsage(event: PaymentCompletionEvent) {
     this.logger.logPaymentProcessing('update-discount-usage', '🎫 Updating discount usage...')
@@ -533,27 +575,66 @@ export class PaymentCompletionProcessor {
    * Stage membership confirmation email
    */
   private async stageMembershipConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+    this.logger.logPaymentProcessing('stage-membership-confirmation-email', '📧 Starting membership email staging', { 
+      paymentId: event.payment_id,
+      userEmail: user.email
+    })
+    
     try {
-      // Get membership details
-      const { data: membership } = await this.supabase
+      await this.initialize()
+      
+      if (!event.payment_id) {
+        this.logger.logPaymentProcessing('stage-membership-confirmation-email', '❌ No payment_id available for membership lookup', { 
+          recordId: event.record_id
+        })
+        return
+      }
+      
+      // Get membership details by payment_id
+      const { data: membership, error: membershipError } = await this.supabase
         .from('user_memberships')
         .select(`
           *,
           memberships (
-            name,
-            price,
-            seasons (name)
+            name
           )
         `)
-        .eq('id', event.record_id)
+        .eq('payment_id', event.payment_id)
         .single()
 
-      if (!membership) return
+      if (membershipError) {
+        this.logger.logPaymentProcessing('stage-membership-confirmation-email', '❌ Error fetching membership', { 
+          paymentId: event.payment_id,
+          error: membershipError.message
+        })
+        return
+      }
 
-      this.logger.logPaymentProcessing('stage-membership-confirmation-email', '📧 Staging membership confirmation email', { email: user.email })
+      if (!membership) {
+        this.logger.logPaymentProcessing('stage-membership-confirmation-email', '❌ Membership not found', { paymentId: event.payment_id })
+        
+        // Let's check what user_memberships exist for this user
+        const { data: allUserMemberships } = await this.supabase
+          .from('user_memberships')
+          .select('id, membership_id, user_id, payment_id, created_at')
+          .eq('user_id', event.user_id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        
+        this.logger.logPaymentProcessing('stage-membership-confirmation-email', '🔍 Recent user memberships for debugging', { 
+          paymentId: event.payment_id,
+          recentMemberships: allUserMemberships
+        })
+        return
+      }
+
+      this.logger.logPaymentProcessing('stage-membership-confirmation-email', '✅ Membership found, staging email', { 
+        email: user.email,
+        membershipName: membership.memberships.name
+      })
 
       // Stage the email for batch processing
-      await emailStagingManager.stageEmail({
+      const stagingResult = await emailStagingManager.stageEmail({
         user_id: event.user_id,
         email_address: user.email,
         event_type: 'membership.purchased',
@@ -570,6 +651,11 @@ export class PaymentCompletionProcessor {
         related_entity_type: 'user_memberships',
         related_entity_id: event.record_id || undefined,
         payment_id: event.payment_id || undefined
+      })
+
+      this.logger.logPaymentProcessing('stage-membership-confirmation-email', '📧 Email staging result', { 
+        success: stagingResult,
+        email: user.email
       })
       
     } catch (error) {
@@ -629,10 +715,23 @@ export class PaymentCompletionProcessor {
    * Stage registration confirmation email
    */
   private async stageRegistrationConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+    this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Starting registration email staging', { 
+      paymentId: event.payment_id,
+      userEmail: user.email
+    })
+    
     try {
       await this.initialize()
-      // Get registration details
-      const { data: registration } = await this.supabase
+      
+      if (!event.payment_id) {
+        this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ No payment_id available for registration lookup', { 
+          recordId: event.record_id
+        })
+        return
+      }
+      
+      // Get registration details by payment_id
+      const { data: registration, error: registrationError } = await this.supabase
         .from('user_registrations')
         .select(`
           *,
@@ -641,19 +740,53 @@ export class PaymentCompletionProcessor {
             season:seasons (name, start_date, end_date)
           ),
           registration_category:registration_categories (
-            name,
-            price
+            custom_name,
+            price,
+            category:categories (name)
           )
         `)
-        .eq('id', event.record_id)
+        .eq('payment_id', event.payment_id)
         .single()
 
-      if (!registration) return
+      if (registrationError) {
+        this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Error fetching registration', { 
+          paymentId: event.payment_id,
+          error: registrationError.message
+        })
+        return
+      }
 
-      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Staging registration confirmation email', { email: user.email })
+      if (!registration) {
+        this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Registration not found', { paymentId: event.payment_id })
+        
+        // Let's check what user_registrations exist for this user
+        const { data: allUserRegistrations } = await this.supabase
+          .from('user_registrations')
+          .select('id, registration_id, user_id, payment_id, created_at')
+          .eq('user_id', event.user_id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        
+        this.logger.logPaymentProcessing('stage-registration-confirmation-email', '🔍 Recent user registrations for debugging', { 
+          paymentId: event.payment_id,
+          recentRegistrations: allUserRegistrations
+        })
+        return
+      }
+
+      // Get the category name (custom_name or category.name)
+      const categoryName = registration.registration_category?.custom_name || 
+                          registration.registration_category?.category?.name || 
+                          'Standard'
+
+      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '✅ Registration found, staging email', { 
+        email: user.email,
+        registrationName: registration.registration.name,
+        categoryName: categoryName
+      })
 
       // Stage the email for batch processing
-      await emailStagingManager.stageEmail({
+      const stagingResult = await emailStagingManager.stageEmail({
         user_id: event.user_id,
         email_address: user.email,
         event_type: 'registration.completed',
@@ -661,7 +794,7 @@ export class PaymentCompletionProcessor {
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
           registrationName: registration.registration.name,
-          categoryName: registration.registration_category?.name || 'Standard',
+          categoryName: categoryName,
           seasonName: registration.registration.season.name,
           amount: registration.amount_paid || 0,
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown'
@@ -669,6 +802,11 @@ export class PaymentCompletionProcessor {
         related_entity_type: 'user_registrations',
         related_entity_id: event.record_id || undefined,
         payment_id: event.payment_id || undefined
+      })
+
+      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Email staging result', { 
+        success: stagingResult,
+        email: user.email
       })
       
     } catch (error) {

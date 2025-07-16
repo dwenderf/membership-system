@@ -270,7 +270,7 @@ async function handleFreeRegistration({
     }
 
     // Update user_registrations record with payment_id
-    const { error: registrationUpdateError } = await supabase
+    const { error: registrationUpdateError } = await adminSupabase
       .from('user_registrations')
       .update({ payment_id: paymentRecord.id })
       .eq('id', reservationData.id)

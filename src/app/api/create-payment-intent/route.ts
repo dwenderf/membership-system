@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
@@ -42,6 +43,8 @@ async function handleFreeMembership({
   startTime: number
 }) {
   try {
+    const adminSupabase = createAdminClient()
+    
     // Fetch membership and user details if not provided
     if (!membership) {
       const { data: membershipData, error: membershipError } = await supabase
@@ -240,7 +243,7 @@ async function handleFreeMembership({
     }
 
     // Update user_memberships record with payment_id
-    const { error: membershipUpdateError } = await supabase
+    const { error: membershipUpdateError } = await adminSupabase
       .from('user_memberships')
       .update({ payment_id: paymentRecord.id })
       .eq('id', membershipRecord.id)

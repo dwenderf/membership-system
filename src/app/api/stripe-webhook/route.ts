@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
 import { autoSyncPaymentToXero } from '@/lib/xero/auto-sync'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
@@ -14,7 +15,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 // Handle membership payment processing
-async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, membershipId: string, durationMonths: number) {
+async function handleMembershipPayment(supabase: any, adminSupabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, membershipId: string, durationMonths: number) {
   // Check if user membership already exists (avoid duplicates)
   const { data: existingMembership } = await supabase
     .from('user_memberships')
@@ -45,26 +46,50 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
   const endDate = new Date(startDate)
   endDate.setMonth(endDate.getMonth() + durationMonths)
 
-  // Create user membership record
-  const { data: membershipRecord, error: membershipError } = await supabase
-    .from('user_memberships')
-    .insert({
-      user_id: userId,
-      membership_id: membershipId,
-      valid_from: startDate.toISOString().split('T')[0],
-      valid_until: endDate.toISOString().split('T')[0],
-      months_purchased: durationMonths,
-      payment_status: 'paid',
-      stripe_payment_intent_id: paymentIntent.id,
-      amount_paid: paymentIntent.amount,
-      purchased_at: new Date().toISOString(),
-    })
-    .select()
-    .single()
+  // Create user membership record (handle duplicate gracefully)
+  let membershipRecord: any
+  try {
+    const { data: newMembership, error: membershipError } = await supabase
+      .from('user_memberships')
+      .insert({
+        user_id: userId,
+        membership_id: membershipId,
+        valid_from: startDate.toISOString().split('T')[0],
+        valid_until: endDate.toISOString().split('T')[0],
+        months_purchased: durationMonths,
+        payment_status: 'paid',
+        stripe_payment_intent_id: paymentIntent.id,
+        amount_paid: paymentIntent.amount,
+        purchased_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
 
-  if (membershipError || !membershipRecord) {
-    console.error('Error creating user membership:', membershipError)
-    throw new Error('Failed to create membership')
+    if (membershipError) {
+      if (membershipError.code === '23505') { // Duplicate key error
+        console.log('Membership already exists for payment intent, fetching existing record:', paymentIntent.id)
+        const { data: existingMembership, error: fetchError } = await supabase
+          .from('user_memberships')
+          .select('*')
+          .eq('stripe_payment_intent_id', paymentIntent.id)
+          .single()
+        
+        if (fetchError || !existingMembership) {
+          console.error('Error fetching existing membership:', fetchError)
+          throw new Error('Failed to fetch existing membership')
+        }
+        
+        membershipRecord = existingMembership
+      } else {
+        console.error('Error creating user membership:', membershipError)
+        throw new Error('Failed to create membership')
+      }
+    } else {
+      membershipRecord = newMembership
+    }
+  } catch (error) {
+    console.error('Error in membership creation/fetch:', error)
+    throw new Error('Failed to create or fetch membership')
   }
 
   // Update payment record
@@ -84,7 +109,7 @@ async function handleMembershipPayment(supabase: any, paymentIntent: Stripe.Paym
     console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id}`)
     
     // Update user_memberships record with payment_id
-    const { error: membershipUpdateError } = await supabase
+    const { error: membershipUpdateError } = await adminSupabase
       .from('user_memberships')
       .update({ payment_id: updatedPayment[0].id })
       .eq('id', membershipRecord.id)
@@ -479,7 +504,7 @@ export async function POST(request: NextRequest) {
 
         // Handle membership payment
         if (userId && membershipId && durationMonths && !isNaN(durationMonths)) {
-          await handleMembershipPayment(supabase, paymentIntent, userId, membershipId, durationMonths)
+          await handleMembershipPayment(supabase, supabase, paymentIntent, userId, membershipId, durationMonths)
         }
         // Handle registration payment  
         else if (userId && registrationId) {

@@ -137,9 +137,8 @@ CREATE TABLE user_memberships (
     amount_paid INTEGER, -- in cents
     purchased_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure valid_until > valid_from
-    CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from)
+    CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from),
+    CONSTRAINT unique_stripe_payment_intent_id UNIQUE (stripe_payment_intent_id)
     -- Note: No unique constraint on (user_id, membership_id) to allow extensions/renewals
 );
 
@@ -347,7 +346,7 @@ CREATE TABLE email_logs (
     subject TEXT NOT NULL,
     template_id TEXT,
     loops_event_id TEXT,
-    status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'bounced', 'spam')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'bounced', 'spam')),
     sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     delivered_at TIMESTAMP WITH TIME ZONE,
     opened_at TIMESTAMP WITH TIME ZONE,

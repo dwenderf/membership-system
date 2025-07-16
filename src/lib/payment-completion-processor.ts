@@ -72,7 +72,9 @@ export class PaymentCompletionProcessor {
    */
   private async initialize() {
     if (!this.supabase) {
-      this.supabase = await createClient()
+      // Use admin client for system operations to bypass RLS
+      const { createAdminClient } = await import('./supabase/server')
+      this.supabase = createAdminClient()
     }
   }
 

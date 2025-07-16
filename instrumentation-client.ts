@@ -20,3 +20,6 @@ Sentry.init({
   
   debug: false,
 });
+
+// Router instrumentation
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart; 

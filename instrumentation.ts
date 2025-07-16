@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/nextjs'
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Initialize logging first
@@ -56,3 +58,21 @@ export async function register() {
     }
   }
 }
+
+// Add Sentry request error handler
+export function onRequestError(error: Error, request: Request, response: Response) {
+  const requestInfo = {
+    path: request.url,
+    method: request.method,
+    headers: Object.fromEntries(request.headers.entries())
+  }
+  
+  const errorContext = {
+    routerKind: 'app',
+    routePath: new URL(request.url).pathname,
+    routeType: 'page'
+  }
+  
+  Sentry.captureRequestError(error, requestInfo, errorContext)
+}
+

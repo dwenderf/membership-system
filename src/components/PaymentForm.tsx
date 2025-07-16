@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js'
 
 // Force import client config
-import '../../sentry.client.config'
+import '../../instrumentation-client'
 import * as Sentry from '@sentry/nextjs'
 
 interface PaymentFormProps {

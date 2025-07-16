@@ -10,7 +10,7 @@ import { validateMembershipCoverage, formatMembershipWarning, calculateExtension
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 
 // Force import client config
-import '../../sentry.client.config'
+import '../../instrumentation-client'
 import * as Sentry from '@sentry/nextjs'
 
 // Helper function to safely parse date strings without timezone conversion

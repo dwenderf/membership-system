@@ -15,7 +15,7 @@ export default function OnboardingPage() {
     firstName: '',
     lastName: '',
     isGoalie: null as boolean | null,
-    isLgbtq: null as boolean | null,
+    isLgbtq: undefined as boolean | null | undefined,
     termsAccepted: false,
     wantsMembership: true, // defaults to checked
   })
@@ -78,7 +78,7 @@ export default function OnboardingPage() {
       newErrors.isGoalie = 'Please answer whether you play goalie'
     }
     
-    if (formData.isLgbtq === null) {
+    if (formData.isLgbtq === null || formData.isLgbtq === undefined) {
       newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ'
     }
     
@@ -97,6 +97,7 @@ export default function OnboardingPage() {
       !!formData.lastName?.trim() &&
       formData.isGoalie !== null &&
       formData.isLgbtq !== null &&
+      formData.isLgbtq !== undefined &&
       formData.termsAccepted
     )
   }

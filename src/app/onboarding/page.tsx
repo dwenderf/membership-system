@@ -96,7 +96,6 @@ export default function OnboardingPage() {
       !!formData.firstName?.trim() &&
       !!formData.lastName?.trim() &&
       formData.isGoalie !== null &&
-      formData.isLgbtq !== null &&
       formData.isLgbtq !== undefined &&
       formData.termsAccepted
     )

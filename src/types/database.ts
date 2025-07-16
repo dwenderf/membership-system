@@ -130,28 +130,43 @@ export type Database = {
         Row: {
           id: string
           season_id: string
-          required_membership_id: string | null
           name: string
           type: 'team' | 'scrimmage' | 'event'
           allow_discounts: boolean
+          is_active: boolean
+          presale_start_at: string | null
+          regular_start_at: string | null
+          registration_end_at: string | null
+          presale_code: string | null
+          allow_lgbtq_presale: boolean
           created_at: string
         }
         Insert: {
           id?: string
           season_id: string
-          required_membership_id?: string | null
           name: string
           type: 'team' | 'scrimmage' | 'event'
           allow_discounts?: boolean
+          is_active?: boolean
+          presale_start_at?: string | null
+          regular_start_at?: string | null
+          registration_end_at?: string | null
+          presale_code?: string | null
+          allow_lgbtq_presale?: boolean
           created_at?: string
         }
         Update: {
           id?: string
           season_id?: string
-          required_membership_id?: string | null
           name?: string
           type?: 'team' | 'scrimmage' | 'event'
           allow_discounts?: boolean
+          is_active?: boolean
+          presale_start_at?: string | null
+          regular_start_at?: string | null
+          registration_end_at?: string | null
+          presale_code?: string | null
+          allow_lgbtq_presale?: boolean
           created_at?: string
         }
       }

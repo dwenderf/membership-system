@@ -189,7 +189,7 @@ export default async function RegistrationDetailPage({
                               <span className="font-medium">Pre-sale:</span> {new Date(registration.presale_start_at).toLocaleString()}
                               {registration.presale_code && (
                                 <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
-                                  Code: {registration.presale_code}
+                                  Code: {registration.presale_code.toUpperCase()}
                                 </span>
                               )}
                             </div>

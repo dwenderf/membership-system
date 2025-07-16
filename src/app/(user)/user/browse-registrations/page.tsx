@@ -56,6 +56,13 @@ export default async function BrowseRegistrationsPage() {
     return null // Layout will handle redirect
   }
 
+  // Get user profile to check LGBTQ status
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('is_lgbtq')
+    .eq('id', user.id)
+    .single()
+
   // Get user's active memberships to check eligibility
   const { data: userMemberships } = await supabase
     .from('user_memberships')
@@ -402,6 +409,7 @@ export default async function BrowseRegistrationsPage() {
                             userEmail={user.email || ''}
                             activeMemberships={activeMemberships}
                             isEligible={hasEligibleMembership}
+                            isLgbtq={userProfile?.is_lgbtq || false}
                           />
                         )}
                       </div>

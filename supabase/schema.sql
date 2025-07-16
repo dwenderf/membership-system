@@ -160,6 +160,7 @@ CREATE TABLE registrations (
     regular_start_at TIMESTAMP WITH TIME ZONE, -- When general registration opens to all users
     registration_end_at TIMESTAMP WITH TIME ZONE, -- When registration closes
     presale_code TEXT, -- Code required for pre-sale access
+    allow_lgbtq_presale BOOLEAN NOT NULL DEFAULT TRUE, -- Whether LGBTQ members can register during pre-sale without requiring a pre-sale code
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

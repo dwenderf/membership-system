@@ -69,9 +69,7 @@ export default function EditProfilePage() {
       newErrors.isGoalie = 'Please answer whether you play goalie'
     }
     
-    if (formData.isLgbtq === null) {
-      newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ'
-    }
+    // Note: isLgbtq can be null (prefer not to answer) - no validation needed
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -82,8 +80,8 @@ export default function EditProfilePage() {
     return (
       !!formData.firstName?.trim() &&
       !!formData.lastName?.trim() &&
-      formData.isGoalie !== null &&
-      formData.isLgbtq !== null
+      formData.isGoalie !== null
+      // Note: isLgbtq can be null (prefer not to answer) - no validation needed
     )
   }
 

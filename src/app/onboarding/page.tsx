@@ -157,6 +157,106 @@ export default function OnboardingPage() {
         if (error) throw error
       }
 
+      // Get the updated user data with member_id for Sentry logging
+      const { data: updatedUser } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, member_id, is_goalie, is_lgbtq')
+        .eq('id', user.id)
+        .single()
+
+      // Log onboarding completion to Sentry
+      if (updatedUser) {
+        const { captureMessage } = await import('@sentry/nextjs')
+        captureMessage('User completed onboarding', {
+          level: 'info',
+          tags: {
+            component: 'onboarding',
+            operation: 'profile_completion'
+          },
+          extra: {
+            user_id: updatedUser.id,
+            email: updatedUser.email,
+            first_name: updatedUser.first_name,
+            last_name: updatedUser.last_name,
+            member_id: updatedUser.member_id,
+            is_goalie: updatedUser.is_goalie,
+            is_lgbtq: updatedUser.is_lgbtq,
+            wants_membership: formData.wantsMembership,
+            onboarding_timestamp: new Date().toISOString()
+          }
+        })
+      }
+
+      // Sync user to Xero if connected
+      if (updatedUser) {
+        try {
+          const xeroSyncResponse = await fetch('/api/xero/sync-user', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userData: {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                first_name: updatedUser.first_name,
+                last_name: updatedUser.last_name,
+                member_id: updatedUser.member_id
+              }
+            }),
+          })
+        
+        if (xeroSyncResponse.ok) {
+          const xeroSyncResult = await xeroSyncResponse.json()
+          
+          if (xeroSyncResult.success && xeroSyncResult.xeroContactId) {
+            console.log(`✅ User synced to Xero successfully: ${xeroSyncResult.xeroContactId}`)
+            
+            // Log successful Xero sync to Sentry
+            const { captureMessage } = await import('@sentry/nextjs')
+            captureMessage('User synced to Xero after onboarding', {
+              level: 'info',
+              tags: {
+                component: 'onboarding',
+                operation: 'xero_sync'
+              },
+              extra: {
+                user_id: updatedUser.id,
+                email: updatedUser.email,
+                member_id: updatedUser.member_id,
+                xero_contact_id: xeroSyncResult.xeroContactId,
+                sync_timestamp: new Date().toISOString()
+              }
+            })
+          } else {
+            console.warn(`⚠️ Failed to sync user to Xero: ${xeroSyncResult.error}`)
+            
+            // Log Xero sync failure to Sentry (as warning, not error)
+            const { captureMessage } = await import('@sentry/nextjs')
+            captureMessage('Failed to sync user to Xero after onboarding', {
+              level: 'warning',
+              tags: {
+                component: 'onboarding',
+                operation: 'xero_sync_failed'
+              },
+              extra: {
+                user_id: updatedUser.id,
+                email: updatedUser.email,
+                member_id: updatedUser.member_id,
+                error: xeroSyncResult.error,
+                sync_timestamp: new Date().toISOString()
+              }
+            })
+          }
+        } else {
+          console.log('ℹ️ Xero not connected, skipping user sync')
+        }
+      } catch (xeroError) {
+        console.error('Error during Xero sync:', xeroError)
+        // Don't fail onboarding if Xero sync fails
+      }
+      }
+
       // Show success toast
       showSuccess('Profile completed!', `Welcome to the ${getOrganizationName('long').toLowerCase()}`)
 

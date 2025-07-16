@@ -362,7 +362,7 @@ export type Database = {
           id?: string
           payment_id?: string | null
           tenant_id?: string | null
-          xero_invoice_id?: string
+          xero_invoice_id?: string | null
           invoice_number?: string | null
           invoice_type?: string
           invoice_status?: string
@@ -378,6 +378,22 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "xero_invoices_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xero_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "xero_oauth_tokens"
+            referencedColumns: ["tenant_id"]
+          }
+        ]
       }
       xero_payments: {
         Row: {

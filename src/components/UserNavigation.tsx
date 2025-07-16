@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import AdminToggle from './AdminToggle'
@@ -23,12 +23,32 @@ interface UserNavigationProps {
 
 export default function UserNavigation({ user, useToggle = false }: UserNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [hasUnpaid, setHasUnpaid] = useState(false)
   const pathname = usePathname()
+
+  // Check for unpaid invoices
+  useEffect(() => {
+    if (user?.id) {
+      fetch('/api/xero/unpaid-invoices')
+        .then(res => res.json())
+        .then(data => setHasUnpaid(data.hasUnpaid))
+        .catch(error => {
+          console.error('Error checking unpaid invoices:', error)
+          setHasUnpaid(false)
+        })
+    }
+  }, [user?.id])
 
   const navigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
+    { 
+      name: 'My Invoices', 
+      href: '/user/invoices', 
+      current: pathname === '/user/invoices',
+      badge: hasUnpaid ? '!' : undefined
+    },
   ]
 
   return (
@@ -53,6 +73,11 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
                   {item.name}
+                  {item.badge && (
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -122,10 +147,15 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   item.current
                     ? 'bg-blue-50 border-blue-500 text-blue-700'
                     : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+                } pl-3 pr-4 py-2 border-l-4 text-base font-medium flex items-center justify-between`}
                 onClick={() => setIsMenuOpen(false)}
               >
-                {item.name}
+                <span>{item.name}</span>
+                {item.badge && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>

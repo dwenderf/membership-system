@@ -135,14 +135,23 @@ export class PaymentCompletionProcessor {
     this.logger.logPaymentProcessing('handle-xero-staging-records', '📊 Handling Xero staging records...')
     
     try {
-      // For zero-value purchases: Always create new staging records
+      // Check for existing staging records first (needed for both zero and paid purchases)
+      const existingStagingRecords = await this.findExistingStagingRecords(event)
+      
+      // For zero-value purchases: Check for existing staging records first, then create if needed
       if (event.amount === 0) {
         if (!event.record_id) {
           this.logger.logPaymentProcessing('handle-xero-staging-records', '⚠️ No record_id for zero-value purchase, skipping Xero staging', undefined, 'warn')
           return
         }
-        this.logger.logPaymentProcessing('handle-xero-staging-records', '🆓 Creating new Xero staging records for zero-value purchase')
-        await this.createXeroStagingRecords(event)
+        
+        if (existingStagingRecords) {
+          this.logger.logPaymentProcessing('handle-xero-staging-records', '🆓 Updating existing Xero staging records for zero-value purchase')
+          await this.updateXeroStagingRecords(event, existingStagingRecords, { success: true })
+        } else {
+          this.logger.logPaymentProcessing('handle-xero-staging-records', '🆓 Creating new Xero staging records for zero-value purchase')
+          await this.createXeroStagingRecords(event)
+        }
         return
       }
 
@@ -152,9 +161,6 @@ export class PaymentCompletionProcessor {
         return
       }
 
-      // Check if staging records already exist for this payment
-      const existingStagingRecords = await this.findExistingStagingRecords(event)
-      
       if (existingStagingRecords) {
         this.logger.logPaymentProcessing('handle-xero-staging-records', '💰 Updating existing Xero staging records for paid purchase')
         await this.updateXeroStagingRecords(event, existingStagingRecords, { success: true })

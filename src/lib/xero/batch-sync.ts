@@ -206,6 +206,40 @@ export class XeroBatchSyncManager {
         return false
       }
 
+      // Check if this is a zero-value invoice (always AUTHORISED)
+      if (invoiceRecord.net_amount === 0) {
+        console.log('✅ Zero-value invoice - marking as AUTHORISED')
+        // Zero-value invoices are always AUTHORISED, no need to check payment status
+      } else {
+        // Non-zero invoices need payment verification
+        if (!invoiceRecord.payment_id) {
+          console.log('⚠️ No payment_id on non-zero invoice - skipping sync')
+          return false
+        }
+
+        // Get payment status
+        const { data: payment } = await this.supabase
+          .from('payments')
+          .select('status')
+          .eq('id', invoiceRecord.payment_id)
+          .single()
+
+        if (!payment) {
+          console.log('⚠️ No payment record found - skipping sync')
+          return false
+        }
+
+        console.log('💰 Payment status:', payment.status, 'for invoice:', invoiceRecord.invoice_number)
+        
+        if (payment.status !== 'completed') {
+          // Non-zero invoices with pending/failed payments should not be synced
+          console.log('⏸️ Non-zero invoice with pending/failed payment - skipping sync')
+          return false
+        }
+
+        console.log('✅ Completed payment - marking as AUTHORISED')
+      }
+
       // Convert line items to Xero format
       const lineItems: LineItem[] = invoiceRecord.xero_invoice_line_items.map(item => ({
         description: item.description,
@@ -225,11 +259,11 @@ export class XeroBatchSyncManager {
           contactID: contactResult.xeroContactId
         },
         lineItems,
-        date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+        date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
+        dueDate: new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from creation
         // Let Xero generate its own invoice number - don't set invoiceNumber here
-        reference: metadata.stripe_payment_intent_id || '',
-        status: invoiceRecord.net_amount === 0 ? Invoice.StatusEnum.AUTHORISED : Invoice.StatusEnum.DRAFT,
+        reference: metadata.stripe_payment_intent_id || '',        
+        status: Invoice.StatusEnum.AUTHORISED,
         currencyCode: CurrencyCode.USD
       }
 
@@ -425,6 +459,7 @@ export class XeroBatchSyncManager {
     const updateData: any = {
       xero_invoice_id: xeroInvoiceId,
       invoice_number: invoiceNumber,
+      invoice_status: 'AUTHORISED', // Any synced invoice should be AUTHORISED
       sync_status: 'synced',
       last_synced_at: new Date().toISOString(),
       sync_error: null

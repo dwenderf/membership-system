@@ -605,28 +605,16 @@ export class XeroStagingManager {
   }
 
   /**
-   * Get all pending staging records for batch sync
+   * Get all pending staging records for batch sync using centralized function
    */
   async getPendingStagingRecords() {
     try {
-      const { data: pendingInvoices } = await this.supabase
-        .from('xero_invoices')
-        .select(`
-          *,
-          xero_invoice_line_items (*)
-        `)
-        .in('sync_status', ['pending', 'staged'])
-        .order('staged_at', { ascending: true })
-
-      const { data: pendingPayments } = await this.supabase
-        .from('xero_payments')
-        .select('*')
-        .in('sync_status', ['pending', 'staged'])
-        .order('staged_at', { ascending: true })
-
+      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync')
+      const { invoices, payments } = await xeroBatchSyncManager.getPendingXeroRecords()
+      
       return {
-        invoices: pendingInvoices || [],
-        payments: pendingPayments || []
+        invoices,
+        payments // Use filtered payments for consistency
       }
     } catch (error) {
       logger.logXeroSync(

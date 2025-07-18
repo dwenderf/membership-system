@@ -379,21 +379,12 @@ export class ScheduledBatchProcessor {
   }
 
   /**
-   * Get count of pending Xero records
+   * Get count of pending Xero records using centralized function
    */
   private async getPendingXeroCount(): Promise<number> {
     try {
-      const { count: invoiceCount } = await this.supabase
-        .from('xero_invoices')
-        .select('*', { count: 'exact', head: true })
-        .in('sync_status', ['pending', 'staged'])
-
-      const { count: paymentCount } = await this.supabase
-        .from('xero_payments')
-        .select('*', { count: 'exact', head: true })
-        .in('sync_status', ['pending', 'staged'])
-
-      return (invoiceCount || 0) + (paymentCount || 0)
+      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync')
+      return await xeroBatchSyncManager.getPendingXeroCount()
     } catch (error) {
       logger.logXeroSync(
         'pending-count-error',

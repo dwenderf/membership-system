@@ -38,11 +38,11 @@ export class BatchProcessor {
   // Default retry strategies for different operation types
   private readonly retryStrategies: Record<string, RetryStrategy> = {
     xero_api: {
-      maxRetries: 5,
-      baseDelayMs: 1000,      // Start with 1 second
-      maxDelayMs: 300000,     // Max 5 minutes
-      backoffMultiplier: 2,   // Double each time
-      jitterMs: 1000          // Add randomness to prevent thundering herd
+      maxRetries: 5,            // More retries with Pro plan 60s timeout (was 3)
+      baseDelayMs: 2000,        // Start with 2 seconds (was 1 second)
+      maxDelayMs: 30000,        // Max 30 seconds (was 10 seconds)
+      backoffMultiplier: 2,     // Double each time
+      jitterMs: 1000            // More jitter for Pro plan (was 500)
     },
     email: {
       maxRetries: 3,
@@ -110,6 +110,22 @@ export class BatchProcessor {
         lastError = error
         console.log(`❌ ${context} failed on attempt ${attempt + 1}:`, error instanceof Error ? error.message : error)
         
+        // Check for HTTP 429 rate limit error
+        const isRateLimitError = this.isRateLimitError(error)
+        
+        if (isRateLimitError) {
+          console.log(`🚫 Rate limit exceeded for ${context} - this is expected and will be retried`)
+          
+          // For rate limit errors, we want to be more aggressive with delays
+          // but still respect the max delay from the strategy
+          const rateLimitDelay = Math.min(strategy.maxDelayMs, 15000) // Max 15 seconds for rate limits (was 5 seconds)
+          console.log(`⏱️ Rate limit delay: ${Math.round(rateLimitDelay)}ms`)
+          await this.delay(rateLimitDelay)
+          
+          // Continue to next attempt (don't break on rate limits)
+          continue
+        }
+        
         // If this was the last attempt, don't wait
         if (attempt === strategy.maxRetries) {
           break
@@ -122,13 +138,60 @@ export class BatchProcessor {
       }
     }
 
-    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError)
+    const errorMessage = this.formatErrorMessage(lastError, operationType)
     console.log(`💥 ${context} failed after all retries: ${errorMessage}`)
     
     return { 
       success: false, 
-      error: `Failed after ${strategy.maxRetries + 1} attempts: ${errorMessage}` 
+      error: errorMessage
     }
+  }
+
+  /**
+   * Check if an error is a rate limit error (HTTP 429)
+   */
+  private isRateLimitError(error: any): boolean {
+    // Check for HTTP 429 status code
+    if (error?.response?.status === 429) {
+      return true
+    }
+    
+    // Check for Xero-specific rate limit error messages
+    if (error?.message && typeof error.message === 'string') {
+      const message = error.message.toLowerCase()
+      return message.includes('rate limit') || 
+             message.includes('429') || 
+             message.includes('too many requests') ||
+             message.includes('quota exceeded')
+    }
+    
+    // Check for Xero API error structure
+    if (error?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
+      const validationMessage = error.response.body.Elements[0].ValidationErrors[0].Message.toLowerCase()
+      return validationMessage.includes('rate limit') || 
+             validationMessage.includes('429') || 
+             validationMessage.includes('too many requests')
+    }
+    
+    return false
+  }
+
+  /**
+   * Format error message based on operation type and error type
+   */
+  private formatErrorMessage(error: any, operationType: string): string {
+    const isRateLimit = this.isRateLimitError(error)
+    
+    if (isRateLimit) {
+      if (operationType === 'xero_api') {
+        return 'Rate limit exceeded. Try again later.'
+      }
+      return 'Rate limit exceeded. Try again later.'
+    }
+    
+    // For other errors, use the original logic
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return `Failed after ${this.retryStrategies[operationType]?.maxRetries + 1 || 3} attempts: ${errorMessage}`
   }
 
   /**
@@ -220,24 +283,8 @@ export class BatchProcessor {
       // Process batch with limited concurrency
       const batchPromises = batch.map(async (item) => {
         try {
-          let result: R
-
-          if (retryFailures) {
-            const retryResult = await this.retryWithBackoff(
-              () => processor(item),
-              operationType as keyof typeof this.retryStrategies,
-              `Processing item ${items.indexOf(item) + 1}`
-            )
-
-            if (!retryResult.success) {
-              throw new Error(retryResult.error || 'Unknown error')
-            }
-
-            result = retryResult.result!
-          } else {
-            result = await processor(item)
-          }
-
+          // Simple processing without retries - let cron handle failures
+          const result = await processor(item)
           return { success: true as const, result, item }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)

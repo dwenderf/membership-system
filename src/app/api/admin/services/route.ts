@@ -7,10 +7,10 @@
  * - Service status monitoring
  * 
  * NOTE: Scheduled processing is handled by Vercel Cron jobs:
- * - Xero sync: Daily at 2 AM
- * - Email retry: Daily at 4 AM
- * - Cleanup: Daily at 6 AM
- * - Xero keep-alive: Daily at midnight
+ * - Xero sync: Every 2 minutes (Pro plan)
+ * - Email retry: Every 2 hours
+ * - Cleanup: Daily at 2 AM
+ * - Xero keep-alive: Every 6 hours
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       services: status,
       cronJobs: {
-        xeroSync: 'Daily at 2 AM',
-        emailRetry: 'Daily at 4 AM',
-        cleanup: 'Daily at 6 AM',
-        xeroKeepAlive: 'Daily at midnight'
+        xeroSync: 'Every 2 minutes (Pro plan)',
+        emailRetry: 'Every 2 hours',
+        cleanup: 'Daily at 2 AM',
+        xeroKeepAlive: 'Every 6 hours'
       },
       timestamp: new Date().toISOString()
     })
@@ -85,84 +85,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const { action } = await request.json()
+    const body = await request.json()
+    const { action, options } = body
 
     switch (action) {
-      case 'start':
-        logger.logAdminAction(
-          'start-services',
-          'Admin initiated service start',
-          { action },
-          user.id
-        )
-        await serviceManager.startServices()
-        return NextResponse.json({ 
-          message: 'Services started',
-          status: serviceManager.getStatus()
+      case 'xero-sync': {
+        logger.logXeroSync('admin-manual-sync', 'Manual Xero sync triggered by admin', { 
+          adminUser: user.email,
+          options 
         })
 
-      case 'stop':
-        logger.logAdminAction(
-          'stop-services',
-          'Admin initiated service stop',
-          { action },
-          user.id
-        )
-        await serviceManager.stopServices()
-        return NextResponse.json({ 
-          message: 'Services stopped',
-          status: serviceManager.getStatus()
+        const startTime = Date.now()
+        const results = await xeroBatchSyncManager.syncAllPendingRecords()
+        const duration = Date.now() - startTime
+
+        logger.logXeroSync('admin-manual-sync-complete', 'Manual Xero sync completed', {
+          adminUser: user.email,
+          duration,
+          results
         })
 
-      case 'restart':
-        logger.logAdminAction(
-          'restart-services',
-          'Admin initiated service restart',
-          { action },
-          user.id
-        )
-        await serviceManager.restartServices()
-        return NextResponse.json({ 
-          message: 'Services restarted',
-          status: serviceManager.getStatus()
+        return NextResponse.json({
+          success: true,
+          action: 'xero-sync',
+          results,
+          duration,
+          timestamp: new Date().toISOString()
+        })
+      }
+
+      case 'payment-processing': {
+        logger.logPaymentProcessing('admin-manual-payment-processing', 'Manual payment processing triggered by admin', { 
+          adminUser: user.email 
         })
 
-      case 'process-pending':
-        logger.logAdminAction(
-          'process-pending',
-          'Admin triggered manual payment processing',
-          { action },
-          user.id
-        )
-        await paymentProcessor.processPendingRecords()
-        return NextResponse.json({ 
-          message: 'Pending records processed'
+        // TODO: Implement manual payment processing
+        return NextResponse.json({
+          success: true,
+          action: 'payment-processing',
+          message: 'Manual payment processing not yet implemented',
+          timestamp: new Date().toISOString()
         })
-
-      case 'sync-xero':
-        logger.logAdminAction(
-          'sync-xero',
-          'Admin triggered manual Xero sync',
-          { action },
-          user.id
-        )
-        const syncResults = await xeroBatchSyncManager.syncAllPendingRecords()
-        return NextResponse.json({ 
-          message: 'Xero batch sync completed',
-          results: syncResults
-        })
+      }
 
       default:
         return NextResponse.json(
-          { error: 'Invalid action. Use: start, stop, restart, process-pending, or sync-xero' },
+          { error: `Unknown action: ${action}` },
           { status: 400 }
         )
     }
 
   } catch (error) {
-    console.error('Error managing services:', error)
+    console.error('Error in admin service action:', error)
     return NextResponse.json(
-      { error: 'Failed to manage services' },
+      { error: 'Failed to execute service action' },
       { status: 500 }
     )
   }

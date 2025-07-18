@@ -10,10 +10,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    logger.logXeroSync('cron-sync-start', '🕐 Scheduled Xero sync started')
+    logger.logXeroSync('cron-sync-start', '🕐 Scheduled Xero sync started (Pro plan - every 2 minutes, efficient connection)')
 
-    // Check if there are any pending records to sync
-    const pendingCount = await getPendingXeroCount()
+    // Check if there are any pending records to sync using centralized function
+    const pendingCount = await xeroBatchSyncManager.getPendingXeroCount()
     
     if (pendingCount === 0) {
       logger.logXeroSync('cron-sync-skip', 'No pending Xero records to sync', { pendingCount: 0 })
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     logger.logXeroSync('cron-sync-processing', `Processing Xero sync: ${pendingCount} pending records to sync`, { pendingCount })
 
-    // Run the batch sync
+    // Run the batch sync with Pro plan optimizations
     const results = await xeroBatchSyncManager.syncAllPendingRecords()
     
     logger.logXeroSync('cron-sync-results', 'Scheduled Xero sync completed', {
@@ -38,45 +38,25 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Xero sync completed successfully',
-      results: {
-        invoices: { synced: results.invoices.synced, failed: results.invoices.failed },
-        payments: { synced: results.payments.synced, failed: results.payments.failed },
-        totalSynced: results.invoices.synced + results.payments.synced,
-        totalFailed: results.invoices.failed + results.payments.failed
-      }
+      message: 'Xero sync completed',
+      results,
+      pendingCount,
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
-    logger.logXeroSync('cron-sync-error', '❌ Scheduled Xero sync error', { 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }, 'error')
+    const errorMessage = error instanceof Error ? error.message : String(error)
     
+    logger.logXeroSync('cron-sync-error', 'Scheduled Xero sync failed', { 
+      error: errorMessage
+    }, 'error')
+
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMessage,
+      timestamp: new Date().toISOString()
     }, { status: 500 })
   }
 }
 
-/**
- * Get count of pending Xero records
- */
-async function getPendingXeroCount(): Promise<number> {
-  const { createClient } = await import('@/lib/supabase/server')
-  const supabase = await createClient()
-  
-  // Count pending invoices
-  const { count: pendingInvoices } = await supabase
-    .from('xero_invoices')
-    .select('*', { count: 'exact', head: true })
-    .in('sync_status', ['pending', 'staged'])
-
-  // Count pending payments
-  const { count: pendingPayments } = await supabase
-    .from('xero_payments')
-    .select('*', { count: 'exact', head: true })
-    .eq('sync_status', 'pending')
-
-  return (pendingInvoices || 0) + (pendingPayments || 0)
-} 
+ 

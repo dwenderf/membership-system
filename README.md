@@ -483,7 +483,7 @@ Replace your-domain with:
 ```bash
 NEXTAUTH_URL=https://your-domain.vercel.app
 NEXTAUTH_SECRET=your_nextauth_secret
-CRON_SECRET=your_random_cron_secret_for_xero_keepalive
+CRON_SECRET=your_random_cron_secret_for_cron_jobs
 ```
 
 **Database & Authentication:**
@@ -584,21 +584,38 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 - [ ] Sentry error monitoring configured for production
 - [ ] Custom domain configured (if desired)
 - [ ] SSL certificate active and verified
-- [ ] Cron job (`CRON_SECRET`) configured for Xero token keep-alive
-- [ ] Vercel Cron jobs enabled for background processing
+- [ ] Vercel Pro plan activated (required for cron jobs)
+- [ ] `CRON_SECRET` environment variable configured
+- [ ] Cron jobs verified in Vercel dashboard (4 active jobs)
 
-#### Setting Up Vercel Cron Jobs
+#### Setting Up Vercel Cron Jobs (Pro Plan Required)
 
-The application uses Vercel Cron jobs for background processing. These are configured in `vercel.json` but need to be enabled in your Vercel dashboard.
+The application uses Vercel Cron jobs for background processing. **Vercel Pro plan is required** for the advanced cron job scheduling used in this system.
 
-**1. Enable Cron Jobs in Vercel Dashboard:**
+**1. Upgrade to Vercel Pro:**
+1. Go to your Vercel account settings
+2. Upgrade to **Pro plan** ($20/month)
+3. Wait 5-10 minutes for the upgrade to propagate
+
+**2. Configure CRON_SECRET Environment Variable:**
 1. Go to your Vercel project dashboard
-2. Navigate to **Settings** → **Functions**
-3. Scroll down to **Cron Jobs** section
-4. Click **Enable** to activate cron job functionality
-5. Verify that all 2 cron jobs are listed:
-   - `xero-daily` - Daily at 6 AM (Xero keep-alive + sync)
-   - `maintenance` - Daily at 7 AM (email retry + cleanup)
+2. Navigate to **Settings** → **Environment Variables**
+3. Add `CRON_SECRET` with a random string value
+4. Generate a secure random string:
+   ```bash
+   openssl rand -base64 32
+   ```
+5. Set the value for **Production** environment
+
+**3. Verify Cron Jobs in Vercel Dashboard:**
+1. Go to **Settings** → **Cron Jobs**
+2. You should see 4 active cron jobs:
+   - `xero-sync` - Every 2 minutes (Xero invoice/payment sync)
+   - `xero-keep-alive` - Every 6 hours (Xero token refresh)
+   - `email-retry` - Every 2 hours (failed email retry)
+   - `cleanup` - Daily at 2 AM (maintenance tasks)
+
+**Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
 
 **2. Verify CRON_SECRET Environment Variable:**
 - Ensure `CRON_SECRET` is set in your Vercel environment variables
@@ -730,15 +747,30 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 
 #### Automatic Sync Process
 
-1. **Payment Completed** → Stripe webhook triggers auto-sync
-2. **Contact Creation** → User automatically added as Xero contact
-3. **Invoice Generation** → Detailed invoice created with line items:
+1. **Payment Completed** → Stripe webhook triggers staging record creation
+2. **Staging Records** → Invoice and payment records created with 'pending' status
+3. **Cron Job Processing** → Every 2 minutes, cron jobs sync eligible records:
+   - **Invoices**: All pending/staged invoices
+   - **Payments**: Only completed, non-free payments
+4. **Contact Creation** → User automatically added as Xero contact
+5. **Invoice Generation** → Detailed invoice created with line items:
    - Membership purchases
    - Registration fees
    - Donations (if applicable)
    - Discount codes (as negative line items)
-4. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
-5. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+6. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
+7. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+
+#### Sync Criteria
+
+**Invoices**: All records with `sync_status IN ('pending', 'staged')`
+
+**Payments**: Filtered by:
+- `sync_status IN ('pending', 'staged')`
+- `payments.status = 'completed'`
+- `payments.payment_method != 'free'`
+
+This ensures only completed, paid transactions are synced to Xero.
 
 #### Manual Sync Operations
 
@@ -753,9 +785,12 @@ The admin interface provides manual sync options:
 ✅ **Automated Bookkeeping** - Eliminates manual invoice entry
 ✅ **Accurate Fee Tracking** - Stripe processing costs automatically recorded
 ✅ **Professional Invoicing** - Uses Xero's templates and delivery system
-✅ **Real-time Sync** - Financial data synchronized immediately
+✅ **Real-time Sync** - Financial data synchronized every 2 minutes
 ✅ **Discount Transparency** - Clear breakdown of promotional pricing
 ✅ **Audit Trail** - Complete transaction history and error logging
+✅ **Staging-First Approach** - Zero data loss with robust staging system
+✅ **Intelligent Filtering** - Only syncs eligible payments (completed, non-free)
+✅ **Pro Plan Optimization** - Leverages Vercel Pro for high-frequency processing
 
 #### Contact Management & Conflict Resolution
 

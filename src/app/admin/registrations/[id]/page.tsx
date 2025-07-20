@@ -1,14 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString } from '@/lib/date-utils'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
+import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import EditableRegistrationName from '@/components/EditableRegistrationName'
 
 export default async function RegistrationDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -40,7 +44,7 @@ export default async function RegistrationDetailPage({
         end_date
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (error || !registration) {
@@ -60,13 +64,15 @@ export default async function RegistrationDetailPage({
       ),
       memberships (
         id,
-        name,
-        price_monthly,
-        price_annual
+        name
       )
     `)
-    .eq('registration_id', params.id)
+    .eq('registration_id', id)
     .order('sort_order', { ascending: true })
+
+  // Get paid registration counts for each category
+  const categoryIds = categories?.map(cat => cat.id) || []
+  const categoryRegistrationCounts = await getCategoryRegistrationCounts(categoryIds)
 
   if (categoriesError) {
     console.error('Error fetching categories:', categoriesError)
@@ -82,15 +88,36 @@ export default async function RegistrationDetailPage({
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{registration.name}</h1>
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-2">
+                  <EditableRegistrationName 
+                    registrationId={id}
+                    initialName={registration.name}
+                  />
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    getStatusBadgeStyle(getRegistrationStatus(registration))
+                  }`}>
+                    {getStatusDisplayText(getRegistrationStatus(registration))}
+                  </span>
+                  {!registration.is_active && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      Not Published
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-gray-600">
                   Registration details and category management
                 </p>
               </div>
               <div className="flex space-x-3">
                 <Link
-                  href={`/admin/registrations/${params.id}/categories/new`}
+                  href={`/admin/registrations/${id}/timing`}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Edit Timing
+                </Link>
+                <Link
+                  href={`/admin/registrations/${id}/categories/new`}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Add Category
@@ -153,6 +180,38 @@ export default async function RegistrationDetailPage({
                   </div>
 
                   <div>
+                    <dt className="text-sm font-medium text-gray-500">Registration Timing</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {registration.presale_start_at || registration.regular_start_at || registration.registration_end_at ? (
+                        <div className="space-y-1">
+                          {registration.presale_start_at && (
+                            <div>
+                              <span className="font-medium">Pre-sale:</span> {new Date(registration.presale_start_at).toLocaleString()}
+                              {registration.presale_code && (
+                                <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
+                                  Code: {registration.presale_code}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {registration.regular_start_at && (
+                            <div>
+                              <span className="font-medium">General:</span> {new Date(registration.regular_start_at).toLocaleString()}
+                            </div>
+                          )}
+                          {registration.registration_end_at && (
+                            <div>
+                              <span className="font-medium">Ends:</span> {new Date(registration.registration_end_at).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">Always available</span>
+                      )}
+                    </dd>
+                  </div>
+
+                  <div>
                     <dt className="text-sm font-medium text-gray-500">Created</dt>
                     <dd className="mt-1 text-sm text-gray-900">
                       {new Date(registration.created_at).toLocaleDateString()}
@@ -181,7 +240,7 @@ export default async function RegistrationDetailPage({
                       Categories help organize different types of participants (e.g., Players, Goalies, Alternates)
                     </p>
                     <Link
-                      href={`/admin/registrations/${params.id}/categories/new`}
+                      href={`/admin/registrations/${id}/categories/new`}
                       className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                     >
                       Add First Category
@@ -190,8 +249,7 @@ export default async function RegistrationDetailPage({
                 ) : (
                   <div className="divide-y divide-gray-200">
                     {categories.map((category) => {
-                      // TODO: Calculate current_count from user_registrations when implemented
-                      const current_count = 0 // Placeholder until user registrations are implemented
+                      const current_count = categoryRegistrationCounts[category.id] || 0
                       const isAtCapacity = category.max_capacity && current_count >= category.max_capacity
                       const capacityPercentage = category.max_capacity 
                         ? (current_count / category.max_capacity) * 100 
@@ -233,11 +291,16 @@ export default async function RegistrationDetailPage({
                                 )}
                               </div>
 
-                              {category.memberships && (
-                                <div className="mt-1 text-sm text-gray-500">
-                                  Requires: {category.memberships.name} (${(category.memberships.price_monthly / 100).toFixed(2)}/mo or ${(category.memberships.price_annual / 100).toFixed(2)}/yr)
-                                </div>
-                              )}
+                              <div className="mt-1 text-sm text-gray-500">
+                                <span className="font-medium text-gray-700">
+                                  Price: ${(category.price / 100).toFixed(2)}
+                                </span>
+                                {category.memberships && (
+                                  <span className="ml-4">
+                                    Requires: {category.memberships.name}
+                                  </span>
+                                )}
+                              </div>
 
                               {category.max_capacity && (
                                 <div className="mt-2">
@@ -257,7 +320,7 @@ export default async function RegistrationDetailPage({
                             
                             <div className="ml-4 flex items-center space-x-2">
                               <Link
-                                href={`/admin/registrations/${params.id}/categories/${category.id}/edit`}
+                                href={`/admin/registrations/${id}/categories/${category.id}/edit`}
                                 className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                               >
                                 Edit

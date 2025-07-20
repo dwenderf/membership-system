@@ -12,31 +12,8 @@ export async function GET(request: Request) {
     const user = data?.user
     
     if (!error && user) {
-      // Check if user exists in our users table
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single()
-
-      // If user doesn't exist, create them
-      if (!existingUser) {
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: user.id,
-              email: user.email!,
-              first_name: user.user_metadata?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '',
-              last_name: user.user_metadata?.last_name || user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-              is_admin: false,
-            },
-          ])
-
-        if (insertError) {
-          console.error('Error creating user:', insertError)
-        }
-      }
+      // Note: We no longer auto-create user records here.
+      // The onboarding page will handle user record creation after collecting required info.
 
       const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
       const isLocalEnv = process.env.NODE_ENV === 'development'

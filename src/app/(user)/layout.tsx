@@ -21,10 +21,15 @@ export default async function UserLayout({
     .eq('id', user.id)
     .single()
 
+  // If user profile doesn't exist or onboarding not completed, redirect to onboarding
+  if (!userProfile || !userProfile.onboarding_completed_at) {
+    redirect('/onboarding')
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col h-full">
       <UserNavigation user={userProfile} useToggle={true} />
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 flex-1 w-full overflow-y-auto">
         {children}
       </main>
     </div>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getOrganizationName } from '@/lib/organization'
 
 export default async function Home() {
   const supabase = await createClient()
@@ -14,7 +15,7 @@ export default async function Home() {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Hockey Association
+          {getOrganizationName('long')}
         </h1>
         <p className="mt-2 text-center text-lg text-gray-600">
           Membership System

@@ -19,8 +19,13 @@
   }
 }
 
+/* Force light mode for the entire app */
 body {
-  background: var(--background);
+  background-color: #f9fafb !important;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html {
+  background-color: #f9fafb !important;
 }

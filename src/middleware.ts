@@ -32,6 +32,28 @@ export async function middleware(request: NextRequest) {
   // This will refresh session if expired - required for Server Components
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Pages that don't require onboarding (whitelist approach for security)
+  const allowedWithoutOnboarding = [
+    '/auth/login',
+    '/auth/callback',
+    '/onboarding',
+    '/', // home page
+  ]
+
+  // Check onboarding for all authenticated users except whitelisted pages
+  if (user && !allowedWithoutOnboarding.some(path => request.nextUrl.pathname.startsWith(path))) {
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('onboarding_completed_at')
+      .eq('id', user.id)
+      .single()
+    
+    // If user doesn't exist in our users table OR hasn't completed onboarding, redirect to onboarding
+    if (!userProfile || !userProfile.onboarding_completed_at) {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
+    }
+  }
+
   // Protect admin routes
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (!user) {

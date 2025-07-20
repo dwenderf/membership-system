@@ -22,10 +22,30 @@ export default function NewMembershipPage() {
   const [existingMemberships, setExistingMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)
+  const [accountingCodesError, setAccountingCodesError] = useState('')
 
   // Fetch existing memberships to check for duplicates
   useEffect(() => {
     const fetchData = async () => {
+      // First validate accounting codes
+      try {
+        const response = await fetch('/api/validate-accounting-codes')
+        if (response.ok) {
+          const validation = await response.json()
+          setAccountingCodesValid(validation.isValid)
+          if (!validation.isValid) {
+            setAccountingCodesError(validation.message)
+          }
+        } else {
+          setAccountingCodesValid(false)
+          setAccountingCodesError('Failed to validate accounting codes')
+        }
+      } catch (error) {
+        setAccountingCodesValid(false)
+        setAccountingCodesError('Failed to validate accounting codes')
+      }
+
       const { data: membershipsData, error: membershipsError } = await supabase
         .from('memberships')
         .select('name')
@@ -56,19 +76,25 @@ export default function NewMembershipPage() {
       const annualPriceInCents = Math.round(parseFloat(formData.price_annual) * 100)
       
       if (isNaN(monthlyPriceInCents) || monthlyPriceInCents < 0) {
-        setError('Please enter a valid monthly price')
+        setError('Please enter a valid monthly price (0 or greater)')
         setLoading(false)
         return
       }
       
       if (isNaN(annualPriceInCents) || annualPriceInCents < 0) {
-        setError('Please enter a valid annual price')
+        setError('Please enter a valid annual price (0 or greater)')
         setLoading(false)
         return
       }
       
-      if (annualPriceInCents > monthlyPriceInCents * 12) {
+      if (monthlyPriceInCents > 0 && annualPriceInCents > monthlyPriceInCents * 12) {
         setError('Annual price should be less than or equal to 12 months of monthly pricing')
+        setLoading(false)
+        return
+      }
+
+      if (!formData.accounting_code.trim()) {
+        setError('Accounting code is required')
         setLoading(false)
         return
       }
@@ -78,7 +104,7 @@ export default function NewMembershipPage() {
         description: formData.description || null,
         price_monthly: monthlyPriceInCents,
         price_annual: annualPriceInCents,
-        accounting_code: formData.accounting_code || null,
+        accounting_code: formData.accounting_code.trim(),
         allow_discounts: formData.allow_discounts,
       }
 
@@ -106,11 +132,13 @@ export default function NewMembershipPage() {
   )
   
   const canCreateMembership = formData.name.trim() && 
-                             formData.price_monthly && 
-                             parseFloat(formData.price_monthly) > 0 &&
-                             formData.price_annual && 
-                             parseFloat(formData.price_annual) > 0 &&
-                             !membershipNameExists
+                             formData.price_monthly !== '' && 
+                             parseFloat(formData.price_monthly) >= 0 &&
+                             formData.price_annual !== '' && 
+                             parseFloat(formData.price_annual) >= 0 &&
+                             formData.accounting_code.trim() &&
+                             !membershipNameExists &&
+                             accountingCodesValid === true
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -123,6 +151,35 @@ export default function NewMembershipPage() {
               Set up a flexible membership type with monthly and annual pricing
             </p>
           </div>
+
+          {/* Accounting codes validation */}
+          {accountingCodesValid === false && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">
+                    Accounting Codes Required
+                  </h3>
+                  <div className="mt-2 text-sm text-yellow-700">
+                    <p>{accountingCodesError}</p>
+                  </div>
+                  <div className="mt-4">
+                    <Link
+                      href="/admin/accounting-codes"
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                    >
+                      Configure Accounting Codes
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Info Notice */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
@@ -295,10 +352,11 @@ export default function NewMembershipPage() {
                   value={formData.accounting_code}
                   onChange={(e) => setFormData(prev => ({ ...prev, accounting_code: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., MEMBERSHIP-2025"
+                  placeholder="Enter Accounting Code (required)"
+                  required
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Optional code for accounting system integration
+                  Required code for Xero integration and accounting system
                 </p>
               </div>
 

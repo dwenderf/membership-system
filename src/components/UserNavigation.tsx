@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import AdminToggle from './AdminToggle'
+import { getOrganizationName } from '@/lib/organization'
 
 interface User {
   id: string
@@ -11,6 +12,7 @@ interface User {
   first_name: string
   last_name: string
   is_admin: boolean
+  member_id?: number
   tags?: string[]
 }
 
@@ -25,8 +27,8 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
 
   const navigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
-    { name: 'Browse Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
+    { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
   ]
 
   return (
@@ -36,7 +38,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/user" className="text-xl font-bold text-gray-900">
-                Hockey Association
+                {getOrganizationName('short')}
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
@@ -79,9 +81,14 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
             <div className="flex items-center">
               <Link 
                 href="/user/account"
-                className="text-sm text-gray-700 hover:text-gray-900 font-medium"
+                className="text-sm text-gray-700 hover:text-gray-900 font-medium flex items-center space-x-2"
               >
-                {user?.first_name} {user?.last_name}
+                <span>{user?.first_name} {user?.last_name}</span>
+                {user?.member_id && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                    #{user.member_id}
+                  </span>
+                )}
               </Link>
             </div>
           </div>
@@ -131,11 +138,16 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
               <div className="flex-shrink-0">
                 <Link 
                   href="/user/account"
-                  className="text-sm font-medium text-gray-900 hover:text-gray-600 flex items-center space-x-1"
+                  className="text-sm font-medium text-gray-900 hover:text-gray-600 flex items-center space-x-2"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   <span>{user?.first_name} {user?.last_name}</span>
-                  <span className="text-xs text-gray-500 ml-2">(Account Settings)</span>
+                  {user?.member_id && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                      #{user.member_id}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">(Account Settings)</span>
                 </Link>
               </div>
             </div>

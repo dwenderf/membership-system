@@ -127,6 +127,25 @@ CREATE TABLE memberships (
     CONSTRAINT chk_annual_pricing CHECK (price_annual <= price_monthly * 12)
 );
 
+-- Payments table (moved earlier to resolve foreign key dependencies)
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    total_amount INTEGER NOT NULL, -- in cents
+    discount_amount INTEGER DEFAULT 0, -- in cents
+    final_amount INTEGER NOT NULL, -- in cents
+    stripe_payment_intent_id TEXT,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded', 'cancelled')),
+    payment_method TEXT DEFAULT 'stripe',
+    refund_reason TEXT,
+    refunded_by UUID REFERENCES users(id),
+    xero_synced BOOLEAN DEFAULT FALSE,
+    xero_sync_error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- User memberships table (duration-based purchases)
 -- Stores individual membership purchases. Users can have multiple records 
 -- for the same membership type to support extensions and renewals.
@@ -142,6 +161,8 @@ CREATE TABLE user_memberships (
     stripe_payment_intent_id TEXT,
     amount_paid INTEGER, -- in cents
     purchased_at TIMESTAMP WITH TIME ZONE,
+    xero_synced BOOLEAN DEFAULT FALSE,
+    xero_sync_error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT chk_membership_validity CHECK (valid_until > valid_from),
     CONSTRAINT unique_stripe_payment_intent_id UNIQUE (stripe_payment_intent_id)
@@ -313,23 +334,6 @@ CREATE TABLE waitlists (
     UNIQUE(user_id, registration_id, registration_category_id)
 );
 
--- Payments table
-CREATE TABLE payments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    total_amount INTEGER NOT NULL, -- in cents
-    discount_amount INTEGER DEFAULT 0, -- in cents
-    final_amount INTEGER NOT NULL, -- in cents
-    stripe_payment_intent_id TEXT,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded', 'cancelled')),
-    payment_method TEXT DEFAULT 'stripe',
-    refund_reason TEXT,
-    refunded_by UUID REFERENCES users(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Payment items table removed 2025-07-14
 -- Transaction details are now stored in xero_invoice_line_items table
 -- which serves as the single source of truth for all purchase line items
@@ -398,32 +402,6 @@ CREATE INDEX idx_user_memberships_xero_synced ON user_memberships(xero_synced);
 CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);
 CREATE INDEX idx_email_logs_event_time ON email_logs(event_type, sent_at);
 CREATE INDEX idx_email_logs_status_time ON email_logs(status, sent_at);
-
--- Xero Integration Indexes
-CREATE INDEX idx_xero_oauth_tokens_tenant_id ON xero_oauth_tokens(tenant_id);
-CREATE INDEX idx_xero_oauth_tokens_expires_at ON xero_oauth_tokens(expires_at);
-CREATE INDEX idx_xero_contacts_user_id ON xero_contacts(user_id);
-CREATE INDEX idx_xero_contacts_tenant_id ON xero_contacts(tenant_id);
-CREATE INDEX idx_xero_contacts_xero_contact_id ON xero_contacts(xero_contact_id);
-CREATE INDEX idx_xero_contacts_sync_status ON xero_contacts(sync_status);
-CREATE INDEX idx_xero_invoices_payment_id ON xero_invoices(payment_id);
-CREATE INDEX idx_xero_invoices_tenant_id ON xero_invoices(tenant_id);
-CREATE INDEX idx_xero_invoices_xero_invoice_id ON xero_invoices(xero_invoice_id);
-CREATE INDEX idx_xero_invoices_sync_status ON xero_invoices(sync_status);
-CREATE INDEX idx_xero_invoices_invoice_number ON xero_invoices(invoice_number);
-CREATE INDEX idx_xero_invoice_line_items_xero_invoice_id ON xero_invoice_line_items(xero_invoice_id);
-CREATE INDEX idx_xero_invoice_line_items_item_type ON xero_invoice_line_items(line_item_type);
-CREATE INDEX idx_xero_payments_xero_invoice_id ON xero_payments(xero_invoice_id);
-CREATE INDEX idx_xero_payments_tenant_id ON xero_payments(tenant_id);
-CREATE INDEX idx_xero_payments_xero_payment_id ON xero_payments(xero_payment_id);
-CREATE INDEX idx_xero_payments_sync_status ON xero_payments(sync_status);
-CREATE INDEX idx_xero_sync_logs_tenant_id ON xero_sync_logs(tenant_id);
-CREATE INDEX idx_xero_sync_logs_operation_type ON xero_sync_logs(operation_type);
-CREATE INDEX idx_xero_sync_logs_status ON xero_sync_logs(status);
-CREATE INDEX idx_xero_sync_logs_created_at ON xero_sync_logs(created_at);
-CREATE INDEX idx_xero_sync_logs_entity_type_id ON xero_sync_logs(entity_type, entity_id);
-CREATE INDEX idx_xero_webhooks_tenant_id ON xero_webhooks(tenant_id);
-CREATE INDEX idx_xero_webhooks_event_category ON xero_webhooks(event_category);
 
 -- Xero Integration Tables
 
@@ -565,16 +543,33 @@ CREATE TABLE xero_webhooks (
     UNIQUE(tenant_id, event_category, event_type)
 );
 
--- Add Xero tracking fields to existing tables
--- Add xero_synced flag to payments table
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
+-- Xero Integration Indexes
+CREATE INDEX idx_xero_oauth_tokens_tenant_id ON xero_oauth_tokens(tenant_id);
+CREATE INDEX idx_xero_oauth_tokens_expires_at ON xero_oauth_tokens(expires_at);
+CREATE INDEX idx_xero_contacts_user_id ON xero_contacts(user_id);
+CREATE INDEX idx_xero_contacts_tenant_id ON xero_contacts(tenant_id);
+CREATE INDEX idx_xero_contacts_xero_contact_id ON xero_contacts(xero_contact_id);
+CREATE INDEX idx_xero_contacts_sync_status ON xero_contacts(sync_status);
+CREATE INDEX idx_xero_invoices_payment_id ON xero_invoices(payment_id);
+CREATE INDEX idx_xero_invoices_tenant_id ON xero_invoices(tenant_id);
+CREATE INDEX idx_xero_invoices_xero_invoice_id ON xero_invoices(xero_invoice_id);
+CREATE INDEX idx_xero_invoices_sync_status ON xero_invoices(sync_status);
+CREATE INDEX idx_xero_invoices_invoice_number ON xero_invoices(invoice_number);
+CREATE INDEX idx_xero_invoice_line_items_xero_invoice_id ON xero_invoice_line_items(xero_invoice_id);
+CREATE INDEX idx_xero_invoice_line_items_item_type ON xero_invoice_line_items(line_item_type);
+CREATE INDEX idx_xero_payments_xero_invoice_id ON xero_payments(xero_invoice_id);
+CREATE INDEX idx_xero_payments_tenant_id ON xero_payments(tenant_id);
+CREATE INDEX idx_xero_payments_xero_payment_id ON xero_payments(xero_payment_id);
+CREATE INDEX idx_xero_payments_sync_status ON xero_payments(sync_status);
+CREATE INDEX idx_xero_sync_logs_tenant_id ON xero_sync_logs(tenant_id);
+CREATE INDEX idx_xero_sync_logs_operation_type ON xero_sync_logs(operation_type);
+CREATE INDEX idx_xero_sync_logs_status ON xero_sync_logs(status);
+CREATE INDEX idx_xero_sync_logs_created_at ON xero_sync_logs(created_at);
+CREATE INDEX idx_xero_sync_logs_entity_type_id ON xero_sync_logs(entity_type, entity_id);
+CREATE INDEX idx_xero_webhooks_tenant_id ON xero_webhooks(tenant_id);
+CREATE INDEX idx_xero_webhooks_event_category ON xero_webhooks(event_category);
 
--- Add Xero tracking fields to user_memberships table
-ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_synced BOOLEAN DEFAULT FALSE;
-ALTER TABLE user_memberships ADD COLUMN IF NOT EXISTS xero_sync_error TEXT;
-
--- Add Xero tracking fields to user_registrations table
+-- Xero tracking fields are now included in table definitions above
 -- Xero sync status is tracked in dedicated staging tables (xero_invoices, xero_payments)
 -- The xero_synced and xero_sync_error columns in user_registrations were removed as redundant
 

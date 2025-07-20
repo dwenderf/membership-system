@@ -690,6 +690,9 @@ For questions about the codebase or setup process, refer to:
 
 The system includes automatic Xero integration for seamless accounting and bookkeeping.
 
+**📚 Important Resources:**
+- **[Xero API Rate Limits](https://developer.xero.com/documentation/guides/oauth2/limits/)** - Current rate limits and best practices
+
 ### Setting Up Xero Integration
 
 #### 1. Create Xero Developer App
@@ -742,6 +745,102 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 **Bank Account Configuration:**
 - Set up your Stripe account in Xero's bank accounts
 - Use account code `STRIPE` for automatic payment recording
+
+#### 5. URI Configuration for All Services
+
+**Important:** These configurations should already be complete for your account, but here's the complete setup for reference.
+
+##### **Google OAuth Configuration**
+
+**Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID**
+
+**Authorized JavaScript origins:**
+```
+http://localhost:3000
+https://membership-system-nycpha-preview.vercel.app
+https://my.nycpha.org
+```
+
+**Authorized redirect URIs:**
+```
+http://localhost:3000/api/auth/callback/google
+https://membership-system-nycpha-preview.vercel.app/api/auth/callback/google
+https://my.nycpha.org/api/auth/callback/google
+```
+
+##### **Supabase Authentication Configuration**
+
+**Supabase Dashboard → Authentication → URL Configuration**
+
+**Site URL:**
+```
+https://my.nycpha.org
+```
+
+**Redirect URLs:**
+```
+https://my.nycpha.org/auth/callback
+https://my.nycpha.org/**
+```
+
+**For Development Environment:**
+- **Site URL:** `https://membership-system-nycpha-preview.vercel.app`
+- **Redirect URLs:**
+  ```
+  https://membership-system-nycpha-preview.vercel.app/auth/callback
+  https://membership-system-nycpha-preview.vercel.app/**
+  ```
+
+**For Local Development:**
+- **Site URL:** `http://localhost:3000`
+- **Redirect URLs:**
+  ```
+  http://localhost:3000/auth/callback
+  http://localhost:3000/**
+  ```
+
+**Supabase Dashboard → Authentication → Sign In / Providers → Google**
+
+1. **Click on "Google"** in the providers list
+2. **Enable "Sign in with Google"**
+3. **Add your Google OAuth credentials:**
+
+**Client ID:** Your Google OAuth client ID
+**Client Secret:** Your Google OAuth client secret
+
+**Where to get Google OAuth credentials:**
+1. **Go to** [Google Cloud Console](https://console.cloud.google.com/)
+2. **Navigate to** APIs & Services → Credentials
+3. **Find your OAuth 2.0 Client ID** (or create a new one)
+4. **Copy the Client ID**
+5. **For Client Secret:** 
+   - **If you have an existing secret:** You cannot view it again (security feature)
+   - **Create a new Client Secret:** Click "Reset Secret" or "Create New Secret"
+   - **Copy the new secret immediately** (it's only shown once)
+
+**Note:** You'll need to configure these settings for each Supabase project (development and production databases).
+
+**Security Settings:**
+- **DO NOT enable "Skip nonce checks"** - This is a security feature that should remain enabled
+- **Keep all default security settings** unless you have a specific reason to change them
+
+##### **Stripe Webhook Configuration**
+
+**Stripe Dashboard → Webhooks**
+
+**Endpoint URL:**
+```
+https://my.nycpha.org/api/stripe-webhook
+```
+
+##### **Xero OAuth Configuration**
+
+**Xero Developer Portal → Your App → OAuth 2.0**
+
+**Redirect URI:**
+```
+https://my.nycpha.org/api/xero/callback
+```
 
 ### How Xero Integration Works
 

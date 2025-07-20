@@ -845,6 +845,14 @@ https://my.nycpha.org/**
 https://my.nycpha.org/api/stripe-webhook
 ```
 
+**Events to Send:**
+Select these specific events only:
+- `payment_intent.succeeded` - When payment completes successfully
+- `payment_intent.payment_failed` - When payment fails  
+- `payment_intent.canceled` - When payment is canceled
+
+**Important:** Only select these three events. The webhook is designed to handle these specific payment intent events for membership and registration payments.
+
 ##### **Xero OAuth Configuration**
 
 **Xero Developer Portal → Your App → OAuth 2.0**

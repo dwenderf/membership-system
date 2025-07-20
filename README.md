@@ -83,11 +83,21 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 ### 3. Database Setup
 
 1. Create a new Supabase project
-2. Run the database schema:
+2. Get your API keys from Supabase Dashboard:
+   - Go to **Settings** → **API**
+   - Click on the **"API Keys"** tab (not "Legacy API Keys")
+   - If you don't have API keys yet, click **"Create a new API key"**
+   - Copy the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - Copy the **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Copy the **service_role** key → `SUPABASE_SERVICE_ROLE_KEY`
+   
+   **Note:** Use the **new API keys** (not the legacy ones). The new keys use an improved JWT format and are the recommended approach.
+
+3. Run the database schema:
    ```bash
    # Apply the schema.sql file in your Supabase SQL editor
    ```
-3. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
 
 ### 4. Run Development Server
 
@@ -494,6 +504,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ```
+
+**Note:** For Supabase API keys, use the **new API keys** (not legacy) from your **production Supabase project** (not development). Go to Settings → API → "API Keys" tab and create new keys if needed.
 
 **Payment Processing:**
 ```bash

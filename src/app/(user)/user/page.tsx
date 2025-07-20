@@ -3,6 +3,7 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { getOrganizationName } from '@/lib/organization'
+import { getUserUnpaidInvoices, formatAmount } from '@/lib/invoice-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -122,8 +123,46 @@ export default async function UserDashboardPage() {
   })
   const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
+  // Check for unpaid invoices
+  const unpaidInvoices = await getUserUnpaidInvoices(user.id)
+
   return (
     <div className="px-4 py-6 sm:px-0">
+      {/* Unpaid Invoices Warning */}
+      {unpaidInvoices.count > 0 && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">
+                You have {unpaidInvoices.count} unpaid invoice{unpaidInvoices.count !== 1 ? 's' : ''}
+              </h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>
+                  Total outstanding: {formatAmount(unpaidInvoices.totalAmount)}. 
+                  Please review and pay your invoices to avoid any service interruptions.
+                </p>
+              </div>
+              <div className="mt-4">
+                <a
+                  href="/user/invoices"
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  View Invoices
+                  <svg className="ml-2 -mr-0.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {userProfile?.first_name}!
@@ -133,7 +172,7 @@ export default async function UserDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Membership Status */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5 flex flex-col h-full">
@@ -301,6 +340,63 @@ export default async function UserDashboardPage() {
                 className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
               >
                 Browse Available Registrations
+                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Invoice Summary */}
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5 flex flex-col h-full">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center ${
+                  unpaidInvoices.count > 0 ? 'bg-red-100' : 'bg-green-100'
+                }`}>
+                  <svg className={`w-5 h-5 ${
+                    unpaidInvoices.count > 0 ? 'text-red-600' : 'text-green-600'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  Invoices
+                </h3>
+              </div>
+            </div>
+            <div className="mt-4 flex-grow">
+              {unpaidInvoices.count > 0 ? (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-600">
+                    <p className="font-medium text-red-600">
+                      {unpaidInvoices.count} unpaid invoice{unpaidInvoices.count !== 1 ? 's' : ''}
+                    </p>
+                    <p className="mt-1">
+                      Total outstanding: {formatAmount(unpaidInvoices.totalAmount)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    <p>Please review and pay your invoices to avoid service interruptions.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  <p className="font-medium text-green-600">All invoices paid</p>
+                  <p className="mt-1">You're up to date with all your payments.</p>
+                </div>
+              )}
+            </div>
+            <div className="mt-5">
+              <a
+                href="/user/invoices"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+              >
+                View All Invoices
                 <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>

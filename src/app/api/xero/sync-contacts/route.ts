@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { bulkSyncMissingContacts, syncUserToXeroContact } from '@/lib/xero-contacts'
+import { bulkSyncMissingContacts, syncUserToXeroContact } from '@/lib/xero/contacts'
 
 export async function POST(request: NextRequest) {
   try {

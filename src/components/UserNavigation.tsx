@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import AdminToggle from './AdminToggle'
@@ -23,12 +23,32 @@ interface UserNavigationProps {
 
 export default function UserNavigation({ user, useToggle = false }: UserNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [hasUnpaid, setHasUnpaid] = useState(false)
   const pathname = usePathname()
+
+  // Check for unpaid invoices
+  useEffect(() => {
+    if (user?.id) {
+      fetch('/api/xero/unpaid-invoices')
+        .then(res => res.json())
+        .then(data => setHasUnpaid(data.hasUnpaid))
+        .catch(error => {
+          console.error('Error checking unpaid invoices:', error)
+          setHasUnpaid(false)
+        })
+    }
+  }, [user?.id])
 
   const navigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
+    { 
+      name: 'My Invoices', 
+      href: '/user/invoices', 
+      current: pathname === '/user/invoices',
+      badge: hasUnpaid ? '!' : undefined
+    },
   ]
 
   return (
@@ -53,6 +73,11 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
                   {item.name}
+                  {item.badge && (
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -61,21 +86,17 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
             {user?.is_admin && (
               <div className="flex items-center space-x-3">
-                {useToggle ? (
-                  <AdminToggle isAdminView={false} />
-                ) : (
-                  <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
-                    <Link
-                      href="/admin"
-                      className="px-3 py-1 rounded text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-800"
-                    >
-                      Admin
-                    </Link>
-                    <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
-                      Member
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
+                  <Link
+                    href="/admin"
+                    className="px-3 py-1 rounded text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-800"
+                  >
+                    Admin
+                  </Link>
+                  <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
+                    Member
+                  </span>
+                </div>
               </div>
             )}
             <div className="flex items-center">
@@ -126,10 +147,15 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                   item.current
                     ? 'bg-blue-50 border-blue-500 text-blue-700'
                     : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
+                } pl-3 pr-4 py-2 border-l-4 text-base font-medium flex items-center justify-between`}
                 onClick={() => setIsMenuOpen(false)}
               >
-                {item.name}
+                <span>{item.name}</span>
+                {item.badge && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
@@ -154,27 +180,19 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
             <div className="mt-3 space-y-1">
               {user?.is_admin && (
                 <div className="px-4 py-2">
-                  {useToggle ? (
-                    <div className="flex items-center justify-between">
-                      <AdminToggle isAdminView={false} />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm font-medium text-gray-900 mb-2">Switch View:</p>
-                      <div className="flex space-x-2">
-                        <Link
-                          href="/admin"
-                          className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-center text-sm font-medium"
-                          onClick={() => setIsMenuOpen(false)}
-                        >
-                          Admin
-                        </Link>
-                        <span className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-center text-sm font-medium">
-                          Member
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <p className="text-sm font-medium text-gray-900 mb-2">Switch View:</p>
+                  <div className="flex space-x-2">
+                    <Link
+                      href="/admin"
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-center text-sm font-medium"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Admin
+                    </Link>
+                    <span className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-center text-sm font-medium">
+                      Member
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

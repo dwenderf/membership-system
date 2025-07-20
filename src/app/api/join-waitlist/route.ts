@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
-import { getCategoryDisplayName } from '@/lib/registration-utils'
+
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -35,7 +35,10 @@ export async function POST(request: NextRequest) {
         id, 
         max_capacity,
         custom_name,
-        categories (name),
+        category_id,
+        accounting_code,
+        required_membership_id,
+        sort_order,
         registration_id
       `)
       .eq('id', categoryId)
@@ -144,7 +147,7 @@ export async function POST(request: NextRequest) {
       .from('registrations')
       .select(`
         name,
-        seasons (name)
+        seasons!inner (name)
       `)
       .eq('id', registrationId)
       .single()
@@ -156,6 +159,19 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!registrationError && !userError && registration && userData) {
+      // Get category display name
+      let categoryDisplayName = category.custom_name || 'Unknown Category'
+      if (category.category_id) {
+        const { data: masterCategory } = await supabase
+          .from('categories')
+          .select('name')
+          .eq('id', category.category_id)
+          .single()
+        if (masterCategory) {
+          categoryDisplayName = masterCategory.name
+        }
+      }
+
       // Send waitlist notification email
       try {
         await emailService.sendWaitlistAddedNotification({
@@ -163,8 +179,8 @@ export async function POST(request: NextRequest) {
           email: userData.email,
           userName: `${userData.first_name} ${userData.last_name}`,
           registrationName: registration.name,
-          categoryName: getCategoryDisplayName(category),
-          seasonName: registration.seasons?.name || 'Unknown Season',
+          categoryName: categoryDisplayName,
+          seasonName: registration.seasons?.[0]?.name || 'Unknown Season',
           position: nextPosition
         })
       } catch (emailError) {

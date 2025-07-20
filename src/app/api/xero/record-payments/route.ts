@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { recordStripePaymentInXero, bulkRecordUnsyncedPayments } from '@/lib/xero-payments'
+import { recordStripePaymentInXero, bulkRecordUnsyncedPayments } from '@/lib/xero/payments'
 
 export async function POST(request: NextRequest) {
   try {

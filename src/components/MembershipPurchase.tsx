@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 
 // Force import client config
-import '../../sentry.client.config'
+import '../../instrumentation-client'
 import * as Sentry from '@sentry/nextjs'
 
 interface Membership {

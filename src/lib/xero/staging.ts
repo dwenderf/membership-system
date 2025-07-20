@@ -1,0 +1,634 @@
+/**
+ * Xero Staging System
+ * 
+ * Implements staging-first approach for Xero integration:
+ * 1. Always create staging records first (guaranteed success)
+ * 2. Batch sync staged records to Xero API
+ * 3. Admin recovery for failed syncs
+ */
+
+import { createAdminClient } from '../supabase/server'
+import { getActiveXeroTenants } from './client'
+import { PaymentInvoiceData, PrePaymentInvoiceData } from './invoices'
+import { Database } from '../../types/database'
+import { logger } from '../logging/logger'
+
+export type StagingPaymentData = {
+  payment_id?: string
+  user_id: string
+  total_amount: number
+  discount_amount: number
+  final_amount: number
+  payment_items: Array<{
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
+    item_id: string | null
+    amount: number
+    description?: string
+    accounting_code?: string
+  }>
+  discount_codes_used?: Array<{
+    code: string
+    amount_saved: number
+    category_name: string
+    accounting_code?: string
+  }>
+  stripe_payment_intent_id?: string | null
+}
+
+export class XeroStagingManager {
+  private supabase: ReturnType<typeof createAdminClient>
+
+  constructor() {
+    this.supabase = createAdminClient()
+  }
+
+  /**
+   * Create staging records for a paid purchase
+   */
+  async createPaidPurchaseStaging(paymentId: string): Promise<boolean> {
+    try {
+      logger.logXeroSync(
+        'staging-paid-purchase-start',
+        'Creating Xero staging for paid purchase',
+        { paymentId },
+        'info'
+      )
+
+      // Check if staging data already exists for this payment
+      const { data: existingStaging } = await this.supabase
+        .from('xero_invoices')
+        .select('id')
+        .eq('payment_id', paymentId)
+        .eq('sync_status', 'staged')
+        .limit(1)
+
+      if (existingStaging && existingStaging.length > 0) {
+        logger.logXeroSync(
+          'staging-paid-purchase-exists',
+          'Staging data already exists for this payment',
+          { paymentId },
+          'info'
+        )
+        return true
+      }
+
+      logger.logXeroSync(
+        'staging-paid-purchase-no-existing',
+        'No existing staging data found, but payment_items table has been removed. Staging should have been created during payment intent creation.',
+        { paymentId },
+        'warn'
+      )
+
+      // In the new architecture, staging data should already exist from payment intent creation
+      // If it doesn't exist, this indicates a problem with the payment flow
+      return false
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-paid-purchase-error',
+        'Error creating paid purchase staging',
+        { 
+          paymentId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  /**
+   * Create staging records immediately with provided invoice data
+   * (for immediate staging at purchase time)
+   */
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<boolean> {
+    try {
+      logger.logXeroSync(
+        'staging-immediate-start',
+        'Creating immediate Xero staging for user',
+        { userId: data.user_id },
+        'info'
+      )
+
+      // Create staging record without tenant_id - will be populated during sync
+      const success = await this.createInvoiceStaging(data, null, options)
+      
+      return success
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-immediate-error',
+        'Error creating immediate staging',
+        { 
+          userId: data.user_id,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  /**
+   * Create staging records for a free purchase
+   */
+  async createFreePurchaseStaging(
+    event: {
+      user_id: string
+      record_id: string
+      trigger_source: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
+    }
+  ): Promise<boolean> {
+    try {
+      logger.logXeroSync(
+        'staging-free-purchase-start',
+        'Creating Xero staging for free purchase',
+        { recordId: event.record_id, source: event.trigger_source },
+        'info'
+      )
+
+      // Get the purchase data based on type
+      const purchaseData = await this.getFreePurchaseData(event)
+      if (!purchaseData) {
+        logger.logXeroSync(
+          'staging-free-purchase-no-data',
+          'No purchase data found for free staging',
+          { recordId: event.record_id, source: event.trigger_source },
+          'error'
+        )
+        return false
+      }
+
+      // Convert to staging format
+      const stagingData = await this.convertToStagingData(purchaseData, event.trigger_source)
+      
+      // Create staging record without tenant_id - will be populated during sync
+      const success = await this.createInvoiceStaging(stagingData, null)
+      
+      return success
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-free-purchase-error',
+        'Error creating free purchase staging',
+        { 
+          recordId: event.record_id,
+          source: event.trigger_source,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  /**
+   * Create staging records for invoice and payment
+   */
+  private async createInvoiceStaging(
+    data: StagingPaymentData, 
+    tenantId: string | null,
+    options?: { isFree?: boolean }
+  ): Promise<boolean> {
+    try {
+      // Let Xero generate its own invoice number - don't set one here
+      
+      // Create invoice staging record
+      const { data: invoiceStaging, error: invoiceError } = await this.supabase
+        .from('xero_invoices')
+        .insert({
+          payment_id: data.payment_id || null,
+          tenant_id: tenantId, // Can be null during staging
+          xero_invoice_id: null, // Will be populated when synced to Xero
+          invoice_number: null, // Let Xero generate the invoice number
+          invoice_type: 'ACCREC',
+          invoice_status: options?.isFree ? 'AUTHORISED' : 'DRAFT',
+          total_amount: data.total_amount,
+          discount_amount: data.discount_amount,
+          net_amount: data.final_amount,
+          stripe_fee_amount: 0, // Calculate from payment data if needed
+          sync_status: 'staged',
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            user_id: data.user_id,
+            payment_items: data.payment_items,
+            discount_codes_used: data.discount_codes_used || [],
+            stripe_payment_intent_id: data.stripe_payment_intent_id,
+            created_at: new Date().toISOString()
+          }
+        })
+        .select()
+        .single()
+
+      if (invoiceError || !invoiceStaging) {
+        logger.logXeroSync(
+          'staging-invoice-create-error',
+          'Failed to create invoice staging',
+          { 
+            tenantId,
+            error: invoiceError?.message || 'No staging record returned'
+          },
+          'error'
+        )
+        return false
+      }
+
+      // Create line item staging records
+      const lineItems = this.generateLineItems(data)
+      for (const lineItem of lineItems) {
+        const { error: lineError } = await this.supabase
+          .from('xero_invoice_line_items')
+          .insert({
+            xero_invoice_id: invoiceStaging.id,
+            line_item_type: lineItem.item_type,
+            item_id: lineItem.item_id,
+            description: lineItem.description,
+            quantity: lineItem.quantity,
+            unit_amount: lineItem.unit_amount,
+            account_code: lineItem.account_code,
+            tax_type: 'NONE',
+            line_amount: lineItem.line_amount
+          })
+
+        if (lineError) {
+          logger.logXeroSync(
+            'staging-line-item-error',
+            'Failed to create line item staging',
+            { 
+              tenantId,
+              itemType: lineItem.item_type,
+              error: lineError.message
+            },
+            'error'
+          )
+          // Continue with other line items
+        }
+      }
+
+      // Create payment staging record if this is a paid purchase
+      if (data.payment_id && data.final_amount > 0) {
+        const { error: paymentError } = await this.supabase
+          .from('xero_payments')
+          .insert({
+            xero_invoice_id: invoiceStaging.id,
+            tenant_id: tenantId, // Can be null during staging
+            xero_payment_id: null, // Will be populated when synced to Xero
+            payment_method: 'stripe',
+            bank_account_code: 'STRIPE', // Default - should be configurable
+            amount_paid: data.final_amount,
+            stripe_fee_amount: 0, // Calculate if needed
+            reference: data.stripe_payment_intent_id || '',
+            sync_status: 'staged',
+            staged_at: new Date().toISOString(),
+            staging_metadata: {
+              payment_id: data.payment_id,
+              stripe_payment_intent_id: data.stripe_payment_intent_id,
+              created_at: new Date().toISOString()
+            }
+          })
+
+        if (paymentError) {
+          logger.logXeroSync(
+            'staging-payment-create-error',
+            'Failed to create payment staging',
+            { 
+              tenantId,
+              amount: data.final_amount,
+              error: paymentError.message
+            },
+            'error'
+          )
+          return false
+        }
+      }
+
+      logger.logXeroSync(
+        'staging-records-created',
+        'Staging records created for tenant',
+        { 
+          tenantId,
+          isFree: options?.isFree || false
+        },
+        'info'
+      )
+      return true
+      
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-records-error',
+        'Error creating staging records',
+        { 
+          tenantId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  // getPaymentDataForStaging method removed - staging data is now created during payment intent creation
+  // and stored in xero_invoices.staging_metadata with all necessary payment item details
+
+  /**
+   * Get free purchase data
+   */
+  private async getFreePurchaseData(event: {
+    user_id: string
+    record_id: string
+    trigger_source: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
+  }) {
+    try {
+      if (event.trigger_source === 'user_registrations' || event.trigger_source === 'free_registration') {
+        // Get registration data
+        const { data: registration, error } = await this.supabase
+          .from('user_registrations')
+          .select(`
+            *,
+            registration:registrations (
+              name,
+              season:seasons (name, start_date, end_date)
+            ),
+            registration_category:registration_categories (
+              name,
+              price,
+              accounting_code
+            ),
+            payment:payments (
+              id,
+              final_amount,
+              discount_amount,
+              stripe_payment_intent_id
+            )
+          `)
+          .eq('id', event.record_id)
+          .single()
+
+        if (error || !registration) {
+          logger.logXeroSync(
+            'staging-free-registration-not-found',
+            'Registration not found for free staging',
+            { recordId: event.record_id, error },
+            'error'
+          )
+          return null
+        }
+
+        return {
+          type: 'registration',
+          data: registration,
+          user_id: event.user_id
+        }
+      } else if (event.trigger_source === 'user_memberships' || event.trigger_source === 'free_membership') {
+        // Get membership data
+        const { data: membership, error } = await this.supabase
+          .from('user_memberships')
+          .select(`
+            *,
+            membership:memberships (
+              name,
+              price,
+              accounting_code,
+              season:seasons (name, start_date, end_date)
+            ),
+            payment:payments (
+              id,
+              final_amount,
+              discount_amount,
+              stripe_payment_intent_id
+            )
+          `)
+          .eq('id', event.record_id)
+          .single()
+
+        if (error || !membership) {
+          logger.logXeroSync(
+            'staging-free-membership-not-found',
+            'Membership not found for free staging',
+            { recordId: event.record_id, error },
+            'error'
+          )
+          return null
+        }
+
+        return {
+          type: 'membership',
+          data: membership,
+          user_id: event.user_id
+        }
+      }
+
+      logger.logXeroSync(
+        'staging-free-unknown-source',
+        'Unknown trigger source for free purchase',
+        { recordId: event.record_id, source: event.trigger_source },
+        'error'
+      )
+      return null
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-free-data-error',
+        'Error getting free purchase data',
+        { 
+          recordId: event.record_id,
+          source: event.trigger_source,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return null
+    }
+  }
+
+  /**
+   * Convert purchase data to staging format
+   */
+  private async convertToStagingData(
+    purchaseData: any, 
+    type: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
+  ): Promise<StagingPaymentData> {
+    try {
+      if (type === 'user_registrations' || type === 'free_registration') {
+        const registration = purchaseData.data
+        const payment = registration.payment
+        
+        return {
+          payment_id: payment?.id || null,
+          user_id: purchaseData.user_id,
+          total_amount: registration.registration_category?.price || 0,
+          discount_amount: payment?.discount_amount || 0,
+          final_amount: payment?.final_amount || 0,
+          payment_items: [{
+            item_type: 'registration',
+            item_id: registration.registration_id,
+            amount: registration.amount_paid || 0,
+            description: `${registration.registration.name} - ${registration.registration_category?.name || 'Standard'}`,
+            accounting_code: registration.registration_category?.accounting_code || 'REGISTRATION'
+          }],
+          stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
+        }
+      } else if (type === 'user_memberships' || type === 'free_membership') {
+        const membership = purchaseData.data
+        const payment = membership.payment
+        
+        return {
+          payment_id: payment?.id || null,
+          user_id: purchaseData.user_id,
+          total_amount: membership.membership?.price || 0,
+          discount_amount: payment?.discount_amount || 0,
+          final_amount: payment?.final_amount || 0,
+          payment_items: [{
+            item_type: 'membership',
+            item_id: membership.membership_id,
+            amount: membership.amount_paid || 0,
+            description: `${membership.membership.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
+            accounting_code: membership.membership?.accounting_code || 'MEMBERSHIP'
+          }],
+          stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
+        }
+      }
+
+      logger.logXeroSync(
+        'staging-convert-unknown-type',
+        'Unknown type for staging data conversion',
+        { type },
+        'error'
+      )
+      
+      return {
+        user_id: purchaseData.user_id,
+        total_amount: 0,
+        discount_amount: 0,
+        final_amount: 0,
+        payment_items: []
+      }
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-convert-data-error',
+        'Error converting purchase data to staging format',
+        { 
+          type,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      
+      return {
+        user_id: purchaseData.user_id,
+        total_amount: 0,
+        discount_amount: 0,
+        final_amount: 0,
+        payment_items: []
+      }
+    }
+  }
+
+  /**
+   * Get item details for description and accounting codes
+   */
+  private async getItemDetails(itemType: string, itemId: string | null) {
+    if (!itemId) return null
+
+    try {
+      if (itemType === 'membership') {
+        const { data } = await this.supabase
+          .from('memberships')
+          .select('name, accounting_code')
+          .eq('id', itemId)
+          .single()
+        
+        return {
+          description: `Membership: ${data?.name || 'Unknown'}`,
+          accounting_code: data?.accounting_code || 'MEMBERSHIP'
+        }
+      } else if (itemType === 'registration') {
+        const { data } = await this.supabase
+          .from('registrations')
+          .select('name')
+          .eq('id', itemId)
+          .single()
+        
+        return {
+          description: `Registration: ${data?.name || 'Unknown'}`,
+          accounting_code: 'REGISTRATION'
+        }
+      }
+      
+      return null
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-item-details-error',
+        'Error getting item details',
+        { 
+          itemType,
+          itemId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return null
+    }
+  }
+
+  /**
+   * Generate line items for invoice
+   */
+  private generateLineItems(data: StagingPaymentData) {
+    const lineItems = []
+
+    // Add payment items
+    for (const item of data.payment_items) {
+      lineItems.push({
+        item_type: item.item_type,
+        item_id: item.item_id,
+        description: item.description || `${item.item_type} purchase`,
+        quantity: 1,
+        unit_amount: item.amount,
+        account_code: item.accounting_code || 'SALES',
+        line_amount: item.amount
+      })
+    }
+
+    // Add discount line items (negative amounts)
+    if (data.discount_codes_used) {
+      for (const discount of data.discount_codes_used) {
+        lineItems.push({
+          item_type: 'discount' as const,
+          item_id: null,
+          description: `Discount: ${discount.code} (${discount.category_name})`,
+          quantity: 1,
+          unit_amount: -discount.amount_saved,
+          account_code: discount.accounting_code || 'DISCOUNT',
+          line_amount: -discount.amount_saved
+        })
+      }
+    }
+
+    return lineItems
+  }
+
+  /**
+   * Get all pending staging records for batch sync using centralized function
+   */
+  async getPendingStagingRecords() {
+    try {
+      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync')
+      const { invoices, payments } = await xeroBatchSyncManager.getPendingXeroRecords()
+      
+      return {
+        invoices,
+        payments // Use filtered payments for consistency
+      }
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-pending-records-error',
+        'Error getting pending staging records',
+        { 
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return { invoices: [], payments: [] }
+    }
+  }
+}
+
+// Export singleton instance
+export const xeroStagingManager = new XeroStagingManager()

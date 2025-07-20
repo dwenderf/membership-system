@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js'
 
 // Force import client config
-import '../../sentry.client.config'
+import '../../instrumentation-client'
 import * as Sentry from '@sentry/nextjs'
 
 interface PaymentFormProps {
@@ -189,7 +189,7 @@ export default function PaymentForm({
 
         // Update payment record status to 'failed' 
         // Use payment intent ID from either the error response or the prop passed from parent
-        const intentId = paymentIntent?.id || paymentIntentId
+        const intentId = (paymentIntent as any)?.id || paymentIntentId
         
         if (intentId) {
           try {

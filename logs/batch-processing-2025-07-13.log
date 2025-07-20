@@ -1,0 +1,1 @@
+{"timestamp":"2025-07-13T13:05:50.408Z","level":"info","category":"batch-processing","operation":"scheduled-start","message":"Starting scheduled batch processing","metadata":{"xeroSync":"120000ms","emailRetry":"300000ms","cleanup":"3600000ms"}}

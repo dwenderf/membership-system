@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { validateXeroConnection } from '@/lib/xero-client'
+import { validateXeroConnection } from '@/lib/xero/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,12 +62,119 @@ export async function GET(request: NextRequest) {
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
       .order('created_at', { ascending: false })
 
+    // Get pending invoices count
+    const { count: pendingInvoicesCount } = await supabase
+      .from('xero_invoices')
+      .select('*', { count: 'exact', head: true })
+      .in('sync_status', ['pending', 'staged'])
+
+    // Get pending payments count  
+    const { count: pendingPaymentsCount } = await supabase
+      .from('xero_payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('sync_status', 'pending')
+
+    // Get failed invoices with user information - only show retryable ones
+    // (zero-value invoices or invoices with completed payments)
+    const { data: failedInvoices, error: failedInvoicesError } = await supabase
+      .from('xero_invoices')
+      .select(`
+        id, 
+        tenant_id, 
+        sync_status, 
+        sync_error, 
+        last_synced_at, 
+        staging_metadata,
+        payment_id,
+        payments (
+          user_id,
+          status,
+          final_amount,
+          users!payments_user_id_fkey (
+            first_name,
+            last_name,
+            member_id
+          )
+        )
+      `).eq('sync_status', 'failed')      
+      .not('payment_id', 'is', null)
+      .order('last_synced_at', { ascending: false })
+
+      
+    if (failedInvoicesError) {
+      console.error('Error fetching failed invoices:', failedInvoicesError)
+    }
+
+    // Filter out invoices that shouldn't be synced (non-zero amounts with non-completed payments)
+    const filteredFailedInvoices = failedInvoices?.filter(invoice => {
+      const payment = Array.isArray(invoice.payments) ? invoice.payments[0] : invoice.payments
+      if (!payment) return true // Keep if no payment data (shouldn't happen)
+      
+      // If it's a zero-value invoice, allow retry
+      if (payment.final_amount === 0) return true
+      
+      // If payment is completed, allow retry
+      if (payment.status === 'completed') return true
+      
+      // Non-zero amount with non-completed payment - don't show for retry
+      console.log('Filtering out invoice for retry:', {
+        invoiceId: invoice.id,
+        paymentStatus: payment.status,
+        finalAmount: payment.final_amount,
+        reason: 'Non-zero amount with non-completed payment'
+      })
+      return false
+    }) || []
+
+    const { data: failedPayments, error: failedPaymentsError } = await supabase
+      .from('xero_payments')
+      .select(`
+        id, 
+        tenant_id, 
+        sync_status, 
+        sync_error, 
+        last_synced_at,
+        xero_invoice_id,
+        xero_invoices (
+          payment_id,
+          payments (
+            user_id,
+            users!payments_user_id_fkey (
+              first_name,
+              last_name,
+              member_id
+            )
+          )
+        )
+      `)
+      .eq('sync_status', 'failed')
+      .order('last_synced_at', { ascending: false })
+
+    if (failedPaymentsError) {
+      console.error('Error fetching failed payments:', failedPaymentsError)
+    }
+
     const stats = {
       total_operations: syncStats?.length || 0,
       successful_operations: syncStats?.filter(s => s.status === 'success').length || 0,
       failed_operations: syncStats?.filter(s => s.status === 'error').length || 0,
-      recent_operations: syncStats?.slice(0, 10) || []
+      recent_operations: syncStats?.slice(0, 10) || [],
+      pending_invoices: pendingInvoicesCount || 0,
+      pending_payments: pendingPaymentsCount || 0,
+      total_pending: (pendingInvoicesCount || 0) + (pendingPaymentsCount || 0),
+      failed_invoices: filteredFailedInvoices,
+      failed_payments: failedPayments || [],
+      failed_count: filteredFailedInvoices.length + (failedPayments?.length || 0)
     }
+
+    // Add debugging information
+    console.log('Xero status API response:', {
+      failedInvoicesCount: filteredFailedInvoices.length,
+      failedPaymentsCount: failedPayments?.length || 0,
+      totalFailedCount: stats.failed_count,
+      failedInvoicesError: failedInvoicesError?.message,
+      failedPaymentsError: failedPaymentsError?.message
+    })
 
     return NextResponse.json({
       connections: connectionsWithStatus,

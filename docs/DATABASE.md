@@ -122,6 +122,14 @@ registration_categories (
 - `memberships` → `user_memberships` (1:many)
 - `seasons` → `registrations` (1:many)
 
+### User Attributes
+The `users` table includes attributes for registration filtering and team organization:
+- `is_goalie`: Boolean indicating if user plays goalie (required, defaults to false)
+- `is_lgbtq`: Boolean indicating LGBTQ identity (nullable for "prefer not to answer")
+- `tags`: Array of custom tags for additional categorization
+
+These attributes are collected during onboarding and can be updated through the profile editing interface. They're displayed as color-coded tags in the user interface and can be used for registration filtering and team organization.
+
 ### Payment System
 - `users` → `payments` (1:many)
 - `payments` → `payment_items` (1:many)
@@ -232,6 +240,7 @@ const { data } = await supabase.from('table').select('*')
 - Payment lookups by Stripe ID for webhook processing
 - Deleted user queries: `idx_users_deleted_at`
 - Member ID lookups: `idx_users_member_id`
+- User attribute filtering: `idx_users_is_lgbtq`, `idx_users_is_goalie`
 
 ### Query Patterns
 Database schema optimized for common queries:
@@ -240,6 +249,7 @@ Database schema optimized for common queries:
 - Payment reconciliation (Stripe ID lookups)
 - Account deletion filtering (`WHERE deleted_at IS NULL`)
 - Orphaned user record identification (`WHERE deleted_at IS NOT NULL`)
+- User attribute filtering for registration and team organization
 
 ## Data Integrity
 
@@ -375,6 +385,199 @@ CREATE TRIGGER set_member_id_trigger
 
 **Alternative Considered:** Using UUID or email-based identification
 **Trade-off:** Lost human readability, gained guaranteed uniqueness and external system compatibility
+
+## Payment Processing Architecture Refactor (2025-07-12)
+
+### 11. Unified Payment Processing with Database Triggers
+
+**Pattern Used:** Database trigger-driven async processing with staging-first Xero integration
+
+**Problem Solved:** Eliminated dual processing paths between sync APIs and webhooks, ensuring zero data loss for external integrations.
+
+```sql
+-- Enhanced business tables with payment relationships
+user_memberships (
+  payment_id: UUID REFERENCES payments(id)     -- Links to payment record
+  -- ... existing fields
+)
+
+user_registrations (
+  payment_id: UUID REFERENCES payments(id)     -- Links to payment record
+  -- ... existing fields  
+)
+
+-- Unified trigger function for all payment completions
+CREATE OR REPLACE FUNCTION notify_payment_completion()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Emit PostgreSQL notification for async processing
+  PERFORM pg_notify('payment_completed', json_build_object(
+    'event_type', TG_TABLE_NAME,
+    'record_id', NEW.id,
+    'user_id', NEW.user_id,
+    'payment_id', CASE WHEN TG_TABLE_NAME = 'payments' THEN NEW.id ELSE NEW.payment_id END,
+    'amount', CASE 
+      WHEN TG_TABLE_NAME = 'payments' THEN NEW.final_amount
+      ELSE COALESCE(NEW.amount_paid, 0)
+    END,
+    'trigger_source', TG_TABLE_NAME,
+    'timestamp', NOW()
+  )::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers for different payment completion scenarios
+CREATE TRIGGER payment_completed_trigger           -- Paid purchases
+  AFTER UPDATE OF status ON payments
+  FOR EACH ROW WHEN (OLD.status != 'completed' AND NEW.status = 'completed' AND NEW.final_amount > 0)
+  EXECUTE FUNCTION notify_payment_completion();
+
+CREATE TRIGGER membership_completed_trigger        -- Free memberships  
+  AFTER INSERT OR UPDATE OF payment_status ON user_memberships
+  FOR EACH ROW WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
+  EXECUTE FUNCTION notify_payment_completion();
+
+CREATE TRIGGER registration_completed_trigger      -- Free registrations
+  AFTER INSERT OR UPDATE OF payment_status ON user_registrations  
+  FOR EACH ROW WHEN (NEW.payment_status = 'paid' AND COALESCE(NEW.amount_paid, 0) = 0)
+  EXECUTE FUNCTION notify_payment_completion();
+```
+
+**Architecture Benefits:**
+- **Single Processing Pipeline:** Unified logic for paid and free purchases
+- **Hybrid Processing:** Immediate attempt + batch fallback for reliability
+- **Zero Data Loss:** Staging-first approach for external integrations
+- **No Code Duplication:** Eliminates separate sync API and webhook logic
+
+### 12. Staging-First Xero Integration
+
+**Pattern Used:** Always create staging records before attempting external API sync
+
+**Enhanced Xero Tables:**
+```sql
+-- Enhanced with staging capabilities
+xero_invoices (
+  sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'
+  staged_at: TIMESTAMP WITH TIME ZONE           -- When staged for sync
+  staging_metadata: JSONB                       -- Validation and context data
+  -- ... existing fields
+)
+
+xero_payments (
+  sync_status: 'pending' | 'staged' | 'synced' | 'failed' | 'needs_update'  
+  staged_at: TIMESTAMP WITH TIME ZONE           -- When staged for sync
+  staging_metadata: JSONB                       -- Validation and context data
+  -- ... existing fields
+)
+
+-- Staging-optimized indexes
+CREATE INDEX idx_xero_invoices_staging ON xero_invoices(sync_status, staged_at) 
+  WHERE sync_status IN ('pending', 'staged');
+CREATE INDEX idx_xero_payments_staging ON xero_payments(sync_status, staged_at)
+  WHERE sync_status IN ('pending', 'staged');
+```
+
+**Processing Flow:**
+```typescript
+// Phase 1: Always create staging records (never fails)
+await createXeroStagingRecords(paymentData)
+
+// Phase 2: Send confirmation emails  
+await sendConfirmationEmails(paymentData)
+
+// Phase 3: Batch sync all pending Xero records
+await syncPendingXeroRecords()
+
+// Phase 4: Update discount usage tracking
+await updateDiscountUsage(paymentData)
+```
+
+**Why This Pattern:**
+- **Guaranteed Data Capture:** Staging always succeeds, external API failures don't lose data
+- **Admin Recovery:** Manual retry of failed syncs from admin interface
+- **Batch Efficiency:** Process multiple records together for better performance
+- **Clean Separation:** Payment success never depends on external API status
+
+### 13. Hybrid Payment Completion Strategy
+
+**Architecture:** Combines immediate user feedback with reliable async processing
+
+**Sync API Flow (Immediate UX):**
+```typescript
+// 1. Create business records with payment_status = 'paid'
+// 2. User sees "Membership Active!" immediately
+// 3. Return success to close payment form
+```
+
+**Async Processing Flow (Reliable):**
+```typescript
+// 1. Database trigger fires on payment_status = 'paid'
+// 2. PostgreSQL notification sent via pg_notify()
+// 3. Application listener processes: emails, Xero, discount tracking
+// 4. Webhook provides safety net if sync API fails
+```
+
+**Benefits:**
+- **Fast User Experience:** Immediate feedback on payment completion
+- **Reliable Processing:** Async operations don't block user interface
+- **Webhook Safety Net:** Catches payments if sync API fails
+- **No Duplicate Processing:** Idempotent checks prevent double-execution
+
+### 14. Payment Record Relationships
+
+**Foreign Key Strategy:** Direct links from business records to payment transactions
+
+```sql
+-- Establishes clear payment relationships
+user_memberships.payment_id → payments.id
+user_registrations.payment_id → payments.id
+
+-- Enables payment tracking queries
+SELECT u.*, p.final_amount, p.status 
+FROM user_memberships u
+LEFT JOIN payments p ON u.payment_id = p.id
+WHERE u.user_id = ?;
+```
+
+**Design Decision:** Added nullable foreign keys rather than using existing `stripe_payment_intent_id`
+- **Benefits:** Handles free purchases, cleaner relationships, better type safety
+- **Migration:** Backward compatible (nullable), existing code continues working
+
+### 15. Email Processing Architecture
+
+**Pattern Used:** Move email sending from sync APIs to async triggers
+
+**Before:** Email sent immediately in sync API (blocks user, fails if email API down)
+**After:** Email sent async via trigger (fast user response, reliable delivery)
+
+```typescript
+// Sync API (fast response)
+await createMembershipRecord({ payment_status: 'paid' })
+return { success: true, membership_id }
+
+// Async trigger (reliable processing) 
+→ Database trigger fires
+→ Email sent via trigger processor
+→ Handles API failures gracefully
+```
+
+**Benefits for Zero-Dollar Purchases:**
+- Free memberships/registrations now send confirmation emails
+- Previously missing feature due to no Stripe webhook for $0
+- Unified email flow for all purchase types
+
+### Migration History
+
+**2025-07-12 Payment Refactor Migrations:**
+1. `add-payment-foreign-keys.sql` - Added payment_id columns to business tables
+2. `enhance-xero-staging.sql` - Added staging fields and enhanced sync_status enums  
+3. `add-payment-triggers.sql` - Created unified trigger system for payment completion
+
+**Backward Compatibility:** All migrations are purely additive
+- Existing code continues working unchanged
+- New features can be enabled incrementally via feature flags
+- No breaking changes to current payment flows
 
 ## Future Considerations
 

@@ -1,0 +1,5 @@
+{"timestamp":"2025-07-13T13:05:48.899Z","level":"info","category":"system","operation":"server-startup","message":"Next.js server starting up (Node.js runtime)","metadata":{"nodeVersion":"v22.16.0","platform":"linux","arch":"x64","environment":"development","pid":44817}}
+{"timestamp":"2025-07-13T13:05:49.708Z","level":"info","category":"system","operation":"sentry-init","message":"Sentry monitoring initialized"}
+{"timestamp":"2025-07-13T13:05:50.390Z","level":"info","category":"system","operation":"service-init-start","message":"Initializing background services for server environment","metadata":{"environment":"server","nodeEnv":"development","processId":44817}}
+{"timestamp":"2025-07-13T13:05:50.410Z","level":"info","category":"system","operation":"service-init-complete","message":"All background services initialized successfully"}
+{"timestamp":"2025-07-13T13:05:50.410Z","level":"info","category":"system","operation":"server-ready","message":"Next.js server fully initialized and ready","metadata":{"runtime":"nodejs"}}

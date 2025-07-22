@@ -176,7 +176,7 @@ export default function EditRegistrationCategoryPage() {
     (isCustom && formData.custom_name.trim()) || 
     (!isCustom && formData.category_id)
   ) && 
-  formData.price && parseInt(formData.price) > 0 &&
+  formData.price !== undefined && formData.price !== '' && parseInt(formData.price) >= 0 &&
   formData.accounting_code.trim()
 
   if (!category || !registration) {

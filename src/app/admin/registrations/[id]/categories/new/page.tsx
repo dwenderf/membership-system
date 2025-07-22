@@ -268,7 +268,7 @@ export default function NewRegistrationCategoryPage() {
     (isCustom && formData.custom_name.trim()) || 
     (!isCustom && formData.category_id)
   ) && 
-  formData.price && parseInt(formData.price) > 0 &&
+  formData.price !== undefined && formData.price !== '' && parseInt(formData.price) >= 0 &&
   formData.accounting_code.trim() &&
   (!formData.max_capacity || parseInt(formData.max_capacity) > 0) &&
   !categoryAlreadyExists

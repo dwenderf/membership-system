@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/xero-keep-alive",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/xero-batch-sync",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

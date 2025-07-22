@@ -20,22 +20,29 @@ export function formatDate(date: Date): string {
 
 /**
  * Formats a timestamp string to localized date and time display
- * using native JavaScript timezone conversion (handles all edge cases properly)
+ * using the EXACT same logic as the timing edit page formatForInput function
  */
 export function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return 'Not set'
   
-  // Parse timestamp and use native toLocaleString for proper timezone conversion
+  // Use the EXACT same formatForInput logic from timing edit page
   const date = new Date(timestamp)
+  // Convert to local timezone and format for datetime-local input
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const datetimeLocal = `${year}-${month}-${day}T${hours}:${minutes}`
   
-  // Use native Intl.DateTimeFormat for reliable timezone conversion
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short', 
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-  }).format(date)
+  // Parse the datetime-local string back to a Date for display formatting
+  const localDate = new Date(datetimeLocal)
+  
+  // Format for display - this should match what the timing edit form shows
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const displayHour = localDate.getHours()
+  const hour12 = displayHour === 0 ? 12 : displayHour > 12 ? displayHour - 12 : displayHour
+  const ampm = displayHour >= 12 ? 'PM' : 'AM'
+  
+  return `${monthNames[localDate.getMonth()]} ${localDate.getDate()}, ${localDate.getFullYear()}, ${hour12}:${String(localDate.getMinutes()).padStart(2, '0')} ${ampm}`
 }

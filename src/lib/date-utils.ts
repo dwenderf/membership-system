@@ -20,31 +20,35 @@ export function formatDate(date: Date): string {
 
 /**
  * Formats a timestamp string to localized date and time display
- * using the same UTC to local conversion logic as the timing edit page
+ * using the exact same UTC to local conversion logic as the timing edit page
  */
 export function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return 'Not set'
   
-  // Parse the timestamp - this automatically converts UTC to local time
+  // Use the exact same logic as the timing edit page formatForInput function
   const date = new Date(timestamp)
   
-  // Extract local time components (same approach as timing edit page)
+  // Extract local timezone components exactly like timing edit page (lines 51-55)
   const year = date.getFullYear()
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
+  const month = String(date.getMonth() + 1).padStart(2, '0') 
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
   
-  // Format month name
+  // This gives us the local time components that the timing edit page uses
+  const localHours = parseInt(hours)
+  const localMinutes = parseInt(minutes)
+  
+  // Format for display
   const monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ]
   
   // Convert to 12-hour format
-  const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
-  const ampm = hours >= 12 ? 'PM' : 'AM'
-  const minutesStr = String(minutes).padStart(2, '0')
+  const hour12 = localHours === 0 ? 12 : localHours > 12 ? localHours - 12 : localHours
+  const ampm = localHours >= 12 ? 'PM' : 'AM'
+  const minutesDisplay = String(localMinutes).padStart(2, '0')
   
-  return `${monthNames[month - 1]} ${day}, ${year}, ${hour12}:${minutesStr} ${ampm}`
+  return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}, ${hour12}:${minutesDisplay} ${ampm}`
 }

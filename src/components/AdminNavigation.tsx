@@ -46,8 +46,10 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
       href: '/admin/discount-categories', 
       current: pathname.startsWith('/admin/discount-categories') || 
                pathname.startsWith('/admin/accounting-codes') || 
-               pathname.startsWith('/admin/accounting'),
+               pathname.startsWith('/admin/accounting') ||
+               pathname.startsWith('/admin/registration-categories'),
       submenu: [
+        { name: 'Registration Categories', href: '/admin/registration-categories' },
         { name: 'Discount Categories', href: '/admin/discount-categories' },
         { name: 'Accounting Codes', href: '/admin/accounting-codes' },
         { name: 'Xero Integration', href: '/admin/accounting' }

@@ -189,6 +189,8 @@ export default async function RegistrationCategoriesPage() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -20,21 +20,31 @@ export function formatDate(date: Date): string {
 
 /**
  * Formats a timestamp string to localized date and time display
- * ensuring proper timezone conversion from UTC to local time
+ * using the same UTC to local conversion logic as the timing edit page
  */
 export function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return 'Not set'
   
-  // Parse the timestamp and ensure it's treated as UTC if it doesn't have timezone info
+  // Parse the timestamp - this automatically converts UTC to local time
   const date = new Date(timestamp)
   
-  // Use toLocaleString with explicit timezone to ensure proper conversion
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  })
+  // Extract local time components (same approach as timing edit page)
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  
+  // Format month name
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ]
+  
+  // Convert to 12-hour format
+  const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  const minutesStr = String(minutes).padStart(2, '0')
+  
+  return `${monthNames[month - 1]} ${day}, ${year}, ${hour12}:${minutesStr} ${ampm}`
 }

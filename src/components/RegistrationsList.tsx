@@ -76,7 +76,7 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true, ba
 }
 
 function RegistrationItem({ registration }: { registration: Registration }) {
-  const status = getRegistrationStatus(registration)
+  const status = getRegistrationStatus(registration as any)
   
   return (
     <li>
@@ -133,19 +133,19 @@ function RegistrationItem({ registration }: { registration: Registration }) {
 export default function RegistrationsList({ registrations }: RegistrationsListProps) {
   // Group registrations by status
   const activeRegistrations = registrations.filter(reg => {
-    const status = getRegistrationStatus(reg)
+    const status = getRegistrationStatus(reg as any)
     return status === 'open' || status === 'presale'
   })
   
   const comingSoonRegistrations = registrations.filter(reg => {
-    const status = getRegistrationStatus(reg)
+    const status = getRegistrationStatus(reg as any)
     return status === 'coming_soon'
   })
   
   const draftRegistrations = registrations.filter(reg => !reg.is_active)
   
   const closedRegistrations = registrations.filter(reg => {
-    const status = getRegistrationStatus(reg)
+    const status = getRegistrationStatus(reg as any)
     return status === 'expired'
   })
 

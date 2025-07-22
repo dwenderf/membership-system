@@ -111,14 +111,14 @@ export default function DeleteAccountSection({ user }: DeleteAccountSectionProps
                 <button
                   onClick={resetFlow}
                   disabled={isDeleting}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] text-center"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteAccount}
                   disabled={isDeleting || confirmationText !== 'DELETE MY ACCOUNT'}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] text-center"
                 >
                   {isDeleting ? 'Deleting Account...' : 'Permanently Delete Account'}
                 </button>
@@ -166,13 +166,13 @@ export default function DeleteAccountSection({ user }: DeleteAccountSectionProps
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowInitialWarning(false)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium min-w-[120px] text-center"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => setShowFinalConfirmation(true)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium min-w-[120px] text-center"
                 >
                   Continue to Delete Account
                 </button>
@@ -193,7 +193,7 @@ export default function DeleteAccountSection({ user }: DeleteAccountSectionProps
         </div>
         <button
           onClick={() => setShowInitialWarning(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-md text-sm font-medium"
+          className="bg-white hover:bg-gray-50 text-red-600 border border-red-300 hover:border-red-400 px-4 py-2 rounded-md text-sm font-medium min-w-[120px] text-center transition-colors"
         >
           Delete Account
         </button>

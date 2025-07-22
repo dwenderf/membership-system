@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { xero } from '@/lib/xero-client'
+import { xero } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {

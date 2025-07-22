@@ -33,7 +33,7 @@ export default function XeroIntegrationPage() {
   const [status, setStatus] = useState<XeroStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const { showToast } = useToast()
+  const { showToast, showSuccess, showError } = useToast()
 
   useEffect(() => {
     fetchStatus()
@@ -46,11 +46,11 @@ export default function XeroIntegrationPage() {
         const data = await response.json()
         setStatus(data)
       } else {
-        showToast('Failed to fetch Xero status', 'error')
+        showError('Failed to fetch Xero status')
       }
     } catch (error) {
       console.error('Error fetching Xero status:', error)
-      showToast('Error loading Xero integration status', 'error')
+      showError('Error loading Xero integration status')
     } finally {
       setLoading(false)
     }
@@ -63,11 +63,11 @@ export default function XeroIntegrationPage() {
         const data = await response.json()
         window.location.href = data.consentUrl
       } else {
-        showToast('Failed to initiate Xero connection', 'error')
+        showError('Failed to initiate Xero connection')
       }
     } catch (error) {
       console.error('Error connecting to Xero:', error)
-      showToast('Error initiating Xero connection', 'error')
+      showError('Error initiating Xero connection')
     }
   }
 
@@ -84,20 +84,20 @@ export default function XeroIntegrationPage() {
       })
 
       if (response.ok) {
-        showToast('Xero integration disconnected successfully', 'success')
+        showSuccess('Xero integration disconnected successfully')
         fetchStatus()
       } else {
-        showToast('Failed to disconnect Xero integration', 'error')
+        showError('Failed to disconnect Xero integration')
       }
     } catch (error) {
       console.error('Error disconnecting Xero:', error)
-      showToast('Error disconnecting Xero integration', 'error')
+      showError('Error disconnecting Xero integration')
     }
   }
 
   const handleBulkSync = async (type: 'contacts' | 'invoices' | 'payments') => {
     if (!status?.connections.length) {
-      showToast('No Xero connections available', 'error')
+      showError('No Xero connections available')
       return
     }
 
@@ -115,16 +115,16 @@ export default function XeroIntegrationPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          showToast(data.message, 'success')
+          showSuccess(data.message)
         } else {
-          showToast(data.message || `Failed to sync ${type}`, 'error')
+          showError(data.message || `Failed to sync ${type}`)
         }
       } else {
-        showToast(`Failed to sync ${type}`, 'error')
+        showError(`Failed to sync ${type}`)
       }
     } catch (error) {
       console.error(`Error syncing ${type}:`, error)
-      showToast(`Error syncing ${type}`, 'error')
+      showError(`Error syncing ${type}`)
     } finally {
       setSyncing(false)
     }

@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
-import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero-invoices'
+import { createAdminClient } from '@/lib/supabase/server'
+import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
+import { logger } from '@/lib/logging/logger'
+import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
+import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config
 import '../../../../sentry.server.config'
 import * as Sentry from '@sentry/nextjs'
-import { setPaymentContext, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
+import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 })
 
 // Handle free membership purchases (amount = 0)
@@ -39,6 +43,8 @@ async function handleFreeMembership({
   startTime: number
 }) {
   try {
+    const adminSupabase = createAdminClient()
+    
     // Fetch membership and user details if not provided
     if (!membership) {
       const { data: membershipData, error: membershipError } = await supabase
@@ -68,95 +74,92 @@ async function handleFreeMembership({
       userProfile = profileData
     }
 
-    // Create Xero invoice for zero payment
-    let invoiceNumber = null
-    let xeroInvoiceId = null
+    // Stage Xero records FIRST - fail fast if this fails
+    logger.logPaymentProcessing(
+      'staging-creation-start',
+      'Creating Xero staging record for free membership',
+      { 
+        userId: user.id, 
+        membershipId,
+        durationMonths
+      },
+      'info'
+    )
+
+    const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
     
-    try {
-      console.log('🔄 Starting Xero invoice creation for free membership...')
-      // Calculate full membership price
-      const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-      
-      // Build invoice data for Xero - always show full membership price
-      const paymentItems = [{
-        item_type: 'membership' as const,
-        item_id: membershipId,
-        amount: basePrice, // Full membership price
-        description: `${membership.name} - ${durationMonths} months`,
-        accounting_code: membership.accounting_code
-      }]
-
-      // Add financial assistance discount for free memberships
-      const discountCodesUsed = []
-      if (paymentOption === 'assistance' && basePrice > 0) {
-        discountCodesUsed.push({
-          code: 'FINANCIAL_ASSISTANCE',
-          amount_saved: basePrice, // Full price was discounted
-          category_name: 'Financial Assistance',
-          accounting_code: undefined // Will use donation_given_default from system codes
-        })
-      }
-
-      // Add donation item if applicable (even for $0 memberships, someone might donate)
-      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
-        paymentItems.push({
-          item_type: 'donation' as const,
+    // Get accounting codes from system_accounting_codes
+    const { data: accountingCodes } = await supabase
+      .from('system_accounting_codes')
+      .select('code_type, accounting_code')
+      .in('code_type', ['donation_given_default', 'donation_received_default'])
+    
+    const discountAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_given_default')?.accounting_code
+    const donationAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_received_default')?.accounting_code
+    
+    const stagingData: StagingPaymentData = {
+      user_id: user.id,
+      total_amount: membershipAmount,
+      discount_amount: membershipAmount, // Full discount for free membership
+      final_amount: donationAmount || 0,
+      payment_items: [
+        {
+          item_type: 'membership' as const,
           item_id: membershipId,
-          amount: donationAmount,
-          description: 'Donation',
-          accounting_code: undefined // Will use donation_received_default from system codes
-        })
-      }
-
-      const xeroInvoiceData: PrePaymentInvoiceData = {
-        user_id: user.id,
-        total_amount: basePrice + (donationAmount || 0),
-        discount_amount: discountCodesUsed.length > 0 ? discountCodesUsed[0].amount_saved : 0,
-        final_amount: donationAmount || 0, // $0 after discount + optional donation
-        payment_items: paymentItems,
-        discount_codes_used: discountCodesUsed
-      }
-
-      console.log('📝 Calling createXeroInvoiceBeforePayment with data:', JSON.stringify(xeroInvoiceData, null, 2))
-      const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
-        markAsAuthorised: true // Mark as AUTHORISED since it's fully paid ($0 + optional donation)
-      })
-      console.log('📋 Invoice result:', invoiceResult)
-      
-      if (invoiceResult.success) {
-        invoiceNumber = invoiceResult.invoiceNumber
-        xeroInvoiceId = invoiceResult.xeroInvoiceId
-        console.log(`✅ Created Xero invoice ${invoiceNumber} for free membership (marked as AUTHORISED)`)
-      } else {
-        console.warn(`⚠️ Failed to create Xero invoice for free membership: ${invoiceResult.error}`)
-      }
-    } catch (error) {
-      console.error('❌ Caught error in API endpoint:', error)
-      console.warn('⚠️ Error creating Xero invoice for free membership:', error)
-      
-      // Capture Xero invoice creation errors in Sentry for visibility
-      Sentry.withScope((scope) => {
-        scope.setTag('integration', 'xero')
-        scope.setTag('operation', 'free_membership_invoice')
-        scope.setTag('user_id', user.id)
-        scope.setLevel('warning') // Non-critical since payment still succeeds
-        scope.setContext('free_membership_invoice_error', {
-          user_id: user.id,
-          membership_id: membershipId,
-          duration_months: durationMonths,
-          donation_amount: donationAmount,
-          error_message: error instanceof Error ? error.message : 'Unknown error'
-        })
-        
-        if (error instanceof Error) {
-          Sentry.captureException(error)
-        } else {
-          Sentry.captureMessage(`Free membership Xero invoice creation failed: ${error}`, 'warning')
+          amount: membershipAmount, // Full membership price
+          description: `Membership: ${membership.name} - ${durationMonths} months`,
+          accounting_code: membership.accounting_code
         }
+      ],
+      discount_codes_used: [
+        {
+          code: 'FREE_MEMBERSHIP',
+          amount_saved: membershipAmount,
+          category_name: 'Free Membership Discount',
+          accounting_code: discountAccountingCode
+        }
+      ],
+      stripe_payment_intent_id: null
+    }
+
+    // Add donation item if applicable
+    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+      stagingData.payment_items.push({
+        item_type: 'donation' as const,
+        item_id: membershipId,
+        amount: donationAmount,
+        description: `Donation - ${membership.name}`,
+        accounting_code: donationAccountingCode
       })
     }
 
+    const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: true })
+    if (!stagingSuccess) {
+      logger.logPaymentProcessing(
+        'staging-creation-failed',
+        'Failed to create Xero staging record for free membership',
+        { 
+          userId: user.id, 
+          membershipId
+        },
+        'error'
+      )
+      capturePaymentError(new Error('Failed to stage Xero records'), paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to process purchase - Xero staging failed' }, { status: 500 })
+    }
+
+    logger.logPaymentProcessing(
+      'staging-creation-success',
+      'Successfully created Xero staging record for free membership',
+      { 
+        userId: user.id, 
+        membershipId
+      },
+      'info'
+    )
+
     // Create payment record with $0 amount and completed status
+    const now = new Date().toISOString()
     const { data: paymentRecord, error: paymentError } = await supabase
       .from('payments')
       .insert({
@@ -166,6 +169,7 @@ async function handleFreeMembership({
         stripe_payment_intent_id: null, // No Stripe payment for free
         status: 'completed',
         payment_method: 'free',
+        completed_at: now,
       })
       .select()
       .single()
@@ -175,32 +179,41 @@ async function handleFreeMembership({
       return NextResponse.json({ error: 'Failed to create payment record' }, { status: 500 })
     }
 
-    // Create payment item records
-    const paymentItems = [{
-      payment_id: paymentRecord.id,
-      item_type: 'membership',
-      item_id: membershipId,
-      amount: 0,
-    }]
+    // Update staging records with payment_id now that we have it
+    logger.logPaymentProcessing(
+      'staging-payment-link',
+      'Linking payment record to staging records',
+      { 
+        userId: user.id, 
+        paymentId: paymentRecord.id,
+        membershipId
+      },
+      'info'
+    )
 
-    // Add donation item if applicable
-    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
-      paymentItems.push({
-        payment_id: paymentRecord.id,
-        item_type: 'donation',
-        item_id: membershipId,
-        amount: donationAmount,
-      })
+    const { error: stagingUpdateError } = await supabase
+      .from('xero_invoices')
+      .update({ payment_id: paymentRecord.id })
+      .eq('staging_metadata->>user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+
+    if (stagingUpdateError) {
+      logger.logPaymentProcessing(
+        'staging-payment-link-failed',
+        'Failed to link payment to staging records',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          error: stagingUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the whole transaction, but log the issue
     }
 
-    const { error: paymentItemError } = await supabase
-      .from('payment_items')
-      .insert(paymentItems)
-
-    if (paymentItemError) {
-      console.error('Error creating payment item records:', paymentItemError)
-      capturePaymentError(paymentItemError, paymentContext, 'warning')
-    }
+    // Payment items are now tracked in xero_invoice_line_items via the staging system
+    // No need to create separate payment_items records
 
 
     // Create the membership record directly (similar to webhook processing)
@@ -208,7 +221,7 @@ async function handleFreeMembership({
     const endDate = new Date(startDate)
     endDate.setMonth(endDate.getMonth() + durationMonths)
 
-    const { error: membershipError } = await supabase
+    const { data: membershipRecord, error: membershipError } = await supabase
       .from('user_memberships')
       .insert({
         user_id: user.id,
@@ -221,10 +234,59 @@ async function handleFreeMembership({
         amount_paid: 0,
         purchased_at: new Date().toISOString(),
       })
+      .select()
+      .single()
 
-    if (membershipError) {
-      capturePaymentError(membershipError, paymentContext, 'error')
+    if (membershipError || !membershipRecord) {
+      capturePaymentError(membershipError || new Error('No membership record returned'), paymentContext, 'error')
       return NextResponse.json({ error: 'Failed to create membership' }, { status: 500 })
+    }
+
+    // Update user_memberships record with payment_id
+    const { error: membershipUpdateError } = await adminSupabase
+      .from('user_memberships')
+      .update({ payment_id: paymentRecord.id })
+      .eq('id', membershipRecord.id)
+
+    if (membershipUpdateError) {
+      logger.logPaymentProcessing(
+        'membership-payment-link-failed',
+        'Failed to link payment to membership record',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          membershipId: membershipRecord.id,
+          error: membershipUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the whole transaction, but log the issue
+    }
+
+    // Trigger payment completion processor for emails and post-processing
+    try {
+      await paymentProcessor.processPaymentCompletion({
+        event_type: 'user_memberships',
+        record_id: membershipRecord.id,
+        user_id: user.id,
+        payment_id: paymentRecord.id, // Now we have the payment_id
+        amount: 0,
+        trigger_source: 'free_membership',
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      // Email staging failures are non-critical - don't fail the transaction
+      logger.logPaymentProcessing(
+        'free-membership-email-error',
+        'Failed to stage confirmation email for free membership',
+        { 
+          userId: user.id, 
+          membershipId,
+          membershipRecordId: membershipRecord.id,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'warn'
+      )
     }
 
     // Log successful operation
@@ -235,13 +297,20 @@ async function handleFreeMembership({
       success: true,
       paymentIntentId: null,
       isFree: true,
-      message: 'Free membership created successfully',
-      invoiceNumber: invoiceNumber || undefined,
-      xeroInvoiceId: xeroInvoiceId || undefined
+      message: 'Free membership created successfully - Xero invoice will be created via batch processing'
     })
 
   } catch (error) {
-    console.error('Error handling free membership:', error)
+    logger.logPaymentProcessing(
+      'free-membership-error',
+      'Error handling free membership',
+      { 
+        userId: user.id, 
+        membershipId,
+        error: error instanceof Error ? error.message : String(error)
+      },
+      'error'
+    )
     capturePaymentError(error, paymentContext, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -263,11 +332,12 @@ export async function POST(request: NextRequest) {
     const { membershipId, durationMonths, amount, paymentOption, assistanceAmount, donationAmount } = body
     
     // Set payment context for Sentry
-    const paymentContext = {
+    const paymentContext: PaymentContext = {
       userId: user.id,
       userEmail: user.email,
       membershipId: membershipId,
       amountCents: amount,
+      paymentIntentId: undefined, // Will be set after Stripe payment intent creation
       endpoint: '/api/create-payment-intent',
       operation: 'payment_intent_creation'
     }
@@ -336,6 +406,96 @@ export async function POST(request: NextRequest) {
     }
 
     const membershipAmount = getMembershipAmount()
+    
+    // Calculate full membership price for assistance scenarios
+    const fullMembershipPrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
+    const discountAmount = paymentOption === 'assistance' ? (fullMembershipPrice - (assistanceAmount || 0)) : 0
+
+    // Get accounting codes from system_accounting_codes
+    const { data: accountingCodes, error: accountingError } = await supabase
+      .from('system_accounting_codes')
+      .select('code_type, accounting_code')
+      .in('code_type', ['donation_received_default', 'donation_given_default'])
+    
+    
+    const donationAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_received_default')?.accounting_code
+    const discountAccountingCode = accountingCodes?.find(code => code.code_type === 'donation_given_default')?.accounting_code
+
+    // Stage Xero records FIRST - fail fast if this fails
+    logger.logPaymentProcessing(
+      'staging-creation-start',
+      'Creating Xero staging record for paid membership',
+      { 
+        userId: user.id, 
+        membershipId,
+        durationMonths,
+        amount: amount
+      },
+      'info'
+    )
+
+    const stagingData: StagingPaymentData = {
+      user_id: user.id,
+      total_amount: paymentOption === 'assistance' ? fullMembershipPrice : amount,
+      discount_amount: discountAmount,
+      final_amount: amount,
+      payment_items: [
+        {
+          item_type: 'membership' as const,
+          item_id: membershipId,
+          amount: paymentOption === 'assistance' ? fullMembershipPrice : membershipAmount,
+          description: `Membership: ${membership.name} - ${durationMonths} months`,
+          accounting_code: membership.accounting_code
+        }
+      ],
+      discount_codes_used: paymentOption === 'assistance' && discountAmount > 0 ? [
+        {
+          code: 'FINANCIAL_ASSISTANCE',
+          amount_saved: discountAmount,
+          category_name: 'Financial Assistance',
+          accounting_code: discountAccountingCode
+        }
+      ] : [],
+      stripe_payment_intent_id: null // Will be updated after Stripe intent creation
+    }
+
+    // Add donation item if applicable
+    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+      stagingData.payment_items.push({
+        item_type: 'donation' as const,
+        item_id: membershipId,
+        amount: donationAmount,
+        description: `Donation - ${membership.name}`,
+        accounting_code: donationAccountingCode
+      })
+    }
+
+    const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
+    if (!stagingSuccess) {
+      logger.logPaymentProcessing(
+        'staging-creation-failed',
+        'Failed to create Xero staging record for paid membership',
+        { 
+          userId: user.id, 
+          membershipId,
+          amount: amount
+        },
+        'error'
+      )
+      capturePaymentError(new Error('Failed to stage Xero records'), paymentContext, 'error')
+      return NextResponse.json({ error: 'Failed to process purchase - Xero staging failed' }, { status: 500 })
+    }
+
+    logger.logPaymentProcessing(
+      'staging-creation-success',
+      'Successfully created Xero staging record for paid membership',
+      { 
+        userId: user.id, 
+        membershipId,
+        amount: amount
+      },
+      'info'
+    )
 
     // Create description for payment intent
     const getDescription = () => {
@@ -384,6 +544,53 @@ export async function POST(request: NextRequest) {
     // Update payment context with payment intent ID
     paymentContext.paymentIntentId = paymentIntent.id
 
+    // Update staging records with Stripe payment intent ID
+    logger.logPaymentProcessing(
+      'staging-stripe-link',
+      'Linking Stripe payment intent to staging records',
+      { 
+        userId: user.id, 
+        paymentIntentId: paymentIntent.id,
+        membershipId
+      },
+      'info'
+    )
+
+    // First get the current staging metadata, then update it
+    const { data: existingRecord } = await supabase
+      .from('xero_invoices')
+      .select('staging_metadata')
+      .eq('staging_metadata->>user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+      .single()
+
+    const updatedMetadata = {
+      ...existingRecord?.staging_metadata,
+      stripe_payment_intent_id: paymentIntent.id
+    }
+
+    const { error: stagingStripeUpdateError } = await supabase
+      .from('xero_invoices')
+      .update({ staging_metadata: updatedMetadata })
+      .eq('staging_metadata->>user_id', user.id)
+      .eq('sync_status', 'staged')
+      .is('payment_id', null)
+
+    if (stagingStripeUpdateError) {
+      logger.logPaymentProcessing(
+        'staging-stripe-link-failed',
+        'Failed to link Stripe payment intent to staging records',
+        { 
+          userId: user.id, 
+          paymentIntentId: paymentIntent.id,
+          error: stagingStripeUpdateError.message
+        },
+        'error'
+      )
+      // Don't fail the transaction, but log the issue
+    }
+
     const totalAmount = amount // This is the final amount sent from frontend
 
     // Create payment record in database
@@ -402,39 +609,54 @@ export async function POST(request: NextRequest) {
 
 
     if (paymentError) {
-      console.error('Error creating payment record:', paymentError)
+      logger.logPaymentProcessing(
+        'payment-record-error',
+        'Error creating payment record for paid membership',
+        { 
+          userId: user.id, 
+          membershipId,
+          paymentIntentId: paymentIntent.id,
+          error: paymentError.message
+        },
+        'error'
+      )
       // Log warning but don't fail the request since Stripe intent was created
       capturePaymentError(paymentError, paymentContext, 'warning')
     } else if (paymentRecord) {
-      // Create payment item records
-      const paymentItems = []
+      // Link payment record to staging records
+      logger.logPaymentProcessing(
+        'staging-payment-link',
+        'Linking payment record to staging records',
+        { 
+          userId: user.id, 
+          paymentId: paymentRecord.id,
+          paymentIntentId: paymentIntent.id
+        },
+        'info'
+      )
 
-      // Always add membership item
-      paymentItems.push({
-        payment_id: paymentRecord.id,
-        item_type: 'membership',
-        item_id: membershipId,
-        amount: membershipAmount,
-      })
+      const { error: stagingPaymentUpdateError } = await supabase
+        .from('xero_invoices')
+        .update({ payment_id: paymentRecord.id })
+        .eq('staging_metadata->>user_id', user.id)
+        .eq('sync_status', 'staged')
+        .is('payment_id', null)
 
-      // Add donation item if applicable
-      if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
-        paymentItems.push({
-          payment_id: paymentRecord.id,
-          item_type: 'donation',
-          item_id: membershipId, // Link to membership for context
-          amount: donationAmount,
-        })
+      if (stagingPaymentUpdateError) {
+        logger.logPaymentProcessing(
+          'staging-payment-link-failed',
+          'Failed to link payment to staging records',
+          { 
+            userId: user.id, 
+            paymentId: paymentRecord.id,
+            error: stagingPaymentUpdateError.message
+          },
+          'error'
+        )
+        // Don't fail the transaction, but log the issue
       }
-
-      const { error: paymentItemError } = await supabase
-        .from('payment_items')
-        .insert(paymentItems)
-
-      if (paymentItemError) {
-        console.error('Error creating payment item records:', paymentItemError)
-        capturePaymentError(paymentItemError, paymentContext, 'warning')
-      }
+      // Payment items are now tracked in xero_invoice_line_items via the staging system
+      // No need to create separate payment_items records
     }
 
     // Log successful operation
@@ -446,7 +668,14 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error creating payment intent:', error)
+    logger.logPaymentProcessing(
+      'payment-intent-error',
+      'Error creating payment intent',
+      { 
+        error: error instanceof Error ? error.message : String(error)
+      },
+      'error'
+    )
     
     // Capture error in Sentry
     capturePaymentError(error, {

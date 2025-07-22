@@ -9,7 +9,7 @@ import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 })
 
 export async function POST(request: NextRequest) {
@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
       paymentIntentId: paymentIntentId,
       categoryId: categoryId,
       endpoint: '/api/confirm-registration-payment',
-      operation: 'registration_payment_confirmation'
+      operation: 'registration_payment_confirmation',
+      amountCents: 0, // Will be updated after payment intent retrieval
+      registrationId: '' // Will be updated after payment intent retrieval
     }
     setPaymentContext(paymentContext)
     
@@ -147,39 +149,47 @@ export async function POST(request: NextRequest) {
       
       console.log(`Existing record for reservation ${reservationId}:`, existingRecord)
       
-      // Update existing reservation to paid status via standardized API
-      try {
-        const { getBaseUrl } = await import('@/lib/url-utils')
-        const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cookie': request.headers.get('cookie') || '',
-          },
-          body: JSON.stringify({
-            registrationId: registrationId,
-            categoryId: categoryId,
-            status: 'paid',
-            userMembershipId: activeMembership?.id || null
-          }),
-        })
+      // Check if webhook has already processed this payment
+      if (existingRecord?.payment_status === 'paid') {
+        console.log('✅ Payment already processed by webhook, using existing record')
+        userRegistration = existingRecord
+        registrationError = null
+        // Skip the API call since webhook already handled it
+              } else {
+          // Update existing reservation to paid status via standardized API
+          try {
+            const { getBaseUrl } = await import('@/lib/url-utils')
+            const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': request.headers.get('cookie') || '',
+              },
+              body: JSON.stringify({
+                registrationId: registrationId,
+                categoryId: categoryId,
+                status: 'paid',
+                userMembershipId: activeMembership?.id || null
+              }),
+            })
 
-        console.log(`Status update response:`, statusResponse.status)
-        
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          userRegistration = statusData.registration
-          registrationError = null
-          console.log(`✅ Updated registration to paid via API`)
-        } else {
-          const statusError = await statusResponse.json()
-          registrationError = new Error(statusError.error || 'Failed to update status')
-          console.log(`❌ Failed to update status:`, statusError)
+            console.log(`Status update response:`, statusResponse.status)
+            
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json()
+              userRegistration = statusData.registration
+              registrationError = null
+              console.log(`✅ Updated registration to paid via API`)
+            } else {
+              const statusError = await statusResponse.json()
+              registrationError = new Error(statusError.error || 'Failed to update status')
+              console.log(`❌ Failed to update status:`, statusError)
+            }
+          } catch (apiError) {
+            registrationError = apiError as Error
+            console.log(`❌ API call error:`, apiError)
+          }
         }
-      } catch (apiError) {
-        registrationError = apiError as Error
-        console.log(`❌ API call error:`, apiError)
-      }
 
       // If reservation not found or expired, check if it was already processed
       if (registrationError) {
@@ -270,9 +280,24 @@ export async function POST(request: NextRequest) {
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
       console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+      
+      // Update user_registrations record with payment_id
+      const { error: registrationUpdateError } = await supabase
+        .from('user_registrations')
+        .update({ payment_id: updatedPayment[0].id })
+        .eq('id', userRegistration.id)
+
+      if (registrationUpdateError) {
+        console.error('Error updating registration record with payment_id:', registrationUpdateError)
+        capturePaymentError(registrationUpdateError, paymentContext, 'warning')
+      } else {
+        console.log(`✅ Updated registration record with payment_id: ${updatedPayment[0].id}`)
+      }
     } else {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }
+
+
 
     // Get user and registration details for email
     const { data: userProfile } = await supabase
@@ -293,6 +318,65 @@ export async function POST(request: NextRequest) {
       `)
       .eq('id', registrationId)
       .single()
+
+    // Record discount usage if applicable (same logic as webhook)
+    const discountCode = paymentIntent.metadata.discountCode
+    const discountAmount = parseInt(paymentIntent.metadata.discountAmount || '0')
+    const discountCategoryId = paymentIntent.metadata.discountCategoryId
+
+    if (discountCode && discountAmount > 0 && discountCategoryId) {
+      try {
+        // Get the discount code record
+        const { data: discountCodeRecord } = await supabase
+          .from('discount_codes')
+          .select(`
+            id,
+            category:discount_categories(id, name)
+          `)
+          .eq('code', discountCode)
+          .eq('is_active', true)
+          .single()
+
+        if (discountCodeRecord) {
+          // Check if discount usage already exists to prevent duplicates
+          const { data: existingUsage } = await supabase
+            .from('discount_usage')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('discount_code_id', discountCodeRecord.id)
+            .eq('registration_id', registrationId)
+            .single()
+
+          if (!existingUsage) {
+            // Record discount usage only if it doesn't already exist
+            const { error: usageError } = await supabase
+              .from('discount_usage')
+              .insert({
+                user_id: user.id,
+                discount_code_id: discountCodeRecord.id,
+                discount_category_id: discountCategoryId,
+                season_id: registrationDetails?.season?.id,
+                amount_saved: discountAmount,
+                registration_id: registrationId,
+              })
+
+            if (usageError) {
+              console.error('Error recording discount usage:', usageError)
+              // Don't fail the payment - just log the error
+              capturePaymentError(usageError, paymentContext, 'warning')
+            } else {
+              console.log('✅ Recorded discount usage for payment intent:', paymentIntentId)
+            }
+          } else {
+            console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntentId)
+          }
+        }
+      } catch (discountError) {
+        console.error('Error processing discount usage:', discountError)
+        // Don't fail the payment - just log the error
+        capturePaymentError(discountError, paymentContext, 'warning')
+      }
+    }
 
     // Send confirmation email
     if (userProfile && registrationDetails) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthenticatedXeroClient, withActiveTenant } from '@/lib/xero-client'
+import { getAuthenticatedXeroClient, withActiveTenant } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
@@ -44,9 +44,9 @@ export async function POST(request: NextRequest) {
         }
 
         // Make a lightweight API call - just get organisation info
-        const orgResponse = await xeroApi.getOrganisations(token.tenant_id)
+        const orgResponse = await xeroApi.accountingApi.getOrganisations(token.tenant_id)
         
-        if (orgResponse?.body?.organisations?.length > 0) {
+        if (orgResponse?.body?.organisations && orgResponse.body.organisations.length > 0) {
           const org = orgResponse.body.organisations[0]
           console.log(`✅ Xero ping successful for: ${org.name}`)
           

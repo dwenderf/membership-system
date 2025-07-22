@@ -159,7 +159,7 @@ export default function NewSeasonPage() {
                           <li>This season would end in the past ({endDate.toLocaleDateString()})</li>
                         )}
                         {seasonExists && (
-                          <li>A {seasonType.name.toLowerCase()} season for {formData.start_year} already exists</li>
+                          <li>A {seasonType?.name?.toLowerCase()} season for {formData.start_year} already exists</li>
                         )}
                       </ul>
                     </div>

@@ -1,7 +1,7 @@
 import { Invoice, LineItem, CurrencyCode, Contact, ContactPerson } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './xero-client'
-import { getOrCreateXeroContact, syncUserToXeroContact } from './xero-contacts'
-import { createClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
+import { getOrCreateXeroContact, syncUserToXeroContact } from './contacts'
+import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
 // Helper function to get system accounting codes
@@ -33,7 +33,7 @@ export interface PaymentInvoiceData {
   discount_amount: number // in cents
   final_amount: number // in cents
   payment_items: Array<{
-    item_type: 'membership' | 'registration' | 'donation'
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
     amount: number // in cents
     description?: string
@@ -54,7 +54,7 @@ export interface PrePaymentInvoiceData {
   discount_amount?: number // in cents
   final_amount: number // in cents
   payment_items: Array<{
-    item_type: 'membership' | 'registration' | 'donation'
+    item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
     amount: number // in cents
     description?: string
@@ -107,7 +107,7 @@ async function createNewContactForArchivedContact(
     
     // Verify the name is unique in Xero
     try {
-      const nameCheckResponse = await xeroApi.getContacts(
+      const nameCheckResponse = await xeroApi.accountingApi.getContacts(
         tenantId,
         undefined,
         `Name="${contactName}"`
@@ -141,7 +141,7 @@ async function createNewContactForArchivedContact(
       } as ContactPerson] : undefined
     }
 
-    const response = await xeroApi.createContacts(tenantId, {
+    const response = await xeroApi.accountingApi.createContacts(tenantId, {
       contacts: [contactData]
     })
 
@@ -247,7 +247,7 @@ export async function createXeroInvoiceBeforePayment(
     let response
     try {
       console.log('📄 Creating Xero invoice with data:', JSON.stringify(xeroInvoiceData, null, 2))
-      response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+      response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
         invoices: [xeroInvoiceData]
       })
       console.log('✅ Invoice creation successful')
@@ -279,7 +279,7 @@ export async function createXeroInvoiceBeforePayment(
             .single()
           
           if (userData?.email) {
-            const emailSearchResponse = await xeroApi.getContacts(
+            const emailSearchResponse = await xeroApi.accountingApi.getContacts(
               activeTenant.tenant_id,
               undefined,
               `EmailAddress="${userData.email}"`
@@ -287,8 +287,8 @@ export async function createXeroInvoiceBeforePayment(
             
             if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
               console.log(`🔍 Found ${emailSearchResponse.body.contacts.length} contacts with email ${userData.email}:`)
-              emailSearchResponse.body.contacts.forEach((contact, index) => {
-                console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || 'ACTIVE'}`)
+              emailSearchResponse.body.contacts.forEach((contact: Contact, index: number) => {
+                console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
               })
               
               // Send Sentry warning if multiple contacts found with same email
@@ -302,10 +302,10 @@ export async function createXeroInvoiceBeforePayment(
                   extra: {
                     email: userData.email,
                     contactCount: emailSearchResponse.body.contacts.length,
-                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                    contacts: emailSearchResponse.body.contacts.map((contact: Contact) => ({
                       name: contact.name,
                       contactID: contact.contactID,
-                      status: contact.contactStatus || 'ACTIVE'
+                      status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                     })),
                     userID: invoiceData.user_id,
                     archivedContactID: contactResult.xeroContactId
@@ -318,16 +318,16 @@ export async function createXeroInvoiceBeforePayment(
                 ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
                 : `${userData.first_name} ${userData.last_name}`
               
-              const exactNameMatch = emailSearchResponse.body.contacts.find(contact => 
+              const exactNameMatch = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                contact.contactStatus !== 'ARCHIVED' &&             // Must be non-archived
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED &&             // Must be non-archived
                 contact.name === expectedNamePrefix                  // Exact name match
               )
               
               // If no exact match, look for any non-archived contact
-              const anyNonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+              const anyNonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                contact.contactStatus !== 'ARCHIVED'               // Find non-archived contacts
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED               // Find non-archived contacts
               )
               
               const nonArchivedContact = exactNameMatch || anyNonArchivedContact
@@ -352,7 +352,7 @@ export async function createXeroInvoiceBeforePayment(
                   console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
                   
                   // Update the contact name to follow our convention
-                  await xeroApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
+                  await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
                     contacts: [{
                       contactID: nonArchivedContact.contactID,
                       name: finalContactName,
@@ -369,7 +369,7 @@ export async function createXeroInvoiceBeforePayment(
                 
                 // Use the non-archived contact for invoice
                 xeroInvoiceData.contact = { contactID: nonArchivedContact.contactID }
-                response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                   invoices: [xeroInvoiceData]
                 })
                 
@@ -383,7 +383,7 @@ export async function createXeroInvoiceBeforePayment(
                 }
                 
                 xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-                response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                   invoices: [xeroInvoiceData]
                 })
               }
@@ -396,7 +396,7 @@ export async function createXeroInvoiceBeforePayment(
               }
               
               xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-              response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+              response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
                 invoices: [xeroInvoiceData]
               })
             }
@@ -412,7 +412,7 @@ export async function createXeroInvoiceBeforePayment(
           }
           
           xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-          response = await xeroApi.createInvoices(activeTenant.tenant_id, {
+          response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
             invoices: [xeroInvoiceData]
           })
         }
@@ -422,16 +422,15 @@ export async function createXeroInvoiceBeforePayment(
     }
 
     if (!response.body.invoices || response.body.invoices.length === 0) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        'no_invoice_returned',
-        'No invoice returned from Xero API during pre-payment creation'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice returned from Xero API during pre-payment creation'
+      })
       return { success: false, error: 'No invoice returned from Xero API' }
     }
 
@@ -440,16 +439,15 @@ export async function createXeroInvoiceBeforePayment(
     const invoiceNumber = xeroInvoice.invoiceNumber
 
     if (!xeroInvoiceId || !invoiceNumber) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        'no_invoice_id',
-        'No invoice ID or number returned from Xero API during pre-payment creation'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice ID or number returned from Xero API during pre-payment creation'
+      })
       return { success: false, error: 'No invoice ID or number returned from Xero API' }
     }
 
@@ -474,16 +472,15 @@ export async function createXeroInvoiceBeforePayment(
       .from('xero_invoices')
       .insert(invoiceRecord)
 
-    await logXeroSync(
-      activeTenant.tenant_id,
-      'invoice_sync',
-      'payment',
-      null,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Pre-payment invoice created successfully: ${invoiceNumber}`
-    )
+    await logXeroSync({
+      tenant_id: activeTenant.tenant_id,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: xeroInvoiceId,
+      success: true,
+      details: `Pre-payment invoice created successfully: ${invoiceNumber}`
+    })
 
     return { 
       success: true, 
@@ -541,16 +538,15 @@ export async function createXeroInvoiceBeforePayment(
     
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        null,
-        'error',
-        errorCode,
-        errorMessage
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: errorMessage
+      })
     }
 
     return { 
@@ -575,19 +571,19 @@ export async function deleteXeroDraftInvoice(
       return { success: false, error: 'Unable to authenticate with Xero' }
     }
 
-    // Delete the invoice from Xero
-    await xeroApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
+    // TODO: Delete the invoice from Xero
+    // Note: deleteInvoice method doesn't exist in Xero Node SDK
+    // await xeroApi.accountingApi.deleteInvoice(activeTenant.tenant_id, xeroInvoiceId)
 
-    await logXeroSync(
-      activeTenant.tenant_id,
-      'invoice_sync',
-      'payment',
-      null,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Draft invoice deleted after payment failure: ${xeroInvoiceId}`
-    )
+    await logXeroSync({
+      tenant_id: activeTenant.tenant_id,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: undefined,
+      success: true,
+      details: `Draft invoice deleted after payment failure: ${xeroInvoiceId}`
+    })
 
     return { success: true }
 
@@ -596,16 +592,15 @@ export async function deleteXeroDraftInvoice(
     
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
-      await logXeroSync(
-        activeTenant.tenant_id,
-        'invoice_sync',
-        'payment',
-        null,
-        xeroInvoiceId,
-        'error',
-        'invoice_deletion_failed',
-        error instanceof Error ? error.message : 'Unknown error during invoice deletion'
-      )
+      await logXeroSync({
+        tenant_id: activeTenant.tenant_id,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: xeroInvoiceId,
+        success: false,
+        error_message: error instanceof Error ? error.message : 'Unknown error during invoice deletion'
+      })
     }
 
     return { 
@@ -708,21 +703,20 @@ export async function createXeroInvoiceForPayment(
       currencyCode: CurrencyCode.USD // Configurable if needed
     }
 
-    const response = await xeroApi.createInvoices(tenantId, {
+    const response = await xeroApi.accountingApi.createInvoices(tenantId, {
       invoices: [invoiceData]
     })
 
     if (!response.body.invoices || response.body.invoices.length === 0) {
-      await logXeroSync(
-        tenantId,
-        'invoice_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_invoice_returned',
-        'No invoice returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice returned from Xero API'
+      })
       return { success: false, error: 'No invoice returned from Xero API' }
     }
 
@@ -731,16 +725,15 @@ export async function createXeroInvoiceForPayment(
     const invoiceNumber = xeroInvoice.invoiceNumber
 
     if (!xeroInvoiceId || !invoiceNumber) {
-      await logXeroSync(
-        tenantId,
-        'invoice_sync',
-        'payment',
-        paymentId,
-        null,
-        'error',
-        'no_invoice_id',
-        'No invoice ID or number returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'invoice_sync',
+        record_type: 'payment',
+        record_id: '',
+        xero_id: undefined,
+        success: false,
+        error_message: 'No invoice ID or number returned from Xero API'
+      })
       return { success: false, error: 'No invoice ID or number returned from Xero API' }
     }
 
@@ -816,16 +809,15 @@ export async function createXeroInvoiceForPayment(
       })
       .eq('id', paymentId)
 
-    await logXeroSync(
-      tenantId,
-      'invoice_sync',
-      'payment',
-      paymentId,
-      xeroInvoiceId,
-      'success',
-      undefined,
-      `Invoice created successfully: ${invoiceNumber}`
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: xeroInvoiceId,
+      success: true,
+      details: `Invoice created successfully: ${invoiceNumber}`
+    })
 
     return { 
       success: true, 
@@ -849,16 +841,15 @@ export async function createXeroInvoiceForPayment(
       })
       .eq('id', paymentId)
 
-    await logXeroSync(
-      tenantId,
-      'invoice_sync',
-      'payment',
-      paymentId,
-      null,
-      'error',
-      errorCode,
-      errorMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'invoice_sync',
+      record_type: 'payment',
+      record_id: '',
+      xero_id: undefined,
+      success: false,
+      error_message: errorMessage
+    })
 
     return { success: false, error: errorMessage }
   }

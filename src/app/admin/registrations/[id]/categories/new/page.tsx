@@ -64,6 +64,7 @@ export default function NewRegistrationCategoryPage() {
   const [availableCategories, setAvailableCategories] = useState<{
     id: string
     name: string
+    description: string | null
     category_type: string
   }[]>([])
   const [availableMemberships, setAvailableMemberships] = useState<{

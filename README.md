@@ -83,11 +83,21 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 ### 3. Database Setup
 
 1. Create a new Supabase project
-2. Run the database schema:
+2. Get your API keys from Supabase Dashboard:
+   - Go to **Settings** → **API**
+   - Click on the **"API Keys"** tab (not "Legacy API Keys")
+   - If you don't have API keys yet, click **"Create a new API key"**
+   - Copy the **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Copy the **service_role** key → `SUPABASE_SERVICE_ROLE_KEY`
+   - Go to **Settings** → **Data API** to get the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   
+   **Note:** Use the **new API keys** (not the legacy ones). The new keys use an improved JWT format and are the recommended approach.
+
+3. Run the database schema:
    ```bash
    # Apply the schema.sql file in your Supabase SQL editor
    ```
-3. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
 
 ### 4. Run Development Server
 
@@ -483,7 +493,7 @@ Replace your-domain with:
 ```bash
 NEXTAUTH_URL=https://your-domain.vercel.app
 NEXTAUTH_SECRET=your_nextauth_secret
-CRON_SECRET=your_random_cron_secret_for_xero_keepalive
+CRON_SECRET=your_random_cron_secret_for_cron_jobs
 ```
 
 **Database & Authentication:**
@@ -494,6 +504,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ```
+
+**Note:** For Supabase API keys, use the **new API keys** (not legacy) from your **production Supabase project** (not development). Go to Settings → API → "API Keys" tab and create new keys if needed.
 
 **Payment Processing:**
 ```bash
@@ -535,7 +547,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 
 **Stripe Webhooks:**
 1. Go to your Stripe Dashboard → Webhooks
-2. Update endpoint URL to: `https://your-domain.vercel.app/api/webhooks/stripe`
+2. Update endpoint URL to: `https://your-domain.vercel.app/api/stripe-webhook`
 3. Copy the new webhook secret to `STRIPE_WEBHOOK_SECRET`
 
 **Google OAuth:**
@@ -553,7 +565,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 **Automatic Features (Vercel handles these):**
 - ✅ **Next.js Build**: Automatic build optimization
 - ✅ **Serverless Functions**: API routes automatically deployed
-- ✅ **Cron Jobs**: Xero keep-alive runs every 12 hours (configured in `vercel.json`)
+- ✅ **Cron Jobs**: Background processing runs daily (Xero operations + maintenance tasks)
 - ✅ **SSL Certificate**: Automatic HTTPS with custom domain support
 - ✅ **CDN**: Global edge network for fast loading
 
@@ -584,7 +596,62 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 - [ ] Sentry error monitoring configured for production
 - [ ] Custom domain configured (if desired)
 - [ ] SSL certificate active and verified
-- [ ] Cron job (`CRON_SECRET`) configured for Xero token keep-alive
+- [ ] Vercel Pro plan activated (required for cron jobs)
+- [ ] `CRON_SECRET` environment variable configured
+- [ ] Cron jobs verified in Vercel dashboard (4 active jobs)
+
+#### Setting Up Vercel Cron Jobs (Pro Plan Required)
+
+The application uses Vercel Cron jobs for background processing. **Vercel Pro plan is required** for the advanced cron job scheduling used in this system.
+
+**1. Upgrade to Vercel Pro:**
+1. Go to your Vercel account settings
+2. Upgrade to **Pro plan** ($20/month)
+3. Wait 5-10 minutes for the upgrade to propagate
+
+**2. Configure CRON_SECRET Environment Variable:**
+1. Go to your Vercel project dashboard
+2. Navigate to **Settings** → **Environment Variables**
+3. Add `CRON_SECRET` with a random string value
+4. Generate a secure random string:
+   ```bash
+   openssl rand -base64 32
+   ```
+5. Set the value for **Production** environment
+
+**3. Verify Cron Jobs in Vercel Dashboard:**
+1. Go to **Settings** → **Cron Jobs**
+2. You should see 4 active cron jobs:
+   - `xero-sync` - Every 2 minutes (Xero invoice/payment sync)
+   - `xero-keep-alive` - Every 6 hours (Xero token refresh)
+   - `email-retry` - Every 2 hours (failed email retry)
+   - `cleanup` - Daily at 2 AM (maintenance tasks)
+
+**Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
+
+**2. Verify CRON_SECRET Environment Variable:**
+- Ensure `CRON_SECRET` is set in your Vercel environment variables
+- This secret is used to authenticate cron job requests
+- Generate a random string if not already set
+
+**3. Test Cron Jobs (Optional):**
+You can manually test cron jobs using curl:
+```bash
+# Test Xero daily operations (replace with your domain and secret)
+curl -X GET https://your-domain.vercel.app/api/cron/xero-daily \
+  -H "Authorization: Bearer your-cron-secret"
+
+# Test maintenance operations
+curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
+  -H "Authorization: Bearer your-cron-secret"
+```
+
+**4. Monitor Cron Job Execution:**
+- Check Vercel dashboard → **Functions** → **Cron Jobs** for execution logs
+- Review application logs for cron job activity
+- Monitor admin interface for sync status
+
+**Note:** Cron jobs are included in Vercel Hobby plan but have execution limits. For higher frequency or more complex scheduling, consider upgrading to Vercel Pro.
 
 #### Monitoring & Maintenance
 
@@ -634,6 +701,9 @@ For questions about the codebase or setup process, refer to:
 ## Xero Accounting Integration
 
 The system includes automatic Xero integration for seamless accounting and bookkeeping.
+
+**📚 Important Resources:**
+- **[Xero API Rate Limits](https://developer.xero.com/documentation/guides/oauth2/limits/)** - Current rate limits and best practices
 
 ### Setting Up Xero Integration
 
@@ -688,19 +758,138 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 - Set up your Stripe account in Xero's bank accounts
 - Use account code `STRIPE` for automatic payment recording
 
+#### 5. URI Configuration for All Services
+
+**Important:** These configurations should already be complete for your account, but here's the complete setup for reference.
+
+##### **Google OAuth Configuration**
+
+**Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID**
+
+**Authorized JavaScript origins:**
+```
+http://localhost:3000
+https://membership-system-nycpha-preview.vercel.app
+https://my.nycpha.org
+```
+
+**Authorized redirect URIs:**
+```
+http://localhost:3000/api/auth/callback/google
+https://membership-system-nycpha-preview.vercel.app/api/auth/callback/google
+https://my.nycpha.org/api/auth/callback/google
+```
+
+##### **Supabase Authentication Configuration**
+
+**Supabase Dashboard → Authentication → URL Configuration**
+
+**Site URL:**
+```
+https://my.nycpha.org
+```
+
+**Redirect URLs:**
+```
+https://my.nycpha.org/auth/callback
+https://my.nycpha.org/**
+```
+
+**For Development Environment:**
+- **Site URL:** `https://membership-system-nycpha-preview.vercel.app`
+- **Redirect URLs:**
+  ```
+  https://membership-system-nycpha-preview.vercel.app/auth/callback
+  https://membership-system-nycpha-preview.vercel.app/**
+  ```
+
+**For Local Development:**
+- **Site URL:** `http://localhost:3000`
+- **Redirect URLs:**
+  ```
+  http://localhost:3000/auth/callback
+  http://localhost:3000/**
+  ```
+
+**Supabase Dashboard → Authentication → Sign In / Providers → Google**
+
+1. **Click on "Google"** in the providers list
+2. **Enable "Sign in with Google"**
+3. **Add your Google OAuth credentials:**
+
+**Client ID:** Your Google OAuth client ID
+**Client Secret:** Your Google OAuth client secret
+
+**Where to get Google OAuth credentials:**
+1. **Go to** [Google Cloud Console](https://console.cloud.google.com/)
+2. **Navigate to** APIs & Services → Credentials
+3. **Find your OAuth 2.0 Client ID** (or create a new one)
+4. **Copy the Client ID**
+5. **For Client Secret:** 
+   - **If you have an existing secret:** You cannot view it again (security feature)
+   - **Create a new Client Secret:** Click "Reset Secret" or "Create New Secret"
+   - **Copy the new secret immediately** (it's only shown once)
+
+**Note:** You'll need to configure these settings for each Supabase project (development and production databases).
+
+**Security Settings:**
+- **DO NOT enable "Skip nonce checks"** - This is a security feature that should remain enabled
+- **Keep all default security settings** unless you have a specific reason to change them
+
+##### **Stripe Webhook Configuration**
+
+**Stripe Dashboard → Webhooks**
+
+**Endpoint URL:**
+```
+https://my.nycpha.org/api/stripe-webhook
+```
+
+**Events to Send:**
+Select these specific events only:
+- `payment_intent.succeeded` - When payment completes successfully
+- `payment_intent.payment_failed` - When payment fails  
+- `payment_intent.canceled` - When payment is canceled
+
+**Important:** Only select these three events. The webhook is designed to handle these specific payment intent events for membership and registration payments.
+
+##### **Xero OAuth Configuration**
+
+**Xero Developer Portal → Your App → OAuth 2.0**
+
+**Redirect URI:**
+```
+https://my.nycpha.org/api/xero/callback
+```
+
 ### How Xero Integration Works
 
 #### Automatic Sync Process
 
-1. **Payment Completed** → Stripe webhook triggers auto-sync
-2. **Contact Creation** → User automatically added as Xero contact
-3. **Invoice Generation** → Detailed invoice created with line items:
+1. **Payment Completed** → Stripe webhook triggers staging record creation
+2. **Staging Records** → Invoice and payment records created with 'pending' status
+3. **Cron Job Processing** → Every 2 minutes, cron jobs sync eligible records:
+   - **Invoices**: All pending/staged invoices
+   - **Payments**: Only completed, non-free payments
+4. **Contact Creation** → User automatically added as Xero contact
+5. **Invoice Generation** → Detailed invoice created with line items:
    - Membership purchases
    - Registration fees
    - Donations (if applicable)
    - Discount codes (as negative line items)
-4. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
-5. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+6. **Payment Recording** → Net payment recorded (gross amount minus Stripe fees)
+7. **Fee Tracking** → Stripe processing fees optionally recorded as expenses
+
+#### Sync Criteria
+
+**Invoices**: All records with `sync_status IN ('pending', 'staged')`
+
+**Payments**: Filtered by:
+- `sync_status IN ('pending', 'staged')`
+- `payments.status = 'completed'`
+- `payments.payment_method != 'free'`
+
+This ensures only completed, paid transactions are synced to Xero.
 
 #### Manual Sync Operations
 
@@ -715,9 +904,12 @@ The admin interface provides manual sync options:
 ✅ **Automated Bookkeeping** - Eliminates manual invoice entry
 ✅ **Accurate Fee Tracking** - Stripe processing costs automatically recorded
 ✅ **Professional Invoicing** - Uses Xero's templates and delivery system
-✅ **Real-time Sync** - Financial data synchronized immediately
+✅ **Real-time Sync** - Financial data synchronized every 2 minutes
 ✅ **Discount Transparency** - Clear breakdown of promotional pricing
 ✅ **Audit Trail** - Complete transaction history and error logging
+✅ **Staging-First Approach** - Zero data loss with robust staging system
+✅ **Intelligent Filtering** - Only syncs eligible payments (completed, non-free)
+✅ **Pro Plan Optimization** - Leverages Vercel Pro for high-frequency processing
 
 #### Contact Management & Conflict Resolution
 

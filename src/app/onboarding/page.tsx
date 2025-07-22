@@ -14,6 +14,8 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    isGoalie: null as boolean | null,
+    isLgbtq: undefined as boolean | null | undefined,
     termsAccepted: false,
     wantsMembership: true, // defaults to checked
   })
@@ -72,6 +74,14 @@ export default function OnboardingPage() {
       newErrors.lastName = 'Last name is required'
     }
     
+    if (formData.isGoalie === null) {
+      newErrors.isGoalie = 'Please answer whether you play goalie'
+    }
+    
+    if (formData.isLgbtq === null || formData.isLgbtq === undefined) {
+      newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ'
+    }
+    
     if (!formData.termsAccepted) {
       newErrors.termsAccepted = 'You must accept the terms and conditions to continue'
     }
@@ -85,6 +95,8 @@ export default function OnboardingPage() {
     return (
       !!formData.firstName?.trim() &&
       !!formData.lastName?.trim() &&
+      formData.isGoalie !== null &&
+      formData.isLgbtq !== undefined &&
       formData.termsAccepted
     )
   }
@@ -112,6 +124,8 @@ export default function OnboardingPage() {
         email: user.email!,
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
+        is_goalie: formData.isGoalie!,
+        is_lgbtq: formData.isLgbtq,
         is_admin: false,
         onboarding_completed_at: new Date().toISOString(),
         terms_accepted_at: new Date().toISOString(),
@@ -125,6 +139,8 @@ export default function OnboardingPage() {
           .update({
             first_name: userData.first_name,
             last_name: userData.last_name,
+            is_goalie: userData.is_goalie,
+            is_lgbtq: userData.is_lgbtq,
             onboarding_completed_at: userData.onboarding_completed_at,
             terms_accepted_at: userData.terms_accepted_at,
             terms_version: userData.terms_version,
@@ -139,6 +155,106 @@ export default function OnboardingPage() {
           .insert([userData])
 
         if (error) throw error
+      }
+
+      // Get the updated user data with member_id for Sentry logging
+      const { data: updatedUser } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, member_id, is_goalie, is_lgbtq')
+        .eq('id', user.id)
+        .single()
+
+      // Log onboarding completion to Sentry
+      if (updatedUser) {
+        const { captureMessage } = await import('@sentry/nextjs')
+        captureMessage('User completed onboarding', {
+          level: 'info',
+          tags: {
+            component: 'onboarding',
+            operation: 'profile_completion'
+          },
+          extra: {
+            user_id: updatedUser.id,
+            email: updatedUser.email,
+            first_name: updatedUser.first_name,
+            last_name: updatedUser.last_name,
+            member_id: updatedUser.member_id,
+            is_goalie: updatedUser.is_goalie,
+            is_lgbtq: updatedUser.is_lgbtq,
+            wants_membership: formData.wantsMembership,
+            onboarding_timestamp: new Date().toISOString()
+          }
+        })
+      }
+
+      // Sync user to Xero if connected
+      if (updatedUser) {
+        try {
+          const xeroSyncResponse = await fetch('/api/xero/sync-user', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userData: {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                first_name: updatedUser.first_name,
+                last_name: updatedUser.last_name,
+                member_id: updatedUser.member_id
+              }
+            }),
+          })
+        
+        if (xeroSyncResponse.ok) {
+          const xeroSyncResult = await xeroSyncResponse.json()
+          
+          if (xeroSyncResult.success && xeroSyncResult.xeroContactId) {
+            console.log(`✅ User synced to Xero successfully: ${xeroSyncResult.xeroContactId}`)
+            
+            // Log successful Xero sync to Sentry
+            const { captureMessage } = await import('@sentry/nextjs')
+            captureMessage('User synced to Xero after onboarding', {
+              level: 'info',
+              tags: {
+                component: 'onboarding',
+                operation: 'xero_sync'
+              },
+              extra: {
+                user_id: updatedUser.id,
+                email: updatedUser.email,
+                member_id: updatedUser.member_id,
+                xero_contact_id: xeroSyncResult.xeroContactId,
+                sync_timestamp: new Date().toISOString()
+              }
+            })
+          } else {
+            console.warn(`⚠️ Failed to sync user to Xero: ${xeroSyncResult.error}`)
+            
+            // Log Xero sync failure to Sentry (as warning, not error)
+            const { captureMessage } = await import('@sentry/nextjs')
+            captureMessage('Failed to sync user to Xero after onboarding', {
+              level: 'warning',
+              tags: {
+                component: 'onboarding',
+                operation: 'xero_sync_failed'
+              },
+              extra: {
+                user_id: updatedUser.id,
+                email: updatedUser.email,
+                member_id: updatedUser.member_id,
+                error: xeroSyncResult.error,
+                sync_timestamp: new Date().toISOString()
+              }
+            })
+          }
+        } else {
+          console.log('ℹ️ Xero not connected, skipping user sync')
+        }
+      } catch (xeroError) {
+        console.error('Error during Xero sync:', xeroError)
+        // Don't fail onboarding if Xero sync fails
+      }
       }
 
       // Show success toast
@@ -242,6 +358,85 @@ export default function OnboardingPage() {
               />
               {errors.lastName && (
                 <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+              )}
+            </div>
+
+            {/* Goalie Question */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Do you play goalie? (select yes even if you primarily play out) *
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isGoalie"
+                    value="true"
+                    checked={formData.isGoalie === true}
+                    onChange={() => setFormData(prev => ({ ...prev, isGoalie: true }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Yes</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isGoalie"
+                    value="false"
+                    checked={formData.isGoalie === false}
+                    onChange={() => setFormData(prev => ({ ...prev, isGoalie: false }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">No</span>
+                </label>
+              </div>
+              {errors.isGoalie && (
+                <p className="mt-1 text-sm text-red-600">{errors.isGoalie}</p>
+              )}
+            </div>
+
+            {/* LGBTQ Question */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Do you identify as LGBTQ? *
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="true"
+                    checked={formData.isLgbtq === true}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: true }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Yes</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="false"
+                    checked={formData.isLgbtq === false}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: false }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">No</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="isLgbtq"
+                    value="null"
+                    checked={formData.isLgbtq === null}
+                    onChange={() => setFormData(prev => ({ ...prev, isLgbtq: null }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="ml-3 text-sm text-gray-700">Prefer not to answer</span>
+                </label>
+              </div>
+              {errors.isLgbtq && (
+                <p className="mt-1 text-sm text-red-600">{errors.isLgbtq}</p>
               )}
             </div>
 

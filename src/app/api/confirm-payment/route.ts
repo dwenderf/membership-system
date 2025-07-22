@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email-service'
 
 // Force import server config
@@ -9,7 +10,7 @@ import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-05-28.basil',
 })
 
 export async function POST(request: NextRequest) {
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
   
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -33,7 +35,9 @@ export async function POST(request: NextRequest) {
       userEmail: user.email,
       paymentIntentId: paymentIntentId,
       endpoint: '/api/confirm-payment',
-      operation: 'payment_confirmation'
+      operation: 'payment_confirmation',
+      amountCents: 0, // Will be updated after payment intent retrieval
+      membershipId: '' // Will be updated after payment intent retrieval
     }
     setPaymentContext(paymentContext)
     
@@ -94,28 +98,52 @@ export async function POST(request: NextRequest) {
     const membershipId = paymentIntent.metadata.membershipId
     const durationMonths = parseInt(paymentIntent.metadata.durationMonths)
 
-    // Create user membership record - THIS IS THE CRITICAL OPERATION
-    const { data: userMembership, error: membershipError } = await supabase
-      .from('user_memberships')
-      .insert({
-        user_id: user.id,
-        membership_id: membershipId,
-        valid_from: startDate,
-        valid_until: endDate,
-        months_purchased: durationMonths,
-        payment_status: 'paid',
-        stripe_payment_intent_id: paymentIntentId,
-        amount_paid: paymentIntent.amount,
-        purchased_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+    // Create user membership record - THIS IS THE CRITICAL OPERATION (handle duplicate gracefully)
+    let userMembership: any
+    try {
+      const { data: newMembership, error: membershipError } = await supabase
+        .from('user_memberships')
+        .insert({
+          user_id: user.id,
+          membership_id: membershipId,
+          valid_from: startDate,
+          valid_until: endDate,
+          months_purchased: durationMonths,
+          payment_status: 'paid',
+          stripe_payment_intent_id: paymentIntentId,
+          amount_paid: paymentIntent.amount,
+          purchased_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
 
-    if (membershipError) {
-      console.error('Error creating user membership:', membershipError)
+      if (membershipError) {
+        if (membershipError.code === '23505') { // Duplicate key error
+          console.log('Membership already exists for payment intent, fetching existing record:', paymentIntentId)
+          const { data: existingMembership, error: fetchError } = await supabase
+            .from('user_memberships')
+            .select('*')
+            .eq('stripe_payment_intent_id', paymentIntentId)
+            .single()
+          
+          if (fetchError || !existingMembership) {
+            console.error('Error fetching existing membership:', fetchError)
+            throw new Error('Failed to fetch existing membership')
+          }
+          
+          userMembership = existingMembership
+        } else {
+          console.error('Error creating user membership:', membershipError)
+          throw new Error('Failed to create membership')
+        }
+      } else {
+        userMembership = newMembership
+      }
+    } catch (error) {
+      console.error('Error in membership creation/fetch:', error)
       
       // THIS IS THE CRITICAL ERROR - Payment succeeded but membership creation failed
-      captureCriticalPaymentError(membershipError, paymentContext, [
+      captureCriticalPaymentError(error, paymentContext, [
         {
           operation: 'stripe_payment_intent_retrieve',
           success: true,
@@ -124,7 +152,7 @@ export async function POST(request: NextRequest) {
         {
           operation: 'user_membership_creation',
           success: false,
-          error: membershipError,
+          error: error,
           details: { membershipId, durationMonths, startDate, endDate }
         }
       ])
@@ -152,6 +180,19 @@ export async function POST(request: NextRequest) {
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
       console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+      
+      // Update user_memberships record with payment_id
+      const { error: membershipUpdateError } = await adminSupabase
+        .from('user_memberships')
+        .update({ payment_id: updatedPayment[0].id })
+        .eq('id', userMembership.id)
+
+      if (membershipUpdateError) {
+        console.error('Error updating membership record with payment_id:', membershipUpdateError)
+        capturePaymentError(membershipUpdateError, paymentContext, 'warning')
+      } else {
+        console.log(`✅ Updated membership record with payment_id: ${updatedPayment[0].id}`)
+      }
     } else {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }

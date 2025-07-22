@@ -30,8 +30,7 @@ export default withSentryConfig(nextConfig, {
   disableLogger: true,
   
   // Hides source maps from generated client bundles
-  hideSourceMaps: true,
-  
-  // Automatically instrument Next.js API routes and middleware
-  automaticVercelFunctionInstrumentation: true,
+  sourcemaps: {
+    disable: true
+  },
 });

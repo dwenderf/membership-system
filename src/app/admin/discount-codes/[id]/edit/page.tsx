@@ -109,8 +109,8 @@ export default function EditDiscountCodePage() {
         setError(errorData.error || 'Failed to update discount code')
       } else {
         // Navigate back to codes list, filtered by category if we came from there
-        const returnUrl = code?.discount_categories?.id 
-          ? `/admin/discount-codes?category=${code.discount_categories.id}`
+        const returnUrl = code?.discount_categories?.[0]?.id 
+          ? `/admin/discount-codes?category=${code.discount_categories[0].id}`
           : '/admin/discount-codes'
         router.push(returnUrl)
       }
@@ -150,7 +150,7 @@ export default function EditDiscountCodePage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Edit Discount Code</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Update discount code for {code.discount_categories?.name}
+              Update discount code for {code.discount_categories?.[0]?.name}
             </p>
           </div>
 
@@ -158,16 +158,16 @@ export default function EditDiscountCodePage() {
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-blue-800">Category: {code.discount_categories?.name}</h3>
+                <h3 className="text-sm font-medium text-blue-800">Category: {code.discount_categories?.[0]?.name}</h3>
                 <p className="mt-1 text-sm text-blue-700">
-                  Accounting Code: {code.discount_categories?.accounting_code}
-                  {code.discount_categories?.max_discount_per_user_per_season && (
-                    <span> • Limit: ${(code.discount_categories.max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
+                  Accounting Code: {code.discount_categories?.[0]?.accounting_code}
+                  {code.discount_categories?.[0]?.max_discount_per_user_per_season && (
+                    <span> • Limit: ${(code.discount_categories[0].max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
                   )}
                 </p>
               </div>
               <Link
-                href={`/admin/discount-codes?category=${code.discount_categories?.id}`}
+                href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
                 className="inline-flex items-center px-3 py-2 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50"
               >
                 Back to Category Codes
@@ -277,7 +277,7 @@ export default function EditDiscountCodePage() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Category</dt>
-                      <dd className="text-sm text-gray-900">{code.discount_categories?.name}</dd>
+                      <dd className="text-sm text-gray-900">{code.discount_categories?.[0]?.name}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Status</dt>
@@ -290,8 +290,8 @@ export default function EditDiscountCodePage() {
               {/* Submit Buttons */}
               <div className="flex justify-end space-x-3">
                 <Link
-                  href={code?.discount_categories?.id 
-                    ? `/admin/discount-codes?category=${code.discount_categories.id}`
+                  href={code?.discount_categories?.[0]?.id 
+                    ? `/admin/discount-codes?category=${code.discount_categories[0].id}`
                     : '/admin/discount-codes'
                   }
                   className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

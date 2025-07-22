@@ -1,0 +1,4 @@
+{"timestamp":"2025-07-13T13:05:50.391Z","level":"info","category":"service-management","operation":"services-start","message":"Starting background services","metadata":{"serviceCount":2,"services":["payment-processor","scheduled-batch-processor"]}}
+{"timestamp":"2025-07-13T13:05:50.407Z","level":"info","category":"service-management","operation":"service-started","message":"Service payment-processor started successfully","metadata":{"serviceName":"payment-processor"}}
+{"timestamp":"2025-07-13T13:05:50.409Z","level":"info","category":"service-management","operation":"service-started","message":"Service scheduled-batch-processor started successfully","metadata":{"serviceName":"scheduled-batch-processor"}}
+{"timestamp":"2025-07-13T13:05:50.410Z","level":"info","category":"service-management","operation":"services-started","message":"All background services startup complete","metadata":{"totalServices":2}}

@@ -1,6 +1,6 @@
 import { Contact, ContactPerson } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync } from './xero-client'
-import { createClient } from './supabase/server'
+import { getAuthenticatedXeroClient, logXeroSync } from './client'
+import { createAdminClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
 export interface UserContactData {
@@ -19,7 +19,7 @@ export async function syncUserToXeroContact(
   userData: UserContactData
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
 
     if (!xeroApi) {
@@ -44,7 +44,7 @@ export async function syncUserToXeroContact(
     } else {
       // Search for existing contact by email in Xero
       try {
-        const searchResponse = await xeroApi.getContacts(
+        const searchResponse = await xeroApi.accountingApi.getContacts(
           tenantId,
           undefined,
           `EmailAddress="${userData.email}"`
@@ -67,12 +67,12 @@ export async function syncUserToXeroContact(
               extra: {
                 email: userData.email,
                 contactCount: foundContacts.length,
-                contacts: foundContacts.map(contact => ({
+                contacts: foundContacts.map((contact: Contact) => ({
                   name: contact.name,
                   contactID: contact.contactID,
                   firstName: contact.firstName,
                   lastName: contact.lastName,
-                  status: contact.contactStatus || 'ACTIVE'
+                  status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                 })),
                 userID: userData.id,
                 searchContext: 'initial-contact-lookup'
@@ -80,7 +80,7 @@ export async function syncUserToXeroContact(
             })
             
             // Try to find exact name match first
-            const exactNameMatch = foundContacts.find(contact => 
+            const exactNameMatch = foundContacts.find((contact: Contact) => 
               contact.firstName === userData.first_name && 
               contact.lastName === userData.last_name
             )
@@ -90,7 +90,7 @@ export async function syncUserToXeroContact(
               console.log(`✅ Found exact name match for ${userData.first_name} ${userData.last_name}`)
             } else {
               // Try partial name matching as fallback
-              const partialMatch = foundContacts.find(contact => {
+              const partialMatch = foundContacts.find((contact: Contact) => {
                 const contactFullName = `${contact.firstName || ''} ${contact.lastName || ''}`.trim().toLowerCase()
                 const userFullName = `${userData.first_name} ${userData.last_name}`.toLowerCase()
                 return contactFullName === userFullName
@@ -119,7 +119,7 @@ export async function syncUserToXeroContact(
           console.log(`No contacts found by email ${userData.email}, searching by name...`)
           
           try {
-            const nameSearchResponse = await xeroApi.getContacts(
+            const nameSearchResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `Name="${userData.first_name} ${userData.last_name}"`
@@ -129,7 +129,7 @@ export async function syncUserToXeroContact(
               const nameFoundContacts = nameSearchResponse.body.contacts
               
               // Check if any of the name matches also have matching email
-              const emailAndNameMatch = nameFoundContacts.find(contact => 
+              const emailAndNameMatch = nameFoundContacts.find((contact: Contact) => 
                 contact.emailAddress === userData.email
               )
               
@@ -142,7 +142,7 @@ export async function syncUserToXeroContact(
                 console.log(`⚠️ Found existing contact with name "${userData.first_name} ${userData.last_name}" but different email`)
                 
                 // Try to find if there's a contact with same name but no email
-                const noEmailMatch = nameFoundContacts.find(contact => 
+                const noEmailMatch = nameFoundContacts.find((contact: Contact) => 
                   !contact.emailAddress || contact.emailAddress === ''
                 )
                 
@@ -178,7 +178,7 @@ export async function syncUserToXeroContact(
       // Fallback to old logic if member_id is not available (legacy users)
       if (!isUpdate && !xeroContactId) {
         try {
-          const duplicateCheckResponse = await xeroApi.getContacts(
+          const duplicateCheckResponse = await xeroApi.accountingApi.getContacts(
             tenantId,
             undefined,
             `Name="${contactName}"`
@@ -202,7 +202,7 @@ export async function syncUserToXeroContact(
       firstName: userData.first_name,
       lastName: userData.last_name,
       emailAddress: userData.email,
-      contactStatus: 'ACTIVE' as any, // Try to unarchive if archived
+      contactStatus: Contact.ContactStatusEnum.ACTIVE, // Try to unarchive if archived
       contactPersons: userData.phone ? [{
         firstName: userData.first_name,
         lastName: userData.last_name,
@@ -217,7 +217,7 @@ export async function syncUserToXeroContact(
       contactData.contactID = xeroContactId
       
       try {
-        response = await xeroApi.updateContact(tenantId, xeroContactId, {
+        response = await xeroApi.accountingApi.updateContact(tenantId, xeroContactId, {
           contacts: [contactData]
         })
       } catch (updateError: any) {
@@ -228,7 +228,7 @@ export async function syncUserToXeroContact(
           
           // Before creating new contact, check if there's another non-archived contact with same email
           try {
-            const emailSearchResponse = await xeroApi.getContacts(
+            const emailSearchResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `EmailAddress="${userData.email}"`
@@ -246,10 +246,10 @@ export async function syncUserToXeroContact(
                   extra: {
                     email: userData.email,
                     contactCount: emailSearchResponse.body.contacts.length,
-                    contacts: emailSearchResponse.body.contacts.map(contact => ({
+                    contacts: emailSearchResponse.body.contacts.map((contact: Contact) => ({
                       name: contact.name,
                       contactID: contact.contactID,
-                      status: contact.contactStatus || 'ACTIVE'
+                      status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
                     })),
                     userID: userData.id,
                     archivedContactID: xeroContactId,
@@ -259,9 +259,9 @@ export async function syncUserToXeroContact(
               }
               
               // Look for any non-archived contact with same email
-              const nonArchivedContact = emailSearchResponse.body.contacts.find(contact => 
+              const nonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== xeroContactId && // Exclude the archived one we just tried
-                contact.contactStatus !== 'ARCHIVED'   // Find non-archived contacts
+                contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED   // Find non-archived contacts
               )
               
               if (nonArchivedContact && nonArchivedContact.contactID) {
@@ -290,12 +290,12 @@ export async function syncUserToXeroContact(
                 contactData.contactID = nonArchivedContact.contactID
                 contactData.name = finalContactName
                 
-                response = await xeroApi.updateContact(tenantId, nonArchivedContact.contactID, {
+                response = await xeroApi.accountingApi.updateContact(tenantId, nonArchivedContact.contactID, {
                   contacts: [contactData]
                 })
                 
                 console.log(`✅ Successfully updated existing non-archived contact: ${nonArchivedContact.contactID} with name: ${finalContactName}`)
-                return
+                return { success: true, xeroContactId: nonArchivedContact.contactID }
               }
             }
           } catch (emailSearchError) {
@@ -314,7 +314,7 @@ export async function syncUserToXeroContact(
           
           // Check for name uniqueness and add timestamp if needed
           try {
-            const nameCheckResponse = await xeroApi.getContacts(
+            const nameCheckResponse = await xeroApi.accountingApi.getContacts(
               tenantId,
               undefined,
               `Name="${contactData.name}"`
@@ -336,7 +336,7 @@ export async function syncUserToXeroContact(
           // Remove contactID since we're creating new
           delete contactData.contactID
           
-          response = await xeroApi.createContacts(tenantId, {
+          response = await xeroApi.accountingApi.createContacts(tenantId, {
             contacts: [contactData]
           })
           
@@ -349,22 +349,21 @@ export async function syncUserToXeroContact(
       }
     } else {
       // Create new contact
-      response = await xeroApi.createContacts(tenantId, {
+      response = await xeroApi.accountingApi.createContacts(tenantId, {
         contacts: [contactData]
       })
     }
 
     if (!response.body.contacts || response.body.contacts.length === 0) {
-      await logXeroSync(
-        tenantId,
-        'contact_sync',
-        'user',
-        userId,
-        null,
-        'error',
-        'no_contact_returned',
-        'No contact returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'contact_sync',
+        record_type: 'user',
+        record_id: userId,
+        xero_id: undefined,
+        success: false,
+        error_message: 'No contact returned from Xero API'
+      })
       return { success: false, error: 'No contact returned from Xero API' }
     }
 
@@ -372,16 +371,15 @@ export async function syncUserToXeroContact(
     xeroContactId = xeroContact.contactID
 
     if (!xeroContactId) {
-      await logXeroSync(
-        tenantId,
-        'contact_sync',
-        'user',
-        userId,
-        null,
-        'error',
-        'no_contact_id',
-        'No contact ID returned from Xero API'
-      )
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'contact_sync',
+        record_type: 'user',
+        record_id: userId,
+        xero_id: undefined,
+        success: false,
+        error_message: 'No contact ID returned from Xero API'
+      })
       return { success: false, error: 'No contact ID returned from Xero API' }
     }
 
@@ -417,16 +415,15 @@ export async function syncUserToXeroContact(
       ? `Contact updated successfully (ID: ${xeroContactId})`
       : `Contact created successfully (ID: ${xeroContactId})`
     
-    await logXeroSync(
-      tenantId,
-      'contact_sync',
-      'user',
-      userId,
-      xeroContactId,
-      'success',
-      undefined,
-      logMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'contact_sync',
+      record_type: 'user',
+      record_id: userId,
+      xero_id: xeroContactId,
+      success: true,
+      details: logMessage
+    })
 
     return { success: true, xeroContactId }
 
@@ -482,7 +479,7 @@ export async function syncUserToXeroContact(
     })
 
     // Update sync status to failed
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     await supabase
       .from('xero_contacts')
       .upsert({
@@ -493,16 +490,15 @@ export async function syncUserToXeroContact(
         updated_at: new Date().toISOString()
       })
 
-    await logXeroSync(
-      tenantId,
-      'contact_sync',
-      'user',
-      userId,
-      null,
-      'error',
-      errorCode,
-      errorMessage
-    )
+    await logXeroSync({
+      tenant_id: tenantId,
+      operation: 'contact_sync',
+      record_type: 'user',
+      record_id: userId,
+      xero_id: undefined,
+      success: false,
+      error_message: errorMessage
+    })
 
     return { success: false, error: errorMessage }
   }
@@ -514,7 +510,7 @@ export async function getOrCreateXeroContact(
   tenantId: string
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Get user data
     const { data: userData, error: userError } = await supabase
@@ -559,7 +555,7 @@ export async function findDuplicateContactsByEmail(
       return { success: false, error: 'Unable to authenticate with Xero' }
     }
 
-    const searchResponse = await xeroApi.getContacts(
+    const searchResponse = await xeroApi.accountingApi.getContacts(
       tenantId,
       undefined,
       `EmailAddress="${email}"`
@@ -568,7 +564,7 @@ export async function findDuplicateContactsByEmail(
     if (searchResponse.body.contacts) {
       return { 
         success: true, 
-        contacts: searchResponse.body.contacts.map(contact => ({
+        contacts: searchResponse.body.contacts.map((contact: Contact) => ({
           contactID: contact.contactID,
           name: contact.name,
           firstName: contact.firstName,
@@ -596,7 +592,7 @@ export async function bulkSyncMissingContacts(tenantId: string): Promise<{
   errors: string[]
 }> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Get users who have made payments but aren't synced to Xero
     const { data: usersNeedingSync, error: usersError } = await supabase

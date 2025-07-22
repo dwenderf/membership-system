@@ -19,6 +19,7 @@ export default function EditRegistrationTimingPage() {
     regular_start_at: '',
     registration_end_at: '',
     presale_code: '',
+    allow_lgbtq_presale: true,
   })
   
   const [loading, setLoading] = useState(false)
@@ -61,6 +62,7 @@ export default function EditRegistrationTimingPage() {
           regular_start_at: formatForInput(regData.regular_start_at),
           registration_end_at: formatForInput(regData.registration_end_at),
           presale_code: regData.presale_code || '',
+          allow_lgbtq_presale: regData.allow_lgbtq_presale !== false, // Default to true if not set
         })
       }
     }
@@ -111,6 +113,7 @@ export default function EditRegistrationTimingPage() {
         regular_start_at: formatForDB(formData.regular_start_at),
         registration_end_at: formatForDB(formData.registration_end_at),
         presale_code: formData.presale_code.trim() || null,
+        allow_lgbtq_presale: formData.allow_lgbtq_presale,
       }
 
       const { error: updateError } = await supabase
@@ -239,6 +242,30 @@ export default function EditRegistrationTimingPage() {
                 )}
               </div>
 
+              {/* LGBTQ Pre-sale Access */}
+              {formData.presale_start_at && (
+                <div className="border rounded-md p-4 bg-purple-50 border-purple-200">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="allow_lgbtq_presale"
+                      checked={formData.allow_lgbtq_presale}
+                      onChange={(e) => setFormData(prev => ({ ...prev, allow_lgbtq_presale: e.target.checked }))}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="allow_lgbtq_presale" className="ml-3 text-sm font-medium text-purple-800">
+                      Allow LGBTQ members to register in pre-sale without code
+                    </label>
+                  </div>
+                  <p className="mt-2 text-sm text-purple-700">
+                    {formData.allow_lgbtq_presale 
+                      ? "LGBTQ members can register during pre-sale period without entering a pre-sale code."
+                      : "LGBTQ members must enter a pre-sale code to register during pre-sale period."
+                    }
+                  </p>
+                </div>
+              )}
+
               {/* Pre-sale Code */}
               <div>
                 <label htmlFor="presale_code" className="block text-sm font-medium text-gray-700">
@@ -248,12 +275,12 @@ export default function EditRegistrationTimingPage() {
                   type="text"
                   id="presale_code"
                   value={formData.presale_code}
-                  onChange={(e) => setFormData(prev => ({ ...prev, presale_code: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  onChange={(e) => setFormData(prev => ({ ...prev, presale_code: e.target.value.toUpperCase() }))}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm uppercase"
                   placeholder="e.g., EARLY2024"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Code required for pre-sale access
+                  Code required for pre-sale access (automatically converted to uppercase)
                 </p>
               </div>
 

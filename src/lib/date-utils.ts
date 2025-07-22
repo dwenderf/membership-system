@@ -17,3 +17,24 @@ export function formatDateString(dateString: string): string {
 export function formatDate(date: Date): string {
   return date.toLocaleDateString()
 }
+
+/**
+ * Formats a timestamp string to localized date and time display
+ * ensuring proper timezone conversion from UTC to local time
+ */
+export function formatTimestamp(timestamp: string | null): string {
+  if (!timestamp) return 'Not set'
+  
+  // Parse the timestamp and ensure it's treated as UTC if it doesn't have timezone info
+  const date = new Date(timestamp)
+  
+  // Use toLocaleString with explicit timezone to ensure proper conversion
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+}

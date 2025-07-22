@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
+import { formatDateString, formatTimestamp } from '@/lib/date-utils'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
@@ -186,7 +186,7 @@ export default async function RegistrationDetailPage({
                         <div className="space-y-1">
                           {registration.presale_start_at && (
                             <div>
-                              <span className="font-medium">Pre-sale:</span> {new Date(registration.presale_start_at).toLocaleString()}
+                              <span className="font-medium">Pre-sale:</span> {formatTimestamp(registration.presale_start_at)}
                               {registration.presale_code && (
                                 <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
                                   Code: {registration.presale_code.toUpperCase()}
@@ -196,12 +196,12 @@ export default async function RegistrationDetailPage({
                           )}
                           {registration.regular_start_at && (
                             <div>
-                              <span className="font-medium">General:</span> {new Date(registration.regular_start_at).toLocaleString()}
+                              <span className="font-medium">General:</span> {formatTimestamp(registration.regular_start_at)}
                             </div>
                           )}
                           {registration.registration_end_at && (
                             <div>
-                              <span className="font-medium">Ends:</span> {new Date(registration.registration_end_at).toLocaleString()}
+                              <span className="font-medium">Ends:</span> {formatTimestamp(registration.registration_end_at)}
                             </div>
                           )}
                         </div>

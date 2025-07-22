@@ -20,35 +20,22 @@ export function formatDate(date: Date): string {
 
 /**
  * Formats a timestamp string to localized date and time display
- * using the exact same UTC to local conversion logic as the timing edit page
+ * using native JavaScript timezone conversion (handles all edge cases properly)
  */
 export function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return 'Not set'
   
-  // Use the exact same logic as the timing edit page formatForInput function
+  // Parse timestamp and use native toLocaleString for proper timezone conversion
   const date = new Date(timestamp)
   
-  // Extract local timezone components exactly like timing edit page (lines 51-55)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0') 
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  
-  // This gives us the local time components that the timing edit page uses
-  const localHours = parseInt(hours)
-  const localMinutes = parseInt(minutes)
-  
-  // Format for display
-  const monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ]
-  
-  // Convert to 12-hour format
-  const hour12 = localHours === 0 ? 12 : localHours > 12 ? localHours - 12 : localHours
-  const ampm = localHours >= 12 ? 'PM' : 'AM'
-  const minutesDisplay = String(localMinutes).padStart(2, '0')
-  
-  return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}, ${hour12}:${minutesDisplay} ${ampm}`
+  // Use native Intl.DateTimeFormat for reliable timezone conversion
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short', 
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  }).format(date)
 }

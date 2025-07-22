@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import UserNavigation from '@/components/UserNavigation'
 import EnvironmentBanner from '@/components/EnvironmentBanner'
+import DebugEnv from '@/components/DebugEnv'
 
 export default async function UserLayout({
   children,
@@ -30,6 +31,7 @@ export default async function UserLayout({
   return (
     <div className="flex flex-col h-full">
       <EnvironmentBanner />
+      <DebugEnv />
       <UserNavigation user={userProfile} useToggle={true} />
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 flex-1 w-full overflow-y-auto">
         {children}

@@ -123,13 +123,15 @@ export default async function UserDashboardPage() {
   })
   const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
-  // Check for unpaid invoices
-  const unpaidInvoices = await getUserUnpaidInvoices(user.id)
+  // Check for unpaid invoices (only for admins)
+  const unpaidInvoices = userProfile?.is_admin 
+    ? await getUserUnpaidInvoices(user.id)
+    : { count: 0, totalAmount: 0 }
 
   return (
     <div className="px-4 py-6 sm:px-0">
-      {/* Unpaid Invoices Warning */}
-      {unpaidInvoices.count > 0 && (
+      {/* Unpaid Invoices Warning - Only show for admins */}
+      {userProfile?.is_admin && unpaidInvoices.count > 0 && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -348,8 +350,9 @@ export default async function UserDashboardPage() {
           </div>
         </div>
 
-        {/* Invoice Summary */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        {/* Invoice Summary - Only show for admins */}
+        {userProfile?.is_admin && (
+          <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5 flex flex-col h-full">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -404,6 +407,7 @@ export default async function UserDashboardPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
     </div>

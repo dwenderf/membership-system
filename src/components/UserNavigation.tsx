@@ -26,9 +26,9 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
   const [hasUnpaid, setHasUnpaid] = useState(false)
   const pathname = usePathname()
 
-  // Check for unpaid invoices
+  // Check for unpaid invoices (only for admins)
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && user?.is_admin) {
       fetch('/api/xero/unpaid-invoices')
         .then(res => res.json())
         .then(data => setHasUnpaid(data.hasUnpaid))
@@ -37,19 +37,23 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           setHasUnpaid(false)
         })
     }
-  }, [user?.id])
+  }, [user?.id, user?.is_admin])
 
-  const navigation = [
+  const baseNavigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
-    { 
-      name: 'My Invoices', 
-      href: '/user/invoices', 
-      current: pathname === '/user/invoices',
-      badge: hasUnpaid ? '!' : undefined
-    },
   ]
+
+  // Add invoices navigation only for admins
+  const navigation = user?.is_admin 
+    ? [...baseNavigation, { 
+        name: 'My Invoices', 
+        href: '/user/invoices', 
+        current: pathname === '/user/invoices',
+        badge: hasUnpaid ? '!' : undefined
+      }]
+    : baseNavigation
 
   return (
     <nav className="bg-white shadow-sm">

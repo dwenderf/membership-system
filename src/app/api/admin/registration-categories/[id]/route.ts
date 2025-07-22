@@ -1,29 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
   try {
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const supabase = await createClient()
+    
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check admin privileges
-    const { data: user } = await supabase
+    // Check if user is admin
+    const { data: userData, error: userError } = await supabase
       .from('users')
       .select('is_admin')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
-    if (!user?.is_admin) {
+    if (userError || !userData?.is_admin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
@@ -49,24 +47,23 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-
   try {
-    // Check authentication
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const supabase = await createClient()
+    
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check admin privileges
-    const { data: user } = await supabase
+    // Check if user is admin
+    const { data: userData, error: userError } = await supabase
       .from('users')
       .select('is_admin')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
-    if (!user?.is_admin) {
+    if (userError || !userData?.is_admin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

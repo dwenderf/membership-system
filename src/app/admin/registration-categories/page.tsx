@@ -1,25 +1,23 @@
 import Link from 'next/link'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
 
 export default async function RegistrationCategoriesPage() {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = await createClient()
 
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
     redirect('/login')
   }
 
-  const { data: user } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from('users')
     .select('is_admin')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
-  if (!user?.is_admin) {
+  if (userError || !userData?.is_admin) {
     redirect('/user')
   }
 

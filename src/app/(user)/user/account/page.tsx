@@ -112,7 +112,7 @@ export default function AccountPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500">LGBTQ Identity</dt>
+              <dt className="text-sm font-medium text-gray-500">LGBTQ+ Identity</dt>
               <dd className="mt-1 text-sm text-gray-900">
                 {userProfile?.is_lgbtq === true ? 'Yes' : userProfile?.is_lgbtq === false ? 'No' : userProfile?.is_lgbtq === null ? 'Prefer not to answer' : 'Not specified'}
               </dd>
@@ -134,7 +134,7 @@ export default function AccountPage() {
                   }
                   
                   if (userProfile?.is_lgbtq === true) {
-                    tags.push('LGBTQ')
+                    tags.push('LGBTQ+')
                   }
                   
                   if (tags.length > 0) {

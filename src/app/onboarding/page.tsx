@@ -79,7 +79,7 @@ export default function OnboardingPage() {
     }
     
     if (formData.isLgbtq === null || formData.isLgbtq === undefined) {
-      newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ'
+      newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ+'
     }
     
     if (!formData.termsAccepted) {
@@ -398,7 +398,7 @@ export default function OnboardingPage() {
             {/* LGBTQ Question */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Do you identify as LGBTQ? *
+                Do you identify as LGBTQ+? *
               </label>
               <div className="space-y-2">
                 <label className="flex items-center">

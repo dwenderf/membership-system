@@ -243,7 +243,7 @@ export default function EditProfilePage() {
           {/* LGBTQ Question */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Do you identify as LGBTQ? *
+              Do you identify as LGBTQ+? *
             </label>
             <div className="space-y-2">
               <label className="flex items-center">

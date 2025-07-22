@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import AdminHeader from '@/components/AdminHeader'
 
 export default async function RegistrationCategoriesPage() {
   const supabase = await createClient()
@@ -35,21 +34,26 @@ export default async function RegistrationCategoriesPage() {
   const userCategories = categories?.filter(cat => cat.category_type === 'user') || []
 
   return (
-    <>
-      <AdminHeader 
-        title="Registration Categories"
-        description="Manage master category templates used across registrations"
-        action={
-          <Link
-            href="/admin/registration-categories/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Create New Category
-          </Link>
-        }
-      />
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Registration Categories</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Manage master category templates used across registrations
+              </p>
+            </div>
+            <Link
+              href="/admin/registration-categories/new"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Create New Category
+            </Link>
+          </div>
 
-      <div className="space-y-8">
+          <div className="space-y-8">
         {/* System Categories Section */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-5 sm:p-6">
@@ -185,6 +189,6 @@ export default async function RegistrationCategoriesPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

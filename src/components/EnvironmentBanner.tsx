@@ -1,9 +1,11 @@
-'use client'
+interface EnvironmentBannerProps {
+  nodeEnv?: string
+  vercelEnv?: string
+}
 
-export default function EnvironmentBanner() {
+export default function EnvironmentBanner({ nodeEnv, vercelEnv }: EnvironmentBannerProps) {
   // Check if we're in production
-  const isProduction = process.env.NODE_ENV === 'production' && 
-                      process.env.VERCEL_ENV === 'production'
+  const isProduction = nodeEnv === 'production' && vercelEnv === 'production'
   
   // Don't show banner in production
   if (isProduction) {
@@ -12,14 +14,14 @@ export default function EnvironmentBanner() {
 
   // Determine environment type
   const getEnvironmentInfo = () => {
-    if (process.env.NODE_ENV === 'development') {
+    if (nodeEnv === 'development') {
       return {
         label: 'DEVELOPMENT',
         description: 'Local development environment',
         bgColor: 'bg-purple-600',
         textColor: 'text-white'
       }
-    } else if (process.env.VERCEL_ENV === 'preview') {
+    } else if (vercelEnv === 'preview') {
       return {
         label: 'PREVIEW',
         description: 'Vercel preview deployment',

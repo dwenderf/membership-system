@@ -120,6 +120,9 @@ function XeroIntegrationContent() {
   const [selectedFailedItems, setSelectedFailedItems] = useState<Set<string>>(new Set())
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
   const [expandedSyncLogs, setExpandedSyncLogs] = useState<Set<string>>(new Set())
+  const [displayedSyncLogs, setDisplayedSyncLogs] = useState<SyncLog[]>([])
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
+  const [hasMoreLogs, setHasMoreLogs] = useState(true)
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -135,6 +138,11 @@ function XeroIntegrationContent() {
           setCurrentToken(data.connections[0])
         }
         setSyncStats(data.stats)
+        // Initialize displayed logs with first 5 items
+        const initialLogs = data.stats?.recent_operations?.slice(0, 5) || []
+        setDisplayedSyncLogs(initialLogs)
+        // Check if there are more logs available
+        setHasMoreLogs((data.stats?.recent_operations?.length || 0) > 5)
       }
     } catch (error) {
       console.error('Error fetching Xero status:', error)
@@ -142,6 +150,30 @@ function XeroIntegrationContent() {
       setLoading(false)
     }
   }, [])
+
+  const loadMoreSyncLogs = async () => {
+    if (!syncStats || loadingMoreLogs) return
+    
+    setLoadingMoreLogs(true)
+    try {
+      // Calculate offset based on currently displayed logs
+      const offset = displayedSyncLogs.length
+      
+      const response = await fetch(`/api/xero/sync-logs?offset=${offset}&limit=25`)
+      if (response.ok) {
+        const data = await response.json()
+        setDisplayedSyncLogs(prev => [...prev, ...data.logs])
+        setHasMoreLogs(data.hasMore)
+      } else {
+        showError('Failed to load more sync logs')
+      }
+    } catch (error) {
+      console.error('Error loading more sync logs:', error)
+      showError('Failed to load more sync logs')
+    } finally {
+      setLoadingMoreLogs(false)
+    }
+  }
 
   useEffect(() => {
     fetchXeroStatus()
@@ -611,11 +643,11 @@ function XeroIntegrationContent() {
                 </div>
               </div>
 
-              {syncStats.recent_operations && syncStats.recent_operations.length > 0 && (
+              {displayedSyncLogs && displayedSyncLogs.length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Activity</h3>
                   <div className="space-y-2">
-                    {syncStats.recent_operations.slice(0, 3).map((log, index) => {
+                    {displayedSyncLogs.map((log, index) => {
                       const logId = log.id || `log-${index}`
                       const isExpanded = expandedSyncLogs.has(logId)
                       const hasResponseData = log.response_data || log.request_data
@@ -679,6 +711,34 @@ function XeroIntegrationContent() {
                       )
                     })}
                   </div>
+                  
+                  {/* Load More Button */}
+                  {hasMoreLogs && (
+                    <div className="mt-4 text-center">
+                      <button
+                        onClick={loadMoreSyncLogs}
+                        disabled={loadingMoreLogs}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loadingMoreLogs ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                            Load More (25)
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

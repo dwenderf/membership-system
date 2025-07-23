@@ -61,7 +61,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
         { name: 'Registration Categories', href: '/admin/registration-categories' },
         { name: 'Discount Categories', href: '/admin/discount-categories' },
         { name: 'Accounting Codes', href: '/admin/accounting-codes' },
-        { name: 'Xero Integration', href: '/admin/accounting' }
+        { name: 'Accounting Integration', href: '/admin/accounting' }
       ]
     },
     { 

@@ -716,9 +716,6 @@ function XeroIntegrationContent() {
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <div className="text-xs text-gray-500">
-                                {new Date(log.created_at).toLocaleTimeString()}
-                              </div>
                               {hasResponseData && (
                                 <button
                                   onClick={() => toggleSyncLogExpanded(logId)}
@@ -727,6 +724,9 @@ function XeroIntegrationContent() {
                                   {isExpanded ? 'Hide Details' : 'Show Details'}
                                 </button>
                               )}
+                              <div className="text-xs text-gray-500">
+                                {new Date(log.created_at).toLocaleTimeString()}
+                              </div>
                             </div>
                           </div>
                           

@@ -254,13 +254,13 @@ export default function EditRegistrationTimingPage() {
                       className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                     />
                     <label htmlFor="allow_lgbtq_presale" className="ml-3 text-sm font-medium text-purple-800">
-                      Allow LGBTQ members to register in pre-sale without code
+                      Allow LGBTQ+ members to register in pre-sale without code
                     </label>
                   </div>
                   <p className="mt-2 text-sm text-purple-700">
                     {formData.allow_lgbtq_presale 
-                      ? "LGBTQ members can register during pre-sale period without entering a pre-sale code."
-                      : "LGBTQ members must enter a pre-sale code to register during pre-sale period."
+                      ? "LGBTQ+ members can register during pre-sale period without entering a pre-sale code."
+                      : "LGBTQ+ members must enter a pre-sale code to register during pre-sale period."
                     }
                   </p>
                 </div>

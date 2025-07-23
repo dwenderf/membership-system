@@ -25,24 +25,6 @@ export function formatDate(date: Date): string {
 export function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return 'Not set'
   
-  // Debug: log what we're getting
-  console.log('formatTimestamp input:', timestamp)
-  
-  const date = new Date(timestamp)
-  console.log('parsed date:', date)
-  console.log('date.getHours():', date.getHours())
-  console.log('date.toString():', date.toString())
-  
-  // Simple approach: just use toLocaleString() which should work the same as datetime-local inputs
-  const result = date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric', 
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  })
-  
-  console.log('formatTimestamp result:', result)
-  return result
+  // Since this runs on server (UTC), return the raw timestamp for client-side rendering
+  return timestamp
 }

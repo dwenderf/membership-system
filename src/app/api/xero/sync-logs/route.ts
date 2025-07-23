@@ -23,15 +23,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Get pagination parameters
+    // Get pagination and time window parameters
     const offset = parseInt(searchParams.get('offset') || '0')
     const limit = Math.min(parseInt(searchParams.get('limit') || '25'), 100) // Cap at 100
+    const timeWindow = searchParams.get('timeWindow') || '24h'
+    
+    let timeRange: number
+    switch (timeWindow) {
+      case '7d':
+        timeRange = 7 * 24 * 60 * 60 * 1000
+        break
+      case '30d':
+        timeRange = 30 * 24 * 60 * 60 * 1000
+        break
+      case '24h':
+      default:
+        timeRange = 24 * 60 * 60 * 1000
+        break
+    }
 
     // Get sync logs with pagination
     const { data: syncLogs, error: syncLogsError } = await supabase
       .from('xero_sync_logs')
       .select('id, status, operation_type, entity_type, created_at, response_data, request_data, error_message')
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+      .gte('created_at', new Date(Date.now() - timeRange).toISOString())
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 

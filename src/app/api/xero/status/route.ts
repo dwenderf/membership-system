@@ -5,6 +5,7 @@ import { validateXeroConnection } from '@/lib/xero/client'
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const { searchParams } = new URL(request.url)
     
     // Check if user is authenticated and is admin
     const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -21,6 +22,23 @@ export async function GET(request: NextRequest) {
 
     if (userDataError || !userData?.is_admin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
+    // Get time window parameter (default to 24h)
+    const timeWindow = searchParams.get('timeWindow') || '24h'
+    let timeRange: number
+    
+    switch (timeWindow) {
+      case '7d':
+        timeRange = 7 * 24 * 60 * 60 * 1000
+        break
+      case '30d':
+        timeRange = 30 * 24 * 60 * 60 * 1000
+        break
+      case '24h':
+      default:
+        timeRange = 24 * 60 * 60 * 1000
+        break
     }
 
     // Get all active Xero connections
@@ -59,7 +77,7 @@ export async function GET(request: NextRequest) {
     const { data: syncStats, error: syncStatsError } = await supabase
       .from('xero_sync_logs')
       .select('id, status, operation_type, entity_type, created_at, response_data, request_data, error_message')
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+      .gte('created_at', new Date(Date.now() - timeRange).toISOString())
       .order('created_at', { ascending: false })
 
     // Get pending invoices with details (only 'pending' - staged invoices are not ready)

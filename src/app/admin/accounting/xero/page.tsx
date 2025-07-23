@@ -123,6 +123,7 @@ function XeroIntegrationContent() {
   const [displayedSyncLogs, setDisplayedSyncLogs] = useState<SyncLog[]>([])
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
   const [hasMoreLogs, setHasMoreLogs] = useState(true)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<'24h' | '7d' | '30d'>('24h')
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -130,7 +131,7 @@ function XeroIntegrationContent() {
 
   const fetchXeroStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/xero/status')
+      const response = await fetch(`/api/xero/status?timeWindow=${selectedTimeWindow}`)
       if (response.ok) {
         const data = await response.json()
         setIsXeroConnected(data.has_active_connection)
@@ -149,7 +150,7 @@ function XeroIntegrationContent() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedTimeWindow])
 
   const loadMoreSyncLogs = async () => {
     if (!syncStats || loadingMoreLogs) return
@@ -159,7 +160,7 @@ function XeroIntegrationContent() {
       // Calculate offset based on currently displayed logs
       const offset = displayedSyncLogs.length
       
-      const response = await fetch(`/api/xero/sync-logs?offset=${offset}&limit=25`)
+      const response = await fetch(`/api/xero/sync-logs?offset=${offset}&limit=25&timeWindow=${selectedTimeWindow}`)
       if (response.ok) {
         const data = await response.json()
         setDisplayedSyncLogs(prev => [...prev, ...data.logs])
@@ -343,6 +344,14 @@ function XeroIntegrationContent() {
       newExpanded.add(logId)
     }
     setExpandedSyncLogs(newExpanded)
+  }
+
+  const handleTimeWindowChange = (timeWindow: '24h' | '7d' | '30d') => {
+    setSelectedTimeWindow(timeWindow)
+    setDisplayedSyncLogs([])
+    setExpandedSyncLogs(new Set())
+    setHasMoreLogs(true)
+    setLoading(true)
   }
 
   const getErrorMessage = (errorCode: string): string => {
@@ -630,7 +639,43 @@ function XeroIntegrationContent() {
 
             {/* Sync Activity Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sync Activity (Last 24 Hours)</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Sync Activity</h2>
+                
+                {/* Time Window Tabs */}
+                <div className="flex rounded-lg border border-gray-200">
+                  <button
+                    onClick={() => handleTimeWindowChange('24h')}
+                    className={`px-3 py-1 text-sm font-medium rounded-l-lg ${
+                      selectedTimeWindow === '24h'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-white text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    24h
+                  </button>
+                  <button
+                    onClick={() => handleTimeWindowChange('7d')}
+                    className={`px-3 py-1 text-sm font-medium border-l ${
+                      selectedTimeWindow === '7d'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-white text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    onClick={() => handleTimeWindowChange('30d')}
+                    className={`px-3 py-1 text-sm font-medium rounded-r-lg border-l ${
+                      selectedTimeWindow === '30d'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-white text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+              </div>
               
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                 <div className="bg-green-50 p-4 rounded-lg">

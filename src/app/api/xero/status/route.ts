@@ -62,17 +62,65 @@ export async function GET(request: NextRequest) {
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
       .order('created_at', { ascending: false })
 
-    // Get pending invoices count
-    const { count: pendingInvoicesCount } = await supabase
+    // Get pending invoices with details (only 'pending' - staged invoices are not ready)
+    const { data: pendingInvoices, error: pendingInvoicesError } = await supabase
       .from('xero_invoices')
-      .select('*', { count: 'exact', head: true })
-      .in('sync_status', ['pending', 'staged'])
-
-    // Get pending payments count  
-    const { count: pendingPaymentsCount } = await supabase
-      .from('xero_payments')
-      .select('*', { count: 'exact', head: true })
+      .select(`
+        id,
+        sync_status,
+        net_amount,
+        staging_metadata,
+        payment_id,
+        last_synced_at,
+        payments (
+          user_id,
+          status,
+          stripe_payment_intent_id,
+          users!payments_user_id_fkey (
+            first_name,
+            last_name,
+            member_id
+          )
+        )
+      `)
       .eq('sync_status', 'pending')
+      .order('staged_at', { ascending: true })
+
+    if (pendingInvoicesError) {
+      console.error('Error fetching pending invoices:', pendingInvoicesError)
+    }
+
+    // Get pending payments with details (only 'pending' - staged payments are not ready)
+    const { data: pendingPayments, error: pendingPaymentsError } = await supabase
+      .from('xero_payments')
+      .select(`
+        id,
+        sync_status,
+        amount_paid,
+        reference,
+        staging_metadata,
+        last_synced_at,
+        xero_invoice_id,
+        xero_invoices (
+          payment_id,
+          payments (
+            user_id,
+            status,
+            stripe_payment_intent_id,
+            users!payments_user_id_fkey (
+              first_name,
+              last_name,
+              member_id
+            )
+          )
+        )
+      `)
+      .eq('sync_status', 'pending')
+      .order('staged_at', { ascending: true })
+
+    if (pendingPaymentsError) {
+      console.error('Error fetching pending payments:', pendingPaymentsError)
+    }
 
     // Get failed invoices with user information - only show retryable ones
     // (zero-value invoices or invoices with completed payments)
@@ -159,9 +207,11 @@ export async function GET(request: NextRequest) {
       successful_operations: syncStats?.filter(s => s.status === 'success').length || 0,
       failed_operations: syncStats?.filter(s => s.status === 'error').length || 0,
       recent_operations: syncStats?.slice(0, 10) || [],
-      pending_invoices: pendingInvoicesCount || 0,
-      pending_payments: pendingPaymentsCount || 0,
-      total_pending: (pendingInvoicesCount || 0) + (pendingPaymentsCount || 0),
+      pending_invoices: pendingInvoices?.length || 0,
+      pending_payments: pendingPayments?.length || 0,
+      total_pending: (pendingInvoices?.length || 0) + (pendingPayments?.length || 0),
+      pending_invoices_list: pendingInvoices || [],
+      pending_payments_list: pendingPayments || [],
       failed_invoices: filteredFailedInvoices,
       failed_payments: failedPayments || [],
       failed_count: filteredFailedInvoices.length + (failedPayments?.length || 0)

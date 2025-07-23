@@ -22,6 +22,7 @@ interface AdminNavigationProps {
 export default function AdminNavigation({ user }: AdminNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const pathname = usePathname()
 
   // Delay closing dropdown to prevent flickering when moving between menu and dropdown
@@ -116,20 +117,32 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                       onMouseLeave={() => handleDropdownClose(item.name)}
                     >
                       <div className="py-1">
-                        {item.submenu.map((subItem) => (
-                          <Link
-                            key={subItem.name}
-                            href={subItem.href}
-                            className={`${
-                              pathname.startsWith(subItem.href)
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-50'
-                            } block px-4 py-2 text-sm transition-colors duration-150`}
-                            onClick={() => setOpenDropdown(null)}
-                          >
-                            {subItem.name}
-                          </Link>
-                        ))}
+                        {item.submenu.map((subItem) => {
+                          const isActive = pathname.startsWith(subItem.href)
+                          const isHovered = hoveredItem === `${item.name}-${subItem.name}`
+                          
+                          return (
+                            <Link
+                              key={subItem.name}
+                              href={subItem.href}
+                              className={`block px-4 py-2 text-sm transition-colors duration-150 ${
+                                isActive
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : isHovered
+                                  ? 'bg-gray-100 text-gray-900'
+                                  : 'text-gray-700'
+                              }`}
+                              onMouseEnter={() => setHoveredItem(`${item.name}-${subItem.name}`)}
+                              onMouseLeave={() => setHoveredItem(null)}
+                              onClick={() => {
+                                setOpenDropdown(null)
+                                setHoveredItem(null)
+                              }}
+                            >
+                              {subItem.name}
+                            </Link>
+                          )
+                        })}
                       </div>
                     </div>
                   )}

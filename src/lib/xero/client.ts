@@ -611,6 +611,8 @@ export async function logXeroSync(params: {
   xero_id?: string
   details?: string
   error_message?: string
+  response_data?: any
+  request_data?: any
 }): Promise<void>
 
 // Implementation
@@ -624,6 +626,8 @@ export async function logXeroSync(
     xero_id?: string
     details?: string
     error_message?: string
+    response_data?: any
+    request_data?: any
   },
   operationType?: 'contact_sync' | 'invoice_sync' | 'payment_sync' | 'token_refresh',
   entityType?: 'user' | 'payment' | 'invoice' | 'contact' | null,
@@ -653,8 +657,8 @@ export async function logXeroSync(
           xero_entity_id: params.xero_id || null,
           status: params.success ? 'success' : 'error',
           error_message: params.error_message || null,
-          request_data: null,
-          response_data: params.details ? { details: params.details } : null
+          request_data: params.request_data || null,
+          response_data: params.response_data || (params.details ? { details: params.details } : null)
         })
     } else {
       // Legacy format

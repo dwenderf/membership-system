@@ -430,7 +430,33 @@ export class XeroBatchSyncManager {
             record_id: invoiceRecord.id,
             xero_id: xeroInvoice.invoiceID,
             success: true,
-            details: `Invoice ${xeroInvoice.invoiceNumber} created successfully`
+            details: `Invoice ${xeroInvoice.invoiceNumber} created successfully`,
+            response_data: {
+              invoice: {
+                invoiceID: xeroInvoice.invoiceID,
+                invoiceNumber: xeroInvoice.invoiceNumber,
+                status: xeroInvoice.status,
+                type: xeroInvoice.type,
+                total: xeroInvoice.total,
+                subTotal: xeroInvoice.subTotal,
+                date: xeroInvoice.date,
+                dueDate: xeroInvoice.dueDate,
+                currencyCode: xeroInvoice.currencyCode,
+                lineAmountTypes: xeroInvoice.lineAmountTypes
+              }
+            },
+            request_data: {
+              invoice: {
+                type: invoice.type,
+                contact: { contactID: contactResult.xeroContactId },
+                lineItems: invoice.lineItems,
+                date: invoice.date,
+                dueDate: invoice.dueDate,
+                reference: invoice.reference,
+                status: invoice.status,
+                currencyCode: invoice.currencyCode
+              }
+            }
           })
 
           console.log('✅ Invoice synced successfully:', xeroInvoice.invoiceNumber)
@@ -571,7 +597,28 @@ export class XeroBatchSyncManager {
             record_id: paymentRecord.id,
             xero_id: xeroPayment.paymentID,
             success: true,
-            details: `Payment ${xeroPayment.paymentID} created successfully`
+            details: `Payment ${xeroPayment.paymentID} created successfully`,
+            response_data: {
+              payment: {
+                paymentID: xeroPayment.paymentID,
+                date: xeroPayment.date,
+                amount: xeroPayment.amount,
+                reference: xeroPayment.reference,
+                currencyRate: xeroPayment.currencyRate,
+                paymentType: xeroPayment.paymentType,
+                status: xeroPayment.status,
+                invoice: xeroPayment.invoice
+              }
+            },
+            request_data: {
+              payment: {
+                invoice: { invoiceID: invoiceRecord.xero_invoice_id },
+                account: { code: paymentRecord.bank_account_code || 'STRIPE' },
+                amount: paymentRecord.amount_paid / 100,
+                date: payment.date,
+                reference: payment.reference
+              }
+            }
           })
 
           console.log('✅ Payment synced successfully:', xeroPayment.paymentID)

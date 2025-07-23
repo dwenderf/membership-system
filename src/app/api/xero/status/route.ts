@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     // Get sync statistics
     const { data: syncStats, error: syncStatsError } = await supabase
       .from('xero_sync_logs')
-      .select('status, operation_type, created_at')
+      .select('id, status, operation_type, entity_type, created_at, response_data, request_data, error_message')
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
       .order('created_at', { ascending: false })
 

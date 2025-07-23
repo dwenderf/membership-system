@@ -22,6 +22,8 @@ interface SyncLog {
   status: string
   error_message?: string
   created_at: string
+  response_data?: any
+  request_data?: any
 }
 
 interface PendingItem {
@@ -117,6 +119,7 @@ function XeroIntegrationContent() {
   const [retrying, setRetrying] = useState(false)
   const [selectedFailedItems, setSelectedFailedItems] = useState<Set<string>>(new Set())
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
+  const [expandedSyncLogs, setExpandedSyncLogs] = useState<Set<string>>(new Set())
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -298,6 +301,16 @@ function XeroIntegrationContent() {
     } else {
       setSelectedFailedItems(new Set(allFailedIds)) // Select all
     }
+  }
+
+  const toggleSyncLogExpanded = (logId: string) => {
+    const newExpanded = new Set(expandedSyncLogs)
+    if (newExpanded.has(logId)) {
+      newExpanded.delete(logId)
+    } else {
+      newExpanded.add(logId)
+    }
+    setExpandedSyncLogs(newExpanded)
   }
 
   const getErrorMessage = (errorCode: string): string => {
@@ -602,28 +615,69 @@ function XeroIntegrationContent() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Activity</h3>
                   <div className="space-y-2">
-                    {syncStats.recent_operations.slice(0, 3).map((log, index) => (
-                      <div key={log.id || `log-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-3 ${
-                            log.status === 'success' ? 'bg-green-400' : 
-                            log.status === 'error' ? 'bg-red-400' : 
-                            'bg-yellow-400'
-                          }`}></div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {log.operation_type.replace('_', ' ')} - {log.entity_type}
+                    {syncStats.recent_operations.slice(0, 3).map((log, index) => {
+                      const logId = log.id || `log-${index}`
+                      const isExpanded = expandedSyncLogs.has(logId)
+                      const hasResponseData = log.response_data || log.request_data
+                      
+                      return (
+                        <div key={logId} className="bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between p-3">
+                            <div className="flex items-center flex-1">
+                              <div className={`w-2 h-2 rounded-full mr-3 ${
+                                log.status === 'success' ? 'bg-green-400' : 
+                                log.status === 'error' ? 'bg-red-400' : 
+                                'bg-yellow-400'
+                              }`}></div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {log.operation_type.replace('_', ' ')} - {log.entity_type}
+                                </div>
+                                {log.error_message && (
+                                  <div className="text-xs text-red-600">{log.error_message}</div>
+                                )}
+                              </div>
                             </div>
-                            {log.error_message && (
-                              <div className="text-xs text-red-600">{log.error_message}</div>
-                            )}
+                            <div className="flex items-center space-x-2">
+                              <div className="text-xs text-gray-500">
+                                {new Date(log.created_at).toLocaleTimeString()}
+                              </div>
+                              {hasResponseData && (
+                                <button
+                                  onClick={() => toggleSyncLogExpanded(logId)}
+                                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                  {isExpanded ? 'Hide Details' : 'Show Details'}
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          
+                          {isExpanded && hasResponseData && (
+                            <div className="px-3 pb-3 border-t border-gray-200 mt-2">
+                              <div className="mt-2 space-y-3">
+                                {log.request_data && (
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 mb-1">Request Data:</div>
+                                    <pre className="text-xs bg-blue-50 p-2 rounded border overflow-x-auto">
+                                      {JSON.stringify(log.request_data, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                                {log.response_data && (
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 mb-1">Response Data:</div>
+                                    <pre className="text-xs bg-green-50 p-2 rounded border overflow-x-auto">
+                                      {JSON.stringify(log.response_data, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(log.created_at).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

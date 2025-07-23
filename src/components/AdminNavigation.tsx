@@ -24,6 +24,13 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const pathname = usePathname()
 
+  // Delay closing dropdown to prevent flickering when moving between menu and dropdown
+  const handleDropdownClose = (itemName: string) => {
+    setTimeout(() => {
+      setOpenDropdown(current => current === itemName ? null : current)
+    }, 100)
+  }
+
   const navigation = [
     { 
       name: 'Dashboard', 
@@ -84,7 +91,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                   key={item.name} 
                   className="relative"
                   onMouseEnter={() => item.submenu && setOpenDropdown(item.name)}
-                  onMouseLeave={() => item.submenu && setOpenDropdown(null)}
+                  onMouseLeave={() => item.submenu && handleDropdownClose(item.name)}
                 >
                   <Link
                     href={item.href}
@@ -103,7 +110,11 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                   </Link>
                   
                   {item.submenu && openDropdown === item.name && (
-                    <div className="absolute left-0 mt-0 w-48 bg-white shadow-lg border border-gray-200 rounded-md z-50">
+                    <div 
+                      className="absolute left-0 mt-0 w-48 bg-white shadow-lg border border-gray-200 rounded-md z-50"
+                      onMouseEnter={() => setOpenDropdown(item.name)}
+                      onMouseLeave={() => handleDropdownClose(item.name)}
+                    >
                       <div className="py-1">
                         {item.submenu.map((subItem) => (
                           <Link
@@ -113,7 +124,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                               pathname.startsWith(subItem.href)
                                 ? 'bg-blue-50 text-blue-700'
                                 : 'text-gray-700 hover:bg-gray-50'
-                            } block px-4 py-2 text-sm`}
+                            } block px-4 py-2 text-sm transition-colors duration-150`}
                             onClick={() => setOpenDropdown(null)}
                           >
                             {subItem.name}

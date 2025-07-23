@@ -74,6 +74,7 @@ SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
 
 # Xero Integration Configuration
+# Recommendation: Create separate Xero apps for development/preview/production environments
 XERO_CLIENT_ID=your_xero_client_id_here
 XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
@@ -529,10 +530,23 @@ SENTRY_PROJECT=membership-system
 ```
 
 **Xero Integration:**
+
+**Important**: Create separate Xero apps for production and preview environments to avoid tenant conflicts.
+
+1. **Create Production Xero App:**
+   - Go to [Xero Developer Console](https://developer.xero.com/myapps)
+   - Create new app (name it "Your App - Production")
+   - Set redirect URI: `https://your-production-domain.com/api/xero/callback`
+
+2. **Create Preview Xero App:**
+   - Create another app (name it "Your App - Preview") 
+   - Set redirect URI: `https://your-preview-domain.vercel.app/api/xero/callback`
+
 ```bash
-XERO_CLIENT_ID=your_xero_client_id_here
-XERO_CLIENT_SECRET=your_xero_client_secret_here
-XERO_REDIRECT_URI=https://your-domain.vercel.app/api/xero/callback
+# Use production app credentials for production environment
+XERO_CLIENT_ID=your_production_xero_client_id_here
+XERO_CLIENT_SECRET=your_production_xero_client_secret_here
+XERO_REDIRECT_URI=https://your-domain.com/api/xero/callback
 XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 ```
 

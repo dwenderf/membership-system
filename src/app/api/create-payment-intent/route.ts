@@ -88,7 +88,10 @@ async function handleFreeMembership({
 
     const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
     
-    // Get accounting codes from system_accounting_codes
+    // Check if this is a naturally free membership (price set to 0) vs a discounted membership
+    const isNaturallyFree = membershipAmount === 0
+    
+    // Get accounting codes from system_accounting_codes (only needed if applying discount)
     const { data: accountingCodes } = await supabase
       .from('system_accounting_codes')
       .select('code_type, accounting_code')
@@ -100,18 +103,18 @@ async function handleFreeMembership({
     const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: membershipAmount,
-      discount_amount: membershipAmount, // Full discount for free membership
+      discount_amount: isNaturallyFree ? 0 : membershipAmount, // Only discount if not naturally free
       final_amount: donationAmount || 0,
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: membershipAmount, // Full membership price
+          amount: membershipAmount, // Use actual membership price (0 if naturally free)
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code
         }
       ],
-      discount_codes_used: [
+      discount_codes_used: isNaturallyFree ? [] : [
         {
           code: 'FREE_MEMBERSHIP',
           amount_saved: membershipAmount,

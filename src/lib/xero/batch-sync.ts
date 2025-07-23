@@ -37,17 +37,17 @@ export class XeroBatchSyncManager {
     payments: XeroPaymentRecord[]
   }> {
     try {
-      // Get pending invoices
+      // Get pending invoices (only 'pending' - staged invoices are not ready until payment succeeds)
       const { data: pendingInvoices } = await this.supabase
         .from('xero_invoices')
         .select(`
           *,
           xero_invoice_line_items (*)
         `)
-        .in('sync_status', ['pending', 'staged'])
+        .eq('sync_status', 'pending')
         .order('staged_at', { ascending: true })
 
-      // Get pending payments with payment data for filtering
+      // Get pending payments with payment data for filtering (only 'pending' - staged payments are not ready)
       const { data: pendingPayments } = await this.supabase
         .from('xero_payments')
         .select(`
@@ -60,7 +60,7 @@ export class XeroBatchSyncManager {
             )
           )
         `)
-        .in('sync_status', ['pending', 'staged'])
+        .eq('sync_status', 'pending')
         .order('staged_at', { ascending: true })
 
       // Filter payments based on criteria: completed status and non-free payment method

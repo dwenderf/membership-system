@@ -331,6 +331,19 @@ export class XeroBatchSyncManager {
         return false
       }
 
+      // Get user data for enhanced logging (contact name)
+      const { data: userData } = await this.supabase
+        .from('users')
+        .select('first_name, last_name, member_id')
+        .eq('id', metadata.user_id)
+        .single()
+      
+      const contactName = userData 
+        ? userData.member_id 
+          ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+          : `${userData.first_name} ${userData.last_name}`
+        : 'Unknown Contact'
+
       // Check if this is a zero-value invoice (always AUTHORISED)
       if (invoiceRecord.net_amount === 0) {
         console.log('✅ Zero-value invoice - marking as AUTHORISED')
@@ -448,7 +461,10 @@ export class XeroBatchSyncManager {
             request_data: {
               invoice: {
                 type: invoice.type,
-                contact: { contactID: contactResult.xeroContactId },
+                contact: { 
+                  contactID: contactResult.xeroContactId,
+                  contactName: contactName
+                },
                 lineItems: invoice.lineItems,
                 date: invoice.date,
                 dueDate: invoice.dueDate,

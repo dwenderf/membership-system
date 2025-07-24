@@ -36,6 +36,17 @@ async function runXeroStartupTest() {
           )
           
           // Test connection to first active tenant
+          logger.logXeroSync(
+            'startup-connection-test-begin',
+            `Testing connection to tenant: ${activeXeroTenants[0].tenant_name}`,
+            { 
+              tenantId: activeXeroTenants[0].tenant_id,
+              tenantName: activeXeroTenants[0].tenant_name,
+              tenantExpiresAt: activeXeroTenants[0].expires_at
+            },
+            'info'
+          )
+          
           const isConnected = await validateXeroConnection(activeXeroTenants[0].tenant_id)
           
           if (isConnected) {

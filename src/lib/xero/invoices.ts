@@ -403,6 +403,7 @@ export async function createXeroInvoiceBeforePayment(
                 } else {
                   console.log(`🔍 Non-archived contact found: ${nonArchivedContact ? `"${nonArchivedContact.name}" (${nonArchivedContact.contactID})` : 'None'}`)
                 }
+              }
               
               if (nonArchivedContact && nonArchivedContact.contactID) {
                 console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)

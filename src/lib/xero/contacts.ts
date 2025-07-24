@@ -582,7 +582,50 @@ export async function getOrCreateXeroContact(
       .single()
 
     if (existingContact && existingContact.sync_status === 'synced' && existingContact.xero_contact_id) {
-      return { success: true, xeroContactId: existingContact.xero_contact_id }
+      // Validate that the cached contact ID is still valid and not archived
+      try {
+        const xeroApi = await getAuthenticatedXeroClient(tenantId)
+        if (xeroApi) {
+          const contactResponse = await xeroApi.accountingApi.getContact(
+            tenantId,
+            existingContact.xero_contact_id
+          )
+          
+          if (contactResponse.body.contacts && contactResponse.body.contacts.length > 0) {
+            const contact = contactResponse.body.contacts[0]
+            
+            // Check if contact is archived
+            if (contact.contactStatus === 'ARCHIVED') {
+              console.log(`⚠️ Cached contact ${existingContact.xero_contact_id} is archived, will re-sync`)
+              // Mark as needing re-sync so we'll create a new contact
+              await supabase
+                .from('xero_contacts')
+                .update({ sync_status: 'pending' })
+                .eq('user_id', userId)
+                .eq('tenant_id', tenantId)
+            } else {
+              // Contact is valid, use it
+              return { success: true, xeroContactId: existingContact.xero_contact_id }
+            }
+          } else {
+            console.log(`⚠️ Cached contact ${existingContact.xero_contact_id} not found in Xero, will re-sync`)
+            // Mark as needing re-sync
+            await supabase
+              .from('xero_contacts')
+              .update({ sync_status: 'pending' })
+              .eq('user_id', userId)
+              .eq('tenant_id', tenantId)
+          }
+        }
+      } catch (validationError) {
+        console.log(`⚠️ Error validating cached contact ${existingContact.xero_contact_id}:`, validationError)
+        // Mark as needing re-sync on validation error
+        await supabase
+          .from('xero_contacts')
+          .update({ sync_status: 'pending' })
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+      }
     }
 
     // Sync the contact

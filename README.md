@@ -937,15 +937,28 @@ The admin interface provides manual sync options:
 3. **Intelligent Archived Contact Handling**: Smart detection and resolution of archived contact conflicts
 4. **Name Standardization**: Ensures all contacts follow consistent naming conventions
 
+#### Improved Contact Search Strategy
+
+Our system uses a **name-first search strategy** to prevent picking up the wrong contact when multiple contacts exist with the same email:
+
+1. ✅ **Search by exact contact name first** → Look for "First Last - MemberID" (e.g., "David Wender - 1002")
+2. ✅ **Fall back to email search** → Only if exact name not found, search by email
+3. ✅ **Prioritize exact matches** → Use exact name matches over partial matches
+4. ✅ **Handle archived contacts** → Skip archived contacts, find active alternatives
+5. ✅ **Create new only if necessary** → Create new contact only if no suitable alternatives exist
+
+This prevents the system from picking up the wrong contact when you have multiple contacts with the same email address in Xero.
+
 #### When Archived Contact is Detected
 
 Our system follows an intelligent 5-step process to handle archived contacts while minimizing duplication:
 
-1. ✅ **Search all contacts by email** → Get all contacts with user's email address
-2. ✅ **Look for non-archived alternatives** → Find contacts that aren't archived  
-3. ✅ **Check naming convention** → Does contact name start with "First Last - MemberID"?
-4. ✅ **Use standardized contact** → Apply updates and use for operations
-5. ✅ **Create new only if necessary** → Create new contact only if no alternatives exist
+1. ✅ **Search by exact contact name first** → Look for "First Last - MemberID" 
+2. ✅ **Fall back to email search** → Get all contacts with user's email address
+3. ✅ **Look for non-archived alternatives** → Find contacts that aren't archived  
+4. ✅ **Check naming convention** → Does contact name start with "First Last - MemberID"?
+5. ✅ **Use standardized contact** → Apply updates and use for operations
+6. ✅ **Create new only if necessary** → Create new contact only if no alternatives exist
 
 #### Archived Contact Resolution Scenarios
 
@@ -956,7 +969,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 
 **Scenario 2: Legacy Contact Found**  
 - **Situation**: Find archived "David Wender - 1002", find active "David Wender" (old format)
-- **Action**: ✅ **Update to "David Wender - 1002 (43423)"** (standardized + timestamp)
+- **Action**: ✅ **Update to "David Wender - 1002"** (standardized naming)
 - **Result**: Legacy contact updated to follow naming convention
 
 **Scenario 3: Different Member Found**
@@ -964,10 +977,15 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 - **Action**: ✅ **Use existing "David Wender - 1001" as-is** (already correct format)
 - **Result**: Uses different member's contact (same person, different membership)
 
-**Scenario 4: No Alternatives - Create New**
+**Scenario 4: Archived Contact with Exact Name**
+- **Situation**: Find archived "David Wender - 1002" (exact name match)
+- **Action**: ✅ **Rename to "David Wender - 1002 - Archived"** then create new "David Wender - 1002"
+- **Result**: Archived contact preserved, new active contact created
+
+**Scenario 5: No Alternatives - Create New**
 - **Situation**: Find archived "David Wender - 1002", no other active contacts found
-- **Action**: ✅ **Create new "David Wender - 1002 (43423)"**
-- **Result**: New contact created with timestamp to ensure uniqueness
+- **Action**: ✅ **Create new "David Wender - 1002"**
+- **Result**: New contact created with clean naming
 
 #### Benefits
 
@@ -975,8 +993,10 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 - ✅ **Naming Consistency**: All contacts follow "First Last - MemberID" format  
 - ✅ **Legacy Cleanup**: Gradually updates old contact names to new standard
 - ✅ **Archive Respect**: Doesn't override business decisions to archive contacts
+- ✅ **Smart Archived Contact Handling**: Renames archived contacts to avoid conflicts
 - ✅ **Member ID Visibility**: Always shows member number in Xero contact name
 - ✅ **Audit Trail**: Clear tracking when multiple contacts needed for same person
+- ✅ **Clean Contact Creation**: New contacts created with proper naming, no timestamps needed
 
 #### Troubleshooting
 

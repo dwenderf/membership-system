@@ -429,27 +429,104 @@ export class XeroBatchSyncManager {
               .single()
 
             if (userData) {
-              // Search for non-archived contacts with the same email
-              const contactsResponse = await xeroApi.accountingApi.getContacts(
-                activeTenant.tenant_id,
-                undefined,
-                `EmailAddress="${userData.email}"`
-              )
+              // IMPROVED STRATEGY: Search by exact contact name first, then fall back to email search
+              let nonArchivedContact: any = undefined
+              
+              // Step 1: Search by exact contact name first (including member ID)
+              const expectedContactName = userData.member_id 
+                ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                : `${userData.first_name} ${userData.last_name}`
+              
+              console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
+              
+              try {
+                const nameSearchResponse = await xeroApi.accountingApi.getContacts(
+                  activeTenant.tenant_id,
+                  undefined,
+                  `Name="${expectedContactName}"`
+                )
+                
+                if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
+                  const nameFoundContacts = nameSearchResponse.body.contacts
+                  console.log(`✅ Found ${nameFoundContacts.length} contact(s) with exact name: "${expectedContactName}"`)
+                  
+                  // Find non-archived contact with exact name
+                  nonArchivedContact = nameFoundContacts.find((contact: any) => 
+                    contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
+                    contact.contactStatus !== 'ARCHIVED' // Must be non-archived
+                  )
+                  
+                                     if (nonArchivedContact) {
+                     console.log(`🎯 Found exact name match: "${nonArchivedContact.name}" (${nonArchivedContact.contactID})`)
+                   } else {
+                     // Check if we found an archived contact with exact name
+                     const archivedContact = nameFoundContacts.find((contact: any) => 
+                       contact.contactID !== contactResult.xeroContactId && // Exclude the current archived one
+                       contact.contactStatus === 'ARCHIVED' // Must be archived
+                     )
+                     
+                     if (archivedContact) {
+                       console.log(`⚠️ Found archived contact with exact name: "${archivedContact.name}" (ID: ${archivedContact.contactID})`)
+                       
+                       // Rename the archived contact to avoid conflicts
+                       try {
+                         const archivedContactName = `${expectedContactName} - Archived`
+                         console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
+                         
+                         await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID, {
+                           contacts: [{
+                             contactID: archivedContact.contactID,
+                             name: archivedContactName,
+                             firstName: userData.first_name,
+                             lastName: userData.last_name,
+                             emailAddress: userData.email,
+                             contactStatus: 'ARCHIVED' // Keep it archived
+                           }]
+                         })
+                         
+                         console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
+                         
+                       } catch (renameError) {
+                         console.error(`❌ Failed to rename archived contact:`, renameError)
+                       }
+                     }
+                   }
+                }
+              } catch (nameSearchError) {
+                console.log(`❌ Name search failed for "${expectedContactName}":`, nameSearchError)
+              }
+              
+              // Step 2: If no exact name match found, fall back to email search
+              if (!nonArchivedContact) {
+                console.log(`🔍 No exact name match found, searching by email: ${userData.email}`)
+                
+                const contactsResponse = await xeroApi.accountingApi.getContacts(
+                  activeTenant.tenant_id,
+                  undefined,
+                  `EmailAddress="${userData.email}"`
+                )
 
-              const nonArchivedContacts = contactsResponse.body.contacts?.filter(
-                contact => contact.contactStatus !== 'ARCHIVED'
-              ) || []
+                const nonArchivedContacts = contactsResponse.body.contacts?.filter(
+                  contact => contact.contactStatus !== 'ARCHIVED'
+                ) || []
 
-              console.log(`🔍 Found ${nonArchivedContacts.length} non-archived contacts with email ${userData.email}`)
+                console.log(`🔍 Found ${nonArchivedContacts.length} non-archived contacts with email ${userData.email}`)
 
-              if (nonArchivedContacts.length > 0) {
-                // Try to find an exact name match first
-                const expectedName = userData.member_id 
-                  ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-                  : `${userData.first_name} ${userData.last_name}`
+                if (nonArchivedContacts.length > 0) {
+                  // Try to find exact name match in email results
+                  const exactMatch = nonArchivedContacts.find(contact => contact.name === expectedContactName)
+                  nonArchivedContact = exactMatch || nonArchivedContacts[0]
+                  
+                  if (exactMatch) {
+                    console.log(`🎯 Found exact name match in email results: "${exactMatch.name}" (${exactMatch.contactID})`)
+                  } else {
+                    console.log(`✅ Using first non-archived contact: "${nonArchivedContact.name}" (${nonArchivedContact.contactID})`)
+                  }
+                }
+              }
 
-                const exactMatch = nonArchivedContacts.find(contact => contact.name === expectedName)
-                const contactToUse = exactMatch || nonArchivedContacts[0]
+              if (nonArchivedContact) {
+                const contactToUse = nonArchivedContact
 
                 console.log(`✅ Found non-archived contact: ${contactToUse.name} (ID: ${contactToUse.contactID})`)
                 

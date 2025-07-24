@@ -42,129 +42,179 @@ export async function syncUserToXeroContact(
       xeroContactId = existingContact.xero_contact_id
       isUpdate = true
     } else {
-      // Search for existing contact by email in Xero
+      // NEW STRATEGY: Search by exact contact name first (including member ID), then fall back to email
+      let foundContacts: Contact[] = []
+      let searchMethod = 'none'
+      
+      // Step 1: Search by exact contact name (including member ID if available)
+      const expectedContactName = userData.member_id 
+        ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+        : `${userData.first_name} ${userData.last_name}`
+      
+      console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
+      
       try {
-        const searchResponse = await xeroApi.accountingApi.getContacts(
+        const nameSearchResponse = await xeroApi.accountingApi.getContacts(
           tenantId,
           undefined,
-          `EmailAddress="${userData.email}"`
+          `Name="${expectedContactName}"`
         )
-
-        if (searchResponse.body.contacts && searchResponse.body.contacts.length > 0) {
-          const foundContacts = searchResponse.body.contacts
+        
+        if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
+          foundContacts = nameSearchResponse.body.contacts
+          searchMethod = 'exact-name'
+          console.log(`✅ Found ${foundContacts.length} contact(s) with exact name: "${expectedContactName}"`)
           
-          if (foundContacts.length > 1) {
-            // Multiple contacts found - log warning and attempt name matching
-            console.warn(`⚠️ Multiple Xero contacts found for email ${userData.email} (${foundContacts.length} contacts)`)
+          // Check if the found contact is archived
+          const foundContact = foundContacts[0] // Should be only one with exact name
+          const isArchived = foundContact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
+          
+          if (isArchived) {
+            console.log(`⚠️ Found archived contact with exact name: "${foundContact.name}" (ID: ${foundContact.contactID})`)
             
-            // Send Sentry warning for duplicate email monitoring
-            Sentry.captureMessage(`Multiple Xero contacts found with same email during contact sync: ${userData.email}`, {
-              level: 'warning',
-              tags: {
-                component: 'xero-contact-sync',
-                operation: 'contact-search'
-              },
-              extra: {
-                email: userData.email,
-                contactCount: foundContacts.length,
-                contacts: foundContacts.map((contact: Contact) => ({
-                  name: contact.name,
-                  contactID: contact.contactID,
-                  firstName: contact.firstName,
-                  lastName: contact.lastName,
-                  status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
-                })),
-                userID: userData.id,
-                searchContext: 'initial-contact-lookup'
-              }
-            })
-            
-            // Try to find exact name match first
-            const exactNameMatch = foundContacts.find((contact: Contact) => 
-              contact.firstName === userData.first_name && 
-              contact.lastName === userData.last_name
-            )
-            
-            if (exactNameMatch && exactNameMatch.contactID) {
-              xeroContactId = exactNameMatch.contactID
-              console.log(`✅ Found exact name match for ${userData.first_name} ${userData.last_name}`)
-            } else {
-              // Try partial name matching as fallback
-              const partialMatch = foundContacts.find((contact: Contact) => {
-                const contactFullName = `${contact.firstName || ''} ${contact.lastName || ''}`.trim().toLowerCase()
-                const userFullName = `${userData.first_name} ${userData.last_name}`.toLowerCase()
-                return contactFullName === userFullName
+            // Rename the archived contact to avoid conflicts
+            try {
+              const archivedContactName = `${expectedContactName} - Archived`
+              console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
+              
+              await xeroApi.accountingApi.updateContact(tenantId, foundContact.contactID, {
+                contacts: [{
+                  contactID: foundContact.contactID,
+                  name: archivedContactName,
+                  firstName: userData.first_name,
+                  lastName: userData.last_name,
+                  emailAddress: userData.email,
+                  contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
+                }]
               })
               
-              if (partialMatch && partialMatch.contactID) {
-                xeroContactId = partialMatch.contactID
-                console.log(`✅ Found partial name match for ${userData.first_name} ${userData.last_name}`)
-              } else {
-                // Fall back to first contact but log the decision
-                xeroContactId = foundContacts[0].contactID
-                console.warn(`⚠️ No name match found, using first contact: ${foundContacts[0].name || 'Unknown'} (ID: ${foundContacts[0].contactID})`)
-              }
+              console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
+              
+              // Don't use this contact - we'll create a new one
+              xeroContactId = undefined
+              isUpdate = false
+              
+            } catch (renameError) {
+              console.error(`❌ Failed to rename archived contact:`, renameError)
+              // If rename fails, we'll still create a new contact with timestamp
+              xeroContactId = undefined
+              isUpdate = false
             }
           } else {
-            // Single contact found - use it
-            xeroContactId = foundContacts[0].contactID
-            console.log(`✅ Single contact found for ${userData.email}`)
-          }
-          
-          if (xeroContactId) {
+            // Contact is active - use it
+            xeroContactId = foundContact.contactID
             isUpdate = true
-          }
-        } else {
-          // No contacts found by email, try searching by name
-          console.log(`No contacts found by email ${userData.email}, searching by name...`)
-          
-          try {
-            const nameSearchResponse = await xeroApi.accountingApi.getContacts(
-              tenantId,
-              undefined,
-              `Name="${userData.first_name} ${userData.last_name}"`
-            )
-            
-            if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
-              const nameFoundContacts = nameSearchResponse.body.contacts
-              
-              // Check if any of the name matches also have matching email
-              const emailAndNameMatch = nameFoundContacts.find((contact: Contact) => 
-                contact.emailAddress === userData.email
-              )
-              
-              if (emailAndNameMatch && emailAndNameMatch.contactID) {
-                xeroContactId = emailAndNameMatch.contactID
-                isUpdate = true
-                console.log(`✅ Found exact name and email match for ${userData.first_name} ${userData.last_name}`)
-              } else {
-                // Name found but email doesn't match - this is the duplicate name case
-                console.log(`⚠️ Found existing contact with name "${userData.first_name} ${userData.last_name}" but different email`)
-                
-                // Try to find if there's a contact with same name but no email
-                const noEmailMatch = nameFoundContacts.find((contact: Contact) => 
-                  !contact.emailAddress || contact.emailAddress === ''
-                )
-                
-                if (noEmailMatch && noEmailMatch.contactID) {
-                  // Update the existing contact with the email
-                  xeroContactId = noEmailMatch.contactID
-                  isUpdate = true
-                  console.log(`✅ Found contact with same name but no email, will update with email`)
-                } else {
-                  // All name matches have different emails - need to create with unique name
-                  console.log(`Multiple contacts exist with name "${userData.first_name} ${userData.last_name}" - will create with unique name`)
-                  // We'll handle this in the create section by making the name unique
-                }
-              }
-            }
-          } catch (nameSearchError) {
-            console.log('Name search failed, will create new contact')
+            console.log(`✅ Using active exact name match: ${foundContact.name} (ID: ${foundContact.contactID})`)
           }
         }
-      } catch (searchError) {
-        // If search fails, we'll create a new contact
-        console.log('Contact search failed, will create new contact')
+      } catch (nameSearchError) {
+        console.log(`❌ Name search failed for "${expectedContactName}":`, nameSearchError)
+      }
+      
+      // Step 2: If no exact name match found, fall back to email search
+      if (!xeroContactId) {
+        console.log(`🔍 No exact name match found, searching by email: ${userData.email}`)
+        
+        try {
+          const emailSearchResponse = await xeroApi.accountingApi.getContacts(
+            tenantId,
+            undefined,
+            `EmailAddress="${userData.email}"`
+          )
+
+          if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
+            foundContacts = emailSearchResponse.body.contacts
+            searchMethod = 'email'
+            
+            console.log(`🔍 Found ${foundContacts.length} contact(s) with email ${userData.email}:`)
+            foundContacts.forEach((contact, index) => {
+              console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
+            })
+            
+            if (foundContacts.length > 1) {
+              // Multiple contacts found - log warning and attempt name matching
+              console.warn(`⚠️ Multiple Xero contacts found for email ${userData.email} (${foundContacts.length} contacts)`)
+              
+              // Send Sentry warning for duplicate email monitoring
+              Sentry.captureMessage(`Multiple Xero contacts found with same email during contact sync: ${userData.email}`, {
+                level: 'warning',
+                tags: {
+                  component: 'xero-contact-sync',
+                  operation: 'contact-search'
+                },
+                extra: {
+                  email: userData.email,
+                  contactCount: foundContacts.length,
+                  contacts: foundContacts.map((contact: Contact) => ({
+                    name: contact.name,
+                    contactID: contact.contactID,
+                    firstName: contact.firstName,
+                    lastName: contact.lastName,
+                    status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
+                  })),
+                  userID: userData.id,
+                  searchContext: 'email-fallback-search',
+                  expectedContactName
+                }
+              })
+              
+              // Try to find exact name match first (should match our expected name)
+              const exactNameMatch = foundContacts.find((contact: Contact) => 
+                contact.name === expectedContactName
+              )
+              
+              if (exactNameMatch && exactNameMatch.contactID) {
+                xeroContactId = exactNameMatch.contactID
+                console.log(`✅ Found exact name match in email results: "${exactNameMatch.name}" (ID: ${exactNameMatch.contactID})`)
+              } else {
+                // Try to find partial name match (first/last name without member ID)
+                const partialNameMatch = foundContacts.find((contact: Contact) => 
+                  contact.firstName === userData.first_name && 
+                  contact.lastName === userData.last_name
+                )
+                
+                if (partialNameMatch && partialNameMatch.contactID) {
+                  xeroContactId = partialNameMatch.contactID
+                  console.log(`✅ Found partial name match: "${partialNameMatch.name}" (ID: ${partialNameMatch.contactID})`)
+                } else {
+                  // Try to find any non-archived contact as last resort
+                  const nonArchivedContact = foundContacts.find((contact: Contact) => 
+                    contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED
+                  )
+                  
+                  if (nonArchivedContact && nonArchivedContact.contactID) {
+                    xeroContactId = nonArchivedContact.contactID
+                    console.log(`✅ Found non-archived contact: "${nonArchivedContact.name}" (ID: ${nonArchivedContact.contactID})`)
+                  } else {
+                    // Fall back to first contact but log the decision
+                    xeroContactId = foundContacts[0].contactID
+                    console.warn(`⚠️ No suitable match found, using first contact: ${foundContacts[0].name || 'Unknown'} (ID: ${foundContacts[0].contactID})`)
+                  }
+                }
+              }
+            } else {
+              // Single contact found - use it
+              xeroContactId = foundContacts[0].contactID
+              console.log(`✅ Single contact found for ${userData.email}: "${foundContacts[0].name}" (ID: ${foundContacts[0].contactID})`)
+            }
+            
+            if (xeroContactId) {
+              isUpdate = true
+            }
+          }
+        } catch (emailSearchError) {
+          console.log('Email search failed, will create new contact:', emailSearchError)
+        }
+      }
+      
+      // Log the final search result
+      if (xeroContactId) {
+        console.log(`📋 Contact search completed:`, {
+          searchMethod,
+          foundContactId: xeroContactId,
+          expectedName: expectedContactName,
+          isUpdate
+        })
       }
     }
 

@@ -182,10 +182,34 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
           .eq('xero_invoice_id', xeroInvoiceId)
           .eq('payment_id', paymentRecord.id)
 
-        // TODO: Update invoice status in Xero from DRAFT to AUTHORISED
-        // This will require a separate API call to update the invoice in Xero
-        
         console.log(`✅ Updated Xero invoice ${invoiceNumber} status after payment completion`)
+
+        // Record the payment in Xero for complete reconciliation
+        try {
+          // Get tenant ID from the existing invoice record
+          const { data: invoiceData } = await supabase
+            .from('xero_invoices')
+            .select('tenant_id')
+            .eq('xero_invoice_id', xeroInvoiceId)
+            .eq('payment_id', paymentRecord.id)
+            .single()
+
+          if (invoiceData?.tenant_id) {
+            const { recordStripePaymentInXero } = await import('@/lib/xero/payments')
+            const paymentResult = await recordStripePaymentInXero(paymentRecord.id, invoiceData.tenant_id)
+            
+            if (paymentResult.success) {
+              console.log(`✅ Payment ${paymentRecord.id} recorded in Xero with ID ${paymentResult.xeroPaymentId}`)
+            } else {
+              console.warn(`⚠️ Invoice updated but payment recording failed for ${paymentRecord.id}: ${paymentResult.error}`)
+            }
+          } else {
+            console.warn(`⚠️ Could not find tenant_id for invoice ${xeroInvoiceId}, skipping payment sync`)
+          }
+        } catch (paymentError) {
+          console.warn(`⚠️ Invoice updated but payment recording failed for ${paymentRecord.id}:`, paymentError)
+          // Don't fail the overall webhook - invoice was updated successfully
+        }
       } else {
         console.log('⚠️ No invoice metadata found, falling back to old flow')
         // Fall back to old flow (create invoice after payment)

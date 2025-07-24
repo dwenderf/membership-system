@@ -93,7 +93,9 @@ export async function GET(request: NextRequest) {
 
     // Step 1: Search by exact contact name first (if member ID provided)
     if (memberId) {
-      const expectedContactName = `David Wender - ${memberId}`
+      // Clean the memberId to remove any extra quotes or encoding
+      const cleanMemberId = memberId.replace(/"/g, '')
+      const expectedContactName = `David Wender - ${cleanMemberId}`
       console.log(`🔍 Step 1: Searching for exact contact name: "${expectedContactName}"`)
       
       try {
@@ -198,7 +200,8 @@ export async function GET(request: NextRequest) {
           console.log('')
 
           if (memberId) {
-            const expectedName = `David Wender - ${memberId}`
+            const cleanMemberId = memberId.replace(/"/g, '')
+            const expectedName = `David Wender - ${cleanMemberId}`
             const exactMatch = emailSearchResponse.body.contacts.find(c => c.name === expectedName)
             
             if (exactMatch) {

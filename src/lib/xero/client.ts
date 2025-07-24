@@ -360,8 +360,9 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
     return {
       access_token: refreshedTokenSet.access_token,
       refresh_token: refreshedTokenSet.refresh_token, // Always use the new refresh token
-      expires_at: refreshedTokenSet.expires_at?.toString() || 
-                  new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
+      expires_at: refreshedTokenSet.expires_at 
+        ? new Date(refreshedTokenSet.expires_at * 1000).toISOString() // Convert Unix timestamp to ISO string
+        : new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
     }
   } catch (error: any) {
     const { logger } = await import('../logging/logger')

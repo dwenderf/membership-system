@@ -135,6 +135,23 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       .eq('is_active', true)
       .single()
 
+    // Debug logging for token retrieval
+    const { logger } = await import('../logging/logger')
+    logger.logXeroSync(
+      'token-retrieval',
+      'Retrieved token data from database',
+      {
+        tenantId,
+        hasTokenData: !!tokenData,
+        hasError: !!error,
+        errorMessage: error?.message,
+        tokenExpiresAt: tokenData?.expires_at,
+        tokenUpdatedAt: tokenData?.updated_at,
+        tokenCreatedAt: tokenData?.created_at
+      },
+      'info'
+    )
+
     if (error || !tokenData) {
       const { logger } = await import('../logging/logger')
       logger.logXeroSync(
@@ -150,6 +167,23 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     const expiresAt = new Date(tokenData.expires_at)
     const now = new Date()
     const isExpired = now >= expiresAt
+
+    // Debug logging for token expiry check
+    const { logger } = await import('../logging/logger')
+    logger.logXeroSync(
+      'token-expiry-check',
+      'Checking token expiry status',
+      {
+        tenantId,
+        expiresAt: expiresAt.toISOString(),
+        currentTime: now.toISOString(),
+        timeDiff: expiresAt.getTime() - now.getTime(),
+        minutesUntilExpiry: Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60)),
+        isExpired,
+        tokenPrefix: tokenData.access_token.substring(0, 20) + '...'
+      },
+      'info'
+    )
 
     if (isExpired) {
       // Try to refresh the token
@@ -197,7 +231,18 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       }
 
       // Update the stored tokens
-      await supabase
+      logger.logXeroSync(
+        'token-update-attempt',
+        'Updating refreshed tokens in database',
+        { 
+          tenantId,
+          newExpiresAt: refreshedTokens.expires_at,
+          newTokenPrefix: refreshedTokens.access_token.substring(0, 20) + '...'
+        },
+        'info'
+      )
+
+      const { error: updateError } = await supabase
         .from('xero_oauth_tokens')
         .update({
           access_token: refreshedTokens.access_token,
@@ -206,6 +251,26 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
           updated_at: new Date().toISOString()
         })
         .eq('tenant_id', tenantId)
+
+      if (updateError) {
+        logger.logXeroSync(
+          'token-update-failed',
+          'Failed to update refreshed tokens in database',
+          { 
+            tenantId,
+            error: updateError.message
+          },
+          'error'
+        )
+        throw new Error(`Failed to update tokens: ${updateError.message}`)
+      }
+
+      logger.logXeroSync(
+        'token-update-success',
+        'Successfully updated refreshed tokens in database',
+        { tenantId },
+        'info'
+      )
 
       // Set the new token on the client
       await xero.setTokenSet({

@@ -1,5 +1,5 @@
 import { LoopsClient } from 'loops'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getWelcomeMessage } from '@/lib/organization'
 
 // Email event types
@@ -181,7 +181,7 @@ class EmailService {
     status: 'sent' | 'delivered' | 'bounced' | 'spam'
     bounceReason?: string
   }): Promise<string> {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     
     const { data, error } = await supabase
       .from('email_logs')
@@ -220,7 +220,7 @@ class EmailService {
     bounced_at?: Date
     bounce_reason?: string
   }): Promise<void> {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     
     const updateData: any = { ...updates }
     

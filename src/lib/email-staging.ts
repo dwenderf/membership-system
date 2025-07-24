@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
 export interface StagedEmailData {
@@ -28,7 +28,7 @@ class EmailStagingManager {
     options: EmailStagingOptions = {}
   ): Promise<boolean> {
     try {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       
       // If immediate sending is requested, send directly
       if (options.isImmediate) {
@@ -191,7 +191,7 @@ class EmailStagingManager {
     }
 
     try {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       
       // Get all pending emails
       const { data: pendingEmails, error } = await supabase
@@ -253,7 +253,7 @@ class EmailStagingManager {
   private async sendStagedEmail(emailLog: any): Promise<boolean> {
     try {
       const { emailService } = await import('./email-service')
-      const supabase = await createClient()
+      const supabase = createAdminClient()
 
       // Extract related entity info from email_data
       const emailData = emailLog.email_data || {}
@@ -340,7 +340,7 @@ class EmailStagingManager {
     } catch (error) {
       // Update email log status to failed
       try {
-        const supabase = await createClient()
+        const supabase = createAdminClient()
         await supabase
           .from('email_logs')
           .update({ 

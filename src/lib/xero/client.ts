@@ -134,8 +134,9 @@ export async function withActiveTenant<T>(
 // Helper function to get authenticated Xero client with token refresh
 export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroClient | null> {
   try {
-    // Import supabase here to avoid circular dependency
+    // Import dependencies here to avoid circular dependency
     const { createAdminClient } = await import('../supabase/server')
+    const { logger } = await import('../logging/logger')
     const supabase = createAdminClient()
 
     // Get stored tokens for the tenant
@@ -147,7 +148,6 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       .single()
 
     // Debug logging for token retrieval
-    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'token-retrieval',
       'Retrieved token data from database',
@@ -164,7 +164,6 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     )
 
     if (error || !tokenData) {
-      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'no-active-tokens',
         'No active Xero tokens found for tenant',
@@ -180,7 +179,6 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     const isExpired = now >= expiresAt
 
     // Debug logging for token expiry check
-    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'token-expiry-check',
       'Checking token expiry status',
@@ -198,7 +196,6 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
 
     if (isExpired) {
       // Try to refresh the token
-      const { logger } = await import('../logging/logger')
       logger.logXeroSync(
         'token-refresh-attempt',
         `Attempting to refresh expired Xero token for tenant: ${tenantId}`,
@@ -305,7 +302,6 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
     return xero
 
   } catch (error) {
-    const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'auth-client-error',
       'Error getting authenticated Xero client',

@@ -211,9 +211,20 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
           // Don't fail the overall webhook - invoice was updated successfully
         }
       } else {
-        console.log('⚠️ No invoice metadata found, falling back to old flow')
-        // Fall back to old flow (create invoice after payment)
-        await autoSyncPaymentToXero(paymentRecord.id)
+        // Check if there are existing staging records for this payment
+        const { data: existingStagingRecords } = await supabase
+          .from('xero_invoices')
+          .select('id, sync_status')
+          .eq('payment_id', paymentRecord.id)
+          .limit(1)
+
+        if (existingStagingRecords && existingStagingRecords.length > 0) {
+          console.log('✅ Found existing staging records for payment, skipping old flow - batch sync will handle this')
+        } else {
+          console.log('⚠️ No invoice metadata and no staging records found, falling back to old flow')
+          // Fall back to old flow (create invoice after payment)
+          await autoSyncPaymentToXero(paymentRecord.id)
+        }
       }
     }
   } catch (xeroError) {

@@ -407,10 +407,80 @@ export class XeroBatchSyncManager {
 
       console.log('📤 Creating invoice in Xero...')
       // Create invoice in Xero
-      const response = await xeroApi.accountingApi.createInvoices(
-        activeTenant.tenant_id,
-        { invoices: [invoice] }
-      )
+      let response
+      let finalContactId = contactResult.xeroContactId
+      
+      try {
+        response = await xeroApi.accountingApi.createInvoices(
+          activeTenant.tenant_id,
+          { invoices: [invoice] }
+        )
+      } catch (error: any) {
+        // Check if this is an archived contact error
+        if (error?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message?.includes('archived')) {
+          console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, checking for other non-archived contacts first`)
+          
+          // Try to find and use a non-archived contact with the same email
+          try {
+            const { data: userData } = await this.supabase
+              .from('users')
+              .select('email, first_name, last_name, member_id')
+              .eq('id', metadata.user_id)
+              .single()
+
+            if (userData) {
+              // Search for non-archived contacts with the same email
+              const contactsResponse = await xeroApi.accountingApi.getContacts(
+                activeTenant.tenant_id,
+                undefined,
+                `EmailAddress="${userData.email}"`
+              )
+
+              const nonArchivedContacts = contactsResponse.body.contacts?.filter(
+                contact => contact.contactStatus !== 'ARCHIVED'
+              ) || []
+
+              console.log(`🔍 Found ${nonArchivedContacts.length} non-archived contacts with email ${userData.email}`)
+
+              if (nonArchivedContacts.length > 0) {
+                // Try to find an exact name match first
+                const expectedName = userData.member_id 
+                  ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                  : `${userData.first_name} ${userData.last_name}`
+
+                const exactMatch = nonArchivedContacts.find(contact => contact.name === expectedName)
+                const contactToUse = exactMatch || nonArchivedContacts[0]
+
+                console.log(`✅ Found non-archived contact: ${contactToUse.name} (ID: ${contactToUse.contactID})`)
+                
+                // Update the invoice with the non-archived contact
+                finalContactId = contactToUse.contactID!
+                invoice.contact = { contactID: finalContactId }
+                
+                // Retry the invoice creation
+                response = await xeroApi.accountingApi.createInvoices(
+                  activeTenant.tenant_id,
+                  { invoices: [invoice] }
+                )
+                
+                console.log(`✅ Successfully created invoice with non-archived contact: ${contactToUse.contactID}`)
+              } else {
+                // Re-throw the original error if no non-archived contacts found
+                throw error
+              }
+            } else {
+              // Re-throw the original error if user data not found
+              throw error
+            }
+          } catch (recoveryError) {
+            console.log('❌ Failed to recover from archived contact error:', recoveryError)
+            throw error // Re-throw the original error
+          }
+        } else {
+          // Re-throw non-archived contact errors
+          throw error
+        }
+      }
 
       console.log('📥 Xero API response received:', {
         hasInvoices: !!response.body.invoices,
@@ -462,7 +532,7 @@ export class XeroBatchSyncManager {
               invoice: {
                 type: invoice.type,
                 contact: { 
-                  contactID: contactResult.xeroContactId,
+                  contactID: finalContactId,
                   contactName: contactName
                 },
                 lineItems: invoice.lineItems,

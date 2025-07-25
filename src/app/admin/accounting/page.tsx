@@ -605,7 +605,7 @@ export default function AccountingIntegrationPage() {
                                 </button>
                               )}
                               <div className="text-xs text-gray-500">
-                                {new Date(log.created_at).toLocaleTimeString()}
+                                {new Date(log.created_at).toLocaleString()}
                               </div>
                             </div>
                           </div>

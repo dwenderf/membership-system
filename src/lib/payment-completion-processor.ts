@@ -567,6 +567,15 @@ export class PaymentCompletionProcessor {
         }
 
         try {
+          // Get the correct bank account code from system accounting codes
+          const { data: systemCode, error: codeError } = await this.supabase
+            .from('system_accounting_codes')
+            .select('accounting_code')
+            .eq('code_type', 'stripe_bank_account')
+            .single()
+          
+          const bankAccountCode = systemCode?.accounting_code || '090' // Fallback to 090
+          
           // Create payment record
           const { error: insertError } = await this.supabase
             .from('xero_payments')
@@ -575,7 +584,7 @@ export class PaymentCompletionProcessor {
               tenant_id: invoice.tenant_id,
               xero_payment_id: null, // Will be populated when synced
               payment_method: 'stripe',
-              bank_account_code: 'STRIPE', // Default - should be configurable
+              bank_account_code: bankAccountCode,
               amount_paid: payment.final_amount,
               stripe_fee_amount: 0, // Calculate if needed
               reference: payment.stripe_payment_intent_id || 'unknown',

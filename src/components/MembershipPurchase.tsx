@@ -127,7 +127,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     }
     
     // New membership: check if we're before September 1, 2025
-    const septemberFirst2025 = new Date('2025-09-01')
+    // Create September 1, 2025 at midnight in local timezone to avoid timezone issues
+    const septemberFirst2025 = new Date(2025, 8, 1) // Month is 0-indexed, so 8 = September
     const now = new Date()
     
     if (now < septemberFirst2025) {
@@ -142,7 +143,21 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const startDate = getStartDate()
   const endDate = new Date(startDate)
   if (selectedDuration) {
-    endDate.setMonth(endDate.getMonth() + selectedDuration)
+    // Use a more reliable method to add months that handles edge cases
+    const year = endDate.getFullYear()
+    const month = endDate.getMonth()
+    const day = endDate.getDate()
+    
+    // Calculate new month and year
+    const newMonth = month + selectedDuration
+    const newYear = year + Math.floor(newMonth / 12)
+    const finalMonth = newMonth % 12
+    
+    // Set the new date, ensuring we don't exceed the last day of the month
+    const lastDayOfMonth = new Date(newYear, finalMonth + 1, 0).getDate()
+    const finalDay = Math.min(day, lastDayOfMonth)
+    
+    endDate.setFullYear(newYear, finalMonth, finalDay)
   }
   
   const isExtension = startDate > new Date()

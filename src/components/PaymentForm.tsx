@@ -216,36 +216,10 @@ export default function PaymentForm({
       }
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
-        // Payment succeeded, now create Xero invoice and then create the record
+        // Payment succeeded, now create the record (membership or registration)
         const isRegistration = registrationId && categoryId
         
-        // Create Xero invoice first
-        try {
-          const invoiceResponse = await fetch('/api/create-xero-invoice', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              paymentIntentId: paymentIntent.id,
-              isRegistration: isRegistration
-            }),
-          })
-          
-          if (!invoiceResponse.ok) {
-            const invoiceError = await invoiceResponse.json()
-            console.warn('⚠️ Failed to create Xero invoice:', invoiceError)
-            // Continue with record creation even if invoice fails
-          } else {
-            const invoiceData = await invoiceResponse.json()
-            console.log('✅ Created Xero invoice:', invoiceData.invoiceNumber)
-          }
-        } catch (invoiceError) {
-          console.warn('⚠️ Error creating Xero invoice:', invoiceError)
-          // Continue with record creation even if invoice fails
-        }
-        
-        // Now create the record (membership or registration)
+        // Create the record (membership or registration) - Xero invoice will be handled by payment completion processor
         const endpoint = isRegistration 
           ? '/api/confirm-registration-payment'
           : '/api/confirm-payment'

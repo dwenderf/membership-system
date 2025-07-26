@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
-import { emailService } from '@/lib/email-service'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -378,38 +377,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Send confirmation email
-    if (userProfile && registrationDetails) {
-      try {
-        // Get the category details from the registration_categories
-        const selectedCategory = registrationDetails.registration_categories.find(
-          (cat: any) => cat.id === categoryId
-        )
-        
-        const categoryName = selectedCategory?.category?.name || selectedCategory?.custom_name || 'Unknown Category'
-        
-        const emailResult = await emailService.sendRegistrationConfirmation({
-          userId: user.id,
-          email: userProfile.email,
-          userName: `${userProfile.first_name} ${userProfile.last_name}`,
-          registrationName: registrationDetails.name,
-          categoryName: categoryName,
-          seasonName: registrationDetails.season?.name || 'Unknown Season',
-          amount: paymentIntent.amount,
-          paymentIntentId: paymentIntentId
-        })
-
-        if (emailResult.success) {
-          console.log('✅ Registration confirmation email sent successfully')
-        } else {
-          console.error('❌ Failed to send registration confirmation email:', emailResult.error)
-          capturePaymentError(new Error(`Email delivery failed: ${emailResult.error}`), paymentContext, 'warning')
-        }
-      } catch (emailError) {
-        console.error('❌ Failed to send confirmation email:', emailError)
-        capturePaymentError(emailError, paymentContext, 'warning')
-      }
-    }
+    // Email confirmation is now handled by the payment completion processor
+    // which is triggered by the webhook or the processor itself
 
     // Log successful operation
     capturePaymentSuccess('registration_payment_confirmation', paymentContext, Date.now() - startTime)

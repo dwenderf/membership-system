@@ -178,20 +178,6 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Update payment record with invoice info
-    try {
-      await supabase
-        .from('payments')
-        .update({
-          xero_synced: true,
-          xero_sync_error: null
-        })
-        .eq('stripe_payment_intent_id', paymentIntentId)
-    } catch (updateError) {
-      console.warn('⚠️ Failed to update payment record:', updateError)
-      // Don't fail the request over this
-    }
-
     // Link the invoice to the payment
     if (invoiceResult.xeroInvoiceId) {
       try {

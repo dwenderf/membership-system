@@ -230,6 +230,9 @@ export class XeroStagingManager {
         return false
       }
 
+      // Link the business record to the Xero invoice
+      await this.linkBusinessRecordToInvoice(data, invoiceStaging.id)
+
       // Create line item staging records
       const lineItems = this.generateLineItems(data)
       for (const lineItem of lineItems) {
@@ -602,6 +605,90 @@ export class XeroStagingManager {
     }
 
     return lineItems
+  }
+
+  /**
+   * Link business records (user_memberships, user_registrations) to Xero invoices
+   * This ensures we can track which business records correspond to which Xero invoices
+   */
+  private async linkBusinessRecordToInvoice(data: StagingPaymentData, xeroInvoiceId: string): Promise<void> {
+    try {
+      // Find the business record based on the payment items
+      const membershipItem = data.payment_items.find(item => item.item_type === 'membership')
+      const registrationItem = data.payment_items.find(item => item.item_type === 'registration')
+
+      if (membershipItem?.item_id) {
+        // Link user_membership to Xero invoice
+        const { error: membershipError } = await this.supabase
+          .from('user_memberships')
+          .update({ xero_invoice_id: xeroInvoiceId })
+          .eq('id', membershipItem.item_id)
+
+        if (membershipError) {
+          logger.logXeroSync(
+            'staging-link-membership-error',
+            'Failed to link membership to Xero invoice',
+            { 
+              membershipId: membershipItem.item_id,
+              xeroInvoiceId,
+              error: membershipError.message
+            },
+            'warn'
+          )
+        } else {
+          logger.logXeroSync(
+            'staging-link-membership-success',
+            'Successfully linked membership to Xero invoice',
+            { 
+              membershipId: membershipItem.item_id,
+              xeroInvoiceId
+            },
+            'info'
+          )
+        }
+      }
+
+      if (registrationItem?.item_id) {
+        // Link user_registration to Xero invoice
+        const { error: registrationError } = await this.supabase
+          .from('user_registrations')
+          .update({ xero_invoice_id: xeroInvoiceId })
+          .eq('id', registrationItem.item_id)
+
+        if (registrationError) {
+          logger.logXeroSync(
+            'staging-link-registration-error',
+            'Failed to link registration to Xero invoice',
+            { 
+              registrationId: registrationItem.item_id,
+              xeroInvoiceId,
+              error: registrationError.message
+            },
+            'warn'
+          )
+        } else {
+          logger.logXeroSync(
+            'staging-link-registration-success',
+            'Successfully linked registration to Xero invoice',
+            { 
+              registrationId: registrationItem.item_id,
+              xeroInvoiceId
+            },
+            'info'
+          )
+        }
+      }
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-link-business-record-error',
+        'Error linking business record to Xero invoice',
+        { 
+          xeroInvoiceId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+    }
   }
 
   /**

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { emailService } from '@/lib/email-service'
 import { autoSyncPaymentToXero } from '@/lib/xero/auto-sync'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
+
+// Force import server config
+import '../../../../sentry.server.config'
+import * as Sentry from '@sentry/nextjs'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -121,39 +124,6 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     }
   } else {
     console.warn(`⚠️ Webhook: No membership payment record found for payment intent: ${paymentIntent.id}`)
-  }
-
-  // Send confirmation email (as backup to confirm-payment endpoint)
-  try {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('first_name, last_name, email')
-      .eq('id', userId)
-      .single()
-
-    const { data: membershipDetails } = await supabase
-      .from('memberships')
-      .select('name')
-      .eq('id', membershipId)
-      .single()
-
-    if (userProfile && membershipDetails) {
-      await emailService.sendMembershipPurchaseConfirmation({
-        userId: userId,
-        email: userProfile.email,
-        userName: `${userProfile.first_name} ${userProfile.last_name}`,
-        membershipName: membershipDetails.name,
-        amount: paymentIntent.amount,
-        durationMonths,
-        validFrom: startDate.toISOString().split('T')[0],
-        validUntil: endDate.toISOString().split('T')[0],
-        paymentIntentId: paymentIntent.id
-      })
-      console.log('✅ Webhook: Membership confirmation email sent successfully')
-    }
-  } catch (emailError) {
-    console.error('❌ Webhook: Failed to send confirmation email:', emailError)
-    // Don't fail the webhook - membership was created successfully
   }
 
   // Handle Xero integration
@@ -389,64 +359,6 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     }
   } else {
     console.warn(`⚠️ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
-  }
-
-  // Send registration confirmation email
-  try {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('first_name, last_name, email')
-      .eq('id', userId)
-      .single()
-
-    const { data: registrationDetails } = await supabase
-      .from('registrations')
-      .select(`
-        name,
-        type,
-        season:seasons(name),
-        registration_categories(
-          custom_name,
-          category:categories(name)
-        )
-      `)
-      .eq('id', registrationId)
-      .single()
-
-    if (userProfile && registrationDetails) {
-      // Find the specific category that matches the user's registration
-      const userCategory = registrationDetails.registration_categories?.find(
-        (cat: any) => cat.id === userRegistration.registration_category_id
-      )
-      
-      const categoryName = userCategory?.category?.name || 
-                          userCategory?.custom_name || 
-                          'Registration'
-
-      await emailService.sendEmail({
-        userId: userId,
-        email: userProfile.email,
-        eventType: 'registration.completed',
-        subject: `Registration Confirmed - ${registrationDetails.name}`,
-        triggeredBy: 'automated',
-        data: {
-          userName: `${userProfile.first_name} ${userProfile.last_name}`,
-          registrationName: registrationDetails.name,
-          categoryName: categoryName,
-          seasonName: registrationDetails.season?.name || '',
-          originalAmount: parseInt(paymentIntent.metadata.originalAmount || '0'),
-          discountAmount: discountAmount,
-          finalAmount: paymentIntent.amount,
-          discountCode: discountCode || null,
-          registrationType: registrationDetails.type,
-          paymentIntentId: paymentIntent.id
-        }
-      })
-      console.log('✅ Webhook: Registration confirmation email sent successfully')
-    }
-  } catch (emailError) {
-    console.error('❌ Webhook: Failed to send registration confirmation email:', emailError)
-    // Don't fail the webhook - registration was processed successfully
   }
 
   // Handle Xero integration

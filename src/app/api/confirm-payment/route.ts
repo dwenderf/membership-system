@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { emailService } from '@/lib/email-service'
 
 // Force import server config
 import '../../../../sentry.server.config'
@@ -197,40 +196,8 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }
 
-    // Get user and membership details for email
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('first_name, last_name, email')
-      .eq('id', user.id)
-      .single()
-
-    const { data: membershipDetails } = await supabase
-      .from('memberships')
-      .select('name')
-      .eq('id', membershipId)
-      .single()
-
-    // Send confirmation email
-    if (userProfile && membershipDetails) {
-      try {
-        await emailService.sendMembershipPurchaseConfirmation({
-          userId: user.id,
-          email: userProfile.email,
-          userName: `${userProfile.first_name} ${userProfile.last_name}`,
-          membershipName: membershipDetails.name,
-          amount: paymentIntent.amount,
-          durationMonths,
-          validFrom: startDate,
-          validUntil: endDate,
-          paymentIntentId: paymentIntentId
-        })
-        console.log('✅ Membership confirmation email sent successfully')
-      } catch (emailError) {
-        console.error('❌ Failed to send confirmation email:', emailError)
-        // Log warning but don't fail the request - membership was created successfully
-        capturePaymentError(emailError, paymentContext, 'warning')
-      }
-    }
+    // Email confirmation is now handled by the payment completion processor
+    // which is triggered by the webhook or the processor itself
 
     // Log successful operation
     capturePaymentSuccess('payment_confirmation', paymentContext, Date.now() - startTime)

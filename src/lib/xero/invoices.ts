@@ -857,30 +857,29 @@ export async function createXeroInvoiceForPayment(
       .single()
 
     if (internalInvoice) {
-      await supabase
-        .from('xero_invoice_line_items')
-        .insert(
-          lineItemRecords.map(item => ({
-            ...item,
-            xero_invoice_id: internalInvoice.id
-          }))
-        )
+      // Store line items
+      for (const lineItem of lineItemRecords) {
+        await supabase
+          .from('xero_invoice_line_items')
+          .insert({
+            xero_invoice_id: internalInvoice.id,
+            line_item_type: lineItem.line_item_type,
+            item_id: lineItem.item_id,
+            description: lineItem.description,
+            quantity: lineItem.quantity,
+            unit_amount: lineItem.unit_amount,
+            account_code: lineItem.account_code,
+            tax_type: lineItem.tax_type,
+            line_amount: lineItem.line_amount
+          })
+      }
     }
-
-    // Mark payment as synced
-    await supabase
-      .from('payments')
-      .update({
-        xero_synced: true,
-        xero_sync_error: null
-      })
-      .eq('id', paymentId)
 
     await logXeroSync({
       tenant_id: tenantId,
       operation: 'invoice_sync',
       record_type: 'payment',
-      record_id: '',
+      record_id: paymentId,
       xero_id: xeroInvoiceId,
       success: true,
       details: `Invoice created successfully: ${invoiceNumber}`
@@ -888,8 +887,8 @@ export async function createXeroInvoiceForPayment(
 
     return { 
       success: true, 
-      xeroInvoiceId,
-      invoiceNumber
+      xeroInvoiceId, 
+      invoiceNumber 
     }
 
   } catch (error) {

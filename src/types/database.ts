@@ -176,6 +176,7 @@ export type Database = {
           user_id: string
           membership_id: string
           payment_id: string | null
+          xero_invoice_id: string | null
           valid_from: string
           valid_until: string
           months_purchased: number | null
@@ -183,8 +184,6 @@ export type Database = {
           stripe_payment_intent_id: string | null
           amount_paid: number | null
           purchased_at: string | null
-          xero_synced: boolean
-          xero_sync_error: string | null
           created_at: string
         }
         Insert: {
@@ -192,6 +191,7 @@ export type Database = {
           user_id: string
           membership_id: string
           payment_id?: string | null
+          xero_invoice_id?: string | null
           valid_from: string
           valid_until: string
           months_purchased?: number | null
@@ -199,8 +199,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           amount_paid?: number | null
           purchased_at?: string | null
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
         }
         Update: {
@@ -208,6 +206,7 @@ export type Database = {
           user_id?: string
           membership_id?: string
           payment_id?: string | null
+          xero_invoice_id?: string | null
           valid_from?: string
           valid_until?: string
           months_purchased?: number | null
@@ -215,8 +214,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           amount_paid?: number | null
           purchased_at?: string | null
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
         }
       }
@@ -228,6 +225,7 @@ export type Database = {
           registration_category_id: string | null
           user_membership_id: string | null
           payment_id: string | null
+          xero_invoice_id: string | null
           payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee: number | null
           amount_paid: number | null
@@ -244,6 +242,7 @@ export type Database = {
           registration_category_id?: string | null
           user_membership_id?: string | null
           payment_id?: string | null
+          xero_invoice_id?: string | null
           payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee?: number | null
           amount_paid?: number | null
@@ -260,6 +259,7 @@ export type Database = {
           registration_category_id?: string | null
           user_membership_id?: string | null
           payment_id?: string | null
+          xero_invoice_id?: string | null
           payment_status?: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
           registration_fee?: number | null
           amount_paid?: number | null
@@ -280,8 +280,6 @@ export type Database = {
           stripe_payment_intent_id: string | null
           status: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method: string
-          xero_synced: boolean
-          xero_sync_error: string | null
           created_at: string
           completed_at: string | null
           updated_at: string
@@ -295,8 +293,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
           completed_at?: string | null
           updated_at?: string
@@ -310,8 +306,6 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
-          xero_synced?: boolean
-          xero_sync_error?: string | null
           created_at?: string
           completed_at?: string | null
           updated_at?: string

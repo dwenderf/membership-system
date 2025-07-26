@@ -96,6 +96,7 @@ interface SyncStats {
   pending_payments_list: PendingItem[]
   failed_invoices: FailedItem[]
   failed_payments: FailedItem[]
+  failed_items_sorted: (FailedItem & { item_type: 'invoice' | 'payment' })[]
   failed_count: number
 }
 
@@ -729,10 +730,11 @@ export default function AccountingIntegrationPage() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Failed Items Details</h3>
                   
-                  {/* Failed Invoices */}
-                  {syncStats.failed_invoices.map((item) => {
-                    const user = item.payments?.users
-                    const itemKey = `inv_${item.id}`
+                  {/* Combined Failed Items (sorted by time) */}
+                  {syncStats.failed_items_sorted.map((item) => {
+                    const isInvoice = item.item_type === 'invoice'
+                    const user = isInvoice ? item.payments?.users : item.xero_invoices?.payments?.users
+                    const itemKey = isInvoice ? `inv_${item.id}` : `pay_${item.id}`
                     const isSelected = selectedFailedItems.has(itemKey)
                     
                     // Use Xero contact naming convention: "First Last - MemberID"
@@ -743,7 +745,7 @@ export default function AccountingIntegrationPage() {
                       : 'Unknown User'
                     
                     return (
-                      <div key={`failed-inv-${item.id}`} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
+                      <div key={`failed-${item.item_type}-${item.id}`} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
                         <div className="flex items-center mr-3 mt-1">
                           <input
                             type="checkbox"
@@ -757,61 +759,7 @@ export default function AccountingIntegrationPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                                Invoice
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-gray-900">
-                                {userDisplayName}
-                              </span>
-                              <span className="ml-2 text-xs text-gray-500 font-mono">
-                                ID: {item.id}
-                              </span>
-                            </div>
-                            <time className="text-xs text-gray-500">
-                              Failed: {new Date(item.last_synced_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <div className="mt-1 text-sm text-gray-600">
-                            <span><strong>Status:</strong> {item.sync_status}</span>
-                            {item.sync_error && (
-                              <div className="mt-1 text-xs text-red-600 bg-red-100 p-2 rounded">
-                                <strong>Error:</strong> {item.sync_error}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {/* Failed Payments */}
-                  {syncStats.failed_payments.map((item) => {
-                    const user = item.xero_invoices?.payments?.users
-                    const itemKey = `pay_${item.id}`
-                    const isSelected = selectedFailedItems.has(itemKey)
-                    
-                    // Use Xero contact naming convention: "First Last - MemberID"
-                    const userDisplayName = user?.first_name && user?.last_name 
-                      ? user.member_id 
-                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
-                        : `${user.first_name} ${user.last_name}`
-                      : 'Unknown User'
-                    
-                    return (
-                      <div key={`failed-pay-${item.id}`} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
-                        <div className="flex items-center mr-3 mt-1">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleFailedItemToggle(itemKey)}
-                            disabled={!isXeroConnected}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                                Payment
+                                {isInvoice ? 'Invoice' : 'Payment'}
                               </span>
                               <span className="ml-2 text-sm font-medium text-gray-900">
                                 {userDisplayName}

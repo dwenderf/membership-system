@@ -180,6 +180,39 @@ export class XeroStagingManager {
   }
 
   /**
+   * Get the Stripe bank account code from system accounting codes
+   */
+  private async getStripeBankAccountCode(): Promise<string> {
+    try {
+      const { data: systemCode, error } = await this.supabase
+        .from('system_accounting_codes')
+        .select('accounting_code')
+        .eq('code_type', 'stripe_bank_account')
+        .single()
+      
+      if (error || !systemCode) {
+        logger.logXeroSync(
+          'staging-bank-account-not-found',
+          'Stripe bank account code not found in system_accounting_codes, using default',
+          { error: error?.message },
+          'warn'
+        )
+        return '090' // Default fallback
+      }
+      
+      return systemCode.accounting_code
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-bank-account-error',
+        'Error getting Stripe bank account code, using default',
+        { error: error instanceof Error ? error.message : String(error) },
+        'warn'
+      )
+      return '090' // Default fallback
+    }
+  }
+
+  /**
    * Create staging records for invoice and payment
    */
   private async createInvoiceStaging(
@@ -267,6 +300,7 @@ export class XeroStagingManager {
 
       // Create payment staging record if this is a paid purchase
       if (data.final_amount > 0) {
+        const stripeBankAccountCode = await this.getStripeBankAccountCode()
         const { error: paymentError } = await this.supabase
           .from('xero_payments')
           .insert({
@@ -274,7 +308,7 @@ export class XeroStagingManager {
             tenant_id: tenantId, // Can be null during staging
             xero_payment_id: null, // Will be populated when synced to Xero
             payment_method: 'stripe',
-            bank_account_code: 'STRIPE', // Default - should be configurable
+            bank_account_code: stripeBankAccountCode,
             amount_paid: data.final_amount,
             stripe_fee_amount: 0, // Calculate if needed
             reference: data.stripe_payment_intent_id || '',

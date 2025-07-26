@@ -220,6 +220,12 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching failed payments:', failedPaymentsError)
     }
 
+    // Combine and sort all failed items by time (most recent first)
+    const allFailedItems = [
+      ...filteredFailedInvoices.map(item => ({ ...item, item_type: 'invoice' })),
+      ...(failedPayments || []).map(item => ({ ...item, item_type: 'payment' }))
+    ].sort((a, b) => new Date(b.last_synced_at).getTime() - new Date(a.last_synced_at).getTime())
+
     const stats = {
       total_operations: syncStats?.length || 0,
       successful_operations: syncStats?.filter(s => s.status === 'success').length || 0,
@@ -232,6 +238,7 @@ export async function GET(request: NextRequest) {
       pending_payments_list: pendingPayments || [],
       failed_invoices: filteredFailedInvoices,
       failed_payments: failedPayments || [],
+      failed_items_sorted: allFailedItems, // New combined and sorted array
       failed_count: filteredFailedInvoices.length + (failedPayments?.length || 0)
     }
 

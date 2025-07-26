@@ -301,9 +301,19 @@ export class PaymentCompletionProcessor {
 
       // Also update the corresponding payment record if it exists
       if (event.payment_id && options.success) {
+        // Get the latest bank account code from system accounting codes
+        const { data: systemCode } = await this.supabase
+          .from('system_accounting_codes')
+          .select('accounting_code')
+          .eq('code_type', 'stripe_bank_account')
+          .single()
+        
+        const bankAccountCode = systemCode?.accounting_code || '090' // Fallback to 090
+        
         const paymentUpdateData = {
           sync_status: 'pending',
           sync_error: null,
+          bank_account_code: bankAccountCode, // Update with latest code
           last_synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -511,16 +521,13 @@ export class PaymentCompletionProcessor {
   }
 
   /**
-   * Phase 3: Batch sync pending Xero records
+   * Phase 2: Sync pending Xero records
    */
   private async syncPendingXeroRecords() {
     this.logger.logPaymentProcessing('sync-pending-xero-records', '🔄 Syncing pending Xero records...')
     
     try {
-      // Step1: Ensure payment records exist for completed payments
-      await this.ensurePaymentRecordsExist()
-      
-      // Step 2: Use the batch sync manager to sync all pending records
+      // Use the Xero batch sync manager to sync all pending records
       const results = await xeroBatchSyncManager.syncAllPendingRecords()
       
       this.logger.logPaymentProcessing('sync-pending-xero-records', '📊 Xero sync results:', {
@@ -529,117 +536,8 @@ export class PaymentCompletionProcessor {
       })
       
     } catch (error) {
-      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to sync Xero records:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to sync pending Xero records:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       // Don't throw - Xero sync failures shouldn't break other processing
-    }
-  }
-
-  /**
-   * Ensure payment records exist in xero_payments table for completed payments
-   */
-  private async ensurePaymentRecordsExist() {
-    this.logger.logPaymentProcessing('ensure-payment-records', '🔍 Checking for missing payment records...')
-    try {
-      // Find completed payments that have invoices but no payment records
-      const { data: paymentsNeedingRecords, error } = await this.supabase
-        .from('xero_invoices')
-        .select(`
-          id,
-          payment_id,
-          tenant_id,
-          net_amount,
-          payments (
-            id,
-            status,
-            final_amount,
-            stripe_payment_intent_id
-          )
-        `)
-        .eq('sync_status', 'synced')
-        .not('payment_id', 'is', null)
-        .not('id', 'in', (
-          this.supabase
-            .from('xero_payments')
-            .select('xero_invoice_id')
-            .eq('sync_status', 'synced')
-        ))
-
-      if (error) {
-        this.logger.logPaymentProcessing('ensure-payment-records', '❌ Error finding payments needing records:', { error: error.message }, 'error')
-        return
-      }
-
-      if (!paymentsNeedingRecords || paymentsNeedingRecords.length === 0) {
-        this.logger.logPaymentProcessing('ensure-payment-records', '✅ All synced invoices have payment records')
-        return
-      }
-
-      this.logger.logPaymentProcessing('ensure-payment-records', `📋 Found ${paymentsNeedingRecords.length} payments needing records`)
-
-      // Create payment records for each missing payment
-      for (const invoice of paymentsNeedingRecords) {
-        const payment = Array.isArray(invoice.payments) ? invoice.payments[0] : invoice.payments
-        
-        if (!payment || payment.status !== 'completed') {
-          this.logger.logPaymentProcessing('ensure-payment-records', '⚠️ Skipping payment - not completed', { 
-            paymentId: payment?.id,
-            status: payment?.status 
-          })
-          continue
-        }
-
-        try {
-          // Get the correct bank account code from system accounting codes
-          const { data: systemCode, error: codeError } = await this.supabase
-            .from('system_accounting_codes')
-            .select('accounting_code')
-            .eq('code_type', 'stripe_bank_account')
-            .single()
-          
-          const bankAccountCode = systemCode?.accounting_code || '090' // Fallback to 090
-          
-          // Create payment record
-          const { error: insertError } = await this.supabase
-            .from('xero_payments')
-            .insert({
-              xero_invoice_id: invoice.id,
-              tenant_id: invoice.tenant_id,
-              xero_payment_id: null, // Will be populated when synced
-              payment_method: 'stripe',
-              bank_account_code: bankAccountCode,
-              amount_paid: payment.final_amount,
-              stripe_fee_amount: 0, // Calculate if needed
-              reference: payment.stripe_payment_intent_id || 'unknown',
-              sync_status: 'pending', // Mark as pending for sync
-              staged_at: new Date().toISOString(),
-              staging_metadata: {
-                payment_id: payment.id,
-                stripe_payment_intent_id: payment.stripe_payment_intent_id,
-                created_at: new Date().toISOString()
-              }
-            })
-
-          if (insertError) {
-            this.logger.logPaymentProcessing('ensure-payment-records', '❌ Error creating payment record:', { 
-              paymentId: payment.id,
-              error: insertError.message 
-            }, 'error')
-          } else {
-            this.logger.logPaymentProcessing('ensure-payment-records', '✅ Created payment record for syncing', { 
-              paymentId: payment.id,
-              invoiceId: invoice.id 
-            })
-          }
-        } catch (error) {
-          this.logger.logPaymentProcessing('ensure-payment-records', '❌ Exception creating payment record:', { 
-            paymentId: payment.id,
-            error: error instanceof Error ? error.message : 'Unknown error' 
-          }, 'error')
-        }
-      }
-      
-    } catch (error) {
-      this.logger.logPaymentProcessing('ensure-payment-records', '❌ Failed to ensure payment records:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 

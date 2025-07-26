@@ -299,6 +299,28 @@ export class PaymentCompletionProcessor {
         throw updateError
       }
 
+      // Also update the corresponding payment record if it exists
+      if (event.payment_id && options.success) {
+        const paymentUpdateData = {
+          sync_status: 'pending',
+          sync_error: null,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+
+        const { error: paymentUpdateError } = await this.supabase
+          .from('xero_payments')
+          .update(paymentUpdateData)
+          .eq('xero_invoice_id', existingRecords.id)
+
+        if (paymentUpdateError) {
+          this.logger.logPaymentProcessing('update-xero-staging-records', '⚠️ Warning: Error updating payment staging record', { error: paymentUpdateError }, 'warn')
+          // Don't throw error for payment update - invoice update was successful
+        } else {
+          this.logger.logPaymentProcessing('update-xero-staging-records', '✅ Payment staging record updated successfully')
+        }
+      }
+
       this.logger.logPaymentProcessing('update-xero-staging-records', `✅ Xero staging records updated successfully (${options.success ? 'success' : 'failed'})`)
       
     } catch (error) {

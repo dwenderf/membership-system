@@ -266,7 +266,7 @@ export class XeroStagingManager {
       }
 
       // Create payment staging record if this is a paid purchase
-      if (data.payment_id && data.final_amount > 0) {
+      if (data.final_amount > 0) {
         const { error: paymentError } = await this.supabase
           .from('xero_payments')
           .insert({
@@ -281,7 +281,7 @@ export class XeroStagingManager {
             sync_status: 'staged',
             staged_at: new Date().toISOString(),
             staging_metadata: {
-              payment_id: data.payment_id,
+              payment_id: data.payment_id || null,
               stripe_payment_intent_id: data.stripe_payment_intent_id,
               created_at: new Date().toISOString()
             }

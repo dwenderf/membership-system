@@ -4,6 +4,18 @@ if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
   throw new Error('Missing Xero environment variables')
 }
 
+// Helper function to calculate refresh token expiration (60 days from last refresh)
+export function calculateRefreshTokenExpiration(updatedAt: string): Date {
+  return new Date(new Date(updatedAt).getTime() + (60 * 24 * 60 * 60 * 1000))
+}
+
+// Helper function to check if refresh token is expired
+export function isRefreshTokenExpired(updatedAt: string): boolean {
+  const refreshTokenExpiresAt = calculateRefreshTokenExpiration(updatedAt)
+  const now = new Date()
+  return now >= refreshTokenExpiresAt
+}
+
 // Run startup connection test when this module is first imported
 // DISABLED: This was causing infinite loops and rate limiting when multiple
 // instances of the module were imported simultaneously
@@ -175,10 +187,14 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       return null
     }
 
-    // Check if token is expired
-    const expiresAt = new Date(tokenData.expires_at)
+    // Check if refresh token is expired (this determines if we can authenticate)
+    const refreshTokenExpiresAt = calculateRefreshTokenExpiration(tokenData.updated_at)
     const now = new Date()
-    const isExpired = now >= expiresAt
+    const isRefreshTokenExpired = now >= refreshTokenExpiresAt
+
+    // Check if access token is expired (this determines if we need to refresh)
+    const accessTokenExpiresAt = new Date(tokenData.expires_at)
+    const isAccessTokenExpired = now >= accessTokenExpiresAt
 
     // Debug logging for token expiry check
     logger.logXeroSync(
@@ -186,17 +202,52 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       'Checking token expiry status',
       {
         tenantId,
-        expiresAt: expiresAt.toISOString(),
+        accessTokenExpiresAt: accessTokenExpiresAt.toISOString(),
+        refreshTokenExpiresAt: refreshTokenExpiresAt.toISOString(),
         currentTime: now.toISOString(),
-        timeDiff: expiresAt.getTime() - now.getTime(),
-        minutesUntilExpiry: Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60)),
-        isExpired,
+        accessTokenMinutesUntilExpiry: Math.floor((accessTokenExpiresAt.getTime() - now.getTime()) / (1000 * 60)),
+        refreshTokenDaysUntilExpiry: Math.floor((refreshTokenExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+        isAccessTokenExpired,
+        isRefreshTokenExpired,
         tokenPrefix: tokenData.access_token.substring(0, 20) + '...'
       },
       'info'
     )
 
-    if (isExpired) {
+    // If refresh token is expired, we cannot authenticate
+    if (isRefreshTokenExpired) {
+      logger.logXeroSync(
+        'refresh-token-expired',
+        'Refresh token has expired - re-authentication required',
+        { 
+          tenantId,
+          refreshTokenExpiresAt: refreshTokenExpiresAt.toISOString(),
+          updated_at: tokenData.updated_at
+        },
+        'error'
+      )
+      
+      // Deactivate the expired tokens
+      await supabase
+        .from('xero_oauth_tokens')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('tenant_id', tenantId)
+      
+      logger.logXeroSync(
+        'token-deactivated',
+        'Deactivated expired refresh tokens for tenant',
+        { tenantId },
+        'info'
+      )
+      
+      return null
+    }
+
+    // Try to refresh the access token if it's expired (but refresh token is still valid)
+    if (isAccessTokenExpired) {
       // Try to refresh the token
       logger.logXeroSync(
         'token-refresh-attempt',

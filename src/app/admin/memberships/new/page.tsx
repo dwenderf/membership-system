@@ -363,9 +363,6 @@ export default function NewMembershipPage() {
                   Allow monthly pricing for this membership
                 </label>
               </div>
-              <p className="text-sm text-gray-500">
-                When unchecked, only annual pricing will be available to users. Monthly price will be set to $0.00.
-              </p>
 
               {/* Allow Discounts */}
               <div className="flex items-center">

@@ -272,9 +272,6 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                   Allow monthly pricing for this membership
                 </label>
               </div>
-              <p className="text-sm text-gray-500">
-                When unchecked, only annual pricing will be available to users.
-              </p>
 
               {/* Allow Discounts */}
               <div className="flex items-center">

@@ -203,7 +203,17 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
   }
 
   // Trigger payment completion processor for emails and post-processing
+  console.log('🔄 About to trigger payment completion processor...')
   try {
+    console.log('🔄 Payment completion processor parameters:', {
+      event_type: 'user_memberships',
+      record_id: membershipRecord.id,
+      user_id: userId,
+      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+      amount: paymentIntent.amount,
+      trigger_source: 'stripe_webhook_membership'
+    })
+    
     await paymentProcessor.processPaymentCompletion({
       event_type: 'user_memberships',
       record_id: membershipRecord.id,
@@ -216,6 +226,10 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     console.log('✅ Triggered payment completion processor for membership')
   } catch (processorError) {
     console.error('❌ Failed to trigger payment completion processor for membership:', processorError)
+    console.error('❌ Processor error details:', {
+      message: processorError instanceof Error ? processorError.message : String(processorError),
+      stack: processorError instanceof Error ? processorError.stack : undefined
+    })
     // Don't fail the webhook - membership was created successfully
   }
 

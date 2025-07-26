@@ -259,6 +259,37 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                 </div>
               )}
 
+              {/* Allow Monthly Pricing */}
+              <div className="flex items-center">
+                <input
+                  id="allow_monthly"
+                  type="checkbox"
+                  checked={formData.allow_monthly}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
+                  Allow monthly pricing for this membership
+                </label>
+              </div>
+              <p className="text-sm text-gray-500">
+                When unchecked, only annual pricing will be available to users.
+              </p>
+
+              {/* Allow Discounts */}
+              <div className="flex items-center">
+                <input
+                  id="allow_discounts"
+                  type="checkbox"
+                  checked={formData.allow_discounts}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_discounts: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_discounts" className="ml-2 block text-sm text-gray-900">
+                  Allow discount codes to be applied to this membership
+                </label>
+              </div>
+
               {/* Pricing */}
               <div className={`grid gap-6 ${formData.allow_monthly ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Monthly Price - Only show when allow_monthly is true */}
@@ -343,23 +374,6 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                 </div>
               )}
 
-              {/* Allow Monthly Pricing */}
-              <div className="flex items-center">
-                <input
-                  id="allow_monthly"
-                  type="checkbox"
-                  checked={formData.allow_monthly}
-                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
-                  Allow monthly pricing for this membership
-                </label>
-              </div>
-              <p className="text-sm text-gray-500">
-                When unchecked, only annual pricing will be available to users. Monthly price will be set to $0.00.
-              </p>
-
               {/* Accounting Code */}
               <div>
                 <label htmlFor="accounting_code" className="block text-sm font-medium text-gray-700">
@@ -377,20 +391,6 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                 <p className="mt-1 text-sm text-gray-500">
                   Required code for Xero integration and accounting system
                 </p>
-              </div>
-
-              {/* Allow Discounts */}
-              <div className="flex items-center">
-                <input
-                  id="allow_discounts"
-                  type="checkbox"
-                  checked={formData.allow_discounts}
-                  onChange={(e) => setFormData(prev => ({ ...prev, allow_discounts: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="allow_discounts" className="ml-2 block text-sm text-gray-900">
-                  Allow discount codes to be applied to this membership
-                </label>
               </div>
 
               {/* Membership Preview */}

@@ -204,6 +204,16 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 
   // Trigger payment completion processor for emails and post-processing
   console.log('🔄 About to trigger payment completion processor...')
+  console.log('🔄 Webhook context:', {
+    paymentIntentId: paymentIntent.id,
+    userId,
+    membershipId,
+    durationMonths,
+    membershipRecordId: membershipRecord.id,
+    updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+    amount: paymentIntent.amount
+  })
+  
   try {
     console.log('🔄 Payment completion processor parameters:', {
       event_type: 'user_memberships',
@@ -214,7 +224,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       trigger_source: 'stripe_webhook_membership'
     })
     
-    await paymentProcessor.processPaymentCompletion({
+    console.log('🔄 Calling paymentProcessor.processPaymentCompletion...')
+    const processorResult = await paymentProcessor.processPaymentCompletion({
       event_type: 'user_memberships',
       record_id: membershipRecord.id,
       user_id: userId,
@@ -223,6 +234,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       trigger_source: 'stripe_webhook_membership',
       timestamp: new Date().toISOString()
     })
+    console.log('✅ Payment completion processor returned successfully:', processorResult)
     console.log('✅ Triggered payment completion processor for membership')
   } catch (processorError) {
     console.error('❌ Failed to trigger payment completion processor for membership:', processorError)
@@ -417,8 +429,28 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
   }
 
   // Trigger payment completion processor for emails and post-processing
+  console.log('🔄 About to trigger payment completion processor for registration...')
+  console.log('🔄 Registration webhook context:', {
+    paymentIntentId: paymentIntent.id,
+    userId,
+    registrationId,
+    userRegistrationId: userRegistration.id,
+    updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+    amount: paymentIntent.amount
+  })
+  
   try {
-    await paymentProcessor.processPaymentCompletion({
+    console.log('🔄 Registration payment completion processor parameters:', {
+      event_type: 'user_registrations',
+      record_id: userRegistration.id,
+      user_id: userId,
+      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
+      amount: paymentIntent.amount,
+      trigger_source: 'stripe_webhook_registration'
+    })
+    
+    console.log('🔄 Calling paymentProcessor.processPaymentCompletion for registration...')
+    const processorResult = await paymentProcessor.processPaymentCompletion({
       event_type: 'user_registrations',
       record_id: userRegistration.id,
       user_id: userId,
@@ -427,9 +459,14 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       trigger_source: 'stripe_webhook_registration',
       timestamp: new Date().toISOString()
     })
+    console.log('✅ Registration payment completion processor returned successfully:', processorResult)
     console.log('✅ Triggered payment completion processor for registration')
   } catch (processorError) {
     console.error('❌ Failed to trigger payment completion processor for registration:', processorError)
+    console.error('❌ Registration processor error details:', {
+      message: processorError instanceof Error ? processorError.message : String(processorError),
+      stack: processorError instanceof Error ? processorError.stack : undefined
+    })
     // Don't fail the webhook - registration was processed successfully
   }
 
@@ -453,6 +490,13 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
 
   try {
+    console.log('🔄 Webhook event received:', {
+      type: event.type,
+      id: event.id,
+      created: event.created,
+      dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
+    })
+    
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent

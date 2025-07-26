@@ -54,21 +54,11 @@ export async function PUT(
       }, { status: 400 })
     }
 
-    // Validate pricing logic based on allow_monthly setting
-    if (allow_monthly) {
-      // Ensure annual pricing offers some discount when monthly is allowed
-      if (price_monthly > 0 && price_annual >= (price_monthly * 12)) {
-        return NextResponse.json({ 
-          error: 'Annual price should be less than 12 times the monthly price' 
-        }, { status: 400 })
-      }
-    } else {
-      // If monthly is not allowed, ensure monthly price is 0
-      if (price_monthly !== 0) {
-        return NextResponse.json({ 
-          error: 'Monthly price must be 0 when monthly pricing is disabled' 
-        }, { status: 400 })
-      }
+    // Basic validation - ensure annual pricing offers some discount when monthly is available
+    if (allow_monthly && price_monthly > 0 && price_annual >= (price_monthly * 12)) {
+      return NextResponse.json({ 
+        error: 'Annual price should be less than 12 times the monthly price' 
+      }, { status: 400 })
     }
 
     // Update the membership

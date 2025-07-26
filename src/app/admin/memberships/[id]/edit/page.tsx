@@ -115,20 +115,11 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
         return
       }
       
-      // Validate pricing logic based on allow_monthly setting
-      if (formData.allow_monthly) {
-        if (monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
-          showError('Annual price should be less than 12 times the monthly price')
-          setUpdating(false)
-          return
-        }
-      } else {
-        // If monthly is not allowed, ensure monthly price is 0
-        if (monthlyPriceInCents !== 0) {
-          showError('Monthly price must be $0.00 when monthly pricing is disabled')
-          setUpdating(false)
-          return
-        }
+      // Basic validation - ensure annual pricing offers some discount when monthly is available
+      if (formData.allow_monthly && monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
+        showError('Annual price should be less than 12 times the monthly price')
+        setUpdating(false)
+        return
       }
 
       if (!formData.accounting_code.trim()) {
@@ -181,8 +172,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                              formData.price_annual !== '' && 
                              parseFloat(formData.price_annual) >= 0 &&
                              formData.accounting_code.trim() &&
-                             !membershipNameExists &&
-                             (formData.allow_monthly || parseFloat(formData.price_monthly) === 0)
+                             !membershipNameExists
 
   if (loading) {
     return (
@@ -270,32 +260,34 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
               )}
 
               {/* Pricing */}
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                {/* Monthly Price */}
-                <div>
-                  <label htmlFor="price_monthly" className="block text-sm font-medium text-gray-700">
-                    Monthly Price (USD)
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">$</span>
+              <div className={`grid gap-6 ${formData.allow_monthly ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                {/* Monthly Price - Only show when allow_monthly is true */}
+                {formData.allow_monthly && (
+                  <div>
+                    <label htmlFor="price_monthly" className="block text-sm font-medium text-gray-700">
+                      Monthly Price (USD)
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">$</span>
+                      </div>
+                      <input
+                        type="number"
+                        id="price_monthly"
+                        step="0.01"
+                        min="0"
+                        value={formData.price_monthly}
+                        onChange={(e) => setFormData(prev => ({ ...prev, price_monthly: e.target.value }))}
+                        className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="0.00"
+                        required
+                      />
                     </div>
-                    <input
-                      type="number"
-                      id="price_monthly"
-                      step="0.01"
-                      min="0"
-                      value={formData.price_monthly}
-                      onChange={(e) => setFormData(prev => ({ ...prev, price_monthly: e.target.value }))}
-                      className="block w-full pl-7 pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="0.00"
-                      required
-                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Price per month
+                    </p>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Price per month
-                  </p>
-                </div>
+                )}
 
                 {/* Annual Price */}
                 <div>
@@ -319,29 +311,33 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                     />
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
-                    Price for full year (should be &lt; 12 months)
+                    Price for full year {formData.allow_monthly ? '(should be < 12 months)' : ''}
                   </p>
                 </div>
               </div>
 
               {/* Pricing Preview */}
-              {formData.price_monthly && formData.price_annual && (
+              {formData.price_annual && (
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Pricing Comparison</h4>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <div>
-                      <span className="text-sm text-gray-500">Monthly:</span>
-                      <span className="ml-2 text-sm font-medium">${parseFloat(formData.price_monthly).toFixed(2)}/month</span>
-                    </div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Pricing Summary</h4>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {formData.allow_monthly && formData.price_monthly && (
+                      <>
+                        <div>
+                          <span className="text-sm text-gray-500">Monthly:</span>
+                          <span className="ml-2 text-sm font-medium">${parseFloat(formData.price_monthly).toFixed(2)}/month</span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-gray-500">Annual savings:</span>
+                          <span className="ml-2 text-sm font-medium text-green-600">
+                            ${Math.max(0, (parseFloat(formData.price_monthly) * 12 - parseFloat(formData.price_annual))).toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <span className="text-sm text-gray-500">Annual:</span>
                       <span className="ml-2 text-sm font-medium">${parseFloat(formData.price_annual).toFixed(2)}/year</span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500">Annual savings:</span>
-                      <span className="ml-2 text-sm font-medium text-green-600">
-                        ${Math.max(0, (parseFloat(formData.price_monthly) * 12 - parseFloat(formData.price_annual))).toFixed(2)}
-                      </span>
                     </div>
                   </div>
                 </div>

@@ -14,6 +14,7 @@ interface Membership {
   price_monthly: number
   price_annual: number
   allow_discounts: boolean
+  allow_monthly: boolean
   created_at: string
 }
 
@@ -30,6 +31,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
     price_annual: '', // in dollars, will convert to cents
     accounting_code: '',
     allow_discounts: true,
+    allow_monthly: true,
   })
   
   const [existingMemberships, setExistingMemberships] = useState<any[]>([])
@@ -63,6 +65,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
           price_annual: (membershipData.price_annual / 100).toString(),
           accounting_code: membershipData.accounting_code || '',
           allow_discounts: membershipData.allow_discounts,
+          allow_monthly: membershipData.allow_monthly ?? true, // Default to true for existing records
         })
 
         // Fetch other memberships to check for duplicates
@@ -112,10 +115,20 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
         return
       }
       
-      if (monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
-        showError('Annual price should be less than 12 times the monthly price')
-        setUpdating(false)
-        return
+      // Validate pricing logic based on allow_monthly setting
+      if (formData.allow_monthly) {
+        if (monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
+          showError('Annual price should be less than 12 times the monthly price')
+          setUpdating(false)
+          return
+        }
+      } else {
+        // If monthly is not allowed, ensure monthly price is 0
+        if (monthlyPriceInCents !== 0) {
+          showError('Monthly price must be $0.00 when monthly pricing is disabled')
+          setUpdating(false)
+          return
+        }
       }
 
       if (!formData.accounting_code.trim()) {
@@ -131,6 +144,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
         price_annual: annualPriceInCents,
         accounting_code: formData.accounting_code.trim(),
         allow_discounts: formData.allow_discounts,
+        allow_monthly: formData.allow_monthly,
       }
 
       const response = await fetch(`/api/admin/memberships/${resolvedParams.id}`, {
@@ -167,7 +181,8 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                              formData.price_annual !== '' && 
                              parseFloat(formData.price_annual) >= 0 &&
                              formData.accounting_code.trim() &&
-                             !membershipNameExists
+                             !membershipNameExists &&
+                             (formData.allow_monthly || parseFloat(formData.price_monthly) === 0)
 
   if (loading) {
     return (
@@ -331,6 +346,23 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                   </div>
                 </div>
               )}
+
+              {/* Allow Monthly Pricing */}
+              <div className="flex items-center">
+                <input
+                  id="allow_monthly"
+                  type="checkbox"
+                  checked={formData.allow_monthly}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
+                  Allow monthly pricing for this membership
+                </label>
+              </div>
+              <p className="text-sm text-gray-500">
+                When unchecked, only annual pricing will be available to users. Monthly price will be set to $0.00.
+              </p>
 
               {/* Accounting Code */}
               <div>

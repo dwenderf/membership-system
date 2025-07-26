@@ -82,25 +82,36 @@ export default async function BrowseMembershipsPage() {
                   
                   {/* Pricing Display */}
                   <div className="mt-4 border-t border-gray-200 pt-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Monthly:</span>
-                      <span className="font-medium text-gray-900">
-                        ${(membership.price_monthly / 100).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm mt-1">
-                      <span className="text-gray-500">Annual:</span>
-                      <div className="text-right">
+                    {membership.allow_monthly ? (
+                      <>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-500">Monthly:</span>
+                          <span className="font-medium text-gray-900">
+                            ${(membership.price_monthly / 100).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm mt-1">
+                          <span className="text-gray-500">Annual:</span>
+                          <div className="text-right">
+                            <span className="font-medium text-gray-900">
+                              ${(membership.price_annual / 100).toFixed(2)}
+                            </span>
+                            {membership.allow_monthly && membership.price_annual < membership.price_monthly * 12 && (
+                              <div className="text-xs text-green-600">
+                                Save ${((membership.price_monthly * 12 - membership.price_annual) / 100).toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">Annual Only:</span>
                         <span className="font-medium text-gray-900">
                           ${(membership.price_annual / 100).toFixed(2)}
                         </span>
-                        {membership.price_annual < membership.price_monthly * 12 && (
-                          <div className="text-xs text-green-600">
-                            Save ${((membership.price_monthly * 12 - membership.price_annual) / 100).toFixed(2)}
-                          </div>
-                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Purchase Component */}

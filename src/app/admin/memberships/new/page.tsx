@@ -16,6 +16,7 @@ export default function NewMembershipPage() {
     price_annual: '', // in dollars, will convert to cents
     accounting_code: '',
     allow_discounts: true,
+    allow_monthly: true,
   })
   
   // Removed seasons state - no longer needed
@@ -87,10 +88,20 @@ export default function NewMembershipPage() {
         return
       }
       
-      if (monthlyPriceInCents > 0 && annualPriceInCents > monthlyPriceInCents * 12) {
-        setError('Annual price should be less than or equal to 12 months of monthly pricing')
-        setLoading(false)
-        return
+      // Validate pricing logic based on allow_monthly setting
+      if (formData.allow_monthly) {
+        if (monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
+          setError('Annual price should be less than 12 times the monthly price')
+          setLoading(false)
+          return
+        }
+      } else {
+        // If monthly is not allowed, ensure monthly price is 0
+        if (monthlyPriceInCents !== 0) {
+          setError('Monthly price must be $0.00 when monthly pricing is disabled')
+          setLoading(false)
+          return
+        }
       }
 
       if (!formData.accounting_code.trim()) {
@@ -106,6 +117,7 @@ export default function NewMembershipPage() {
         price_annual: annualPriceInCents,
         accounting_code: formData.accounting_code.trim(),
         allow_discounts: formData.allow_discounts,
+        allow_monthly: formData.allow_monthly,
       }
 
       const { error: insertError } = await supabase
@@ -138,7 +150,8 @@ export default function NewMembershipPage() {
                              parseFloat(formData.price_annual) >= 0 &&
                              formData.accounting_code.trim() &&
                              !membershipNameExists &&
-                             accountingCodesValid === true
+                             accountingCodesValid &&
+                             (formData.allow_monthly || parseFloat(formData.price_monthly) === 0)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -340,6 +353,23 @@ export default function NewMembershipPage() {
                   </div>
                 </div>
               )}
+
+              {/* Allow Monthly Pricing */}
+              <div className="flex items-center">
+                <input
+                  id="allow_monthly"
+                  type="checkbox"
+                  checked={formData.allow_monthly}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
+                  Allow monthly pricing for this membership
+                </label>
+              </div>
+              <p className="text-sm text-gray-500">
+                When unchecked, only annual pricing will be available to users. Monthly price will be set to $0.00.
+              </p>
 
               {/* Accounting Code */}
               <div>

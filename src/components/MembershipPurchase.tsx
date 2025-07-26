@@ -18,6 +18,7 @@ interface Membership {
   description?: string
   price_monthly: number
   price_annual: number
+  allow_monthly: boolean
 }
 
 interface MembershipPurchaseProps {
@@ -32,9 +33,9 @@ interface MembershipPurchaseProps {
 }
 
 const DURATION_OPTIONS = [
-  { months: 3, label: '3 Months' },
-  { months: 6, label: '6 Months' },
-  { months: 12, label: '12 Months (Annual)' },
+  { months: 3, label: '3 Months', requiresMonthly: true },
+  { months: 6, label: '6 Months', requiresMonthly: true },
+  { months: 12, label: '12 Months (Annual)', requiresMonthly: false },
 ]
 
 export default function MembershipPurchase({ membership, userEmail, userMemberships = [] }: MembershipPurchaseProps) {
@@ -60,6 +61,10 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
 
   const calculateSavings = (months: number) => {
+    // Only calculate savings if monthly pricing is available
+    if (!membership.allow_monthly) {
+      return 0
+    }
     const regularPrice = membership.price_monthly * months
     const actualPrice = calculatePrice(months)
     return regularPrice - actualPrice
@@ -237,7 +242,9 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           Select Duration
         </label>
         <div className="grid grid-cols-1 gap-2">
-          {DURATION_OPTIONS.map((option) => {
+          {DURATION_OPTIONS
+            .filter(option => !option.requiresMonthly || membership.allow_monthly)
+            .map((option) => {
             const price = calculatePrice(option.months)
             const optionSavings = calculateSavings(option.months)
             
@@ -266,7 +273,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                       }`}>
                         {option.label}
                       </div>
-                      {optionSavings > 0 && (
+                      {optionSavings > 0 && membership.allow_monthly && (
                         <div className="text-green-600 text-xs">
                           Save ${(optionSavings / 100).toFixed(2)}
                         </div>
@@ -457,7 +464,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
               <span className="text-gray-600">Valid until:</span>
               <span className="text-gray-900">{endDate.toLocaleDateString()}</span>
             </div>
-            {savings > 0 && (
+            {savings > 0 && membership.allow_monthly && (
               <div className="flex justify-between text-green-600">
                 <span>Savings:</span>
                 <span>${(savings / 100).toFixed(2)}</span>

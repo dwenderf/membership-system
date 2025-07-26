@@ -100,29 +100,35 @@ export type Database = {
       memberships: {
         Row: {
           id: string
-          season_id: string
           name: string
-          price: number
+          description: string | null
+          price_monthly: number
+          price_annual: number
           accounting_code: string | null
           allow_discounts: boolean
+          allow_monthly: boolean
           created_at: string
         }
         Insert: {
           id?: string
-          season_id: string
           name: string
-          price: number
+          description?: string | null
+          price_monthly: number
+          price_annual: number
           accounting_code?: string | null
           allow_discounts?: boolean
+          allow_monthly?: boolean
           created_at?: string
         }
         Update: {
           id?: string
-          season_id?: string
           name?: string
-          price?: number
+          description?: string | null
+          price_monthly?: number
+          price_annual?: number
           accounting_code?: string | null
           allow_discounts?: boolean
+          allow_monthly?: boolean
           created_at?: string
         }
       }

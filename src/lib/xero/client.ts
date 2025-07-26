@@ -5,6 +5,8 @@ if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
 }
 
 // Run startup connection test when this module is first imported
+// DISABLED: This was causing infinite loops and rate limiting when multiple
+// instances of the module were imported simultaneously
 let hasRunStartupTest = false
 
 async function runXeroStartupTest() {
@@ -96,8 +98,8 @@ async function runXeroStartupTest() {
   }
 }
 
-// Trigger startup test
-runXeroStartupTest()
+// Trigger startup test - DISABLED due to potential infinite loop causing rate limiting
+// runXeroStartupTest()
 
 const xero = new XeroClient({
   clientId: process.env.XERO_CLIENT_ID,

@@ -38,7 +38,7 @@ export class XeroBatchSyncManager {
   }> {
     try {
       // Get pending invoices (only 'pending' - staged invoices are not ready until payment succeeds)
-      const { data: pendingInvoices } = await this.supabase
+      const { data: pendingInvoices, error: invoiceError } = await this.supabase
         .from('xero_invoices')
         .select(`
           *,
@@ -47,8 +47,12 @@ export class XeroBatchSyncManager {
         .eq('sync_status', 'pending')
         .order('staged_at', { ascending: true })
 
+      if (invoiceError) {
+        console.error('❌ Error fetching pending invoices:', invoiceError)
+      }
+
       // Get pending payments with payment data for filtering (only 'pending' - staged payments are not ready)
-      const { data: pendingPayments } = await this.supabase
+      const { data: pendingPayments, error: paymentError } = await this.supabase
         .from('xero_payments')
         .select(`
           *,
@@ -62,6 +66,21 @@ export class XeroBatchSyncManager {
         `)
         .eq('sync_status', 'pending')
         .order('staged_at', { ascending: true })
+
+      if (paymentError) {
+        console.error('❌ Error fetching pending payments:', paymentError)
+      }
+
+      // Debug logging
+      console.log(`🔍 Database query results: ${pendingInvoices?.length || 0} invoices, ${pendingPayments?.length || 0} payments`)
+      if (pendingInvoices && pendingInvoices.length > 0) {
+        console.log('📄 Pending invoices found:', pendingInvoices.map(inv => ({
+          id: inv.id,
+          sync_status: inv.sync_status,
+          invoice_number: inv.invoice_number,
+          staged_at: inv.staged_at
+        })))
+      }
 
       // Filter payments based on criteria: completed status and non-free payment method
       const eligiblePayments = pendingPayments?.filter(payment => {
@@ -85,6 +104,16 @@ export class XeroBatchSyncManager {
         
         return true
       }) || []
+
+      // Debug logging for final results
+      console.log(`🔍 Final results: ${pendingInvoices?.length || 0} invoices, ${eligiblePayments.length} eligible payments`)
+      if (eligiblePayments.length > 0) {
+        console.log('💰 Eligible payments found:', eligiblePayments.map(pay => ({
+          id: pay.id,
+          sync_status: pay.sync_status,
+          staged_at: pay.staged_at
+        })))
+      }
 
       return {
         invoices: pendingInvoices || [],
@@ -127,16 +156,21 @@ export class XeroBatchSyncManager {
       console.log('📋 Phase 1: Checking for pending records...')
       const { invoices: pendingInvoices, payments: filteredPayments } = await this.getPendingXeroRecords()
 
-      console.log(`📊 Found ${pendingInvoices?.length || 0} pending invoices, ${filteredPayments.length} eligible payments`)
+      const pendingInvoiceCount = pendingInvoices?.length || 0
+      const pendingPaymentCount = filteredPayments.length
+      const totalPending = pendingInvoiceCount + pendingPaymentCount
+
+      console.log(`📊 Found ${pendingInvoiceCount} pending invoices, ${pendingPaymentCount} eligible payments (${totalPending} total)`)
 
       // If no pending records, skip Xero connection entirely
-      if ((!pendingInvoices || pendingInvoices.length === 0) && 
-          (!filteredPayments || filteredPayments.length === 0)) {
-        console.log('✅ No pending records to sync - skipping Xero connection')
+      if (totalPending === 0) {
+        console.log('✅ No pending records to sync - skipping Xero connection entirely (no API calls made)')
         return results
       }
 
-      // Phase 2: Connect to Xero
+      console.log(`🔄 Proceeding with sync: ${pendingInvoiceCount} invoices + ${pendingPaymentCount} payments = ${totalPending} total records`)
+
+      // Phase 2: Connect to Xero (only if we have records to sync)
       console.log('🔌 Phase 2: Connecting to Xero...')
       
       // Check if Xero is connected before attempting any sync
@@ -148,7 +182,7 @@ export class XeroBatchSyncManager {
 
       console.log(`🏢 Found ${activeTenants.length} active Xero tenant(s)`)
 
-      // Validate connection to at least one tenant
+      // Validate connection to at least one tenant (only if we have records to sync)
       let hasValidConnection = false
       let validTenant = null
       for (const tenant of activeTenants) {

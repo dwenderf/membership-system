@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Make a lightweight API call - just get organisation info
+        // NOTE: This makes a real Xero API call and should be used sparingly to avoid rate limiting
         const orgResponse = await xeroApi.accountingApi.getOrganisations(token.tenant_id)
         
         if (orgResponse?.body?.organisations && orgResponse.body.organisations.length > 0) {

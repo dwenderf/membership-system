@@ -112,22 +112,31 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     }
   }, [selectedDuration, selectedPrice, paymentOption])
   
-  // Calculate validity period - start from latest expiration date of current memberships of same type, or today
+  // Calculate validity period - start from latest expiration date of current memberships of same type, or September 1, 2025 for new memberships
   const getStartDate = () => {
     const currentMembershipsOfSameType = userMemberships.filter(
       um => um.membership?.id === membership.id && new Date(um.valid_until) > new Date()
     )
     
     if (currentMembershipsOfSameType.length > 0) {
-      // Find the latest expiration date
+      // Extension: start from end of current membership
       const latestExpiration = currentMembershipsOfSameType.reduce((latest, current) => {
         return new Date(current.valid_until) > new Date(latest.valid_until) ? current : latest
       })
       return new Date(latestExpiration.valid_until)
     }
     
-    // No current membership of this type, start today
-    return new Date()
+    // New membership: check if we're before September 1, 2025
+    const septemberFirst2025 = new Date('2025-09-01')
+    const now = new Date()
+    
+    if (now < septemberFirst2025) {
+      // Before September 1, 2025: start on September 1, 2025
+      return septemberFirst2025
+    }
+    
+    // After September 1, 2025: start today
+    return now
   }
   
   const startDate = getStartDate()

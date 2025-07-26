@@ -224,9 +224,7 @@ export default function NewMembershipPage() {
                   placeholder="e.g., Full Hockey Membership, Social Membership"
                   required
                 />
-                <p className="mt-1 text-sm text-gray-500">
-                  A descriptive name for this membership type
-                </p>
+
               </div>
 
               {/* Description */}
@@ -242,9 +240,7 @@ export default function NewMembershipPage() {
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="e.g., Includes access to all ice times, tournaments, and events"
                 />
-                <p className="mt-1 text-sm text-gray-500">
-                  Optional description of what this membership includes
-                </p>
+
               </div>
 
               {/* Duplicate Name Warning */}
@@ -290,9 +286,7 @@ export default function NewMembershipPage() {
                         required
                       />
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Price per month
-                    </p>
+
                   </div>
                 )}
 
@@ -317,9 +311,7 @@ export default function NewMembershipPage() {
                       required
                     />
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Price for full year {formData.allow_monthly ? '(should be ≤ 12 months)' : ''}
-                  </p>
+
                 </div>
               </div>
 
@@ -392,9 +384,7 @@ export default function NewMembershipPage() {
                   placeholder="Enter Accounting Code (required)"
                   required
                 />
-                <p className="mt-1 text-sm text-gray-500">
-                  Required code for Xero integration and accounting system
-                </p>
+
               </div>
 
               {/* Membership Preview */}

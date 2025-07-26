@@ -759,7 +759,7 @@ export class XeroBatchSyncManager {
         },
         amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
         date: new Date().toISOString().split('T')[0],
-        reference: paymentRecord.reference || ''
+        reference: paymentRecord.reference || ((paymentRecord.staging_metadata as any)?.stripe_payment_intent_id || '')
       }
 
       console.log('📤 Creating payment in Xero:', {

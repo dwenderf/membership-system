@@ -455,16 +455,63 @@ export async function GET(request: NextRequest) {
       recentTransactions: processedTransactions
     }
 
+    // Get active members by membership type
+    const { data: activeMembers, error: activeMembersError } = await supabase
+      .from('user_memberships')
+      .select(`
+        id,
+        memberships (
+          id,
+          name
+        )
+      `)
+      .eq('payment_status', 'paid')
+      .gte('expires_at', new Date().toISOString())
+
+    if (activeMembersError) {
+      console.error('Error fetching active members:', activeMembersError)
+    }
+
+    // Group active members by membership type
+    const activeMembersByType = new Map<string, { 
+      membershipId: string, 
+      name: string, 
+      count: number 
+    }>()
+
+    activeMembers?.forEach(membership => {
+      const membershipData = Array.isArray(membership.memberships) ? membership.memberships[0] : membership.memberships
+      const membershipId = membershipData?.id || 'unknown'
+      const name = membershipData?.name || 'Unknown Membership'
+
+      const existing = activeMembersByType.get(membershipId) || {
+        membershipId,
+        name,
+        count: 0
+      }
+
+      existing.count += 1
+      activeMembersByType.set(membershipId, existing)
+    })
+
+    // Convert to array and sort by count
+    const activeMembersSummary = Array.from(activeMembersByType.values())
+      .sort((a, b) => b.count - a.count)
+
     // Add some debugging info
     console.log('Report data generated:', {
       dateRange: `${startDate} to ${endDate}`,
       membershipCount: memberships?.length || 0,
       registrationCount: registrations?.length || 0,
       discountUsageCount: discountUsage?.length || 0,
-      transactionCount: processedTransactions.length
+      transactionCount: processedTransactions.length,
+      activeMembersCount: activeMembers?.length || 0
     })
 
-    return NextResponse.json(reportData)
+    return NextResponse.json({
+      ...reportData,
+      activeMembers: activeMembersSummary
+    })
 
   } catch (error) {
     console.error('Error generating reports:', error)

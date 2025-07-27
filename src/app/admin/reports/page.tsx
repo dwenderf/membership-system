@@ -85,6 +85,11 @@ interface ReportData {
     date: string
     status: string
   }>
+  activeMembers: Array<{
+    membershipId: string
+    name: string
+    count: number
+  }>
 }
 
 const dateRanges = [
@@ -193,6 +198,36 @@ export default function ReportsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Active Members Summary - Date Independent */}
+      {reportData && (
+        <div className="mb-8">
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Active Members</h2>
+            </div>
+            <div className="p-6">
+              {reportData.activeMembers && reportData.activeMembers.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {reportData.activeMembers.map((membership) => (
+                    <div key={membership.membershipId} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{membership.name}</p>
+                        <p className="text-sm text-gray-500">Active members</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-blue-600">{membership.count}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-4">No active members found</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         {/* Date Range Tabs */}
         <div className="flex space-x-1 mb-6">
@@ -214,6 +249,7 @@ export default function ReportsPage() {
 
       {reportData && (
         <div className="space-y-8">
+
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
@@ -228,7 +264,11 @@ export default function ReportsPage() {
             
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Net Donations</h3>
-              <p className="text-3xl font-bold text-orange-600">
+              <p className={`text-3xl font-bold ${
+                (reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount) >= 0 
+                  ? 'text-green-600' 
+                  : 'text-red-600'
+              }`}>
                 {formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}
               </p>
             </div>
@@ -242,7 +282,13 @@ export default function ReportsPage() {
             
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Net Revenue</h3>
-              <p className="text-3xl font-bold text-blue-600">
+              <p className={`text-3xl font-bold ${
+                ((reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) + reportData.summary.registrations.totalAmount) -
+                reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) -
+                (reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)) >= 0 
+                  ? 'text-green-600' 
+                  : 'text-red-600'
+              }`}>
                 {formatCurrency(
                   (reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) + reportData.summary.registrations.totalAmount) -
                   reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) -
@@ -347,7 +393,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Discount Usage</p>
                     <p className="text-sm text-gray-500">{reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)} uses</p>
                   </div>
-                  <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
+                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.discountUsage.length > 0 ? (
                   <div className="space-y-4">
@@ -367,7 +413,7 @@ export default function ReportsPage() {
                                 <h4 className="font-medium text-gray-900">{category.name}</h4>
                               </div>
                               <div className="text-right">
-                                <div className="text-lg font-semibold text-green-600">
+                                <div className="text-lg font-semibold text-blue-600">
                                   {formatCurrency(category.total)}
                                 </div>
                                 <div className="text-sm text-gray-600">
@@ -428,7 +474,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Net Donations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount} transactions</p>
                   </div>
-                  <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
+                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
                 </div>
                 
                 <div className="space-y-4">
@@ -446,7 +492,7 @@ export default function ReportsPage() {
                           <h4 className="font-medium text-gray-900">Donations Received</h4>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-semibold text-green-600">
+                          <div className="text-lg font-semibold text-blue-600">
                             {formatCurrency(reportData.summary.donationsReceived.totalAmount)}
                           </div>
                           <div className="text-sm text-gray-600">
@@ -541,7 +587,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Registrations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.registrations.purchaseCount} purchases</p>
                   </div>
-                  <p className="font-semibold text-purple-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
+                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
                 </div>
                 
                 {/* Registrations Breakdown */}
@@ -562,7 +608,7 @@ export default function ReportsPage() {
                               <h4 className="font-medium text-gray-900">{registration.name}</h4>
                             </div>
                             <div className="text-right">
-                              <div className="text-lg font-semibold text-purple-600">
+                                                              <div className="text-lg font-semibold text-blue-600">
                                 {formatCurrency(registration.total)}
                               </div>
                               <div className="text-sm text-gray-600">

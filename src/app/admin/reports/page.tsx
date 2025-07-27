@@ -221,7 +221,8 @@ export default function ReportsPage() {
               <p className="text-3xl font-bold text-green-600">
                 {formatCurrency(
                   reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) +
-                  reportData.summary.registrations.totalAmount
+                  reportData.summary.registrations.totalAmount +
+                  reportData.summary.donationsReceived.totalAmount
                 )}
               </p>
             </div>
@@ -444,6 +445,7 @@ export default function ReportsPage() {
                   </div>
                   
                   {/* Expandable donation details */}
+                  {(() => { console.log('Donation details:', reportData.summary.donationDetails); return null; })()}
                   {reportData.summary.donationDetails && reportData.summary.donationDetails.length > 0 ? (
                     <div className="mt-4">
                       <div 

@@ -47,31 +47,36 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(Date.now() - timeRange).toISOString()
     const endDate = new Date().toISOString()
 
-    // Get memberships data with user details
+    // Get memberships data from Xero line items
     const { data: memberships, error: membershipsError } = await supabase
-      .from('user_memberships')
+      .from('xero_invoice_line_items')
       .select(`
         id,
-        amount_paid,
-        purchased_at,
-        memberships (
+        line_amount,
+        description,
+        created_at,
+        xero_invoices!inner (
           id,
-          name
-        ),
-        users (
-          first_name,
-          last_name
+          invoice_status,
+          created_at,
+          payments!inner (
+            users (
+              first_name,
+              last_name
+            )
+          )
         )
       `)
-      .gte('purchased_at', startDate)
-      .lte('purchased_at', endDate)
-      .eq('payment_status', 'paid')
+      .eq('line_item_type', 'membership')
+      .eq('xero_invoices.invoice_status', 'PAID')
+      .gte('xero_invoices.created_at', startDate)
+      .lte('xero_invoices.created_at', endDate)
 
     if (membershipsError) {
-      console.error('Error fetching memberships:', membershipsError)
+      console.error('Error fetching memberships from Xero:', membershipsError)
     }
 
-    // Group memberships by type and calculate totals
+    // Group memberships by description and calculate totals
     const membershipsByType = new Map<string, { 
       membershipId: string, 
       name: string, 
@@ -86,13 +91,14 @@ export async function GET(request: NextRequest) {
     }>()
 
     memberships?.forEach(membership => {
-      const membershipData = Array.isArray(membership.memberships) ? membership.memberships[0] : membership.memberships
-      const userData = Array.isArray(membership.users) ? membership.users[0] : membership.users
+      const invoiceData = Array.isArray(membership.xero_invoices) ? membership.xero_invoices[0] : membership.xero_invoices
+      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
+      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
       
-      const membershipId = membershipData?.id || 'unknown'
-      const name = membershipData?.name || 'Unknown Membership'
+      const membershipId = membership.description || 'unknown'
+      const name = membership.description || 'Unknown Membership'
       const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
-      const amount = membership.amount_paid || 0
+      const amount = membership.line_amount || 0
 
       const existing = membershipsByType.get(membershipId) || {
         membershipId,
@@ -113,7 +119,7 @@ export async function GET(request: NextRequest) {
         id: membership.id,
         customerName,
         amount,
-        date: membership.purchased_at
+        date: invoiceData.created_at
       })
 
       membershipsByType.set(membershipId, existing)
@@ -138,55 +144,62 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations data with registration details
+    // Get registrations data from Xero line items
     const { data: registrations, error: registrationsError } = await supabase
-      .from('user_registrations')
+      .from('xero_invoice_line_items')
       .select(`
         id,
-        amount_paid,
-        registered_at,
-        registrations (
+        line_amount,
+        description,
+        created_at,
+        xero_invoices!inner (
           id,
-          name,
-          season_id
-        ),
-        users (
-          first_name,
-          last_name
+          invoice_status,
+          created_at,
+          payments!inner (
+            users (
+              first_name,
+              last_name
+            )
+          )
         )
       `)
-      .gte('registered_at', startDate)
-      .lte('registered_at', endDate)
-      .eq('payment_status', 'paid')
+      .eq('line_item_type', 'registration')
+      .eq('xero_invoices.invoice_status', 'PAID')
+      .gte('xero_invoices.created_at', startDate)
+      .lte('xero_invoices.created_at', endDate)
 
     if (registrationsError) {
-      console.error('Error fetching registrations:', registrationsError)
+      console.error('Error fetching registrations from Xero:', registrationsError)
     }
 
-    // Get discount usage with user details
+    // Get discount usage from Xero line items
     const { data: discountUsage, error: discountError } = await supabase
-      .from('discount_usage')
+      .from('xero_invoice_line_items')
       .select(`
         id,
-        amount_saved,
-        used_at,
-        discount_categories (
+        line_amount,
+        description,
+        created_at,
+        xero_invoices!inner (
           id,
-          name
-        ),
-        users (
-          first_name,
-          last_name
-        ),
-        discount_codes (
-          code
+          invoice_status,
+          created_at,
+          payments!inner (
+            users (
+              first_name,
+              last_name
+            )
+          )
         )
       `)
-      .gte('used_at', startDate)
-      .lte('used_at', endDate)
+      .eq('line_item_type', 'discount')
+      .eq('xero_invoices.invoice_status', 'PAID')
+      .gte('xero_invoices.created_at', startDate)
+      .lte('xero_invoices.created_at', endDate)
 
     if (discountError) {
-      console.error('Error fetching discount usage:', discountError)
+      console.error('Error fetching discount usage from Xero:', discountError)
     }
 
     // Group discount usage by category and calculate totals
@@ -205,15 +218,16 @@ export async function GET(request: NextRequest) {
     }>()
 
     discountUsage?.forEach(usage => {
-      const categoryData = Array.isArray(usage.discount_categories) ? usage.discount_categories[0] : usage.discount_categories
-      const userData = Array.isArray(usage.users) ? usage.users[0] : usage.users
-      const codeData = Array.isArray(usage.discount_codes) ? usage.discount_codes[0] : usage.discount_codes
+      const invoiceData = Array.isArray(usage.xero_invoices) ? usage.xero_invoices[0] : usage.xero_invoices
+      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
+      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
       
-      const categoryId = categoryData?.id || 'unknown'
-      const name = categoryData?.name || 'Unknown Category'
+      // For discounts, we'll group by description since we don't have category info in Xero line items
+      const categoryId = usage.description || 'unknown'
+      const name = usage.description || 'Unknown Discount'
       const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
-      const discountCode = codeData?.code || 'Unknown Code'
-      const amountSaved = usage.amount_saved || 0
+      const discountCode = usage.description || 'Unknown Code' // Use description as discount code
+      const amountSaved = Math.abs(usage.line_amount || 0) // Discounts are typically negative amounts
 
       const existing = discountUsageByCategory.get(categoryId) || {
         categoryId,
@@ -236,7 +250,7 @@ export async function GET(request: NextRequest) {
         customerName,
         discountCode,
         amountSaved,
-        date: usage.used_at
+        date: invoiceData.created_at
       })
 
       discountUsageByCategory.set(categoryId, existing)
@@ -261,28 +275,36 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get donations from user_memberships with user details
-    const { data: membershipDonations, error: membershipDonationsError } = await supabase
-      .from('user_memberships')
+    // Get donations from Xero line items
+    const { data: donations, error: donationsError } = await supabase
+      .from('xero_invoice_line_items')
       .select(`
         id,
-        amount_paid,
-        purchased_at,
-        stripe_payment_intent_id,
-        users (
-          first_name,
-          last_name
+        line_amount,
+        description,
+        created_at,
+        xero_invoices!inner (
+          id,
+          invoice_status,
+          created_at,
+          payments!inner (
+            users (
+              first_name,
+              last_name
+            )
+          )
         )
       `)
-      .gte('purchased_at', startDate)
-      .lte('purchased_at', endDate)
-      .eq('payment_status', 'paid')
+      .eq('line_item_type', 'donation')
+      .eq('xero_invoices.invoice_status', 'PAID')
+      .gte('xero_invoices.created_at', startDate)
+      .lte('xero_invoices.created_at', endDate)
 
-    if (membershipDonationsError) {
-      console.error('Error fetching membership donations:', membershipDonationsError)
+    if (donationsError) {
+      console.error('Error fetching donations from Xero:', donationsError)
     }
 
-    // Calculate donations based on membership payments that include donation components
+    // Calculate donations from Xero line items
     let donationsReceived = 0
     let donationsGiven = 0
     let donationTransactionCount = 0
@@ -294,28 +316,40 @@ export async function GET(request: NextRequest) {
       type: 'received' | 'given'
     }> = []
 
-    membershipDonations?.forEach(membership => {
-      const userData = Array.isArray(membership.users) ? membership.users[0] : membership.users
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+    console.log('🔍 Donations data from Xero:', {
+      totalDonations: donations?.length || 0,
+      sampleDonation: donations?.[0] ? {
+        amount: donations[0].line_amount,
+        description: donations[0].description
+      } : null
+    })
+
+    donations?.forEach(donation => {
+      const invoiceData = Array.isArray(donation.xero_invoices) ? donation.xero_invoices[0] : donation.xero_invoices
+      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
+      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
       
-      // This is a simplified calculation - in a real implementation, you'd want to
-      // fetch the actual donation amounts from Stripe metadata or store them separately
-      // For now, we'll estimate based on common donation patterns
-      if (membership.amount_paid && membership.amount_paid > 5000) { // $50 in cents
-        // Assume any amount over $50 might include a donation
-        const estimatedDonation = Math.min(membership.amount_paid - 5000, 2000) // Cap at $20
-        if (estimatedDonation > 0) {
-          donationsReceived += estimatedDonation
-          donationTransactionCount++
-          donationDetails.push({
-            id: membership.id,
-            customerName,
-            amount: estimatedDonation,
-            date: membership.purchased_at,
-            type: 'received'
-          })
-        }
-      }
+      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const amount = donation.line_amount || 0
+      
+      // For now, treat all donations as received
+      // In the future, you might want to distinguish based on description or other metadata
+      donationsReceived += amount
+      donationTransactionCount++
+      donationDetails.push({
+        id: donation.id,
+        customerName,
+        amount,
+        date: invoiceData.created_at,
+        type: 'received'
+      })
+    })
+
+    console.log('📊 Donation calculation results:', {
+      donationsReceived,
+      donationTransactionCount,
+      donationDetailsCount: donationDetails.length,
+      sampleDonation: donationDetails[0]
     })
 
     // Sort donation details by date (newest first)
@@ -425,13 +459,14 @@ export async function GET(request: NextRequest) {
     }>()
 
     registrations?.forEach(registration => {
-      const registrationData = Array.isArray(registration.registrations) ? registration.registrations[0] : registration.registrations
-      const userData = Array.isArray(registration.users) ? registration.users[0] : registration.users
+      const invoiceData = Array.isArray(registration.xero_invoices) ? registration.xero_invoices[0] : registration.xero_invoices
+      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
+      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
       
-      const registrationId = registrationData?.id || 'unknown'
-      const name = registrationData?.name || 'Unknown Registration'
+      const registrationId = registration.description || 'unknown'
+      const name = registration.description || 'Unknown Registration'
       const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
-      const amount = registration.amount_paid || 0
+      const amount = registration.line_amount || 0
 
       const existing = registrationsByType.get(registrationId) || {
         registrationId,
@@ -452,7 +487,7 @@ export async function GET(request: NextRequest) {
         id: registration.id,
         customerName,
         amount,
-        date: registration.registered_at
+        date: invoiceData.created_at
       })
 
       registrationsByType.set(registrationId, existing)
@@ -497,7 +532,7 @@ export async function GET(request: NextRequest) {
         membershipsBreakdown: membershipsBreakdown,
         registrations: {
           purchaseCount: registrations?.length || 0,
-          totalAmount: registrations?.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0) || 0,
+          totalAmount: registrations?.reduce((sum, reg) => sum + (reg.line_amount || 0), 0) || 0,
           breakdown: registrationsBreakdown
         }
       },

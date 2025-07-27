@@ -88,7 +88,6 @@ interface ReportData {
 }
 
 const dateRanges = [
-  { label: 'Last 24 Hours', value: '24h' },
   { label: 'Last 7 Days', value: '7d' },
   { label: 'Last 30 Days', value: '30d' },
   { label: 'Last 90 Days', value: '90d' }
@@ -195,28 +194,21 @@ export default function ReportsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Business Reports</h1>
-        
-        {/* Date Range Selector */}
-        <div className="flex items-center space-x-4 mb-6">
-          <label className="text-sm font-medium text-gray-700">Date Range:</label>
-          <select
-            value={selectedRange}
-            onChange={(e) => setSelectedRange(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {dateRanges.map((range) => (
-              <option key={range.value} value={range.value}>
-                {range.label}
-              </option>
-            ))}
-          </select>
-          
-          {reportData && (
-            <span className="text-sm text-gray-500">
-              {formatDate(reportData.dateRange.start)} - {formatDate(reportData.dateRange.end)}
-            </span>
-          )}
+        {/* Date Range Tabs */}
+        <div className="flex space-x-1 mb-6">
+          {dateRanges.map((range) => (
+            <button
+              key={range.value}
+              onClick={() => setSelectedRange(range.value)}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                selectedRange === range.value
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -452,7 +444,7 @@ export default function ReportsPage() {
                   </div>
                   
                   {/* Expandable donation details */}
-                  {reportData.summary.donationDetails && reportData.summary.donationDetails.length > 0 && (
+                  {reportData.summary.donationDetails && reportData.summary.donationDetails.length > 0 ? (
                     <div className="mt-4">
                       <div 
                         className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
@@ -481,6 +473,10 @@ export default function ReportsPage() {
                           ))}
                         </div>
                       )}
+                    </div>
+                  ) : (
+                    <div className="mt-4 text-center text-gray-500 text-sm">
+                      No donation details available in this period
                     </div>
                   )}
                 </div>

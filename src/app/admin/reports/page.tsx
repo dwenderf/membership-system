@@ -100,7 +100,7 @@ export default function ReportsPage() {
   const [expandedRegistrations, setExpandedRegistrations] = useState<Set<string>>(new Set())
   const [expandedMemberships, setExpandedMemberships] = useState<Set<string>>(new Set())
   const [expandedDiscountCategories, setExpandedDiscountCategories] = useState<Set<string>>(new Set())
-  const [expandedDonations, setExpandedDonations] = useState<boolean>(false)
+  const [expandedDonations, setExpandedDonations] = useState<string | null>(null)
   const { showError } = useToast()
 
   const fetchReportData = async (range: string) => {
@@ -177,8 +177,8 @@ export default function ReportsPage() {
     })
   }
 
-  const toggleDonationsExpansion = () => {
-    setExpandedDonations(prev => !prev)
+  const toggleDonationsExpansion = (type: 'received' | 'given') => {
+    setExpandedDonations(prev => prev === type ? null : type)
   }
 
   if (loading) {
@@ -429,38 +429,33 @@ export default function ReportsPage() {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <div>
-                      <p className="font-medium text-gray-900">Donations Received</p>
-                      <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount} transactions</p>
-                    </div>
-                    <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount)}</p>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <div>
-                      <p className="font-medium text-gray-900">Donations Given</p>
-                      <p className="text-sm text-gray-500">{reportData.summary.donationsGiven.transactionCount} transactions</p>
-                    </div>
-                    <p className="font-semibold text-orange-600">{formatCurrency(reportData.summary.donationsGiven.totalAmount)}</p>
-                  </div>
-                  
-                  {/* Expandable donation details */}
-                  {(() => { console.log('Donation details:', reportData.summary.donationDetails); return null; })()}
-                  {reportData.summary.donationDetails && reportData.summary.donationDetails.length > 0 ? (
-                    <div className="mt-4">
+                  {/* Donations Received - only show if there are transactions */}
+                  {reportData.summary.donationsReceived.transactionCount > 0 && (
+                    <div className="border rounded-lg p-4">
                       <div 
-                        className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
-                        onClick={toggleDonationsExpansion}
+                        className="flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                        onClick={() => toggleDonationsExpansion('received')}
                       >
-                        <button className="mr-2 text-gray-500 hover:text-gray-700">
-                          {expandedDonations ? '▼' : '▶'}
-                        </button>
-                        <span className="font-medium text-gray-900">View Donation Details</span>
+                        <div className="flex items-center">
+                          <button className="mr-2 text-gray-500 hover:text-gray-700">
+                            {expandedDonations === 'received' ? '▼' : '▶'}
+                          </button>
+                          <h4 className="font-medium text-gray-900">Donations Received</h4>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-green-600">
+                            {formatCurrency(reportData.summary.donationsReceived.totalAmount)}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {reportData.summary.donationsReceived.transactionCount} transaction{reportData.summary.donationsReceived.transactionCount !== 1 ? 's' : ''}
+                          </div>
+                        </div>
                       </div>
                       
-                      {expandedDonations && (
+                      {/* Individual donations received - only show when expanded */}
+                      {expandedDonations === 'received' && (
                         <div className="space-y-2 mt-4">
-                          {reportData.summary.donationDetails.map((donation) => (
+                          {reportData.summary.donationDetails?.filter(d => d.type === 'received').map((donation) => (
                             <div key={donation.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
                               <div>
                                 <span className="font-medium">{donation.customerName}</span>
@@ -476,9 +471,56 @@ export default function ReportsPage() {
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="mt-4 text-center text-gray-500 text-sm">
-                      No donation details available in this period
+                  )}
+
+                  {/* Donations Given - only show if there are transactions */}
+                  {reportData.summary.donationsGiven.transactionCount > 0 && (
+                    <div className="border rounded-lg p-4">
+                      <div 
+                        className="flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                        onClick={() => toggleDonationsExpansion('given')}
+                      >
+                        <div className="flex items-center">
+                          <button className="mr-2 text-gray-500 hover:text-gray-700">
+                            {expandedDonations === 'given' ? '▼' : '▶'}
+                          </button>
+                          <h4 className="font-medium text-gray-900">Donations Given</h4>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-orange-600">
+                            {formatCurrency(reportData.summary.donationsGiven.totalAmount)}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {reportData.summary.donationsGiven.transactionCount} transaction{reportData.summary.donationsGiven.transactionCount !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Individual donations given - only show when expanded */}
+                      {expandedDonations === 'given' && (
+                        <div className="space-y-2 mt-4">
+                          {reportData.summary.donationDetails?.filter(d => d.type === 'given').map((donation) => (
+                            <div key={donation.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                              <div>
+                                <span className="font-medium">{donation.customerName}</span>
+                                <span className="text-gray-500 ml-2">
+                                  {formatDate(donation.date)}
+                                </span>
+                              </div>
+                              <div className="font-medium text-orange-600">
+                                {formatCurrency(donation.amount)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Show message if no donations at all */}
+                  {reportData.summary.donationsReceived.transactionCount === 0 && reportData.summary.donationsGiven.transactionCount === 0 && (
+                    <div className="text-center text-gray-500 text-sm py-4">
+                      No donation transactions in this period
                     </div>
                   )}
                 </div>

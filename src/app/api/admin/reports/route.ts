@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   try {
@@ -455,8 +455,9 @@ export async function GET(request: NextRequest) {
       recentTransactions: processedTransactions
     }
 
-    // Get active members by membership type using the view
-    const { data: activeMembers, error: activeMembersError } = await supabase
+    // Get active members by membership type using the view (with admin client to bypass RLS)
+    const adminSupabase = createAdminClient()
+    const { data: activeMembers, error: activeMembersError } = await adminSupabase
       .from('reports_active_memberships')
       .select('*')
 
@@ -473,6 +474,10 @@ export async function GET(request: NextRequest) {
 
     // Data is already sorted by count from the view
     const activeMembersSummary = activeMembersByType
+
+    // Add debugging for active members
+    console.log('Active members data from view:', activeMembers)
+    console.log('Processed active members:', activeMembersSummary)
 
     // Add some debugging info
     console.log('Report data generated:', {

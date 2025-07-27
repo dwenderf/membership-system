@@ -66,6 +66,7 @@ export default function ReportsPage() {
   const [selectedRange, setSelectedRange] = useState('7d')
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [expandedRegistrations, setExpandedRegistrations] = useState<Set<string>>(new Set())
   const { showError } = useToast()
 
   const fetchReportData = async (range: string) => {
@@ -103,6 +104,18 @@ export default function ReportsPage() {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    })
+  }
+
+  const toggleRegistrationExpansion = (registrationId: string) => {
+    setExpandedRegistrations(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(registrationId)) {
+        newSet.delete(registrationId)
+      } else {
+        newSet.add(registrationId)
+      }
+      return newSet
     })
   }
 
@@ -271,38 +284,51 @@ export default function ReportsPage() {
                 {reportData.summary.registrations.breakdown && reportData.summary.registrations.breakdown.length > 0 && (
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-gray-900">Breakdown by Registration Type</h3>
-                    {reportData.summary.registrations.breakdown.map((registration) => (
-                      <div key={registration.registrationId} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <h4 className="font-medium text-gray-900">{registration.name}</h4>
-                          <div className="text-right">
-                            <div className="text-lg font-semibold text-purple-600">
-                              {formatCurrency(registration.total)}
+                    {reportData.summary.registrations.breakdown.map((registration) => {
+                      const isExpanded = expandedRegistrations.has(registration.registrationId)
+                      return (
+                        <div key={registration.registrationId} className="border rounded-lg p-4">
+                          <div 
+                            className="flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                            onClick={() => toggleRegistrationExpansion(registration.registrationId)}
+                          >
+                            <div className="flex items-center">
+                              <button className="mr-2 text-gray-500 hover:text-gray-700">
+                                {isExpanded ? '▼' : '▶'}
+                              </button>
+                              <h4 className="font-medium text-gray-900">{registration.name}</h4>
                             </div>
-                            <div className="text-sm text-gray-600">
-                              {registration.count} purchase{registration.count !== 1 ? 's' : ''}
+                            <div className="text-right">
+                              <div className="text-lg font-semibold text-purple-600">
+                                {formatCurrency(registration.total)}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {registration.count} purchase{registration.count !== 1 ? 's' : ''}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        {/* Individual registrations */}
-                        <div className="space-y-2">
-                          {registration.registrations.map((reg) => (
-                            <div key={reg.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
-                              <div>
-                                <span className="font-medium">{reg.customerName}</span>
-                                <span className="text-gray-500 ml-2">
-                                  {new Date(reg.date).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <div className="font-medium text-gray-900">
-                                {formatCurrency(reg.amount)}
-                              </div>
+                          
+                          {/* Individual registrations - only show when expanded */}
+                          {isExpanded && (
+                            <div className="space-y-2 mt-4">
+                              {registration.registrations.map((reg) => (
+                                <div key={reg.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                                  <div>
+                                    <span className="font-medium">{reg.customerName}</span>
+                                    <span className="text-gray-500 ml-2">
+                                      {formatDate(reg.date)}
+                                    </span>
+                                  </div>
+                                  <div className="font-medium text-gray-900">
+                                    {formatCurrency(reg.amount)}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

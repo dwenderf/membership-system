@@ -168,82 +168,57 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Get recent transactions from Xero invoices
+    // Get recent transactions using the new view
+    console.log('🔍 Querying recent_transactions view with date range:', { startDate, endDate })
+    
     const { data: recentTransactions, error: transactionsError } = await supabase
-      .from('xero_invoices')
-      .select(`
-        id,
-        invoice_number,
-        net_amount,
-        invoice_status,
-        created_at,
-        payment_id,
-        payments!inner (
-          user_id,
-          users!inner (
-            first_name,
-            last_name
-          )
-        ),
-        staging_metadata
-      `)
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .not('payment_id', 'is', null)
-      .order('created_at', { ascending: false })
+      .from('recent_transactions')
+      .select('*')
+      .gte('transaction_date', startDate)
+      .lte('transaction_date', endDate)
+      .order('transaction_date', { ascending: false })
       .limit(20)
 
     if (transactionsError) {
-      console.error('Error fetching recent transactions:', transactionsError)
+      console.error('❌ Error fetching recent transactions:', transactionsError)
     }
 
     // Debug: Log what we found
-    console.log('Recent transactions query results:', {
+    console.log('📊 Recent transactions query results:', {
       found: recentTransactions?.length || 0,
+      error: transactionsError ? transactionsError.message : null,
       sample: recentTransactions?.[0] ? {
-        id: recentTransactions[0].id,
+        transactionId: recentTransactions[0].transaction_id,
         invoiceNumber: recentTransactions[0].invoice_number,
-        amount: recentTransactions[0].net_amount,
-        status: recentTransactions[0].invoice_status,
-        hasPayment: !!recentTransactions[0].payment_id,
-        hasUser: !!recentTransactions[0].payments
-      } : null
+        amount: recentTransactions[0].amount,
+        status: recentTransactions[0].status,
+        customerName: `${recentTransactions[0].first_name} ${recentTransactions[0].last_name}`,
+        type: recentTransactions[0].transaction_type,
+        date: recentTransactions[0].transaction_date
+      } : null,
+      allData: recentTransactions?.slice(0, 3) // Show first 3 records for debugging
     })
 
-    // Process recent transactions
+    // Process recent transactions from the view
     let processedTransactions = recentTransactions?.map(transaction => {
-      const payment = Array.isArray(transaction.payments) ? transaction.payments[0] : transaction.payments
-      const userData = Array.isArray(payment?.users) ? payment?.users[0] : payment?.users
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
-      
-      // Determine transaction type from staging metadata
-      let type = 'unknown'
-      if (transaction.staging_metadata) {
-        const metadata = typeof transaction.staging_metadata === 'string' 
-          ? JSON.parse(transaction.staging_metadata) 
-          : transaction.staging_metadata
-        
-        if (metadata.membership_id) {
-          type = 'membership'
-        } else if (metadata.registration_id) {
-          type = 'registration'
-        }
-      }
+      const customerName = transaction.first_name && transaction.last_name 
+        ? `${transaction.first_name} ${transaction.last_name}`.trim() 
+        : 'Unknown'
 
       return {
-        id: transaction.id,
-        invoiceNumber: transaction.invoice_number,
+        id: transaction.transaction_id,
+        invoiceNumber: transaction.invoice_number || 'N/A',
         customerName,
-        amount: transaction.net_amount || 0,
-        type,
-        date: transaction.created_at,
-        status: transaction.invoice_status || 'UNKNOWN'
+        amount: transaction.amount || 0,
+        type: transaction.transaction_type || 'unknown',
+        date: transaction.transaction_date,
+        status: transaction.status || 'UNKNOWN'
       }
     }) || []
 
-    // If no Xero transactions found, fall back to payments table
+    // If no transactions found in the view, fall back to payments table
     if (processedTransactions.length === 0) {
-      console.log('No Xero transactions found, falling back to payments table')
+      console.log('No transactions found in view, falling back to payments table')
       
       const { data: fallbackPayments, error: fallbackError } = await supabase
         .from('payments')
@@ -330,8 +305,14 @@ export async function GET(request: NextRequest) {
       registrationsByType.set(registrationId, existing)
     })
 
-    // Convert to array and sort by total amount
+    // Convert to array, sort registrations by date (newest first), then sort by total amount
     const registrationsBreakdown = Array.from(registrationsByType.values())
+      .map(registration => ({
+        ...registration,
+        registrations: registration.registrations.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+      }))
       .sort((a, b) => b.total - a.total)
 
     const reportData = {

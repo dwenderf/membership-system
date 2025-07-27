@@ -47,33 +47,16 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(Date.now() - timeRange).toISOString()
     const endDate = new Date().toISOString()
 
-    // Get memberships data from Xero line items
+    // Get memberships data from reports view
     const { data: memberships, error: membershipsError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        id,
-        line_amount,
-        description,
-        created_at,
-        xero_invoices!inner (
-          id,
-          invoice_status,
-          created_at,
-          payments!inner (
-            users (
-              first_name,
-              last_name
-            )
-          )
-        )
-      `)
+      .from('reports_data')
+      .select('*')
       .eq('line_item_type', 'membership')
-      .eq('xero_invoices.invoice_status', 'PAID')
-      .gte('xero_invoices.created_at', startDate)
-      .lte('xero_invoices.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (membershipsError) {
-      console.error('Error fetching memberships from Xero:', membershipsError)
+      console.error('Error fetching memberships from reports view:', membershipsError)
     }
 
     // Group memberships by description and calculate totals
@@ -91,13 +74,9 @@ export async function GET(request: NextRequest) {
     }>()
 
     memberships?.forEach(membership => {
-      const invoiceData = Array.isArray(membership.xero_invoices) ? membership.xero_invoices[0] : membership.xero_invoices
-      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
-      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
-      
       const membershipId = membership.description || 'unknown'
       const name = membership.description || 'Unknown Membership'
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const customerName = membership.customer_name || 'Unknown'
       const amount = membership.line_amount || 0
 
       const existing = membershipsByType.get(membershipId) || {
@@ -116,10 +95,10 @@ export async function GET(request: NextRequest) {
       existing.count += 1
       existing.total += amount
       existing.memberships.push({
-        id: membership.id,
+        id: membership.line_item_id,
         customerName,
         amount,
-        date: invoiceData.created_at
+        date: membership.invoice_created_at
       })
 
       membershipsByType.set(membershipId, existing)
@@ -144,62 +123,28 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations data from Xero line items
+    // Get registrations data from reports view
     const { data: registrations, error: registrationsError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        id,
-        line_amount,
-        description,
-        created_at,
-        xero_invoices!inner (
-          id,
-          invoice_status,
-          created_at,
-          payments!inner (
-            users (
-              first_name,
-              last_name
-            )
-          )
-        )
-      `)
+      .from('reports_data')
+      .select('*')
       .eq('line_item_type', 'registration')
-      .eq('xero_invoices.invoice_status', 'PAID')
-      .gte('xero_invoices.created_at', startDate)
-      .lte('xero_invoices.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (registrationsError) {
-      console.error('Error fetching registrations from Xero:', registrationsError)
+      console.error('Error fetching registrations from reports view:', registrationsError)
     }
 
-    // Get discount usage from Xero line items
+    // Get discount usage from reports view
     const { data: discountUsage, error: discountError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        id,
-        line_amount,
-        description,
-        created_at,
-        xero_invoices!inner (
-          id,
-          invoice_status,
-          created_at,
-          payments!inner (
-            users (
-              first_name,
-              last_name
-            )
-          )
-        )
-      `)
+      .from('reports_data')
+      .select('*')
       .eq('line_item_type', 'discount')
-      .eq('xero_invoices.invoice_status', 'PAID')
-      .gte('xero_invoices.created_at', startDate)
-      .lte('xero_invoices.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (discountError) {
-      console.error('Error fetching discount usage from Xero:', discountError)
+      console.error('Error fetching discount usage from reports view:', discountError)
     }
 
     // Group discount usage by category and calculate totals
@@ -218,16 +163,12 @@ export async function GET(request: NextRequest) {
     }>()
 
     discountUsage?.forEach(usage => {
-      const invoiceData = Array.isArray(usage.xero_invoices) ? usage.xero_invoices[0] : usage.xero_invoices
-      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
-      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
-      
       // For discounts, we'll group by description since we don't have category info in Xero line items
       const categoryId = usage.description || 'unknown'
       const name = usage.description || 'Unknown Discount'
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const customerName = usage.customer_name || 'Unknown'
       const discountCode = usage.description || 'Unknown Code' // Use description as discount code
-      const amountSaved = Math.abs(usage.line_amount || 0) // Discounts are typically negative amounts
+      const amountSaved = usage.absolute_amount || 0 // Use the computed absolute amount from the view
 
       const existing = discountUsageByCategory.get(categoryId) || {
         categoryId,
@@ -246,11 +187,11 @@ export async function GET(request: NextRequest) {
       existing.count += 1
       existing.total += amountSaved
       existing.usages.push({
-        id: usage.id,
+        id: usage.line_item_id,
         customerName,
         discountCode,
         amountSaved,
-        date: invoiceData.created_at
+        date: usage.invoice_created_at
       })
 
       discountUsageByCategory.set(categoryId, existing)
@@ -275,33 +216,16 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get donations from Xero line items
+    // Get donations from reports view
     const { data: donations, error: donationsError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        id,
-        line_amount,
-        description,
-        created_at,
-        xero_invoices!inner (
-          id,
-          invoice_status,
-          created_at,
-          payments!inner (
-            users (
-              first_name,
-              last_name
-            )
-          )
-        )
-      `)
+      .from('reports_data')
+      .select('*')
       .eq('line_item_type', 'donation')
-      .eq('xero_invoices.invoice_status', 'PAID')
-      .gte('xero_invoices.created_at', startDate)
-      .lte('xero_invoices.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (donationsError) {
-      console.error('Error fetching donations from Xero:', donationsError)
+      console.error('Error fetching donations from reports view:', donationsError)
     }
 
     // Calculate donations from Xero line items
@@ -325,11 +249,7 @@ export async function GET(request: NextRequest) {
     })
 
     donations?.forEach(donation => {
-      const invoiceData = Array.isArray(donation.xero_invoices) ? donation.xero_invoices[0] : donation.xero_invoices
-      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
-      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
-      
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const customerName = donation.customer_name || 'Unknown'
       const amount = donation.line_amount || 0
       
       // For now, treat all donations as received
@@ -337,10 +257,10 @@ export async function GET(request: NextRequest) {
       donationsReceived += amount
       donationTransactionCount++
       donationDetails.push({
-        id: donation.id,
+        id: donation.line_item_id,
         customerName,
         amount,
-        date: invoiceData.created_at,
+        date: donation.invoice_created_at,
         type: 'received'
       })
     })
@@ -459,13 +379,9 @@ export async function GET(request: NextRequest) {
     }>()
 
     registrations?.forEach(registration => {
-      const invoiceData = Array.isArray(registration.xero_invoices) ? registration.xero_invoices[0] : registration.xero_invoices
-      const paymentData = Array.isArray(invoiceData.payments) ? invoiceData.payments[0] : invoiceData.payments
-      const userData = Array.isArray(paymentData.users) ? paymentData.users[0] : paymentData.users
-      
       const registrationId = registration.description || 'unknown'
       const name = registration.description || 'Unknown Registration'
-      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const customerName = registration.customer_name || 'Unknown'
       const amount = registration.line_amount || 0
 
       const existing = registrationsByType.get(registrationId) || {
@@ -484,10 +400,10 @@ export async function GET(request: NextRequest) {
       existing.count += 1
       existing.total += amount
       existing.registrations.push({
-        id: registration.id,
+        id: registration.line_item_id,
         customerName,
         amount,
-        date: invoiceData.created_at
+        date: registration.invoice_created_at
       })
 
       registrationsByType.set(registrationId, existing)

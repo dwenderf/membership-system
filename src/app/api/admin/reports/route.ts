@@ -163,14 +163,23 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching registrations:', registrationsError)
     }
 
-    // Get discount usage
+    // Get discount usage with user details
     const { data: discountUsage, error: discountError } = await supabase
       .from('discount_usage')
       .select(`
+        id,
         amount_saved,
         used_at,
         discount_categories (
+          id,
           name
+        ),
+        users (
+          first_name,
+          last_name
+        ),
+        discount_codes (
+          code
         )
       `)
       .gte('used_at', startDate)
@@ -180,25 +189,90 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching discount usage:', discountError)
     }
 
-    // Aggregate discount usage by category
-    const discountSummary = new Map<string, { count: number; total: number }>()
+    // Group discount usage by category and calculate totals
+    const discountUsageByCategory = new Map<string, { 
+      categoryId: string, 
+      name: string, 
+      count: number, 
+      total: number,
+      usages: Array<{
+        id: string,
+        customerName: string,
+        discountCode: string,
+        amountSaved: number,
+        date: string
+      }>
+    }>()
+
     discountUsage?.forEach(usage => {
       const categoryData = Array.isArray(usage.discount_categories) ? usage.discount_categories[0] : usage.discount_categories
-      const category = categoryData?.name || 'Unknown'
-      const existing = discountSummary.get(category) || { count: 0, total: 0 }
-      discountSummary.set(category, {
-        count: existing.count + 1,
-        total: existing.total + (usage.amount_saved || 0)
+      const userData = Array.isArray(usage.users) ? usage.users[0] : usage.users
+      const codeData = Array.isArray(usage.discount_codes) ? usage.discount_codes[0] : usage.discount_codes
+      
+      const categoryId = categoryData?.id || 'unknown'
+      const name = categoryData?.name || 'Unknown Category'
+      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const discountCode = codeData?.code || 'Unknown Code'
+      const amountSaved = usage.amount_saved || 0
+
+      const existing = discountUsageByCategory.get(categoryId) || {
+        categoryId,
+        name,
+        count: 0,
+        total: 0,
+        usages: [] as Array<{
+          id: string,
+          customerName: string,
+          discountCode: string,
+          amountSaved: number,
+          date: string
+        }>
+      }
+
+      existing.count += 1
+      existing.total += amountSaved
+      existing.usages.push({
+        id: usage.id,
+        customerName,
+        discountCode,
+        amountSaved,
+        date: usage.used_at
+      })
+
+      discountUsageByCategory.set(categoryId, existing)
+    })
+
+    // Convert to array, sort usages by date (newest first), then sort by total amount
+    const discountUsageBreakdown = Array.from(discountUsageByCategory.values())
+      .map(category => ({
+        ...category,
+        usages: category.usages.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+      }))
+      .sort((a, b) => b.total - a.total)
+
+    // Calculate discount summary for backward compatibility
+    const discountSummary = new Map<string, { count: number; total: number }>()
+    discountUsageBreakdown.forEach(category => {
+      discountSummary.set(category.name, {
+        count: category.count,
+        total: category.total
       })
     })
 
-    // Get donations from user_memberships with donation amounts
+    // Get donations from user_memberships with user details
     const { data: membershipDonations, error: membershipDonationsError } = await supabase
       .from('user_memberships')
       .select(`
+        id,
         amount_paid,
         purchased_at,
-        stripe_payment_intent_id
+        stripe_payment_intent_id,
+        users (
+          first_name,
+          last_name
+        )
       `)
       .gte('purchased_at', startDate)
       .lte('purchased_at', endDate)
@@ -208,14 +282,22 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching membership donations:', membershipDonationsError)
     }
 
-    // Get donation amounts from Stripe payment intents (we'll need to fetch this separately)
-    // For now, we'll use a simplified approach based on payment amounts
+    // Calculate donations based on membership payments that include donation components
     let donationsReceived = 0
     let donationsGiven = 0
     let donationTransactionCount = 0
+    const donationDetails: Array<{
+      id: string,
+      customerName: string,
+      amount: number,
+      date: string,
+      type: 'received' | 'given'
+    }> = []
 
-    // Calculate donations based on membership payments that include donation components
     membershipDonations?.forEach(membership => {
+      const userData = Array.isArray(membership.users) ? membership.users[0] : membership.users
+      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      
       // This is a simplified calculation - in a real implementation, you'd want to
       // fetch the actual donation amounts from Stripe metadata or store them separately
       // For now, we'll estimate based on common donation patterns
@@ -225,9 +307,19 @@ export async function GET(request: NextRequest) {
         if (estimatedDonation > 0) {
           donationsReceived += estimatedDonation
           donationTransactionCount++
+          donationDetails.push({
+            id: membership.id,
+            customerName,
+            amount: estimatedDonation,
+            date: membership.purchased_at,
+            type: 'received'
+          })
         }
       }
     })
+
+    // Sort donation details by date (newest first)
+    donationDetails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     // Get recent transactions using the new view
     console.log('🔍 Querying recent_transactions view with date range:', { startDate, endDate })
@@ -387,6 +479,7 @@ export async function GET(request: NextRequest) {
           timesUsed: data.count,
           totalAmount: data.total
         })),
+        discountUsageBreakdown: discountUsageBreakdown,
         donationsReceived: {
           transactionCount: donationTransactionCount,
           totalAmount: donationsReceived
@@ -395,6 +488,7 @@ export async function GET(request: NextRequest) {
           transactionCount: 0, // You might need to implement this based on your business logic
           totalAmount: donationsGiven
         },
+        donationDetails: donationDetails,
         memberships: Array.from(membershipSummary.entries()).map(([name, data]) => ({
           name,
           purchaseCount: data.count,

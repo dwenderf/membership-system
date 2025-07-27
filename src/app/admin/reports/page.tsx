@@ -14,6 +14,19 @@ interface ReportData {
       timesUsed: number
       totalAmount: number
     }>
+    discountUsageBreakdown?: Array<{
+      categoryId: string
+      name: string
+      count: number
+      total: number
+      usages: Array<{
+        id: string
+        customerName: string
+        discountCode: string
+        amountSaved: number
+        date: string
+      }>
+    }>
     donationsReceived: {
       transactionCount: number
       totalAmount: number
@@ -22,6 +35,13 @@ interface ReportData {
       transactionCount: number
       totalAmount: number
     }
+    donationDetails?: Array<{
+      id: string
+      customerName: string
+      amount: number
+      date: string
+      type: 'received' | 'given'
+    }>
     memberships: Array<{
       name: string
       purchaseCount: number
@@ -80,6 +100,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [expandedRegistrations, setExpandedRegistrations] = useState<Set<string>>(new Set())
   const [expandedMemberships, setExpandedMemberships] = useState<Set<string>>(new Set())
+  const [expandedDiscountCategories, setExpandedDiscountCategories] = useState<Set<string>>(new Set())
+  const [expandedDonations, setExpandedDonations] = useState<boolean>(false)
   const { showError } = useToast()
 
   const fetchReportData = async (range: string) => {
@@ -142,6 +164,22 @@ export default function ReportsPage() {
       }
       return newSet
     })
+  }
+
+  const toggleDiscountCategoryExpansion = (categoryId: string) => {
+    setExpandedDiscountCategories(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId)
+      } else {
+        newSet.add(categoryId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleDonationsExpansion = () => {
+    setExpandedDonations(prev => !prev)
   }
 
   if (loading) {
@@ -220,12 +258,27 @@ export default function ReportsPage() {
 
           {/* Detailed Sections */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Memberships by Type */}
+            {/* Memberships */}
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Memberships by Type</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Memberships</h2>
               </div>
               <div className="p-6">
+                {/* Summary totals */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Revenue</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Purchases</div>
+                  </div>
+                </div>
                 {reportData.summary.memberships.length > 0 ? (
                   <div className="space-y-4">
                     {reportData.summary.membershipsBreakdown && reportData.summary.membershipsBreakdown.length > 0 ? (
@@ -296,20 +349,84 @@ export default function ReportsPage() {
             {/* Discount Usage */}
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Discount Usage by Category</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Discount Usage</h2>
               </div>
               <div className="p-6">
+                {/* Summary totals */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Saved</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Uses</div>
+                  </div>
+                </div>
                 {reportData.summary.discountUsage.length > 0 ? (
                   <div className="space-y-4">
-                    {reportData.summary.discountUsage.map((discount, index) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                        <div>
-                          <p className="font-medium text-gray-900">{discount.category}</p>
-                          <p className="text-sm text-gray-500">{discount.timesUsed} times used</p>
+                    {reportData.summary.discountUsageBreakdown && reportData.summary.discountUsageBreakdown.length > 0 ? (
+                      reportData.summary.discountUsageBreakdown.map((category) => {
+                        const isExpanded = expandedDiscountCategories.has(category.categoryId)
+                        return (
+                          <div key={category.categoryId} className="border rounded-lg p-4">
+                            <div 
+                              className="flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                              onClick={() => toggleDiscountCategoryExpansion(category.categoryId)}
+                            >
+                              <div className="flex items-center">
+                                <button className="mr-2 text-gray-500 hover:text-gray-700">
+                                  {isExpanded ? '▼' : '▶'}
+                                </button>
+                                <h4 className="font-medium text-gray-900">{category.name}</h4>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-lg font-semibold text-green-600">
+                                  {formatCurrency(category.total)}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {category.count} time{category.count !== 1 ? 's' : ''} used
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Individual usages - only show when expanded */}
+                            {isExpanded && (
+                              <div className="space-y-2 mt-4">
+                                {category.usages.map((usage) => (
+                                  <div key={usage.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                                    <div>
+                                      <span className="font-medium">{usage.customerName}</span>
+                                      <span className="text-gray-500 ml-2">
+                                        {usage.discountCode} - {formatDate(usage.date)}
+                                      </span>
+                                    </div>
+                                    <div className="font-medium text-green-600">
+                                      -{formatCurrency(usage.amountSaved)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      // Fallback to simple list if breakdown not available
+                      reportData.summary.discountUsage.map((discount, index) => (
+                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                          <div>
+                            <p className="font-medium text-gray-900">{discount.category}</p>
+                            <p className="text-sm text-gray-500">{discount.timesUsed} times used</p>
+                          </div>
+                          <p className="font-semibold text-gray-900">{formatCurrency(discount.totalAmount)}</p>
                         </div>
-                        <p className="font-semibold text-gray-900">{formatCurrency(discount.totalAmount)}</p>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-4">No discount usage in this period</p>
@@ -322,20 +439,71 @@ export default function ReportsPage() {
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Donations</h2>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <p className="font-medium text-gray-900">Donations Received</p>
-                    <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount} transactions</p>
+              <div className="p-6">
+                {/* Summary totals */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}
+                    </div>
+                    <div className="text-sm text-gray-600">Net Donations</div>
                   </div>
-                  <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount)}</p>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Transactions</div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <div>
-                    <p className="font-medium text-gray-900">Donations Given</p>
-                    <p className="text-sm text-gray-500">{reportData.summary.donationsGiven.transactionCount} transactions</p>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <div>
+                      <p className="font-medium text-gray-900">Donations Received</p>
+                      <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount} transactions</p>
+                    </div>
+                    <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount)}</p>
                   </div>
-                  <p className="font-semibold text-orange-600">{formatCurrency(reportData.summary.donationsGiven.totalAmount)}</p>
+                  <div className="flex justify-between items-center py-2">
+                    <div>
+                      <p className="font-medium text-gray-900">Donations Given</p>
+                      <p className="text-sm text-gray-500">{reportData.summary.donationsGiven.transactionCount} transactions</p>
+                    </div>
+                    <p className="font-semibold text-orange-600">{formatCurrency(reportData.summary.donationsGiven.totalAmount)}</p>
+                  </div>
+                  
+                  {/* Expandable donation details */}
+                  {reportData.summary.donationDetails && reportData.summary.donationDetails.length > 0 && (
+                    <div className="mt-4">
+                      <div 
+                        className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                        onClick={toggleDonationsExpansion}
+                      >
+                        <button className="mr-2 text-gray-500 hover:text-gray-700">
+                          {expandedDonations ? '▼' : '▶'}
+                        </button>
+                        <span className="font-medium text-gray-900">View Donation Details</span>
+                      </div>
+                      
+                      {expandedDonations && (
+                        <div className="space-y-2 mt-4">
+                          {reportData.summary.donationDetails.map((donation) => (
+                            <div key={donation.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                              <div>
+                                <span className="font-medium">{donation.customerName}</span>
+                                <span className="text-gray-500 ml-2">
+                                  {formatDate(donation.date)}
+                                </span>
+                              </div>
+                              <div className="font-medium text-green-600">
+                                {formatCurrency(donation.amount)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -357,7 +525,6 @@ export default function ReportsPage() {
                 {/* Registrations Breakdown */}
                 {reportData.summary.registrations.breakdown && reportData.summary.registrations.breakdown.length > 0 && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900">Breakdown by Registration Type</h3>
                     {reportData.summary.registrations.breakdown.map((registration) => {
                       const isExpanded = expandedRegistrations.has(registration.registrationId)
                       return (

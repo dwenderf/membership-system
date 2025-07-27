@@ -375,7 +375,15 @@ export async function POST(request: NextRequest) {
   }
 
   const { createAdminClient } = await import('@/lib/supabase/server')
-  const supabase = createAdminClient()
+  
+  let supabase
+  try {
+    supabase = createAdminClient()
+    console.log('✅ Database connection created successfully')
+  } catch (dbError) {
+    console.error('❌ Failed to create database connection:', dbError)
+    return NextResponse.json({ error: 'Database connection failed' }, { status: 500 })
+  }
 
   try {
     console.log('🔄 Webhook event received:', {
@@ -384,6 +392,8 @@ export async function POST(request: NextRequest) {
       created: event.created,
       dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
     })
+    
+
     
     switch (event.type) {
       case 'payment_intent.succeeded': {

@@ -21,6 +21,10 @@ type XeroPaymentRecord = Database['public']['Tables']['xero_payments']['Row']
 
 export class XeroBatchSyncManager {
   private supabase: ReturnType<typeof createAdminClient>
+  private isRunning: boolean = false
+  private lastRunTime: Date | null = null
+  private currentRunPromise: Promise<any> | null = null
+  private readonly MIN_DELAY_BETWEEN_SYNCS = 2000 // 2 seconds minimum delay between syncs
 
   constructor() {
     this.supabase = createAdminClient()
@@ -137,9 +141,149 @@ export class XeroBatchSyncManager {
   }
 
   /**
+   * Check if a sync operation is currently running
+   */
+  isSyncRunning(): boolean {
+    return this.isRunning
+  }
+
+  /**
+   * Get the last run time of the sync operation
+   */
+  getLastRunTime(): Date | null {
+    return this.lastRunTime
+  }
+
+  /**
+   * Get the current sync status
+   */
+  getSyncStatus(): {
+    isRunning: boolean
+    lastRunTime: Date | null
+    hasCurrentRun: boolean
+    timeUntilNextSync: number
+    minDelayBetweenSyncs: number
+  } {
+    return {
+      isRunning: this.isRunning,
+      lastRunTime: this.lastRunTime,
+      hasCurrentRun: this.currentRunPromise !== null,
+      timeUntilNextSync: this.getTimeUntilNextSync(),
+      minDelayBetweenSyncs: this.MIN_DELAY_BETWEEN_SYNCS
+    }
+  }
+
+  /**
+   * Get the time remaining before the next sync can start
+   */
+  getTimeUntilNextSync(): number {
+    if (!this.lastRunTime) {
+      return 0 // No previous run, can start immediately
+    }
+    
+    const timeSinceLastRun = Date.now() - this.lastRunTime.getTime()
+    const remainingDelay = this.MIN_DELAY_BETWEEN_SYNCS - timeSinceLastRun
+    
+    return Math.max(0, remainingDelay)
+  }
+
+  /**
+   * Get the minimum delay configuration
+   */
+  getMinDelayBetweenSyncs(): number {
+    return this.MIN_DELAY_BETWEEN_SYNCS
+  }
+
+  /**
+   * Force stop a running sync operation
+   * Note: This will not immediately stop the current operation, but will prevent new operations from starting
+   */
+  forceStop(): void {
+    const callId = Math.random().toString(36).substring(2, 8)
+    console.log(`🛑 [${callId}] Force stop requested for Xero batch sync`)
+    
+    if (this.isRunning) {
+      console.log(`🛑 [${callId}] Force stopping Xero batch sync...`)
+      this.isRunning = false
+      this.currentRunPromise = null
+      console.log(`🛑 [${callId}] Force stop completed`)
+    } else {
+      console.log(`ℹ️ [${callId}] Force stop requested but sync was not running`)
+    }
+  }
+
+  /**
    * Sync all pending invoices and payments with intelligent batching
+   * 
+   * This method is protected against concurrent execution - if called while
+   * another sync is running, it will return the result of the existing sync.
+   * It also enforces a minimum delay between sync operations to prevent rate limits.
    */
   async syncAllPendingRecords(): Promise<{
+    invoices: { synced: number; failed: number }
+    payments: { synced: number; failed: number }
+  }> {
+    const callTime = new Date()
+    const callId = Math.random().toString(36).substring(2, 8) // Short unique ID for tracking
+    
+    console.log(`🔄 [${callId}] Xero batch sync requested at ${callTime.toISOString()}`)
+    
+    // Check if sync is already running
+    if (this.isRunning) {
+      console.log(`⚠️ [${callId}] Xero batch sync already running - returning existing promise`)
+      if (this.currentRunPromise) {
+        return this.currentRunPromise
+      }
+      // Fallback - shouldn't happen but just in case
+      console.log(`⚠️ [${callId}] No existing promise found, returning empty result`)
+      return {
+        invoices: { synced: 0, failed: 0 },
+        payments: { synced: 0, failed: 0 }
+      }
+    }
+
+    // Check minimum delay between syncs
+    if (this.lastRunTime) {
+      const timeSinceLastRun = Date.now() - this.lastRunTime.getTime()
+      const remainingDelay = this.MIN_DELAY_BETWEEN_SYNCS - timeSinceLastRun
+      
+      if (remainingDelay > 0) {
+        console.log(`⏳ [${callId}] Rate limit protection: waiting ${remainingDelay}ms before starting sync...`)
+        console.log(`⏳ [${callId}] Last sync was ${timeSinceLastRun}ms ago, minimum delay is ${this.MIN_DELAY_BETWEEN_SYNCS}ms`)
+        await new Promise(resolve => setTimeout(resolve, remainingDelay))
+        console.log(`✅ [${callId}] Delay completed, proceeding with sync`)
+      } else {
+        console.log(`✅ [${callId}] No delay needed - last sync was ${timeSinceLastRun}ms ago (>= ${this.MIN_DELAY_BETWEEN_SYNCS}ms minimum)`)
+      }
+    } else {
+      console.log(`✅ [${callId}] First sync run - no delay needed`)
+    }
+
+    // Set running state and create promise
+    console.log(`🚀 [${callId}] Starting Xero batch sync...`)
+    this.isRunning = true
+    this.currentRunPromise = this.performSync()
+    
+    try {
+      const result = await this.currentRunPromise
+      console.log(`✅ [${callId}] Xero batch sync completed successfully`)
+      return result
+    } catch (error) {
+      console.error(`❌ [${callId}] Xero batch sync failed:`, error)
+      throw error
+    } finally {
+      // Always clean up state
+      this.isRunning = false
+      this.currentRunPromise = null
+      this.lastRunTime = new Date()
+      console.log(`🏁 [${callId}] Sync state cleaned up, lastRunTime updated to ${this.lastRunTime.toISOString()}`)
+    }
+  }
+
+  /**
+   * Internal method that performs the actual sync operation
+   */
+  private async performSync(): Promise<{
     invoices: { synced: number; failed: number }
     payments: { synced: number; failed: number }
   }> {
@@ -507,14 +651,14 @@ export class XeroBatchSyncManager {
                          const archivedContactName = `${expectedContactName} - Archived`
                          console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
                          
-                         await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID, {
+                         await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID!, {
                            contacts: [{
                              contactID: archivedContact.contactID,
                              name: archivedContactName,
                              firstName: userData.first_name,
                              lastName: userData.last_name,
                              emailAddress: userData.email,
-                             contactStatus: 'ARCHIVED' // Keep it archived
+                             contactStatus: 'ARCHIVED' as any // Keep it archived
                            }]
                          })
                          
@@ -541,7 +685,7 @@ export class XeroBatchSyncManager {
                 )
 
                 const nonArchivedContacts = contactsResponse.body.contacts?.filter(
-                  contact => contact.contactStatus !== 'ARCHIVED'
+                  contact => contact.contactStatus !== 'ARCHIVED' as any
                 ) || []
 
                 console.log(`🔍 Found ${nonArchivedContacts.length} non-archived contacts with email ${userData.email}`)

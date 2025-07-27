@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { autoSyncPaymentToXero } from '@/lib/xero/auto-sync'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
@@ -126,81 +125,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     console.warn(`⚠️ Webhook: No membership payment record found for payment intent: ${paymentIntent.id}`)
   }
 
-  // Handle Xero integration
-  try {
-    const { data: paymentRecord } = await supabase
-      .from('payments')
-      .select('id')
-      .eq('stripe_payment_intent_id', paymentIntent.id)
-      .single()
-    
-    if (paymentRecord) {
-      // Check if invoice was already created (new invoice-first flow)
-      const invoiceNumber = paymentIntent.metadata.invoiceNumber
-      const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
-      
-      if (invoiceNumber && xeroInvoiceId) {
-        console.log(`✅ Found existing Xero invoice ${invoiceNumber} for payment, updating status...`)
-        
-        // Update existing invoice status and sync status
-        await supabase
-          .from('xero_invoices')
-          .update({ 
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .eq('xero_invoice_id', xeroInvoiceId)
-          .eq('payment_id', paymentRecord.id)
-
-        console.log(`✅ Updated Xero invoice ${invoiceNumber} status after payment completion`)
-
-        // Record the payment in Xero for complete reconciliation
-        try {
-          // Get tenant ID from the existing invoice record
-          const { data: invoiceData } = await supabase
-            .from('xero_invoices')
-            .select('tenant_id')
-            .eq('xero_invoice_id', xeroInvoiceId)
-            .eq('payment_id', paymentRecord.id)
-            .single()
-
-          if (invoiceData?.tenant_id) {
-            const { recordStripePaymentInXero } = await import('@/lib/xero/payments')
-            const paymentResult = await recordStripePaymentInXero(paymentRecord.id, invoiceData.tenant_id)
-            
-            if (paymentResult.success) {
-              console.log(`✅ Payment ${paymentRecord.id} recorded in Xero with ID ${paymentResult.xeroPaymentId}`)
-            } else {
-              console.warn(`⚠️ Invoice updated but payment recording failed for ${paymentRecord.id}: ${paymentResult.error}`)
-            }
-          } else {
-            console.warn(`⚠️ Could not find tenant_id for invoice ${xeroInvoiceId}, skipping payment sync`)
-          }
-        } catch (paymentError) {
-          console.warn(`⚠️ Invoice updated but payment recording failed for ${paymentRecord.id}:`, paymentError)
-          // Don't fail the overall webhook - invoice was updated successfully
-        }
-      } else {
-        // Check if there are existing staging records for this payment
-        const { data: existingStagingRecords } = await supabase
-          .from('xero_invoices')
-          .select('id, sync_status')
-          .eq('payment_id', paymentRecord.id)
-          .limit(1)
-
-        if (existingStagingRecords && existingStagingRecords.length > 0) {
-          console.log('✅ Found existing staging records for payment, skipping old flow - batch sync will handle this')
-        } else {
-          console.log('⚠️ No invoice metadata and no staging records found, falling back to old flow')
-          // Fall back to old flow (create invoice after payment)
-          await autoSyncPaymentToXero(paymentRecord.id)
-        }
-      }
-    }
-  } catch (xeroError) {
-    console.error('❌ Webhook: Failed to sync membership payment to Xero:', xeroError)
-    // Don't fail the webhook - membership was created successfully
-  }
+  // Xero integration is now handled entirely by the payment completion processor
+  // This ensures consistent handling of staging records, emails, and batch sync
 
   // Trigger payment completion processor for emails and post-processing
   console.log('🔄 About to trigger payment completion processor...')
@@ -387,46 +313,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     console.warn(`⚠️ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
   }
 
-  // Handle Xero integration
-  try {
-    const { data: paymentRecord } = await supabase
-      .from('payments')
-      .select('id')
-      .eq('stripe_payment_intent_id', paymentIntent.id)
-      .single()
-    
-    if (paymentRecord) {
-      // Check if invoice was already created (new invoice-first flow)
-      const invoiceNumber = paymentIntent.metadata.invoiceNumber
-      const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
-      
-      if (invoiceNumber && xeroInvoiceId) {
-        console.log(`✅ Found existing Xero invoice ${invoiceNumber} for registration payment, updating status...`)
-        
-        // Update existing invoice status and sync status
-        await supabase
-          .from('xero_invoices')
-          .update({ 
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .eq('xero_invoice_id', xeroInvoiceId)
-          .eq('payment_id', paymentRecord.id)
-
-        // TODO: Update invoice status in Xero from DRAFT to AUTHORISED
-        // This will require a separate API call to update the invoice in Xero
-        
-        console.log(`✅ Updated Xero invoice ${invoiceNumber} status after registration payment completion`)
-      } else {
-        console.log('⚠️ No invoice metadata found, falling back to old flow')
-        // Fall back to old flow (create invoice after payment)
-        await autoSyncPaymentToXero(paymentRecord.id)
-      }
-    }
-  } catch (xeroError) {
-    console.error('❌ Webhook: Failed to sync registration payment to Xero:', xeroError)
-    // Don't fail the webhook - registration was processed successfully
-  }
+  // Xero integration is now handled entirely by the payment completion processor
+  // This ensures consistent handling of staging records, emails, and batch sync
 
   // Trigger payment completion processor for emails and post-processing
   console.log('🔄 About to trigger payment completion processor for registration...')

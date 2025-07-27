@@ -184,6 +184,7 @@ export class PaymentCompletionProcessor {
    * 
    * Looks for Xero staging records by:
    * - payment_id (for paid purchases that have staging records)
+   * - user_id in staging_metadata (for staged records that don't have payment_id yet)
    * - record_id (for zero-value purchases that might have staging records)
    * 
    * Returns the first matching record or null if none found.
@@ -195,6 +196,7 @@ export class PaymentCompletionProcessor {
       this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Searching for existing staging records', {
         payment_id: event.payment_id,
         record_id: event.record_id,
+        user_id: event.user_id,
         trigger_source: event.trigger_source
       })
       
@@ -220,36 +222,91 @@ export class PaymentCompletionProcessor {
         })
       }
       
-      if (!paymentId) {
-        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No payment_id available for staging record lookup', undefined, 'warn')
-        return null
+      // First, try to find staging records by payment_id (for records that have been updated)
+      if (paymentId) {
+        const { data: existingInvoicesByPaymentId, error: paymentIdError } = await this.supabase
+          .from('xero_invoices')
+          .select('*')
+          .eq('payment_id', paymentId)
+          .in('sync_status', ['staged', 'pending', 'synced'])
+          .limit(1)
+        
+        if (paymentIdError) {
+          this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding staging records by payment_id', { error: paymentIdError }, 'error')
+        } else if (existingInvoicesByPaymentId && existingInvoicesByPaymentId.length > 0) {
+          this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Found staging records by payment_id', {
+            found: true,
+            count: existingInvoicesByPaymentId.length,
+            firstRecord: {
+              id: existingInvoicesByPaymentId[0].id,
+              payment_id: existingInvoicesByPaymentId[0].payment_id,
+              sync_status: existingInvoicesByPaymentId[0].sync_status,
+              invoice_status: existingInvoicesByPaymentId[0].invoice_status
+            }
+          })
+          return existingInvoicesByPaymentId[0]
+        }
       }
       
-      // Search for staging records by payment_id
-      const { data: existingInvoices, error } = await this.supabase
+      // If no records found by payment_id, try to find staged records by user_id in staging_metadata
+      // This handles the case where staging records were created but payment_id hasn't been set yet
+      const { data: existingInvoicesByUserId, error: userIdError } = await this.supabase
         .from('xero_invoices')
         .select('*')
-        .eq('payment_id', paymentId)
-        .in('sync_status', ['staged', 'pending', 'synced'])
+        .eq('staging_metadata->>user_id', event.user_id)
+        .eq('sync_status', 'staged')
+        .is('payment_id', null)
         .limit(1)
       
-      if (error) {
-        this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding staging records', { error }, 'error')
-        return null
+      if (userIdError) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding staging records by user_id', { error: userIdError }, 'error')
+      } else if (existingInvoicesByUserId && existingInvoicesByUserId.length > 0) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Found staging records by user_id in metadata', {
+          found: true,
+          count: existingInvoicesByUserId.length,
+          firstRecord: {
+            id: existingInvoicesByUserId[0].id,
+            payment_id: existingInvoicesByUserId[0].payment_id,
+            sync_status: existingInvoicesByUserId[0].sync_status,
+            invoice_status: existingInvoicesByUserId[0].invoice_status
+          }
+        })
+        return existingInvoicesByUserId[0]
       }
       
-      this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Search results', {
-        found: existingInvoices && existingInvoices.length > 0,
-        count: existingInvoices?.length || 0,
-        firstRecord: existingInvoices?.[0] ? {
-          id: existingInvoices[0].id,
-          payment_id: existingInvoices[0].payment_id,
-          sync_status: existingInvoices[0].sync_status,
-          invoice_status: existingInvoices[0].invoice_status
-        } : null
+      // Also check for invoice-first flow records that already have xero_invoice_id but need payment_id updated
+      const { data: existingInvoicesByXeroId, error: xeroIdError } = await this.supabase
+        .from('xero_invoices')
+        .select('*')
+        .not('xero_invoice_id', 'is', null)
+        .eq('staging_metadata->>user_id', event.user_id)
+        .is('payment_id', null)
+        .limit(1)
+      
+      if (xeroIdError) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding invoice-first records by xero_invoice_id', { error: xeroIdError }, 'error')
+      } else if (existingInvoicesByXeroId && existingInvoicesByXeroId.length > 0) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Found invoice-first records by xero_invoice_id', {
+          found: true,
+          count: existingInvoicesByXeroId.length,
+          firstRecord: {
+            id: existingInvoicesByXeroId[0].id,
+            payment_id: existingInvoicesByXeroId[0].payment_id,
+            xero_invoice_id: existingInvoicesByXeroId[0].xero_invoice_id,
+            sync_status: existingInvoicesByXeroId[0].sync_status,
+            invoice_status: existingInvoicesByXeroId[0].invoice_status
+          }
+        })
+        return existingInvoicesByXeroId[0]
+      }
+      
+      this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 No staging records found', {
+        found: false,
+        searchedByPaymentId: !!paymentId,
+        searchedByUserId: true
       })
       
-      return existingInvoices && existingInvoices.length > 0 ? existingInvoices[0] : null
+      return null
     } catch (error) {
       this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Error finding existing staging records', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
       return null
@@ -310,10 +367,25 @@ export class PaymentCompletionProcessor {
         
         const bankAccountCode = systemCode?.accounting_code || '090' // Fallback to 090
         
+        // Update payment staging metadata to include payment_id
+        const { data: existingPaymentRecord } = await this.supabase
+          .from('xero_payments')
+          .select('staging_metadata')
+          .eq('xero_invoice_id', existingRecords.id)
+          .eq('sync_status', 'staged')
+          .single()
+        
+        const updatedPaymentMetadata = {
+          ...existingPaymentRecord?.staging_metadata,
+          payment_id: event.payment_id,
+          updated_at: new Date().toISOString()
+        }
+        
         const paymentUpdateData = {
           sync_status: 'pending',
           sync_error: null,
           bank_account_code: bankAccountCode, // Update with latest code
+          staging_metadata: updatedPaymentMetadata,
           last_synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }

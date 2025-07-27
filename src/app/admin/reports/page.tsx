@@ -265,19 +265,12 @@ export default function ReportsPage() {
               </div>
               <div className="p-6">
                 {/* Summary totals */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Revenue</div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <p className="font-medium text-gray-900">Total Memberships</p>
+                    <p className="text-sm text-gray-500">{reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)} purchases</p>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Purchases</div>
-                  </div>
+                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.memberships.length > 0 ? (
                   <div className="space-y-4">
@@ -353,19 +346,12 @@ export default function ReportsPage() {
               </div>
               <div className="p-6">
                 {/* Summary totals */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Saved</div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <p className="font-medium text-gray-900">Total Discount Usage</p>
+                    <p className="text-sm text-gray-500">{reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)} uses</p>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Uses</div>
-                  </div>
+                  <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.discountUsage.length > 0 ? (
                   <div className="space-y-4">
@@ -441,19 +427,12 @@ export default function ReportsPage() {
               </div>
               <div className="p-6">
                 {/* Summary totals */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}
-                    </div>
-                    <div className="text-sm text-gray-600">Net Donations</div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <p className="font-medium text-gray-900">Net Donations</p>
+                    <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount} transactions</p>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Transactions</div>
-                  </div>
+                  <p className="font-semibold text-green-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
                 </div>
                 
                 <div className="space-y-4">

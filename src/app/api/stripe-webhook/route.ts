@@ -25,73 +25,98 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .single()
 
+  let membershipRecord: any
+
   if (existingMembership) {
     console.log('User membership already exists for payment intent:', paymentIntent.id)
-    return
-  }
-
-  // Calculate dates - need to determine if this extends an existing membership
-  const { data: userMemberships } = await supabase
-    .from('user_memberships')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('membership_id', membershipId)
-    .gte('valid_until', new Date().toISOString().split('T')[0])
-    .order('valid_until', { ascending: false })
-
-  let startDate = new Date()
-  if (userMemberships && userMemberships.length > 0) {
-    // Extend from the latest expiration date
-    startDate = new Date(userMemberships[0].valid_until)
-  }
-
-  const endDate = new Date(startDate)
-  endDate.setMonth(endDate.getMonth() + durationMonths)
-
-  // Create user membership record (handle duplicate gracefully)
-  let membershipRecord: any
-  try {
-    const { data: newMembership, error: membershipError } = await supabase
-    .from('user_memberships')
-    .insert({
-      user_id: userId,
-      membership_id: membershipId,
-      valid_from: startDate.toISOString().split('T')[0],
-      valid_until: endDate.toISOString().split('T')[0],
-      months_purchased: durationMonths,
-      payment_status: 'paid',
-      stripe_payment_intent_id: paymentIntent.id,
-      amount_paid: paymentIntent.amount,
-      purchased_at: new Date().toISOString(),
-    })
-    .select()
-    .single()
-
-    if (membershipError) {
-      if (membershipError.code === '23505') { // Duplicate key error
-        console.log('Membership already exists for payment intent, fetching existing record:', paymentIntent.id)
-        const { data: existingMembership, error: fetchError } = await supabase
-          .from('user_memberships')
-          .select('*')
-          .eq('stripe_payment_intent_id', paymentIntent.id)
-          .single()
-        
-        if (fetchError || !existingMembership) {
-          console.error('Error fetching existing membership:', fetchError)
-          throw new Error('Failed to fetch existing membership')
-        }
-        
-        membershipRecord = existingMembership
-      } else {
-    console.error('Error creating user membership:', membershipError)
-    throw new Error('Failed to create membership')
+    
+    // Update payment status from 'pending' to 'paid' if needed
+    if (existingMembership.payment_status === 'pending') {
+      console.log('Updating existing membership payment status from pending to paid')
+      const { data: updatedMembership, error: updateError } = await supabase
+        .from('user_memberships')
+        .update({ 
+          payment_status: 'paid',
+          amount_paid: paymentIntent.amount,
+          purchased_at: new Date().toISOString()
+        })
+        .eq('id', existingMembership.id)
+        .select()
+        .single()
+      
+      if (updateError) {
+        console.error('Error updating membership payment status:', updateError)
+        throw new Error('Failed to update membership payment status')
       }
+      
+      membershipRecord = updatedMembership
+      console.log('Successfully updated membership payment status to paid')
     } else {
-      membershipRecord = newMembership
+      membershipRecord = existingMembership
     }
-  } catch (error) {
-    console.error('Error in membership creation/fetch:', error)
-    throw new Error('Failed to create or fetch membership')
+  } else {
+    // Calculate dates - need to determine if this extends an existing membership
+    const { data: userMemberships } = await supabase
+      .from('user_memberships')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('membership_id', membershipId)
+      .gte('valid_until', new Date().toISOString().split('T')[0])
+      .order('valid_until', { ascending: false })
+
+    let startDate = new Date()
+    if (userMemberships && userMemberships.length > 0) {
+      // Extend from the latest expiration date
+      startDate = new Date(userMemberships[0].valid_until)
+    }
+
+    const endDate = new Date(startDate)
+    endDate.setMonth(endDate.getMonth() + durationMonths)
+
+    // Create user membership record (handle duplicate gracefully)
+    try {
+      const { data: newMembership, error: membershipError } = await supabase
+      .from('user_memberships')
+      .insert({
+        user_id: userId,
+        membership_id: membershipId,
+        valid_from: startDate.toISOString().split('T')[0],
+        valid_until: endDate.toISOString().split('T')[0],
+        months_purchased: durationMonths,
+        payment_status: 'paid',
+        stripe_payment_intent_id: paymentIntent.id,
+        amount_paid: paymentIntent.amount,
+        purchased_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+      if (membershipError) {
+        if (membershipError.code === '23505') { // Duplicate key error
+          console.log('Membership already exists for payment intent, fetching existing record:', paymentIntent.id)
+          const { data: existingMembership, error: fetchError } = await supabase
+            .from('user_memberships')
+            .select('*')
+            .eq('stripe_payment_intent_id', paymentIntent.id)
+            .single()
+          
+          if (fetchError || !existingMembership) {
+            console.error('Error fetching existing membership:', fetchError)
+            throw new Error('Failed to fetch existing membership')
+          }
+          
+          membershipRecord = existingMembership
+        } else {
+      console.error('Error creating user membership:', membershipError)
+      throw new Error('Failed to create membership')
+        }
+      } else {
+        membershipRecord = newMembership
+      }
+    } catch (error) {
+      console.error('Error in membership creation/fetch:', error)
+      throw new Error('Failed to create or fetch membership')
+    }
   }
 
   // Update payment record

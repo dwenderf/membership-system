@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isRefreshTokenExpired } from '@/lib/xero/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     // Get all active Xero connections
     const { data: connections, error: connectionsError } = await supabase
       .from('xero_oauth_tokens')
-      .select('tenant_id, tenant_name, expires_at, created_at')
+      .select('tenant_id, tenant_name, expires_at, created_at, updated_at')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
 
@@ -52,24 +53,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 })
     }
 
-    // Check connection status for each tenant (without making API calls to avoid rate limiting)
+    // Check connection status for each tenant using the proper helper function
     const connectionsWithStatus = (connections || []).map((connection) => {
-      const expiresAt = new Date(connection.expires_at)
-      const now = new Date()
-      const isExpired = now >= expiresAt
+      // Use the helper function to check refresh token expiry (60 days from updated_at)
+      const isRefreshExpired = isRefreshTokenExpired(connection.updated_at)
       
-      // Don't validate connection via API call to avoid rate limiting
-      // Just check if token is expired
-      const isValid = !isExpired // Assume valid if not expired
+      // Also check access token expiry (short term)
+      const accessTokenExpiresAt = new Date(connection.expires_at)
+      const now = new Date()
+      const isAccessExpired = now >= accessTokenExpiresAt
+      
+      // Connection is valid if refresh token is not expired (access token can be refreshed)
+      const isValid = !isRefreshExpired
+      const status = isRefreshExpired ? 'expired' : 'connected'
+      
+      // Add debugging for connection status
+      console.log('Connection status check:', {
+        tenant_id: connection.tenant_id,
+        tenant_name: connection.tenant_name,
+        access_token_expires_at: connection.expires_at,
+        refresh_token_updated_at: connection.updated_at,
+        now: now.toISOString(),
+        isAccessExpired,
+        isRefreshExpired,
+        isValid,
+        status,
+        accessTokenTimeUntilExpiry: accessTokenExpiresAt.getTime() - now.getTime(),
+        refreshTokenDaysUntilExpiry: Math.floor((new Date(connection.updated_at).getTime() + (60 * 24 * 60 * 60 * 1000) - now.getTime()) / (24 * 60 * 60 * 1000))
+      })
       
       return {
         tenant_id: connection.tenant_id,
         tenant_name: connection.tenant_name,
         expires_at: connection.expires_at,
         created_at: connection.created_at,
-        is_expired: isExpired,
+        updated_at: connection.updated_at,
+        is_expired: isRefreshExpired,
         is_valid: isValid,
-        status: isExpired ? 'expired' : 'connected' // Assume connected if not expired
+        status: status
       }
     })
 
@@ -244,19 +265,33 @@ export async function GET(request: NextRequest) {
 
     // Add debugging information
     console.log('Xero status API response:', {
+      pendingInvoicesCount: pendingInvoices?.length || 0,
+      pendingPaymentsCount: pendingPayments?.length || 0,
       failedInvoicesCount: filteredFailedInvoices.length,
-      failedPaymentsCount: failedPayments?.length || 0,
-      totalFailedCount: stats.failed_count,
-      failedInvoicesError: failedInvoicesError?.message,
-      failedPaymentsError: failedPaymentsError?.message
+      failedPaymentsCount: failedPayments?.length || 0
     })
 
-    return NextResponse.json({
+    const response = {
       connections: connectionsWithStatus,
       stats,
       is_configured: connectionsWithStatus.length > 0,
       has_active_connection: connectionsWithStatus.some(c => c.status === 'connected')
+    }
+
+    // Add debugging for connection status
+    console.log('Final connection status:', {
+      connectionsCount: connectionsWithStatus.length,
+      connections: connectionsWithStatus.map(c => ({
+        tenant_name: c.tenant_name,
+        status: c.status,
+        is_expired: c.is_expired,
+        expires_at: c.expires_at
+      })),
+      is_configured: response.is_configured,
+      has_active_connection: response.has_active_connection
     })
+
+    return NextResponse.json(response)
 
   } catch (error) {
     console.error('Error fetching Xero status:', error)

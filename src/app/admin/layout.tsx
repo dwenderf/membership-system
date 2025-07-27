@@ -31,13 +31,13 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <EnvironmentBanner 
         nodeEnv={process.env.NODE_ENV}
         vercelEnv={process.env.VERCEL_ENV}
       />
       <AdminNavigation user={user} />
-      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {children}
         </div>

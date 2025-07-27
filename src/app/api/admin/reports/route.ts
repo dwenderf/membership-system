@@ -47,14 +47,20 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(Date.now() - timeRange).toISOString()
     const endDate = new Date().toISOString()
 
-    // Get memberships by type
+    // Get memberships data with user details
     const { data: memberships, error: membershipsError } = await supabase
       .from('user_memberships')
       .select(`
+        id,
         amount_paid,
         purchased_at,
         memberships (
+          id,
           name
+        ),
+        users (
+          first_name,
+          last_name
         )
       `)
       .gte('purchased_at', startDate)
@@ -65,15 +71,70 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching memberships:', membershipsError)
     }
 
-    // Aggregate memberships by type
-    const membershipSummary = new Map<string, { count: number; total: number }>()
+    // Group memberships by type and calculate totals
+    const membershipsByType = new Map<string, { 
+      membershipId: string, 
+      name: string, 
+      count: number, 
+      total: number,
+      memberships: Array<{
+        id: string,
+        customerName: string,
+        amount: number,
+        date: string
+      }>
+    }>()
+
     memberships?.forEach(membership => {
       const membershipData = Array.isArray(membership.memberships) ? membership.memberships[0] : membership.memberships
-      const name = membershipData?.name || 'Unknown'
-      const existing = membershipSummary.get(name) || { count: 0, total: 0 }
-      membershipSummary.set(name, {
-        count: existing.count + 1,
-        total: existing.total + (membership.amount_paid || 0)
+      const userData = Array.isArray(membership.users) ? membership.users[0] : membership.users
+      
+      const membershipId = membershipData?.id || 'unknown'
+      const name = membershipData?.name || 'Unknown Membership'
+      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const amount = membership.amount_paid || 0
+
+      const existing = membershipsByType.get(membershipId) || {
+        membershipId,
+        name,
+        count: 0,
+        total: 0,
+        memberships: [] as Array<{
+          id: string,
+          customerName: string,
+          amount: number,
+          date: string
+        }>
+      }
+
+      existing.count += 1
+      existing.total += amount
+      existing.memberships.push({
+        id: membership.id,
+        customerName,
+        amount,
+        date: membership.purchased_at
+      })
+
+      membershipsByType.set(membershipId, existing)
+    })
+
+    // Convert to array, sort memberships by date (newest first), then sort by total amount
+    const membershipsBreakdown = Array.from(membershipsByType.values())
+      .map(membership => ({
+        ...membership,
+        memberships: membership.memberships.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+      }))
+      .sort((a, b) => b.total - a.total)
+
+    // Calculate memberships summary for backward compatibility
+    const membershipSummary = new Map<string, { count: number; total: number }>()
+    membershipsBreakdown.forEach(membership => {
+      membershipSummary.set(membership.name, {
+        count: membership.count,
+        total: membership.total
       })
     })
 
@@ -339,6 +400,7 @@ export async function GET(request: NextRequest) {
           purchaseCount: data.count,
           totalAmount: data.total
         })),
+        membershipsBreakdown: membershipsBreakdown,
         registrations: {
           purchaseCount: registrations?.length || 0,
           totalAmount: registrations?.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0) || 0,

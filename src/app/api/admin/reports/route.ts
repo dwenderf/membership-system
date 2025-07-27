@@ -77,10 +77,23 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations
+    // Get registrations data with registration details
     const { data: registrations, error: registrationsError } = await supabase
       .from('user_registrations')
-      .select('amount_paid, registered_at')
+      .select(`
+        id,
+        amount_paid,
+        registered_at,
+        registrations (
+          id,
+          name,
+          season_id
+        ),
+        users (
+          first_name,
+          last_name
+        )
+      `)
       .gte('registered_at', startDate)
       .lte('registered_at', endDate)
       .eq('payment_status', 'paid')
@@ -269,6 +282,58 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Group registrations by registration type and calculate totals
+    const registrationsByType = new Map<string, { 
+      registrationId: string, 
+      name: string, 
+      count: number, 
+      total: number,
+      registrations: Array<{
+        id: string,
+        customerName: string,
+        amount: number,
+        date: string
+      }>
+    }>()
+
+    registrations?.forEach(registration => {
+      const registrationData = Array.isArray(registration.registrations) ? registration.registrations[0] : registration.registrations
+      const userData = Array.isArray(registration.users) ? registration.users[0] : registration.users
+      
+      const registrationId = registrationData?.id || 'unknown'
+      const name = registrationData?.name || 'Unknown Registration'
+      const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+      const amount = registration.amount_paid || 0
+
+      const existing = registrationsByType.get(registrationId) || {
+        registrationId,
+        name,
+        count: 0,
+        total: 0,
+        registrations: [] as Array<{
+          id: string,
+          customerName: string,
+          amount: number,
+          date: string
+        }>
+      }
+
+      existing.count += 1
+      existing.total += amount
+      existing.registrations.push({
+        id: registration.id,
+        customerName,
+        amount,
+        date: registration.registered_at
+      })
+
+      registrationsByType.set(registrationId, existing)
+    })
+
+    // Convert to array and sort by total amount
+    const registrationsBreakdown = Array.from(registrationsByType.values())
+      .sort((a, b) => b.total - a.total)
+
     const reportData = {
       dateRange: {
         start: startDate,
@@ -295,7 +360,8 @@ export async function GET(request: NextRequest) {
         })),
         registrations: {
           purchaseCount: registrations?.length || 0,
-          totalAmount: registrations?.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0) || 0
+          totalAmount: registrations?.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0) || 0,
+          breakdown: registrationsBreakdown
         }
       },
       recentTransactions: processedTransactions

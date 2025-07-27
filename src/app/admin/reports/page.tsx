@@ -30,6 +30,18 @@ interface ReportData {
     registrations: {
       purchaseCount: number
       totalAmount: number
+      breakdown?: Array<{
+        registrationId: string
+        name: string
+        count: number
+        total: number
+        registrations: Array<{
+          id: string
+          customerName: string
+          amount: number
+          date: string
+        }>
+      }>
     }
   }
   recentTransactions: Array<{
@@ -247,13 +259,52 @@ export default function ReportsPage() {
                 <h2 className="text-xl font-semibold text-gray-900">Registrations</h2>
               </div>
               <div className="p-6">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-4">
                   <div>
                     <p className="font-medium text-gray-900">Total Registrations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.registrations.purchaseCount} purchases</p>
                   </div>
                   <p className="font-semibold text-purple-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
                 </div>
+                
+                {/* Registrations Breakdown */}
+                {reportData.summary.registrations.breakdown && reportData.summary.registrations.breakdown.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Breakdown by Registration Type</h3>
+                    {reportData.summary.registrations.breakdown.map((registration) => (
+                      <div key={registration.registrationId} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 className="font-medium text-gray-900">{registration.name}</h4>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-purple-600">
+                              {formatCurrency(registration.total)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {registration.count} purchase{registration.count !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Individual registrations */}
+                        <div className="space-y-2">
+                          {registration.registrations.map((reg) => (
+                            <div key={reg.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                              <div>
+                                <span className="font-medium">{reg.customerName}</span>
+                                <span className="text-gray-500 ml-2">
+                                  {new Date(reg.date).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="font-medium text-gray-900">
+                                {formatCurrency(reg.amount)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

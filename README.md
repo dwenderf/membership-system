@@ -876,6 +876,203 @@ Select these specific events only:
 https://my.nycpha.org/api/xero/callback
 ```
 
+## Payment Processing & Xero Integration Flow
+
+The system implements a robust, multi-stage payment processing pipeline that ensures data integrity, handles failures gracefully, and provides complete transparency into operations.
+
+### Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
+│   Stripe        │    │  Payment Completion │    │  Xero Batch     │
+│   Webhook       │───▶│  Processor          │───▶│  Sync Manager   │
+└─────────────────┘    └─────────────────────┘    └─────────────────┘
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
+│  Core Business  │    │  Email Staging &    │    │  Rate Limited   │
+│  Records        │    │  Processing         │    │  API Calls      │
+└─────────────────┘    └─────────────────────┘    └─────────────────┘
+```
+
+### Detailed Flow
+
+#### 1. Payment Initiation
+- User completes payment via Stripe
+- Payment intent created with metadata (user_id, membership_id, etc.)
+- User redirected to success/failure page
+
+#### 2. Stripe Webhook Processing
+**Event**: `payment_intent.succeeded` or `payment_intent.payment_failed`
+
+**Webhook Handler** (`src/app/api/stripe-webhook/route.ts`):
+- ✅ **Validates webhook signature** for security
+- ✅ **Updates core business records**:
+  - `user_memberships` or `user_registrations` → `payment_status: 'paid'`
+  - `payments` → `status: 'completed'`
+- ✅ **Triggers Payment Completion Processor** for orchestration
+- ✅ **Handles payment failures** with cleanup and notifications
+
+**Key Design Principle**: Webhook focuses solely on core business record updates and delegates all complex processing to the Payment Completion Processor.
+
+#### 3. Payment Completion Processor
+**Service**: `src/lib/payment-completion-processor.ts`
+
+**Responsibilities**:
+- ✅ **Xero Staging Record Management**:
+  - Creates/updates `xero_invoices` and `xero_payments` staging records
+  - Transitions records from `'staged'` → `'pending'` → `'synced'`
+  - Handles both new staging and invoice-first flow scenarios
+- ✅ **Email Orchestration**:
+  - Stages confirmation emails for batch processing
+  - Triggers immediate email sending for critical notifications
+- ✅ **Batch Sync Triggering**:
+  - Initiates Xero batch sync operations
+  - Ensures proper sequencing of operations
+
+**Staging Record Search Logic**:
+```typescript
+// 1. Search by payment_id (for completed payments)
+// 2. Search by user_id in staging_metadata (for staged records)
+// 3. Search by xero_invoice_id (for invoice-first flow)
+// 4. Handle null payment_id scenarios gracefully
+```
+
+#### 4. Xero Batch Sync Manager
+**Service**: `src/lib/xero/batch-sync.ts`
+
+**Singleton Pattern with Concurrency Protection**:
+- ✅ **Prevents concurrent execution** - Only one sync operation at a time
+- ✅ **Rate limit protection** - 2-second minimum delay between syncs
+- ✅ **Comprehensive logging** - Unique call IDs for transparency
+- ✅ **State management** - Tracks running status and timing
+
+**Sync Process**:
+1. **Phase 1**: Query pending records from database
+2. **Phase 2**: Connect to Xero (with token refresh if needed)
+3. **Phase 3**: Sync invoices (create contacts, generate invoices)
+4. **Phase 4**: Sync payments (record payments against invoices)
+
+**Rate Limiting Strategy**:
+```typescript
+// Minimum 2-second delay between sync operations
+private readonly MIN_DELAY_BETWEEN_SYNCS = 2000
+
+// Automatic delay enforcement
+if (remainingDelay > 0) {
+  console.log(`⏳ Rate limit protection: waiting ${remainingDelay}ms`)
+  await new Promise(resolve => setTimeout(resolve, remainingDelay))
+}
+```
+
+#### 5. Xero API Integration
+**Contact Management**:
+- ✅ **Smart contact creation** with member ID integration
+- ✅ **Archived contact handling** with intelligent resolution
+- ✅ **Naming convention**: "First Last - MemberID" format
+- ✅ **Duplicate prevention** with name-first search strategy
+
+**Invoice Generation**:
+- ✅ **Detailed line items** for membership/registration fees
+- ✅ **Discount code integration** as negative line items
+- ✅ **Professional formatting** using Xero templates
+- ✅ **Status tracking** (DRAFT → AUTHORISED)
+
+**Payment Recording**:
+- ✅ **Net amount recording** (gross minus Stripe fees)
+- ✅ **Bank account integration** with Stripe account codes
+- ✅ **Reference tracking** with payment intent IDs
+- ✅ **Automatic reconciliation** with invoices
+
+### Data Flow States
+
+#### Staging Record Lifecycle
+```
+┌─────────┐    ┌──────────┐    ┌─────────┐    ┌─────────┐
+│ staged  │───▶│ pending  │───▶│ synced  │───▶│ failed  │
+└─────────┘    └──────────┘    └─────────┘    └─────────┘
+     │              │              │              │
+  Initial        Ready for      Successfully   Error state
+  creation       Xero sync      synced to      (retryable)
+                 (webhook       Xero
+                 triggered)                     
+```
+
+#### Payment Status Flow
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ processing  │───▶│ completed   │───▶│ synced      │
+└─────────────┘    └─────────────┘    └─────────────┘
+     │                   │                   │
+  Payment in          Payment              Xero sync
+  progress            successful           complete
+```
+
+### Error Handling & Resilience
+
+#### Graceful Degradation
+- ✅ **Payment processing continues** even if Xero sync fails
+- ✅ **Email delivery independent** of Xero operations
+- ✅ **Staging records preserved** for retry mechanisms
+- ✅ **Webhook idempotency** prevents duplicate processing
+
+#### Retry Mechanisms
+- ✅ **Automatic retry** via cron jobs every 2 minutes
+- ✅ **Manual sync options** in admin interface
+- ✅ **Failed record tracking** with detailed error logging
+- ✅ **Token refresh** handles Xero authentication expiry
+
+#### Monitoring & Alerting
+- ✅ **Sentry integration** for critical error tracking
+- ✅ **Comprehensive logging** with unique call IDs
+- ✅ **Admin dashboard** for sync status monitoring
+- ✅ **Email notifications** for failed operations
+
+### Performance Optimizations
+
+#### Batch Processing
+- ✅ **Intelligent batching** based on record count
+- ✅ **Concurrency control** to prevent API rate limits
+- ✅ **Optimized queries** with proper indexing
+- ✅ **Memory management** for large datasets
+
+#### Rate Limit Management
+- ✅ **2-second minimum delays** between sync operations
+- ✅ **API call spacing** within batch operations
+- ✅ **Token refresh optimization** to minimize API calls
+- ✅ **Concurrent execution prevention** via singleton pattern
+
+### Security Considerations
+
+#### Data Protection
+- ✅ **Webhook signature validation** prevents unauthorized calls
+- ✅ **Environment-specific Xero apps** prevent tenant conflicts
+- ✅ **Token encryption** in database storage
+- ✅ **RLS policies** protect sensitive data
+
+#### Access Control
+- ✅ **Admin-only sync operations** require proper authentication
+- ✅ **Audit logging** for all sync operations
+- ✅ **Error masking** prevents sensitive data exposure
+- ✅ **Rate limiting** prevents abuse
+
+### Testing & Validation
+
+#### Test Scenarios
+1. **Successful Payment Flow**: Complete end-to-end processing
+2. **Payment Failure**: Proper cleanup and notifications
+3. **Xero Sync Failure**: Graceful degradation and retry
+4. **Concurrent Operations**: Singleton pattern validation
+5. **Rate Limiting**: Delay enforcement verification
+6. **Token Expiry**: Automatic refresh handling
+
+#### Monitoring Points
+- ✅ **Webhook delivery** via Stripe dashboard
+- ✅ **Database record states** in Supabase
+- ✅ **Xero sync status** in admin interface
+- ✅ **Email delivery** via Loops.so dashboard
+- ✅ **Error tracking** via Sentry
+
 ### How Xero Integration Works
 
 #### Automatic Sync Process

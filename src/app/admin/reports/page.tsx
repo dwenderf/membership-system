@@ -221,30 +221,33 @@ export default function ReportsPage() {
               <p className="text-3xl font-bold text-green-600">
                 {formatCurrency(
                   reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) +
-                  reportData.summary.registrations.totalAmount +
-                  reportData.summary.donationsReceived.totalAmount
+                  reportData.summary.registrations.totalAmount
                 )}
               </p>
             </div>
             
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Memberships</h3>
-              <p className="text-3xl font-bold text-blue-600">
-                {reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)}
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Registrations</h3>
-              <p className="text-3xl font-bold text-purple-600">
-                {reportData.summary.registrations.purchaseCount}
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Donations</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Net Donations</h3>
               <p className="text-3xl font-bold text-orange-600">
-                {formatCurrency(reportData.summary.donationsReceived.totalAmount)}
+                {formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Discount Usage</h3>
+              <p className="text-3xl font-bold text-red-600">
+                {formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Net Revenue</h3>
+              <p className="text-3xl font-bold text-blue-600">
+                {formatCurrency(
+                  (reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) + reportData.summary.registrations.totalAmount) -
+                  reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) -
+                  (reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)
+                )}
               </p>
             </div>
           </div>

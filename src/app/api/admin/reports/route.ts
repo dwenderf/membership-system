@@ -164,8 +164,10 @@ export async function GET(request: NextRequest) {
         net_amount,
         invoice_status,
         created_at,
-        payments (
-          users (
+        payment_id,
+        payments!inner (
+          user_id,
+          users!inner (
             first_name,
             last_name
           )
@@ -174,6 +176,7 @@ export async function GET(request: NextRequest) {
       `)
       .gte('created_at', startDate)
       .lte('created_at', endDate)
+      .not('payment_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(20)
 
@@ -181,8 +184,21 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching recent transactions:', transactionsError)
     }
 
+    // Debug: Log what we found
+    console.log('Recent transactions query results:', {
+      found: recentTransactions?.length || 0,
+      sample: recentTransactions?.[0] ? {
+        id: recentTransactions[0].id,
+        invoiceNumber: recentTransactions[0].invoice_number,
+        amount: recentTransactions[0].net_amount,
+        status: recentTransactions[0].invoice_status,
+        hasPayment: !!recentTransactions[0].payment_id,
+        hasUser: !!recentTransactions[0].payments
+      } : null
+    })
+
     // Process recent transactions
-    const processedTransactions = recentTransactions?.map(transaction => {
+    let processedTransactions = recentTransactions?.map(transaction => {
       const payment = Array.isArray(transaction.payments) ? transaction.payments[0] : transaction.payments
       const userData = Array.isArray(payment?.users) ? payment?.users[0] : payment?.users
       const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
@@ -211,6 +227,47 @@ export async function GET(request: NextRequest) {
         status: transaction.invoice_status || 'UNKNOWN'
       }
     }) || []
+
+    // If no Xero transactions found, fall back to payments table
+    if (processedTransactions.length === 0) {
+      console.log('No Xero transactions found, falling back to payments table')
+      
+      const { data: fallbackPayments, error: fallbackError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          final_amount,
+          created_at,
+          users (
+            first_name,
+            last_name
+          )
+        `)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (fallbackError) {
+        console.error('Error fetching fallback payments:', fallbackError)
+      } else {
+        processedTransactions = fallbackPayments?.map(payment => {
+          const userData = Array.isArray(payment.users) ? payment.users[0] : payment.users
+          const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
+          
+          return {
+            id: payment.id,
+            invoiceNumber: 'N/A',
+            customerName,
+            amount: payment.final_amount || 0,
+            type: 'payment',
+            date: payment.created_at,
+            status: 'COMPLETED'
+          }
+        }) || []
+      }
+    }
 
     const reportData = {
       dateRange: {

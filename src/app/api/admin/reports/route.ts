@@ -455,48 +455,24 @@ export async function GET(request: NextRequest) {
       recentTransactions: processedTransactions
     }
 
-    // Get active members by membership type
+    // Get active members by membership type using the view
     const { data: activeMembers, error: activeMembersError } = await supabase
-      .from('user_memberships')
-      .select(`
-        id,
-        memberships (
-          id,
-          name
-        )
-      `)
-      .eq('payment_status', 'paid')
-      .gte('expires_at', new Date().toISOString())
+      .from('reports_active_memberships')
+      .select('*')
 
     if (activeMembersError) {
       console.error('Error fetching active members:', activeMembersError)
     }
 
-    // Group active members by membership type
-    const activeMembersByType = new Map<string, { 
-      membershipId: string, 
-      name: string, 
-      count: number 
-    }>()
+    // Process active members data (already grouped by membership type)
+    const activeMembersByType = activeMembers?.map(membership => ({
+      membershipId: membership.membership_id,
+      name: membership.membership_name,
+      count: membership.active_member_count
+    })) || []
 
-    activeMembers?.forEach(membership => {
-      const membershipData = Array.isArray(membership.memberships) ? membership.memberships[0] : membership.memberships
-      const membershipId = membershipData?.id || 'unknown'
-      const name = membershipData?.name || 'Unknown Membership'
-
-      const existing = activeMembersByType.get(membershipId) || {
-        membershipId,
-        name,
-        count: 0
-      }
-
-      existing.count += 1
-      activeMembersByType.set(membershipId, existing)
-    })
-
-    // Convert to array and sort by count
-    const activeMembersSummary = Array.from(activeMembersByType.values())
-      .sort((a, b) => b.count - a.count)
+    // Data is already sorted by count from the view
+    const activeMembersSummary = activeMembersByType
 
     // Add some debugging info
     console.log('Report data generated:', {

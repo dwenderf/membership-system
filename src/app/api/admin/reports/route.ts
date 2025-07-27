@@ -47,11 +47,10 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(Date.now() - timeRange).toISOString()
     const endDate = new Date().toISOString()
 
-    // Get memberships data from enhanced reports view (includes membership IDs)
+    // Get memberships data from membership-specific view (starts from memberships table)
     const { data: memberships, error: membershipsError } = await supabase
-      .from('reports_data_with_membership_ids')
+      .from('membership_reports_data')
       .select('*')
-      .eq('line_item_type', 'membership')
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 

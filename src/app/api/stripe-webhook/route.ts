@@ -389,6 +389,14 @@ export async function POST(request: NextRequest) {
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent
         
+        // Debug: Log all metadata to see what we're receiving
+        console.log('🔍 Payment intent metadata received:', {
+          paymentIntentId: paymentIntent.id,
+          amount: paymentIntent.amount,
+          status: paymentIntent.status,
+          allMetadata: paymentIntent.metadata
+        })
+        
         // Extract metadata
         const userId = paymentIntent.metadata.userId
         const membershipId = paymentIntent.metadata.membershipId
@@ -404,12 +412,14 @@ export async function POST(request: NextRequest) {
           await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
         }
         else {
-          console.error('Missing required metadata in payment intent:', paymentIntent.id, {
+          console.error('❌ Missing required metadata in payment intent:', paymentIntent.id, {
             userId,
             membershipId,
             registrationId,
             durationMonths,
-            hasDurationMonths: !!paymentIntent.metadata.durationMonths
+            hasDurationMonths: !!paymentIntent.metadata.durationMonths,
+            allMetadataKeys: Object.keys(paymentIntent.metadata),
+            allMetadata: paymentIntent.metadata
           })
         }
         break

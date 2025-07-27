@@ -1,6 +1,9 @@
+-- Drop the existing view first to allow column type changes
+DROP VIEW IF EXISTS recent_transactions;
+
 -- Create a view for recent transactions that joins all necessary tables
 -- This provides a clean interface for the reports API to get transaction data
-CREATE OR REPLACE VIEW recent_transactions AS
+CREATE VIEW recent_transactions AS
 SELECT 
     xi.id as transaction_id,
     xi.invoice_number,
@@ -15,17 +18,19 @@ SELECT
     u.first_name,
     u.last_name,
     u.email,
-    -- Determine transaction type from staging metadata
-    CASE 
-        WHEN xi.staging_metadata->>'membership_id' IS NOT NULL THEN 'membership'
-        WHEN xi.staging_metadata->>'registration_id' IS NOT NULL THEN 'registration'
-        ELSE 'unknown'
-    END as transaction_type,
-    -- Get the actual item ID from metadata
+    -- Use item_type from xero_invoice_line_items to determine transaction type
     COALESCE(
-        xi.staging_metadata->>'membership_id',
-        xi.staging_metadata->>'registration_id'
-    ) as item_id
+        (SELECT xili.line_item_type 
+         FROM xero_invoice_line_items xili 
+         WHERE xili.xero_invoice_id = xi.id 
+         LIMIT 1),
+        'unknown'::text
+    ) as transaction_type,
+    -- Get the actual item ID from line items
+    (SELECT xili.item_id 
+     FROM xero_invoice_line_items xili 
+     WHERE xili.xero_invoice_id = xi.id 
+     LIMIT 1) as item_id
 FROM xero_invoices xi
 LEFT JOIN payments p ON xi.payment_id = p.id
 LEFT JOIN users u ON p.user_id = u.id

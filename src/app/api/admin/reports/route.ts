@@ -47,9 +47,9 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(Date.now() - timeRange).toISOString()
     const endDate = new Date().toISOString()
 
-    // Get memberships data from reports view
+    // Get memberships data from enhanced reports view (includes membership IDs)
     const { data: memberships, error: membershipsError } = await supabase
-      .from('reports_data')
+      .from('reports_data_with_membership_ids')
       .select('*')
       .eq('line_item_type', 'membership')
       .gte('invoice_created_at', startDate)
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching memberships from reports view:', membershipsError)
     }
 
-    // Group memberships by description and calculate totals
+    // Group memberships by membership ID and calculate totals
     const membershipsByType = new Map<string, { 
       membershipId: string, 
       name: string, 
@@ -74,14 +74,14 @@ export async function GET(request: NextRequest) {
     }>()
 
     memberships?.forEach(membership => {
-      const membershipId = membership.description || 'unknown'
-      const name = membership.description || 'Unknown Membership'
+      const membershipId = membership.membership_id || 'unknown'
+      const membershipName = membership.membership_name || membership.description || 'Unknown Membership'
       const customerName = membership.customer_name || 'Unknown'
       const amount = membership.line_amount || 0
 
       const existing = membershipsByType.get(membershipId) || {
         membershipId,
-        name,
+        name: membershipName,
         count: 0,
         total: 0,
         memberships: [] as Array<{

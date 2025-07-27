@@ -362,6 +362,13 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 }
 
 export async function POST(request: NextRequest) {
+  // Log webhook receipt immediately for debugging
+  try {
+    console.log('🔄 Webhook POST request received')
+  } catch (logError) {
+    console.error('❌ Failed to log webhook receipt:', logError)
+  }
+
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')!
 
@@ -369,13 +376,19 @@ export async function POST(request: NextRequest) {
 
   try {
     event = stripe.webhooks.constructEvent(body, signature, endpointSecret)
+    
+    // Log webhook event immediately after signature verification
+    console.log('🔄 Webhook event received:', {
+      type: event.type,
+      id: event.id,
+      created: event.created,
+      dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
+    })
   } catch (err) {
     console.error('Webhook signature verification failed:', err)
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
-  const { createAdminClient } = await import('@/lib/supabase/server')
-  
   let supabase
   try {
     supabase = createAdminClient()
@@ -386,12 +399,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log('🔄 Webhook event received:', {
-      type: event.type,
-      id: event.id,
-      created: event.created,
-      dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
-    })
     
 
     

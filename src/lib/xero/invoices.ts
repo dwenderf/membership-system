@@ -71,99 +71,7 @@ export interface PrePaymentInvoiceData {
   }>
 }
 
-// Helper function to create a new contact when the existing one is archived
-async function createNewContactForArchivedContact(
-  userId: string, 
-  tenantId: string
-): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
-  try {
-    const supabase = await createClient()
-    
-    // Get user data including member_id
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, email, first_name, last_name, phone, member_id')
-      .eq('id', userId)
-      .single()
 
-    if (userError || !userData) {
-      return { success: false, error: 'User not found for archived contact workaround' }
-    }
-
-    // Force create a new contact with unique name to avoid archived contact
-    console.log(`🔄 Creating new contact for user ${userId} to avoid archived contact`)
-    
-    const xeroApi = await getAuthenticatedXeroClient(tenantId)
-    if (!xeroApi) {
-      return { success: false, error: 'Unable to authenticate with Xero for new contact creation' }
-    }
-
-    // Create contact with member ID format for uniqueness
-    let contactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
-    if (!userData.member_id) {
-      // Fallback: add timestamp to ensure uniqueness
-      const timestamp = Date.now().toString().slice(-6)
-      contactName = `${contactName} - ${timestamp}`
-    }
-    
-    // Verify the name is unique in Xero
-    try {
-      const nameCheckResponse = await xeroApi.accountingApi.getContacts(
-        tenantId,
-        undefined,
-        `Name="${contactName}"`
-      )
-      
-      if (nameCheckResponse.body.contacts && nameCheckResponse.body.contacts.length > 0) {
-        // Name already exists, add timestamp in parentheses to preserve member ID
-        const timestamp = Date.now().toString().slice(-6)
-        contactName = `${generateContactName(userData.first_name, userData.last_name, userData.member_id)} (${timestamp})`
-        console.log(`⚠️ Name conflict detected, using timestamped name: ${contactName}`)
-      }
-    } catch (nameCheckError) {
-      // If name check fails, proceed with current name
-      console.log('Name uniqueness check failed, proceeding with generated name')
-    }
-
-    const contactData: Contact = {
-      name: contactName,
-      firstName: userData.first_name,
-      lastName: userData.last_name,
-      emailAddress: userData.email,
-      contactPersons: userData.phone ? [{
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        emailAddress: userData.email,
-        phoneNumber: userData.phone
-      } as ContactPerson] : undefined
-    }
-
-    const response = await xeroApi.accountingApi.createContacts(tenantId, {
-      contacts: [contactData]
-    })
-
-    if (!response.body.contacts || response.body.contacts.length === 0) {
-      return { success: false, error: 'No contact returned from Xero API during new contact creation' }
-    }
-
-    const xeroContact = response.body.contacts[0]
-    const xeroContactId = xeroContact.contactID
-
-    if (!xeroContactId) {
-      return { success: false, error: 'No contact ID returned from Xero API during new contact creation' }
-    }
-
-    console.log(`✅ Created new contact ${xeroContactId} with name "${contactName}" to avoid archived contact`)
-    return { success: true, xeroContactId }
-    
-  } catch (error) {
-    console.error('Error creating new contact for archived contact:', error)
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to create new contact' 
-    }
-  }
-}
 
 // Create an invoice in Xero BEFORE payment (for invoice-first flow)
 export async function createXeroInvoiceBeforePayment(
@@ -251,7 +159,6 @@ export async function createXeroInvoiceBeforePayment(
     } catch (invoiceError: any) {
       console.error('❌ Invoice creation failed:', invoiceError)
       // Check if the error is due to archived contact
-      // Try different possible error structures
       let errorMessage = ''
       if (invoiceError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
         errorMessage = invoiceError.response.body.Elements[0].ValidationErrors[0].Message
@@ -261,212 +168,24 @@ export async function createXeroInvoiceBeforePayment(
         errorMessage = invoiceError.message
       }
       
-      // Also check the entire error string for archived contact message
+      // Check if this is an archived contact error
       const fullErrorString = JSON.stringify(invoiceError)
       if (errorMessage.includes('archived') || errorMessage.includes('un-archived') || fullErrorString.includes('archived') || fullErrorString.includes('un-archived')) {
-        console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, checking for other non-archived contacts first`)
+        console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, using contact resolution strategy`)
         
-        // IMPROVED STRATEGY: Search by exact contact name first, then fall back to email search
-        try {
-          const supabase = await createClient()
-          const { data: userData } = await supabase
-            .from('users')
-            .select('email, first_name, last_name, member_id')
-            .eq('id', invoiceData.user_id)
-            .single()
-          
-          if (userData?.email) {
-            // Step 1: Search by exact contact name first (including member ID)
-            const expectedContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
-            
-            console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
-            
-            let nonArchivedContact: Contact | undefined
-            
-            try {
-              const nameSearchResponse = await xeroApi.accountingApi.getContacts(
-                activeTenant.tenant_id,
-                undefined,
-                `Name="${expectedContactName}"`
-              )
-              
-              if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
-                const nameFoundContacts = nameSearchResponse.body.contacts
-                console.log(`✅ Found ${nameFoundContacts.length} contact(s) with exact name: "${expectedContactName}"`)
-                
-                                 // Find non-archived contact with exact name
-                 nonArchivedContact = nameFoundContacts.find((contact: Contact) => 
-                   contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                   contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED // Must be non-archived
-                 )
-                 
-                 if (nonArchivedContact) {
-                   console.log(`🎯 Found exact name match: "${nonArchivedContact.name}" (${nonArchivedContact.contactID})`)
-                 } else {
-                   // Check if we found an archived contact with exact name
-                   const archivedContact = nameFoundContacts.find((contact: Contact) => 
-                     contact.contactID !== contactResult.xeroContactId && // Exclude the current archived one
-                     contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED // Must be archived
-                   )
-                   
-                   if (archivedContact) {
-                     console.log(`⚠️ Found archived contact with exact name: "${archivedContact.name}" (ID: ${archivedContact.contactID})`)
-                     
-                     // Rename the archived contact to avoid conflicts
-                     if (archivedContact.contactID) {
-                       try {
-                         const archivedContactName = `${expectedContactName} - Archived`
-                         console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
-                         
-                         await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID, {
-                           contacts: [{
-                             contactID: archivedContact.contactID,
-                             name: archivedContactName,
-                             firstName: userData.first_name,
-                             lastName: userData.last_name,
-                             emailAddress: userData.email,
-                             contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
-                           }]
-                         })
-                         
-                         console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
-                         
-                       } catch (renameError) {
-                         console.error(`❌ Failed to rename archived contact:`, renameError)
-                       }
-                     }
-                   }
-                 }
-              }
-            } catch (nameSearchError) {
-              console.log(`❌ Name search failed for "${expectedContactName}":`, nameSearchError)
-            }
-            
-            // Step 2: If no exact name match found, fall back to email search
-            if (!nonArchivedContact) {
-              console.log(`🔍 No exact name match found, searching by email: ${userData.email}`)
-              
-              const emailSearchResponse = await xeroApi.accountingApi.getContacts(
-                activeTenant.tenant_id,
-                undefined,
-                `EmailAddress="${userData.email}"`
-              )
-            
-              if (emailSearchResponse.body.contacts?.length ?? 0 > 0) {
-                const contacts = emailSearchResponse.body.contacts!
-                console.log(`🔍 Found ${contacts.length} contacts with email ${userData.email}:`)
-                contacts.forEach((contact: Contact, index: number) => {
-                  console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
-                })
-                
-                // Send Sentry warning if multiple contacts found with same email
-                if (contacts.length > 1) {
-                  Sentry.captureMessage(`Multiple Xero contacts found with same email: ${userData.email}`, {
-                    level: 'warning',
-                    tags: {
-                      component: 'xero-contact-resolution',
-                      operation: 'archived-contact-handling'
-                    },
-                    extra: {
-                      email: userData.email,
-                      contactCount: contacts.length,
-                      contacts: contacts.map((contact: Contact) => ({
-                        name: contact.name,
-                        contactID: contact.contactID,
-                        status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
-                      })),
-                      userID: invoiceData.user_id,
-                      archivedContactID: contactResult.xeroContactId
-                    }
-                  })
-                }
-                
-                // Look for any non-archived contact (exact name match is impossible here since Step 1 would have found it)
-                const anyNonArchivedContact = contacts.find((contact: Contact) => 
-                  contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                  contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED // Find non-archived contacts
-                )
-                
-                nonArchivedContact = anyNonArchivedContact
-                
-                if (nonArchivedContact) {
-                  console.log(`🔍 Found non-archived contact: "${nonArchivedContact.name}" (${nonArchivedContact.contactID})`)
-                } else {
-                  console.log(`🔍 No non-archived contacts found`)
-                }
-              }
-              
-              if (nonArchivedContact && nonArchivedContact.contactID) {
-                console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)
-                
-                // Since this is Step 2, we know this contact doesn't follow our naming convention
-                // (otherwise Step 1 would have found it), so we need to rename it
-                const finalContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
-                
-                console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
-                
-                // Update the contact name to follow our convention
-                await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
-                  contacts: [{
-                    contactID: nonArchivedContact.contactID,
-                    name: finalContactName,
-                    firstName: userData.first_name,
-                    lastName: userData.last_name,
-                    emailAddress: userData.email
-                  }]
-                })
-                
-                console.log(`✅ Updated contact name to follow convention: ${finalContactName}`)
-                
-                // Use the non-archived contact for invoice
-                xeroInvoiceData.contact = { contactID: nonArchivedContact.contactID }
-                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
-                  invoices: [xeroInvoiceData]
-                })
-                
-                console.log(`✅ Successfully created invoice with existing non-archived contact: ${nonArchivedContact.contactID}`)
-              } else {
-                // No non-archived contacts found, create new one
-                console.log(`⚠️ No non-archived contacts found with email ${userData.email}, creating new contact`)
-                const newContactResult = await createNewContactForArchivedContact(invoiceData.user_id, activeTenant.tenant_id)
-                if (!newContactResult.success || !newContactResult.xeroContactId) {
-                  throw invoiceError
-                }
-                
-                xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-                response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
-                  invoices: [xeroInvoiceData]
-                })
-              }
-            } else {
-              // No contacts found with email, create new one
-              console.log(`⚠️ No contacts found with email ${userData.email}, creating new contact`)
-              const newContactResult = await createNewContactForArchivedContact(invoiceData.user_id, activeTenant.tenant_id)
-              if (!newContactResult.success || !newContactResult.xeroContactId) {
-                throw invoiceError
-              }
-              
-              xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-              response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
-                invoices: [xeroInvoiceData]
-              })
-            }
-          } else {
-            throw new Error('User email not found')
-          }
-        } catch (searchError) {
-          console.error('Error searching for non-archived contacts:', searchError)
-          console.log('Falling back to creating new contact')
-          const newContactResult = await createNewContactForArchivedContact(invoiceData.user_id, activeTenant.tenant_id)
-          if (!newContactResult.success || !newContactResult.xeroContactId) {
-            throw invoiceError
-          }
-          
-          xeroInvoiceData.contact = { contactID: newContactResult.xeroContactId }
-          response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
-            invoices: [xeroInvoiceData]
-          })
+        // Use the existing contact resolution strategy from contacts.ts
+        const resolvedContactResult = await getOrCreateXeroContact(invoiceData.user_id, activeTenant.tenant_id)
+        if (!resolvedContactResult.success || !resolvedContactResult.xeroContactId) {
+          throw new Error(`Failed to resolve contact: ${resolvedContactResult.error}`)
         }
+        
+        // Use the resolved contact for invoice
+        xeroInvoiceData.contact = { contactID: resolvedContactResult.xeroContactId }
+        response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
+          invoices: [xeroInvoiceData]
+        })
+        
+        console.log(`✅ Successfully created invoice with resolved contact: ${resolvedContactResult.xeroContactId}`)
       } else {
         throw invoiceError // Re-throw other errors
       }

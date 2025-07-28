@@ -310,7 +310,7 @@ export class XeroStagingManager {
             payment_method: 'stripe',
             bank_account_code: stripeBankAccountCode,
             amount_paid: data.final_amount,
-            stripe_fee_amount: 0, // Calculate if needed
+            stripe_fee_amount: 0, // Will be calculated when payment is completed
             reference: data.stripe_payment_intent_id || '',
             sync_status: 'staged',
             staged_at: new Date().toISOString(),

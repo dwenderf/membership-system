@@ -286,6 +286,7 @@ export type Database = {
           stripe_payment_intent_id: string | null
           status: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method: string
+          stripe_fee_amount: number
           created_at: string
           completed_at: string | null
           updated_at: string
@@ -299,6 +300,7 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
+          stripe_fee_amount?: number
           created_at?: string
           completed_at?: string | null
           updated_at?: string
@@ -312,6 +314,7 @@ export type Database = {
           stripe_payment_intent_id?: string | null
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
+          stripe_fee_amount?: number
           created_at?: string
           completed_at?: string | null
           updated_at?: string

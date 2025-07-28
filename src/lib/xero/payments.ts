@@ -270,6 +270,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
         id,
         stripe_payment_intent_id,
         final_amount,
+        stripe_fee_amount,
         completed_at
       `)
       .eq('id', paymentId)
@@ -280,10 +281,9 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
       return null
     }
 
-    // Calculate Stripe fees (approximate - in practice you'd get this from Stripe)
-    // Standard Stripe rates: 2.9% + $0.30 for card payments
+    // Use actual Stripe fees from database, fallback to 0 if not available
     const grossAmount = payment.final_amount
-    const stripeFeeAmount = Math.round(grossAmount * 0.029 + 30)
+    const stripeFeeAmount = payment.stripe_fee_amount || 0
     const netAmount = grossAmount - stripeFeeAmount
 
     return {

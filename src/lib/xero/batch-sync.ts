@@ -6,7 +6,7 @@
 
 import { Invoice, LineItem, Payment, CurrencyCode } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
-import { getOrCreateXeroContact } from './contacts'
+import { getOrCreateXeroContact, generateContactName } from './contacts'
 import { createAdminClient } from '../supabase/server'
 import { Database } from '../../types/database'
 import { batchProcessor } from '../batch-processor'
@@ -517,9 +517,7 @@ export class XeroBatchSyncManager {
         .single()
       
       const contactName = userData 
-        ? userData.member_id 
-          ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-          : `${userData.first_name} ${userData.last_name}`
+        ? generateContactName(userData.first_name, userData.last_name, userData.member_id)
         : 'Unknown Contact'
 
       // Check if this is a zero-value invoice (always AUTHORISED)
@@ -611,9 +609,7 @@ export class XeroBatchSyncManager {
               let nonArchivedContact: any = undefined
               
               // Step 1: Search by exact contact name first (including member ID)
-              const expectedContactName = userData.member_id 
-                ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-                : `${userData.first_name} ${userData.last_name}`
+              const expectedContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
               
               console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
               

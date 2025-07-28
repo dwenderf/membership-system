@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
@@ -9,7 +8,36 @@ import { logger } from '@/lib/logging/logger'
 
 // Force import server config
 import '../../../../sentry.server.config'
-import * as Sentry from '@sentry/nextjs'
+
+// Helper function to get actual Stripe fees from balance transaction
+async function getStripeFeeAmount(paymentIntent: Stripe.PaymentIntent): Promise<number> {
+  try {
+    // Retrieve the payment intent with expanded balance transaction to get actual fees
+    const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+      expand: ['latest_charge.balance_transaction']
+    })
+    
+    if (expandedPaymentIntent.latest_charge && 
+        typeof expandedPaymentIntent.latest_charge === 'object' && 
+        'balance_transaction' in expandedPaymentIntent.latest_charge &&
+        expandedPaymentIntent.latest_charge.balance_transaction &&
+        typeof expandedPaymentIntent.latest_charge.balance_transaction === 'object' &&
+        'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
+      
+      const stripeFeeAmount = expandedPaymentIntent.latest_charge.balance_transaction.fee
+      console.log(`✅ Retrieved actual Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+      return stripeFeeAmount
+    } else {
+      // Fallback to 0 if balance transaction is not available
+      console.log(`⚠️ Balance transaction not available, setting fee to 0 for payment ${paymentIntent.id}`)
+      return 0
+    }
+  } catch (feeError) {
+    // Fallback to 0 if there's an error retrieving the balance transaction
+    console.error(`❌ Error retrieving Stripe fees, setting fee to 0 for payment ${paymentIntent.id}`, feeError)
+    return 0
+  }
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -114,13 +142,17 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     }
   }
 
+  // Get actual Stripe fees from the balance transaction
+  const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
+  
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      stripe_fee_amount: stripeFeeAmount
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -128,7 +160,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
   if (paymentUpdateError) {
     console.error('❌ Webhook: Error updating membership payment record:', paymentUpdateError)
   } else if (updatedPayment && updatedPayment.length > 0) {
-    console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id}`)
+    console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
     
     // Update user_memberships record with payment_id
     const { error: membershipUpdateError } = await adminSupabase
@@ -302,13 +334,17 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     }
   }
 
+  // Get actual Stripe fees from the balance transaction
+  const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
+  
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      stripe_fee_amount: stripeFeeAmount
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -316,7 +352,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
   if (paymentUpdateError) {
     console.error('❌ Webhook: Error updating payment record:', paymentUpdateError)
   } else if (updatedPayment && updatedPayment.length > 0) {
-    console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id}`)
+    console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
     
     // Update user_registrations record with payment_id
     const { error: registrationUpdateError } = await supabase

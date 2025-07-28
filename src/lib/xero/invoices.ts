@@ -1,6 +1,6 @@
 import { Invoice, LineItem, CurrencyCode, Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
-import { getOrCreateXeroContact, syncUserToXeroContact } from './contacts'
+import { getOrCreateXeroContact, syncUserToXeroContact, generateContactName } from './contacts'
 import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
@@ -26,12 +26,15 @@ async function getSystemAccountingCode(codeType: string): Promise<string | null>
   }
 }
 
+
+
 export interface PaymentInvoiceData {
   payment_id: string
   user_id: string
   total_amount: number // in cents
   discount_amount: number // in cents
   final_amount: number // in cents
+  stripe_fee_amount?: number // in cents
   payment_items: Array<{
     item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
@@ -96,13 +99,11 @@ async function createNewContactForArchivedContact(
     }
 
     // Create contact with member ID format for uniqueness
-    let contactName = `${userData.first_name} ${userData.last_name}`
-    if (userData.member_id) {
-      contactName = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-    } else {
+    let contactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
+    if (!userData.member_id) {
       // Fallback: add timestamp to ensure uniqueness
       const timestamp = Date.now().toString().slice(-6)
-      contactName = `${userData.first_name} ${userData.last_name} - ${timestamp}`
+      contactName = `${contactName} - ${timestamp}`
     }
     
     // Verify the name is unique in Xero
@@ -116,11 +117,7 @@ async function createNewContactForArchivedContact(
       if (nameCheckResponse.body.contacts && nameCheckResponse.body.contacts.length > 0) {
         // Name already exists, add timestamp in parentheses to preserve member ID
         const timestamp = Date.now().toString().slice(-6)
-        if (userData.member_id) {
-          contactName = `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
-        } else {
-          contactName = `${userData.first_name} ${userData.last_name} (${timestamp})`
-        }
+        contactName = `${generateContactName(userData.first_name, userData.last_name, userData.member_id)} (${timestamp})`
         console.log(`⚠️ Name conflict detected, using timestamped name: ${contactName}`)
       }
     } catch (nameCheckError) {
@@ -280,9 +277,7 @@ export async function createXeroInvoiceBeforePayment(
           
           if (userData?.email) {
             // Step 1: Search by exact contact name first (including member ID)
-            const expectedContactName = userData.member_id 
-              ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-              : `${userData.first_name} ${userData.last_name}`
+            const expectedContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
             
             console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
             
@@ -318,25 +313,27 @@ export async function createXeroInvoiceBeforePayment(
                      console.log(`⚠️ Found archived contact with exact name: "${archivedContact.name}" (ID: ${archivedContact.contactID})`)
                      
                      // Rename the archived contact to avoid conflicts
-                     try {
-                       const archivedContactName = `${expectedContactName} - Archived`
-                       console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
-                       
-                       await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID, {
-                         contacts: [{
-                           contactID: archivedContact.contactID,
-                           name: archivedContactName,
-                           firstName: userData.first_name,
-                           lastName: userData.last_name,
-                           emailAddress: userData.email,
-                           contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
-                         }]
-                       })
-                       
-                       console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
-                       
-                     } catch (renameError) {
-                       console.error(`❌ Failed to rename archived contact:`, renameError)
+                     if (archivedContact.contactID) {
+                       try {
+                         const archivedContactName = `${expectedContactName} - Archived`
+                         console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
+                         
+                         await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, archivedContact.contactID, {
+                           contacts: [{
+                             contactID: archivedContact.contactID,
+                             name: archivedContactName,
+                             firstName: userData.first_name,
+                             lastName: userData.last_name,
+                             emailAddress: userData.email,
+                             contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
+                           }]
+                         })
+                         
+                         console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
+                         
+                       } catch (renameError) {
+                         console.error(`❌ Failed to rename archived contact:`, renameError)
+                       }
                      }
                    }
                  }
@@ -355,14 +352,15 @@ export async function createXeroInvoiceBeforePayment(
                 `EmailAddress="${userData.email}"`
               )
             
-                          if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
-                console.log(`🔍 Found ${emailSearchResponse.body.contacts.length} contacts with email ${userData.email}:`)
-                emailSearchResponse.body.contacts.forEach((contact: Contact, index: number) => {
+              if (emailSearchResponse.body.contacts?.length ?? 0 > 0) {
+                const contacts = emailSearchResponse.body.contacts!
+                console.log(`🔍 Found ${contacts.length} contacts with email ${userData.email}:`)
+                contacts.forEach((contact: Contact, index: number) => {
                   console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
                 })
                 
                 // Send Sentry warning if multiple contacts found with same email
-                if (emailSearchResponse.body.contacts.length > 1) {
+                if (contacts.length > 1) {
                   Sentry.captureMessage(`Multiple Xero contacts found with same email: ${userData.email}`, {
                     level: 'warning',
                     tags: {
@@ -371,8 +369,8 @@ export async function createXeroInvoiceBeforePayment(
                     },
                     extra: {
                       email: userData.email,
-                      contactCount: emailSearchResponse.body.contacts.length,
-                      contacts: emailSearchResponse.body.contacts.map((contact: Contact) => ({
+                      contactCount: contacts.length,
+                      contacts: contacts.map((contact: Contact) => ({
                         name: contact.name,
                         contactID: contact.contactID,
                         status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
@@ -383,56 +381,42 @@ export async function createXeroInvoiceBeforePayment(
                   })
                 }
                 
-                // Look for exact name match in email results (should match our expected name)
-                const exactNameMatch = emailSearchResponse.body.contacts.find((contact: Contact) => 
-                  contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
-                  contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED && // Must be non-archived
-                  contact.name === expectedContactName // Exact name match
-                )
-                
-                // If no exact match, look for any non-archived contact
-                const anyNonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
+                // Look for any non-archived contact (exact name match is impossible here since Step 1 would have found it)
+                const anyNonArchivedContact = contacts.find((contact: Contact) => 
                   contact.contactID !== contactResult.xeroContactId && // Exclude the archived one
                   contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED // Find non-archived contacts
                 )
                 
-                nonArchivedContact = exactNameMatch || anyNonArchivedContact
+                nonArchivedContact = anyNonArchivedContact
                 
-                if (exactNameMatch) {
-                  console.log(`🎯 Found exact name match in email results: "${exactNameMatch.name}" (${exactNameMatch.contactID})`)
+                if (nonArchivedContact) {
+                  console.log(`🔍 Found non-archived contact: "${nonArchivedContact.name}" (${nonArchivedContact.contactID})`)
                 } else {
-                  console.log(`🔍 Non-archived contact found: ${nonArchivedContact ? `"${nonArchivedContact.name}" (${nonArchivedContact.contactID})` : 'None'}`)
+                  console.log(`🔍 No non-archived contacts found`)
                 }
               }
               
               if (nonArchivedContact && nonArchivedContact.contactID) {
                 console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)
                 
-                // Check if the contact name follows our naming convention (only update if not exact match)
-                if (!exactNameMatch) {
-                  // This contact doesn't follow our convention, update it but add timestamp for uniqueness
-                  const timestamp = Date.now().toString().slice(-6)
-                  const finalContactName = userData.member_id 
-                    ? `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
-                    : `${userData.first_name} ${userData.last_name} (${timestamp})`
-                  
-                  console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
-                  
-                  // Update the contact name to follow our convention
-                  await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
-                    contacts: [{
-                      contactID: nonArchivedContact.contactID,
-                      name: finalContactName,
-                      firstName: userData.first_name,
-                      lastName: userData.last_name,
-                      emailAddress: userData.email
-                    }]
-                  })
-                  
-                  console.log(`✅ Updated contact name to follow convention: ${finalContactName}`)
-                } else {
-                  console.log(`✅ Contact name already follows our convention: ${nonArchivedContact.name}`)
-                }
+                // Since this is Step 2, we know this contact doesn't follow our naming convention
+                // (otherwise Step 1 would have found it), so we need to rename it
+                const finalContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
+                
+                console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
+                
+                // Update the contact name to follow our convention
+                await xeroApi.accountingApi.updateContact(activeTenant.tenant_id, nonArchivedContact.contactID, {
+                  contacts: [{
+                    contactID: nonArchivedContact.contactID,
+                    name: finalContactName,
+                    firstName: userData.first_name,
+                    lastName: userData.last_name,
+                    emailAddress: userData.email
+                  }]
+                })
+                
+                console.log(`✅ Updated contact name to follow convention: ${finalContactName}`)
                 
                 // Use the non-archived contact for invoice
                 xeroInvoiceData.contact = { contactID: nonArchivedContact.contactID }
@@ -804,8 +788,8 @@ export async function createXeroInvoiceForPayment(
       return { success: false, error: 'No invoice ID or number returned from Xero API' }
     }
 
-    // Calculate Stripe fees (typically 2.9% + $0.30)
-    const stripeFeeAmount = Math.round(paymentData.final_amount * 0.029 + 30) // Approximate calculation
+    // Use actual Stripe fees from database, fallback to 0 if not available
+    const stripeFeeAmount = paymentData.stripe_fee_amount || 0
 
     // Store invoice tracking record
     const invoiceRecord = {
@@ -935,6 +919,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
         total_amount,
         discount_amount,
         final_amount,
+        stripe_fee_amount,
         stripe_payment_intent_id,
         payment_items (
           item_type,
@@ -1019,6 +1004,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
       total_amount: payment.total_amount,
       discount_amount: payment.discount_amount,
       final_amount: payment.final_amount,
+      stripe_fee_amount: payment.stripe_fee_amount,
       payment_items: enhancedPaymentItems,
       discount_codes_used: discountCodesUsed,
       stripe_payment_intent_id: payment.stripe_payment_intent_id

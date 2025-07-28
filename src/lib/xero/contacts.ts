@@ -3,6 +3,15 @@ import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { createAdminClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
+// Helper function to generate contact name following our naming convention
+export function generateContactName(firstName: string, lastName: string, memberId?: number | null): string {
+  if (memberId) {
+    return `${firstName} ${lastName} - ${memberId}`
+  } else {
+    return `${firstName} ${lastName}`
+  }
+}
+
 export interface UserContactData {
   id: string
   email: string
@@ -47,9 +56,7 @@ export async function syncUserToXeroContact(
       let searchMethod = 'none'
       
       // Step 1: Search by exact contact name (including member ID if available)
-      const expectedContactName = userData.member_id 
-        ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-        : `${userData.first_name} ${userData.last_name}`
+      const expectedContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
       
       console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
       
@@ -73,32 +80,34 @@ export async function syncUserToXeroContact(
             console.log(`⚠️ Found archived contact with exact name: "${foundContact.name}" (ID: ${foundContact.contactID})`)
             
             // Rename the archived contact to avoid conflicts
-            try {
-              const archivedContactName = `${expectedContactName} - Archived`
-              console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
+            if (foundContact.contactID) {
+              try {
+                const archivedContactName = `${expectedContactName} - Archived`
+                console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
+                
+                await xeroApi.accountingApi.updateContact(tenantId, foundContact.contactID, {
+                  contacts: [{
+                    contactID: foundContact.contactID,
+                    name: archivedContactName,
+                    firstName: userData.first_name,
+                    lastName: userData.last_name,
+                    emailAddress: userData.email,
+                    contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
+                  }]
+                })
               
-              await xeroApi.accountingApi.updateContact(tenantId, foundContact.contactID, {
-                contacts: [{
-                  contactID: foundContact.contactID,
-                  name: archivedContactName,
-                  firstName: userData.first_name,
-                  lastName: userData.last_name,
-                  emailAddress: userData.email,
-                  contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
-                }]
-              })
-              
-              console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
-              
-              // Don't use this contact - we'll create a new one
-              xeroContactId = undefined
-              isUpdate = false
-              
-            } catch (renameError) {
-              console.error(`❌ Failed to rename archived contact:`, renameError)
-              // If rename fails, we'll still create a new contact with timestamp
-              xeroContactId = undefined
-              isUpdate = false
+                              console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
+                
+                // Don't use this contact - we'll create a new one
+                xeroContactId = undefined
+                isUpdate = false
+                
+              } catch (renameError) {
+                console.error(`❌ Failed to rename archived contact:`, renameError)
+                // If rename fails, we'll still create a new contact with timestamp
+                xeroContactId = undefined
+                isUpdate = false
+              }
             }
           } else {
             // Contact is active - use it
@@ -223,7 +232,7 @@ export async function syncUserToXeroContact(
     
     // Always append member ID if available for guaranteed uniqueness
     if (userData.member_id) {
-      contactName = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                      contactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
     } else {
       // Fallback to old logic if member_id is not available (legacy users)
       if (!isUpdate && !xeroContactId) {
@@ -319,8 +328,8 @@ export async function syncUserToXeroContact(
                 
                 // Check if the contact name follows our naming convention
                 const expectedNamePrefix = userData.member_id 
-                  ? `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
-                  : `${userData.first_name} ${userData.last_name}`
+                                  ? generateContactName(userData.first_name, userData.last_name, userData.member_id)
+                : generateContactName(userData.first_name, userData.last_name)
                 
                 let finalContactName = expectedNamePrefix
                 
@@ -328,8 +337,8 @@ export async function syncUserToXeroContact(
                   // Contact name doesn't follow our convention, update it but add timestamp for uniqueness
                   const timestamp = Date.now().toString().slice(-6)
                   finalContactName = userData.member_id 
-                    ? `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
-                    : `${userData.first_name} ${userData.last_name} (${timestamp})`
+                                    ? `${generateContactName(userData.first_name, userData.last_name, userData.member_id)} (${timestamp})`
+                : `${generateContactName(userData.first_name, userData.last_name)} (${timestamp})`
                   
                   console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
                 } else {
@@ -356,7 +365,7 @@ export async function syncUserToXeroContact(
           
           // Create a new contact with unique name to avoid the archived contact
           if (userData.member_id) {
-            contactData.name = `${userData.first_name} ${userData.last_name} - ${userData.member_id}`
+                            contactData.name = generateContactName(userData.first_name, userData.last_name, userData.member_id)
           } else {
             const emailPart = userData.email.split('@')[0]
             contactData.name = `${userData.first_name} ${userData.last_name} (${emailPart})`
@@ -373,7 +382,7 @@ export async function syncUserToXeroContact(
             if (nameCheckResponse.body.contacts && nameCheckResponse.body.contacts.length > 0) {
               const timestamp = Date.now().toString().slice(-6)
               if (userData.member_id) {
-                contactData.name = `${userData.first_name} ${userData.last_name} - ${userData.member_id} (${timestamp})`
+                contactData.name = `${generateContactName(userData.first_name, userData.last_name, userData.member_id)} (${timestamp})`
               } else {
                 contactData.name = `${userData.first_name} ${userData.last_name} (${timestamp})`
               }
@@ -595,7 +604,7 @@ export async function getOrCreateXeroContact(
             const contact = contactResponse.body.contacts[0]
             
             // Check if contact is archived
-            if (contact.contactStatus === 'ARCHIVED') {
+            if (contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
               console.log(`⚠️ Cached contact ${existingContact.xero_contact_id} is archived, will re-sync`)
               // Mark as needing re-sync so we'll create a new contact
               await supabase

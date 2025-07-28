@@ -395,7 +395,7 @@ export class BatchProcessor {
     
     try {
       // Process staged emails
-      const { emailStagingManager } = await import('./email-staging')
+      const { emailStagingManager } = await import('./email')
       const emailResults = await emailStagingManager.processStagedEmails()
       
       console.log('📧 Email batch processing results:', {

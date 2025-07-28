@@ -323,7 +323,7 @@ The Hockey Association Team
 
 **🚨 IMPORTANT:** When adding new email functionality to the application:
 
-1. **Add the email event type** to `EMAIL_EVENTS` in `src/lib/email-service.ts`
+1. **Add the email event type** to `EMAIL_EVENTS` in `src/lib/email/service.ts`
 2. **Create the email function** (e.g., `sendRegistrationConfirmation()`)
 3. **Add environment variable** for template ID (e.g., `LOOPS_REGISTRATION_TEMPLATE_ID`)
 4. **Update this README.md** with template setup instructions and data variables
@@ -430,7 +430,10 @@ src/
 ├── app/                 # Next.js app directory
 ├── components/          # React components
 ├── lib/                # Utilities and services
-│   ├── email-service.ts # Email integration service
+│   ├── email/
+│   │   ├── processor.ts # Email processing for payment completion
+│   │   ├── service.ts # Email integration service
+│   │   └── staging.ts # Email staging and batch processing
 │   ├── supabase.ts     # Database client
 │   └── stripe.ts       # Payment processing
 ├── middleware.ts       # Authentication middleware
@@ -439,7 +442,7 @@ src/
 
 ## Key Services
 
-- **Email Service** (`src/lib/email-service.ts`): Handles all email communications
+- **Email Service** (`src/lib/email/service.ts`): Handles all email communications
 - **Supabase Client** (`src/lib/supabase.ts`): Database operations and auth
 - **Stripe Integration** (`src/lib/stripe.ts`): Payment processing
 - **Sentry Integration** (`src/lib/sentry-helpers.ts`): Error monitoring and alerting

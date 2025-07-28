@@ -104,7 +104,7 @@ class EmailStagingManager {
    */
   private async sendEmailImmediately(emailData: StagedEmailData): Promise<boolean> {
     try {
-      const { emailService } = await import('./email-service')
+      const { emailService } = await import('./service')
       
       // Map event types to email service methods
       switch (emailData.event_type) {
@@ -252,7 +252,7 @@ class EmailStagingManager {
    */
   private async sendStagedEmail(emailLog: any): Promise<boolean> {
     try {
-      const { emailService } = await import('./email-service')
+      const { emailService } = await import('./service')
       const supabase = createAdminClient()
 
       // Extract related entity info from email_data

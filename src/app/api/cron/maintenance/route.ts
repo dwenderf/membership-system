@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       )
 
       // Process staged emails
-      const { emailStagingManager } = await import('@/lib/email-staging')
+      const { emailStagingManager } = await import('@/lib/email')
       const emailResults = await emailStagingManager.processStagedEmails()
 
       results.emailRetry.retried = emailResults.processed

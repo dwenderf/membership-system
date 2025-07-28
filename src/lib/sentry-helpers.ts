@@ -1,34 +1,245 @@
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from '@sentry/nextjs'
+import { createClient } from './supabase/server'
+import { extractRequestInfo, getSimpleRequestInfo } from './request-info'
 
-export interface PaymentContext {
-  paymentIntentId?: string | undefined;
-  userId?: string;
-  userEmail?: string;
-  membershipId?: string;
-  registrationId?: string;
-  categoryId?: string;
-  amountCents?: number;
-  discountCode?: string;
-  endpoint?: string;
-  operation?: string;
-}
+/**
+ * Enhanced Sentry error capture with automatic user context
+ */
+export async function captureSentryError(
+  error: Error | string,
+  context?: {
+    user?: any
+    request?: any
+    tags?: Record<string, string>
+    extra?: Record<string, any>
+  }
+) {
+  const scope = new Sentry.Scope()
+  
+  // Add user context if available
+  if (context?.user) {
+    scope.setUser({
+      id: context.user.id,
+      email: context.user.email,
+      username: `${context.user.first_name} ${context.user.last_name}`,
+      member_id: context.user.member_id,
+      is_admin: context.user.is_admin
+    })
+  } else {
+    // Try to get user from current session
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        // Get additional user profile data
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('first_name, last_name, member_id, is_admin')
+          .eq('id', user.id)
+          .single()
+        
+        scope.setUser({
+          id: user.id,
+          email: user.email,
+          username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
+          member_id: userProfile?.member_id,
+          is_admin: userProfile?.is_admin
+        })
+      }
+    } catch (userError) {
+      // Silently fail user context - don't let it break error reporting
+      console.warn('Failed to get user context for Sentry:', userError)
+    }
+  }
 
-export interface DatabaseOperation {
-  operation: string;
-  success: boolean;
-  error?: any;
-  details?: any;
+  // Add request context if available
+  if (context?.request) {
+    scope.setContext('request', {
+      url: context.request.url,
+      method: context.request.method,
+      headers: context.request.headers,
+      ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
+      userAgent: context.request.headers?.['user-agent']
+    })
+  }
+
+  // Add tags
+  if (context?.tags) {
+    Object.entries(context.tags).forEach(([key, value]) => {
+      scope.setTag(key, value)
+    })
+  }
+
+  // Add extra context
+  if (context?.extra) {
+    scope.setExtras(context.extra)
+  }
+
+  // Capture the error
+  if (typeof error === 'string') {
+    Sentry.captureMessage(error, scope)
+  } else {
+    Sentry.captureException(error, scope)
+  }
 }
 
 /**
- * Capture a critical payment error where payment succeeded but database operation failed
+ * Enhanced Sentry message capture with automatic user context
  */
-export function captureCriticalPaymentError(
+export async function captureSentryMessage(
+  message: string,
+  level: Sentry.SeverityLevel = 'info',
+  context?: {
+    user?: any
+    request?: any
+    tags?: Record<string, string>
+    extra?: Record<string, any>
+  }
+) {
+  const scope = new Sentry.Scope()
+  
+  // Add user context if available
+  if (context?.user) {
+    scope.setUser({
+      id: context.user.id,
+      email: context.user.email,
+      username: `${context.user.first_name} ${context.user.last_name}`,
+      member_id: context.user.member_id,
+      is_admin: context.user.is_admin
+    })
+  } else {
+    // Try to get user from current session
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        // Get additional user profile data
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('first_name, last_name, member_id, is_admin')
+          .eq('id', user.id)
+          .single()
+        
+        scope.setUser({
+          id: user.id,
+          email: user.email,
+          username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
+          member_id: userProfile?.member_id,
+          is_admin: userProfile?.is_admin
+        })
+      }
+    } catch (userError) {
+      // Silently fail user context - don't let it break error reporting
+      console.warn('Failed to get user context for Sentry:', userError)
+    }
+  }
+
+  // Add request context if available
+  if (context?.request) {
+    scope.setContext('request', {
+      url: context.request.url,
+      method: context.request.method,
+      headers: context.request.headers,
+      ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
+      userAgent: context.request.headers?.['user-agent']
+    })
+  }
+
+  // Add tags
+  if (context?.tags) {
+    Object.entries(context.tags).forEach(([key, value]) => {
+      scope.setTag(key, value)
+    })
+  }
+
+  // Add extra context
+  if (context?.extra) {
+    scope.setExtras(context.extra)
+  }
+
+  Sentry.captureMessage(message, scope)
+}
+
+/**
+ * Set up Sentry user context for API routes
+ */
+export async function setupSentryUserContext(request?: any) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (user) {
+      // Get additional user profile data
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('first_name, last_name, member_id, is_admin')
+        .eq('id', user.id)
+        .single()
+      
+      Sentry.setUser({
+        id: user.id,
+        email: user.email,
+        username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
+        member_id: userProfile?.member_id,
+        is_admin: userProfile?.is_admin
+      })
+
+      // Add request context if available
+      if (request) {
+        const requestInfo = extractRequestInfo(request)
+        Sentry.setContext('request', {
+          url: requestInfo.url,
+          method: requestInfo.method,
+          ip: requestInfo.ip,
+          userAgent: requestInfo.userAgent,
+          browser: `${requestInfo.browser.name} ${requestInfo.browser.version}`,
+          os: `${requestInfo.os.name} ${requestInfo.os.version}`,
+          device: requestInfo.device.type,
+          referer: requestInfo.referer,
+          language: requestInfo.language,
+          headers: requestInfo.headers
+        })
+      }
+    }
+  } catch (error) {
+    // Silently fail - don't let it break the application
+    console.warn('Failed to setup Sentry user context:', error)
+  }
+}
+
+/**
+ * Legacy functions for backward compatibility
+ */
+
+// Payment-related functions
+export interface PaymentContext {
+  paymentIntentId?: string
+  userId?: string
+  userEmail?: string
+  membershipId?: string
+  registrationId?: string
+  categoryId?: string
+  amountCents?: number
+  discountCode?: string
+  endpoint?: string
+  operation?: string
+}
+
+export interface DatabaseOperation {
+  operation: string
+  success: boolean
+  error?: any
+  details?: any
+}
+
+export async function captureCriticalPaymentError(
   error: Error | any,
   context: PaymentContext,
   databaseOperations: DatabaseOperation[] = []
 ) {
-  return Sentry.captureException(error, {
+  await captureSentryError(error instanceof Error ? error : new Error(String(error)), {
     tags: {
       critical: 'payment_inconsistency',
       payment_status: 'succeeded',
@@ -42,24 +253,16 @@ export function captureCriticalPaymentError(
       amountCents: context.amountCents,
       databaseOperations,
       errorDetails: error
-    },
-    user: context.userId ? {
-      id: context.userId,
-      email: context.userEmail
-    } : undefined,
-    level: 'fatal'
-  });
+    }
+  })
 }
 
-/**
- * Capture a payment operation error (non-critical but important)
- */
-export function capturePaymentError(
+export async function capturePaymentError(
   error: Error | any,
   context: PaymentContext,
   severity: 'error' | 'warning' | 'info' = 'error'
 ) {
-  return Sentry.captureException(error, {
+  await captureSentryError(error instanceof Error ? error : new Error(String(error)), {
     tags: {
       operation: context.operation || 'unknown',
       endpoint: context.endpoint || 'unknown',
@@ -71,135 +274,65 @@ export function capturePaymentError(
       membershipId: context.membershipId,
       amountCents: context.amountCents,
       errorDetails: error
+    }
+  })
+}
+
+export async function setPaymentContext(context: PaymentContext) {
+  const { captureSentryMessage } = await import('./sentry-helpers')
+  await captureSentryMessage(`Setting payment context: ${context.operation}`, 'info', {
+    tags: {
+      operation: context.operation || 'unknown',
+      endpoint: context.endpoint || 'unknown'
     },
-    user: context.userId ? {
-      id: context.userId,
-      email: context.userEmail
-    } : undefined,
-    level: severity
-  });
+    extra: {
+      paymentIntentId: context.paymentIntentId,
+      membershipId: context.membershipId,
+      amountCents: context.amountCents
+    }
+  })
 }
 
-/**
- * Add payment context to the current Sentry scope
- */
-export function setPaymentContext(context: PaymentContext) {
-  Sentry.setTags({
-    operation: context.operation || 'unknown',
-    endpoint: context.endpoint || 'unknown'
-  });
-  
-  Sentry.setContext('payment', {
-    paymentIntentId: context.paymentIntentId,
-    membershipId: context.membershipId,
-    amountCents: context.amountCents
-  });
-  
-  if (context.userId) {
-    Sentry.setUser({
-      id: context.userId,
-      email: context.userEmail
-    });
-  }
-}
-
-/**
- * Create a Sentry transaction for payment operations
- */
-export function createPaymentTransaction(name: string, operation: string) {
-  // Sentry transactions are not available in this version
-  return null;
-}
-
-/**
- * Capture successful payment operation for performance monitoring
- */
-export function capturePaymentSuccess(
+export async function capturePaymentSuccess(
   operationName: string,
   context: PaymentContext,
   durationMs?: number
 ) {
-  Sentry.addBreadcrumb({
-    message: `Payment operation succeeded: ${operationName}`,
-    category: 'payment',
-    level: 'info',
-    data: {
+  await captureSentryMessage(`Payment operation succeeded: ${operationName}`, 'info', {
+    tags: {
+      operation: context.operation || 'unknown',
+      endpoint: context.endpoint || 'unknown',
+      payment_related: 'true'
+    },
+    extra: {
       paymentIntentId: context.paymentIntentId,
       userId: context.userId,
       membershipId: context.membershipId,
       amountCents: context.amountCents,
       durationMs
     }
-  });
+  })
 }
 
-export interface AccountDeletionContext {
-  userId: string;
-  userEmail: string;
-  userName?: string;
-  step?: 'email_send' | 'database_update' | 'auth_delete' | 'auth_signout';
-  emailSent?: boolean;
-  originalEmail?: string;
-}
-
-/**
- * Capture critical account deletion failure
- */
-export function captureCriticalAccountDeletionError(
-  error: Error | any,
-  context: AccountDeletionContext
-) {
-  return Sentry.captureException(error, {
+// Account deletion functions
+export async function captureCriticalAccountDeletionError(error: Error, context?: any) {
+  await captureSentryError(error, {
+    ...context,
     tags: {
-      critical: 'account_deletion_failure',
-      operation: 'delete_account',
-      endpoint: '/api/delete-account',
-      step: context.step || 'unknown'
-    },
-    extra: {
-      userId: context.userId,
-      userEmail: context.userEmail,
-      userName: context.userName,
-      emailSent: context.emailSent,
-      originalEmail: context.originalEmail,
-      failureStep: context.step,
-      errorDetails: error,
-      timestamp: new Date().toISOString()
-    },
-    user: {
-      id: context.userId,
-      email: context.userEmail,
-      username: context.userName
-    },
-    level: 'fatal',
-    fingerprint: ['account-deletion-failure', context.userId]
-  });
+      ...context?.tags,
+      critical: 'account_deletion',
+      payment_related: 'true'
+    }
+  })
 }
 
-/**
- * Capture account deletion operation warning (non-critical issues)
- */
-export function captureAccountDeletionWarning(
-  message: string,
-  context: AccountDeletionContext,
-  details?: any
-) {
-  return Sentry.captureMessage(message, {
+export async function captureAccountDeletionWarning(message: string, context?: any) {
+  await captureSentryMessage(message, 'warning', {
+    ...context,
     tags: {
-      operation: 'delete_account',
-      endpoint: '/api/delete-account',
-      step: context.step || 'unknown'
-    },
-    extra: {
-      userId: context.userId,
-      userEmail: context.userEmail,
-      details,
-      timestamp: new Date().toISOString()
-    },
-    user: {
-      id: context.userId,
-      email: context.userEmail
-    },
-    level: 'warning'
-  });
+      ...context?.tags,
+      critical: 'account_deletion',
+      payment_related: 'true'
+    }
+  })
 }

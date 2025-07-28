@@ -7,7 +7,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 
 // Force import server config
-import '../../../../sentry.server.config'
+
 
 // Helper function to get actual Stripe fees from balance transaction
 async function getStripeFeeAmount(paymentIntent: Stripe.PaymentIntent): Promise<number> {

@@ -822,8 +822,71 @@ export class XeroBatchSyncManager {
         return false
       }
       
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Extract detailed error information from Xero API response
+      let errorMessage = 'Unknown error during Xero invoice sync'
+      let errorCode = 'invoice_sync_failed'
+      let validationErrors: string[] = []
+      let xeroErrorDetails: any = {}
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (error && typeof error === 'object') {
+        const xeroError = error as any
+        
+        // Extract Xero API error structure
+        if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors) {
+          validationErrors = xeroError.response.body.Elements[0].ValidationErrors.map((err: any) => err.Message)
+          errorMessage = `Xero validation errors: ${validationErrors.join(', ')}`
+          errorCode = 'xero_validation_error'
+          xeroErrorDetails = {
+            xeroErrorNumber: xeroError.response.body.ErrorNumber,
+            xeroErrorType: xeroError.response.body.Type,
+            validationErrors: xeroError.response.body.Elements?.[0]?.ValidationErrors
+          }
+        } else if (xeroError.response?.body?.Message) {
+          errorMessage = `Xero API error: ${xeroError.response.body.Message}`
+          errorCode = 'xero_api_error'
+          xeroErrorDetails = {
+            xeroErrorNumber: xeroError.response.body.ErrorNumber,
+            xeroErrorType: xeroError.response.body.Type
+          }
+        } else if (xeroError.message) {
+          errorMessage = xeroError.message
+        } else {
+          errorMessage = `Xero error: ${JSON.stringify(xeroError).substring(0, 200)}...`
+        }
+      }
+      
       await this.markInvoiceAsFailed(invoiceRecord.id, errorMessage)
+      
+      // Enhanced Sentry logging with detailed context
+      const { captureSentryError } = await import('../sentry-helpers')
+      await captureSentryError(error instanceof Error ? error : new Error(String(error)), {
+        tags: {
+          integration: 'xero',
+          operation: 'invoice_sync',
+          error_code: errorCode,
+          tenant_id: activeTenant?.tenant_id || 'unknown'
+        },
+        extra: {
+          invoice_id: invoiceRecord.id,
+          invoice_number: invoiceRecord.invoice_number,
+          payment_id: invoiceRecord.payment_id,
+          tenant_id: activeTenant?.tenant_id,
+          tenant_name: activeTenant?.tenant_name,
+          user_id: (invoiceRecord.staging_metadata as any)?.user_id,
+          net_amount: invoiceRecord.net_amount,
+          error_code: errorCode,
+          error_message: errorMessage,
+          validation_errors: validationErrors,
+          xero_error_details: xeroErrorDetails,
+          line_items: invoiceRecord.xero_invoice_line_items?.map(item => ({
+            description: item.description,
+            accounting_code: item.account_code,
+            amount: item.line_amount
+          }))
+        }
+      })
       
       // Log to Xero sync logs
       await logXeroSync({
@@ -986,8 +1049,65 @@ export class XeroBatchSyncManager {
         return false
       }
       
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Extract detailed error information from Xero API response
+      let errorMessage = 'Unknown error during Xero payment sync'
+      let errorCode = 'payment_sync_failed'
+      let validationErrors: string[] = []
+      let xeroErrorDetails: any = {}
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (error && typeof error === 'object') {
+        const xeroError = error as any
+        
+        // Extract Xero API error structure
+        if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors) {
+          validationErrors = xeroError.response.body.Elements[0].ValidationErrors.map((err: any) => err.Message)
+          errorMessage = `Xero validation errors: ${validationErrors.join(', ')}`
+          errorCode = 'xero_validation_error'
+          xeroErrorDetails = {
+            xeroErrorNumber: xeroError.response.body.ErrorNumber,
+            xeroErrorType: xeroError.response.body.Type,
+            validationErrors: xeroError.response.body.Elements?.[0]?.ValidationErrors
+          }
+        } else if (xeroError.response?.body?.Message) {
+          errorMessage = `Xero API error: ${xeroError.response.body.Message}`
+          errorCode = 'xero_api_error'
+          xeroErrorDetails = {
+            xeroErrorNumber: xeroError.response.body.ErrorNumber,
+            xeroErrorType: xeroError.response.body.Type
+          }
+        } else if (xeroError.message) {
+          errorMessage = xeroError.message
+        } else {
+          errorMessage = `Xero error: ${JSON.stringify(xeroError).substring(0, 200)}...`
+        }
+      }
+      
       await this.markPaymentAsFailed(paymentRecord.id, errorMessage)
+      
+      // Enhanced Sentry logging with detailed context
+      const { captureSentryError } = await import('../sentry-helpers')
+      await captureSentryError(error instanceof Error ? error : new Error(String(error)), {
+        tags: {
+          integration: 'xero',
+          operation: 'payment_sync',
+          error_code: errorCode,
+          tenant_id: activeTenant?.tenant_id || 'unknown'
+        },
+        extra: {
+          payment_id: paymentRecord.id,
+          xero_invoice_id: paymentRecord.xero_invoice_id,
+          amount_paid: paymentRecord.amount_paid,
+          bank_account_code: paymentRecord.bank_account_code,
+          tenant_id: activeTenant?.tenant_id,
+          tenant_name: activeTenant?.tenant_name,
+          error_code: errorCode,
+          error_message: errorMessage,
+          validation_errors: validationErrors,
+          xero_error_details: xeroErrorDetails
+        }
+      })
       
       // Log to Xero sync logs
       await logXeroSync({

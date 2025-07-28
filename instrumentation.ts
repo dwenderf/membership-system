@@ -19,7 +19,40 @@ export async function register() {
 
     try {
       // Initialize Sentry
-      await import('./sentry.server.config')
+      Sentry.init({
+        dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+        environment: process.env.NODE_ENV,
+        tracesSampleRate: 1.0,
+        
+        // Enhanced error context and user information
+        beforeSend(event, hint) {
+          // Add server environment context
+          event.extra = {
+            ...event.extra,
+            server_time: new Date().toISOString(),
+            node_version: process.version,
+            platform: process.platform,
+            memory_usage: process.memoryUsage(),
+            uptime: process.uptime()
+          };
+
+          // Enhanced error filtering for development
+          if (process.env.NODE_ENV === 'development') {
+            // Allow critical payment errors and warnings in development for testing
+            if (event.tags?.payment_related === 'true' || 
+                event.tags?.critical === 'payment_inconsistency' ||
+                event.tags?.integration === 'xero' ||
+                event.tags?.operation === 'invoice_sync' ||
+                event.tags?.operation === 'payment_sync') {
+              return event;
+            }
+            return null;
+          }
+          return event;
+        },
+        
+        debug: false,
+      });
       logger.logSystem('sentry-init', 'Sentry monitoring initialized')
       
       // Initialize background services for payment processing
@@ -50,7 +83,21 @@ export async function register() {
     console.log('🌟 Next.js Edge Runtime starting up')
     
     try {
-      await import('./sentry.edge.config')
+      Sentry.init({
+        dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+        tracesSampleRate: 1.0,
+        
+        // Error filtering
+        beforeSend(event) {
+          // Don't send events in development
+          if (process.env.NODE_ENV === 'development') {
+            return null;
+          }
+          return event;
+        },
+        
+        debug: process.env.NODE_ENV === 'development',
+      });
       console.log('🔍 Sentry Edge monitoring initialized')
     } catch (error) {
       console.error('❌ Error initializing Edge runtime:', error)

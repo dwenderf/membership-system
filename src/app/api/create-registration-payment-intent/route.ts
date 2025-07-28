@@ -10,7 +10,7 @@ import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 
 // Force import server config
-import '../../../../sentry.server.config'
+
 import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
 

@@ -4,7 +4,7 @@ import { emailService } from '@/lib/email'
 
 
 // Force import server config
-import '../../../../sentry.server.config'
+
 import * as Sentry from '@sentry/nextjs'
 
 export async function POST(request: NextRequest) {

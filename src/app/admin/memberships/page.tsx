@@ -64,10 +64,14 @@ export default async function MembershipsPage() {
                   <span className="text-green-600 font-medium">
                     {memberships.filter(m => m.allow_discounts).length} allow discounts
                   </span>
-                  <span className="text-gray-400">•</span>
-                  <span className="text-red-600 font-medium">
-                    {memberships.filter(m => !m.accounting_code).length} missing accounting codes
-                  </span>
+                  {memberships.filter(m => !m.accounting_code).length > 0 && (
+                    <>
+                      <span className="text-gray-400">•</span>
+                      <span className="text-red-600 font-medium">
+                        {memberships.filter(m => !m.accounting_code).length} missing accounting codes
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -88,9 +88,17 @@ export default function NewMembershipPage() {
         return
       }
       
-      // Basic validation - ensure annual pricing offers some discount when monthly is available
-      if (formData.allow_monthly && monthlyPriceInCents > 0 && annualPriceInCents >= monthlyPriceInCents * 12) {
-        setError('Annual price should be less than 12 times the monthly price')
+      // Validate pricing logic with clear user-friendly messages
+      if (formData.allow_monthly && monthlyPriceInCents > 0) {
+        // When monthly pricing is enabled and has a price, annual should offer savings
+        if (annualPriceInCents >= monthlyPriceInCents * 12) {
+          setError('Annual price should be less than 12 times the monthly price to offer savings. Consider reducing the annual price or increasing the monthly price.')
+          setLoading(false)
+          return
+        }
+      } else if (!formData.allow_monthly && annualPriceInCents === 0) {
+        // When monthly is disabled, annual must have a price
+        setError('Annual price is required when monthly pricing is disabled.')
         setLoading(false)
         return
       }
@@ -135,8 +143,7 @@ export default function NewMembershipPage() {
   )
   
   const canCreateMembership = formData.name.trim() && 
-                             formData.price_monthly !== '' && 
-                             parseFloat(formData.price_monthly) >= 0 &&
+                             (formData.allow_monthly ? (formData.price_monthly !== '' && parseFloat(formData.price_monthly) >= 0) : true) &&
                              formData.price_annual !== '' && 
                              parseFloat(formData.price_annual) >= 0 &&
                              formData.accounting_code.trim() &&
@@ -268,7 +275,11 @@ export default function NewMembershipPage() {
                   id="allow_monthly"
                   type="checkbox"
                   checked={formData.allow_monthly}
-                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    allow_monthly: e.target.checked,
+                    price_monthly: e.target.checked ? prev.price_monthly : '0'
+                  }))}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">

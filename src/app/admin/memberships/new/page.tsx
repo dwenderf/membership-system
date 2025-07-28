@@ -262,6 +262,34 @@ export default function NewMembershipPage() {
                 </div>
               )}
 
+              {/* Allow Monthly Pricing */}
+              <div className="flex items-center">
+                <input
+                  id="allow_monthly"
+                  type="checkbox"
+                  checked={formData.allow_monthly}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
+                  Allow monthly pricing for this membership
+                </label>
+              </div>
+
+              {/* Allow Discounts */}
+              <div className="flex items-center">
+                <input
+                  id="allow_discounts"
+                  type="checkbox"
+                  checked={formData.allow_discounts}
+                  onChange={(e) => setFormData(prev => ({ ...prev, allow_discounts: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="allow_discounts" className="ml-2 block text-sm text-gray-900">
+                  Allow discount codes to be applied to this membership
+                </label>
+              </div>
+
               {/* Pricing */}
               <div className={`grid gap-6 ${formData.allow_monthly ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Monthly Price - Only show when allow_monthly is true */}
@@ -341,34 +369,6 @@ export default function NewMembershipPage() {
                   </div>
                 </div>
               )}
-
-              {/* Allow Monthly Pricing */}
-              <div className="flex items-center">
-                <input
-                  id="allow_monthly"
-                  type="checkbox"
-                  checked={formData.allow_monthly}
-                  onChange={(e) => setFormData(prev => ({ ...prev, allow_monthly: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="allow_monthly" className="ml-2 block text-sm text-gray-900">
-                  Allow monthly pricing for this membership
-                </label>
-              </div>
-
-              {/* Allow Discounts */}
-              <div className="flex items-center">
-                <input
-                  id="allow_discounts"
-                  type="checkbox"
-                  checked={formData.allow_discounts}
-                  onChange={(e) => setFormData(prev => ({ ...prev, allow_discounts: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="allow_discounts" className="ml-2 block text-sm text-gray-900">
-                  Allow discount codes to be applied to this membership
-                </label>
-              </div>
 
               {/* Accounting Code */}
               <div>

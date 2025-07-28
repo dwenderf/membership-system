@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
@@ -220,9 +221,8 @@ async function handleFreeMembership({
 
 
     // Create the membership record directly (similar to webhook processing)
-    const startDate = new Date()
-    const endDate = new Date(startDate)
-    endDate.setMonth(endDate.getMonth() + durationMonths)
+    const startDate = calculateMembershipStartDate(membershipId, [])
+    const endDate = calculateMembershipEndDate(startDate, durationMonths)
 
     const { data: membershipRecord, error: membershipError } = await supabase
       .from('user_memberships')

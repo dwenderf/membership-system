@@ -7,6 +7,7 @@ import PaymentForm from './PaymentForm'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
+import { calculateMembershipDates, isMembershipExtension } from '@/lib/membership-utils'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -113,54 +114,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }, [selectedDuration, selectedPrice, paymentOption])
   
   // Calculate validity period - start from latest expiration date of current memberships of same type, or September 1, 2025 for new memberships
-  const getStartDate = () => {
-    const currentMembershipsOfSameType = userMemberships.filter(
-      um => um.membership?.id === membership.id && new Date(um.valid_until) > new Date()
-    )
-    
-    if (currentMembershipsOfSameType.length > 0) {
-      // Extension: start from end of current membership
-      const latestExpiration = currentMembershipsOfSameType.reduce((latest, current) => {
-        return new Date(current.valid_until) > new Date(latest.valid_until) ? current : latest
-      })
-      return new Date(latestExpiration.valid_until)
-    }
-    
-    // New membership: check if we're before September 1, 2025
-    // Create September 1, 2025 at midnight in local timezone to avoid timezone issues
-    const septemberFirst2025 = new Date(2025, 8, 1) // Month is 0-indexed, so 8 = September
-    const now = new Date()
-    
-    if (now < septemberFirst2025) {
-      // Before September 1, 2025: start on September 1, 2025
-      return septemberFirst2025
-    }
-    
-    // After September 1, 2025: start today
-    return now
-  }
+  const { startDate, endDate } = selectedDuration 
+    ? calculateMembershipDates(membership.id, selectedDuration, userMemberships)
+    : { startDate: new Date(), endDate: new Date() }
   
-  const startDate = getStartDate()
-  const endDate = new Date(startDate)
-  if (selectedDuration) {
-    // Use a more reliable method to add months that handles edge cases
-    const year = endDate.getFullYear()
-    const month = endDate.getMonth()
-    const day = endDate.getDate()
-    
-    // Calculate new month and year
-    const newMonth = month + selectedDuration
-    const newYear = year + Math.floor(newMonth / 12)
-    const finalMonth = newMonth % 12
-    
-    // Set the new date, ensuring we don't exceed the last day of the month
-    const lastDayOfMonth = new Date(newYear, finalMonth + 1, 0).getDate()
-    const finalDay = Math.min(day, lastDayOfMonth)
-    
-    endDate.setFullYear(newYear, finalMonth, finalDay)
-  }
-  
-  const isExtension = startDate > new Date()
+  const isExtension = isMembershipExtension(startDate)
 
 
   const handlePurchase = async () => {

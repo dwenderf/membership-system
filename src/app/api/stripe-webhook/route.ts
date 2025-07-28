@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
@@ -64,14 +65,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       .gte('valid_until', new Date().toISOString().split('T')[0])
       .order('valid_until', { ascending: false })
 
-    let startDate = new Date()
-    if (userMemberships && userMemberships.length > 0) {
-      // Extend from the latest expiration date
-      startDate = new Date(userMemberships[0].valid_until)
-    }
-
-    const endDate = new Date(startDate)
-    endDate.setMonth(endDate.getMonth() + durationMonths)
+    const startDate = calculateMembershipStartDate(membershipId, userMemberships || [])
+    const endDate = calculateMembershipEndDate(startDate, durationMonths)
 
     // Create user membership record (handle duplicate gracefully)
     try {

@@ -68,10 +68,10 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
     },
     { 
       name: 'Reports', 
-      href: '/admin/reports', 
-      current: pathname.startsWith('/admin/reports'),
+      href: '/admin/financial-reports', 
+      current: pathname.startsWith('/admin/financial-reports'),
       submenu: [
-        { name: 'Financial Reports', href: '/admin/reports' }
+        { name: 'Financial Reports', href: '/admin/financial-reports' }
       ]
     }
   ]

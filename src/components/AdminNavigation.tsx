@@ -56,23 +56,23 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
       current: pathname.startsWith('/admin/discount-categories') || 
                pathname.startsWith('/admin/accounting-codes') || 
                pathname.startsWith('/admin/accounting') ||
-               pathname.startsWith('/admin/registration-categories'),
+               pathname.startsWith('/admin/registration-categories') ||
+               pathname.startsWith('/admin/logs'),
       submenu: [
         { name: 'Registration Categories', href: '/admin/registration-categories' },
         { name: 'Discount Categories', href: '/admin/discount-categories' },
         { name: 'Accounting Codes', href: '/admin/accounting-codes' },
-        { name: 'Accounting Integration', href: '/admin/accounting' }
+        { name: 'Accounting Integration', href: '/admin/accounting' },
+        { name: 'Logs', href: '/admin/logs' }
       ]
     },
     { 
       name: 'Reports', 
       href: '/admin/reports', 
-      current: pathname.startsWith('/admin/reports') 
-    },
-    { 
-      name: 'Logs', 
-      href: '/admin/logs', 
-      current: pathname.startsWith('/admin/logs') 
+      current: pathname.startsWith('/admin/reports'),
+      submenu: [
+        { name: 'Financial Reports', href: '/admin/reports' }
+      ]
     }
   ]
 

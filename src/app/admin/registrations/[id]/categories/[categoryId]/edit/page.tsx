@@ -95,15 +95,15 @@ export default function EditRegistrationCategoryPage() {
         setFormData({
           category_id: categoryData.category_id || '',
           custom_name: categoryData.custom_name || '',
-          price: categoryData.price ? categoryData.price.toString() : '',
+          price: categoryData.price !== null && categoryData.price !== undefined ? categoryData.price.toString() : '',
           max_capacity: categoryData.max_capacity ? categoryData.max_capacity.toString() : '',
           accounting_code: categoryData.accounting_code || '',
           required_membership_id: categoryData.required_membership_id || '',
           sort_order: categoryData.sort_order ? categoryData.sort_order.toString() : '',
         })
         
-        // Set price display
-        if (categoryData.price) {
+        // Set price display - handle zero values properly
+        if (categoryData.price !== null && categoryData.price !== undefined) {
           setPriceDisplay((categoryData.price / 100).toFixed(2))
         }
       }

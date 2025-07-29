@@ -37,7 +37,7 @@ export default function MembershipReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortField, setSortField] = useState<keyof MemberData>('member_id')
+  const [sortField, setSortField] = useState<keyof MemberData>('full_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const supabase = createClient()

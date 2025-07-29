@@ -137,6 +137,10 @@ export default function AccountPage() {
                     tags.push('LGBTQ+')
                   }
                   
+                  if (userProfile?.is_lgbtq === false) {
+                    tags.push('Ally')
+                  }
+                  
                   if (tags.length > 0) {
                     return (
                       <div className="flex flex-wrap gap-1">
@@ -146,8 +150,10 @@ export default function AccountPage() {
                             switch (tagName.toLowerCase()) {
                               case 'goalie':
                                 return 'bg-blue-100 text-blue-800 border border-blue-200'
-                              case 'lgbtq':
+                              case 'lgbtq+':
                                 return 'bg-purple-100 text-purple-800 border border-purple-200'
+                              case 'ally':
+                                return 'bg-green-100 text-green-800 border border-green-200'
                               default:
                                 return 'bg-gray-100 text-gray-800 border border-gray-200'
                             }

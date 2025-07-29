@@ -204,7 +204,16 @@ export default function AccountingIntegrationPage() {
 
       if (response.ok) {
         const data = await response.json()
-        showSuccess(`Manual sync completed: ${data.results.total_synced} synced, ${data.results.total_failed} failed`)
+        const { total_synced, total_failed } = data.results
+        
+        if (total_failed === 0) {
+          showSuccess(`Manual sync completed successfully: ${total_synced} items synced`)
+        } else if (total_synced === 0) {
+          showError(`Manual sync failed: ${total_failed} items failed to sync`)
+        } else {
+          showError(`Manual sync partially completed: ${total_synced} synced, ${total_failed} failed`)
+        }
+        
         // Refresh the status to get updated counts
         await fetchXeroStatus()
       } else {

@@ -33,6 +33,7 @@ export default function MembershipReportsPage() {
   const [members, setMembers] = useState<MemberData[]>([])
   const [stats, setStats] = useState<MembershipStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<keyof MemberData>('member_id')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -51,23 +52,31 @@ export default function MembershipReportsPage() {
 
   const fetchMembershipTypes = async () => {
     try {
+      setError(null)
       const { data, error } = await supabase
         .from('memberships')
         .select('id, name, description')
         .order('name')
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching membership types:', error)
+        setError(`Failed to load membership types: ${error.message}`)
+        return
+      }
+      
       setMembershipTypes(data || [])
       if (data && data.length > 0) {
         setSelectedMembership(data[0].id)
       }
     } catch (error) {
       console.error('Error fetching membership types:', error)
+      setError(`Failed to load membership types: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const fetchMembershipData = async (membershipId: string) => {
     setLoading(true)
+    setError(null)
     try {
       console.log('Fetching membership data for:', membershipId)
       
@@ -94,7 +103,8 @@ export default function MembershipReportsPage() {
 
       if (error) {
         console.error('Supabase error:', error)
-        throw error
+        setError(`Failed to load membership data: ${error.message}`)
+        return
       }
 
       console.log('Membership data received:', membershipData?.length || 0, 'records')
@@ -157,6 +167,7 @@ export default function MembershipReportsPage() {
 
     } catch (error) {
       console.error('Error fetching membership data:', error)
+      setError(`Failed to load membership data: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // Set empty data on error
       setMembers([])
       setStats({
@@ -230,23 +241,67 @@ export default function MembershipReportsPage() {
         <p className="text-gray-600">Detailed analytics and member listings by membership type</p>
       </div>
 
-      {/* Membership Type Selector */}
-      <div className="mb-6">
-        <label htmlFor="membership-select" className="block text-sm font-medium text-gray-700 mb-2">
-          Select Membership Type
-        </label>
-        <select
-          id="membership-select"
-          value={selectedMembership}
-          onChange={(e) => setSelectedMembership(e.target.value)}
-          className="block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-        >
-          {membershipTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
+      {/* Error Display */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Membership Type Tiles */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Membership Type</h2>
+        {loading && membershipTypes.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-gray-100 rounded-lg p-6 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {membershipTypes.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setSelectedMembership(type.id)}
+                className={`p-6 rounded-lg border-2 transition-all duration-200 text-left hover:shadow-md ${
+                  selectedMembership === type.id
+                    ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{type.name}</h3>
+                {type.description && (
+                  <p className="text-sm text-gray-600 mb-3">{type.description}</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${
+                    selectedMembership === type.id ? 'text-indigo-600' : 'text-gray-500'
+                  }`}>
+                    {selectedMembership === type.id ? 'Selected' : 'Click to view'}
+                  </span>
+                  {selectedMembership === type.id && (
+                    <svg className="h-5 w-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedMembership && (

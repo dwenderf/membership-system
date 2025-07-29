@@ -87,7 +87,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                 {getOrganizationName('short')} Admin
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden md:ml-6 md:flex md:space-x-8">
               {navigation.map((item) => (
                 <div 
                   key={item.name} 
@@ -147,7 +147,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
             </div>
           </div>
           
-          <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
+          <div className="hidden md:ml-6 md:flex md:items-center space-x-4">
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
                 <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
@@ -177,7 +177,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
           </div>
 
           {/* Mobile menu button */}
-          <div className="sm:hidden flex items-center">
+          <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
@@ -199,7 +199,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
 
       {/* Mobile menu */}
       {isMenuOpen && (
-        <div className="sm:hidden">
+        <div className="md:hidden">
           <div className="pt-2 pb-3 space-y-1">
             {navigation.map((item) => (
               <div key={item.name}>

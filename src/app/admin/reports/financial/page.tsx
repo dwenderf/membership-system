@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 
 interface ReportData {
@@ -209,7 +210,11 @@ export default function ReportsPage() {
               {reportData.activeMembers && reportData.activeMembers.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {reportData.activeMembers.map((membership) => (
-                    <div key={membership.membershipId} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                    <Link
+                      key={membership.membershipId}
+                      href={`/admin/reports/memberships?membershipId=${membership.membershipId}`}
+                      className="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-blue-50 transition-colors"
+                    >
                       <div>
                         <p className="font-medium text-gray-900">{membership.name}</p>
                         <p className="text-sm text-gray-500">Active members</p>
@@ -217,7 +222,7 @@ export default function ReportsPage() {
                       <div className="text-right">
                         <p className="text-2xl font-bold text-blue-600">{membership.count}</p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (

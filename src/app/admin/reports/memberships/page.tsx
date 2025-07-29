@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 interface MembershipType {
@@ -40,6 +41,7 @@ export default function MembershipReportsPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     fetchMembershipTypes()
@@ -67,7 +69,13 @@ export default function MembershipReportsPage() {
       
       setMembershipTypes(data || [])
       if (data && data.length > 0) {
-        setSelectedMembership(data[0].id)
+        // Check if there's a membershipId in the URL query params
+        const membershipIdFromUrl = searchParams.get('membershipId')
+        if (membershipIdFromUrl && data.some(m => m.id === membershipIdFromUrl)) {
+          setSelectedMembership(membershipIdFromUrl)
+        } else {
+          setSelectedMembership(data[0].id)
+        }
       }
     } catch (error) {
       console.error('Error fetching membership types:', error)

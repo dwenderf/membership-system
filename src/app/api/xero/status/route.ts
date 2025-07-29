@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching pending payments:', pendingPaymentsError)
     }
 
-    // Get failed invoices with user information - only show retryable ones
+    // Get failed and ignored invoices with user information - only show retryable ones
     // (zero-value invoices or invoices with completed payments)
     const { data: failedInvoices, error: failedInvoicesError } = await supabase
       .from('xero_invoices')
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
             member_id
           )
         )
-      `).eq('sync_status', 'failed')      
+      `).in('sync_status', ['failed', 'ignore'])      
       .not('payment_id', 'is', null)
       .order('last_synced_at', { ascending: false })
 
@@ -229,12 +229,12 @@ export async function GET(request: NextRequest) {
             users!payments_user_id_fkey (
               first_name,
               last_name,
-              member_id
+            member_id
             )
           )
         )
       `)
-      .eq('sync_status', 'failed')
+      .in('sync_status', ['failed', 'ignore'])
       .order('last_synced_at', { ascending: false })
 
     if (failedPaymentsError) {

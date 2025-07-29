@@ -251,6 +251,41 @@ export default function AccountingIntegrationPage() {
     }
   }
 
+  const handleIgnoreFailed = async (type: 'all' | 'selected') => {
+    setRetrying(true)
+    
+    try {
+      const items = type === 'selected' ? Array.from(selectedFailedItems) : []
+      
+      const response = await fetch('/api/xero/ignore-failed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type, items }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const ignoredCount = data.ignore_results.invoices + data.ignore_results.payments
+        showSuccess(`Ignored ${data.ignore_results.invoices} invoices and ${data.ignore_results.payments} payments`)
+        
+        // Clear selections
+        setSelectedFailedItems(new Set())
+        
+        // Refresh the status to get updated counts
+        await fetchXeroStatus()
+      } else {
+        const errorData = await response.json()
+        showError(errorData.error || 'Failed to ignore items')
+      }
+    } catch (error) {
+      showError('Failed to ignore items')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   const handleFailedItemToggle = (itemId: string) => {
     const newSelection = new Set(selectedFailedItems)
     if (newSelection.has(itemId)) {
@@ -673,20 +708,29 @@ export default function AccountingIntegrationPage() {
               )}
             </div>
 
-            {/* Failed Sync Items */}
+            {/* Failed and Ignored Sync Items */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Failed Sync Items</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Failed & Ignored Sync Items</h2>
                 {syncStats.failed_count > 0 && isXeroConnected && (
                   <div className="flex items-center space-x-2">
                     {selectedFailedItems.size > 0 && (
-                      <button
-                        onClick={() => handleRetryFailed('selected')}
-                        disabled={retrying}
-                        className="inline-flex items-center px-3 py-1 border border-orange-300 rounded-md text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {retrying ? 'Retrying...' : `Retry Selected (${selectedFailedItems.size})`}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleRetryFailed('selected')}
+                          disabled={retrying}
+                          className="inline-flex items-center px-3 py-1 border border-orange-300 rounded-md text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {retrying ? 'Retrying...' : `Retry Selected (${selectedFailedItems.size})`}
+                        </button>
+                        <button
+                          onClick={() => handleIgnoreFailed('selected')}
+                          disabled={retrying}
+                          className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {retrying ? 'Ignoring...' : `Ignore Selected (${selectedFailedItems.size})`}
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={handleSelectAllFailed}
@@ -700,6 +744,13 @@ export default function AccountingIntegrationPage() {
                       className="inline-flex items-center px-3 py-1 border border-red-300 rounded-md text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {retrying ? 'Retrying...' : 'Retry All'}
+                    </button>
+                    <button
+                      onClick={() => handleIgnoreFailed('all')}
+                      disabled={retrying}
+                      className="inline-flex items-center px-3 py-1 border border-gray-400 rounded-md text-xs font-medium text-gray-800 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {retrying ? 'Ignoring...' : 'Ignore All'}
                     </button>
                   </div>
                 )}
@@ -718,11 +769,11 @@ export default function AccountingIntegrationPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                 <div className="bg-red-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">{syncStats.failed_invoices.length}</div>
-                  <div className="text-sm text-red-800">Failed Invoices</div>
+                  <div className="text-sm text-red-800">Failed & Ignored Invoices</div>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">{syncStats.failed_payments.length}</div>
-                  <div className="text-sm text-red-800">Failed Payments</div>
+                  <div className="text-sm text-red-800">Failed & Ignored Payments</div>
                 </div>
               </div>
 
@@ -744,21 +795,27 @@ export default function AccountingIntegrationPage() {
                         : `${user.first_name} ${user.last_name}`
                       : 'Unknown User'
                     
+                    const isIgnored = item.sync_status === 'ignore'
+                    const bgColor = isIgnored ? 'bg-gray-50' : 'bg-red-50'
+                    const borderColor = isIgnored ? 'border-gray-200' : 'border-red-200'
+                    const statusColor = isIgnored ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+                    const timeText = isIgnored ? 'Ignored' : 'Failed'
+                    
                     return (
-                      <div key={`failed-${item.item_type}-${item.id}`} className="flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
+                      <div key={`failed-${item.item_type}-${item.id}`} className={`flex items-start p-3 ${bgColor} rounded-lg border ${borderColor}`}>
                         <div className="flex items-center mr-3 mt-1">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleFailedItemToggle(itemKey)}
-                            disabled={!isXeroConnected}
+                            disabled={!isXeroConnected || isIgnored}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColor}`}>
                                 {isInvoice ? 'Invoice' : 'Payment'}
                               </span>
                               <span className="ml-2 text-sm font-medium text-gray-900">
@@ -767,16 +824,26 @@ export default function AccountingIntegrationPage() {
                               <span className="ml-2 text-xs text-gray-500 font-mono">
                                 ID: {item.id}
                               </span>
+                              {isIgnored && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  (Ignored)
+                                </span>
+                              )}
                             </div>
                             <time className="text-xs text-gray-500">
-                              Failed: {new Date(item.last_synced_at).toLocaleString()}
+                              {timeText}: {new Date(item.last_synced_at).toLocaleString()}
                             </time>
                           </div>
                           <div className="mt-1 text-sm text-gray-600">
                             <span><strong>Status:</strong> {item.sync_status}</span>
-                            {item.sync_error && (
+                            {item.sync_error && !isIgnored && (
                               <div className="mt-1 text-xs text-red-600 bg-red-100 p-2 rounded">
                                 <strong>Error:</strong> {item.sync_error}
+                              </div>
+                            )}
+                            {isIgnored && (
+                              <div className="mt-1 text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                                <strong>Status:</strong> This item has been marked as ignored and will not be retried
                               </div>
                             )}
                           </div>

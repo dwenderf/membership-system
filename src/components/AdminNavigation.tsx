@@ -104,11 +104,6 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-16`}
                   >
                     {item.name}
-                    {item.submenu && (
-                      <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    )}
                   </Link>
                   
                   {item.submenu && openDropdown === item.name && (

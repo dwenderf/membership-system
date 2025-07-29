@@ -961,13 +961,22 @@ export class XeroBatchSyncManager {
         // Continue with payment creation if we can't check invoice status
       }
 
+      // Get the Stripe bank account code from system_accounting_codes
+      const { data: stripeAccountCode } = await this.supabase
+        .from('system_accounting_codes')
+        .select('accounting_code')
+        .eq('code_type', 'stripe_bank_account')
+        .single()
+
+      const bankAccountCode = paymentRecord.bank_account_code || stripeAccountCode?.accounting_code || '090'
+
       // Create payment object
       const payment: Payment = {
         invoice: {
           invoiceID: invoiceRecord.xero_invoice_id
         },
         account: {
-          code: paymentRecord.bank_account_code || 'STRIPE'
+          code: bankAccountCode
         },
         amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
         date: new Date().toISOString().split('T')[0],
@@ -1029,7 +1038,7 @@ export class XeroBatchSyncManager {
             request_data: {
               payment: {
                 invoice: { invoiceID: invoiceRecord.xero_invoice_id },
-                account: { code: paymentRecord.bank_account_code || 'STRIPE' },
+                account: { code: bankAccountCode },
                 amount: paymentRecord.amount_paid / 100,
                 date: payment.date,
                 reference: payment.reference
@@ -1044,7 +1053,7 @@ export class XeroBatchSyncManager {
 
       console.log('❌ Invalid response from Xero payment API')
       await this.markPaymentAsFailed(paymentRecord.id, 'Invalid response from Xero API')
-      return false
+      throw new Error('Invalid response from Xero API')
 
     } catch (error) {
       console.error('❌ Error syncing payment to Xero:', error)
@@ -1128,7 +1137,8 @@ export class XeroBatchSyncManager {
         error_message: errorMessage
       })
 
-      return false
+      // Re-throw the error so the batch processor treats it as a failure
+      throw error
     }
   }
 

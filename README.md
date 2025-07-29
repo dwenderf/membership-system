@@ -706,6 +706,92 @@ curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
 - Check Xero token expiration (automatic refresh should work)
 - Review sync logs in admin interface
 
+## Debugging
+
+The system includes several debugging tools to help troubleshoot issues with user payments, Xero sync, and system operations.
+
+### Debug Scripts
+
+Located in `scripts/debug/`, these scripts help investigate specific issues:
+
+#### User Invoice and Payment Debugging
+
+**`debug-user-invoices.js`** - Investigate a specific user's invoices and payments:
+```bash
+# Usage: node debug-user-invoices.js <user_id>
+node scripts/debug/debug-user-invoices.js 79e9a75e-2580-4d56-8d10-d1a6f8542118
+```
+
+**What it shows:**
+- User details (name, email, member ID)
+- All payments for the user
+- All Xero invoices linked to the user
+- All Xero payments linked to the user
+- Summary with potential issues (failed syncs, duplicates)
+
+#### Xero Sync Log Debugging
+
+**`debug-user-sync-logs.js`** - Investigate Xero sync operations for a specific user:
+```bash
+# Usage: node debug-user-sync-logs.js <user_id>
+node scripts/debug/debug-user-sync-logs.js 79e9a75e-2580-4d56-8d10-d1a6f8542118
+```
+
+**What it shows:**
+- All Xero sync operations for the user's payments
+- Failed sync operations and error messages
+- Potential duplicate operations (race conditions)
+- Timeline of sync events
+
+### Environment Setup for Debug Scripts
+
+Before running debug scripts, ensure your environment is configured:
+
+```bash
+# Set up environment variables
+export NEXT_PUBLIC_SUPABASE_URL="your_supabase_url"
+export SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
+
+# Or use .env.local file
+source .env.local
+```
+
+### Common Debugging Scenarios
+
+**Duplicate Xero Invoices:**
+```bash
+# Check if a user has duplicate invoice numbers
+node scripts/debug/debug-user-invoices.js <user_id>
+```
+
+**Failed Xero Sync:**
+```bash
+# Check sync logs for failed operations
+node scripts/debug/debug-user-sync-logs.js <user_id>
+```
+
+**Payment Processing Issues:**
+```bash
+# Check all payment and invoice data for a user
+node scripts/debug/debug-user-invoices.js <user_id>
+```
+
+### Admin Interface Debugging
+
+The admin interface also provides debugging tools:
+
+- **`/admin/logs`** - View system logs and error messages
+- **`/admin/xero-integration`** - Monitor Xero sync status and retry failed operations
+- **`/admin/financial-reports`** - Review payment and invoice data
+
+### Database Debugging
+
+For direct database access, use the Supabase dashboard:
+
+- **Table Editor** - Browse and query data directly
+- **SQL Editor** - Run custom queries for investigation
+- **Logs** - View real-time database logs
+
 ## Support
 
 For questions about the codebase or setup process, refer to:

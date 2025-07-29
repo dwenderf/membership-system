@@ -18,6 +18,7 @@ interface MemberData {
   days_to_expiration: number
   is_lgbtq: boolean | null
   lgbtq_status: string
+  expiration_status: string
 }
 
 interface MembershipStats {
@@ -80,26 +81,12 @@ export default function MembershipReportsPage() {
     try {
       console.log('Fetching membership data for:', membershipId)
       
-      // Get the latest valid_until date for each user's membership of this type
+      // Use the new database view for much simpler and more reliable queries
       const { data: membershipData, error } = await supabase
-        .from('user_memberships')
-        .select(`
-          user_id,
-          valid_until,
-          payment_status,
-          users (
-            member_id,
-            first_name,
-            last_name,
-            email,
-            onboarding_completed_at,
-            is_lgbtq
-          )
-        `)
+        .from('membership_analytics_data')
+        .select('*')
         .eq('membership_id', membershipId)
-        .eq('payment_status', 'paid') // Only paid memberships
-        .gte('valid_until', new Date().toISOString()) // Only active memberships
-        .order('valid_until', { ascending: false })
+        .order('last_name', { ascending: true })
 
       if (error) {
         console.error('Supabase error:', error)
@@ -109,61 +96,39 @@ export default function MembershipReportsPage() {
 
       console.log('Membership data received:', membershipData?.length || 0, 'records')
 
-      // Process the data
-      const memberMap = new Map<string, MemberData>()
-      
-      membershipData?.forEach((item: any) => {
-        const user = item.users
-        if (!user) {
-          console.log('Skipping item with no user:', item)
-          return
-        }
+      // Process the data - much simpler now since the view handles all the logic
+      const membersList: MemberData[] = membershipData?.map((item: any) => ({
+        member_id: item.member_id?.toString() || 'N/A',
+        full_name: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A',
+        email: item.email || 'N/A',
+        member_since: item.onboarding_completed_at || 'N/A',
+        expiration_date: item.valid_until,
+        days_to_expiration: item.days_to_expiration,
+        is_lgbtq: item.is_lgbtq,
+        lgbtq_status: item.lgbtq_status,
+        expiration_status: item.expiration_status
+      })) || []
 
-        // Only keep the latest valid_until for each user
-        const existing = memberMap.get(user.member_id)
-        if (!existing || new Date(item.valid_until) > new Date(existing.expiration_date)) {
-          const expirationDate = new Date(item.valid_until)
-          const daysToExpiration = Math.ceil((expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-          
-          // Determine LGBTQ+ status
-          let lgbtqStatus = 'No Response'
-          if (user.is_lgbtq === true) {
-            lgbtqStatus = 'LGBTQ+'
-          } else if (user.is_lgbtq === false) {
-            lgbtqStatus = 'Ally'
-          }
-
-          memberMap.set(user.member_id, {
-            member_id: user.member_id || 'N/A',
-            full_name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'N/A',
-            email: user.email || 'N/A',
-            member_since: user.onboarding_completed_at || 'N/A',
-            expiration_date: item.valid_until,
-            days_to_expiration: daysToExpiration,
-            is_lgbtq: user.is_lgbtq,
-            lgbtq_status: lgbtqStatus
-          })
-        }
-      })
-
-      const membersList = Array.from(memberMap.values())
       console.log('Processed members:', membersList.length)
       setMembers(membersList)
 
-      // Calculate stats
-      const totalMembers = membersList.length
-      const lgbtqCount = membersList.filter(m => m.is_lgbtq === true).length
-      const preferNotToSayCount = membersList.filter(m => m.is_lgbtq === null).length
-      const lgbtqPercent = totalMembers - preferNotToSayCount > 0 
-        ? (lgbtqCount / (totalMembers - preferNotToSayCount)) * 100 
-        : 0
-
-      setStats({
-        total_members: totalMembers,
-        lgbtq_count: lgbtqCount,
-        lgbtq_percent: lgbtqPercent,
-        prefer_not_to_say_count: preferNotToSayCount
-      })
+      // Get stats from the first record (they're all the same for a membership type)
+      if (membershipData && membershipData.length > 0) {
+        const firstRecord = membershipData[0]
+        setStats({
+          total_members: firstRecord.total_members,
+          lgbtq_count: firstRecord.lgbtq_count,
+          lgbtq_percent: firstRecord.lgbtq_percent,
+          prefer_not_to_say_count: firstRecord.prefer_not_to_say_count
+        })
+      } else {
+        setStats({
+          total_members: 0,
+          lgbtq_count: 0,
+          lgbtq_percent: 0,
+          prefer_not_to_say_count: 0
+        })
+      }
 
     } catch (error) {
       console.error('Error fetching membership data:', error)
@@ -417,7 +382,7 @@ export default function MembershipReportsPage() {
                             {member.days_to_expiration} days
                           </span>
                           <span className="ml-2 text-xs text-gray-500">
-                            ({getExpirationStatus(member.days_to_expiration)})
+                            ({member.expiration_status || getExpirationStatus(member.days_to_expiration)})
                           </span>
                         </td>
                       </tr>

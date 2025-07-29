@@ -497,7 +497,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      membership_analytics_data: {
+        Row: {
+          user_id: string
+          membership_id: string
+          valid_until: string
+          valid_from: string
+          member_id: number | null
+          first_name: string | null
+          last_name: string | null
+          email: string | null
+          onboarding_completed_at: string | null
+          is_lgbtq: boolean | null
+          membership_name: string
+          membership_description: string | null
+          total_members: number
+          lgbtq_count: number
+          prefer_not_to_say_count: number
+          lgbtq_percent: number
+          days_to_expiration: number
+          expiration_status: string
+          lgbtq_status: string
+        }
+        Insert: never
+        Update: never
+      }
     }
     Functions: {
       [_ in never]: never

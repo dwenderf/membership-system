@@ -31,104 +31,60 @@ export class XeroBatchSyncManager {
   }
 
   /**
-   * Centralized function to get pending Xero records with consistent filtering
+   * Get pending Xero records with proper database-level locking
    * 
-   * This ensures all parts of the system use the same criteria for determining
-   * which records are ready to sync.
+   * Uses SELECT FOR UPDATE to lock records before processing, preventing
+   * the same record from being processed by multiple concurrent operations.
+   * This is the proper way to handle race conditions in database operations.
    */
   async getPendingXeroRecords(): Promise<{
     invoices: XeroInvoiceRecord[]
     payments: XeroPaymentRecord[]
   }> {
     try {
-      // Get pending invoices (only 'pending' - staged invoices are not ready until payment succeeds)
+      console.log('🔒 Getting pending Xero records with proper database locking...')
+
+      // Use a transaction with SELECT FOR UPDATE to lock records
       const { data: pendingInvoices, error: invoiceError } = await this.supabase
-        .from('xero_invoices')
-        .select(`
-          *,
-          xero_invoice_line_items (*)
-        `)
-        .eq('sync_status', 'pending')
-        .order('staged_at', { ascending: true })
+        .rpc('get_pending_xero_invoices_with_lock', {
+          limit_count: 50
+        })
 
       if (invoiceError) {
-        console.error('❌ Error fetching pending invoices:', invoiceError)
+        console.error('❌ Error fetching pending invoices with lock:', invoiceError)
+        throw invoiceError
       }
 
-      // Get pending payments with payment data for filtering (only 'pending' - staged payments are not ready)
+      // Use a transaction with SELECT FOR UPDATE to lock records
       const { data: pendingPayments, error: paymentError } = await this.supabase
-        .from('xero_payments')
-        .select(`
-          *,
-          xero_invoices (
-            payment_id,
-            payments (
-              status,
-              payment_method
-            )
-          )
-        `)
-        .eq('sync_status', 'pending')
-        .order('staged_at', { ascending: true })
+        .rpc('get_pending_xero_payments_with_lock', {
+          limit_count: 50
+        })
 
       if (paymentError) {
-        console.error('❌ Error fetching pending payments:', paymentError)
+        console.error('❌ Error fetching pending payments with lock:', paymentError)
+        throw paymentError
       }
 
-      // Debug logging
-      console.log(`🔍 Database query results: ${pendingInvoices?.length || 0} invoices, ${pendingPayments?.length || 0} payments`)
+      console.log(`📊 Found ${pendingInvoices?.length || 0} pending invoices, ${pendingPayments?.length || 0} pending payments`)
+
+      // Records are already locked and marked as processing by the database functions
       if (pendingInvoices && pendingInvoices.length > 0) {
-        console.log('📄 Pending invoices found:', pendingInvoices.map(inv => ({
-          id: inv.id,
-          sync_status: inv.sync_status,
-          invoice_number: inv.invoice_number,
-          staged_at: inv.staged_at
-        })))
+        console.log(`🔒 Locked ${pendingInvoices.length} invoices for processing`)
       }
 
-      // Filter payments based on criteria: completed status and non-free payment method
-      const eligiblePayments = pendingPayments?.filter(payment => {
-        const invoice = Array.isArray(payment.xero_invoices) ? payment.xero_invoices[0] : payment.xero_invoices
-        const linkedPayment = invoice?.payments ? (Array.isArray(invoice.payments) ? invoice.payments[0] : invoice.payments) : null
-        
-        if (!linkedPayment) {
-          console.log(`⚠️ Payment ${payment.id} has no linked payment record - skipping`)
-          return false
-        }
-        
-        if (linkedPayment.status !== 'completed') {
-          console.log(`⚠️ Payment ${payment.id} has non-completed status (${linkedPayment.status}) - skipping`)
-          return false
-        }
-        
-        if (linkedPayment.payment_method === 'free') {
-          console.log(`⚠️ Payment ${payment.id} is free payment - skipping`)
-          return false
-        }
-        
-        return true
-      }) || []
-
-      // Debug logging for final results
-      console.log(`🔍 Final results: ${pendingInvoices?.length || 0} invoices, ${eligiblePayments.length} eligible payments`)
-      if (eligiblePayments.length > 0) {
-        console.log('💰 Eligible payments found:', eligiblePayments.map(pay => ({
-          id: pay.id,
-          sync_status: pay.sync_status,
-          staged_at: pay.staged_at
-        })))
+      if (pendingPayments && pendingPayments.length > 0) {
+        console.log(`🔒 Locked ${pendingPayments.length} payments for processing`)
       }
 
       return {
         invoices: pendingInvoices || [],
-        payments: eligiblePayments
+        payments: pendingPayments || []
       }
+
     } catch (error) {
-      console.error('❌ Error getting pending Xero records:', error)
-      return {
-        invoices: [],
-        payments: []
-      }
+      console.error('❌ Error in getPendingXeroRecords:', error)
+      throw error
     }
   }
 
@@ -950,6 +906,59 @@ export class XeroBatchSyncManager {
         // Don't mark as failed - leave as pending for when Xero is reconnected
         console.log('⚠️ Unable to authenticate with Xero - leaving payment as pending:', paymentRecord.id)
         return false
+      }
+
+      // Check if invoice is already paid before attempting to create payment
+      try {
+        const invoiceResponse = await xeroApi.accountingApi.getInvoice(
+          activeTenant.tenant_id,
+          invoiceRecord.xero_invoice_id
+        )
+        
+        if (invoiceResponse.body.invoices && invoiceResponse.body.invoices.length > 0) {
+          const xeroInvoice = invoiceResponse.body.invoices[0]
+          const amountDue = xeroInvoice.amountDue || 0
+          const amountPaid = xeroInvoice.amountPaid || 0
+          const status = xeroInvoice.status
+          
+          console.log('📊 Invoice status check:', {
+            invoiceId: invoiceRecord.xero_invoice_id,
+            status: status,
+            amountDue: amountDue,
+            amountPaid: amountPaid,
+            paymentAmount: paymentRecord.amount_paid / 100
+          })
+          
+          // If invoice is already paid or amount due is less than payment amount, skip payment creation
+          if (status?.toString() === 'PAID' || amountDue === 0 || amountDue < (paymentRecord.amount_paid / 100)) {
+            console.log('✅ Invoice already paid - marking payment as synced without creating duplicate payment')
+            await this.markPaymentAsSynced(paymentRecord.id, `already_paid_${Date.now()}`, activeTenant.tenant_id)
+            
+            await logXeroSync({
+              tenant_id: activeTenant.tenant_id,
+              operation: 'payment_sync',
+              record_type: 'payment',
+              record_id: paymentRecord.id,
+              xero_id: `already_paid_${Date.now()}`,
+              success: true,
+              details: `Payment skipped - invoice already paid (status: ${status}, amountDue: ${amountDue}, amountPaid: ${amountPaid})`,
+              response_data: {
+                invoice_status: status,
+                amount_due: amountDue,
+                amount_paid: amountPaid
+              },
+              request_data: {
+                payment_amount: paymentRecord.amount_paid / 100,
+                invoice_id: invoiceRecord.xero_invoice_id
+              }
+            })
+            
+            return true
+          }
+        }
+      } catch (invoiceCheckError) {
+        console.log('⚠️ Could not check invoice status - proceeding with payment creation:', invoiceCheckError)
+        // Continue with payment creation if we can't check invoice status
       }
 
       // Create payment object

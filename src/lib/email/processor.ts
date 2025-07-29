@@ -149,6 +149,7 @@ export class EmailProcessor {
         email_address: user.email,
         event_type: 'payment.failed',
         subject: 'Payment Failed - Please Try Again',
+        template_id: process.env.LOOPS_PAYMENT_FAILED_TEMPLATE_ID,
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
           paymentIntentId: event.metadata?.payment_intent_id || 'unknown',
@@ -256,6 +257,7 @@ export class EmailProcessor {
         email_address: user.email,
         event_type: 'membership.purchased',
         subject: `Membership Confirmation - ${membership.memberships.name}`,
+        template_id: process.env.LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID,
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
           membershipName: membership.memberships.name,
@@ -358,6 +360,7 @@ export class EmailProcessor {
         email_address: user.email,
         event_type: 'registration.completed',
         subject: `Registration Confirmation - ${registration.registration.name}`,
+        template_id: process.env.LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
           registrationName: registration.registration.name,

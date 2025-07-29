@@ -143,6 +143,16 @@ export class EmailProcessor {
 
       this.logger.logPaymentProcessing('send-failed-payment-emails', '📧 Sending payment failure email', { email: user.email })
 
+      // Check for existing failed payment email to prevent duplicates
+      const existingEmail = await this.checkExistingEmail(event, 'payment.failed')
+      if (existingEmail) {
+        this.logger.logPaymentProcessing('send-failed-payment-emails', '⚠️ Failed payment email already staged, skipping duplicate', { 
+          existingEmailId: existingEmail.id,
+          userEmail: user.email
+        })
+        return
+      }
+
       // Send payment failure email using LOOPS_PAYMENT_FAILED_TEMPLATE_ID
       await emailStagingManager.stageEmail({
         user_id: event.user_id,
@@ -192,6 +202,29 @@ export class EmailProcessor {
   }
 
   /**
+   * Check if an email has already been staged for this event
+   */
+  private async checkExistingEmail(event: PaymentCompletionEvent, eventType: string) {
+    try {
+      const { data: existingEmail } = await this.supabase
+        .from('email_logs')
+        .select('id, created_at')
+        .eq('user_id', event.user_id)
+        .eq('event_type', eventType)
+        .eq('email_data->>payment_id', event.payment_id || 'null')
+        .eq('email_data->>related_entity_id', event.record_id || 'null')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      return existingEmail
+    } catch (error) {
+      // No existing email found (this is expected)
+      return null
+    }
+  }
+
+  /**
    * Stage membership confirmation email
    */
   private async stageMembershipConfirmationEmail(event: PaymentCompletionEvent, user: any) {
@@ -204,6 +237,16 @@ export class EmailProcessor {
       if (!event.payment_id) {
         this.logger.logPaymentProcessing('stage-membership-confirmation-email', '❌ No payment_id available for membership lookup', { 
           recordId: event.record_id
+        })
+        return
+      }
+      
+      // Check for existing email to prevent duplicates
+      const existingEmail = await this.checkExistingEmail(event, 'membership.purchased')
+      if (existingEmail) {
+        this.logger.logPaymentProcessing('stage-membership-confirmation-email', '⚠️ Email already staged, skipping duplicate', { 
+          existingEmailId: existingEmail.id,
+          userEmail: user.email
         })
         return
       }
@@ -295,6 +338,16 @@ export class EmailProcessor {
       if (!event.payment_id) {
         this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ No payment_id available for registration lookup', { 
           recordId: event.record_id
+        })
+        return
+      }
+      
+      // Check for existing email to prevent duplicates
+      const existingEmail = await this.checkExistingEmail(event, 'registration.completed')
+      if (existingEmail) {
+        this.logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Email already staged, skipping duplicate', { 
+          existingEmailId: existingEmail.id,
+          userEmail: user.email
         })
         return
       }

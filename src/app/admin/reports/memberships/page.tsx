@@ -44,7 +44,7 @@ export default function MembershipReportsPage() {
   }, [])
 
   useEffect(() => {
-    if (selectedMembership) {
+    if (selectedMembership && selectedMembership.trim() !== '') {
       fetchMembershipData(selectedMembership)
     }
   }, [selectedMembership])
@@ -69,13 +69,16 @@ export default function MembershipReportsPage() {
   const fetchMembershipData = async (membershipId: string) => {
     setLoading(true)
     try {
+      console.log('Fetching membership data for:', membershipId)
+      
       // Get the latest valid_until date for each user's membership of this type
       const { data: membershipData, error } = await supabase
         .from('user_memberships')
         .select(`
           user_id,
           valid_until,
-          users!user_memberships_user_id_fkey (
+          payment_status,
+          users (
             member_id,
             first_name,
             last_name,
@@ -85,17 +88,26 @@ export default function MembershipReportsPage() {
           )
         `)
         .eq('membership_id', membershipId)
+        .eq('payment_status', 'paid') // Only paid memberships
         .gte('valid_until', new Date().toISOString()) // Only active memberships
         .order('valid_until', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+
+      console.log('Membership data received:', membershipData?.length || 0, 'records')
 
       // Process the data
       const memberMap = new Map<string, MemberData>()
       
       membershipData?.forEach((item: any) => {
         const user = item.users
-        if (!user) return
+        if (!user) {
+          console.log('Skipping item with no user:', item)
+          return
+        }
 
         // Only keep the latest valid_until for each user
         const existing = memberMap.get(user.member_id)
@@ -125,6 +137,7 @@ export default function MembershipReportsPage() {
       })
 
       const membersList = Array.from(memberMap.values())
+      console.log('Processed members:', membersList.length)
       setMembers(membersList)
 
       // Calculate stats
@@ -144,6 +157,14 @@ export default function MembershipReportsPage() {
 
     } catch (error) {
       console.error('Error fetching membership data:', error)
+      // Set empty data on error
+      setMembers([])
+      setStats({
+        total_members: 0,
+        lgbtq_count: 0,
+        lgbtq_percent: 0,
+        prefer_not_to_say_count: 0
+      })
     } finally {
       setLoading(false)
     }

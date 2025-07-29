@@ -257,13 +257,72 @@ export class PaymentCompletionProcessor {
       
       // If no records found by payment_id, try to find staged records by user_id in staging_metadata
       // This handles the case where staging records were created but payment_id hasn't been set yet
-      const { data: existingInvoicesByUserId, error: userIdError } = await this.supabase
-        .from('xero_invoices')
-        .select('*')
-        .eq('staging_metadata->>user_id', event.user_id)
-        .eq('sync_status', 'staged')
-        .is('payment_id', null)
-        .limit(1)
+      // Prioritize records that match the current payment intent ID if available
+      let existingInvoicesByUserId: any[] = []
+      let userIdError: any = null
+      
+      // First, try to find staging records that match the current payment intent ID
+      if (event.metadata?.payment_intent_id) {
+        const { data: matchingIntentRecords, error: intentError } = await this.supabase
+          .from('xero_invoices')
+          .select('*')
+          .eq('staging_metadata->>user_id', event.user_id)
+          .eq('staging_metadata->>stripe_payment_intent_id', event.metadata.payment_intent_id)
+          .eq('sync_status', 'staged')
+          .is('payment_id', null)
+          .order('staged_at', { ascending: false })
+          .limit(1)
+        
+        if (!intentError && matchingIntentRecords && matchingIntentRecords.length > 0) {
+          existingInvoicesByUserId = matchingIntentRecords
+          this.logger.logPaymentProcessing('find-existing-staging-records', '🔍 Found staging records by payment intent ID', {
+            found: true,
+            count: matchingIntentRecords.length,
+            payment_intent_id: event.metadata.payment_intent_id,
+            firstRecord: {
+              id: matchingIntentRecords[0].id,
+              payment_id: matchingIntentRecords[0].payment_id,
+              sync_status: matchingIntentRecords[0].sync_status,
+              invoice_status: matchingIntentRecords[0].invoice_status
+            }
+          })
+        }
+      }
+      
+      // If no records found by payment intent ID, fall back to finding the most recent staging record
+      if (existingInvoicesByUserId.length === 0) {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No staging records found by payment intent ID, falling back to most recent record', {
+          user_id: event.user_id,
+          payment_intent_id: event.metadata?.payment_intent_id || 'not provided',
+          trigger_source: event.trigger_source
+        }, 'warn')
+        
+        const { data: recentRecords, error: recentError } = await this.supabase
+          .from('xero_invoices')
+          .select('*')
+          .eq('staging_metadata->>user_id', event.user_id)
+          .eq('sync_status', 'staged')
+          .is('payment_id', null)
+          .order('staged_at', { ascending: false })
+          .limit(1)
+        
+        existingInvoicesByUserId = recentRecords || []
+        userIdError = recentError
+        
+        if (recentRecords && recentRecords.length > 0) {
+          this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ Using most recent staging record as fallback', {
+            found: true,
+            count: recentRecords.length,
+            firstRecord: {
+              id: recentRecords[0].id,
+              payment_id: recentRecords[0].payment_id,
+              sync_status: recentRecords[0].sync_status,
+              invoice_status: recentRecords[0].invoice_status,
+              staged_at: recentRecords[0].staged_at
+            }
+          }, 'warn')
+        }
+      }
       
       if (userIdError) {
         this.logger.logPaymentProcessing('find-existing-staging-records', '❌ Database error finding staging records by user_id', { error: userIdError }, 'error')
@@ -375,10 +434,12 @@ export class PaymentCompletionProcessor {
         const bankAccountCode = systemCode?.accounting_code || '090' // Fallback to 090
         
         // Update payment staging metadata to include payment_id
+        // Look for payment records that match the current payment_id to avoid updating wrong records
         const { data: existingPaymentRecord } = await this.supabase
           .from('xero_payments')
           .select('staging_metadata')
           .eq('xero_invoice_id', existingRecords.id)
+          .eq('staging_metadata->>payment_id', event.payment_id)
           .eq('sync_status', 'staged')
           .single()
         
@@ -607,7 +668,10 @@ export class PaymentCompletionProcessor {
       payment_id: payment.id,
       amount: payment.final_amount / 100,
       trigger_source: 'payments',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      metadata: {
+        payment_intent_id: payment.stripe_payment_intent_id
+      }
     }
   }
 
@@ -622,7 +686,10 @@ export class PaymentCompletionProcessor {
       payment_id: membership.payment_id || null,
       amount: membership.amount_paid || 0,
       trigger_source: 'user_memberships',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      metadata: {
+        payment_intent_id: membership.stripe_payment_intent_id
+      }
     }
   }
 
@@ -637,7 +704,10 @@ export class PaymentCompletionProcessor {
       payment_id: registration.payment_id || null,
       amount: registration.amount_paid || 0,
       trigger_source: 'user_registrations',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      metadata: {
+        payment_intent_id: registration.stripe_payment_intent_id
+      }
     }
   }
 

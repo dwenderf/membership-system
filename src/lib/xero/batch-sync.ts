@@ -14,7 +14,7 @@ import * as Sentry from '@sentry/nextjs'
 import { getActiveXeroTenants, validateXeroConnection } from './client'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
-  xero_invoice_line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
+  line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
 }
 
 type XeroPaymentRecord = Database['public']['Tables']['xero_payments']['Row']
@@ -511,7 +511,7 @@ export class XeroBatchSyncManager {
       }
 
       // Convert line items to Xero format
-      const lineItems: LineItem[] = invoiceRecord.xero_invoice_line_items.map(item => ({
+      const lineItems: LineItem[] = invoiceRecord.line_items.map(item => ({
         description: item.description,
         quantity: item.quantity,
         unitAmount: item.unit_amount / 100, // Convert cents to dollars
@@ -836,7 +836,7 @@ export class XeroBatchSyncManager {
           error_message: errorMessage,
           validation_errors: validationErrors,
           xero_error_details: xeroErrorDetails,
-          line_items: invoiceRecord.xero_invoice_line_items?.map(item => ({
+          line_items: invoiceRecord.line_items?.map(item => ({
             description: item.description,
             accounting_code: item.account_code,
             amount: item.line_amount

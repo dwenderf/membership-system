@@ -241,7 +241,13 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching failed payments:', failedPaymentsError)
     }
 
-    // Combine and sort all failed items by time (most recent first)
+    // Separate failed and ignored items
+    const failedInvoicesOnly = filteredFailedInvoices.filter(item => item.sync_status === 'failed')
+    const failedPaymentsOnly = (failedPayments || []).filter(item => item.sync_status === 'failed')
+    const ignoredInvoices = filteredFailedInvoices.filter(item => item.sync_status === 'ignore')
+    const ignoredPayments = (failedPayments || []).filter(item => item.sync_status === 'ignore')
+
+    // Combine and sort all failed and ignored items by time (most recent first)
     const allFailedItems = [
       ...filteredFailedInvoices.map(item => ({ ...item, item_type: 'invoice' })),
       ...(failedPayments || []).map(item => ({ ...item, item_type: 'payment' }))
@@ -257,10 +263,13 @@ export async function GET(request: NextRequest) {
       total_pending: (pendingInvoices?.length || 0) + (pendingPayments?.length || 0),
       pending_invoices_list: pendingInvoices || [],
       pending_payments_list: pendingPayments || [],
-      failed_invoices: filteredFailedInvoices,
-      failed_payments: failedPayments || [],
-      failed_items_sorted: allFailedItems, // New combined and sorted array
-      failed_count: filteredFailedInvoices.length + (failedPayments?.length || 0)
+      failed_invoices: failedInvoicesOnly,
+      failed_payments: failedPaymentsOnly,
+      failed_items_sorted: allFailedItems, // Combined and sorted array (includes both failed and ignored)
+      failed_count: failedInvoicesOnly.length + failedPaymentsOnly.length,
+      ignored_invoices: ignoredInvoices,
+      ignored_payments: ignoredPayments,
+      ignored_count: ignoredInvoices.length + ignoredPayments.length
     }
 
     // Add debugging information

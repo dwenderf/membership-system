@@ -98,6 +98,9 @@ interface SyncStats {
   failed_payments: FailedItem[]
   failed_items_sorted: (FailedItem & { item_type: 'invoice' | 'payment' })[]
   failed_count: number
+  ignored_invoices?: FailedItem[]
+  ignored_payments?: FailedItem[]
+  ignored_count?: number
 }
 
 export default function AccountingIntegrationPage() {
@@ -769,13 +772,27 @@ export default function AccountingIntegrationPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                 <div className="bg-red-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">{syncStats.failed_invoices.length}</div>
-                  <div className="text-sm text-red-800">Failed & Ignored Invoices</div>
+                  <div className="text-sm text-red-800">Failed Invoices</div>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold text-red-600">{syncStats.failed_payments.length}</div>
-                  <div className="text-sm text-red-800">Failed & Ignored Payments</div>
+                  <div className="text-sm text-red-800">Failed Payments</div>
                 </div>
               </div>
+              
+              {/* Show ignored counts if any exist */}
+              {((syncStats.ignored_invoices && syncStats.ignored_invoices.length > 0) || (syncStats.ignored_payments && syncStats.ignored_payments.length > 0)) && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-600">{syncStats.ignored_invoices?.length || 0}</div>
+                    <div className="text-sm text-gray-800">Ignored Invoices</div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-600">{syncStats.ignored_payments?.length || 0}</div>
+                    <div className="text-sm text-gray-800">Ignored Payments</div>
+                  </div>
+                </div>
+              )}
 
               {syncStats.failed_count > 0 ? (
                 <div className="space-y-3">

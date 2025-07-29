@@ -782,7 +782,7 @@ The admin interface also provides debugging tools:
 
 - **`/admin/logs`** - View system logs and error messages
 - **`/admin/xero-integration`** - Monitor Xero sync status and retry failed operations
-- **`/admin/financial-reports`** - Review payment and invoice data
+- **`/admin/reports/financial`** - Review payment and invoice data
 
 ### Database Debugging
 

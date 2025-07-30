@@ -18,7 +18,6 @@ async function testPaymentProcessor() {
     const { xeroStagingManager } = await import('./src/lib/xero-staging.ts')
     const { xeroBatchSyncManager } = await import('./src/lib/xero-batch-sync.ts')
     const { batchProcessor } = await import('./src/lib/batch-processor.ts')
-    const { scheduledBatchProcessor } = await import('./src/lib/scheduled-batch-processor.ts')
     
     console.log('📦 All modules loaded successfully')
     
@@ -79,8 +78,8 @@ async function testPaymentProcessor() {
     console.log('\n🔄 Testing batch sync...')
     await xeroBatchSyncManager.syncAllPendingRecords()
     
-    console.log('\n⏰ Testing scheduled batch processor...')
-    console.log('📊 Scheduled processor status:', scheduledBatchProcessor.getStatus())
+    console.log('\n⏰ Testing batch processor...')
+    console.log('📊 Batch processor status:', batchProcessor.getStatus())
     
     console.log('\n✅ All tests completed successfully')
     

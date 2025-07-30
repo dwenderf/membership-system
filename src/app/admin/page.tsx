@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { getOrganizationName } from '@/lib/organization'
+import SyncButtons from '@/components/admin/SyncButtons'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -108,87 +109,100 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
+      {/* Manual Sync (Preview Environment) */}
+      <div className="bg-white shadow rounded-lg mb-8">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+            Manual Sync (Preview Environment)
+          </h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Since cron jobs are not available in the preview environment, you can manually sync emails and accounting records here.
+          </p>
+          <SyncButtons />
+        </div>
+      </div>
+
       {/* Quick Actions */}
       <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Quick Actions
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <Link
-                  href="/admin/seasons"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Seasons</div>
-                  <div className="mt-1 text-sm text-gray-500">Create and manage hockey seasons</div>
-                </Link>
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              href="/admin/seasons"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Seasons</div>
+              <div className="mt-1 text-sm text-gray-500">Create and manage hockey seasons</div>
+            </Link>
 
-                <Link
-                  href="/admin/memberships"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Membership Types</div>
-                  <div className="mt-1 text-sm text-gray-500">Set up membership plans and pricing</div>
-                </Link>
+            <Link
+              href="/admin/memberships"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Membership Types</div>
+              <div className="mt-1 text-sm text-gray-500">Set up membership plans and pricing</div>
+            </Link>
 
-                <Link
-                  href="/admin/registrations"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Registrations</div>
-                  <div className="mt-1 text-sm text-gray-500">Create teams and events</div>
-                </Link>
+            <Link
+              href="/admin/registrations"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Registrations</div>
+              <div className="mt-1 text-sm text-gray-500">Create teams and events</div>
+            </Link>
 
-                <Link
-                  href="/admin/registration-categories"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Registration Categories</div>
-                  <div className="mt-1 text-sm text-gray-500">Configure master category templates</div>
-                </Link>
+            <Link
+              href="/admin/registration-categories"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Registration Categories</div>
+              <div className="mt-1 text-sm text-gray-500">Configure master category templates</div>
+            </Link>
 
-                <Link
-                  href="/admin/discount-categories"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Discounts</div>
-                  <div className="mt-1 text-sm text-gray-500">Manage categories and discount codes</div>
-                </Link>
+            <Link
+              href="/admin/discount-categories"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Discounts</div>
+              <div className="mt-1 text-sm text-gray-500">Manage categories and discount codes</div>
+            </Link>
 
-                <Link
-                  href="/admin/accounting-codes"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Accounting Codes</div>
-                  <div className="mt-1 text-sm text-gray-500">Configure default codes and bulk updates</div>
-                </Link>
+            <Link
+              href="/admin/accounting-codes"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Accounting Codes</div>
+              <div className="mt-1 text-sm text-gray-500">Configure default codes and bulk updates</div>
+            </Link>
 
-                <Link
-                  href="/admin/accounting"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Manage Xero Integration</div>
-                  <div className="mt-1 text-sm text-gray-500">Connect and manage Xero accounting</div>
-                </Link>
+            <Link
+              href="/admin/accounting"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Manage Xero Integration</div>
+              <div className="mt-1 text-sm text-gray-500">Connect and manage Xero accounting</div>
+            </Link>
 
-                <Link
-                  href="/admin/reports/financial"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">Reports</div>
-                  <div className="mt-1 text-sm text-gray-500">View system reports and analytics</div>
-                </Link>
+            <Link
+              href="/admin/reports/financial"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">Reports</div>
+              <div className="mt-1 text-sm text-gray-500">View system reports and analytics</div>
+            </Link>
 
-                <Link
-                  href="/admin/logs"
-                  className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <div className="text-gray-900 font-medium">📊 System Logs</div>
-                  <div className="mt-1 text-sm text-gray-500">Monitor application logs and system events</div>
-                </Link>
-              </div>
-            </div>
+            <Link
+              href="/admin/logs"
+              className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <div className="text-gray-900 font-medium">📊 System Logs</div>
+              <div className="mt-1 text-sm text-gray-500">Monitor application logs and system events</div>
+            </Link>
           </div>
+        </div>
+      </div>
 
     </>
   )

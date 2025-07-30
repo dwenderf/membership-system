@@ -115,7 +115,7 @@ class EmailStagingManager {
   /**
    * Process staged emails (called by batch processor)
    */
-  async processStagedEmails(): Promise<{
+  async processStagedEmails(options: { limit?: number } = {}): Promise<{
     processed: number
     successful: number
     failed: number
@@ -131,13 +131,14 @@ class EmailStagingManager {
     try {
       const supabase = createAdminClient()
       
-      // Get all pending emails
+      // Get pending emails with configurable limit (default 100 for cron jobs)
+      const limit = options.limit || 100
       const { data: pendingEmails, error } = await supabase
         .from('email_logs')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
-        .limit(100) // Process in batches
+        .limit(limit)
 
       if (error) {
         results.errors.push(`Failed to fetch pending emails: ${error.message}`)
@@ -196,12 +197,13 @@ class EmailStagingManager {
 
       logger.logBatchProcessing(
         'email-batch-complete',
-        `Processed ${results.processed} staged emails`,
+        `Processed ${results.processed} staged emails (limit: ${limit})`,
         {
           processed: results.processed,
           successful: results.successful,
           failed: results.failed,
-          errors: results.errors
+          errors: results.errors,
+          limit
         }
       )
 

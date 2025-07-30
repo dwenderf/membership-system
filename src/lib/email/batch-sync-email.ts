@@ -12,10 +12,10 @@ export class EmailProcessingManager {
   /**
    * Process staged emails
    * 
-   * Simple method that processes all pending staged emails with delays.
+   * Simple method that processes pending staged emails with delays.
    * No complex batch job system needed.
    */
-  async processStagedEmails(): Promise<{
+  async processStagedEmails(options: { limit?: number } = {}): Promise<{
     success: boolean
     results?: {
       processed: number
@@ -31,7 +31,7 @@ export class EmailProcessingManager {
         'Starting staged email processing'
       )
 
-      const results = await emailStagingManager.processStagedEmails()
+      const results = await emailStagingManager.processStagedEmails(options)
 
       logger.logBatchProcessing(
         'email-processing-complete',

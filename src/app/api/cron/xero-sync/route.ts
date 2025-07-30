@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    logger.logXeroSync('cron-sync-start', '🕐 Scheduled Xero sync started (Pro plan - every 2 minutes, efficient connection)')
+    logger.logXeroSync('cron-sync-start', '🕐 Scheduled Xero sync started (every 5 minutes)')
 
     // Check if there are any pending records to sync using centralized function
     const pendingCount = await xeroBatchSyncManager.getPendingXeroCount()

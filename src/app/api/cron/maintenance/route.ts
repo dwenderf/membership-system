@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
 
   const startTime = Date.now()
   const results = {
-    emailRetry: { success: false, error: null as string | null, retried: 0, successful: 0, failed: 0 },
     cleanup: { success: false, error: null as string | null, cleaned: 0 }
   }
 
@@ -27,57 +26,13 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Step 1: Email Processing
-    try {
-      logger.logPaymentProcessing(
-        'cron-email-processing-start',
-        'Starting email processing',
-        {},
-        'info'
-      )
-
-      // Process failed email retries (not staged emails)
-      // Note: Staged emails are processed immediately by PaymentCompletionProcessor
-      // This endpoint only handles retries of failed emails
-      logger.logPaymentProcessing(
-        'cron-email-retry-start',
-        'Starting failed email retry processing',
-        {},
-        'info'
-      )
-
-      // TODO: Implement failed email retry logic
-      // This should:
-      // 1. Query email_logs for failed emails (status = 'failed')
-      // 2. Retry emails that haven't exceeded max retry count
-      // 3. Use intelligent backoff for retries
-      
-      results.emailRetry.retried = 0
-      results.emailRetry.successful = 0
-      results.emailRetry.failed = 0
-
-      logger.logPaymentProcessing(
-        'cron-email-retry-complete',
-        'Failed email retry processing completed (not yet implemented)',
-        { 
-          retried: 0,
-          successful: 0,
-          failed: 0,
-          note: 'Failed email retry logic needs to be implemented'
-        },
-        'info'
-      )
-
-      results.emailRetry.success = true
-    } catch (error) {
-      results.emailRetry.error = error instanceof Error ? error.message : String(error)
-      logger.logPaymentProcessing(
-        'cron-email-processing-exception',
-        'Email processing threw exception',
-        { error: results.emailRetry.error },
-        'error'
-      )
-    }
+    // Step 1: General Maintenance (no email processing - handled by dedicated email cron)
+    logger.logPaymentProcessing(
+      'cron-maintenance-start',
+      'Starting general maintenance (email processing handled by dedicated cron)',
+      {},
+      'info'
+    )
 
     // Step 2: Cleanup
     try {
@@ -163,7 +118,7 @@ export async function GET(request: NextRequest) {
     }
 
     const duration = Date.now() - startTime
-    const overallSuccess = results.emailRetry.success && results.cleanup.success
+    const overallSuccess = results.cleanup.success
 
     logger.logPaymentProcessing(
       'cron-maintenance-complete',

@@ -4,12 +4,12 @@
  * Handles the completion of payments and purchases by:
  * - Creating or updating Xero staging records
  * - Coordinating with EmailProcessor for confirmation emails
- * - Syncing pending Xero records
  * - Updating discount usage tracking
  * 
  * ARCHITECTURE:
  * This processor orchestrates the payment completion flow and delegates
- * email processing to the dedicated EmailProcessor class.
+ * email processing to the dedicated EmailProcessor class. Background processing
+ * (email sending and Xero sync) is handled by cron jobs for reliability.
  * 
  * EMAIL FLOW (DELEGATED TO EMAILPROCESSOR):
  * - Zero-dollar purchases: Send confirmation email immediately (free_membership, free_registration)
@@ -17,10 +17,15 @@
  * - Failed payments: Send failure notification email
  * - Waitlist emails: Sent directly from join-waitlist endpoint (not payment-related)
  * 
+ * BACKGROUND PROCESSING (HANDLED BY CRON JOBS):
+ * - Email processing: /api/cron/email-sync (every minute, limit 100 per batch)
+ * - Xero sync: /api/cron/xero-sync (every 5 minutes)
+ * 
  * FLOW:
  * 1. Stripe webhook receives payment completion → calls processPaymentCompletion
  * 2. Zero-value purchase completes → calls processPaymentCompletion
  * 3. Payment fails → calls processPaymentCompletion with failed metadata
+ * 4. Background processing handled by cron jobs (emails within 1 minute, Xero within 5 minutes)
  * 
  * USAGE:
  * ```ts
@@ -44,7 +49,6 @@
  */
 
 import { xeroStagingManager } from '@/lib/xero/staging'
-import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 import { emailProcessor } from '@/lib/email'
 import { Logger } from '@/lib/logging/logger'
 
@@ -112,22 +116,15 @@ export class PaymentCompletionProcessor {
       // Phase 2: Process confirmation emails (delegated to EmailProcessor)
       await emailProcessor.processConfirmationEmails(event)
 
-      // Phase 3: Process staged emails immediately (for immediate delivery)
-      // Note: This processes the emails that were just staged in Phase 2
-      // Fire-and-forget: don't await to avoid delaying payment completion
-      this.processStagedEmails().catch(error => {
-        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email processing failed (non-blocking)', { 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 'error')
-      })
+      // Phase 3: Email processing (handled by cron job)
+      // Note: Emails staged in Phase 2 will be processed by /api/cron/email-sync every minute
+      // This ensures fast payment completion while maintaining reliable email delivery
+      this.logger.logPaymentProcessing('process-payment-completion', '📧 Emails staged - will be processed by cron job within 1 minute')
 
-      // Phase 4: Batch sync pending Xero records
-      // Fire-and-forget: don't await to avoid delaying payment completion
-      this.syncPendingXeroRecords().catch(error => {
-        this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Xero sync failed (non-blocking)', { 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 'error')
-      })
+      // Phase 4: Xero sync (handled by cron job)
+      // Note: Xero staging records created in Phase 1 will be synced by /api/cron/xero-sync every 5 minutes
+      // This ensures fast payment completion while maintaining reliable Xero integration
+      this.logger.logPaymentProcessing('process-payment-completion', '📊 Xero records staged - will be synced by cron job within 5 minutes')
 
       // Phase 5: Update discount usage tracking
       await this.updateDiscountUsage(event)
@@ -606,55 +603,7 @@ export class PaymentCompletionProcessor {
    * Fire-and-forget method that doesn't block payment completion.
    * All logging is handled within the Xero batch sync manager.
    */
-  private async syncPendingXeroRecords() {
-    this.logger.logPaymentProcessing('sync-pending-xero-records', '🔄 Starting Xero sync (non-blocking)...')
-    
-    try {
-      // Use the Xero batch sync manager to sync all pending records
-      // Fire-and-forget: don't await the results
-      xeroBatchSyncManager.syncAllPendingRecords().catch(error => {
-        this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Xero sync failed (non-blocking)', { 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 'error')
-      })
-      
-    } catch (error) {
-      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to start Xero sync', { 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      }, 'error')
-      // Don't throw - Xero sync failures shouldn't break other processing
-    }
-  }
 
-
-
-  /**
-   * Process staged emails immediately for immediate delivery
-   * 
-   * Fire-and-forget method that doesn't block payment completion.
-   * All logging is handled within the email processing manager.
-   */
-  private async processStagedEmails() {
-    this.logger.logPaymentProcessing('process-staged-emails', '📧 Starting staged email processing (non-blocking)...')
-    
-    try {
-      // Import and use the email processing manager to process staged emails
-      const { emailProcessingManager } = await import('./email/batch-sync-email')
-      
-      // Fire-and-forget: don't await the results
-      emailProcessingManager.processStagedEmails().catch(error => {
-        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email processing failed (non-blocking)', { 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 'error')
-      })
-      
-    } catch (error) {
-      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to start email processing', { 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      }, 'error')
-      // Don't throw - email processing failures shouldn't break the payment completion
-    }
-  }
 
   /**
    * Phase 5: Update discount usage tracking
@@ -705,18 +654,17 @@ export class PaymentCompletionProcessor {
 
   /**
    * Manual batch processing for failed records
+   * 
+   * Note: This method is deprecated. Background processing is now handled by cron jobs:
+   * - /api/cron/email-sync (every minute)
+   * - /api/cron/xero-sync (every 5 minutes)
    */
   async processPendingRecords() {
-    this.logger.logPaymentProcessing('process-pending-records', '🔄 Starting manual batch processing...')
+    this.logger.logPaymentProcessing('process-pending-records', '⚠️ Manual batch processing deprecated - use cron jobs instead')
     
-    try {
-      // Find all pending Xero records and retry them
-      await this.syncPendingXeroRecords()
-      
-      this.logger.logPaymentProcessing('process-pending-records', '✅ Manual batch processing completed')
-    } catch (error) {
-      this.logger.logPaymentProcessing('process-pending-records', '❌ Manual batch processing failed:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-    }
+    // This method is no longer needed as background processing is handled by cron jobs
+    this.logger.logPaymentProcessing('process-pending-records', '📧 Email processing: /api/cron/email-sync (every minute)')
+    this.logger.logPaymentProcessing('process-pending-records', '📊 Xero sync: /api/cron/xero-sync (every 5 minutes)')
   }
 
   /**

@@ -638,10 +638,9 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 
 **3. Verify Cron Jobs in Vercel Dashboard:**
 1. Go to **Settings** → **Cron Jobs**
-2. You should see 4 active cron jobs:
-   - `xero-sync` - Every 2 minutes (Xero invoice/payment sync)
-   - `xero-keep-alive` - Every 6 hours (Xero token refresh)
-   - `email-retry` - Every 2 hours (failed email retry)
+2. You should see 3 active cron jobs:
+   - `xero-sync` - Every 5 minutes (Xero invoice/payment sync)
+   - `email-sync` - Every minute (staged email processing + failed email retry, limit 100 per batch)
    - `cleanup` - Daily at 2 AM (maintenance tasks)
 
 **Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
@@ -654,8 +653,12 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 **3. Test Cron Jobs (Optional):**
 You can manually test cron jobs using curl:
 ```bash
-# Test Xero daily operations (replace with your domain and secret)
-curl -X GET https://your-domain.vercel.app/api/cron/xero-daily \
+# Test email sync operations (replace with your domain and secret)
+curl -X GET https://your-domain.vercel.app/api/cron/email-sync \
+  -H "Authorization: Bearer your-cron-secret"
+
+# Test Xero sync operations
+curl -X GET https://your-domain.vercel.app/api/cron/xero-sync \
   -H "Authorization: Bearer your-cron-secret"
 
 # Test maintenance operations

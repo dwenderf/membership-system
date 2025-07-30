@@ -112,7 +112,10 @@ export class PaymentCompletionProcessor {
       // Phase 2: Process confirmation emails (delegated to EmailProcessor)
       await emailProcessor.processConfirmationEmails(event)
 
-      // Phase 3: Batch sync pending Xero records
+      // Phase 3: Process staged emails immediately (for immediate delivery)
+      await this.processStagedEmails()
+
+      // Phase 4: Batch sync pending Xero records
       await this.syncPendingXeroRecords()
 
       // Phase 5: Update discount usage tracking
@@ -608,6 +611,38 @@ export class PaymentCompletionProcessor {
   }
 
 
+
+  /**
+   * Process staged emails immediately for immediate delivery
+   */
+  private async processStagedEmails() {
+    this.logger.logPaymentProcessing('process-staged-emails', '📧 Processing staged emails for immediate delivery...')
+    
+    try {
+      // Import and use the email batch sync manager to process staged emails
+      const { emailBatchSyncManager } = await import('./email/batch-sync-email')
+      const emailJobId = await emailBatchSyncManager.createBatchJob()
+      const emailResults = await emailBatchSyncManager.processBatchJob(emailJobId)
+      
+      if (emailResults.success && emailResults.results) {
+        this.logger.logPaymentProcessing('process-staged-emails', '✅ Email batch processing completed', {
+          processed: emailResults.results.processed,
+          successful: emailResults.results.successful,
+          failed: emailResults.results.failed,
+          errors: emailResults.results.errors
+        })
+      } else {
+        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email batch processing failed', { 
+          error: emailResults.error 
+        }, 'error')
+      }
+    } catch (error) {
+      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to process staged emails', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, 'error')
+      // Don't throw - email processing failures shouldn't break the payment completion
+    }
+  }
 
   /**
    * Phase 5: Update discount usage tracking

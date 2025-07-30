@@ -9,31 +9,56 @@ import { logger } from '@/lib/logging/logger'
 // Force import server config
 
 
-// Helper function to get actual Stripe fees from charge
-async function getStripeFeeAmount(paymentIntent: Stripe.PaymentIntent): Promise<number> {
+// Helper function to get actual Stripe fees and charge ID from charge
+async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {
   try {
-    // Retrieve the payment intent with expanded charge to get actual fees
+    // First try to get the charge ID from the payment intent
     const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
       expand: ['latest_charge']
     })
     
+    console.log(`🔍 Retrieved payment intent with charge data:`, {
+      hasLatestCharge: !!expandedPaymentIntent.latest_charge,
+      chargeType: typeof expandedPaymentIntent.latest_charge,
+      chargeKeys: expandedPaymentIntent.latest_charge && typeof expandedPaymentIntent.latest_charge === 'object' 
+        ? Object.keys(expandedPaymentIntent.latest_charge) 
+        : 'N/A'
+    })
+    
     if (expandedPaymentIntent.latest_charge && 
         typeof expandedPaymentIntent.latest_charge === 'object' && 
-        'fee' in expandedPaymentIntent.latest_charge &&
-        typeof expandedPaymentIntent.latest_charge.fee === 'number') {
+        'id' in expandedPaymentIntent.latest_charge) {
       
-      const stripeFeeAmount = expandedPaymentIntent.latest_charge.fee
-      console.log(`✅ Retrieved actual Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
-      return stripeFeeAmount
+      const chargeId = expandedPaymentIntent.latest_charge.id
+      console.log(`🔍 Found charge ID: ${chargeId}, retrieving charge details...`)
+      
+      // Now retrieve the charge directly to get the fee
+      const charge = await stripe.charges.retrieve(chargeId as string)
+      
+      console.log(`🔍 Retrieved charge data:`, {
+        chargeId: charge.id,
+        hasFee: 'fee' in charge,
+        feeType: typeof (charge as any).fee,
+        feeValue: (charge as any).fee
+      })
+      
+      if (charge && typeof (charge as any).fee === 'number') {
+        const stripeFeeAmount = (charge as any).fee
+        console.log(`✅ Retrieved actual Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+        return { fee: stripeFeeAmount, chargeId: chargeId as string }
+      } else {
+        console.log(`⚠️ Fee not available in charge, setting fee to 0 for payment ${paymentIntent.id}`)
+        return { fee: 0, chargeId: chargeId as string }
+      }
     } else {
       // Fallback to 0 if charge is not available
       console.log(`⚠️ Charge not available, setting fee to 0 for payment ${paymentIntent.id}`)
-      return 0
+      return { fee: 0, chargeId: null }
     }
   } catch (feeError) {
     // Fallback to 0 if there's an error retrieving the charge
     console.error(`❌ Error retrieving Stripe fees, setting fee to 0 for payment ${paymentIntent.id}`, feeError)
-    return 0
+    return { fee: 0, chargeId: null }
   }
 }
 
@@ -140,13 +165,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     }
   }
 
-  // Get actual Stripe fees from the balance transaction
-  const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
-  
-  // Get charge ID from payment intent
-  const chargeId = paymentIntent.latest_charge && typeof paymentIntent.latest_charge === 'object' 
-    ? (paymentIntent.latest_charge as any).id 
-    : null
+  // Get actual Stripe fees and charge ID from the charge
+  const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
   
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
@@ -163,6 +183,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 
   if (paymentUpdateError) {
     console.error('❌ Webhook: Error updating membership payment record:', paymentUpdateError)
+    throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
     
@@ -178,7 +199,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       console.log(`✅ Webhook: Updated membership record with payment_id: ${updatedPayment[0].id}`)
     }
   } else {
-    console.warn(`⚠️ Webhook: No membership payment record found for payment intent: ${paymentIntent.id}`)
+    console.error(`❌ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
+    throw new Error('Payment record not found - checkout process may have failed')
   }
 
   // Xero integration is now handled entirely by the payment completion processor
@@ -217,7 +239,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       timestamp: new Date().toISOString(),
       metadata: {
         payment_intent_id: paymentIntent.id,
-        charge_id: chargeId
+        charge_id: chargeId || undefined
       }
     })
     console.log('✅ Payment completion processor returned successfully:', processorResult)
@@ -342,13 +364,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     }
   }
 
-  // Get actual Stripe fees from the balance transaction
-  const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
-  
-  // Get charge ID from payment intent
-  const chargeId = paymentIntent.latest_charge && typeof paymentIntent.latest_charge === 'object' 
-    ? (paymentIntent.latest_charge as any).id 
-    : null
+  // Get actual Stripe fees and charge ID from the charge
+  const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
   
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
@@ -365,6 +382,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 
   if (paymentUpdateError) {
     console.error('❌ Webhook: Error updating payment record:', paymentUpdateError)
+    throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
     
@@ -380,7 +398,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       console.log(`✅ Webhook: Updated registration record with payment_id: ${updatedPayment[0].id}`)
     }
   } else {
-    console.warn(`⚠️ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
+    console.error(`❌ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
+    throw new Error('Payment record not found - checkout process may have failed')
   }
 
   // Xero integration is now handled entirely by the payment completion processor
@@ -418,7 +437,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       timestamp: new Date().toISOString(),
       metadata: {
         payment_intent_id: paymentIntent.id,
-        charge_id: chargeId
+        charge_id: chargeId || undefined
       }
     })
     console.log('✅ Registration payment completion processor returned successfully:', processorResult)

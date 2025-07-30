@@ -33,7 +33,6 @@ async function checkUserPayments(userId) {
     .from('payments')
     .select('*')
     .eq('user_id', userId)
-    .eq('status', 'completed')
     .order('created_at', { ascending: false })
   
   if (error) {
@@ -41,7 +40,7 @@ async function checkUserPayments(userId) {
     return
   }
   
-  console.log(`\n💰 Found ${payments.length} completed payments:`)
+  console.log(`\n💰 Found ${payments.length} payments:`)
   payments.forEach((payment, i) => {
     console.log(`${i+1}. ID: ${payment.id}`)
     console.log(`   Stripe Intent: ${payment.stripe_payment_intent_id}`)

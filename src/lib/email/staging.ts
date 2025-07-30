@@ -30,9 +30,17 @@ class EmailStagingManager {
     try {
       const supabase = createAdminClient()
       
-      // If immediate sending is requested, send directly
+      // If immediate sending is requested, log warning and stage instead
       if (options.isImmediate) {
-        return await this.sendEmailImmediately(emailData)
+        logger.logPaymentProcessing(
+          'email-immediate-deprecated',
+          'Immediate email sending is deprecated, staging instead',
+          { 
+            userId: emailData.user_id,
+            eventType: emailData.event_type
+          },
+          'warn'
+        )
       }
 
       // Stage the email for batch processing
@@ -102,77 +110,7 @@ class EmailStagingManager {
   /**
    * Send email immediately (bypass staging)
    */
-  private async sendEmailImmediately(emailData: StagedEmailData): Promise<boolean> {
-    try {
-      const { emailService } = await import('./service')
-      
-      // Map event types to email service methods
-      switch (emailData.event_type) {
-        case 'membership.purchased':
-          await emailService.sendMembershipPurchaseConfirmation({
-            userId: emailData.user_id,
-            email: emailData.email_address,
-            userName: emailData.email_data?.userName || '',
-            membershipName: emailData.email_data?.membershipName || '',
-            amount: emailData.email_data?.amount || 0,
-            durationMonths: emailData.email_data?.durationMonths || 0,
-            validFrom: emailData.email_data?.validFrom || '',
-            validUntil: emailData.email_data?.validUntil || '',
-            paymentIntentId: emailData.email_data?.paymentIntentId || ''
-          })
-          break
-
-        case 'registration.completed':
-          await emailService.sendRegistrationConfirmation({
-            userId: emailData.user_id,
-            email: emailData.email_address,
-            userName: emailData.email_data?.userName || '',
-            registrationName: emailData.email_data?.registrationName || '',
-            categoryName: emailData.email_data?.categoryName || '',
-            seasonName: emailData.email_data?.seasonName || '',
-            amount: emailData.email_data?.amount || 0,
-            paymentIntentId: emailData.email_data?.paymentIntentId || ''
-          })
-          break
-
-        default:
-          logger.logPaymentProcessing(
-            'email-immediate-unknown-type',
-            'Unknown email event type for immediate sending',
-            { 
-              userId: emailData.user_id,
-              eventType: emailData.event_type
-            },
-            'warn'
-          )
-          return false
-      }
-
-      logger.logPaymentProcessing(
-        'email-immediate-success',
-        'Successfully sent email immediately',
-        { 
-          userId: emailData.user_id,
-          eventType: emailData.event_type
-        },
-        'info'
-      )
-
-      return true
-    } catch (error) {
-      logger.logPaymentProcessing(
-        'email-immediate-error',
-        'Error sending email immediately',
-        { 
-          userId: emailData.user_id,
-          eventType: emailData.event_type,
-          error: error instanceof Error ? error.message : String(error)
-        },
-        'error'
-      )
-      return false
-    }
-  }
+  // Removed sendEmailImmediately as it is not used anywhere in the codebase
 
   /**
    * Process staged emails (called by batch processor)
@@ -273,7 +211,8 @@ class EmailStagingManager {
             durationMonths: emailData.durationMonths || 0,
             validFrom: emailData.validFrom || '',
             validUntil: emailData.validUntil || '',
-            paymentIntentId: emailData.paymentIntentId || ''
+            paymentIntentId: emailData.paymentIntentId || '',
+            triggeredBy: emailLog.triggered_by || 'automated'
           })
           break
 
@@ -286,7 +225,8 @@ class EmailStagingManager {
             categoryName: emailData.categoryName || '',
             seasonName: emailData.seasonName || '',
             amount: emailData.amount || 0,
-            paymentIntentId: emailData.paymentIntentId || ''
+            paymentIntentId: emailData.paymentIntentId || '',
+            triggeredBy: emailLog.triggered_by || 'automated'
           })
           break
 

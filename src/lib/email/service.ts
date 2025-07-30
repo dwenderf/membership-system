@@ -181,6 +181,14 @@ class EmailService {
     status: 'sent' | 'delivered' | 'bounced' | 'spam'
     bounceReason?: string
   }): Promise<string> {
+    // Log stack trace to help debug email creation
+    console.log('📧 Email log creation stack trace:', {
+      eventType: options.eventType,
+      triggeredBy: options.triggeredBy,
+      userId: options.userId,
+      stack: new Error().stack
+    })
+    
     const supabase = createAdminClient()
     
     const { data, error } = await supabase
@@ -220,6 +228,13 @@ class EmailService {
     bounced_at?: Date
     bounce_reason?: string
   }): Promise<void> {
+    // Log stack trace to help debug email updates
+    console.log('📧 Email log update stack trace:', {
+      logId,
+      updates,
+      stack: new Error().stack
+    })
+    
     const supabase = createAdminClient()
     
     const updateData: any = { ...updates }
@@ -254,13 +269,14 @@ class EmailService {
     validFrom: string
     validUntil: string
     paymentIntentId: string
+    triggeredBy?: 'user_action' | 'admin_send' | 'automated'
   }) {
     return this.sendEmail({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.MEMBERSHIP_PURCHASED,
       subject: `Membership Purchase Confirmation - ${options.membershipName}`,
-      triggeredBy: 'user_action',
+      triggeredBy: options.triggeredBy || 'user_action',
       templateId: process.env.LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID,
       data: {
         userName: options.userName,
@@ -362,13 +378,14 @@ class EmailService {
     seasonName: string
     amount: number
     paymentIntentId: string
+    triggeredBy?: 'user_action' | 'admin_send' | 'automated'
   }) {
     return this.sendEmail({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.REGISTRATION_COMPLETED,
       subject: `Registration Confirmed - ${options.registrationName}`,
-      triggeredBy: 'user_action',
+      triggeredBy: options.triggeredBy || 'user_action',
       templateId: process.env.LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
       data: {
         userName: options.userName,

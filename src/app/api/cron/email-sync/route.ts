@@ -20,8 +20,24 @@ export async function GET(request: NextRequest) {
     try {
       logger.logBatchProcessing('cron-staged-emails-start', 'Processing staged emails (limit: 100)')
       
+      const startTime = new Date()
       const { emailProcessingManager } = await import('@/lib/email/batch-sync-email')
       const stagedResults = await emailProcessingManager.processStagedEmails({ limit: 100 })
+      
+      // Log system event for staged emails
+      const { logSyncEvent } = await import('@/lib/system-events')
+      await logSyncEvent(
+        'email_sync',
+        'cron_job',
+        startTime,
+        {
+          processed: stagedResults.results?.processed || 0,
+          successful: stagedResults.results?.successful || 0,
+          failed: stagedResults.results?.failed || 0,
+          errors: stagedResults.results?.errors
+        },
+        stagedResults.error
+      )
       
       if (stagedResults.success && stagedResults.results) {
         results.stagedEmails = stagedResults.results

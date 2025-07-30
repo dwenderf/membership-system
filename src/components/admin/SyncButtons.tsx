@@ -19,6 +19,7 @@ export default function SyncButtons() {
   const [loading, setLoading] = useState({ emails: false, accounting: false })
   const [loadingCounts, setLoadingCounts] = useState(true)
   const [lastSync, setLastSync] = useState<{ emails?: string; accounting?: string }>({})
+  const [lastCronSync, setLastCronSync] = useState<{ emails?: string; accounting?: string }>({})
 
   // Fetch counts on component mount
   useEffect(() => {
@@ -28,9 +29,11 @@ export default function SyncButtons() {
   const fetchCounts = async () => {
     setLoadingCounts(true)
     try {
-      const [emailResponse, accountingResponse] = await Promise.all([
+      const [emailResponse, accountingResponse, emailSyncResponse, xeroSyncResponse] = await Promise.all([
         fetch('/api/admin/sync-emails'),
-        fetch('/api/xero/status?timeWindow=24h')
+        fetch('/api/xero/status?timeWindow=24h'),
+        fetch('/api/admin/system-events?type=email_sync&limit=1'),
+        fetch('/api/admin/system-events?type=xero_sync&limit=1')
       ])
 
       if (emailResponse.ok) {
@@ -49,6 +52,27 @@ export default function SyncButtons() {
           pendingInvoices: accountingData.stats?.pending_invoices || 0,
           pendingPayments: accountingData.stats?.pending_payments || 0
         }))
+      }
+
+      // Get last cron sync times
+      if (emailSyncResponse.ok) {
+        const emailSyncData = await emailSyncResponse.json()
+        if (emailSyncData.events && emailSyncData.events.length > 0) {
+          const lastEvent = emailSyncData.events[0]
+          if (lastEvent.initiator === 'cron_job') {
+            setLastCronSync(prev => ({ ...prev, emails: new Date(lastEvent.completed_at).toLocaleString() }))
+          }
+        }
+      }
+
+      if (xeroSyncResponse.ok) {
+        const xeroSyncData = await xeroSyncResponse.json()
+        if (xeroSyncData.events && xeroSyncData.events.length > 0) {
+          const lastEvent = xeroSyncData.events[0]
+          if (lastEvent.initiator === 'cron_job') {
+            setLastCronSync(prev => ({ ...prev, accounting: new Date(lastEvent.completed_at).toLocaleString() }))
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to fetch sync counts:', error)
@@ -130,9 +154,14 @@ export default function SyncButtons() {
               {counts.pendingEmails} staged • {counts.failedEmails} failed
             </div>
           )}
+          {lastCronSync.emails && (
+            <div className="mt-1 text-xs text-blue-600">
+              Last cron: {lastCronSync.emails}
+            </div>
+          )}
           {lastSync.emails && (
             <div className="mt-1 text-xs text-green-600">
-              Last synced: {lastSync.emails}
+              Last manual: {lastSync.emails}
             </div>
           )}
         </button>
@@ -172,9 +201,14 @@ export default function SyncButtons() {
               {counts.pendingInvoices} invoices • {counts.pendingPayments} payments
             </div>
           )}
+          {lastCronSync.accounting && (
+            <div className="mt-1 text-xs text-blue-600">
+              Last cron: {lastCronSync.accounting}
+            </div>
+          )}
           {lastSync.accounting && (
             <div className="mt-1 text-xs text-green-600">
-              Last synced: {lastSync.accounting}
+              Last manual: {lastSync.accounting}
             </div>
           )}
         </button>

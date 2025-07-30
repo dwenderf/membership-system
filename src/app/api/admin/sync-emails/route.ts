@@ -7,6 +7,10 @@ export async function POST(request: NextRequest) {
     // Verify admin access (you might want to add more robust auth here)
     const supabase = createAdminClient()
     
+    // Get user info for initiator
+    const { data: { user } } = await supabase.auth.getUser()
+    const initiator = user ? `manual (${user.email})` : 'manual (unknown)'
+    
     // Get pending email count
     const { count: pendingEmails } = await supabase
       .from('email_logs')
@@ -21,9 +25,26 @@ export async function POST(request: NextRequest) {
       .eq('status', 'failed')
       .gte('created_at', twentyFourHoursAgo)
 
+    const startTime = new Date()
+    
     // Process emails
     const { emailProcessingManager } = await import('@/lib/email/batch-sync-email')
     const results = await emailProcessingManager.processStagedEmails({ limit: 100 })
+
+    // Log system event
+    const { logSyncEvent } = await import('@/lib/system-events')
+    await logSyncEvent(
+      'email_sync',
+      initiator,
+      startTime,
+      {
+        processed: results.results?.processed || 0,
+        successful: results.results?.successful || 0,
+        failed: results.results?.failed || 0,
+        errors: results.results?.errors
+      },
+      results.error
+    )
 
     logger.logBatchProcessing('admin-sync-emails', 'Manual email sync triggered from admin dashboard', {
       pendingEmails,

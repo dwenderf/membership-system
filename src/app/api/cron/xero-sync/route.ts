@@ -26,8 +26,23 @@ export async function GET(request: NextRequest) {
 
     logger.logXeroSync('cron-sync-processing', `Processing Xero sync: ${pendingCount} pending records to sync`, { pendingCount })
 
+    const startTime = new Date()
+    
     // Run the batch sync with Pro plan optimizations
     const results = await xeroBatchSyncManager.syncAllPendingRecords()
+    
+    // Log system event
+    const { logSyncEvent } = await import('@/lib/system-events')
+    await logSyncEvent(
+      'xero_sync',
+      'cron_job',
+      startTime,
+      {
+        processed: results.invoices.synced + results.invoices.failed + results.payments.synced + results.payments.failed,
+        successful: results.invoices.synced + results.payments.synced,
+        failed: results.invoices.failed + results.payments.failed
+      }
+    )
     
     logger.logXeroSync('cron-sync-results', 'Scheduled Xero sync completed', {
       invoices: { synced: results.invoices.synced, failed: results.invoices.failed },

@@ -6,7 +6,6 @@
  */
 
 import { createAdminClient } from './supabase/server'
-import { Database } from '../types/database'
 import { logger } from './logging/logger'
 
 export interface BatchJob {

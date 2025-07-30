@@ -18,8 +18,10 @@ export default function SyncButtons() {
   })
   const [loading, setLoading] = useState({ emails: false, accounting: false })
   const [loadingCounts, setLoadingCounts] = useState(true)
-  const [lastSync, setLastSync] = useState<{ emails?: string; accounting?: string }>({})
-  const [lastCronSync, setLastCronSync] = useState<{ emails?: string; accounting?: string }>({})
+  const [lastSync, setLastSync] = useState<{ 
+    emails?: { time: string; processed: number; failed: number }; 
+    accounting?: { time: string; processed: number; failed: number } 
+  }>({})
 
   // Fetch counts on component mount
   useEffect(() => {
@@ -54,14 +56,19 @@ export default function SyncButtons() {
         }))
       }
 
-      // Get last cron sync times
+      // Get last sync times
       if (emailSyncResponse.ok) {
         const emailSyncData = await emailSyncResponse.json()
         if (emailSyncData.events && emailSyncData.events.length > 0) {
           const lastEvent = emailSyncData.events[0]
-          if (lastEvent.initiator === 'cron_job') {
-            setLastCronSync(prev => ({ ...prev, emails: new Date(lastEvent.completed_at).toLocaleString() }))
-          }
+          setLastSync(prev => ({ 
+            ...prev, 
+            emails: {
+              time: new Date(lastEvent.completed_at).toLocaleString(),
+              processed: lastEvent.records_processed || 0,
+              failed: lastEvent.records_failed || 0
+            }
+          }))
         }
       }
 
@@ -69,9 +76,14 @@ export default function SyncButtons() {
         const xeroSyncData = await xeroSyncResponse.json()
         if (xeroSyncData.events && xeroSyncData.events.length > 0) {
           const lastEvent = xeroSyncData.events[0]
-          if (lastEvent.initiator === 'cron_job') {
-            setLastCronSync(prev => ({ ...prev, accounting: new Date(lastEvent.completed_at).toLocaleString() }))
-          }
+          setLastSync(prev => ({ 
+            ...prev, 
+            accounting: {
+              time: new Date(lastEvent.completed_at).toLocaleString(),
+              processed: lastEvent.records_processed || 0,
+              failed: lastEvent.records_failed || 0
+            }
+          }))
         }
       }
     } catch (error) {
@@ -86,7 +98,14 @@ export default function SyncButtons() {
     try {
       const response = await fetch('/api/admin/sync-emails', { method: 'POST' })
       if (response.ok) {
-        setLastSync(prev => ({ ...prev, emails: new Date().toLocaleTimeString() }))
+        setLastSync(prev => ({ 
+          ...prev, 
+          emails: {
+            time: new Date().toLocaleTimeString(),
+            processed: 0,
+            failed: 0
+          }
+        }))
         await fetchCounts() // Refresh counts
       } else {
         console.error('Email sync failed')
@@ -103,7 +122,14 @@ export default function SyncButtons() {
     try {
       const response = await fetch('/api/xero/manual-sync', { method: 'POST' })
       if (response.ok) {
-        setLastSync(prev => ({ ...prev, accounting: new Date().toLocaleTimeString() }))
+        setLastSync(prev => ({ 
+          ...prev, 
+          accounting: {
+            time: new Date().toLocaleTimeString(),
+            processed: 0,
+            failed: 0
+          }
+        }))
         await fetchCounts() // Refresh counts
       } else {
         console.error('Accounting sync failed')
@@ -154,14 +180,15 @@ export default function SyncButtons() {
               {counts.pendingEmails} staged • {counts.failedEmails} failed
             </div>
           )}
-          {lastCronSync.emails && (
-            <div className="mt-1 text-xs text-blue-600">
-              Last cron: {lastCronSync.emails}
-            </div>
-          )}
           {lastSync.emails && (
-            <div className="mt-1 text-xs text-green-600">
-              Last manual: {lastSync.emails}
+            <div className="mt-1 text-xs text-blue-600">
+              Last synced: {lastSync.emails.time}
+              {lastSync.emails.processed > 0 && (
+                <span> • {lastSync.emails.processed} processed</span>
+              )}
+              {lastSync.emails.failed > 0 && (
+                <span className="text-red-600"> • {lastSync.emails.failed} failed</span>
+              )}
             </div>
           )}
         </button>
@@ -201,14 +228,15 @@ export default function SyncButtons() {
               {counts.pendingInvoices} invoices • {counts.pendingPayments} payments
             </div>
           )}
-          {lastCronSync.accounting && (
-            <div className="mt-1 text-xs text-blue-600">
-              Last cron: {lastCronSync.accounting}
-            </div>
-          )}
           {lastSync.accounting && (
-            <div className="mt-1 text-xs text-green-600">
-              Last manual: {lastSync.accounting}
+            <div className="mt-1 text-xs text-blue-600">
+              Last synced: {lastSync.accounting.time}
+              {lastSync.accounting.processed > 0 && (
+                <span> • {lastSync.accounting.processed} processed</span>
+              )}
+              {lastSync.accounting.failed > 0 && (
+                <span className="text-red-600"> • {lastSync.accounting.failed} failed</span>
+              )}
             </div>
           )}
         </button>

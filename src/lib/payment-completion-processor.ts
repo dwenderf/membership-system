@@ -112,10 +112,7 @@ export class PaymentCompletionProcessor {
       // Phase 2: Process confirmation emails (delegated to EmailProcessor)
       await emailProcessor.processConfirmationEmails(event)
 
-      // Phase 3: Process staged emails immediately (delegated to EmailProcessor)
-      await emailProcessor.processStagedEmails()
-
-      // Phase 4: Batch sync pending Xero records
+      // Phase 3: Batch sync pending Xero records
       await this.syncPendingXeroRecords()
 
       // Phase 5: Update discount usage tracking

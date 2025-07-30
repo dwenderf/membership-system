@@ -36,22 +36,34 @@ export async function GET(request: NextRequest) {
         'info'
       )
 
-      // Process staged emails
-      const { emailStagingManager } = await import('@/lib/email')
-      const emailResults = await emailStagingManager.processStagedEmails()
+      // Process failed email retries (not staged emails)
+      // Note: Staged emails are processed immediately by PaymentCompletionProcessor
+      // This endpoint only handles retries of failed emails
+      logger.logPaymentProcessing(
+        'cron-email-retry-start',
+        'Starting failed email retry processing',
+        {},
+        'info'
+      )
 
-      results.emailRetry.retried = emailResults.processed
-      results.emailRetry.successful = emailResults.successful
-      results.emailRetry.failed = emailResults.failed
+      // TODO: Implement failed email retry logic
+      // This should:
+      // 1. Query email_logs for failed emails (status = 'failed')
+      // 2. Retry emails that haven't exceeded max retry count
+      // 3. Use intelligent backoff for retries
+      
+      results.emailRetry.retried = 0
+      results.emailRetry.successful = 0
+      results.emailRetry.failed = 0
 
       logger.logPaymentProcessing(
-        'cron-email-processing-complete',
-        'Email processing completed',
+        'cron-email-retry-complete',
+        'Failed email retry processing completed (not yet implemented)',
         { 
-          processed: emailResults.processed, 
-          successful: emailResults.successful, 
-          failed: emailResults.failed,
-          errors: emailResults.errors
+          retried: 0,
+          successful: 0,
+          failed: 0,
+          note: 'Failed email retry logic needs to be implemented'
         },
         'info'
       )

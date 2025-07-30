@@ -32,8 +32,6 @@ export interface RetryStrategy {
 
 export class BatchProcessor {
   private supabase: ReturnType<typeof createAdminClient>
-  private isProcessing = false
-  private processingInterval?: NodeJS.Timeout
 
   // Default retry strategies for different operation types
   private readonly retryStrategies: Record<string, RetryStrategy> = {
@@ -349,77 +347,13 @@ export class BatchProcessor {
   }
 
   /**
-   * Start scheduled batch processing
+   * NOTE: Scheduled processing is not used in serverless environment.
+   * Scheduled tasks are handled by cron endpoints:
+   * - /api/cron/xero-sync
+   * - /api/cron/email-retry  
+   * - /api/cron/maintenance
+   * - /api/cron/cleanup
    */
-  async startScheduledProcessing(intervalMs: number = 60000): Promise<void> {
-    if (this.isProcessing) {
-      console.log('📋 Batch processing already running')
-      return
-    }
-
-    console.log(`⏰ Starting scheduled batch processing every ${intervalMs}ms`)
-    this.isProcessing = true
-
-    this.processingInterval = setInterval(async () => {
-      try {
-        await this.processScheduledBatches()
-      } catch (error) {
-        console.error('❌ Error in scheduled batch processing:', error)
-      }
-    }, intervalMs)
-  }
-
-  /**
-   * Stop scheduled batch processing
-   */
-  async stopScheduledProcessing(): Promise<void> {
-    if (!this.isProcessing) {
-      console.log('📋 Batch processing not running')
-      return
-    }
-
-    console.log('🛑 Stopping scheduled batch processing')
-    this.isProcessing = false
-
-    if (this.processingInterval) {
-      clearInterval(this.processingInterval)
-      this.processingInterval = undefined
-    }
-  }
-
-  /**
-   * Process scheduled batches (to be implemented by specific processors)
-   */
-  protected async processScheduledBatches(): Promise<void> {
-    console.log('🔄 Running scheduled batch processing...')
-    
-    try {
-      // Process staged emails using the dedicated email batch sync manager
-      const { emailBatchSyncManager } = await import('./email/batch-sync-email')
-      const emailJobId = await emailBatchSyncManager.createBatchJob()
-      const emailResults = await emailBatchSyncManager.processBatchJob(emailJobId)
-      
-      if (emailResults.success && emailResults.results) {
-        console.log('📧 Email batch processing results:', {
-          processed: emailResults.results.processed,
-          successful: emailResults.results.successful,
-          failed: emailResults.results.failed,
-          errors: emailResults.results.errors
-        })
-      } else {
-        console.error('❌ Email batch processing failed:', emailResults.error)
-      }
-
-      // TODO: Add other batch processing operations:
-      // - Processing pending Xero sync records
-      // - Retrying failed operations
-      // - Cleaning up old records
-      
-      console.log('✅ Scheduled batch processing completed')
-    } catch (error) {
-      console.error('❌ Scheduled batch processing failed:', error)
-    }
-  }
 
   /**
    * Optimize batch size based on dataset size
@@ -577,8 +511,8 @@ export class BatchProcessor {
    */
   getStatus() {
     return {
-      isProcessing: this.isProcessing,
-      hasInterval: !!this.processingInterval,
+      isProcessing: false, // Not used in serverless environment
+      hasInterval: false, // Not used in serverless environment
       retryStrategies: Object.keys(this.retryStrategies)
     }
   }

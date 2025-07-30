@@ -113,10 +113,21 @@ export class PaymentCompletionProcessor {
       await emailProcessor.processConfirmationEmails(event)
 
       // Phase 3: Process staged emails immediately (for immediate delivery)
-      await this.processStagedEmails()
+      // Note: This processes the emails that were just staged in Phase 2
+      // Fire-and-forget: don't await to avoid delaying payment completion
+      this.processStagedEmails().catch(error => {
+        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email processing failed (non-blocking)', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        }, 'error')
+      })
 
       // Phase 4: Batch sync pending Xero records
-      await this.syncPendingXeroRecords()
+      // Fire-and-forget: don't await to avoid delaying payment completion
+      this.syncPendingXeroRecords().catch(error => {
+        this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Xero sync failed (non-blocking)', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        }, 'error')
+      })
 
       // Phase 5: Update discount usage tracking
       await this.updateDiscountUsage(event)
@@ -591,21 +602,26 @@ export class PaymentCompletionProcessor {
 
   /**
    * Phase 2: Sync pending Xero records
+   * 
+   * Fire-and-forget method that doesn't block payment completion.
+   * All logging is handled within the Xero batch sync manager.
    */
   private async syncPendingXeroRecords() {
-    this.logger.logPaymentProcessing('sync-pending-xero-records', '🔄 Syncing pending Xero records...')
+    this.logger.logPaymentProcessing('sync-pending-xero-records', '🔄 Starting Xero sync (non-blocking)...')
     
     try {
       // Use the Xero batch sync manager to sync all pending records
-      const results = await xeroBatchSyncManager.syncAllPendingRecords()
-      
-      this.logger.logPaymentProcessing('sync-pending-xero-records', '📊 Xero sync results:', {
-        invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
-        payments: `${results.payments.synced} synced, ${results.payments.failed} failed`
+      // Fire-and-forget: don't await the results
+      xeroBatchSyncManager.syncAllPendingRecords().catch(error => {
+        this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Xero sync failed (non-blocking)', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        }, 'error')
       })
       
     } catch (error) {
-      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to sync pending Xero records:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+      this.logger.logPaymentProcessing('sync-pending-xero-records', '❌ Failed to start Xero sync', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }, 'error')
       // Don't throw - Xero sync failures shouldn't break other processing
     }
   }
@@ -614,30 +630,26 @@ export class PaymentCompletionProcessor {
 
   /**
    * Process staged emails immediately for immediate delivery
+   * 
+   * Fire-and-forget method that doesn't block payment completion.
+   * All logging is handled within the email processing manager.
    */
   private async processStagedEmails() {
-    this.logger.logPaymentProcessing('process-staged-emails', '📧 Processing staged emails for immediate delivery...')
+    this.logger.logPaymentProcessing('process-staged-emails', '📧 Starting staged email processing (non-blocking)...')
     
     try {
-      // Import and use the email batch sync manager to process staged emails
-      const { emailBatchSyncManager } = await import('./email/batch-sync-email')
-      const emailJobId = await emailBatchSyncManager.createBatchJob()
-      const emailResults = await emailBatchSyncManager.processBatchJob(emailJobId)
+      // Import and use the email processing manager to process staged emails
+      const { emailProcessingManager } = await import('./email/batch-sync-email')
       
-      if (emailResults.success && emailResults.results) {
-        this.logger.logPaymentProcessing('process-staged-emails', '✅ Email batch processing completed', {
-          processed: emailResults.results.processed,
-          successful: emailResults.results.successful,
-          failed: emailResults.results.failed,
-          errors: emailResults.results.errors
-        })
-      } else {
-        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email batch processing failed', { 
-          error: emailResults.error 
+      // Fire-and-forget: don't await the results
+      emailProcessingManager.processStagedEmails().catch(error => {
+        this.logger.logPaymentProcessing('process-staged-emails', '❌ Email processing failed (non-blocking)', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
         }, 'error')
-      }
+      })
+      
     } catch (error) {
-      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to process staged emails', { 
+      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to start email processing', { 
         error: error instanceof Error ? error.message : 'Unknown error' 
       }, 'error')
       // Don't throw - email processing failures shouldn't break the payment completion

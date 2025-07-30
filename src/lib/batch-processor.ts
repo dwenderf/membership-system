@@ -394,16 +394,21 @@ export class BatchProcessor {
     console.log('🔄 Running scheduled batch processing...')
     
     try {
-      // Process staged emails
-      const { emailStagingManager } = await import('./email')
-      const emailResults = await emailStagingManager.processStagedEmails()
+      // Process staged emails using the dedicated email batch sync manager
+      const { emailBatchSyncManager } = await import('./email/batch-sync-email')
+      const emailJobId = await emailBatchSyncManager.createBatchJob()
+      const emailResults = await emailBatchSyncManager.processBatchJob(emailJobId)
       
-      console.log('📧 Email batch processing results:', {
-        processed: emailResults.processed,
-        successful: emailResults.successful,
-        failed: emailResults.failed,
-        errors: emailResults.errors
-      })
+      if (emailResults.success && emailResults.results) {
+        console.log('📧 Email batch processing results:', {
+          processed: emailResults.results.processed,
+          successful: emailResults.results.successful,
+          failed: emailResults.results.failed,
+          errors: emailResults.results.errors
+        })
+      } else {
+        console.error('❌ Email batch processing failed:', emailResults.error)
+      }
 
       // TODO: Add other batch processing operations:
       // - Processing pending Xero sync records

@@ -6,7 +6,7 @@
  */
 
 import { batchProcessor } from './batch-processor'
-import { xeroBatchSyncManager } from './xero/batch-sync'
+import { xeroBatchSyncManager } from './xero/batch-sync-xero'
 import { xeroStagingManager } from './xero/staging'
 import { createAdminClient } from './supabase/server'
 import { Database } from '@/types/database'
@@ -383,7 +383,7 @@ export class ScheduledBatchProcessor {
    */
   private async getPendingXeroCount(): Promise<number> {
     try {
-      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync')
+      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync-xero')
       return await xeroBatchSyncManager.getPendingXeroCount()
     } catch (error) {
       logger.logXeroSync(

@@ -150,9 +150,21 @@ class EmailStagingManager {
 
       results.processed = pendingEmails.length
 
-      // Process each pending email
-      for (const emailLog of pendingEmails) {
+      // Process each pending email with delays to prevent overwhelming the email service
+      for (let i = 0; i < pendingEmails.length; i++) {
+        const emailLog = pendingEmails[i]
+        
         try {
+          logger.logPaymentProcessing(
+            'email-staged-processing',
+            `Processing email ${i + 1}/${pendingEmails.length}`,
+            { 
+              emailLogId: emailLog.id,
+              eventType: emailLog.event_type,
+              progress: `${i + 1}/${pendingEmails.length}`
+            }
+          )
+          
           const success = await this.sendStagedEmail(emailLog)
           
           if (success) {
@@ -164,6 +176,21 @@ class EmailStagingManager {
         } catch (emailError) {
           results.failed++
           results.errors.push(`Error processing email ${emailLog.id}: ${emailError instanceof Error ? emailError.message : String(emailError)}`)
+        }
+        
+        // Add delay between emails to prevent overwhelming the email service
+        // Skip delay for the last email
+        if (i < pendingEmails.length - 1) {
+          const delayMs = this.getEmailDelayMs()
+          logger.logPaymentProcessing(
+            'email-staged-delay',
+            `Waiting ${delayMs}ms before next email`,
+            { 
+              delayMs,
+              remainingEmails: pendingEmails.length - i - 1
+            }
+          )
+          await this.delay(delayMs)
         }
       }
 
@@ -183,6 +210,30 @@ class EmailStagingManager {
       results.errors.push(`Batch processing error: ${error instanceof Error ? error.message : String(error)}`)
       return results
     }
+  }
+
+  /**
+   * Get delay between emails in milliseconds
+   * Configurable delay to prevent overwhelming the email service
+   */
+  private getEmailDelayMs(): number {
+    // Default delay: 1 second between emails
+    // Can be made configurable via environment variable
+    const configDelay = process.env.LOOPS_EMAIL_BATCH_DELAY_MS
+    if (configDelay) {
+      const parsed = parseInt(configDelay, 10)
+      if (!isNaN(parsed) && parsed >= 0) {
+        return parsed
+      }
+    }
+    return 150 // Default 150ms
+  }
+
+  /**
+   * Add delay between operations
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   /**

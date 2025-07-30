@@ -123,10 +123,10 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       
       membershipRecord = updatedMembership
       console.log('Successfully updated membership payment status to paid')
-    } else {
-      membershipRecord = existingMembership
-    }
-  } else {
+      } else {
+    membershipRecord = existingMembership
+  }
+} else {
     // Calculate dates - need to determine if this extends an existing membership
     const { data: userMemberships } = await supabase
       .from('user_memberships')

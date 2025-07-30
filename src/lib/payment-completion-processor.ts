@@ -44,7 +44,7 @@
  */
 
 import { xeroStagingManager } from '@/lib/xero/staging'
-import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
+import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 import { emailProcessor } from '@/lib/email'
 import { Logger } from '@/lib/logging/logger'
 

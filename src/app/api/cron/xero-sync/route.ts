@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
+import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {

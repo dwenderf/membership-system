@@ -730,7 +730,7 @@ export class XeroStagingManager {
    */
   async getPendingStagingRecords() {
     try {
-      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync')
+      const { xeroBatchSyncManager } = await import('@/lib/xero/batch-sync-xero')
       const { invoices, payments } = await xeroBatchSyncManager.getPendingXeroRecords()
       
       return {

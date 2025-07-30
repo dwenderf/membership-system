@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { xeroBatchSyncManager } from '@/lib/xero/batch-sync'
+import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 
 export async function POST(request: NextRequest) {
   try {

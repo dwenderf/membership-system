@@ -6,6 +6,7 @@ export interface StripePaymentData {
   payment_id: string
   xero_invoice_id: string
   stripe_payment_intent_id: string
+  stripe_charge_id: string | null
   gross_amount: number // in cents
   net_amount: number // in cents (after Stripe fees)
   stripe_fee_amount: number // in cents
@@ -88,7 +89,7 @@ export async function recordStripePaymentInXero(
       },
       amount: stripePaymentData.net_amount / 100, // Convert to dollars (net amount after fees)
       date: stripePaymentData.payment_date,
-      reference: stripePaymentData.reference || ''
+      reference: stripePaymentData.reference || stripePaymentData.stripe_charge_id || ''
     }
 
     const paymentResponse = await xeroApi.accountingApi.createPayments(tenantId, {
@@ -269,6 +270,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
       .select(`
         id,
         stripe_payment_intent_id,
+        stripe_charge_id,
         final_amount,
         stripe_fee_amount,
         completed_at
@@ -290,6 +292,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
       payment_id: payment.id,
       xero_invoice_id: paymentId, // This will be corrected in the calling function
       stripe_payment_intent_id: payment.stripe_payment_intent_id,
+      stripe_charge_id: payment.stripe_charge_id,
       gross_amount: grossAmount,
       net_amount: netAmount,
       stripe_fee_amount: stripeFeeAmount,

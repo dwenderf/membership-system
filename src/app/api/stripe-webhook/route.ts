@@ -9,31 +9,29 @@ import { logger } from '@/lib/logging/logger'
 // Force import server config
 
 
-// Helper function to get actual Stripe fees from balance transaction
+// Helper function to get actual Stripe fees from charge
 async function getStripeFeeAmount(paymentIntent: Stripe.PaymentIntent): Promise<number> {
   try {
-    // Retrieve the payment intent with expanded balance transaction to get actual fees
+    // Retrieve the payment intent with expanded charge to get actual fees
     const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
-      expand: ['latest_charge.balance_transaction']
+      expand: ['latest_charge']
     })
     
     if (expandedPaymentIntent.latest_charge && 
         typeof expandedPaymentIntent.latest_charge === 'object' && 
-        'balance_transaction' in expandedPaymentIntent.latest_charge &&
-        expandedPaymentIntent.latest_charge.balance_transaction &&
-        typeof expandedPaymentIntent.latest_charge.balance_transaction === 'object' &&
-        'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
+        'fee' in expandedPaymentIntent.latest_charge &&
+        typeof expandedPaymentIntent.latest_charge.fee === 'number') {
       
-      const stripeFeeAmount = expandedPaymentIntent.latest_charge.balance_transaction.fee
+      const stripeFeeAmount = expandedPaymentIntent.latest_charge.fee
       console.log(`✅ Retrieved actual Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
       return stripeFeeAmount
     } else {
-      // Fallback to 0 if balance transaction is not available
-      console.log(`⚠️ Balance transaction not available, setting fee to 0 for payment ${paymentIntent.id}`)
+      // Fallback to 0 if charge is not available
+      console.log(`⚠️ Charge not available, setting fee to 0 for payment ${paymentIntent.id}`)
       return 0
     }
   } catch (feeError) {
-    // Fallback to 0 if there's an error retrieving the balance transaction
+    // Fallback to 0 if there's an error retrieving the charge
     console.error(`❌ Error retrieving Stripe fees, setting fee to 0 for payment ${paymentIntent.id}`, feeError)
     return 0
   }
@@ -145,6 +143,11 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
   // Get actual Stripe fees from the balance transaction
   const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
   
+  // Get charge ID from payment intent
+  const chargeId = paymentIntent.latest_charge && typeof paymentIntent.latest_charge === 'object' 
+    ? (paymentIntent.latest_charge as any).id 
+    : null
+  
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
@@ -152,7 +155,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       status: 'completed',
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      stripe_fee_amount: stripeFeeAmount
+      stripe_fee_amount: stripeFeeAmount,
+      stripe_charge_id: chargeId
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -210,7 +214,11 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
       amount: paymentIntent.amount,
       trigger_source: 'stripe_webhook_membership',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      metadata: {
+        payment_intent_id: paymentIntent.id,
+        charge_id: chargeId
+      }
     })
     console.log('✅ Payment completion processor returned successfully:', processorResult)
     console.log('✅ Triggered payment completion processor for membership')
@@ -337,6 +345,11 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
   // Get actual Stripe fees from the balance transaction
   const stripeFeeAmount = await getStripeFeeAmount(paymentIntent)
   
+  // Get charge ID from payment intent
+  const chargeId = paymentIntent.latest_charge && typeof paymentIntent.latest_charge === 'object' 
+    ? (paymentIntent.latest_charge as any).id 
+    : null
+  
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
@@ -344,7 +357,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       status: 'completed',
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      stripe_fee_amount: stripeFeeAmount
+      stripe_fee_amount: stripeFeeAmount,
+      stripe_charge_id: chargeId
     })
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .select()
@@ -401,7 +415,11 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
       amount: paymentIntent.amount,
       trigger_source: 'stripe_webhook_registration',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      metadata: {
+        payment_intent_id: paymentIntent.id,
+        charge_id: chargeId
+      }
     })
     console.log('✅ Registration payment completion processor returned successfully:', processorResult)
     console.log('✅ Triggered payment completion processor for registration')

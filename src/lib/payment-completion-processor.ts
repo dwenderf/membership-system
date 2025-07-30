@@ -58,6 +58,7 @@ type PaymentCompletionEvent = {
   timestamp: string
   metadata?: {
     payment_intent_id?: string
+    charge_id?: string
     failure_reason?: string
     failed?: boolean
   }
@@ -459,6 +460,9 @@ export class PaymentCompletionProcessor {
           payment_id: event.payment_id,
           ...(event.metadata?.payment_intent_id && {
             stripe_payment_intent_id: event.metadata.payment_intent_id
+          }),
+          ...(event.metadata?.charge_id && {
+            stripe_charge_id: event.metadata.charge_id
           }),
           updated_at: new Date().toISOString()
         }

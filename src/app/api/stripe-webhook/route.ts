@@ -474,6 +474,62 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
   console.log('Successfully processed registration payment intent:', paymentIntent.id)
 }
 
+// Handle charge updated events (when balance transaction becomes available)
+async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
+  try {
+    console.log('🔄 Processing charge updated event for fee update...')
+    
+    // Get the payment record by payment intent ID
+    const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
+    if (!paymentIntentId) {
+      console.log('⚠️ No payment intent ID found in charge')
+      return
+    }
+    
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .single()
+    
+    if (paymentError || !payment) {
+      console.log('⚠️ No payment record found for charge update:', paymentIntentId)
+      return
+    }
+    
+    // Get the balance transaction to retrieve the fee
+    const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction as string)
+    
+    if (!balanceTransaction || !balanceTransaction.fee) {
+      console.log('⚠️ No fee found in balance transaction:', charge.balance_transaction)
+      return
+    }
+    
+    const feeAmount = balanceTransaction.fee
+    console.log(`💰 Found fee in balance transaction: $${(feeAmount / 100).toFixed(2)}`)
+    
+    // Update the payment record with the fee
+    const { error: updateError } = await supabase
+      .from('payments')
+      .update({
+        stripe_fee_amount: feeAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', payment.id)
+    
+    if (updateError) {
+      console.error('❌ Error updating payment with fee:', updateError)
+      return
+    }
+    
+    console.log(`✅ Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`)
+    console.log('✅ Successfully processed charge updated event - fee updated in database')
+    
+  } catch (error) {
+    console.error('❌ Error processing charge updated event:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Log webhook receipt immediately for debugging
   try {
@@ -550,6 +606,29 @@ export async function POST(request: NextRequest) {
             hasDurationMonths: !!paymentIntent.metadata.durationMonths,
             allMetadataKeys: Object.keys(paymentIntent.metadata),
             allMetadata: paymentIntent.metadata
+          })
+        }
+        break
+      }
+      
+      case 'charge.updated': {
+        const charge = event.data.object as Stripe.Charge
+        
+        console.log('🔍 Charge updated webhook received:', {
+          chargeId: charge.id,
+          paymentIntentId: charge.payment_intent,
+          hasBalanceTransaction: !!charge.balance_transaction,
+          balanceTransactionId: charge.balance_transaction
+        })
+        
+        // Only process if balance transaction is now available
+        if (charge.balance_transaction && typeof charge.balance_transaction === 'string') {
+          await handleChargeUpdated(supabase, charge)
+        } else {
+          console.log('⚠️ Charge updated but no balance transaction available yet:', {
+            chargeId: charge.id,
+            balanceTransaction: charge.balance_transaction,
+            balanceTransactionType: typeof charge.balance_transaction
           })
         }
         break

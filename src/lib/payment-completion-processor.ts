@@ -402,11 +402,22 @@ export class PaymentCompletionProcessor {
     
     try {
       await this.initialize()
+      
+      // Update staging metadata to include payment intent ID if available
+      const updatedStagingMetadata = {
+        ...existingRecords.staging_metadata,
+        ...(event.metadata?.payment_intent_id && {
+          stripe_payment_intent_id: event.metadata.payment_intent_id
+        }),
+        updated_at: new Date().toISOString()
+      }
+      
       const updateData = {
         sync_status: options.success ? 'pending' : 'failed',
         invoice_status: options.success ? 'AUTHORISED' : 'DRAFT',
         payment_id: options.success ? event.payment_id : null,
         sync_error: options.success ? null : options.error,
+        staging_metadata: updatedStagingMetadata,
         last_synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -446,6 +457,9 @@ export class PaymentCompletionProcessor {
         const updatedPaymentMetadata = {
           ...existingPaymentRecord?.staging_metadata,
           payment_id: event.payment_id,
+          ...(event.metadata?.payment_intent_id && {
+            stripe_payment_intent_id: event.metadata.payment_intent_id
+          }),
           updated_at: new Date().toISOString()
         }
         

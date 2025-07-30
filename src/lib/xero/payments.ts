@@ -88,7 +88,7 @@ export async function recordStripePaymentInXero(
       },
       amount: stripePaymentData.net_amount / 100, // Convert to dollars (net amount after fees)
       date: stripePaymentData.payment_date,
-      reference: stripePaymentData.reference || `Stripe: ${stripePaymentData.stripe_payment_intent_id}`
+      reference: stripePaymentData.reference || ''
     }
 
     const paymentResponse = await xeroApi.accountingApi.createPayments(tenantId, {
@@ -294,7 +294,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
       net_amount: netAmount,
       stripe_fee_amount: stripeFeeAmount,
       payment_date: payment.completed_at ? new Date(payment.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      reference: `Stripe: ${payment.stripe_payment_intent_id}`
+      reference: ''
     }
 
   } catch (error) {

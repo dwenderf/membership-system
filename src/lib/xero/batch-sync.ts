@@ -532,7 +532,7 @@ export class XeroBatchSyncManager {
         date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
         dueDate: new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from creation
         // Let Xero generate its own invoice number - don't set invoiceNumber here
-        reference: metadata.stripe_payment_intent_id || '',        
+        reference: metadata.stripe_payment_intent_id || '',
         status: Invoice.StatusEnum.AUTHORISED,
         currencyCode: CurrencyCode.USD
       }
@@ -876,7 +876,7 @@ export class XeroBatchSyncManager {
       // Get the associated invoice record
       const { data: invoiceRecord } = await this.supabase
         .from('xero_invoices')
-        .select('xero_invoice_id')
+        .select('xero_invoice_id, invoice_number')
         .eq('id', paymentRecord.xero_invoice_id)
         .single()
 
@@ -980,7 +980,7 @@ export class XeroBatchSyncManager {
         },
         amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
         date: new Date().toISOString().split('T')[0],
-        reference: paymentRecord.reference || ((paymentRecord.staging_metadata as any)?.stripe_payment_intent_id || '')
+        reference: paymentRecord.reference || invoiceRecord.invoice_number || ''
       }
 
       console.log('📤 Creating payment in Xero:', {

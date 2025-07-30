@@ -311,7 +311,7 @@ export class XeroStagingManager {
             bank_account_code: stripeBankAccountCode,
             amount_paid: data.final_amount,
             stripe_fee_amount: 0, // Will be calculated when payment is completed
-            reference: data.stripe_payment_intent_id || '',
+            reference: '', // Will be set to invoice number during sync
             sync_status: 'staged',
             staged_at: new Date().toISOString(),
             staging_metadata: {

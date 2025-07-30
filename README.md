@@ -984,6 +984,87 @@ The system implements a robust, multi-stage payment processing pipeline that ens
 └─────────────────┘    └─────────────────────┘    └─────────────────┘
 ```
 
+### Email Processing Architecture
+
+The system implements a **fire-and-forget email processing architecture** optimized for serverless environments to ensure fast payment completion responses while maintaining reliable email delivery.
+
+#### Email Processing Flow
+
+```
+Payment Completion (Fast Response):
+┌─────────────────────────────────────┐
+│ PaymentCompletionProcessor          │
+│ ├─ Phase 1: Xero staging (awaited)  │
+│ ├─ Phase 2: Email staging (awaited) │
+│ ├─ Phase 3: Email processing (fire-and-forget) │
+│ ├─ Phase 4: Xero sync (fire-and-forget) │
+│ └─ Phase 5: Discount usage (awaited) │
+└─────────────────────────────────────┘
+
+Background Email Processing:
+┌─────────────────────────────────────┐
+│ EmailProcessingManager              │
+│ └─ emailStagingManager.processStagedEmails() │
+│    └─ Send emails one by one with delays │
+└─────────────────────────────────────┘
+
+Scheduled Tasks (Cron):
+┌─────────────────────────────────────┐
+│ Cron Endpoints                      │
+│ ├─ /api/cron/email-retry           │
+│ ├─ /api/cron/maintenance           │
+│ └─ /api/cron/cleanup               │
+└─────────────────────────────────────┘
+```
+
+#### Key Design Principles
+
+**1. Single Source of Truth**
+- Only `PaymentCompletionProcessor` handles staged email processing
+- No duplicate processing from background services
+- Eliminates race conditions and duplicate emails
+
+**2. Fire-and-Forget Processing**
+- Payment completion doesn't wait for email processing
+- Immediate response to users for better UX
+- Background failures don't affect payment completion
+
+**3. Serverless-Optimized**
+- No long-running processes or `setInterval` calls
+- All scheduled tasks handled by Vercel cron endpoints
+- Removed unused scheduled processing methods
+
+**4. Simple Email Processing**
+- No complex batch job system for emails
+- Direct processing of staged emails with delays
+- Clear separation between staging and sending
+
+#### Email Processing Components
+
+**Email Staging Manager** (`src/lib/email/staging.ts`)
+- Stages emails in database for batch processing
+- Handles email delays and rate limiting
+- Processes emails one by one with configurable delays
+
+**Email Processing Manager** (`src/lib/email/batch-sync-email.ts`)
+- Simplified email processing utility
+- No complex batch job system
+- Direct processing of staged emails
+
+**Payment Completion Processor** (`src/lib/payment-completion-processor.ts`)
+- Stages confirmation emails during payment completion
+- Triggers fire-and-forget email processing
+- Ensures emails are queued for immediate delivery
+
+#### Benefits
+
+1. **Fast Payment Response** - Payment completion returns immediately
+2. **No Duplicate Emails** - Single source of truth for email processing
+3. **Better UX** - Users get immediate confirmation
+4. **Error Isolation** - Background failures don't affect payment completion
+5. **Serverless Compatible** - No long-running processes
+6. **Simple Architecture** - Easy to understand and maintain
+
 ### Detailed Flow
 
 #### 1. Payment Initiation
@@ -1305,6 +1386,69 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 3. **Check Xero** for created contact, invoice, and payment
 4. **Verify sync status** in admin interface
 5. **Test bulk sync** features with historical data
+
+---
+
+## Recent Optimizations & Cleanup
+
+### Email Processing Architecture Overhaul (Latest)
+
+**Problem Solved**: Duplicate email processing and slow payment completion responses due to complex batch job systems.
+
+**Changes Made**:
+- ✅ **Removed duplicate email processing** - Only PaymentCompletionProcessor handles staged emails
+- ✅ **Simplified batch processing** - Removed complex batch job system for emails
+- ✅ **Fire-and-forget processing** - Payment completion doesn't wait for emails/Xero sync
+- ✅ **Serverless optimization** - Removed unused scheduled processing methods
+- ✅ **Cleaner codebase** - Removed 738+ lines of unused code
+
+**Performance Improvements**:
+- **Faster payment completion** - Immediate response to users
+- **No duplicate emails** - Single source of truth for email processing
+- **Better error isolation** - Background failures don't affect payment completion
+- **Simplified architecture** - Easier to understand and maintain
+
+### Architecture Cleanup
+
+**Removed Components**:
+- ❌ `ScheduledBatchProcessor` - Unused scheduled processing logic
+- ❌ Complex batch job system for emails - Unnecessary complexity
+- ❌ Unused `Database` imports - Cleaned up imports
+- ❌ Duplicate email processing paths - Single source of truth
+
+**Optimized Components**:
+- ✅ `BatchProcessor` - Kept for Xero sync operations (actively used)
+- ✅ `EmailProcessingManager` - Simplified email processing utility
+- ✅ `PaymentCompletionProcessor` - Fire-and-forget architecture
+- ✅ Cron endpoints - Handle all scheduled tasks in serverless environment
+
+**Current Architecture**:
+```
+Payment Completion (Fast):
+┌─────────────────────────────────────┐
+│ PaymentCompletionProcessor          │
+│ ├─ Phase 1: Xero staging (awaited)  │
+│ ├─ Phase 2: Email staging (awaited) │
+│ ├─ Phase 3: Email processing (fire-and-forget) │
+│ ├─ Phase 4: Xero sync (fire-and-forget) │
+│ └─ Phase 5: Discount usage (awaited) │
+└─────────────────────────────────────┘
+
+Scheduled Tasks (Cron):
+┌─────────────────────────────────────┐
+│ Cron Endpoints                      │
+│ ├─ /api/cron/xero-sync             │
+│ ├─ /api/cron/email-retry           │
+│ ├─ /api/cron/maintenance           │
+│ └─ /api/cron/cleanup               │
+└─────────────────────────────────────┘
+
+Batch Processing (Xero Only):
+┌─────────────────────────────────────┐
+│ BatchProcessor                      │
+│ └─ Used by Xero sync operations    │
+└─────────────────────────────────────┘
+```
 
 ---
 

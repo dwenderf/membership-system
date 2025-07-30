@@ -17,6 +17,7 @@ export default function SyncButtons() {
     pendingPayments: 0
   })
   const [loading, setLoading] = useState({ emails: false, accounting: false })
+  const [loadingCounts, setLoadingCounts] = useState(true)
   const [lastSync, setLastSync] = useState<{ emails?: string; accounting?: string }>({})
 
   // Fetch counts on component mount
@@ -25,6 +26,7 @@ export default function SyncButtons() {
   }, [])
 
   const fetchCounts = async () => {
+    setLoadingCounts(true)
     try {
       const [emailResponse, accountingResponse] = await Promise.all([
         fetch('/api/admin/sync-emails'),
@@ -50,6 +52,8 @@ export default function SyncButtons() {
       }
     } catch (error) {
       console.error('Failed to fetch sync counts:', error)
+    } finally {
+      setLoadingCounts(false)
     }
   }
 
@@ -96,7 +100,7 @@ export default function SyncButtons() {
       <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <button
           onClick={handleEmailSync}
-          disabled={loading.emails || totalPendingEmails === 0}
+          disabled={loading.emails || loadingCounts || totalPendingEmails === 0}
           className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="text-gray-900 font-medium flex items-center justify-between">
@@ -106,7 +110,12 @@ export default function SyncButtons() {
             )}
           </div>
           <div className="mt-1 text-sm text-gray-500">
-            {totalPendingEmails > 0 ? (
+            {loadingCounts ? (
+              <span className="text-blue-600 font-medium flex items-center">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                Checking status...
+              </span>
+            ) : totalPendingEmails > 0 ? (
               <span className="text-orange-600 font-medium">
                 {totalPendingEmails} pending emails
               </span>
@@ -133,7 +142,7 @@ export default function SyncButtons() {
       <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <button
           onClick={handleAccountingSync}
-          disabled={loading.accounting || totalPendingAccounting === 0}
+          disabled={loading.accounting || loadingCounts || totalPendingAccounting === 0}
           className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="text-gray-900 font-medium flex items-center justify-between">
@@ -143,7 +152,12 @@ export default function SyncButtons() {
             )}
           </div>
           <div className="mt-1 text-sm text-gray-500">
-            {totalPendingAccounting > 0 ? (
+            {loadingCounts ? (
+              <span className="text-blue-600 font-medium flex items-center">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                Checking status...
+              </span>
+            ) : totalPendingAccounting > 0 ? (
               <span className="text-orange-600 font-medium">
                 {totalPendingAccounting} pending records
               </span>

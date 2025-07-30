@@ -28,7 +28,7 @@ export default function SyncButtons() {
     try {
       const [emailResponse, accountingResponse] = await Promise.all([
         fetch('/api/admin/sync-emails'),
-        fetch('/api/admin/sync-accounting')
+        fetch('/api/xero/status?timeWindow=24h')
       ])
 
       if (emailResponse.ok) {
@@ -44,8 +44,8 @@ export default function SyncButtons() {
         const accountingData = await accountingResponse.json()
         setCounts(prev => ({
           ...prev,
-          pendingInvoices: accountingData.pendingInvoices,
-          pendingPayments: accountingData.pendingPayments
+          pendingInvoices: accountingData.stats?.pending_invoices || 0,
+          pendingPayments: accountingData.stats?.pending_payments || 0
         }))
       }
     } catch (error) {
@@ -73,7 +73,7 @@ export default function SyncButtons() {
   const handleAccountingSync = async () => {
     setLoading(prev => ({ ...prev, accounting: true }))
     try {
-      const response = await fetch('/api/admin/sync-accounting', { method: 'POST' })
+      const response = await fetch('/api/xero/manual-sync', { method: 'POST' })
       if (response.ok) {
         setLastSync(prev => ({ ...prev, accounting: new Date().toLocaleTimeString() }))
         await fetchCounts() // Refresh counts
@@ -96,8 +96,8 @@ export default function SyncButtons() {
       <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <button
           onClick={handleEmailSync}
-          disabled={loading.emails}
-          className="w-full text-left"
+          disabled={loading.emails || totalPendingEmails === 0}
+          className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="text-gray-900 font-medium flex items-center justify-between">
             <span>📧 Sync Emails</span>
@@ -111,7 +111,9 @@ export default function SyncButtons() {
                 {totalPendingEmails} pending emails
               </span>
             ) : (
-              'No pending emails'
+              <span className="text-green-600 font-medium">
+                ✅ All emails synced
+              </span>
             )}
           </div>
           {counts.pendingEmails > 0 && (
@@ -131,8 +133,8 @@ export default function SyncButtons() {
       <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <button
           onClick={handleAccountingSync}
-          disabled={loading.accounting}
-          className="w-full text-left"
+          disabled={loading.accounting || totalPendingAccounting === 0}
+          className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="text-gray-900 font-medium flex items-center justify-between">
             <span>📊 Sync Accounting</span>
@@ -146,7 +148,9 @@ export default function SyncButtons() {
                 {totalPendingAccounting} pending records
               </span>
             ) : (
-              'No pending records'
+              <span className="text-green-600 font-medium">
+                ✅ All records synced
+              </span>
             )}
           </div>
           {totalPendingAccounting > 0 && (

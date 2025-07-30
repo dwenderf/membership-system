@@ -109,14 +109,14 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-      {/* Manual Sync (Preview Environment) */}
+      {/* Manual Sync */}
       <div className="bg-white shadow rounded-lg mb-8">
         <div className="px-4 py-5 sm:p-6">
           <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-            Manual Sync (Preview Environment)
+            Manual Sync
           </h3>
           <p className="text-sm text-gray-600 mb-4">
-            Since cron jobs are not available in the preview environment, you can manually sync emails and accounting records here.
+            Manually sync emails and accounting records. In production, these are also handled automatically by cron jobs.
           </p>
           <SyncButtons />
         </div>

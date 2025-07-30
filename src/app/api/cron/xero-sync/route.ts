@@ -17,6 +17,16 @@ export async function GET(request: NextRequest) {
     
     if (pendingCount === 0) {
       logger.logXeroSync('cron-sync-skip', 'No pending Xero records to sync', { pendingCount: 0 })
+      
+      // Log system event even when no items to sync
+      const { logSyncEvent } = await import('@/lib/system-events')
+      await logSyncEvent(
+        'xero_sync',
+        'cron_job',
+        new Date(),
+        { processed: 0, successful: 0, failed: 0 }
+      )
+      
       return NextResponse.json({
         success: true,
         message: 'No pending records to sync',

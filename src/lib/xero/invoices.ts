@@ -467,9 +467,7 @@ export async function createXeroInvoiceForPayment(
       lineItems: lineItems,
       date: new Date().toISOString().split('T')[0], // Today's date
       dueDate: new Date().toISOString().split('T')[0], // Due today since it's already paid
-      reference: paymentData.stripe_payment_intent_id ? 
-                 `Stripe: ${paymentData.stripe_payment_intent_id}` : 
-                 `Payment: ${paymentId}`,
+      reference: '', // Keep reference empty - payment intent ID is not relevant for invoice creation
       currencyCode: CurrencyCode.USD // Configurable if needed
     }
 

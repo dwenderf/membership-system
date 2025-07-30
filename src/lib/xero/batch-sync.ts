@@ -532,7 +532,7 @@ export class XeroBatchSyncManager {
         date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
         dueDate: new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from creation
         // Let Xero generate its own invoice number - don't set invoiceNumber here
-        reference: metadata.stripe_payment_intent_id || '',
+        reference: '', // Keep reference empty - payment intent ID is not relevant for invoice creation
         status: Invoice.StatusEnum.AUTHORISED,
         currencyCode: CurrencyCode.USD
       }

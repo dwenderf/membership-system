@@ -12,9 +12,9 @@ import { logger } from '@/lib/logging/logger'
 // Helper function to get actual Stripe fees and charge ID from charge
 async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {
   try {
-    // First try to get the charge ID from the payment intent
+    // Retrieve the payment intent with expanded charge and balance transaction to get actual fees
     const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
-      expand: ['latest_charge']
+      expand: ['latest_charge', 'latest_charge.balance_transaction']
     })
     
     console.log(`🔍 Retrieved payment intent with charge data:`, {
@@ -30,33 +30,53 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
         'id' in expandedPaymentIntent.latest_charge) {
       
       const chargeId = expandedPaymentIntent.latest_charge.id
-      console.log(`🔍 Found charge ID: ${chargeId}, retrieving charge details...`)
+      console.log(`🔍 Found charge ID: ${chargeId}, checking for balance transaction...`)
       
-      // Now retrieve the charge directly to get the fee
-      const charge = await stripe.charges.retrieve(chargeId as string)
+      // Check if balance transaction is available in the expanded charge
+      if ('balance_transaction' in expandedPaymentIntent.latest_charge && 
+          expandedPaymentIntent.latest_charge.balance_transaction &&
+          typeof expandedPaymentIntent.latest_charge.balance_transaction === 'object' &&
+          'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
+        
+        const stripeFeeAmount = expandedPaymentIntent.latest_charge.balance_transaction.fee
+        console.log(`✅ Retrieved actual Stripe fee from balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+        return { fee: stripeFeeAmount, chargeId: chargeId as string }
+      }
+      
+      // Fallback: retrieve the charge directly to get the fee
+      console.log(`🔍 Balance transaction not available, retrieving charge directly...`)
+      const charge = await stripe.charges.retrieve(chargeId as string, {
+        expand: ['balance_transaction']
+      })
       
       console.log(`🔍 Retrieved charge data:`, {
         chargeId: charge.id,
-        hasFee: 'fee' in charge,
-        feeType: typeof (charge as any).fee,
-        feeValue: (charge as any).fee
+        hasBalanceTransaction: !!charge.balance_transaction,
+        balanceTransactionKeys: charge.balance_transaction && typeof charge.balance_transaction === 'object'
+          ? Object.keys(charge.balance_transaction)
+          : 'N/A',
+        hasFee: charge.balance_transaction && typeof charge.balance_transaction === 'object' && 'fee' in charge.balance_transaction,
+        feeType: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? typeof charge.balance_transaction.fee : 'undefined',
+        feeValue: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? charge.balance_transaction.fee : undefined
       })
       
-      if (charge && typeof (charge as any).fee === 'number') {
-        const stripeFeeAmount = (charge as any).fee
-        console.log(`✅ Retrieved actual Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+      if (charge.balance_transaction && 
+          typeof charge.balance_transaction === 'object' && 
+          'fee' in charge.balance_transaction &&
+          typeof charge.balance_transaction.fee === 'number') {
+        const stripeFeeAmount = charge.balance_transaction.fee
+        console.log(`✅ Retrieved actual Stripe fee from charge balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
       } else {
-        console.log(`⚠️ Fee not available in charge, setting fee to 0 for payment ${paymentIntent.id}`)
+        console.log(`⚠️ Fee not available in balance transaction, setting fee to 0 for payment ${paymentIntent.id}`)
         return { fee: 0, chargeId: chargeId as string }
       }
     } else {
-      // Fallback to 0 if charge is not available
       console.log(`⚠️ Charge not available, setting fee to 0 for payment ${paymentIntent.id}`)
       return { fee: 0, chargeId: null }
     }
   } catch (feeError) {
-    // Fallback to 0 if there's an error retrieving the charge
+    // Fallback to 0 if there's an error retrieving the balance transaction
     console.error(`❌ Error retrieving Stripe fees, setting fee to 0 for payment ${paymentIntent.id}`, feeError)
     return { fee: 0, chargeId: null }
   }

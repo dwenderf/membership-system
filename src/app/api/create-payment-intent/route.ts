@@ -517,7 +517,7 @@ export async function POST(request: NextRequest) {
 
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
-      amount: amount, // Amount in cents
+      amount: centsToCents(amount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
       payment_method_types: ['card', 'link'],

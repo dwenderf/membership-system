@@ -1204,9 +1204,9 @@ export async function POST(request: NextRequest) {
       .from('payments')
       .insert({
         user_id: user.id,
-        total_amount: amount,
-        discount_amount: discountAmount,
-        final_amount: finalAmount,
+        total_amount: centsToCents(amount),
+        discount_amount: centsToCents(discountAmount),
+        final_amount: centsToCents(finalAmount),
         stripe_payment_intent_id: paymentIntent.id,
         status: 'pending',
         payment_method: 'stripe',

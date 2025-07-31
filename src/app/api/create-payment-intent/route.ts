@@ -595,7 +595,7 @@ export async function POST(request: NextRequest) {
       // Don't fail the transaction, but log the issue
     }
 
-    const totalAmount = amount // This is the final amount sent from frontend
+    const totalAmount = centsToCents(amount) // Ensure integer cents
 
     // Create payment record in database
     const { data: paymentRecord, error: paymentError } = await supabase

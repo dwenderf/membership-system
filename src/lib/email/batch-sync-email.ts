@@ -187,6 +187,21 @@ export class EmailProcessingManager {
           }
         }
         
+        // Debug: Log the original and cleaned data
+        logger.logPaymentProcessing(
+          'email-data-debug',
+          'Email data conversion debug',
+          { 
+            emailLogId: emailLog.id,
+            originalData: emailData,
+            cleanedData: cleanData,
+            hasPurchaseDate: 'purchaseDate' in cleanData,
+            hasRegistrationDate: 'registrationDate' in cleanData,
+            purchaseDateValue: cleanData.purchaseDate,
+            registrationDateValue: cleanData.registrationDate
+          }
+        )
+        
         loopsResponse = await this.loops!.sendTransactionalEmail({
           transactionalId: emailLog.template_id,
           email: emailLog.email_address,

@@ -287,7 +287,7 @@ export class EmailProcessor {
           validFrom: membership.valid_from,
           validUntil: membership.valid_until,
           paymentIntentId: membership.stripe_payment_intent_id || 'unknown',
-          purchaseDate: (membership.created_at ?? new Date()).toLocaleDateString()
+          purchaseDate: (membership.created_at ? new Date(membership.created_at) : new Date()).toLocaleDateString()
         },
         related_entity_type: 'user_memberships',
         related_entity_id: event.record_id || undefined,
@@ -400,7 +400,7 @@ export class EmailProcessor {
           seasonName: registration.registration.season.name,
           amount: registration.amount_paid || 0,
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
-          registrationDate:(registration.created_at ?? new Date()).toLocaleDateString()
+          registrationDate: (registration.created_at ? new Date(registration.created_at) : new Date()).toLocaleDateString()
         },
         related_entity_type: 'user_registrations',
         related_entity_id: event.record_id || undefined,

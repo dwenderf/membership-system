@@ -50,16 +50,16 @@ export class EmailProcessor {
   }
 
   /**
-   * Process confirmation emails for payment completion events
+   * Stage confirmation emails for payment completion events
    * 
-   * This method ensures emails are sent exactly once:
-   * - For zero-dollar purchases: Send immediately (free_membership, free_registration)
-   * - For paid purchases: Send when payment completes (stripe_webhook_membership, stripe_webhook_registration)
+   * This method stages emails for batch processing:
+   * - For zero-dollar purchases: Stage immediately (free_membership, free_registration)
+   * - For paid purchases: Stage when payment completes (stripe_webhook_membership, stripe_webhook_registration)
    * 
    * The payment completion processor is the ONLY place where membership and registration
-   * confirmation emails should be sent, ensuring no duplicates.
+   * confirmation emails should be staged, ensuring no duplicates.
    */
-  async processConfirmationEmails(event: PaymentCompletionEvent) {
+  async stageConfirmationEmails(event: PaymentCompletionEvent) {
     this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Processing confirmation emails...', { 
       triggerSource: event.trigger_source,
       userId: event.user_id,
@@ -121,9 +121,9 @@ export class EmailProcessor {
   }
 
   /**
-   * Send failed payment emails
+   * Stage failed payment emails
    */
-  async sendFailedPaymentEmails(event: PaymentCompletionEvent) {
+  async stageFailedPaymentEmails(event: PaymentCompletionEvent) {
     this.logger.logPaymentProcessing('send-failed-payment-emails', '📧 Sending failed payment emails...')
     
     try {
@@ -178,28 +178,6 @@ export class EmailProcessor {
     }
   }
 
-  /**
-   * Process staged emails immediately
-   */
-  async processStagedEmails() {
-    this.logger.logPaymentProcessing('process-staged-emails', '📧 Processing staged emails...')
-    
-    try {
-      // Use the email staging manager to process all staged emails
-      const results = await emailStagingManager.processStagedEmails()
-      
-      this.logger.logPaymentProcessing('process-staged-emails', '📊 Email processing results:', {
-        processed: results.processed,
-        successful: results.successful,
-        failed: results.failed,
-        errors: results.errors
-      })
-      
-    } catch (error) {
-      this.logger.logPaymentProcessing('process-staged-emails', '❌ Failed to process staged emails:', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
-      // Don't throw - email processing failures shouldn't break other processing
-    }
-  }
 
   /**
    * Check if an email has already been staged for this event

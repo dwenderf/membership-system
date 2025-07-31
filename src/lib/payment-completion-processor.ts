@@ -105,7 +105,7 @@ export class PaymentCompletionProcessor {
       // Handle failed payments differently
       if (event.metadata?.failed) {
         this.logger.logPaymentProcessing('process-payment-completion', '❌ Processing failed payment event')
-        await emailProcessor.sendFailedPaymentEmails(event)
+        await emailProcessor.stageFailedPaymentEmails(event)
         this.logger.logPaymentProcessing('process-payment-completion', `✅ Completed processing failed ${event.trigger_source}`)
         return
       }
@@ -113,8 +113,8 @@ export class PaymentCompletionProcessor {
       // Phase 1: Handle Xero staging records (create new or update existing)
       await this.handleXeroStagingRecords(event)
 
-      // Phase 2: Process confirmation emails (delegated to EmailProcessor)
-      await emailProcessor.processConfirmationEmails(event)
+      // Phase 2: Stage confirmation emails for batch processing
+      await emailProcessor.stageConfirmationEmails(event)
 
       // Phase 3: Email processing (handled by cron job)
       // Note: Emails staged in Phase 2 will be processed by /api/cron/email-sync every minute

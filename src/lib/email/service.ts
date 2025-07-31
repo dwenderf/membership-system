@@ -64,18 +64,8 @@ class EmailService {
     } = options
 
     try {
-      // Log the email attempt immediately
-      const logId = await this.logEmail({
-        userId,
-        email,
-        eventType,
-        subject,
-        templateId,
-        data,
-        triggeredBy,
-        triggeredByUserId,
-        status: 'sent'
-      })
+      // NOTE: This method no longer creates email logs to prevent duplicates.
+      // Email logging should be handled by the calling code when needed.
 
       // If Loops is not configured, just log and return success for development
       if (!this.loops) {
@@ -100,7 +90,7 @@ class EmailService {
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
-          dataVariables: cleanData  // Back to dataVariables - template expects specific field names
+          dataVariables: cleanData
         })
       } else {
         // Send as a basic contact event (for triggering automations)
@@ -114,23 +104,13 @@ class EmailService {
         })
       }
 
-      // Update log with Loops event ID if available
+      // Return success/failure based on Loops response
       if (loopsResponse && 'success' in loopsResponse && loopsResponse.success) {
-        await this.updateEmailLog(logId, {
-          loops_event_id: (loopsResponse as any).id || 'sent',
-          status: 'delivered'
-        })
-        
         return {
           success: true,
           loopsEventId: (loopsResponse as any).id
         }
       } else {
-        await this.updateEmailLog(logId, {
-          status: 'bounced',
-          bounce_reason: 'Loops API error'
-        })
-        
         return {
           success: false,
           error: 'Failed to send via Loops'
@@ -144,20 +124,6 @@ class EmailService {
       if (error && typeof error === 'object' && 'json' in error) {
         console.error('Loops.so API error details:', (error as any).json)
       }
-      
-      // Log the failure
-      await this.logEmail({
-        userId,
-        email,
-        eventType,
-        subject,
-        templateId,
-        data,
-        triggeredBy,
-        triggeredByUserId,
-        status: 'bounced',
-        bounceReason: error instanceof Error ? error.message : 'Unknown error'
-      })
 
       return {
         success: false,
@@ -166,95 +132,6 @@ class EmailService {
     }
   }
 
-  /**
-   * Log email to database
-   */
-  private async logEmail(options: {
-    userId: string
-    email: string
-    eventType: EmailEventType
-    subject: string
-    templateId?: string
-    data?: EmailData
-    triggeredBy?: 'user_action' | 'admin_send' | 'automated'
-    triggeredByUserId?: string
-    status: 'sent' | 'delivered' | 'bounced' | 'spam'
-    bounceReason?: string
-  }): Promise<string> {
-    // Log stack trace to help debug email creation
-    console.log('📧 Email log creation stack trace:', {
-      eventType: options.eventType,
-      triggeredBy: options.triggeredBy,
-      userId: options.userId,
-      stack: new Error().stack
-    })
-    
-    const supabase = createAdminClient()
-    
-    const { data, error } = await supabase
-      .from('email_logs')
-      .insert({
-        user_id: options.userId,
-        email_address: options.email,
-        event_type: options.eventType,
-        subject: options.subject,
-        template_id: options.templateId,
-        status: options.status,
-        email_data: options.data || {},
-        triggered_by: options.triggeredBy || 'automated',
-        triggered_by_user_id: options.triggeredByUserId,
-        bounce_reason: options.bounceReason
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      console.error('Failed to log email:', error)
-      throw error
-    }
-
-    return data.id
-  }
-
-  /**
-   * Update email log with delivery status
-   */
-  private async updateEmailLog(logId: string, updates: {
-    loops_event_id?: string
-    status?: 'sent' | 'delivered' | 'bounced' | 'spam'
-    delivered_at?: Date
-    opened_at?: Date
-    first_clicked_at?: Date
-    bounced_at?: Date
-    bounce_reason?: string
-  }): Promise<void> {
-    // Log stack trace to help debug email updates
-    console.log('📧 Email log update stack trace:', {
-      logId,
-      updates,
-      stack: new Error().stack
-    })
-    
-    const supabase = createAdminClient()
-    
-    const updateData: any = { ...updates }
-    
-    // Set timestamps based on status
-    if (updates.status === 'delivered' && !updates.delivered_at) {
-      updateData.delivered_at = new Date().toISOString()
-    } else if (updates.status === 'bounced' && !updates.bounced_at) {
-      updateData.bounced_at = new Date().toISOString()
-    }
-
-    const { error } = await supabase
-      .from('email_logs')
-      .update(updateData)
-      .eq('id', logId)
-
-    if (error) {
-      console.error('Failed to update email log:', error)
-    }
-  }
 
   /**
    * Send membership purchase confirmation email

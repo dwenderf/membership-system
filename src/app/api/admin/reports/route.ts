@@ -283,7 +283,7 @@ export async function GET(request: NextRequest) {
       .gte('transaction_date', startDate)
       .lte('transaction_date', endDate)
       .order('transaction_date', { ascending: false })
-      .limit(20)
+      .limit(50)
 
     if (transactionsError) {
       console.error('❌ Error fetching recent transactions:', transactionsError)
@@ -341,7 +341,7 @@ export async function GET(request: NextRequest) {
         .lte('created_at', endDate)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(50)
 
       if (fallbackError) {
         console.error('Error fetching fallback payments:', fallbackError)

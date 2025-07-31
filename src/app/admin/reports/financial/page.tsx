@@ -107,6 +107,7 @@ export default function ReportsPage() {
   const [expandedMemberships, setExpandedMemberships] = useState<Set<string>>(new Set())
   const [expandedDiscountCategories, setExpandedDiscountCategories] = useState<Set<string>>(new Set())
   const [expandedDonations, setExpandedDonations] = useState<string | null>(null)
+  const [transactionsToShow, setTransactionsToShow] = useState(50)
   const { showError } = useToast()
 
   const fetchReportData = async (range: string) => {
@@ -128,6 +129,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReportData(selectedRange)
+    setTransactionsToShow(50) // Reset pagination when date range changes
   }, [selectedRange])
 
   const formatCurrency = (amount: number) => {
@@ -668,7 +670,7 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {reportData.recentTransactions.length > 0 ? (
-                    reportData.recentTransactions.map((transaction) => (
+                    reportData.recentTransactions.slice(0, transactionsToShow).map((transaction) => (
                       <tr key={transaction.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {transaction.invoiceNumber || 'N/A'}
@@ -711,6 +713,16 @@ export default function ReportsPage() {
                   )}
                 </tbody>
               </table>
+              {reportData.recentTransactions.length > transactionsToShow && (
+                <div className="px-6 py-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setTransactionsToShow(prev => prev + 50)}
+                    className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Show More ({reportData.recentTransactions.length - transactionsToShow} remaining)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

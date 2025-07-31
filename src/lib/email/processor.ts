@@ -14,6 +14,7 @@
 
 import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
+import { centsToDollars } from '@/types/currency'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'
@@ -282,7 +283,7 @@ export class EmailProcessor {
         email_data: {
           userName: `${user.first_name} ${user.last_name}`,
           membershipName: membership.memberships.name,
-          amount: membership.amount_paid || 0,
+          amount: Number((centsToDollars(membership.amount_paid || 0)).toFixed(2)),
           durationMonths: membership.months_purchased || 1,
           validFrom: membership.valid_from,
           validUntil: membership.valid_until,
@@ -398,7 +399,7 @@ export class EmailProcessor {
           registrationName: registration.registration.name,
           categoryName: categoryName,
           seasonName: registration.registration.season.name,
-          amount: registration.amount_paid || 0,
+          amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
           registrationDate: (registration.created_at ? new Date(registration.created_at) : new Date()).toLocaleDateString()
         },

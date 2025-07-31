@@ -141,7 +141,7 @@ export default function SyncButtons() {
     }
   }
 
-  const totalPendingEmails = counts.pendingEmails + counts.failedEmails
+  const totalPendingEmails = counts.pendingEmails
   const totalPendingAccounting = counts.pendingInvoices + counts.pendingPayments
 
   return (

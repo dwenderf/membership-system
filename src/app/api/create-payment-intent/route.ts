@@ -7,6 +7,7 @@ import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xer
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
+import { centsToCents } from '@/types/currency'
 
 // Force import server config
 
@@ -103,14 +104,14 @@ async function handleFreeMembership({
     
     const stagingData: StagingPaymentData = {
       user_id: user.id,
-      total_amount: membershipAmount,
-      discount_amount: isNaturallyFree ? 0 : membershipAmount, // Only discount if not naturally free
-      final_amount: donationAmount || 0,
+      total_amount: centsToCents(membershipAmount),
+      discount_amount: centsToCents(isNaturallyFree ? 0 : membershipAmount), // Only discount if not naturally free
+      final_amount: centsToCents(donationAmount || 0),
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: membershipAmount, // Use actual membership price (0 if naturally free)
+          amount: centsToCents(membershipAmount), // Use actual membership price (0 if naturally free)
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code
         }
@@ -118,7 +119,7 @@ async function handleFreeMembership({
       discount_codes_used: isNaturallyFree ? [] : [
         {
           code: 'FREE_MEMBERSHIP',
-          amount_saved: membershipAmount,
+          amount_saved: centsToCents(membershipAmount),
           category_name: 'Free Membership Discount',
           accounting_code: discountAccountingCode
         }
@@ -131,7 +132,7 @@ async function handleFreeMembership({
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
-        amount: donationAmount,
+        amount: centsToCents(donationAmount),
         description: `Donation - ${membership.name}`,
         accounting_code: donationAccountingCode
       })
@@ -401,18 +402,18 @@ export async function POST(request: NextRequest) {
     // Calculate amounts for Xero invoice
     const getMembershipAmount = () => {
       if (paymentOption === 'assistance') {
-        return assistanceAmount || 0
+        return Math.round(assistanceAmount || 0)
       }
       // For donations and standard, use the base membership price calculation
       const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-      return basePrice
+      return Math.round(basePrice)
     }
 
     const membershipAmount = getMembershipAmount()
     
     // Calculate full membership price for assistance scenarios
-    const fullMembershipPrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-    const discountAmount = paymentOption === 'assistance' ? (fullMembershipPrice - (assistanceAmount || 0)) : 0
+    const fullMembershipPrice = Math.round(durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths)
+    const discountAmount = Math.round(paymentOption === 'assistance' ? (fullMembershipPrice - (assistanceAmount || 0)) : 0)
 
     // Get accounting codes from system_accounting_codes
     const { data: accountingCodes, error: accountingError } = await supabase
@@ -439,14 +440,14 @@ export async function POST(request: NextRequest) {
 
     const stagingData: StagingPaymentData = {
       user_id: user.id,
-      total_amount: paymentOption === 'assistance' ? fullMembershipPrice : amount,
-      discount_amount: discountAmount,
-      final_amount: amount,
+      total_amount: centsToCents(paymentOption === 'assistance' ? fullMembershipPrice : amount),
+      discount_amount: centsToCents(discountAmount),
+      final_amount: centsToCents(amount),
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: paymentOption === 'assistance' ? fullMembershipPrice : membershipAmount,
+          amount: centsToCents(paymentOption === 'assistance' ? fullMembershipPrice : membershipAmount),
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code
         }
@@ -454,7 +455,7 @@ export async function POST(request: NextRequest) {
       discount_codes_used: paymentOption === 'assistance' && discountAmount > 0 ? [
         {
           code: 'FINANCIAL_ASSISTANCE',
-          amount_saved: discountAmount,
+          amount_saved: centsToCents(discountAmount),
           category_name: 'Financial Assistance',
           accounting_code: discountAccountingCode
         }
@@ -467,7 +468,7 @@ export async function POST(request: NextRequest) {
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
-        amount: donationAmount,
+        amount: centsToCents(donationAmount),
         description: `Donation - ${membership.name}`,
         accounting_code: donationAccountingCode
       })

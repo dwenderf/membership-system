@@ -4,10 +4,11 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
-import { xeroStagingManager } from '@/lib/xero/staging'
+import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { logger } from '@/lib/logging/logger'
 import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
+import { centsToCents } from '@/types/currency'
 
 // Force import server config
 
@@ -154,9 +155,9 @@ async function handleFreeRegistration({
         // Create staging record
         const stagingResult = await xeroStagingManager.createImmediateStaging({
           user_id: user.id,
-          total_amount: fullPrice,
-          discount_amount: fullPrice, // Full discount for free registration
-          final_amount: 0,
+          total_amount: centsToCents(fullPrice),
+          discount_amount: centsToCents(fullPrice), // Full discount for free registration
+          final_amount: centsToCents(0),
           payment_items: paymentItems,
           discount_codes_used: discountCodesUsed
         }, { isFree: true })
@@ -586,8 +587,8 @@ export async function POST(request: NextRequest) {
           
           if (discountResult.isValid) {
             validatedDiscountCode = discountResult.discountCode
-            discountAmount = discountResult.discountAmount
-            finalAmount = amount - discountAmount
+            discountAmount = Math.round(discountResult.discountAmount)
+            finalAmount = Math.round(amount - discountAmount)
             
             // Ensure final amount is not negative
             if (finalAmount < 0) {
@@ -1059,23 +1060,23 @@ export async function POST(request: NextRequest) {
       discountCode
     )
 
-    const stagingData = {
+    const stagingData: StagingPaymentData = {
       user_id: user.id,
-      total_amount: amount, // Original amount before discount
-      discount_amount: discountAmount, // Discount amount
-      final_amount: finalAmount, // Final amount being charged
+      total_amount: centsToCents(amount), // Original amount before discount
+      discount_amount: centsToCents(discountAmount), // Discount amount
+      final_amount: centsToCents(finalAmount), // Final amount being charged
       payment_items: [
         {
           item_type: 'registration' as const,
           item_id: registrationId,
-          amount: amount, // Use original amount, not final amount after discount
+          amount: centsToCents(amount), // Use original amount, not final amount after discount
           description: `Registration: ${registration.name} - ${categoryName}`,
           accounting_code: accountingCodes.registration || undefined
         }
       ],
       discount_codes_used: validatedDiscountCode ? [{
         code: discountCode!,
-        amount_saved: discountAmount,
+        amount_saved: centsToCents(discountAmount),
         category_name: validatedDiscountCode.category?.name || 'Registration Discount',
         accounting_code: accountingCodes.discount || undefined
       }] : [],

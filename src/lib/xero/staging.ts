@@ -8,27 +8,25 @@
  */
 
 import { createAdminClient } from '../supabase/server'
-import { getActiveXeroTenants } from './client'
-import { PaymentInvoiceData, PrePaymentInvoiceData } from './invoices'
-import { Database } from '../../types/database'
 import { logger } from '../logging/logger'
+import { Cents, centsToCents } from '../../types/currency'
 
 export type StagingPaymentData = {
   payment_id?: string
   user_id: string
-  total_amount: number
-  discount_amount: number
-  final_amount: number
+  total_amount: Cents
+  discount_amount: Cents
+  final_amount: Cents
   payment_items: Array<{
     item_type: 'membership' | 'registration' | 'discount' | 'donation'
     item_id: string | null
-    amount: number
+    amount: Cents
     description?: string
     accounting_code?: string
   }>
   discount_codes_used?: Array<{
     code: string
-    amount_saved: number
+    amount_saved: Cents
     category_name: string
     accounting_code?: string
   }>
@@ -489,13 +487,13 @@ export class XeroStagingManager {
         return {
           payment_id: payment?.id || null,
           user_id: purchaseData.user_id,
-          total_amount: registration.registration_category?.price || 0,
-          discount_amount: payment?.discount_amount || 0,
-          final_amount: payment?.final_amount || 0,
+          total_amount: centsToCents(registration.registration_category?.price || 0),
+          discount_amount: centsToCents(payment?.discount_amount || 0),
+          final_amount: centsToCents(payment?.final_amount || 0),
           payment_items: [{
             item_type: 'registration',
             item_id: registration.registration_id,
-            amount: registration.amount_paid || 0,
+            amount: centsToCents(registration.amount_paid || 0),
             description: `${registration.registration.name} - ${registration.registration_category?.name || 'Standard'}`,
             accounting_code: registration.registration_category?.accounting_code || 'REGISTRATION'
           }],
@@ -508,13 +506,13 @@ export class XeroStagingManager {
         return {
           payment_id: payment?.id || null,
           user_id: purchaseData.user_id,
-          total_amount: membership.membership?.price || 0,
-          discount_amount: payment?.discount_amount || 0,
-          final_amount: payment?.final_amount || 0,
+          total_amount: centsToCents(membership.membership?.price || 0),
+          discount_amount: centsToCents(payment?.discount_amount || 0),
+          final_amount: centsToCents(payment?.final_amount || 0),
           payment_items: [{
             item_type: 'membership',
             item_id: membership.membership_id,
-            amount: membership.amount_paid || 0,
+            amount: centsToCents(membership.amount_paid || 0),
             description: `${membership.membership.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
             accounting_code: membership.membership?.accounting_code || 'MEMBERSHIP'
           }],
@@ -531,9 +529,9 @@ export class XeroStagingManager {
       
       return {
         user_id: purchaseData.user_id,
-        total_amount: 0,
-        discount_amount: 0,
-        final_amount: 0,
+        total_amount: centsToCents(0),
+        discount_amount: centsToCents(0),
+        final_amount: centsToCents(0),
         payment_items: []
       }
     } catch (error) {
@@ -549,9 +547,9 @@ export class XeroStagingManager {
       
       return {
         user_id: purchaseData.user_id,
-        total_amount: 0,
-        discount_amount: 0,
-        final_amount: 0,
+        total_amount: centsToCents(0),
+        discount_amount: centsToCents(0),
+        final_amount: centsToCents(0),
         payment_items: []
       }
     }

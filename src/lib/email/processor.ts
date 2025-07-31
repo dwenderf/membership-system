@@ -401,7 +401,8 @@ export class EmailProcessor {
           seasonName: registration.registration.season.name,
           amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
-          registrationDate: (registration.created_at ? new Date(registration.created_at) : new Date()).toLocaleDateString()
+          registrationDate: (registration.created_at ? new Date(registration.created_at) : new Date()).toLocaleDateString(),
+          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
         },
         related_entity_type: 'user_registrations',
         related_entity_id: event.record_id || undefined,

@@ -120,7 +120,14 @@ export default function OnboardingPage() {
         formDataToSend.append('wantsMembership', formData.wantsMembership.toString())
         
         await completeOnboarding(formDataToSend)
-      } catch (error) {
+      } catch (error: any) {
+        // NEXT_REDIRECT is expected when redirect() is called in server actions
+        if (error?.digest?.includes('NEXT_REDIRECT')) {
+          // This is a successful redirect, show success message
+          showSuccess('Profile completed successfully!')
+          return
+        }
+        
         console.error('Error completing onboarding:', error)
         showError('Onboarding failed', error instanceof Error ? error.message : 'An error occurred')
       }

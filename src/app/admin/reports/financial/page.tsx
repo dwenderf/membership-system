@@ -107,7 +107,7 @@ export default function ReportsPage() {
   const [expandedMemberships, setExpandedMemberships] = useState<Set<string>>(new Set())
   const [expandedDiscountCategories, setExpandedDiscountCategories] = useState<Set<string>>(new Set())
   const [expandedDonations, setExpandedDonations] = useState<string | null>(null)
-  const [transactionsToShow, setTransactionsToShow] = useState(50)
+  const [transactionsToShow, setTransactionsToShow] = useState(20)
   const { showError } = useToast()
 
   const fetchReportData = async (range: string) => {
@@ -129,7 +129,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReportData(selectedRange)
-    setTransactionsToShow(50) // Reset pagination when date range changes
+    setTransactionsToShow(20) // Reset pagination when date range changes
   }, [selectedRange])
 
   const formatCurrency = (amount: number) => {
@@ -713,10 +713,14 @@ export default function ReportsPage() {
                   )}
                 </tbody>
               </table>
+              {/* Debug info */}
+              <div className="px-6 py-2 text-xs text-gray-500 bg-gray-50">
+                Debug: {reportData.recentTransactions.length} total transactions, showing {transactionsToShow}
+              </div>
               {reportData.recentTransactions.length > transactionsToShow && (
                 <div className="px-6 py-4 border-t border-gray-200">
                   <button
-                    onClick={() => setTransactionsToShow(prev => prev + 50)}
+                    onClick={() => setTransactionsToShow(prev => prev + 20)}
                     className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     Show More ({reportData.recentTransactions.length - transactionsToShow} remaining)

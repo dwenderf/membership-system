@@ -247,20 +247,28 @@ export default function OnboardingPage() {
           console.log('🔄 Attempting to sync user to Xero after onboarding...')
           showSuccess('Debug', 'Attempting to sync user to Xero...')
           
-          // Import the Xero contact function and client utilities
+          // Import the Xero contact function
           console.log('📦 Importing Xero modules...')
           const { getOrCreateXeroContact } = await import('@/lib/xero/contacts')
-          const { getActiveTenant } = await import('@/lib/xero/client')
           console.log('✅ Xero modules imported successfully')
           
-                      // Get active Xero tenant using the client utility
-            console.log('🔍 Getting active Xero tenant...')
-            const activeTenant = await getActiveTenant()
-            console.log('📊 Active tenant result:', activeTenant)
+          // Get active Xero tenant using API route
+          console.log('🔍 Getting active Xero tenant via API...')
+          const tenantResponse = await fetch('/api/xero/get-active-tenant')
+          const tenantResult = await tenantResponse.json()
+          console.log('📊 Active tenant API result:', tenantResult)
+          
+          if (!tenantResult.success) {
+            console.log('❌ Failed to get active tenant:', tenantResult.error)
+            showError('Debug', `Failed to get Xero tenant: ${tenantResult.error}`)
+            return
+          }
+          
+          const activeTenant = tenantResult.tenant
 
             if (activeTenant) {
-              console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
-              showSuccess('Debug', `Found Xero tenant: ${activeTenant.tenant_name}`)
+              console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_id}`)
+              showSuccess('Debug', `Found Xero tenant: ${activeTenant.tenant_id}`)
             
             const xeroResult = await getOrCreateXeroContact(userForSync.id, activeTenant.tenant_id)
             

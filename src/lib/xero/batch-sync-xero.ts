@@ -779,58 +779,8 @@ export class XeroBatchSyncManager {
         return null
       }
 
-      // Check if invoice is already paid before attempting to create payment
-      try {
-        const invoiceResponse = await xeroApi.accountingApi.getInvoice(
-          activeTenant.tenant_id,
-          invoiceRecord.xero_invoice_id
-        )
-        
-        if (invoiceResponse.body.invoices && invoiceResponse.body.invoices.length > 0) {
-          const xeroInvoice = invoiceResponse.body.invoices[0]
-          const amountDue = xeroInvoice.amountDue || 0
-          const amountPaid = xeroInvoice.amountPaid || 0
-          const status = xeroInvoice.status
-          
-          console.log('📊 Invoice status check:', {
-            invoiceId: invoiceRecord.xero_invoice_id,
-            status: status,
-            amountDue: amountDue,
-            amountPaid: amountPaid,
-            paymentAmount: paymentRecord.amount_paid / 100
-          })
-          
-          // If invoice is already paid or amount due is less than payment amount, skip payment creation
-          if (status?.toString() === 'PAID' || amountDue === 0 || amountDue < (paymentRecord.amount_paid / 100)) {
-            console.log('✅ Invoice already paid - marking payment as synced without creating duplicate payment')
-            await this.markPaymentAsSynced(paymentRecord.id, `already_paid_${Date.now()}`, activeTenant.tenant_id)
-            
-            await logXeroSync({
-              tenant_id: activeTenant.tenant_id,
-              operation: 'payment_sync',
-              record_type: 'payment',
-              record_id: paymentRecord.id,
-              xero_id: `already_paid_${Date.now()}`,
-              success: true,
-              details: `Payment skipped - invoice already paid (status: ${status}, amountDue: ${amountDue}, amountPaid: ${amountPaid})`,
-              response_data: {
-                invoice_status: status,
-                amount_due: amountDue,
-                amount_paid: amountPaid
-              },
-              request_data: {
-                payment_amount: paymentRecord.amount_paid / 100,
-                invoice_id: invoiceRecord.xero_invoice_id
-              }
-            })
-            
-            return null
-          }
-        }
-      } catch (invoiceCheckError) {
-        console.log('⚠️ Could not check invoice status - proceeding with payment creation:', invoiceCheckError)
-        // Continue with payment creation if we can't check invoice status
-      }
+      // No need to check invoice status - if payment is in pending status, it should be created
+      // If Xero returns an error for duplicate/invalid payment, we'll handle it gracefully
 
       // Get the Stripe bank account code from system_accounting_codes
       const { data: stripeAccountCode } = await this.supabase

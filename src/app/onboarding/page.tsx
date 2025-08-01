@@ -104,17 +104,21 @@ export default function OnboardingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    // Use both console.log and toast for debugging
     console.log('🚀 Onboarding form submitted!', {
       userEmail: user?.email,
       formData: formData
     })
+    showSuccess('Debug', 'Form submitted - check console for logs')
     
     if (!validateForm()) {
       console.log('❌ Form validation failed')
+      showError('Debug', 'Form validation failed')
       return
     }
 
     console.log('✅ Form validation passed, starting submission...')
+    showSuccess('Debug', 'Form validation passed, starting submission...')
     setSubmitting(true)
 
     try {
@@ -203,6 +207,7 @@ export default function OnboardingPage() {
       }
 
       console.log('📝 User data saved successfully, preparing for Xero sync...')
+      showSuccess('Debug', 'User data saved, preparing for Xero sync...')
       
       // Sync user to Xero if connected
       // Use updatedUser if available, otherwise fall back to original user data
@@ -226,6 +231,7 @@ export default function OnboardingPage() {
       
       if (userForSync) {
         console.log('🔄 Starting Xero sync for user:', userForSync.email)
+        showSuccess('Debug', `Starting Xero sync for: ${userForSync.email}`)
         try {
           console.log('🔄 Attempting to sync user to Xero after onboarding...')
           

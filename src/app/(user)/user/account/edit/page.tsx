@@ -130,27 +130,35 @@ export default function EditProfilePage() {
       if (contactChanged) {
         console.log('Contact info changed, syncing to Xero contact...')
         try {
-          const response = await fetch('/api/xero/sync-user', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userData: {
-                id: user.id,
-                email: user.email,
-                first_name: formData.firstName.trim(),
-                last_name: formData.lastName.trim(),
-                phone: null, // We don't collect phone in this form
-                member_id: null // This will be fetched from the database by the API
-              }
-            }),
-          })
+          // Import the Xero contact function directly
+          const { syncContactOnNameChange } = await import('@/lib/xero/contacts')
+          
+          // Get active Xero tenant
+          const { data: activeTenant } = await supabase
+            .from('xero_oauth_tokens')
+            .select('tenant_id, tenant_name')
+            .eq('is_active', true)
+            .single()
 
-          if (!response.ok) {
-            console.warn('Xero contact sync failed, but profile update succeeded')
+          if (activeTenant) {
+            console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
+            
+            const xeroResult = await syncContactOnNameChange(
+              user.id,
+              activeTenant.tenant_id,
+              originalFormData.firstName,
+              originalFormData.lastName,
+              formData.firstName.trim(),
+              formData.lastName.trim()
+            )
+            
+            if (xeroResult.success && xeroResult.xeroContactId) {
+              console.log(`✅ Xero contact synced successfully: ${xeroResult.xeroContactId}`)
+            } else {
+              console.warn(`⚠️ Xero contact sync failed: ${xeroResult.error}`)
+            }
           } else {
-            console.log('Xero contact synced successfully')
+            console.log('ℹ️ No active Xero connection found, skipping contact sync')
           }
         } catch (xeroError) {
           console.warn('Xero contact sync failed, but profile update succeeded:', xeroError)

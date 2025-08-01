@@ -190,71 +190,90 @@ export default function OnboardingPage() {
       // Sync user to Xero if connected
       if (updatedUser) {
         try {
-          const xeroSyncResponse = await fetch('/api/xero/sync-user', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userData: {
-                id: updatedUser.id,
-                email: updatedUser.email,
-                first_name: updatedUser.first_name,
-                last_name: updatedUser.last_name,
-                member_id: updatedUser.member_id
-              }
-            }),
-          })
-        
-        if (xeroSyncResponse.ok) {
-          const xeroSyncResult = await xeroSyncResponse.json()
+          console.log('🔄 Attempting to sync user to Xero after onboarding...')
           
-          if (xeroSyncResult.success && xeroSyncResult.xeroContactId) {
-            console.log(`✅ User synced to Xero successfully: ${xeroSyncResult.xeroContactId}`)
+          // Import the Xero contact function directly
+          const { getOrCreateXeroContact } = await import('@/lib/xero/contacts')
+          
+          // Get active Xero tenant
+          const { data: activeTenant } = await supabase
+            .from('xero_oauth_tokens')
+            .select('tenant_id, tenant_name')
+            .eq('is_active', true)
+            .single()
+
+          if (activeTenant) {
+            console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
             
-            // Log successful Xero sync to Sentry
-            const { captureMessage } = await import('@sentry/nextjs')
-            captureMessage('User synced to Xero after onboarding', {
-              level: 'info',
-              tags: {
-                component: 'onboarding',
-                operation: 'xero_sync'
-              },
-              extra: {
-                user_id: updatedUser.id,
-                email: updatedUser.email,
-                member_id: updatedUser.member_id,
-                xero_contact_id: xeroSyncResult.xeroContactId,
-                sync_timestamp: new Date().toISOString()
-              }
-            })
+            const xeroResult = await getOrCreateXeroContact(updatedUser.id, activeTenant.tenant_id)
+            
+            if (xeroResult.success && xeroResult.xeroContactId) {
+              console.log(`✅ User synced to Xero successfully: ${xeroResult.xeroContactId}`)
+              
+              // Log successful Xero sync to Sentry
+              const { captureMessage } = await import('@sentry/nextjs')
+              captureMessage('User synced to Xero after onboarding', {
+                level: 'info',
+                tags: {
+                  component: 'onboarding',
+                  operation: 'xero_sync'
+                },
+                extra: {
+                  user_id: updatedUser.id,
+                  email: updatedUser.email,
+                  member_id: updatedUser.member_id,
+                  xero_contact_id: xeroResult.xeroContactId,
+                  api_call_made: xeroResult.apiCallMade,
+                  sync_timestamp: new Date().toISOString()
+                }
+              })
+            } else {
+              console.warn(`⚠️ Failed to sync user to Xero: ${xeroResult.error}`)
+              
+              // Log Xero sync failure to Sentry (as warning, not error)
+              const { captureMessage } = await import('@sentry/nextjs')
+              captureMessage('Failed to sync user to Xero after onboarding', {
+                level: 'warning',
+                tags: {
+                  component: 'onboarding',
+                  operation: 'xero_sync_failed'
+                },
+                extra: {
+                  user_id: updatedUser.id,
+                  email: updatedUser.email,
+                  member_id: updatedUser.member_id,
+                  error: xeroResult.error,
+                  api_call_made: xeroResult.apiCallMade,
+                  sync_timestamp: new Date().toISOString()
+                }
+              })
+            }
           } else {
-            console.warn(`⚠️ Failed to sync user to Xero: ${xeroSyncResult.error}`)
-            
-            // Log Xero sync failure to Sentry (as warning, not error)
-            const { captureMessage } = await import('@sentry/nextjs')
-            captureMessage('Failed to sync user to Xero after onboarding', {
-              level: 'warning',
-              tags: {
-                component: 'onboarding',
-                operation: 'xero_sync_failed'
-              },
-              extra: {
-                user_id: updatedUser.id,
-                email: updatedUser.email,
-                member_id: updatedUser.member_id,
-                error: xeroSyncResult.error,
-                sync_timestamp: new Date().toISOString()
-              }
-            })
+            console.log('ℹ️ No active Xero connection found, skipping user sync')
           }
-        } else {
-          console.log('ℹ️ Xero not connected, skipping user sync')
+        } catch (xeroError) {
+          console.error('❌ Error during Xero sync:', xeroError)
+          
+          // Log sync error to Sentry
+          const { captureMessage } = await import('@sentry/nextjs')
+          captureMessage('Exception during Xero sync after onboarding', {
+            level: 'error',
+            tags: {
+              component: 'onboarding',
+              operation: 'xero_sync_exception'
+            },
+            extra: {
+              user_id: updatedUser.id,
+              email: updatedUser.email,
+              member_id: updatedUser.member_id,
+              error: xeroError instanceof Error ? xeroError.message : String(xeroError),
+              stack: xeroError instanceof Error ? xeroError.stack : undefined,
+              sync_timestamp: new Date().toISOString()
+            }
+          })
+          
+          // Don't fail onboarding if Xero sync fails
         }
-      } catch (xeroError) {
-        console.error('Error during Xero sync:', xeroError)
-        // Don't fail onboarding if Xero sync fails
-      }
       }
 
       // Show success toast

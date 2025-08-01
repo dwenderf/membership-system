@@ -1,6 +1,6 @@
 import { Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
-import { createAdminClient } from '../supabase/server'
+import { createAdminClient } from '../supabase/admin'
 import * as Sentry from '@sentry/nextjs'
 
 // Helper function to generate contact name following our naming convention

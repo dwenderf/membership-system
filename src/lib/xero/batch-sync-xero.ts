@@ -7,7 +7,7 @@
 import { Invoice, LineItem, Payment, CurrencyCode, AccountingApi } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { getOrCreateXeroContact, generateContactName } from './contacts'
-import { createAdminClient } from '../supabase/server'
+import { createAdminClient } from '../supabase/admin'
 import { Database } from '../../types/database'
 import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'

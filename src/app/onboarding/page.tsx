@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
 

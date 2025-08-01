@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { useToast } from '@/contexts/ToastContext'
 
 export default function EditProfilePage() {

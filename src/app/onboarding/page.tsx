@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
 
@@ -79,7 +78,7 @@ export default function OnboardingPage() {
       newErrors.isGoalie = 'Please answer whether you play goalie'
     }
     
-    if (formData.isLgbtq === null || formData.isLgbtq === undefined) {
+    if (formData.isLgbtq === undefined) {
       newErrors.isLgbtq = 'Please answer whether you identify as LGBTQ+'
     }
     

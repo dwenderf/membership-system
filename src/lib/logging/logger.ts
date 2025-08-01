@@ -27,8 +27,15 @@
  * logger.logXeroSync('contact-sync', 'Contact synced to Xero', { contactId: 'xero_123' })
  */
 
-import { writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+// Only import fs on server side
+let fs: any = null
+let path: any = null
+
+if (typeof window === 'undefined') {
+  // Server-side only
+  fs = require('fs')
+  path = require('path')
+}
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogCategory = 
@@ -64,13 +71,18 @@ export class Logger {
   }
 
   constructor() {
-    this.logDir = join(process.cwd(), 'logs')
-    
-    // Check if we're running on Vercel or similar serverless environment
-    if (this.isServerlessEnvironment()) {
-      console.log('🌐 Serverless environment detected, using console-only logging')
+    if (typeof window === 'undefined' && path) {
+      this.logDir = path.join(process.cwd(), 'logs')
+      
+      // Check if we're running on Vercel or similar serverless environment
+      if (this.isServerlessEnvironment()) {
+        console.log('🌐 Serverless environment detected, using console-only logging')
+      } else {
+        this.ensureLogDirectory()
+      }
     } else {
-      this.ensureLogDirectory()
+      // Client-side or no fs available
+      this.logDir = ''
     }
   }
 
@@ -91,8 +103,10 @@ export class Logger {
    * Ensure log directory exists
    */
   private ensureLogDirectory(): void {
-    if (!existsSync(this.logDir)) {
-      mkdirSync(this.logDir, { recursive: true })
+    if (!fs || !path) return // Client-side or no fs available
+    
+    if (!fs.existsSync(this.logDir)) {
+      fs.mkdirSync(this.logDir, { recursive: true })
     }
   }
 
@@ -100,8 +114,9 @@ export class Logger {
    * Get current log file path
    */
   private getLogFilePath(category: LogCategory): string {
+    if (!fs || !path) return '' // Client-side or no fs available
     const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-    return join(this.logDir, `${category}-${date}.log`)
+    return path.join(this.logDir, `${category}-${date}.log`)
   }
 
   /**
@@ -142,14 +157,16 @@ export class Logger {
       const logLine = JSON.stringify(entry) + '\n'
       
       // Check if file needs rotation
-      if (existsSync(filePath)) {
-        const stats = statSync(filePath)
+      if (fs && fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath)
         if (stats.size > this.maxFileSize) {
           this.rotateLogFile(entry.category)
         }
       }
       
-      appendFileSync(filePath, logLine, 'utf8')
+      if (fs) {
+        fs.appendFileSync(filePath, logLine, 'utf8')
+      }
     } catch (error) {
       console.error('Failed to write to log file:', error)
     }
@@ -159,15 +176,16 @@ export class Logger {
    * Rotate log file when it gets too large
    */
   private rotateLogFile(category: LogCategory): void {
+    if (!fs || !path) return // Client-side or no fs available
+    
     try {
       const date = new Date().toISOString().split('T')[0]
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const currentFile = join(this.logDir, `${category}-${date}.log`)
-      const rotatedFile = join(this.logDir, `${category}-${date}-${timestamp}.log`)
+      const currentFile = path.join(this.logDir, `${category}-${date}.log`)
+      const rotatedFile = path.join(this.logDir, `${category}-${date}-${timestamp}.log`)
       
-      if (existsSync(currentFile)) {
+      if (fs.existsSync(currentFile)) {
         // Rename current file
-        const fs = require('fs')
         fs.renameSync(currentFile, rotatedFile)
       }
       
@@ -182,21 +200,22 @@ export class Logger {
    * Clean up old log files
    */
   private cleanupOldLogs(category: LogCategory): void {
+    if (!fs || !path) return // Client-side or no fs available
+    
     try {
-      const files = readdirSync(this.logDir)
-        .filter(file => file.startsWith(`${category}-`) && file.endsWith('.log'))
-        .map(file => ({
+      const files = fs.readdirSync(this.logDir)
+        .filter((file: string) => file.startsWith(`${category}-`) && file.endsWith('.log'))
+        .map((file: string) => ({
           name: file,
-          path: join(this.logDir, file),
-          mtime: statSync(join(this.logDir, file)).mtime
+          path: path.join(this.logDir, file),
+          mtime: fs.statSync(path.join(this.logDir, file)).mtime
         }))
-        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+        .sort((a: any, b: any) => b.mtime.getTime() - a.mtime.getTime())
 
       // Keep only the most recent files
       const filesToDelete = files.slice(this.maxFiles)
       
       for (const file of filesToDelete) {
-        const fs = require('fs')
         fs.unlinkSync(file.path)
         console.log(`🗑️ Cleaned up old log file: ${file.name}`)
       }
@@ -591,10 +610,12 @@ export class Logger {
       return []
     }
 
+    if (!fs || !path) return [] // Client-side or no fs available
+    
     try {
       const logs: LogEntry[] = []
-      const files = readdirSync(this.logDir)
-        .filter(file => {
+      const files = fs.readdirSync(this.logDir)
+        .filter((file: string) => {
           if (!file.endsWith('.log')) return false
           if (category && !file.startsWith(`${category}-`)) return false
           return true
@@ -602,8 +623,7 @@ export class Logger {
         .sort()
 
       for (const file of files) {
-        const filePath = join(this.logDir, file)
-        const fs = require('fs')
+        const filePath = path.join(this.logDir, file)
         const content = fs.readFileSync(filePath, 'utf8')
         
         const lines = content.trim().split('\n').filter((line: string) => line.trim())

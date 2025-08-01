@@ -1,4 +1,7 @@
 import { XeroClient, AccountingApi } from 'xero-node'
+import { Logger } from '@/lib/logging/logger'
+
+const logger = Logger.getInstance()
 
 if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
   throw new Error('Missing Xero environment variables')
@@ -149,7 +152,7 @@ export async function withActiveTenant<T>(
 export async function getAuthenticatedXeroClient(tenantId: string): Promise<XeroClient | null> {
   try {
     // Import dependencies here to avoid circular dependency
-    const { createAdminClient } = await import('../supabase/server')
+    const { createAdminClient } = await import('../supabase/admin')
     const { logger } = await import('../logging/logger')
     const supabase = createAdminClient()
 
@@ -476,7 +479,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
 // Helper function to revoke OAuth tokens on Xero's side
 export async function revokeXeroTokens(): Promise<boolean> {
   try {
-    const { createAdminClient } = await import('../supabase/server')
+    const { createAdminClient } = await import('../supabase/admin')
     const supabase = createAdminClient()
 
     // Get all active tokens
@@ -615,7 +618,7 @@ export async function getActiveTenant(): Promise<{
   expires_at: string
 } | null> {
   try {
-    const { createAdminClient } = await import('../supabase/server')
+    const { createAdminClient } = await import('../supabase/admin')
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -655,7 +658,7 @@ export async function getActiveXeroTenants(): Promise<Array<{
   expires_at: string
 }>> {
   try {
-    const { createAdminClient } = await import('../supabase/server')
+    const { createAdminClient } = await import('../supabase/admin')
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -766,7 +769,7 @@ export async function logXeroSync(
   responseData?: any
 ): Promise<void> {
   try {
-    const { createAdminClient } = await import('../supabase/server')
+    const { createAdminClient } = await import('../supabase/admin')
     const supabase = createAdminClient()
 
     // Handle both calling patterns

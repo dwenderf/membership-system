@@ -459,9 +459,33 @@ export class XeroBatchSyncManager {
       const contactResult = await getOrCreateXeroContact(metadata.user_id, activeTenant.tenant_id)
       console.log('👤 Contact result:', contactResult)
       
-      if (!contactResult.success || !contactResult.xeroContactId) {
-        console.log('❌ Contact sync failed:', contactResult.error)
-        await this.markInvoiceAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
+      if (!contactResult.success) {
+        // Check if we have a valid xeroContactId despite the failure
+        if (contactResult.xeroContactId) {
+          console.log('⚠️ Contact sync failed but we have a valid contact ID, continuing:', contactResult.xeroContactId)
+          // Continue with the sync using the existing contact ID
+        } else {
+          // Check if this is a rate limit error (429) - if so, don't fail the batch
+          const isRateLimitError = contactResult.error?.includes('429') || 
+                                   contactResult.error?.toLowerCase().includes('rate limit') ||
+                                   contactResult.error?.toLowerCase().includes('too many requests')
+          
+          if (isRateLimitError) {
+            console.log('⚠️ Contact sync hit rate limit (429), skipping this invoice but not failing batch:', contactResult.error)
+            // Don't mark as failed, leave as pending so it can be retried later
+            return false
+          } else {
+            console.log('❌ Contact sync failed with no valid contact ID:', contactResult.error)
+            await this.markInvoiceAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
+            return false
+          }
+        }
+      }
+      
+      // Ensure we have a contact ID to proceed
+      if (!contactResult.xeroContactId) {
+        console.log('❌ No Xero contact ID available for invoice sync')
+        await this.markInvoiceAsFailed(invoiceRecord.id, 'No Xero contact ID available')
         return false
       }
 

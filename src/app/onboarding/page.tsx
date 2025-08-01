@@ -169,11 +169,22 @@ export default function OnboardingPage() {
       }
 
       // Get the updated user data with member_id for Sentry logging
-      const { data: updatedUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id, email, first_name, last_name, member_id, is_goalie, is_lgbtq')
-        .eq('id', user.id)
-        .single()
+      let updatedUser = null
+      let fetchError = null
+      
+      try {
+        const result = await supabase
+          .from('users')
+          .select('id, email, first_name, last_name, member_id, is_goalie, is_lgbtq')
+          .eq('id', user.id)
+          .single()
+        
+        updatedUser = result.data
+        fetchError = result.error
+      } catch (error) {
+        fetchError = error instanceof Error ? error : new Error(String(error))
+        console.error('❌ Error fetching user data:', error)
+      }
 
       console.log('🔍 Fetching updated user data:', {
         userId: user.id,

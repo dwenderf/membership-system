@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
+import { completeOnboarding } from './actions'
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -104,272 +105,26 @@ export default function OnboardingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Use both console.log and toast for debugging
-    console.log('🚀 Onboarding form submitted!', {
-      userEmail: user?.email,
-      formData: formData
-    })
-    showSuccess('Debug', 'Form submitted - check console for logs')
-    
     if (!validateForm()) {
-      console.log('❌ Form validation failed')
-      showError('Debug', 'Form validation failed')
       return
     }
 
-    console.log('✅ Form validation passed, starting submission...')
-    showSuccess('Debug', 'Form validation passed, starting submission...')
-    setSubmitting(true)
-
-    try {
-      // Check if user record exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single()
-
-      // Trim whitespace before saving to database
-      const userData = {
-        id: user.id,
-        email: user.email!,
-        first_name: formData.firstName.trim(),
-        last_name: formData.lastName.trim(),
-        is_goalie: formData.isGoalie!,
-        is_lgbtq: formData.isLgbtq,
-        is_admin: false,
-        onboarding_completed_at: new Date().toISOString(),
-        terms_accepted_at: new Date().toISOString(),
-        terms_version: 'v1.0',
-      }
-
-      if (existingUser) {
-        // Update existing user
-        const { error } = await supabase
-          .from('users')
-          .update({
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            is_goalie: userData.is_goalie,
-            is_lgbtq: userData.is_lgbtq,
-            onboarding_completed_at: userData.onboarding_completed_at,
-            terms_accepted_at: userData.terms_accepted_at,
-            terms_version: userData.terms_version,
-          })
-          .eq('id', user.id)
-
-        if (error) throw error
-      } else {
-        // Create new user
-        const { error } = await supabase
-          .from('users')
-          .insert([userData])
-
-        if (error) throw error
-      }
-
-      // Get the updated user data with member_id for Sentry logging
-      let updatedUser = null
-      let fetchError = null
-      
+    startTransition(async () => {
       try {
-        const result = await supabase
-          .from('users')
-          .select('id, email, first_name, last_name, member_id, is_goalie, is_lgbtq')
-          .eq('id', user.id)
-          .single()
+        // Create FormData for server action
+        const formDataToSend = new FormData()
+        formDataToSend.append('firstName', formData.firstName)
+        formDataToSend.append('lastName', formData.lastName)
+        formDataToSend.append('isGoalie', formData.isGoalie?.toString() || '')
+        formDataToSend.append('isLgbtq', formData.isLgbtq?.toString() || '')
+        formDataToSend.append('wantsMembership', formData.wantsMembership.toString())
         
-        updatedUser = result.data
-        fetchError = result.error
+        await completeOnboarding(formDataToSend)
       } catch (error) {
-        fetchError = error instanceof Error ? error : new Error(String(error))
-        console.error('❌ Error fetching user data:', error)
+        console.error('Error completing onboarding:', error)
+        showError('Onboarding failed', error instanceof Error ? error.message : 'An error occurred')
       }
-
-      console.log('🔍 Fetching updated user data:', {
-        userId: user.id,
-        userEmail: user.email,
-        hasUpdatedUser: !!updatedUser,
-        fetchError: fetchError?.message,
-        updatedUserData: updatedUser
-      })
-
-      // Log onboarding completion to Sentry
-      if (updatedUser) {
-        const { captureMessage } = await import('@sentry/nextjs')
-        captureMessage('User completed onboarding', {
-          level: 'info',
-          tags: {
-            component: 'onboarding',
-            operation: 'profile_completion'
-          },
-          extra: {
-            user_id: updatedUser.id,
-            email: updatedUser.email,
-            first_name: updatedUser.first_name,
-            last_name: updatedUser.last_name,
-            member_id: updatedUser.member_id,
-            is_goalie: updatedUser.is_goalie,
-            is_lgbtq: updatedUser.is_lgbtq,
-            wants_membership: formData.wantsMembership,
-            onboarding_timestamp: new Date().toISOString()
-          }
-        })
-      }
-
-      console.log('📝 User data saved successfully, preparing for Xero sync...')
-      showSuccess('Debug', 'User data saved, preparing for Xero sync...')
-      
-      // Sync user to Xero if connected
-      // Use updatedUser if available, otherwise fall back to original user data
-      const userForSync = updatedUser || {
-        id: user.id,
-        email: user.email,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        member_id: null // Will be generated by the system
-      }
-      
-      console.log('👤 User data for sync:', {
-        hasUpdatedUser: !!updatedUser,
-        userForSync: {
-          id: userForSync.id,
-          email: userForSync.email,
-          firstName: userForSync.first_name,
-          lastName: userForSync.last_name
-        }
-      })
-      
-      if (userForSync) {
-        console.log('🔄 Starting Xero sync for user:', userForSync.email)
-        showSuccess('Debug', `Starting Xero sync for: ${userForSync.email}`)
-        try {
-          console.log('🔄 Attempting to sync user to Xero after onboarding...')
-          showSuccess('Debug', 'Attempting to sync user to Xero...')
-          
-          // Import the Xero contact function
-          console.log('📦 Importing Xero modules...')
-          const { getOrCreateXeroContact } = await import('@/lib/xero/contacts')
-          console.log('✅ Xero modules imported successfully')
-          
-          // Get active Xero tenant using API route
-          console.log('🔍 Getting active Xero tenant via API...')
-          const tenantResponse = await fetch('/api/xero/get-active-tenant')
-          const tenantResult = await tenantResponse.json()
-          console.log('📊 Active tenant API result:', tenantResult)
-          
-          if (!tenantResult.success) {
-            console.log('❌ Failed to get active tenant:', tenantResult.error)
-            showError('Debug', `Failed to get Xero tenant: ${tenantResult.error}`)
-            return
-          }
-          
-          const activeTenant = tenantResult.tenant
-
-            if (activeTenant) {
-              console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_id}`)
-              showSuccess('Debug', `Found Xero tenant: ${activeTenant.tenant_id}`)
-            
-            const xeroResult = await getOrCreateXeroContact(userForSync.id, activeTenant.tenant_id)
-            
-            if (xeroResult.success && xeroResult.xeroContactId) {
-              console.log(`✅ User synced to Xero successfully: ${xeroResult.xeroContactId}`)
-              
-              // Log successful Xero sync to Sentry
-              const { captureMessage } = await import('@sentry/nextjs')
-              captureMessage('User synced to Xero after onboarding', {
-                level: 'info',
-                tags: {
-                  component: 'onboarding',
-                  operation: 'xero_sync'
-                },
-                extra: {
-                  user_id: userForSync.id,
-                  email: userForSync.email,
-                  member_id: userForSync.member_id,
-                  xero_contact_id: xeroResult.xeroContactId,
-                  api_call_made: xeroResult.apiCallMade,
-                  sync_timestamp: new Date().toISOString()
-                }
-              })
-            } else {
-              console.warn(`⚠️ Failed to sync user to Xero: ${xeroResult.error}`)
-              
-              // Log Xero sync failure to Sentry (as warning, not error)
-              const { captureMessage } = await import('@sentry/nextjs')
-              captureMessage('Failed to sync user to Xero after onboarding', {
-                level: 'warning',
-                tags: {
-                  component: 'onboarding',
-                  operation: 'xero_sync_failed'
-                },
-                extra: {
-                  user_id: userForSync.id,
-                  email: userForSync.email,
-                  member_id: userForSync.member_id,
-                  error: xeroResult.error,
-                  api_call_made: xeroResult.apiCallMade,
-                  sync_timestamp: new Date().toISOString()
-                }
-              })
-            }
-                      } else {
-              console.log('ℹ️ No active Xero connection found, skipping user sync')
-              showSuccess('Debug', 'No active Xero connection found, skipping sync')
-            }
-        } catch (xeroError) {
-          console.error('❌ Error during Xero sync:', xeroError)
-          showError('Debug', `Xero sync error: ${xeroError instanceof Error ? xeroError.message : String(xeroError)}`)
-          
-          // Log sync error to Sentry
-          const { captureMessage } = await import('@sentry/nextjs')
-          captureMessage('Exception during Xero sync after onboarding', {
-            level: 'error',
-            tags: {
-              component: 'onboarding',
-              operation: 'xero_sync_exception'
-            },
-            extra: {
-              user_id: userForSync.id,
-              email: userForSync.email,
-              member_id: userForSync.member_id,
-              error: xeroError instanceof Error ? xeroError.message : String(xeroError),
-              stack: xeroError instanceof Error ? xeroError.stack : undefined,
-              sync_timestamp: new Date().toISOString()
-            }
-          })
-          
-          // Don't fail onboarding if Xero sync fails
-        }
-        console.log('✅ Xero sync process completed for user:', userForSync.email)
-      } else {
-        console.log('⚠️ No user data available for Xero sync. User data:', {
-          userId: user?.id,
-          email: user?.email,
-          hasUpdatedUser: !!updatedUser,
-          hasUserForSync: !!userForSync
-        })
-      }
-
-      // Show success toast
-      showSuccess('Profile completed!', `Welcome to the ${getOrganizationName('long').toLowerCase()}`)
-
-      // Redirect based on membership preference (no delay needed)
-      if (formData.wantsMembership) {
-        router.push('/user/browse-memberships?onboarding=true')
-      } else {
-        router.push('/dashboard')
-      }
-      
-      // Note: Don't reset submitting state on success - keep button disabled until redirect
-
-    } catch (error: any) {
-      console.error('Error completing onboarding:', error)
-      const errorMessage = error?.message || 'Failed to complete onboarding. Please try again.'
-      setErrors({ submit: errorMessage })
-      showError('Profile completion failed', errorMessage)
-      setSubmitting(false) // Only reset on error
-    }
+    })
   }
 
   const handleCancel = async () => {
@@ -606,10 +361,10 @@ export default function OnboardingPage() {
             
             <button
               type="submit"
-              disabled={submitting || !isFormValid()}
+              disabled={isPending || !isFormValid()}
               className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Completing...' : 'Complete Profile'}
+              {isPending ? 'Completing...' : 'Complete Profile'}
             </button>
           </div>
         </form>

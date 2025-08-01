@@ -567,7 +567,7 @@ export async function syncUserToXeroContact(
 export async function getOrCreateXeroContact(
   userId: string,
   tenantId: string
-): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
+): Promise<{ success: boolean; xeroContactId?: string; error?: string; apiCallMade?: boolean }> {
   try {
     const supabase = createAdminClient()
 
@@ -595,12 +595,13 @@ export async function getOrCreateXeroContact(
       
       // SKIP EXPENSIVE VALIDATION: Assume contact is valid since it was synced during onboarding
       // Only validate if explicitly requested or if we suspect issues
-      return { success: true, xeroContactId: existingContact.xero_contact_id }
+      return { success: true, xeroContactId: existingContact.xero_contact_id, apiCallMade: false }
     }
 
     // Only sync if no local contact exists (shouldn't happen since contacts are synced during onboarding)
     console.log(`⚠️ No local contact found for user ${userId}, syncing to Xero (this should be rare)`)
-    return await syncUserToXeroContact(userId, tenantId, userData)
+    const result = await syncUserToXeroContact(userId, tenantId, userData)
+    return { ...result, apiCallMade: true }
 
   } catch (error) {
     console.error('Error getting or creating Xero contact:', error)

@@ -1,4 +1,7 @@
 import { XeroClient, AccountingApi } from 'xero-node'
+import { Logger } from '@/lib/logging/logger'
+
+const logger = Logger.getInstance()
 
 if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
   throw new Error('Missing Xero environment variables')

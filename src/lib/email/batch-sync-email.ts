@@ -276,6 +276,8 @@ export class EmailProcessingManager {
         { 
           emailLogId: emailLog.id,
           eventType: emailLog.event_type,
+          templateId: emailLog.template_id, // Include template_id in error logging
+          email: emailLog.email_address,
           error: error instanceof Error ? error.message : String(error)
         },
         'error'

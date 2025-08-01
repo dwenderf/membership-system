@@ -28,3 +28,12 @@ export function formatTimestamp(timestamp: string | null): string {
   // Since this runs on server (UTC), return the raw timestamp for client-side rendering
   return timestamp
 }
+
+/**
+ * Format a date to local date string in New York timezone
+ * Used for email templates and consistent date display
+ */
+export function toNYDateString(date?: Date | string): string {
+  const dateObj = date ? new Date(date) : new Date()
+  return dateObj.toLocaleDateString('en-US', { timeZone: 'America/New_York' })
+}

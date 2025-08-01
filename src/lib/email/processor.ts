@@ -15,6 +15,7 @@
 import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
+import { toNYDateString } from '@/lib/date-utils'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations'
@@ -288,7 +289,7 @@ export class EmailProcessor {
           validFrom: membership.valid_from,
           validUntil: membership.valid_until,
           paymentIntentId: membership.stripe_payment_intent_id || 'unknown',
-          purchaseDate: (membership.created_at ? new Date(membership.created_at) : new Date()).toLocaleDateString()
+          purchaseDate: toNYDateString(membership.created_at || new Date())
         },
         related_entity_type: 'user_memberships',
         related_entity_id: event.record_id || undefined,
@@ -401,7 +402,7 @@ export class EmailProcessor {
           seasonName: registration.registration.season.name,
           amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
           paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
-          registrationDate: (registration.created_at ? new Date(registration.created_at) : new Date()).toLocaleDateString(),
+          registrationDate: toNYDateString(registration.created_at || new Date()),
           dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
         },
         related_entity_type: 'user_registrations',

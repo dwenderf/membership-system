@@ -234,16 +234,22 @@ export default function OnboardingPage() {
         showSuccess('Debug', `Starting Xero sync for: ${userForSync.email}`)
         try {
           console.log('🔄 Attempting to sync user to Xero after onboarding...')
+          showSuccess('Debug', 'Attempting to sync user to Xero...')
           
           // Import the Xero contact function and client utilities
+          console.log('📦 Importing Xero modules...')
           const { getOrCreateXeroContact } = await import('@/lib/xero/contacts')
           const { getActiveTenant } = await import('@/lib/xero/client')
+          console.log('✅ Xero modules imported successfully')
           
-          // Get active Xero tenant using the client utility
-          const activeTenant = await getActiveTenant()
+                      // Get active Xero tenant using the client utility
+            console.log('🔍 Getting active Xero tenant...')
+            const activeTenant = await getActiveTenant()
+            console.log('📊 Active tenant result:', activeTenant)
 
-          if (activeTenant) {
-            console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
+            if (activeTenant) {
+              console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
+              showSuccess('Debug', `Found Xero tenant: ${activeTenant.tenant_name}`)
             
             const xeroResult = await getOrCreateXeroContact(userForSync.id, activeTenant.tenant_id)
             
@@ -288,11 +294,13 @@ export default function OnboardingPage() {
                 }
               })
             }
-          } else {
-            console.log('ℹ️ No active Xero connection found, skipping user sync')
-          }
+                      } else {
+              console.log('ℹ️ No active Xero connection found, skipping user sync')
+              showSuccess('Debug', 'No active Xero connection found, skipping sync')
+            }
         } catch (xeroError) {
           console.error('❌ Error during Xero sync:', xeroError)
+          showError('Debug', `Xero sync error: ${xeroError instanceof Error ? xeroError.message : String(xeroError)}`)
           
           // Log sync error to Sentry
           const { captureMessage } = await import('@sentry/nextjs')

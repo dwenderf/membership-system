@@ -189,18 +189,16 @@ export default function OnboardingPage() {
 
       // Sync user to Xero if connected
       if (updatedUser) {
+        console.log('🔄 Starting Xero sync for user:', updatedUser.email)
         try {
           console.log('🔄 Attempting to sync user to Xero after onboarding...')
           
-          // Import the Xero contact function directly
+          // Import the Xero contact function and client utilities
           const { getOrCreateXeroContact } = await import('@/lib/xero/contacts')
+          const { getActiveTenant } = await import('@/lib/xero/client')
           
-          // Get active Xero tenant
-          const { data: activeTenant } = await supabase
-            .from('xero_oauth_tokens')
-            .select('tenant_id, tenant_name')
-            .eq('is_active', true)
-            .single()
+          // Get active Xero tenant using the client utility
+          const activeTenant = await getActiveTenant()
 
           if (activeTenant) {
             console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
@@ -274,6 +272,9 @@ export default function OnboardingPage() {
           
           // Don't fail onboarding if Xero sync fails
         }
+        console.log('✅ Xero sync process completed for user:', updatedUser.email)
+      } else {
+        console.log('⚠️ No updatedUser found, skipping Xero sync')
       }
 
       // Show success toast

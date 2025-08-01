@@ -130,15 +130,12 @@ export default function EditProfilePage() {
       if (contactChanged) {
         console.log('Contact info changed, syncing to Xero contact...')
         try {
-          // Import the Xero contact function directly
+          // Import the Xero contact function and client utilities
           const { syncContactOnNameChange } = await import('@/lib/xero/contacts')
+          const { getActiveTenant } = await import('@/lib/xero/client')
           
-          // Get active Xero tenant
-          const { data: activeTenant } = await supabase
-            .from('xero_oauth_tokens')
-            .select('tenant_id, tenant_name')
-            .eq('is_active', true)
-            .single()
+          // Get active Xero tenant using the client utility
+          const activeTenant = await getActiveTenant()
 
           if (activeTenant) {
             console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)

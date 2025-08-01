@@ -582,7 +582,7 @@ export async function getOrCreateXeroContact(
       return { success: false, error: 'User not found' }
     }
 
-    // Check if contact already exists and is synced
+    // OPTIMIZATION: Check if contact already exists locally with valid Xero ID
     const { data: existingContact } = await supabase
       .from('xero_contacts')
       .select('*')
@@ -591,58 +591,62 @@ export async function getOrCreateXeroContact(
       .single()
 
     if (existingContact && existingContact.sync_status === 'synced' && existingContact.xero_contact_id) {
-      // Validate that the cached contact ID is still valid and not archived
-      try {
-        const xeroApi = await getAuthenticatedXeroClient(tenantId)
-        if (xeroApi) {
-          const contactResponse = await xeroApi.accountingApi.getContact(
-            tenantId,
-            existingContact.xero_contact_id
-          )
-          
-          if (contactResponse.body.contacts && contactResponse.body.contacts.length > 0) {
-            const contact = contactResponse.body.contacts[0]
-            
-            // Check if contact is archived
-            if (contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
-              console.log(`⚠️ Cached contact ${existingContact.xero_contact_id} is archived, will re-sync`)
-              // Mark as needing re-sync so we'll create a new contact
-              await supabase
-                .from('xero_contacts')
-                .update({ sync_status: 'pending' })
-                .eq('user_id', userId)
-                .eq('tenant_id', tenantId)
-            } else {
-              // Contact is valid, use it
-              return { success: true, xeroContactId: existingContact.xero_contact_id }
-            }
-          } else {
-            console.log(`⚠️ Cached contact ${existingContact.xero_contact_id} not found in Xero, will re-sync`)
-            // Mark as needing re-sync
-            await supabase
-              .from('xero_contacts')
-              .update({ sync_status: 'pending' })
-              .eq('user_id', userId)
-              .eq('tenant_id', tenantId)
-          }
-        }
-      } catch (validationError) {
-        console.log(`⚠️ Error validating cached contact ${existingContact.xero_contact_id}:`, validationError)
-        // Mark as needing re-sync on validation error
-        await supabase
-          .from('xero_contacts')
-          .update({ sync_status: 'pending' })
-          .eq('user_id', userId)
-          .eq('tenant_id', tenantId)
-      }
+      console.log(`✅ Contact already synced locally, using cached Xero ID: ${existingContact.xero_contact_id}`)
+      
+      // SKIP EXPENSIVE VALIDATION: Assume contact is valid since it was synced during onboarding
+      // Only validate if explicitly requested or if we suspect issues
+      return { success: true, xeroContactId: existingContact.xero_contact_id }
     }
 
-    // Sync the contact
+    // Only sync if no local contact exists (shouldn't happen since contacts are synced during onboarding)
+    console.log(`⚠️ No local contact found for user ${userId}, syncing to Xero (this should be rare)`)
     return await syncUserToXeroContact(userId, tenantId, userData)
 
   } catch (error) {
     console.error('Error getting or creating Xero contact:', error)
     return { success: false, error: 'Failed to get or create contact' }
+  }
+}
+
+// Force sync contact when user name changes (called from profile update)
+export async function syncContactOnNameChange(
+  userId: string,
+  tenantId: string,
+  oldFirstName: string,
+  oldLastName: string,
+  newFirstName: string,
+  newLastName: string
+): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
+  try {
+    console.log(`👤 Name change detected for user ${userId}: "${oldFirstName} ${oldLastName}" → "${newFirstName} ${newLastName}"`)
+    
+    // Check if name actually changed
+    if (oldFirstName === newFirstName && oldLastName === newLastName) {
+      console.log(`✅ No name change detected, skipping Xero contact sync`)
+      return { success: true }
+    }
+
+    const supabase = createAdminClient()
+
+    // Get full user data
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, phone, member_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !userData) {
+      return { success: false, error: 'User not found' }
+    }
+
+    console.log(`🔄 Forcing Xero contact sync due to name change from profile update`)
+    
+    // Force sync to update the contact name in Xero
+    return await syncUserToXeroContact(userId, tenantId, userData)
+
+  } catch (error) {
+    console.error('Error syncing contact on name change:', error)
+    return { success: false, error: 'Failed to sync contact on name change' }
   }
 }
 

@@ -15,8 +15,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { userData } = body
 
-    if (!userData) {
-      return NextResponse.json({ error: 'User data required' }, { status: 400 })
+    // Get complete user data from database instead of relying on passed data
+    const { data: completeUserData, error: userDataError } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, phone, member_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userDataError || !completeUserData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Get active Xero tenant
@@ -33,11 +40,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Sync user to Xero
+    // Sync user to Xero using complete database data
     const result = await syncUserToXeroContact(
       user.id,
       activeTenant.tenant_id,
-      userData
+      completeUserData
     )
 
     return NextResponse.json(result)

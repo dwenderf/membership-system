@@ -15,6 +15,11 @@ export default function EditProfilePage() {
     isGoalie: null as boolean | null,
     isLgbtq: null as boolean | null,
   })
+  const [originalFormData, setOriginalFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '', // Track email for future contact sync needs
+  })
   const [errors, setErrors] = useState<Record<string, string>>({})
   
   const router = useRouter()
@@ -42,11 +47,17 @@ export default function EditProfilePage() {
       }
 
       setUser(user)
-      setFormData({
+      const initialData = {
         firstName: userProfile.first_name || '',
         lastName: userProfile.last_name || '',
         isGoalie: userProfile.is_goalie,
         isLgbtq: userProfile.is_lgbtq,
+      }
+      setFormData(initialData)
+      setOriginalFormData({
+        firstName: userProfile.first_name || '',
+        lastName: userProfile.last_name || '',
+        email: user.email || '', // Track original email for future contact sync
       })
       setLoading(false)
     }
@@ -95,6 +106,13 @@ export default function EditProfilePage() {
     setSubmitting(true)
 
     try {
+      // Check for contact-relevant changes (name or email)
+      const contactChanged = (
+        originalFormData.firstName !== formData.firstName.trim() ||
+        originalFormData.lastName !== formData.lastName.trim() ||
+        originalFormData.email !== user.email // Future-proofing for email changes
+      )
+
       const { error } = await supabase
         .from('users')
         .update({
@@ -107,6 +125,38 @@ export default function EditProfilePage() {
         .eq('id', user.id)
 
       if (error) throw error
+
+      // If contact info changed (name or email), sync to Xero contact  
+      if (contactChanged) {
+        console.log('Contact info changed, syncing to Xero contact...')
+        try {
+          const response = await fetch('/api/xero/sync-user', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userData: {
+                id: user.id,
+                email: user.email,
+                first_name: formData.firstName.trim(),
+                last_name: formData.lastName.trim(),
+                phone: null, // We don't collect phone in this form
+                member_id: null // This will be fetched from the database by the API
+              }
+            }),
+          })
+
+          if (!response.ok) {
+            console.warn('Xero contact sync failed, but profile update succeeded')
+          } else {
+            console.log('Xero contact synced successfully')
+          }
+        } catch (xeroError) {
+          console.warn('Xero contact sync failed, but profile update succeeded:', xeroError)
+          // Don't fail the entire operation if Xero sync fails
+        }
+      }
 
       showSuccess('Profile updated!', 'Your profile has been successfully updated.')
       router.push('/user/account')

@@ -107,18 +107,29 @@ export default function ReportsPage() {
   const [expandedMemberships, setExpandedMemberships] = useState<Set<string>>(new Set())
   const [expandedDiscountCategories, setExpandedDiscountCategories] = useState<Set<string>>(new Set())
   const [expandedDonations, setExpandedDonations] = useState<string | null>(null)
-  const [transactionsToShow, setTransactionsToShow] = useState(20)
+  const [pagination, setPagination] = useState({ offset: 0, limit: 50, hasMore: false })
   const { showError } = useToast()
 
-  const fetchReportData = async (range: string) => {
+  const fetchReportData = async (range: string, offset: number = 0) => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/admin/reports?range=${range}`)
+      const response = await fetch(`/api/admin/reports?range=${range}&offset=${offset}&limit=50`)
       if (!response.ok) {
         throw new Error('Failed to fetch report data')
       }
       const data = await response.json()
-      setReportData(data)
+      if (offset === 0) {
+        // First load - replace all data
+        setReportData(data)
+        setPagination(data.pagination || { offset: 0, limit: 50, hasMore: false })
+      } else {
+        // Load more - append to existing data
+        setReportData(prev => prev ? {
+          ...prev,
+          recentTransactions: [...prev.recentTransactions, ...data.recentTransactions]
+        } : data)
+        setPagination(data.pagination || { offset: 0, limit: 50, hasMore: false })
+      }
     } catch (error) {
       console.error('Error fetching report data:', error)
       showError('Failed to load report data')
@@ -129,7 +140,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReportData(selectedRange)
-    setTransactionsToShow(20) // Reset pagination when date range changes
+    setPagination({ offset: 0, limit: 50, hasMore: false }) // Reset pagination when date range changes
   }, [selectedRange])
 
   const formatCurrency = (amount: number) => {
@@ -670,7 +681,7 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {reportData.recentTransactions.length > 0 ? (
-                    reportData.recentTransactions.slice(0, transactionsToShow).map((transaction) => (
+                    reportData.recentTransactions.map((transaction) => (
                       <tr key={transaction.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {transaction.invoiceNumber || 'N/A'}
@@ -715,15 +726,15 @@ export default function ReportsPage() {
               </table>
               {/* Debug info */}
               <div className="px-6 py-2 text-xs text-gray-500 bg-gray-50">
-                Debug: {reportData.recentTransactions.length} total transactions, showing {transactionsToShow}
+                Debug: {reportData.recentTransactions.length} total transactions, offset: {pagination.offset}, hasMore: {pagination.hasMore.toString()}
               </div>
-              {reportData.recentTransactions.length > transactionsToShow && (
+              {pagination.hasMore && (
                 <div className="px-6 py-4 border-t border-gray-200">
                   <button
-                    onClick={() => setTransactionsToShow(prev => prev + 20)}
+                    onClick={() => fetchReportData(selectedRange, pagination.offset + pagination.limit)}
                     className="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Show More ({reportData.recentTransactions.length - transactionsToShow} remaining)
+                    Show More
                   </button>
                 </div>
               )}

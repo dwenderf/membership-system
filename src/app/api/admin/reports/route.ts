@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
 
     // Get time range parameter
     const range = searchParams.get('range') || '7d'
+    
+    // Get pagination parameters
+    const offset = parseInt(searchParams.get('offset') || '0')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100) // Cap at 100
     let timeRange: number
     
     switch (range) {
@@ -283,7 +287,7 @@ export async function GET(request: NextRequest) {
       .gte('transaction_date', startDate)
       .lte('transaction_date', endDate)
       .order('transaction_date', { ascending: false })
-      .limit(20)
+      .range(offset, offset + limit - 1)
 
     if (transactionsError) {
       console.error('❌ Error fetching recent transactions:', transactionsError)
@@ -341,7 +345,7 @@ export async function GET(request: NextRequest) {
         .lte('created_at', endDate)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(20)
+        .range(offset, offset + limit - 1)
 
       if (fallbackError) {
         console.error('Error fetching fallback payments:', fallbackError)
@@ -490,7 +494,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ...reportData,
-      activeMembers: activeMembersSummary
+      activeMembers: activeMembersSummary,
+      pagination: {
+        offset,
+        limit,
+        hasMore: processedTransactions.length === limit
+      }
     })
 
   } catch (error) {

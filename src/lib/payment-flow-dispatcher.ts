@@ -56,7 +56,7 @@ async function handleZeroPaymentFlow(
     // Use existing free payment APIs which will handle invoice creation
     const endpoint = isRegistration 
       ? '/api/create-registration-payment-intent'
-      : '/api/create-payment-intent'
+      : '/api/create-membership-payment-intent'
     
     const body = isRegistration
       ? {
@@ -117,7 +117,7 @@ async function handlePaidPaymentFlow(
     // Create payment intent
     const endpoint = isRegistration 
       ? '/api/create-registration-payment-intent'
-      : '/api/create-payment-intent'
+      : '/api/create-membership-payment-intent'
     
     const body = isRegistration
       ? {

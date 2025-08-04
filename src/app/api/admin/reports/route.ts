@@ -138,11 +138,12 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching registrations from reports view:', registrationsError)
     }
 
-    // Get discount usage from reports view
+    // Get discount usage from reports view (only actual discount codes with discount_code_id)
     const { data: discountUsage, error: discountError } = await supabase
       .from('reports_data')
       .select('*')
       .eq('line_item_type', 'discount')
+      .not('discount_code_id', 'is', null)
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
@@ -227,6 +228,8 @@ export async function GET(request: NextRequest) {
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
+
+
     if (donationsError) {
       console.error('Error fetching donations from reports view:', donationsError)
     }
@@ -251,25 +254,39 @@ export async function GET(request: NextRequest) {
       } : null
     })
 
+    // Process donations (received and given)
     donations?.forEach(donation => {
       const customerName = donation.customer_name || 'Unknown'
       const amount = donation.line_amount || 0
       
-      // For now, treat all donations as received
-      // In the future, you might want to distinguish based on description or other metadata
-      donationsReceived += amount
+      if (amount > 0) {
+        // Positive amount = donation received
+        donationsReceived += amount
+        donationDetails.push({
+          id: donation.line_item_id,
+          customerName,
+          amount,
+          date: donation.invoice_created_at,
+          type: 'received'
+        })
+      } else {
+        // Negative amount = donation given
+        donationsGiven += Math.abs(amount)
+        donationDetails.push({
+          id: donation.line_item_id,
+          customerName,
+          amount: Math.abs(amount),
+          date: donation.invoice_created_at,
+          type: 'given'
+        })
+      }
+      
       donationTransactionCount++
-      donationDetails.push({
-        id: donation.line_item_id,
-        customerName,
-        amount,
-        date: donation.invoice_created_at,
-        type: 'received'
-      })
     })
 
     console.log('📊 Donation calculation results:', {
       donationsReceived,
+      donationsGiven,
       donationTransactionCount,
       donationDetailsCount: donationDetails.length,
       sampleDonation: donationDetails[0]

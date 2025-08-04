@@ -29,6 +29,7 @@ export type StagingPaymentData = {
     amount_saved: Cents
     category_name: string
     accounting_code?: string
+    discount_code_id?: string // UUID reference to discount_codes.id for actual discount codes
   }>
   stripe_payment_intent_id?: string | null
 }
@@ -626,7 +627,7 @@ export class XeroStagingManager {
       for (const discount of data.discount_codes_used) {
         lineItems.push({
           item_type: 'discount' as const,
-          item_id: null,
+          item_id: discount.discount_code_id || null, // Use discount_code_id if available
           description: `Discount: ${discount.code} (${discount.category_name})`,
           quantity: 1,
           unit_amount: -discount.amount_saved,

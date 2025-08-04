@@ -28,6 +28,14 @@ export function centsToCents(amountInCents: number): Cents {
 }
 
 /**
+ * Helper function to create negative Cents value (for donations given)
+ * This function rounds the input and makes it negative
+ */
+export function negativeCents(amountInCents: number): Cents {
+  return ensureIntegerCents(-amountInCents)
+}
+
+/**
  * Helper function to create a Cents value from dollars (converts to cents)
  * This function multiplies by 100 and rounds to ensure proper integer cents
  */
@@ -46,7 +54,7 @@ export function centsToDollars(cents: Cents): number {
  * Type guard to check if a number is a valid Cents value
  */
 export function isValidCents(value: number): value is Cents {
-  return Number.isInteger(value) && value >= 0
+  return Number.isInteger(value) // Allow negative values for donations given
 }
 
 /**

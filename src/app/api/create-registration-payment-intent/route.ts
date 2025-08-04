@@ -1078,7 +1078,8 @@ export async function POST(request: NextRequest) {
         code: discountCode!,
         amount_saved: centsToCents(discountAmount),
         category_name: validatedDiscountCode.category?.name || 'Registration Discount',
-        accounting_code: accountingCodes.discount || undefined
+        accounting_code: accountingCodes.discount || undefined,
+        discount_code_id: validatedDiscountCode.id // Include the discount code ID for proper categorization
       }] : [],
       stripe_payment_intent_id: undefined // Will be updated after Stripe intent creation
     }

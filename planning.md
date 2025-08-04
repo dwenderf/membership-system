@@ -46,7 +46,7 @@
 **Solution**: Remove `payment_items` table entirely and update all code to use `xero_invoice_line_items` as the single source of truth.
 
 **Files to Update**:1. **API Routes** (remove payment_items INSERT operations):
-   - `/api/create-payment-intent/route.ts` - Lines229-231658
+   - `/api/create-membership-payment-intent/route.ts` - Lines229-231658
    - `/api/create-registration-payment-intent/route.ts` - Remove payment_items inserts
 
 2 **Library Files** (update to read from xero_invoice_line_items):

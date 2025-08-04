@@ -679,7 +679,7 @@ email_logs (
 **Current Status**: 
 - ✅ **Option A (Main Offenders) - COMPLETED**: Core system files and critical APIs migrated to structured logging
   - ✅ xero-client.ts, startup.ts
-  - ✅ /api/create-payment-intent/route.ts - Fixed free membership payment completion and migrated all logging
+  - ✅ /api/create-membership-payment-intent/route.ts - Fixed free membership payment completion and migrated all logging
   - ✅ /api/create-registration-payment-intent/route.ts - Migrated payment processing and Stripe integration logging
   - ✅ xero-staging.ts - Migrated all staging record creation and management logging
   - ✅ All major terminal output clutter eliminated from startup and operation logs

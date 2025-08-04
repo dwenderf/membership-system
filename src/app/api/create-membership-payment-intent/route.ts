@@ -7,7 +7,7 @@ import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xer
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
-import { centsToCents } from '@/types/currency'
+import { centsToCents, negativeCents } from '@/types/currency'
 
 // Force import server config
 
@@ -116,25 +116,20 @@ async function handleFreeMembership({
           accounting_code: membership.accounting_code
         }
       ],
-      discount_codes_used: isNaturallyFree ? [] : [
-        {
-          code: 'FREE_MEMBERSHIP',
-          amount_saved: centsToCents(membershipAmount),
-          category_name: 'Free Membership Discount',
-          accounting_code: discountAccountingCode
-        }
-      ],
+      discount_codes_used: [], // No discount codes for membership - hardcoded codes are treated as donations
       stripe_payment_intent_id: null
     }
 
-    // Add donation item if applicable
-    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+    // Add donation items if applicable (can be positive for donations or negative for discounts)
+    if (donationAmount && donationAmount !== 0) {
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
         amount: centsToCents(donationAmount),
-        description: `Donation - ${membership.name}`,
-        accounting_code: donationAccountingCode
+        description: donationAmount > 0 
+          ? `Donation Received: ${membership.name}`
+          : `Donation Given: Financial Assistance - ${membership.name}`,
+        accounting_code: donationAmount > 0 ? donationAccountingCode : discountAccountingCode
       })
     }
 
@@ -342,7 +337,7 @@ export async function POST(request: NextRequest) {
       membershipId: membershipId,
       amountCents: amount,
       paymentIntentId: undefined, // Will be set after Stripe payment intent creation
-      endpoint: '/api/create-payment-intent',
+      endpoint: '/api/create-membership-payment-intent',
       operation: 'payment_intent_creation'
     }
     setPaymentContext(paymentContext)
@@ -452,25 +447,20 @@ export async function POST(request: NextRequest) {
           accounting_code: membership.accounting_code
         }
       ],
-      discount_codes_used: paymentOption === 'assistance' && discountAmount > 0 ? [
-        {
-          code: 'FINANCIAL_ASSISTANCE',
-          amount_saved: centsToCents(discountAmount),
-          category_name: 'Financial Assistance',
-          accounting_code: discountAccountingCode
-        }
-      ] : [],
+      discount_codes_used: [], // No discount codes for membership - hardcoded codes are treated as donations
       stripe_payment_intent_id: null // Will be updated after Stripe intent creation
     }
 
-    // Add donation item if applicable
-    if (paymentOption === 'donation' && donationAmount && donationAmount > 0) {
+    // Add donation items if applicable (can be positive for donations or negative for discounts)
+    if (donationAmount && donationAmount !== 0) {
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
         amount: centsToCents(donationAmount),
-        description: `Donation - ${membership.name}`,
-        accounting_code: donationAccountingCode
+        description: donationAmount > 0 
+          ? `Donation Received: ${membership.name}`
+          : `Donation Given: Financial Assistance - ${membership.name}`,
+        accounting_code: donationAmount > 0 ? donationAccountingCode : discountAccountingCode
       })
     }
 
@@ -743,7 +733,7 @@ export async function POST(request: NextRequest) {
     
     // Capture error in Sentry
     capturePaymentError(error, {
-      endpoint: '/api/create-payment-intent',
+      endpoint: '/api/create-membership-payment-intent',
       operation: 'payment_intent_creation'
     }, 'error')
     

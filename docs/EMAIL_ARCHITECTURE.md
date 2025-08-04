@@ -26,7 +26,7 @@ src/lib/email/
 - **Trigger**: Immediate completion of free membership/registration
 - **Source**: `free_membership` or `free_registration`
 - **Timing**: Email sent immediately when purchase completes
-- **Location**: `src/app/api/create-payment-intent/route.ts` and `src/app/api/create-registration-payment-intent/route.ts`
+- **Location**: `src/app/api/create-membership-payment-intent/route.ts` and `src/app/api/create-registration-payment-intent/route.ts`
 
 #### Paid Purchases
 - **Trigger**: Stripe webhook payment completion

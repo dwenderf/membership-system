@@ -15,14 +15,7 @@ function formatDateString(dateString: string): string {
   return date.toLocaleDateString()
 }
 
-// Helper function to get price for a registration category (simplified)
-function getCategoryPrice(category: any): { price: number; tierName: string } {
-  // Use the price directly from the category
-  return { 
-    price: category.price || 5000, // Default to $50.00 if no price set
-    tierName: 'Standard' 
-  }
-}
+
 
 // Helper function to get timing message for coming soon registrations
 function getTimingMessage(registration: any): string {
@@ -399,10 +392,9 @@ export default async function BrowseRegistrationsPage() {
                           <RegistrationPurchase
                             registration={{
                               ...registration,
-                              // Pre-calculate pricing for all categories
+                              // Add current count to categories
                               registration_categories: registration.registration_categories?.map((cat: any) => ({
                                 ...cat,
-                                pricing: getCategoryPrice(cat),
                                 current_count: categoryRegistrationCounts[cat.id] || 0
                               })) || []
                             }}

@@ -30,15 +30,12 @@ interface RegistrationCategory {
   max_capacity?: number
   current_count?: number
   required_membership_id?: string
+  price?: number
   categories?: {
     name: string
   }
   memberships?: {
     name: string
-  }
-  pricing?: {
-    price: number
-    tierName: string
   }
 }
 
@@ -167,10 +164,7 @@ export default function RegistrationPurchase({
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId)
   
   // Get pricing for selected category
-  const pricing = selectedCategory?.pricing || { price: 0, tierName: 'Standard' }
-  
-  // Calculate final price with discount
-  const originalAmount = pricing.price
+  const originalAmount = selectedCategory?.price ?? 0
   const discountAmount = discountValidation?.isValid ? discountValidation.discountAmount : 0
   const finalAmount = originalAmount - discountAmount
   
@@ -444,7 +438,7 @@ export default function RegistrationPurchase({
               const requiresMembership = category.required_membership_id
               const hasRequiredMembership = !requiresMembership || 
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
-              const categoryPricing = category.pricing || { price: 5000, tierName: 'Standard' }
+              const categoryPrice = category.price ?? 0
               
               return (
                 <label
@@ -515,7 +509,7 @@ export default function RegistrationPurchase({
                     <div className={`text-sm font-medium ${
                       selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                     }`}>
-                      ${(categoryPricing.price / 100).toFixed(2)}
+                      ${(categoryPrice / 100).toFixed(2)}
                     </div>
                   </div>
                 </label>
@@ -533,7 +527,7 @@ export default function RegistrationPurchase({
               const requiresMembership = category.required_membership_id
               const hasRequiredMembership = !requiresMembership || 
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
-              const categoryPricing = category.pricing || { price: 5000, tierName: 'Standard' }
+              const categoryPrice = category.price ?? 0
               
               return (
                 <label key={category.id} className="cursor-pointer">
@@ -603,7 +597,7 @@ export default function RegistrationPurchase({
                       <div className={`text-sm font-medium ${
                         selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                       }`}>
-                        ${(categoryPricing.price / 100).toFixed(2)}
+                        ${(categoryPrice / 100).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -651,7 +645,7 @@ export default function RegistrationPurchase({
             )}
             <div className="flex justify-between border-t pt-2 font-medium">
               <span className="text-gray-900">Total:</span>
-              <span className="text-gray-900">${(pricing.price / 100).toFixed(2)}</span>
+              <span className="text-gray-900">${(originalAmount / 100).toFixed(2)}</span>
             </div>
           </div>
         </div>

@@ -343,7 +343,8 @@ export class XeroStagingManager {
           .insert({
             xero_invoice_id: invoiceStaging.id,
             line_item_type: lineItem.item_type,
-            item_id: lineItem.item_id,
+            item_id: lineItem.item_type === 'discount' ? null : lineItem.item_id, // Don't use item_id for discounts
+            discount_code_id: lineItem.item_type === 'discount' ? lineItem.item_id : null, // Use discount_code_id for discounts
             description: lineItem.description,
             quantity: lineItem.quantity,
             unit_amount: lineItem.unit_amount,

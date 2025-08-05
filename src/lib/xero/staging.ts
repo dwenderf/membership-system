@@ -60,7 +60,7 @@ export type StagingPaymentData = {
      * Reference ID for the item
      * - membership: membership ID
      * - registration: registration ID  
-     * - discount: discount code ID (for actual discount codes) or null (for assistance)
+     * - discount: null (discount_code_id is used instead)
      * - donation: membership/registration ID (for context)
      */
     item_id: string | null
@@ -77,6 +77,9 @@ export type StagingPaymentData = {
     
     /** Xero accounting code for this line item */
     accounting_code?: string
+    
+    /** UUID reference to discount_codes.id for discount line items */
+    discount_code_id?: string
   }>
   
   /** 
@@ -343,8 +346,8 @@ export class XeroStagingManager {
           .insert({
             xero_invoice_id: invoiceStaging.id,
             line_item_type: lineItem.item_type,
-            item_id: lineItem.item_type === 'discount' ? null : lineItem.item_id, // Don't use item_id for discounts
-            discount_code_id: lineItem.item_type === 'discount' ? lineItem.item_id : null, // Use discount_code_id for discounts
+            item_id: lineItem.item_id,
+            discount_code_id: lineItem.discount_code_id,
             description: lineItem.description,
             quantity: lineItem.quantity,
             unit_amount: lineItem.unit_amount,
@@ -685,27 +688,13 @@ export class XeroStagingManager {
       lineItems.push({
         item_type: item.item_type,
         item_id: item.item_id,
+        discount_code_id: item.discount_code_id,
         description: item.description || `${item.item_type} purchase`,
         quantity: 1,
         unit_amount: item.item_amount,
         account_code: item.accounting_code || 'SALES',
         line_amount: item.item_amount
       })
-    }
-
-    // Add discount line items (negative amounts)
-    if (data.discount_codes_used) {
-      for (const discount of data.discount_codes_used) {
-        lineItems.push({
-          item_type: 'discount' as const,
-          item_id: discount.discount_code_id || null, // Use discount_code_id if available
-          description: `Discount: ${discount.code} (${discount.category_name})`,
-          quantity: 1,
-          unit_amount: -discount.amount_saved,
-          account_code: discount.accounting_code || 'DISCOUNT',
-          line_amount: -discount.amount_saved
-        })
-      }
     }
 
     return lineItems

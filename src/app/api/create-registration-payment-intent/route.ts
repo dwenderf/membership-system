@@ -133,7 +133,14 @@ async function handleFreeRegistration({
           discountCode
         )
 
-        const paymentItems = [{
+        const paymentItems: Array<{
+          item_type: 'registration' | 'discount'
+          item_id: string | null
+          item_amount: any
+          description: string
+          accounting_code?: string
+          discount_code_id?: string
+        }> = [{
           item_type: 'registration' as const,
           item_id: registrationId,
           item_amount: centsToCents(fullPrice), // Full registration price
@@ -141,8 +148,7 @@ async function handleFreeRegistration({
           accounting_code: accountingCodes.registration || undefined
         }]
 
-        // Add discount line items if applicable
-        const discountCodesUsed = []
+        // Add discount line item if applicable
         if (discountCode && fullPrice > 0) {
           // Validate discount code to get the discount_code_id
           let validatedDiscountCode = null
@@ -181,10 +187,11 @@ async function handleFreeRegistration({
             // Continue without discount_code_id if validation fails
           }
 
-          discountCodesUsed.push({
-            code: discountCode,
-            amount_saved: fullPrice, // Full price was discounted
-            category_name: validatedDiscountCode?.category?.name || 'Registration Discount',
+          paymentItems.push({
+            item_type: 'discount' as const,
+            item_id: null, // No item_id for discounts
+            item_amount: centsToCents(-fullPrice), // Negative amount for discount
+            description: `Discount: ${discountCode} (${validatedDiscountCode?.category?.name || 'Registration Discount'})`,
             accounting_code: accountingCodes.discount || undefined,
             discount_code_id: validatedDiscountCode?.id // Include the discount code ID for proper categorization
           })
@@ -196,8 +203,7 @@ async function handleFreeRegistration({
           total_amount: centsToCents(fullPrice),
           discount_amount: centsToCents(fullPrice), // Full discount for free registration
           final_amount: centsToCents(0),
-          payment_items: paymentItems,
-          discount_codes_used: discountCodesUsed
+          payment_items: paymentItems
         }, { isFree: true })
         
         if (!stagingResult) {
@@ -1098,27 +1104,41 @@ export async function POST(request: NextRequest) {
       discountCode
     )
 
+    const paymentItems: Array<{
+      item_type: 'registration' | 'discount'
+      item_id: string | null
+      item_amount: any
+      description: string
+      accounting_code?: string
+      discount_code_id?: string
+    }> = [
+      {
+        item_type: 'registration' as const,
+        item_id: registrationId,
+        item_amount: centsToCents(amount), // Use original amount, not final amount after discount
+        description: `Registration: ${registration.name} - ${categoryName}`,
+        accounting_code: accountingCodes.registration || undefined
+      }
+    ]
+
+    // Add discount line item if applicable
+    if (validatedDiscountCode && discountAmount > 0) {
+      paymentItems.push({
+        item_type: 'discount' as const,
+        item_id: null, // No item_id for discounts
+        item_amount: centsToCents(-discountAmount), // Negative amount for discount
+        description: `Discount: ${discountCode} (${validatedDiscountCode.category?.name || 'Registration Discount'})`,
+        accounting_code: accountingCodes.discount || undefined,
+        discount_code_id: validatedDiscountCode.id // Include the discount code ID for proper categorization
+      })
+    }
+
     const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: centsToCents(amount), // Original amount before discount
       discount_amount: centsToCents(discountAmount), // Discount amount
       final_amount: centsToCents(finalAmount), // Final amount being charged
-      payment_items: [
-        {
-          item_type: 'registration' as const,
-          item_id: registrationId,
-          item_amount: centsToCents(amount), // Use original amount, not final amount after discount
-          description: `Registration: ${registration.name} - ${categoryName}`,
-          accounting_code: accountingCodes.registration || undefined
-        }
-      ],
-      discount_codes_used: validatedDiscountCode ? [{
-        code: discountCode!,
-        amount_saved: centsToCents(discountAmount),
-        category_name: validatedDiscountCode.category?.name || 'Registration Discount',
-        accounting_code: accountingCodes.discount || undefined,
-        discount_code_id: validatedDiscountCode.id // Include the discount code ID for proper categorization
-      }] : [],
+      payment_items: paymentItems,
       stripe_payment_intent_id: undefined // Will be updated after Stripe intent creation
     }
 

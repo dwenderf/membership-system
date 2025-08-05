@@ -11,25 +11,99 @@ import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
 import { Cents, centsToCents } from '../../types/currency'
 
+/**
+ * Data structure for staging Xero invoice and payment records
+ * 
+ * This type represents the complete financial transaction data that will be
+ * staged in the database before being synced to Xero.
+ */
 export type StagingPaymentData = {
+  /** Database ID of the payment record (if already created) */
   payment_id?: string
+  
+  /** UUID of the user making the purchase */
   user_id: string
+  
+  /** 
+   * Original price before any discounts/assistance
+   * - For standard payments: Same as final_amount (no discount applied)
+   * - For assistance payments: Full membership price before discount
+   * - For free memberships: 0 (naturally free) or original price (discounted to free)
+   */
   total_amount: Cents
+  
+  /** 
+   * Amount of discount/assistance applied (always positive)
+   * - For standard payments: 0 (no discount)
+   * - For assistance payments: Amount being discounted (e.g., $70 discount on $100 membership)
+   * - For free memberships: Full original price (discounted to $0)
+   */
   discount_amount: Cents
+  
+  /** 
+   * Actual amount the user will pay (after all discounts/assistance)
+   * - For standard payments: Full membership price
+   * - For assistance payments: Reduced amount user can afford
+   * - For free memberships: 0
+   */
   final_amount: Cents
+  
+  /** 
+   * Individual line items that will appear on the Xero invoice
+   * Each item represents a separate charge, discount, or donation
+   */
   payment_items: Array<{
+    /** Type of line item: membership fee, registration fee, discount, or donation */
     item_type: 'membership' | 'registration' | 'discount' | 'donation'
+    
+    /** 
+     * Reference ID for the item
+     * - membership: membership ID
+     * - registration: registration ID  
+     * - discount: null (discount_code_id is used instead)
+     * - donation: membership/registration ID (for context)
+     */
     item_id: string | null
-    amount: Cents
+    
+    /** 
+     * Amount for this line item (can be negative for discounts)
+     * - Positive: Charge to customer (membership, registration, donation)
+     * - Negative: Discount/credit to customer (assistance, discount codes)
+     */
+    item_amount: Cents
+    
+    /** Human-readable description for Xero invoice */
     description?: string
+    
+    /** Xero accounting code for this line item */
     accounting_code?: string
+    
+    /** UUID reference to discount_codes.id for discount line items */
+    discount_code_id?: string
   }>
+  
+  /** 
+   * Discount codes that were applied to this purchase
+   * Only includes actual discount codes (not financial assistance)
+   */
   discount_codes_used?: Array<{
+    /** Discount code string (e.g., "SAVE20") */
     code: string
+    
+    /** Amount saved by this discount code (always positive) */
     amount_saved: Cents
+    
+    /** Category name for the discount code */
     category_name: string
+    
+    /** Xero accounting code for this discount */
     accounting_code?: string
+    
+    /** UUID reference to discount_codes.id for actual discount codes */
+    discount_code_id?: string
   }>
+  
+  /** Stripe payment intent ID (if using Stripe for payment) */
   stripe_payment_intent_id?: string | null
 }
 
@@ -273,6 +347,7 @@ export class XeroStagingManager {
             xero_invoice_id: invoiceStaging.id,
             line_item_type: lineItem.item_type,
             item_id: lineItem.item_id,
+            discount_code_id: lineItem.discount_code_id,
             description: lineItem.description,
             quantity: lineItem.quantity,
             unit_amount: lineItem.unit_amount,
@@ -493,7 +568,7 @@ export class XeroStagingManager {
           payment_items: [{
             item_type: 'registration',
             item_id: registration.registration_id,
-            amount: centsToCents(registration.amount_paid || 0),
+            item_amount: centsToCents(registration.amount_paid || 0),
             description: `${registration.registration.name} - ${registration.registration_category?.name || 'Standard'}`,
             accounting_code: registration.registration_category?.accounting_code || 'REGISTRATION'
           }],
@@ -512,7 +587,7 @@ export class XeroStagingManager {
           payment_items: [{
             item_type: 'membership',
             item_id: membership.membership_id,
-            amount: centsToCents(membership.amount_paid || 0),
+            item_amount: centsToCents(membership.amount_paid || 0),
             description: `${membership.membership.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
             accounting_code: membership.membership?.accounting_code || 'MEMBERSHIP'
           }],
@@ -613,27 +688,13 @@ export class XeroStagingManager {
       lineItems.push({
         item_type: item.item_type,
         item_id: item.item_id,
+        discount_code_id: item.discount_code_id,
         description: item.description || `${item.item_type} purchase`,
         quantity: 1,
-        unit_amount: item.amount,
+        unit_amount: item.item_amount,
         account_code: item.accounting_code || 'SALES',
-        line_amount: item.amount
+        line_amount: item.item_amount
       })
-    }
-
-    // Add discount line items (negative amounts)
-    if (data.discount_codes_used) {
-      for (const discount of data.discount_codes_used) {
-        lineItems.push({
-          item_type: 'discount' as const,
-          item_id: null,
-          description: `Discount: ${discount.code} (${discount.category_name})`,
-          quantity: 1,
-          unit_amount: -discount.amount_saved,
-          account_code: discount.accounting_code || 'DISCOUNT',
-          line_amount: -discount.amount_saved
-        })
-      }
     }
 
     return lineItems

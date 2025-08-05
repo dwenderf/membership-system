@@ -126,9 +126,9 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations data from reports view
+    // Get registrations data from reports_financial_data view
     const { data: registrations, error: registrationsError } = await supabase
-      .from('reports_data')
+      .from('reports_financial_data')
       .select('*')
       .eq('line_item_type', 'registration')
       .gte('invoice_created_at', startDate)
@@ -138,97 +138,121 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching registrations from reports view:', registrationsError)
     }
 
-    // Get discount usage from reports view
+    // Get discount usage from reports_financial_data view (only AUTHORISED invoices)
     const { data: discountUsage, error: discountError } = await supabase
-      .from('reports_data')
+      .from('reports_financial_data')
       .select('*')
       .eq('line_item_type', 'discount')
+      .not('discount_code_id', 'is', null)
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
     if (discountError) {
-      console.error('Error fetching discount usage from reports view:', discountError)
+      console.error('Error fetching discount usage:', discountError)
     }
 
-    // Group discount usage by category and calculate totals
+    // Group discount usage by category and code
     const discountUsageByCategory = new Map<string, { 
       categoryId: string, 
-      name: string, 
+      categoryName: string, 
       count: number, 
       total: number,
-      usages: Array<{
-        id: string,
-        customerName: string,
-        discountCode: string,
-        amountSaved: number,
-        date: string
+      codes: Map<string, {
+        code: string,
+        count: number,
+        total: number,
+        usages: Array<{
+          id: string,
+          customerName: string,
+          amountSaved: number,
+          date: string
+        }>
       }>
     }>()
 
     discountUsage?.forEach(usage => {
-      // For discounts, we'll group by description since we don't have category info in Xero line items
-      const categoryId = usage.description || 'unknown'
-      const name = usage.description || 'Unknown Discount'
+      const categoryId = usage.discount_category_id || 'unknown'
+      const categoryName = usage.discount_category_name || 'Unknown Category'
+      const discountCode = usage.discount_code || 'Unknown Code'
       const customerName = usage.customer_name || 'Unknown'
-      const discountCode = usage.description || 'Unknown Code' // Use description as discount code
-      const amountSaved = usage.absolute_amount || 0 // Use the computed absolute amount from the view
+      const amountSaved = usage.absolute_amount || 0
 
-      const existing = discountUsageByCategory.get(categoryId) || {
-        categoryId,
-        name,
-        count: 0,
-        total: 0,
-        usages: [] as Array<{
-          id: string,
-          customerName: string,
-          discountCode: string,
-          amountSaved: number,
-          date: string
-        }>
+      // Get or create category
+      let category = discountUsageByCategory.get(categoryId)
+      if (!category) {
+        category = {
+          categoryId,
+          categoryName,
+          count: 0,
+          total: 0,
+          codes: new Map()
+        }
+        discountUsageByCategory.set(categoryId, category)
       }
 
-      existing.count += 1
-      existing.total += amountSaved
-      existing.usages.push({
+      // Get or create code within category
+      let codeData = category.codes.get(discountCode)
+      if (!codeData) {
+        codeData = {
+          code: discountCode,
+          count: 0,
+          total: 0,
+          usages: []
+        }
+        category.codes.set(discountCode, codeData)
+      }
+
+      // Update totals
+      category.count += 1
+      category.total += amountSaved
+      codeData.count += 1
+      codeData.total += amountSaved
+      codeData.usages.push({
         id: usage.line_item_id,
         customerName,
-        discountCode,
         amountSaved,
-        date: usage.invoice_created_at
+        date: usage.invoice_created_at || new Date().toISOString()
       })
-
-      discountUsageByCategory.set(categoryId, existing)
     })
 
-    // Convert to array, sort usages by date (newest first), then sort by total amount
+    // Convert to array structure for API response
     const discountUsageBreakdown = Array.from(discountUsageByCategory.values())
       .map(category => ({
-        ...category,
-        usages: category.usages.sort((a, b) => 
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        )
+        categoryId: category.categoryId,
+        categoryName: category.categoryName,
+        count: category.count,
+        total: category.total,
+        codes: Array.from(category.codes.values())
+          .map(code => ({
+            ...code,
+            usages: code.usages.sort((a, b) => 
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+            )
+          }))
+          .sort((a, b) => b.total - a.total)
       }))
       .sort((a, b) => b.total - a.total)
 
     // Calculate discount summary for backward compatibility
     const discountSummary = new Map<string, { count: number; total: number }>()
     discountUsageBreakdown.forEach(category => {
-      discountSummary.set(category.name, {
+      discountSummary.set(category.categoryName, {
         count: category.count,
         total: category.total
       })
     })
 
-    // Get donations from reports view
-    const { data: donations, error: donationsError } = await supabase
-      .from('reports_data')
+    // Get donations from reports_financial_data view
+    // Only include line_item_type = 'donation' items (assistance is now donation type)
+    const { data: donationItems, error: donationsError } = await supabase
+      .from('reports_financial_data')
       .select('*')
       .eq('line_item_type', 'donation')
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
     if (donationsError) {
-      console.error('Error fetching donations from reports view:', donationsError)
+      console.error('Error fetching donations:', donationsError)
     }
 
     // Calculate donations from Xero line items
@@ -240,36 +264,56 @@ export async function GET(request: NextRequest) {
       customerName: string,
       amount: number,
       date: string,
-      type: 'received' | 'given'
+      type: 'received' | 'given',
+      description: string
     }> = []
 
     console.log('🔍 Donations data from Xero:', {
-      totalDonations: donations?.length || 0,
-      sampleDonation: donations?.[0] ? {
-        amount: donations[0].line_amount,
-        description: donations[0].description
+      totalDonations: donationItems?.length || 0,
+      sampleDonation: donationItems?.[0] ? {
+        amount: donationItems[0].line_amount,
+        description: donationItems[0].description,
+        lineItemType: donationItems[0].line_item_type
       } : null
     })
 
-    donations?.forEach(donation => {
-      const customerName = donation.customer_name || 'Unknown'
-      const amount = donation.line_amount || 0
+    // Process donations and assistance
+    donationItems?.forEach(item => {
+      const customerName = item.customer_name || 'Unknown'
+      const amount = item.line_amount || 0
+      const description = item.description || 'Unknown'
       
-      // For now, treat all donations as received
-      // In the future, you might want to distinguish based on description or other metadata
-      donationsReceived += amount
-      donationTransactionCount++
-      donationDetails.push({
-        id: donation.line_item_id,
-        customerName,
-        amount,
-        date: donation.invoice_created_at,
-        type: 'received'
-      })
+      if (item.line_item_type === 'donation' && amount > 0) {
+        // Positive donation = donation received
+        donationsReceived += amount
+        donationDetails.push({
+          id: item.line_item_id,
+          customerName,
+          amount,
+          date: item.invoice_created_at || new Date().toISOString(),
+          type: 'received',
+          description
+        })
+        donationTransactionCount++
+      } else if (item.line_item_type === 'donation' && amount < 0) {
+        // Negative donation = donation given (assistance)
+        const absAmount = Math.abs(amount)
+        donationsGiven += absAmount
+        donationDetails.push({
+          id: item.line_item_id,
+          customerName,
+          amount: absAmount,
+          date: item.invoice_created_at || new Date().toISOString(),
+          type: 'given',
+          description
+        })
+        donationTransactionCount++
+      }
     })
 
     console.log('📊 Donation calculation results:', {
       donationsReceived,
+      donationsGiven,
       donationTransactionCount,
       donationDetailsCount: donationDetails.length,
       sampleDonation: donationDetails[0]
@@ -435,11 +479,11 @@ export async function GET(request: NextRequest) {
         })),
         discountUsageBreakdown: discountUsageBreakdown,
         donationsReceived: {
-          transactionCount: donationTransactionCount,
+          transactionCount: donationDetails.filter(d => d.type === 'received').length,
           totalAmount: donationsReceived
         },
         donationsGiven: {
-          transactionCount: 0, // You might need to implement this based on your business logic
+          transactionCount: donationDetails.filter(d => d.type === 'given').length,
           totalAmount: donationsGiven
         },
         donationDetails: donationDetails,

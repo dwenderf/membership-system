@@ -17,15 +17,19 @@ interface ReportData {
     }>
     discountUsageBreakdown?: Array<{
       categoryId: string
-      name: string
+      categoryName: string
       count: number
       total: number
-      usages: Array<{
-        id: string
-        customerName: string
-        discountCode: string
-        amountSaved: number
-        date: string
+      codes: Array<{
+        code: string
+        count: number
+        total: number
+        usages: Array<{
+          id: string
+          customerName: string
+          amountSaved: number
+          date: string
+        }>
       }>
     }>
     donationsReceived: {
@@ -42,6 +46,7 @@ interface ReportData {
       amount: number
       date: string
       type: 'received' | 'given'
+      description: string
     }>
     memberships: Array<{
       name: string
@@ -330,7 +335,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Memberships</p>
                     <p className="text-sm text-gray-500">{reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)} purchases</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.memberships.length > 0 ? (
                   <div className="space-y-4">
@@ -411,7 +416,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Discount Usage</p>
                     <p className="text-sm text-gray-500">{reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)} uses</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.discountUsage.length > 0 ? (
                   <div className="space-y-4">
@@ -428,7 +433,7 @@ export default function ReportsPage() {
                                 <button className="mr-2 text-gray-500 hover:text-gray-700">
                                   {isExpanded ? '▼' : '▶'}
                                 </button>
-                                <h4 className="font-medium text-gray-900">{category.name}</h4>
+                                <h4 className="font-medium text-gray-900">{category.categoryName}</h4>
                               </div>
                               <div className="text-right">
                                 <div className="text-lg font-semibold text-blue-600">
@@ -440,19 +445,38 @@ export default function ReportsPage() {
                               </div>
                             </div>
                             
-                            {/* Individual usages - only show when expanded */}
+                            {/* Individual codes - only show when expanded */}
                             {isExpanded && (
-                              <div className="space-y-2 mt-4">
-                                {category.usages.map((usage) => (
-                                  <div key={usage.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
-                                    <div>
-                                      <span className="font-medium">{usage.customerName}</span>
-                                      <span className="text-gray-500 ml-2">
-                                        {usage.discountCode} - {formatDate(usage.date)}
-                                      </span>
+                              <div className="space-y-3 mt-4">
+                                {category.codes.map((code) => (
+                                  <div key={code.code} className="border-l-4 border-blue-200 pl-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <h5 className="font-medium text-gray-800">{code.code}</h5>
+                                      <div className="text-right">
+                                        <div className="text-sm font-semibold text-blue-600">
+                                          {formatCurrency(code.total)}
+                                        </div>
+                                        <div className="text-xs text-gray-600">
+                                          {code.count} time{code.count !== 1 ? 's' : ''} used
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="font-medium text-green-600">
-                                      -{formatCurrency(usage.amountSaved)}
+                                    
+                                    {/* Individual usages for this code */}
+                                    <div className="space-y-1">
+                                      {code.usages.map((usage) => (
+                                        <div key={usage.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                                          <div>
+                                            <span className="font-medium">{usage.customerName}</span>
+                                            <span className="text-gray-500 ml-2">
+                                              {formatDate(usage.date)}
+                                            </span>
+                                          </div>
+                                          <div className="font-medium text-green-600">
+                                            -{formatCurrency(usage.amountSaved)}
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
                                 ))}
@@ -492,7 +516,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Net Donations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount} transactions</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
                 </div>
                 
                 <div className="space-y-4">
@@ -527,7 +551,7 @@ export default function ReportsPage() {
                               <div>
                                 <span className="font-medium">{donation.customerName}</span>
                                 <span className="text-gray-500 ml-2">
-                                  {formatDate(donation.date)}
+                                  {donation.description} - {formatDate(donation.date)}
                                 </span>
                               </div>
                               <div className="font-medium text-green-600">
@@ -571,7 +595,7 @@ export default function ReportsPage() {
                               <div>
                                 <span className="font-medium">{donation.customerName}</span>
                                 <span className="text-gray-500 ml-2">
-                                  {formatDate(donation.date)}
+                                  {donation.description} - {formatDate(donation.date)}
                                 </span>
                               </div>
                               <div className="font-medium text-orange-600">
@@ -605,7 +629,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Registrations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.registrations.purchaseCount} purchases</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
                 </div>
                 
                 {/* Registrations Breakdown */}

@@ -70,14 +70,21 @@ interface ReportData {
       totalAmount: number
       breakdown?: Array<{
         registrationId: string
-        name: string
+        registrationName: string
+        seasonName: string
         count: number
         total: number
-        registrations: Array<{
-          id: string
-          customerName: string
-          amount: number
-          date: string
+        categories: Array<{
+          categoryId: string
+          categoryName: string
+          count: number
+          total: number
+          registrations: Array<{
+            id: string
+            customerName: string
+            amount: number
+            date: string
+          }>
         }>
       }>
     }
@@ -647,10 +654,13 @@ export default function ReportsPage() {
                               <button className="mr-2 text-gray-500 hover:text-gray-700">
                                 {isExpanded ? '▼' : '▶'}
                               </button>
-                              <h4 className="font-medium text-gray-900">{registration.name}</h4>
+                              <div>
+                                <h4 className="font-medium text-gray-900">{registration.registrationName}</h4>
+                                <p className="text-sm text-gray-500">{registration.seasonName}</p>
+                              </div>
                             </div>
                             <div className="text-right">
-                                                              <div className="text-lg font-semibold text-blue-600">
+                              <div className="text-lg font-semibold text-blue-600">
                                 {formatCurrency(registration.total)}
                               </div>
                               <div className="text-sm text-gray-600">
@@ -659,19 +669,38 @@ export default function ReportsPage() {
                             </div>
                           </div>
                           
-                          {/* Individual registrations - only show when expanded */}
+                          {/* Categories within registration - only show when expanded */}
                           {isExpanded && (
-                            <div className="space-y-2 mt-4">
-                              {registration.registrations.map((reg) => (
-                                <div key={reg.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
-                                  <div>
-                                    <span className="font-medium">{reg.customerName}</span>
-                                    <span className="text-gray-500 ml-2">
-                                      {formatDate(reg.date)}
-                                    </span>
+                            <div className="space-y-3 mt-4">
+                              {registration.categories.map((category) => (
+                                <div key={category.categoryId} className="border-l-4 border-purple-200 pl-4">
+                                  <div className="flex justify-between items-center mb-2">
+                                    <h5 className="font-medium text-gray-800">{category.categoryName}</h5>
+                                    <div className="text-right">
+                                      <div className="text-sm font-semibold text-purple-600">
+                                        {formatCurrency(category.total)}
+                                      </div>
+                                      <div className="text-xs text-gray-600">
+                                        {category.count} purchase{category.count !== 1 ? 's' : ''}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="font-medium text-gray-900">
-                                    {formatCurrency(reg.amount)}
+                                  
+                                  {/* Individual registrations for this category */}
+                                  <div className="space-y-1">
+                                    {category.registrations.map((reg) => (
+                                      <div key={reg.id} className="flex justify-between items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                                        <div>
+                                          <span className="font-medium">{reg.customerName}</span>
+                                          <span className="text-gray-500 ml-2">
+                                            {formatDate(reg.date)}
+                                          </span>
+                                        </div>
+                                        <div className="font-medium text-gray-900">
+                                          {formatCurrency(reg.amount)}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               ))}

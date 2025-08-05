@@ -126,16 +126,15 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations data from reports_financial_data view
+    // Get registrations data from registration_reports_data view (hierarchical breakdown)
     const { data: registrations, error: registrationsError } = await supabase
-      .from('reports_financial_data')
+      .from('registration_reports_data')
       .select('*')
-      .eq('line_item_type', 'registration')
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
     if (registrationsError) {
-      console.error('Error fetching registrations from reports view:', registrationsError)
+      console.error('Error fetching registrations from registration reports view:', registrationsError)
     }
 
     // Get discount usage from reports_financial_data view (only AUTHORISED invoices)
@@ -411,58 +410,92 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Group registrations by registration type and calculate totals
-    const registrationsByType = new Map<string, { 
+    // Group registrations by registration and then by category (hierarchical breakdown)
+    const registrationsByRegistration = new Map<string, { 
       registrationId: string, 
-      name: string, 
+      registrationName: string, 
+      seasonName: string,
       count: number, 
       total: number,
-      registrations: Array<{
-        id: string,
-        customerName: string,
-        amount: number,
-        date: string
-      }>
-    }>()
-
-    registrations?.forEach(registration => {
-      const registrationId = registration.description || 'unknown'
-      const name = registration.description || 'Unknown Registration'
-      const customerName = registration.customer_name || 'Unknown'
-      const amount = registration.line_amount || 0
-
-      const existing = registrationsByType.get(registrationId) || {
-        registrationId,
-        name,
-        count: 0,
-        total: 0,
-        registrations: [] as Array<{
+      categories: Map<string, {
+        categoryId: string,
+        categoryName: string,
+        count: number,
+        total: number,
+        registrations: Array<{
           id: string,
           customerName: string,
           amount: number,
           date: string
         }>
+      }>
+    }>()
+
+    registrations?.forEach(registration => {
+      const registrationId = registration.registration_id || 'unknown'
+      const registrationName = registration.registration_name || 'Unknown Registration'
+      const seasonName = registration.season_name || 'Unknown Season'
+      const categoryId = registration.registration_category_id || 'unknown'
+      const categoryName = registration.registration_category_name || registration.category_name || 'Unknown Category'
+      const customerName = registration.customer_name || 'Unknown'
+      const amount = registration.line_amount || 0
+
+      // Get or create registration
+      let registrationData = registrationsByRegistration.get(registrationId)
+      if (!registrationData) {
+        registrationData = {
+          registrationId,
+          registrationName,
+          seasonName,
+          count: 0,
+          total: 0,
+          categories: new Map()
+        }
+        registrationsByRegistration.set(registrationId, registrationData)
       }
 
-      existing.count += 1
-      existing.total += amount
-      existing.registrations.push({
+      // Get or create category within registration
+      let categoryData = registrationData.categories.get(categoryId)
+      if (!categoryData) {
+        categoryData = {
+          categoryId,
+          categoryName,
+          count: 0,
+          total: 0,
+          registrations: []
+        }
+        registrationData.categories.set(categoryId, categoryData)
+      }
+
+      // Update totals
+      registrationData.count += 1
+      registrationData.total += amount
+      categoryData.count += 1
+      categoryData.total += amount
+      categoryData.registrations.push({
         id: registration.line_item_id,
         customerName,
         amount,
-        date: registration.invoice_created_at
+        date: registration.invoice_created_at || new Date().toISOString()
       })
-
-      registrationsByType.set(registrationId, existing)
     })
 
-    // Convert to array, sort registrations by date (newest first), then sort by total amount
-    const registrationsBreakdown = Array.from(registrationsByType.values())
+    // Convert to array structure for API response
+    const registrationsBreakdown = Array.from(registrationsByRegistration.values())
       .map(registration => ({
-        ...registration,
-        registrations: registration.registrations.sort((a, b) => 
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        )
+        registrationId: registration.registrationId,
+        registrationName: registration.registrationName,
+        seasonName: registration.seasonName,
+        count: registration.count,
+        total: registration.total,
+        categories: Array.from(registration.categories.values())
+          .map(category => ({
+            ...category,
+            registrations: category.registrations.sort((a, b) => 
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+            )
+          }))
+          .sort((a, b) => b.total - a.total)
       }))
       .sort((a, b) => b.total - a.total)
 

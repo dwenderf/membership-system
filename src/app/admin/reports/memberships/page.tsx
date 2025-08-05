@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 interface MembershipType {
   id: string
@@ -40,7 +39,6 @@ export default function MembershipReportsPage() {
   const [sortField, setSortField] = useState<keyof MemberData>('full_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  const supabase = createClient()
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -56,14 +54,17 @@ export default function MembershipReportsPage() {
   const fetchMembershipTypes = async () => {
     try {
       setError(null)
-      const { data, error } = await supabase
-        .from('memberships')
-        .select('id, name, description')
-        .order('name')
+      const response = await fetch('/api/admin/reports/memberships')
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load membership types: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      const data = result.data
 
-      if (error) {
-        console.error('Error fetching membership types:', error)
-        setError(`Failed to load membership types: ${error.message}`)
+      if (!data) {
+        setError('No membership types found')
         return
       }
       
@@ -89,18 +90,15 @@ export default function MembershipReportsPage() {
     try {
       console.log('Fetching membership data for:', membershipId)
       
-      // Use the new database view for much simpler and more reliable queries
-      const { data: membershipData, error } = await supabase
-        .from('membership_analytics_data')
-        .select('*')
-        .eq('membership_id', membershipId)
-        .order('last_name', { ascending: true })
-
-      if (error) {
-        console.error('Supabase error:', error)
-        setError(`Failed to load membership data: ${error.message}`)
-        return
+      // Use the API route with admin privileges to access the secured view
+      const response = await fetch(`/api/admin/reports/memberships?membershipId=${membershipId}`)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load membership data: ${response.statusText}`)
       }
+      
+      const result = await response.json()
+      const membershipData = result.data
 
       console.log('Membership data received:', membershipData?.length || 0, 'records')
 

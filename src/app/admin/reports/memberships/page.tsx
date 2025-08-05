@@ -72,7 +72,7 @@ export default function MembershipReportsPage() {
       if (data && data.length > 0) {
         // Check if there's a membershipId in the URL query params
         const membershipIdFromUrl = searchParams.get('membershipId')
-        if (membershipIdFromUrl && data.some(m => m.id === membershipIdFromUrl)) {
+        if (membershipIdFromUrl && data.some((m: MembershipType) => m.id === membershipIdFromUrl)) {
           setSelectedMembership(membershipIdFromUrl)
         } else {
           setSelectedMembership(data[0].id)

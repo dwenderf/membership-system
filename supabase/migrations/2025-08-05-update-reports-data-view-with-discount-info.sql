@@ -1,5 +1,5 @@
--- Update reports_data view to include discount information and rename to reports_financial_data
-DROP VIEW IF EXISTS reports_data;
+-- Create new reports_financial_data view with discount information
+-- Keep old reports_data view for backward compatibility with reports_active_memberships
 DROP VIEW IF EXISTS reports_financial_data;
 
 CREATE VIEW reports_financial_data AS

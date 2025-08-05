@@ -115,11 +115,11 @@ async function handleFreeMembership({
       stripe_payment_intent_id: null
     }
 
-    // Add assistance items if applicable (convert positive assistance amount to negative discount)
+    // Add assistance items if applicable (convert positive assistance amount to negative donation)
     if (assistanceAmount && assistanceAmount > 0) {
       logger.logPaymentProcessing(
         'staging-free-adding-assistance',
-        'Adding assistance discount item to free membership staging data',
+        'Adding assistance donation item to free membership staging data',
         { 
           userId: user.id, 
           membershipId,
@@ -131,9 +131,9 @@ async function handleFreeMembership({
       )
       
       stagingData.payment_items.push({
-        item_type: 'discount' as const,
+        item_type: 'donation' as const,
         item_id: membershipId,
-        item_amount: centsToCents(-assistanceAmount), // Convert to negative for discount
+        item_amount: centsToCents(-assistanceAmount), // Convert to negative for donation given
         description: `Donation Given: Financial Assistance - ${membership.name}`,
         accounting_code: discountAccountingCode
       })
@@ -564,11 +564,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Add assistance items if applicable (convert positive assistance amount to negative discount)
+    // Add assistance items if applicable (convert positive assistance amount to negative donation)
     if (assistanceAmount && assistanceAmount > 0) {
       logger.logPaymentProcessing(
         'staging-adding-assistance',
-        'Adding assistance discount item to staging data',
+        'Adding assistance donation item to staging data',
         { 
           userId: user.id, 
           membershipId,
@@ -580,9 +580,9 @@ export async function POST(request: NextRequest) {
       )
       
       stagingData.payment_items.push({
-        item_type: 'discount' as const,
+        item_type: 'donation' as const,
         item_id: membershipId,
-        item_amount: centsToCents(-assistanceAmount), // Convert to negative for discount
+        item_amount: centsToCents(-assistanceAmount), // Convert to negative for donation given
         description: `Donation Given: Financial Assistance - ${membership.name}`,
         accounting_code: discountAccountingCode
       })

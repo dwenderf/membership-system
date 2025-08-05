@@ -242,12 +242,12 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get donations and assistance (donations given) from reports_financial_data view
-    // Exclude discount items that have a discount_code_id (those go in discount usage)
+    // Get donations from reports_financial_data view
+    // Only include line_item_type = 'donation' items (assistance is now donation type)
     const { data: donationItems, error: donationsError } = await supabase
       .from('reports_financial_data')
       .select('*')
-      .or('line_item_type.eq.donation,and(line_item_type.eq.discount,discount_code_id.is.null)')
+      .eq('line_item_type', 'donation')
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 
@@ -295,11 +295,8 @@ export async function GET(request: NextRequest) {
           description
         })
         donationTransactionCount++
-      } else if (
-        (item.line_item_type === 'donation' && amount < 0) ||
-        (item.line_item_type === 'discount' && !item.discount_code_id)
-      ) {
-        // Negative donation OR discount without discount_code_id = donation given (assistance)
+      } else if (item.line_item_type === 'donation' && amount < 0) {
+        // Negative donation = donation given (assistance)
         const absAmount = Math.abs(amount)
         donationsGiven += absAmount
         donationDetails.push({

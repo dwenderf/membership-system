@@ -136,7 +136,7 @@ async function handleFreeRegistration({
         const paymentItems = [{
           item_type: 'registration' as const,
           item_id: registrationId,
-          amount: fullPrice, // Full registration price
+          item_amount: centsToCents(fullPrice), // Full registration price
           description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
           accounting_code: accountingCodes.registration || undefined
         }]
@@ -144,11 +144,49 @@ async function handleFreeRegistration({
         // Add discount line items if applicable
         const discountCodesUsed = []
         if (discountCode && fullPrice > 0) {
+          // Validate discount code to get the discount_code_id
+          let validatedDiscountCode = null
+          try {
+            const discountResponse = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': request.headers.get('cookie') || '',
+              },
+              body: JSON.stringify({
+                code: discountCode,
+                registrationId: registrationId,
+                amount: fullPrice
+              })
+            })
+
+            if (discountResponse.ok) {
+              const discountResult = await discountResponse.json()
+              if (discountResult.isValid) {
+                validatedDiscountCode = discountResult.discountCode
+              }
+            }
+          } catch (discountError) {
+            logger.logPaymentProcessing(
+              'free-registration-discount-validation-error',
+              'Error validating discount code for free registration',
+              { 
+                userId: user.id, 
+                registrationId,
+                discountCode,
+                error: discountError instanceof Error ? discountError.message : String(discountError)
+              },
+              'warn'
+            )
+            // Continue without discount_code_id if validation fails
+          }
+
           discountCodesUsed.push({
             code: discountCode,
             amount_saved: fullPrice, // Full price was discounted
-            category_name: 'Registration Discount',
-            accounting_code: accountingCodes.discount || undefined
+            category_name: validatedDiscountCode?.category?.name || 'Registration Discount',
+            accounting_code: accountingCodes.discount || undefined,
+            discount_code_id: validatedDiscountCode?.id // Include the discount code ID for proper categorization
           })
         }
 

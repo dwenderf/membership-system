@@ -140,13 +140,32 @@ async function handleFreeRegistration({
           description: string
           accounting_code?: string
           discount_code_id?: string
-        }> = [{
+        }> = []
+
+        // Add registration line item
+        const registrationItem = {
           item_type: 'registration' as const,
           item_id: registrationId,
           item_amount: centsToCents(fullPrice), // Full registration price
           description: `Registration: ${registration.name} - ${registrationCategory.category?.name || registrationCategory.custom_name}`,
           accounting_code: accountingCodes.registration || undefined
-        }]
+        }
+        paymentItems.push(registrationItem)
+        
+        logger.logPaymentProcessing(
+          'free-staging-adding-registration-item',
+          'Adding registration line item to free registration staging data',
+          { 
+            userId: user.id, 
+            registrationId,
+            itemType: registrationItem.item_type,
+            itemId: registrationItem.item_id,
+            itemAmount: registrationItem.item_amount,
+            description: registrationItem.description,
+            accountingCode: registrationItem.accounting_code
+          },
+          'info'
+        )
 
         // Add discount line item if applicable
         if (discountCode && fullPrice > 0) {
@@ -187,14 +206,47 @@ async function handleFreeRegistration({
             // Continue without discount_code_id if validation fails
           }
 
-          paymentItems.push({
+          const discountItem = {
             item_type: 'discount' as const,
             item_id: null, // No item_id for discounts
             item_amount: centsToCents(-fullPrice), // Negative amount for discount
             description: `Discount: ${discountCode} (${validatedDiscountCode?.category?.name || 'Registration Discount'})`,
             accounting_code: accountingCodes.discount || undefined,
             discount_code_id: validatedDiscountCode?.id // Include the discount code ID for proper categorization
-          })
+          }
+          paymentItems.push(discountItem)
+          
+          logger.logPaymentProcessing(
+            'free-staging-adding-discount-item',
+            'Adding discount line item to free registration staging data',
+            { 
+              userId: user.id, 
+              registrationId,
+              itemType: discountItem.item_type,
+              itemId: discountItem.item_id,
+              itemAmount: discountItem.item_amount,
+              description: discountItem.description,
+              accountingCode: discountItem.accounting_code,
+              discountCodeId: discountItem.discount_code_id,
+              discountCode: discountCode,
+              fullPrice,
+              categoryName: validatedDiscountCode?.category?.name
+            },
+            'info'
+          )
+        } else {
+          logger.logPaymentProcessing(
+            'free-staging-no-discount-item',
+            'No discount line item added to free registration (condition not met)',
+            { 
+              userId: user.id, 
+              registrationId,
+              discountCode: !!discountCode,
+              fullPrice,
+              conditionMet: discountCode && fullPrice > 0
+            },
+            'info'
+          )
         }
 
         // Create staging record
@@ -1111,26 +1163,76 @@ export async function POST(request: NextRequest) {
       description: string
       accounting_code?: string
       discount_code_id?: string
-    }> = [
-      {
-        item_type: 'registration' as const,
-        item_id: registrationId,
-        item_amount: centsToCents(amount), // Use original amount, not final amount after discount
-        description: `Registration: ${registration.name} - ${categoryName}`,
-        accounting_code: accountingCodes.registration || undefined
-      }
-    ]
+    }> = []
+
+    // Add registration line item
+    const registrationItem = {
+      item_type: 'registration' as const,
+      item_id: registrationId,
+      item_amount: centsToCents(amount), // Use original amount, not final amount after discount
+      description: `Registration: ${registration.name} - ${categoryName}`,
+      accounting_code: accountingCodes.registration || undefined
+    }
+    paymentItems.push(registrationItem)
+    
+    logger.logPaymentProcessing(
+      'staging-adding-registration-item',
+      'Adding registration line item to staging data',
+      { 
+        userId: user.id, 
+        registrationId,
+        itemType: registrationItem.item_type,
+        itemId: registrationItem.item_id,
+        itemAmount: registrationItem.item_amount,
+        description: registrationItem.description,
+        accountingCode: registrationItem.accounting_code
+      },
+      'info'
+    )
 
     // Add discount line item if applicable
     if (validatedDiscountCode && discountAmount > 0) {
-      paymentItems.push({
+      const discountItem = {
         item_type: 'discount' as const,
         item_id: null, // No item_id for discounts
         item_amount: centsToCents(-discountAmount), // Negative amount for discount
         description: `Discount: ${discountCode} (${validatedDiscountCode.category?.name || 'Registration Discount'})`,
         accounting_code: accountingCodes.discount || undefined,
         discount_code_id: validatedDiscountCode.id // Include the discount code ID for proper categorization
-      })
+      }
+      paymentItems.push(discountItem)
+      
+      logger.logPaymentProcessing(
+        'staging-adding-discount-item',
+        'Adding discount line item to staging data',
+        { 
+          userId: user.id, 
+          registrationId,
+          itemType: discountItem.item_type,
+          itemId: discountItem.item_id,
+          itemAmount: discountItem.item_amount,
+          description: discountItem.description,
+          accountingCode: discountItem.accounting_code,
+          discountCodeId: discountItem.discount_code_id,
+          discountCode: discountCode,
+          discountAmount,
+          categoryName: validatedDiscountCode.category?.name
+        },
+        'info'
+      )
+    } else {
+      logger.logPaymentProcessing(
+        'staging-no-discount-item',
+        'No discount line item added (condition not met)',
+        { 
+          userId: user.id, 
+          registrationId,
+          validatedDiscountCode: !!validatedDiscountCode,
+          discountAmount,
+          conditionMet: validatedDiscountCode && discountAmount > 0
+        },
+        'info'
+      )
     }
 
     const stagingData: StagingPaymentData = {

@@ -243,10 +243,11 @@ export async function GET(request: NextRequest) {
     })
 
     // Get donations and assistance (donations given) from reports_financial_data view
+    // Exclude discount items that have a discount_code_id (those go in discount usage)
     const { data: donationItems, error: donationsError } = await supabase
       .from('reports_financial_data')
       .select('*')
-      .or('line_item_type.eq.donation,line_item_type.eq.discount')
+      .or('line_item_type.eq.donation,and(line_item_type.eq.discount,discount_code_id.is.null)')
       .gte('invoice_created_at', startDate)
       .lte('invoice_created_at', endDate)
 

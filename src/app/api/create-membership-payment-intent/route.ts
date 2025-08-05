@@ -3,11 +3,10 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
-import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
-import { centsToCents, negativeCents } from '@/types/currency'
+import { centsToCents } from '@/types/currency'
 
 // Force import server config
 
@@ -26,9 +25,7 @@ async function handleFreeMembership({
   membership,
   membershipId,
   durationMonths,
-  paymentOption,
   assistanceAmount,
-  donationAmount,
   paymentContext,
   startTime
 }: {
@@ -38,9 +35,7 @@ async function handleFreeMembership({
   membership: any
   membershipId: string
   durationMonths: number
-  paymentOption?: string
   assistanceAmount?: number
-  donationAmount?: number
   paymentContext: any
   startTime: number
 }) {
@@ -90,8 +85,8 @@ async function handleFreeMembership({
 
     const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
     
-    // Check if this is a naturally free membership (price set to 0) vs a discounted membership
-    const isNaturallyFree = membershipAmount === 0
+
+
     
     // Get accounting codes from system_accounting_codes (only needed if applying discount)
     const { data: accountingCodes } = await supabase
@@ -100,18 +95,18 @@ async function handleFreeMembership({
       .in('code_type', ['donation_given_default', 'donation_received_default'])
     
     const discountAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_given_default')?.accounting_code
-    const donationAccountingCode = accountingCodes?.find((code: { code_type: string; accounting_code: string }) => code.code_type === 'donation_received_default')?.accounting_code
+
     
     const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: centsToCents(membershipAmount),
-      discount_amount: centsToCents(isNaturallyFree ? 0 : membershipAmount), // Only discount if not naturally free
-      final_amount: centsToCents(donationAmount || 0),
+      discount_amount: centsToCents(assistanceAmount || 0), // Only discount if not naturally free
+      final_amount: centsToCents(0),
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: centsToCents(membershipAmount), // Use actual membership price (0 if naturally free)
+          item_amount: centsToCents(membershipAmount), // Use actual membership price (0 if naturally free)
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code
         }
@@ -120,16 +115,14 @@ async function handleFreeMembership({
       stripe_payment_intent_id: null
     }
 
-    // Add donation items if applicable (can be positive for donations or negative for discounts)
-    if (donationAmount && donationAmount !== 0) {
+    // Add assistance items if applicable (convert positive assistance amount to negative discount)
+    if (assistanceAmount && assistanceAmount > 0) {
       stagingData.payment_items.push({
-        item_type: 'donation' as const,
+        item_type: 'discount' as const,
         item_id: membershipId,
-        amount: centsToCents(donationAmount),
-        description: donationAmount > 0 
-          ? `Donation Received: ${membership.name}`
-          : `Donation Given: Financial Assistance - ${membership.name}`,
-        accounting_code: donationAmount > 0 ? donationAccountingCode : discountAccountingCode
+        item_amount: centsToCents(-assistanceAmount), // Convert to negative for discount
+        description: `Donation Given: Financial Assistance - ${membership.name}`,
+        accounting_code: discountAccountingCode
       })
     }
 
@@ -164,8 +157,8 @@ async function handleFreeMembership({
       .from('payments')
       .insert({
         user_id: user.id,
-        total_amount: donationAmount || 0,
-        final_amount: donationAmount || 0,
+        total_amount: 0,
+        final_amount: 0,
         stripe_payment_intent_id: null, // No Stripe payment for free
         status: 'completed',
         payment_method: 'free',
@@ -315,6 +308,22 @@ async function handleFreeMembership({
   }
 }
 
+/**
+ * Create a membership payment intent
+ * 
+ * @param membershipId - UUID of the membership to purchase
+ * @param durationMonths - Number of months for the membership (1 or 12)
+ * @param amountToCharge - Final amount to charge in cents (0 for free memberships)
+ * @param paymentOption - Payment type: 'standard', 'assistance', or 'donation'
+ * @param assistanceAmount - Amount of financial assistance needed in cents (positive value, e.g., 3000 for $30 discount)
+ * @param donationAmount - Additional donation amount in cents (positive value, e.g., 5000 for $50 donation)
+ * 
+ * @returns Payment intent data including:
+ * - clientSecret: Stripe client secret for payment form
+ * - total_amount: Original membership price before discounts (for assistance payments) or final amount (for standard payments)
+ * - final_amount: Actual amount being charged to the user
+ * - discount_amount: Amount of assistance/discount applied (positive value)
+ */
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
@@ -328,14 +337,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount, paymentOption, assistanceAmount, donationAmount } = body
+    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount } = body
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
       userId: user.id,
       userEmail: user.email,
       membershipId: membershipId,
-      amountCents: amount,
+      amountCents: amountToCharge,
       paymentIntentId: undefined, // Will be set after Stripe payment intent creation
       endpoint: '/api/create-membership-payment-intent',
       operation: 'payment_intent_creation'
@@ -343,7 +352,7 @@ export async function POST(request: NextRequest) {
     setPaymentContext(paymentContext)
 
     // Validate required fields (amount can be 0 for free memberships)
-    if (!membershipId || !durationMonths || amount === undefined || amount === null) {
+    if (!membershipId || !durationMonths || amountToCharge === undefined || amountToCharge === null) {
       const error = new Error('Missing required fields: membershipId, durationMonths, amount')
       capturePaymentError(error, paymentContext, 'warning')
       
@@ -354,7 +363,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle free membership (amount = 0) - no Stripe payment needed
-    if (amount === 0) {
+    if (amountToCharge === 0) {
       return await handleFreeMembership({
         supabase,
         user,
@@ -362,14 +371,20 @@ export async function POST(request: NextRequest) {
         membership: null, // Will fetch in function
         membershipId,
         durationMonths,
-        paymentOption,
         assistanceAmount,
-        donationAmount,
         paymentContext,
         startTime
       })
     }
 
+    // Not a free membership, so we need to create a Stripe payment intent. There can be a donation or assistance amount.
+    // If there is a donation amount, we need to create a donation item in the Xero staging record.
+    // If there is an assistance amount, we need to create an assistance item in the Xero staging record.
+    // If there is both, we need to create both items in the Xero staging record.
+    // If there is neither, we need to create a membership item in the Xero staging record.
+    // The Xero staging record will be created in the createImmediateStaging function.
+    // The Stripe payment intent will be created in the createStripePaymentIntent function.
+    
     // Fetch membership details for metadata
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
@@ -396,20 +411,13 @@ export async function POST(request: NextRequest) {
 
     // Calculate amounts for Xero invoice
     const getMembershipAmount = () => {
-      if (paymentOption === 'assistance') {
-        return Math.round(assistanceAmount || 0)
-      }
-      // For donations and standard, use the base membership price calculation
       const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
       return Math.round(basePrice)
     }
 
     const membershipAmount = getMembershipAmount()
     
-    // Calculate full membership price for assistance scenarios
-    const fullMembershipPrice = Math.round(durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths)
-    const discountAmount = Math.round(paymentOption === 'assistance' ? (fullMembershipPrice - (assistanceAmount || 0)) : 0)
-
+    
     // Get accounting codes from system_accounting_codes
     const { data: accountingCodes, error: accountingError } = await supabase
       .from('system_accounting_codes')
@@ -428,21 +436,21 @@ export async function POST(request: NextRequest) {
         userId: user.id, 
         membershipId,
         durationMonths,
-        amount: amount
+        amount: amountToCharge
       },
       'info'
     )
 
     const stagingData: StagingPaymentData = {
       user_id: user.id,
-      total_amount: centsToCents(paymentOption === 'assistance' ? fullMembershipPrice : amount),
-      discount_amount: centsToCents(discountAmount),
-      final_amount: centsToCents(amount),
+      total_amount: centsToCents(paymentOption === 'assistance' ? membershipAmount : amountToCharge),
+      discount_amount: centsToCents(paymentOption === 'assistance' ? Math.abs(assistanceAmount || 0) : 0),
+      final_amount: centsToCents(amountToCharge),
       payment_items: [
         {
           item_type: 'membership' as const,
           item_id: membershipId,
-          amount: centsToCents(paymentOption === 'assistance' ? fullMembershipPrice : membershipAmount),
+          item_amount: centsToCents(paymentOption === 'assistance' ? (durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths) : membershipAmount),
           description: `Membership: ${membership.name} - ${durationMonths} months`,
           accounting_code: membership.accounting_code
         }
@@ -451,16 +459,25 @@ export async function POST(request: NextRequest) {
       stripe_payment_intent_id: null // Will be updated after Stripe intent creation
     }
 
-    // Add donation items if applicable (can be positive for donations or negative for discounts)
-    if (donationAmount && donationAmount !== 0) {
+    // Add donation items if applicable
+    if (donationAmount && donationAmount > 0) {
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
-        amount: centsToCents(donationAmount),
-        description: donationAmount > 0 
-          ? `Donation Received: ${membership.name}`
-          : `Donation Given: Financial Assistance - ${membership.name}`,
-        accounting_code: donationAmount > 0 ? donationAccountingCode : discountAccountingCode
+        item_amount: centsToCents(donationAmount),
+        description: `Donation Received: ${membership.name}`,         
+        accounting_code: donationAccountingCode
+      })
+    }
+
+    // Add assistance items if applicable (convert positive assistance amount to negative discount)
+    if (assistanceAmount && assistanceAmount > 0) {
+      stagingData.payment_items.push({
+        item_type: 'discount' as const,
+        item_id: membershipId,
+        item_amount: centsToCents(-assistanceAmount), // Convert to negative for discount
+        description: `Donation Given: Financial Assistance - ${membership.name}`,
+        accounting_code: discountAccountingCode
       })
     }
 
@@ -472,7 +489,7 @@ export async function POST(request: NextRequest) {
         { 
           userId: user.id, 
           membershipId,
-          amount: amount
+          amount: amountToCharge
         },
         'error'
       )
@@ -486,7 +503,7 @@ export async function POST(request: NextRequest) {
       { 
         userId: user.id, 
         membershipId,
-        amount: amount
+        amount: amountToCharge
       },
       'info'
     )
@@ -507,7 +524,7 @@ export async function POST(request: NextRequest) {
 
     // Create payment intent with explicit Link support
     const paymentIntentParams = {
-      amount: centsToCents(amount), // Ensure integer cents for Stripe
+      amount: centsToCents(amountToCharge), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
       payment_method_types: ['card', 'link'],
@@ -585,7 +602,7 @@ export async function POST(request: NextRequest) {
       // Don't fail the transaction, but log the issue
     }
 
-    const totalAmount = centsToCents(amount) // Ensure integer cents
+    const totalAmount = centsToCents(amountToCharge) // Ensure integer cents
 
     // Create payment record in database
     const { data: paymentRecord, error: paymentError } = await supabase

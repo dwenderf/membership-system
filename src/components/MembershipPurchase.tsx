@@ -141,7 +141,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? parseFloat(assistanceAmount) * 100 : undefined,
+        assistanceAmount: paymentOption === 'assistance' ? -(selectedPrice - parseFloat(assistanceAmount) * 100) : undefined, // Negative discount amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
       }
 

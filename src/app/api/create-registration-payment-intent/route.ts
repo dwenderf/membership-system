@@ -1069,7 +1069,7 @@ export async function POST(request: NextRequest) {
         {
           item_type: 'registration' as const,
           item_id: registrationId,
-          amount: centsToCents(amount), // Use original amount, not final amount after discount
+          item_amount: centsToCents(amount), // Use original amount, not final amount after discount
           description: `Registration: ${registration.name} - ${categoryName}`,
           accounting_code: accountingCodes.registration || undefined
         }

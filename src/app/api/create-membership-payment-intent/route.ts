@@ -117,6 +117,19 @@ async function handleFreeMembership({
 
     // Add assistance items if applicable (convert positive assistance amount to negative discount)
     if (assistanceAmount && assistanceAmount > 0) {
+      logger.logPaymentProcessing(
+        'staging-free-adding-assistance',
+        'Adding assistance discount item to free membership staging data',
+        { 
+          userId: user.id, 
+          membershipId,
+          assistanceAmount,
+          negativeAmount: -assistanceAmount,
+          discountAccountingCode
+        },
+        'info'
+      )
+      
       stagingData.payment_items.push({
         item_type: 'discount' as const,
         item_id: membershipId,
@@ -124,7 +137,41 @@ async function handleFreeMembership({
         description: `Donation Given: Financial Assistance - ${membership.name}`,
         accounting_code: discountAccountingCode
       })
+    } else {
+      logger.logPaymentProcessing(
+        'staging-free-no-assistance',
+        'No assistance item added to free membership (condition not met)',
+        { 
+          userId: user.id, 
+          membershipId,
+          assistanceAmount,
+          conditionMet: assistanceAmount && assistanceAmount > 0
+        },
+        'info'
+      )
     }
+
+    // Log final staging data for free membership before sending to staging manager
+    logger.logPaymentProcessing(
+      'staging-free-final-data',
+      'Final staging data for free membership before sending to staging manager',
+      { 
+        userId: user.id, 
+        membershipId,
+        totalAmount: stagingData.total_amount,
+        discountAmount: stagingData.discount_amount,
+        finalAmount: stagingData.final_amount,
+        paymentItemsCount: stagingData.payment_items.length,
+        paymentItems: stagingData.payment_items.map(item => ({
+          type: item.item_type,
+          amount: item.item_amount,
+          description: item.description,
+          accountingCode: item.accounting_code
+        })),
+        discountCodesCount: stagingData.discount_codes_used?.length || 0
+      },
+      'info'
+    )
 
     const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: true })
     if (!stagingSuccess) {
@@ -441,6 +488,24 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
+    // Log payment option and amounts for debugging
+    logger.logPaymentProcessing(
+      'staging-data-creation-start',
+      'Creating staging data for paid membership',
+      { 
+        userId: user.id, 
+        membershipId,
+        paymentOption,
+        membershipAmount,
+        amountToCharge,
+        assistanceAmount,
+        donationAmount,
+        membershipName: membership.name,
+        durationMonths
+      },
+      'info'
+    )
+
     const stagingData: StagingPaymentData = {
       user_id: user.id,
       total_amount: centsToCents(paymentOption === 'assistance' ? membershipAmount : amountToCharge),
@@ -459,8 +524,37 @@ export async function POST(request: NextRequest) {
       stripe_payment_intent_id: null // Will be updated after Stripe intent creation
     }
 
+    // Log initial payment items
+    logger.logPaymentProcessing(
+      'staging-initial-items',
+      'Initial payment items created',
+      { 
+        userId: user.id, 
+        membershipId,
+        paymentItemsCount: stagingData.payment_items.length,
+        paymentItems: stagingData.payment_items.map(item => ({
+          type: item.item_type,
+          amount: item.item_amount,
+          description: item.description
+        }))
+      },
+      'info'
+    )
+
     // Add donation items if applicable
     if (donationAmount && donationAmount > 0) {
+      logger.logPaymentProcessing(
+        'staging-adding-donation',
+        'Adding donation item to staging data',
+        { 
+          userId: user.id, 
+          membershipId,
+          donationAmount,
+          donationAccountingCode
+        },
+        'info'
+      )
+      
       stagingData.payment_items.push({
         item_type: 'donation' as const,
         item_id: membershipId,
@@ -472,6 +566,19 @@ export async function POST(request: NextRequest) {
 
     // Add assistance items if applicable (convert positive assistance amount to negative discount)
     if (assistanceAmount && assistanceAmount > 0) {
+      logger.logPaymentProcessing(
+        'staging-adding-assistance',
+        'Adding assistance discount item to staging data',
+        { 
+          userId: user.id, 
+          membershipId,
+          assistanceAmount,
+          negativeAmount: -assistanceAmount,
+          discountAccountingCode
+        },
+        'info'
+      )
+      
       stagingData.payment_items.push({
         item_type: 'discount' as const,
         item_id: membershipId,
@@ -479,7 +586,41 @@ export async function POST(request: NextRequest) {
         description: `Donation Given: Financial Assistance - ${membership.name}`,
         accounting_code: discountAccountingCode
       })
+    } else {
+      logger.logPaymentProcessing(
+        'staging-no-assistance',
+        'No assistance item added (condition not met)',
+        { 
+          userId: user.id, 
+          membershipId,
+          assistanceAmount,
+          conditionMet: assistanceAmount && assistanceAmount > 0
+        },
+        'info'
+      )
     }
+
+    // Log final staging data before sending to staging manager
+    logger.logPaymentProcessing(
+      'staging-final-data',
+      'Final staging data before sending to staging manager',
+      { 
+        userId: user.id, 
+        membershipId,
+        totalAmount: stagingData.total_amount,
+        discountAmount: stagingData.discount_amount,
+        finalAmount: stagingData.final_amount,
+        paymentItemsCount: stagingData.payment_items.length,
+        paymentItems: stagingData.payment_items.map(item => ({
+          type: item.item_type,
+          amount: item.item_amount,
+          description: item.description,
+          accountingCode: item.accounting_code
+        })),
+        discountCodesCount: stagingData.discount_codes_used?.length || 0
+      },
+      'info'
+    )
 
     const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
     if (!stagingSuccess) {

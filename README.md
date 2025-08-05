@@ -16,6 +16,62 @@ A comprehensive membership and registration system for adult hockey associations
 - **Email Integration**: Transactional emails via Loops.so for confirmations and notifications
 - **Admin Dashboard**: Season management, membership oversight, and user administration
 - **Xero Integration**: Automatic invoice creation and payment recording for seamless accounting
+- **Financial Reporting**: Comprehensive financial tracking with categorized line items for accurate reporting
+
+## Financial Reporting Architecture
+
+The system uses a sophisticated line item categorization system to track financial data for accurate reporting. All financial transactions are stored in the `xero_invoice_line_items` table with specific `line_item_type` values that determine how they appear in financial reports.
+
+### Key Database View: `reports_financial_data`
+
+The `reports_financial_data` view is the primary source for financial reporting. It joins `xero_invoice_line_items` with related tables and includes only **AUTHORISED** invoices (not DRAFT) with **completed** payments.
+
+### Line Item Types and Categorization
+
+The `xero_invoice_line_items.line_item_type` field categorizes financial data into four main types:
+
+#### 1. **Memberships** (`line_item_type = 'membership'`)
+- **Purpose**: Track membership fee payments
+- **Amount**: Positive (charged to customer)
+- **Reports Section**: Memberships breakdown
+- **Example**: Annual membership fee, monthly membership fee
+
+#### 2. **Registrations** (`line_item_type = 'registration'`)
+- **Purpose**: Track registration fee payments
+- **Amount**: Positive (charged to customer)
+- **Reports Section**: Registrations breakdown
+- **Example**: Team registration fee, event registration fee
+
+#### 3. **Discounts** (`line_item_type = 'discount'`)
+- **Purpose**: Track actual discount codes applied
+- **Amount**: Negative (credit to customer)
+- **Reports Section**: Discount Usage (grouped by category)
+- **Requirements**: Must have `discount_code_id` populated
+- **Example**: PRIDE50 scholarship code, board member discount
+
+#### 4. **Donations** (`line_item_type = 'donation'`)
+- **Purpose**: Track financial assistance and additional donations
+- **Amount**: 
+  - **Positive**: Donation received (additional donation)
+  - **Negative**: Donation given (financial assistance)
+- **Reports Section**: Donations (received vs given)
+- **Example**: Financial assistance for memberships, additional donations
+
+### Financial Reports Structure
+
+Based on these line item types, the financial reports are organized as:
+
+- **Memberships**: All `membership` line items, grouped by membership type
+- **Discount Usage**: All `discount` line items with `discount_code_id`, grouped by discount category
+- **Donations**: All `donation` line items, separated into received (positive) and given (negative)
+- **Registrations**: All `registration` line items, grouped by registration type
+
+### Important Notes
+
+- **Discount codes** (like PRIDE50) are tracked as `discount` line items with proper `discount_code_id`
+- **Financial assistance** for memberships is tracked as `donation` line items (negative amount)
+- **Only AUTHORISED invoices** are included in reports (DRAFT invoices are excluded)
+- **Customer names** are resolved from the `users` table via the view
 
 ## Getting Started
 

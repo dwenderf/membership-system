@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
           )
         ),
         invoice:xero_invoices(
-          customer_name,
+          staging_metadata,
           created_at
         )
       `)
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
       const categoryId = usage.discount_code?.discount_category?.id || 'unknown'
       const categoryName = usage.discount_code?.discount_category?.name || 'Unknown Category'
       const discountCode = usage.discount_code?.code || 'Unknown Code'
-      const customerName = usage.invoice?.customer_name || 'Unknown'
+      const userId = usage.invoice?.staging_metadata?.user_id || 'Unknown'
       const amountSaved = Math.abs(usage.line_amount || 0)
 
       // Get or create category
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
       codeData.total += amountSaved
       codeData.usages.push({
         id: usage.id,
-        customerName,
+        customerName: `User ${userId}`, // TODO: Get actual customer name from users table
         amountSaved,
         date: usage.invoice?.created_at || new Date().toISOString()
       })
@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         invoice:xero_invoices(
-          customer_name,
+          staging_metadata,
           created_at
         )
       `)
@@ -297,7 +297,7 @@ export async function GET(request: NextRequest) {
 
     // Process donations and assistance
     donationItems?.forEach(item => {
-      const customerName = item.invoice?.customer_name || 'Unknown'
+      const userId = item.invoice?.staging_metadata?.user_id || 'Unknown'
       const amount = item.line_amount || 0
       const description = item.description || 'Unknown'
       
@@ -306,7 +306,7 @@ export async function GET(request: NextRequest) {
         donationsReceived += amount
         donationDetails.push({
           id: item.id,
-          customerName,
+          customerName: `User ${userId}`, // TODO: Get actual customer name from users table
           amount,
           date: item.invoice?.created_at || new Date().toISOString(),
           type: 'received',
@@ -322,7 +322,7 @@ export async function GET(request: NextRequest) {
         donationsGiven += absAmount
         donationDetails.push({
           id: item.id,
-          customerName,
+          customerName: `User ${userId}`, // TODO: Get actual customer name from users table
           amount: absAmount,
           date: item.invoice?.created_at || new Date().toISOString(),
           type: 'given',

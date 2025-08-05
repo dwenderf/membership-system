@@ -335,7 +335,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Memberships</p>
                     <p className="text-sm text-gray-500">{reportData.summary.memberships.reduce((sum, m) => sum + m.purchaseCount, 0)} purchases</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.memberships.length > 0 ? (
                   <div className="space-y-4">
@@ -416,7 +416,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Discount Usage</p>
                     <p className="text-sm text-gray-500">{reportData.summary.discountUsage.reduce((sum, d) => sum + d.timesUsed, 0)} uses</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0))}</p>
                 </div>
                 {reportData.summary.discountUsage.length > 0 ? (
                   <div className="space-y-4">
@@ -516,7 +516,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Net Donations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.donationsReceived.transactionCount + reportData.summary.donationsGiven.transactionCount} transactions</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)}</p>
                 </div>
                 
                 <div className="space-y-4">
@@ -629,7 +629,7 @@ export default function ReportsPage() {
                     <p className="font-medium text-gray-900">Total Registrations</p>
                     <p className="text-sm text-gray-500">{reportData.summary.registrations.purchaseCount} purchases</p>
                   </div>
-                  <p className="font-semibold text-blue-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
+                  <p className="text-xl font-semibold text-blue-600">{formatCurrency(reportData.summary.registrations.totalAmount)}</p>
                 </div>
                 
                 {/* Registrations Breakdown */}

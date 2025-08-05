@@ -126,9 +126,9 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get registrations data from reports view
+    // Get registrations data from reports_financial_data view
     const { data: registrations, error: registrationsError } = await supabase
-      .from('reports_data')
+      .from('reports_financial_data')
       .select('*')
       .eq('line_item_type', 'registration')
       .gte('invoice_created_at', startDate)
@@ -138,27 +138,14 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching registrations from reports view:', registrationsError)
     }
 
-    // Get discount usage with proper category and code information
+    // Get discount usage from reports_financial_data view (only AUTHORISED invoices)
     const { data: discountUsage, error: discountError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        *,
-        discount_code:discount_codes!inner(
-          code,
-          discount_category:discount_categories(
-            id,
-            name
-          )
-        ),
-        invoice:xero_invoices(
-          staging_metadata,
-          created_at
-        )
-      `)
+      .from('reports_financial_data')
+      .select('*')
       .eq('line_item_type', 'discount')
       .not('discount_code_id', 'is', null)
-      .gte('invoice.created_at', startDate)
-      .lte('invoice.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (discountError) {
       console.error('Error fetching discount usage:', discountError)
@@ -184,11 +171,11 @@ export async function GET(request: NextRequest) {
     }>()
 
     discountUsage?.forEach(usage => {
-      const categoryId = usage.discount_code?.discount_category?.id || 'unknown'
-      const categoryName = usage.discount_code?.discount_category?.name || 'Unknown Category'
-      const discountCode = usage.discount_code?.code || 'Unknown Code'
-      const userId = usage.invoice?.staging_metadata?.user_id || 'Unknown'
-      const amountSaved = Math.abs(usage.line_amount || 0)
+      const categoryId = usage.discount_category_id || 'unknown'
+      const categoryName = usage.discount_category_name || 'Unknown Category'
+      const discountCode = usage.discount_code || 'Unknown Code'
+      const customerName = usage.customer_name || 'Unknown'
+      const amountSaved = usage.absolute_amount || 0
 
       // Get or create category
       let category = discountUsageByCategory.get(categoryId)
@@ -221,10 +208,10 @@ export async function GET(request: NextRequest) {
       codeData.count += 1
       codeData.total += amountSaved
       codeData.usages.push({
-        id: usage.id,
-        customerName: `User ${userId}`, // TODO: Get actual customer name from users table
+        id: usage.line_item_id,
+        customerName,
         amountSaved,
-        date: usage.invoice?.created_at || new Date().toISOString()
+        date: usage.invoice_created_at || new Date().toISOString()
       })
     })
 
@@ -255,19 +242,13 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Get donations and assistance (donations given) from Xero line items
+    // Get donations and assistance (donations given) from reports_financial_data view
     const { data: donationItems, error: donationsError } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        *,
-        invoice:xero_invoices(
-          staging_metadata,
-          created_at
-        )
-      `)
+      .from('reports_financial_data')
+      .select('*')
       .or('line_item_type.eq.donation,line_item_type.eq.discount')
-      .gte('invoice.created_at', startDate)
-      .lte('invoice.created_at', endDate)
+      .gte('invoice_created_at', startDate)
+      .lte('invoice_created_at', endDate)
 
     if (donationsError) {
       console.error('Error fetching donations:', donationsError)
@@ -297,7 +278,7 @@ export async function GET(request: NextRequest) {
 
     // Process donations and assistance
     donationItems?.forEach(item => {
-      const userId = item.invoice?.staging_metadata?.user_id || 'Unknown'
+      const customerName = item.customer_name || 'Unknown'
       const amount = item.line_amount || 0
       const description = item.description || 'Unknown'
       
@@ -305,10 +286,10 @@ export async function GET(request: NextRequest) {
         // Positive donation = donation received
         donationsReceived += amount
         donationDetails.push({
-          id: item.id,
-          customerName: `User ${userId}`, // TODO: Get actual customer name from users table
+          id: item.line_item_id,
+          customerName,
           amount,
-          date: item.invoice?.created_at || new Date().toISOString(),
+          date: item.invoice_created_at || new Date().toISOString(),
           type: 'received',
           description
         })
@@ -321,10 +302,10 @@ export async function GET(request: NextRequest) {
         const absAmount = Math.abs(amount)
         donationsGiven += absAmount
         donationDetails.push({
-          id: item.id,
-          customerName: `User ${userId}`, // TODO: Get actual customer name from users table
+          id: item.line_item_id,
+          customerName,
           amount: absAmount,
-          date: item.invoice?.created_at || new Date().toISOString(),
+          date: item.invoice_created_at || new Date().toISOString(),
           type: 'given',
           description
         })

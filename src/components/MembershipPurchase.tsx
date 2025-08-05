@@ -11,7 +11,6 @@ import { calculateMembershipDates, isMembershipExtension } from '@/lib/membershi
 
 // Force import client config
 import '../../instrumentation-client'
-import * as Sentry from '@sentry/nextjs'
 
 interface Membership {
   id: string
@@ -49,7 +48,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   // Payment option states
   const [paymentOption, setPaymentOption] = useState<'assistance' | 'donation' | 'standard' | null>(null)
-  const [assistanceAmount, setAssistanceAmount] = useState<string>('') // Display value
+  const [requestedPurchaseAmount, setAssistanceAmount] = useState<string>('') // Display value
   const [donationAmount, setDonationAmount] = useState<string>('50.00') // Display value
   
   const { showSuccess, showError } = useToast()
@@ -81,7 +80,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     
     switch (paymentOption) {
       case 'assistance':
-        const assistance = parseFloat(assistanceAmount) || 0
+        const assistance = parseFloat(requestedPurchaseAmount) || 0
         return Math.max(0, Math.min(assistance * 100, basePrice)) // Convert to cents, cap at full price
       case 'donation':
         const donation = parseFloat(donationAmount) || 0
@@ -141,7 +140,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? -(selectedPrice - parseFloat(assistanceAmount) * 100) : undefined, // Negative discount amount (amount being discounted)
+        assistanceAmount: paymentOption === 'assistance' ? -(selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined, // Negative discount amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
       }
 
@@ -325,7 +324,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                           min="0"
                           max={(selectedPrice / 100).toFixed(2)}
                           step="0.01"
-                          value={assistanceAmount}
+                          value={requestedPurchaseAmount}
                           onChange={(e) => setAssistanceAmount(e.target.value)}
                           className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
                           placeholder="0.00"

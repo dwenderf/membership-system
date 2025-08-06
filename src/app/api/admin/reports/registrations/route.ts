@@ -139,9 +139,12 @@ export async function GET(request: NextRequest) {
           last_name: user?.last_name || '',
           email: user?.email || 'Unknown',
           category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
+          category_id: item.registration_category_id,
           position: item.position,
           joined_at: item.joined_at,
-          bypass_code_generated: item.bypass_code_generated || false
+          bypass_code_generated: item.bypass_code_generated || false,
+          is_lgbtq: user?.is_lgbtq,
+          is_goalie: user?.is_goalie || false
         }
       }) || []
 

@@ -48,9 +48,12 @@ interface WaitlistData {
   last_name: string
   email: string
   category_name: string
+  category_id: string
   position: number
   joined_at: string
   bypass_code_generated: boolean
+  is_lgbtq: boolean | null
+  is_goalie: boolean
 }
 
 
@@ -65,6 +68,8 @@ export default function RegistrationReportsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<keyof RegistrationData>('full_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [waitlistSortField, setWaitlistSortField] = useState<keyof WaitlistData>('joined_at')
+  const [waitlistSortDirection, setWaitlistSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const searchParams = useSearchParams()
 
@@ -158,9 +163,12 @@ export default function RegistrationReportsPage() {
         last_name: item.last_name || '',
         email: item.email || 'Unknown',
         category_name: item.category_name || 'Unknown Category',
+        category_id: item.category_id || '',
         position: item.position || 0,
         joined_at: item.joined_at || 'N/A',
-        bypass_code_generated: item.bypass_code_generated || false
+        bypass_code_generated: item.bypass_code_generated || false,
+        is_lgbtq: item.is_lgbtq,
+        is_goalie: item.is_goalie || false
       })) || []
 
       console.log('Processed registrations:', registrationsList.length)
@@ -235,6 +243,54 @@ export default function RegistrationReportsPage() {
   const formatDate = (dateString: string) => {
     if (dateString === 'N/A') return 'N/A'
     return new Date(dateString).toLocaleDateString()
+  }
+
+  const formatDateTime = (dateString: string) => {
+    if (dateString === 'N/A') return { date: 'N/A', time: '' }
+    const date = new Date(dateString)
+    return {
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  }
+
+  const handleWaitlistSort = (field: keyof WaitlistData) => {
+    if (waitlistSortField === field) {
+      setWaitlistSortDirection(waitlistSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setWaitlistSortField(field)
+      setWaitlistSortDirection('asc')
+    }
+  }
+
+  const sortWaitlistData = (data: WaitlistData[]) => {
+    return [...data].sort((a, b) => {
+      let aValue = a[waitlistSortField]
+      let bValue = b[waitlistSortField]
+      
+      // Handle boolean fields by converting to display labels for proper sorting
+      if (waitlistSortField === 'is_lgbtq') {
+        aValue = getLgbtqStatusLabel(a.is_lgbtq)
+        bValue = getLgbtqStatusLabel(b.is_lgbtq)
+      } else if (waitlistSortField === 'is_goalie') {
+        aValue = getGoalieStatusLabel(a.is_goalie)
+        bValue = getGoalieStatusLabel(b.is_goalie)
+      }
+      
+      if (waitlistSortField === 'joined_at') {
+        const aDate = new Date(a.joined_at).getTime()
+        const bDate = new Date(b.joined_at).getTime()
+        return waitlistSortDirection === 'asc' ? aDate - bDate : bDate - aDate
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return waitlistSortDirection === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+      
+      return 0
+    })
   }
 
   const getRegistrationTypeColor = (type: string) => {
@@ -448,7 +504,12 @@ export default function RegistrationReportsPage() {
                           {formatCurrency(registration.registration_fee)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(registration.registered_at)}
+                          <div>
+                            <div>{formatDateTime(registration.registered_at).date}</div>
+                            {formatDateTime(registration.registered_at).time && (
+                              <div className="text-xs text-gray-500">{formatDateTime(registration.registered_at).time}</div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {registration.presale_code_used ? (
@@ -467,60 +528,113 @@ export default function RegistrationReportsPage() {
             )}
           </div>
 
-          {/* Waitlist Section */}
-          {waitlistData && waitlistData.length > 0 && (
-            <div className="mb-8">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Waitlist ({waitlistData.length})</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participant</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bypass Code</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {waitlistData.map((waitlist) => (
-                        <tr key={waitlist.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            #{waitlist.position}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {waitlist.first_name} {waitlist.last_name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {waitlist.email}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {waitlist.category_name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(waitlist.joined_at)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            {waitlist.bypass_code_generated ? (
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                Generated
-                              </span>
-                            ) : (
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                Not Generated
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          {/* Waitlist Section - Organized by Category */}
+          {waitlistData && waitlistData.length > 0 && (() => {
+            // Group waitlist data by category
+            const waitlistByCategory = waitlistData.reduce((acc, waitlist) => {
+              const category = waitlist.category_name
+              if (!acc[category]) {
+                acc[category] = []
+              }
+              acc[category].push(waitlist)
+              return acc
+            }, {} as Record<string, WaitlistData[]>)
+
+            return (
+              <div className="mb-8 space-y-6">
+                <h3 className="text-lg font-semibold text-gray-900">Waitlist ({waitlistData.length} total)</h3>
+                {Object.entries(waitlistByCategory).map(([categoryName, categoryWaitlist]) => {
+                  const sortedCategoryWaitlist = sortWaitlistData(categoryWaitlist)
+                  
+                  return (
+                    <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
+                      <h4 className="text-md font-semibold text-gray-900 mb-4">
+                        {categoryName} ({categoryWaitlist.length})
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              {[
+                                { key: 'first_name', label: 'Participant' },
+                                { key: 'email', label: 'Email' },
+                                { key: 'category_name', label: 'Category' },
+                                { key: 'is_lgbtq', label: 'LGBTQ+' },
+                                { key: 'is_goalie', label: 'Goalie' },
+                                { key: 'joined_at', label: 'Joined' },
+                                { key: 'bypass_code_generated', label: 'Bypass Code' }
+                              ].map(({ key, label }) => (
+                                <th
+                                  key={key}
+                                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                  onClick={() => handleWaitlistSort(key as keyof WaitlistData)}
+                                >
+                                  <div className="flex items-center">
+                                    {label}
+                                    {waitlistSortField === key && (
+                                      <span className="ml-1">
+                                        {waitlistSortDirection === 'asc' ? '↑' : '↓'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {sortedCategoryWaitlist.map((waitlist) => (
+                              <tr key={waitlist.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {waitlist.first_name} {waitlist.last_name}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {waitlist.email}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryPillStyles()}`}>
+                                    {waitlist.category_name}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(waitlist.is_lgbtq)}`}>
+                                    {getLgbtqStatusLabel(waitlist.is_lgbtq)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(waitlist.is_goalie)}`}>
+                                    {getGoalieStatusLabel(waitlist.is_goalie)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div>
+                                    <div>{formatDateTime(waitlist.joined_at).date}</div>
+                                    {formatDateTime(waitlist.joined_at).time && (
+                                      <div className="text-xs text-gray-500">{formatDateTime(waitlist.joined_at).time}</div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  {waitlist.bypass_code_generated ? (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                      Generated
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                      Not Generated
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
-          )}
+            )
+          })()}
         </>
       )}
     </div>

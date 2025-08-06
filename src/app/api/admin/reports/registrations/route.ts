@@ -68,6 +68,33 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch registration data' }, { status: 500 })
       }
 
+      // Get waitlist details for this registration
+      const { data: waitlistData, error: waitlistError } = await adminSupabase
+        .from('waitlists')
+        .select(`
+          *,
+          users!inner (
+            id,
+            email,
+            first_name,
+            last_name
+          ),
+          registration_categories (
+            id,
+            custom_name,
+            categories (
+              name
+            )
+          )
+        `)
+        .eq('registration_id', registrationId)
+        .is('removed_at', null)
+        .order('position', { ascending: true })
+
+      if (waitlistError) {
+        logger.logSystem('registration-reports-api', 'Error fetching waitlist data', { error: waitlistError, registrationId }, 'error')
+      }
+
       // Process the data to flatten the structure for the frontend
       const processedData = registrationData?.map(item => {
         const user = Array.isArray(item.users) ? item.users[0] : item.users
@@ -95,7 +122,29 @@ export async function GET(request: NextRequest) {
         }
       }) || []
 
-      return NextResponse.json({ data: processedData })
+      // Process waitlist data
+      const processedWaitlistData = waitlistData?.map(item => {
+        const user = Array.isArray(item.users) ? item.users[0] : item.users
+        const registrationCategory = Array.isArray(item.registration_categories) ? item.registration_categories[0] : item.registration_categories
+        const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
+
+        return {
+          id: item.id,
+          user_id: user?.id || 'Unknown',
+          first_name: user?.first_name || '',
+          last_name: user?.last_name || '',
+          email: user?.email || 'Unknown',
+          category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
+          position: item.position,
+          joined_at: item.joined_at,
+          bypass_code_generated: item.bypass_code_generated || false
+        }
+      }) || []
+
+      return NextResponse.json({ 
+        data: processedData,
+        waitlistData: processedWaitlistData 
+      })
     } else {
       // Get all registrations for selection with category counts
       const { data: registrationsList, error: registrationsError } = await adminSupabase
@@ -137,6 +186,17 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching registration counts', { error: countsError }, 'error')
       }
 
+      // Get waitlist counts for each registration
+      const { data: waitlistCounts, error: waitlistError } = await adminSupabase
+        .from('waitlists')
+        .select('registration_id, registration_category_id')
+        .in('registration_id', registrationIds)
+        .is('removed_at', null)
+
+      if (waitlistError) {
+        logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
+      }
+
       // Create a map of registration counts by registration_id and category_id
       const countsMap = new Map<string, Map<string, number>>()
       registrationCounts?.forEach(count => {
@@ -151,30 +211,48 @@ export async function GET(request: NextRequest) {
         regMap.set(catId, (regMap.get(catId) || 0) + 1)
       })
 
+      // Create a map of waitlist counts by registration_id and category_id
+      const waitlistMap = new Map<string, Map<string, number>>()
+      waitlistCounts?.forEach(count => {
+        const regId = count.registration_id
+        const catId = count.registration_category_id || 'no-category'
+        
+        if (!waitlistMap.has(regId)) {
+          waitlistMap.set(regId, new Map())
+        }
+        
+        const regMap = waitlistMap.get(regId)!
+        regMap.set(catId, (regMap.get(catId) || 0) + 1)
+      })
+
       // Process the data to flatten the structure and add counts
       const processedRegistrations = registrationsList?.map(item => {
         const season = Array.isArray(item.seasons) ? item.seasons[0] : item.seasons
         const categories = Array.isArray(item.registration_categories) ? item.registration_categories : (item.registration_categories ? [item.registration_categories] : [])
         
-        // Calculate category breakdown with counts
+        // Calculate category breakdown with counts and waitlist counts
         const categoryBreakdown = categories.map(cat => {
           const category = Array.isArray(cat.categories) ? cat.categories[0] : cat.categories
           const categoryId = cat.id
           const registrationCounts = countsMap.get(item.id)
+          const waitlistCounts = waitlistMap.get(item.id)
           const count = registrationCounts?.get(categoryId) || 0
+          const waitlistCount = waitlistCounts?.get(categoryId) || 0
           
           return {
             id: categoryId,
             name: category?.name || cat.custom_name || 'Unknown Category',
             count: count,
+            waitlist_count: waitlistCount,
             max_capacity: cat.max_capacity,
             percentage_full: cat.max_capacity ? Math.round((count / cat.max_capacity) * 100) : null
           }
         })
 
-        // Calculate total count across all categories
+        // Calculate total count and waitlist count across all categories
         const totalCount = categoryBreakdown.reduce((sum, cat) => sum + cat.count, 0)
         const totalCapacity = categoryBreakdown.reduce((sum, cat) => sum + (cat.max_capacity || 0), 0)
+        const totalWaitlistCount = categoryBreakdown.reduce((sum, cat) => sum + cat.waitlist_count, 0)
 
         return {
           id: item.id,
@@ -183,6 +261,7 @@ export async function GET(request: NextRequest) {
           season_name: season?.name || 'Unknown Season',
           total_count: totalCount,
           total_capacity: totalCapacity > 0 ? totalCapacity : null,
+          total_waitlist_count: totalWaitlistCount,
           category_breakdown: categoryBreakdown
         }
       }) || []

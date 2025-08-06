@@ -10,10 +10,12 @@ interface Registration {
   type: string
   total_count: number
   total_capacity: number | null
+  total_waitlist_count: number
   category_breakdown: Array<{
     id: string
     name: string
     count: number
+    waitlist_count: number
     max_capacity: number | null
     percentage_full: number | null
   }>
@@ -36,9 +38,22 @@ interface RegistrationData {
   presale_code_used: string | null
 }
 
+interface WaitlistData {
+  id: string
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+  category_name: string
+  position: number
+  joined_at: string
+  bypass_code_generated: boolean
+}
+
 interface RegistrationStats {
   total_registrations: number
   total_revenue: number
+  total_waitlist_count: number
   category_breakdown: Array<{
     category: string
     count: number
@@ -50,6 +65,7 @@ export default function RegistrationReportsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [selectedRegistration, setSelectedRegistration] = useState<string>('')
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
+  const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
   const [stats, setStats] = useState<RegistrationStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -116,8 +132,10 @@ export default function RegistrationReportsPage() {
       
       const result = await response.json()
       const registrationReportData = result.data
+      const waitlistReportData = result.waitlistData || []
 
       console.log('Registration data received:', registrationReportData?.length || 0, 'records')
+      console.log('Waitlist data received:', waitlistReportData?.length || 0, 'records')
 
       // Process the data
       const registrationsList: RegistrationData[] = registrationReportData?.map((item: any) => ({
@@ -137,8 +155,23 @@ export default function RegistrationReportsPage() {
         presale_code_used: item.presale_code_used || null
       })) || []
 
+      // Process the waitlist data
+      const waitlistList: WaitlistData[] = waitlistReportData?.map((item: any) => ({
+        id: item.id,
+        user_id: item.user_id,
+        first_name: item.first_name || '',
+        last_name: item.last_name || '',
+        email: item.email || 'Unknown',
+        category_name: item.category_name || 'Unknown Category',
+        position: item.position || 0,
+        joined_at: item.joined_at || 'N/A',
+        bypass_code_generated: item.bypass_code_generated || false
+      })) || []
+
       console.log('Processed registrations:', registrationsList.length)
+      console.log('Processed waitlist:', waitlistList.length)
       setRegistrationData(registrationsList)
+      setWaitlistData(waitlistList)
 
       // Calculate statistics
       if (registrationsList.length > 0) {
@@ -157,6 +190,7 @@ export default function RegistrationReportsPage() {
         setStats({
           total_registrations: registrationsList.length,
           total_revenue: totalRevenue,
+          total_waitlist_count: waitlistList.length,
           category_breakdown: Array.from(categoryMap.entries()).map(([category, data]) => ({
             category,
             count: data.count,
@@ -167,6 +201,7 @@ export default function RegistrationReportsPage() {
         setStats({
           total_registrations: 0,
           total_revenue: 0,
+          total_waitlist_count: waitlistList.length,
           category_breakdown: []
         })
       }
@@ -176,9 +211,11 @@ export default function RegistrationReportsPage() {
       setError(`Failed to load registration data: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // Set empty data on error
       setRegistrationData([])
+      setWaitlistData([])
       setStats({
         total_registrations: 0,
         total_revenue: 0,
+        total_waitlist_count: 0,
         category_breakdown: []
       })
     } finally {
@@ -322,17 +359,46 @@ export default function RegistrationReportsPage() {
                   )}
                 </div>
 
+                {/* Waitlist count */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Waitlist</span>
+                    <span className="font-medium text-orange-600">
+                      {registration.total_waitlist_count}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Category breakdown */}
                 {registration.category_breakdown.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Categories</p>
                     {registration.category_breakdown.slice(0, 3).map((category) => (
-                      <div key={category.id} className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600 truncate flex-1">{category.name}</span>
-                        <span className="font-medium text-gray-900 ml-2">
-                          {category.count}
-                          {category.max_capacity && ` / ${category.max_capacity}`}
-                        </span>
+                      <div key={category.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600 truncate flex-1">{category.name}</span>
+                          <span className="font-medium text-gray-900 ml-2">
+                            {category.count}
+                            {category.max_capacity && ` / ${category.max_capacity}`}
+                          </span>
+                        </div>
+                        {/* Only show progress bar for capacity-limited categories */}
+                        {category.max_capacity && (
+                          <div className="w-full bg-gray-200 rounded-full h-1">
+                            <div 
+                              className="bg-indigo-600 h-1 rounded-full" 
+                              style={{ 
+                                width: `${Math.min((category.count / category.max_capacity) * 100, 100)}%` 
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                        {/* Show waitlist count for this category */}
+                        {category.waitlist_count > 0 && (
+                          <div className="text-xs text-orange-600">
+                            {category.waitlist_count} on waitlist
+                          </div>
+                        )}
                       </div>
                     ))}
                     {registration.category_breakdown.length > 3 && (
@@ -350,7 +416,7 @@ export default function RegistrationReportsPage() {
         <>
           {/* Summary Statistics */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Total Registrations</h3>
                 <p className="text-3xl font-bold text-indigo-600">{stats.total_registrations}</p>
@@ -358,6 +424,10 @@ export default function RegistrationReportsPage() {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Total Revenue</h3>
                 <p className="text-3xl font-bold text-green-600">{formatCurrency(stats.total_revenue)}</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-900">Waitlist</h3>
+                <p className="text-3xl font-bold text-orange-600">{stats.total_waitlist_count}</p>
               </div>
             </div>
           )}
@@ -474,6 +544,61 @@ export default function RegistrationReportsPage() {
               </div>
             )}
           </div>
+
+          {/* Waitlist Section */}
+          {waitlistData && waitlistData.length > 0 && (
+            <div className="mb-8">
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Waitlist ({waitlistData.length})</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participant</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bypass Code</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {waitlistData.map((waitlist) => (
+                        <tr key={waitlist.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            #{waitlist.position}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {waitlist.first_name} {waitlist.last_name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {waitlist.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {waitlist.category_name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDate(waitlist.joined_at)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {waitlist.bypass_code_generated ? (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                Generated
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                Not Generated
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -8,6 +8,15 @@ interface Registration {
   name: string
   season_name: string
   type: string
+  total_count: number
+  total_capacity: number | null
+  category_breakdown: Array<{
+    id: string
+    name: string
+    count: number
+    max_capacity: number | null
+    percentage_full: number | null
+  }>
 }
 
 interface RegistrationData {
@@ -338,23 +347,57 @@ export default function RegistrationReportsPage() {
                     : 'border-gray-200 bg-white hover:border-gray-300'
                 }`}
               >
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{registration.name}</h3>
-                <p className="text-sm text-gray-600 mb-3">{registration.season_name}</p>
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{registration.name}</h3>
+                    <p className="text-sm text-gray-600">{registration.season_name}</p>
+                  </div>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRegistrationTypeColor(registration.type)}`}>
                     {registration.type}
                   </span>
-                  <span className={`text-sm font-medium ${
-                    selectedRegistration === registration.id ? 'text-indigo-600' : 'text-gray-500'
-                  }`}>
-                    {selectedRegistration === registration.id ? 'Selected' : 'Click to view'}
-                  </span>
-                  {selectedRegistration === registration.id && (
-                    <svg className="h-5 w-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
+                </div>
+                
+                {/* Total registration count */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Total Registrations</span>
+                    <span className="font-medium text-gray-900">
+                      {registration.total_count}
+                      {registration.total_capacity && ` / ${registration.total_capacity}`}
+                    </span>
+                  </div>
+                  {registration.total_capacity && (
+                    <div className="mt-1">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-indigo-600 h-2 rounded-full" 
+                          style={{ 
+                            width: `${Math.min((registration.total_count / registration.total_capacity) * 100, 100)}%` 
+                          }}
+                        ></div>
+                      </div>
+                    </div>
                   )}
                 </div>
+
+                {/* Category breakdown */}
+                {registration.category_breakdown.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Categories</p>
+                    {registration.category_breakdown.slice(0, 3).map((category) => (
+                      <div key={category.id} className="flex items-center justify-between text-xs">
+                        <span className="text-gray-600 truncate flex-1">{category.name}</span>
+                        <span className="font-medium text-gray-900 ml-2">
+                          {category.count}
+                          {category.max_capacity && ` / ${category.max_capacity}`}
+                        </span>
+                      </div>
+                    ))}
+                    {registration.category_breakdown.length > 3 && (
+                      <p className="text-xs text-gray-500">+{registration.category_breakdown.length - 3} more categories</p>
+                    )}
+                  </div>
+                )}
               </button>
             ))}
           </div>

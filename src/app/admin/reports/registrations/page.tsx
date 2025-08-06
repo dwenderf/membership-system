@@ -53,22 +53,13 @@ interface WaitlistData {
   bypass_code_generated: boolean
 }
 
-interface RegistrationStats {
-  total_registrations: number
-  total_revenue: number
-  category_breakdown: Array<{
-    category: string
-    count: number
-    revenue: number
-  }>
-}
+
 
 export default function RegistrationReportsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [selectedRegistration, setSelectedRegistration] = useState<string>('')
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
   const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
-  const [stats, setStats] = useState<RegistrationStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -177,36 +168,7 @@ export default function RegistrationReportsPage() {
       setRegistrationData(registrationsList)
       setWaitlistData(waitlistList)
 
-      // Calculate statistics
-      if (registrationsList.length > 0) {
-        const totalRevenue = registrationsList.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0)
-        
-        // Category breakdown
-        const categoryMap = new Map<string, { count: number, revenue: number }>()
-        registrationsList.forEach(reg => {
-          const category = reg.category_name
-          const existing = categoryMap.get(category) || { count: 0, revenue: 0 }
-          existing.count += 1
-          existing.revenue += reg.amount_paid || 0
-          categoryMap.set(category, existing)
-        })
 
-        setStats({
-          total_registrations: registrationsList.length,
-          total_revenue: totalRevenue,
-          category_breakdown: Array.from(categoryMap.entries()).map(([category, data]) => ({
-            category,
-            count: data.count,
-            revenue: data.revenue
-          }))
-        })
-      } else {
-        setStats({
-          total_registrations: 0,
-          total_revenue: 0,
-          category_breakdown: []
-        })
-      }
 
     } catch (error) {
       console.error('Error fetching registration data:', error)
@@ -214,11 +176,6 @@ export default function RegistrationReportsPage() {
       // Set empty data on error
       setRegistrationData([])
       setWaitlistData([])
-      setStats({
-        total_registrations: 0,
-        total_revenue: 0,
-        category_breakdown: []
-      })
     } finally {
       setLoading(false)
     }
@@ -392,39 +349,7 @@ export default function RegistrationReportsPage() {
 
       {selectedRegistration && (
         <>
-          {/* Summary Statistics */}
-          {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Total Registrations</h3>
-                <p className="text-3xl font-bold text-indigo-600">{stats.total_registrations}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Total Revenue</h3>
-                <p className="text-3xl font-bold text-green-600">{formatCurrency(stats.total_revenue)}</p>
-              </div>
-            </div>
-          )}
 
-          {/* Category Breakdown */}
-          {stats && stats.category_breakdown.length > 0 && (
-            <div className="mb-8">
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Breakdown</h3>
-                <div className="space-y-3">
-                  {stats.category_breakdown.map((category) => (
-                    <div key={category.category} className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium text-gray-900">{category.category}</p>
-                        <p className="text-sm text-gray-500">{category.count} registrations</p>
-                      </div>
-                      <p className="font-semibold text-gray-900">{formatCurrency(category.revenue)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Search */}
           <div className="mb-4">

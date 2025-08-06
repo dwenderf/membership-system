@@ -28,6 +28,8 @@ interface MembershipStats {
   lgbtq_count: number
   lgbtq_percent: number
   prefer_not_to_say_count: number
+  goalie_count: number
+  goalie_percent: number
 }
 
 export default function MembershipReportsPage() {
@@ -128,14 +130,18 @@ export default function MembershipReportsPage() {
           total_members: firstRecord.total_members,
           lgbtq_count: firstRecord.lgbtq_count,
           lgbtq_percent: firstRecord.lgbtq_percent,
-          prefer_not_to_say_count: firstRecord.prefer_not_to_say_count
+          prefer_not_to_say_count: firstRecord.prefer_not_to_say_count,
+          goalie_count: firstRecord.goalie_count,
+          goalie_percent: firstRecord.goalie_percent
         })
       } else {
         setStats({
           total_members: 0,
           lgbtq_count: 0,
           lgbtq_percent: 0,
-          prefer_not_to_say_count: 0
+          prefer_not_to_say_count: 0,
+          goalie_count: 0,
+          goalie_percent: 0
         })
       }
 
@@ -148,7 +154,9 @@ export default function MembershipReportsPage() {
         total_members: 0,
         lgbtq_count: 0,
         lgbtq_percent: 0,
-        prefer_not_to_say_count: 0
+        prefer_not_to_say_count: 0,
+        goalie_count: 0,
+        goalie_percent: 0
       })
     } finally {
       setLoading(false)
@@ -288,8 +296,8 @@ export default function MembershipReportsPage() {
                 <p className="text-3xl font-bold text-green-600">{stats.lgbtq_percent.toFixed(1)}%</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Prefer Not to Say</h3>
-                <p className="text-3xl font-bold text-gray-600">{stats.prefer_not_to_say_count}</p>
+                <h3 className="text-lg font-semibold text-gray-900">Goalie Members</h3>
+                <p className="text-3xl font-bold text-green-600">{stats.goalie_count}</p>
               </div>
             </div>
           )}

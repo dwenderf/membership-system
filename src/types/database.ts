@@ -520,7 +520,6 @@ export type Database = {
           prefer_not_to_say_count: number
           lgbtq_percent: number
           goalie_count: number
-          goalie_percent: number
           days_to_expiration: number
           expiration_status: string
           lgbtq_status: string

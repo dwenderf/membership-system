@@ -29,7 +29,6 @@ interface MembershipStats {
   lgbtq_percent: number
   prefer_not_to_say_count: number
   goalie_count: number
-  goalie_percent: number
 }
 
 export default function MembershipReportsPage() {
@@ -131,8 +130,7 @@ export default function MembershipReportsPage() {
           lgbtq_count: firstRecord.lgbtq_count,
           lgbtq_percent: firstRecord.lgbtq_percent,
           prefer_not_to_say_count: firstRecord.prefer_not_to_say_count,
-          goalie_count: firstRecord.goalie_count,
-          goalie_percent: firstRecord.goalie_percent
+          goalie_count: firstRecord.goalie_count
         })
       } else {
         setStats({
@@ -140,8 +138,7 @@ export default function MembershipReportsPage() {
           lgbtq_count: 0,
           lgbtq_percent: 0,
           prefer_not_to_say_count: 0,
-          goalie_count: 0,
-          goalie_percent: 0
+          goalie_count: 0
         })
       }
 
@@ -155,8 +152,7 @@ export default function MembershipReportsPage() {
         lgbtq_count: 0,
         lgbtq_percent: 0,
         prefer_not_to_say_count: 0,
-        goalie_count: 0,
-        goalie_percent: 0
+        goalie_count: 0
       })
     } finally {
       setLoading(false)

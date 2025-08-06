@@ -45,14 +45,7 @@ membership_stats AS (
          (COUNT(*) - COUNT(*) FILTER (WHERE is_lgbtq IS NULL))) * 100, 1
       )
       ELSE 0 
-    END as lgbtq_percent,
-    CASE 
-      WHEN COUNT(*) > 0 
-      THEN ROUND(
-        (COUNT(*) FILTER (WHERE is_goalie = true)::DECIMAL / COUNT(*)) * 100, 1
-      )
-      ELSE 0 
-    END as goalie_percent
+    END as lgbtq_percent
   FROM latest_memberships
   GROUP BY membership_id, membership_name, membership_description
 )
@@ -63,7 +56,6 @@ SELECT
   ms.prefer_not_to_say_count,
   ms.lgbtq_percent,
   ms.goalie_count,
-  ms.goalie_percent,
   (lm.valid_until - CURRENT_DATE) as days_to_expiration,
   CASE 
     WHEN (lm.valid_until - CURRENT_DATE) < 0 THEN 'Expired'
@@ -93,4 +85,3 @@ COMMENT ON COLUMN membership_analytics_data.expiration_status IS 'Human-readable
 COMMENT ON COLUMN membership_analytics_data.lgbtq_status IS 'Human-readable LGBTQ+ status';
 COMMENT ON COLUMN membership_analytics_data.lgbtq_percent IS 'Percentage of LGBTQ+ members (excluding "prefer not to say")';
 COMMENT ON COLUMN membership_analytics_data.goalie_count IS 'Number of goalie members';
-COMMENT ON COLUMN membership_analytics_data.goalie_percent IS 'Percentage of goalie members';

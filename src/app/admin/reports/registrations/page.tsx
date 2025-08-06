@@ -56,7 +56,6 @@ interface WaitlistData {
 interface RegistrationStats {
   total_registrations: number
   total_revenue: number
-  total_waitlist_count: number
   category_breakdown: Array<{
     category: string
     count: number
@@ -195,7 +194,6 @@ export default function RegistrationReportsPage() {
         setStats({
           total_registrations: registrationsList.length,
           total_revenue: totalRevenue,
-          total_waitlist_count: waitlistList.length,
           category_breakdown: Array.from(categoryMap.entries()).map(([category, data]) => ({
             category,
             count: data.count,
@@ -206,7 +204,6 @@ export default function RegistrationReportsPage() {
         setStats({
           total_registrations: 0,
           total_revenue: 0,
-          total_waitlist_count: waitlistList.length,
           category_breakdown: []
         })
       }
@@ -220,7 +217,6 @@ export default function RegistrationReportsPage() {
       setStats({
         total_registrations: 0,
         total_revenue: 0,
-        total_waitlist_count: 0,
         category_breakdown: []
       })
     } finally {
@@ -344,32 +340,9 @@ export default function RegistrationReportsPage() {
                 {/* Total registration count */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Total Registrations</span>
-                    <span className="font-medium text-gray-900">
+                    <span className="text-gray-600 font-semibold">Total Registrations</span>
+                    <span className="font-bold text-gray-900">
                       {registration.total_count}
-                      {registration.total_capacity && ` / ${registration.total_capacity}`}
-                    </span>
-                  </div>
-                  {registration.total_capacity && (
-                    <div className="mt-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-indigo-600 h-2 rounded-full" 
-                          style={{ 
-                            width: `${Math.min((registration.total_count / registration.total_capacity) * 100, 100)}%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Waitlist count */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Waitlist</span>
-                    <span className="font-medium text-orange-600">
-                      {registration.total_waitlist_count}
                     </span>
                   </div>
                 </div>
@@ -421,7 +394,7 @@ export default function RegistrationReportsPage() {
         <>
           {/* Summary Statistics */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Total Registrations</h3>
                 <p className="text-3xl font-bold text-indigo-600">{stats.total_registrations}</p>
@@ -429,10 +402,6 @@ export default function RegistrationReportsPage() {
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Total Revenue</h3>
                 <p className="text-3xl font-bold text-green-600">{formatCurrency(stats.total_revenue)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Waitlist</h3>
-                <p className="text-3xl font-bold text-orange-600">{stats.total_waitlist_count}</p>
               </div>
             </div>
           )}

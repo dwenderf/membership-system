@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
 
 interface Registration {
   id: string
@@ -36,6 +37,8 @@ interface RegistrationData {
   registered_at: string
   registration_fee: number
   presale_code_used: string | null
+  is_lgbtq: boolean | null
+  is_goalie: boolean
 }
 
 interface WaitlistData {
@@ -152,7 +155,9 @@ export default function RegistrationReportsPage() {
         amount_paid: item.amount_paid || 0,
         registered_at: item.registered_at || 'N/A',
         registration_fee: item.registration_fee || 0,
-        presale_code_used: item.presale_code_used || null
+        presale_code_used: item.presale_code_used || null,
+        is_lgbtq: item.is_lgbtq,
+        is_goalie: item.is_goalie || false
       })) || []
 
       // Process the waitlist data
@@ -485,6 +490,8 @@ export default function RegistrationReportsPage() {
                         { key: 'full_name', label: 'Participant' },
                         { key: 'email', label: 'Email' },
                         { key: 'category_name', label: 'Category' },
+                        { key: 'is_lgbtq', label: 'LGBTQ' },
+                        { key: 'is_goalie', label: 'Goalie' },
                         { key: 'amount_paid', label: 'Amount Paid' },
                         { key: 'registration_fee', label: 'Registration Fee' },
                         { key: 'registered_at', label: 'Registered At' },
@@ -516,8 +523,20 @@ export default function RegistrationReportsPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {registration.email}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {registration.category_name}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryPillStyles()}`}>
+                            {registration.category_name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
+                            {getLgbtqStatusLabel(registration.is_lgbtq)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(registration.is_goalie)}`}>
+                            {getGoalieStatusLabel(registration.is_goalie)}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                           {formatCurrency(registration.amount_paid)}

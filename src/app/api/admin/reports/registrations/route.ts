@@ -41,7 +41,9 @@ export async function GET(request: NextRequest) {
             id,
             email,
             first_name,
-            last_name
+            last_name,
+            is_lgbtq,
+            is_goalie
           ),
           registrations!inner (
             id,
@@ -118,7 +120,9 @@ export async function GET(request: NextRequest) {
           amount_paid: item.amount_paid || 0,
           registered_at: item.registered_at,
           registration_fee: item.registration_fee || 0,
-          presale_code_used: item.presale_code_used
+          presale_code_used: item.presale_code_used,
+          is_lgbtq: user?.is_lgbtq,
+          is_goalie: user?.is_goalie || false
         }
       }) || []
 

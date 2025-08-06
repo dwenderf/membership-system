@@ -189,8 +189,17 @@ export default function RegistrationReportsPage() {
   )
 
   const sortedRegistrations = [...filteredRegistrations].sort((a, b) => {
-    const aValue = a[sortField]
-    const bValue = b[sortField]
+    let aValue = a[sortField]
+    let bValue = b[sortField]
+    
+    // Handle boolean fields by converting to display labels for proper sorting
+    if (sortField === 'is_lgbtq') {
+      aValue = getLgbtqStatusLabel(a.is_lgbtq)
+      bValue = getLgbtqStatusLabel(b.is_lgbtq)
+    } else if (sortField === 'is_goalie') {
+      aValue = getGoalieStatusLabel(a.is_goalie)
+      bValue = getGoalieStatusLabel(b.is_goalie)
+    }
     
     if (sortField === 'amount_paid' || sortField === 'registration_fee') {
       const aNum = typeof aValue === 'number' ? aValue : 0

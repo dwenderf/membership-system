@@ -39,17 +39,8 @@ interface RegistrationData {
 interface RegistrationStats {
   total_registrations: number
   total_revenue: number
-  average_registration_fee: number
-  paid_registrations: number
-  pending_registrations: number
-  failed_registrations: number
   category_breakdown: Array<{
     category: string
-    count: number
-    revenue: number
-  }>
-  payment_status_breakdown: Array<{
-    status: string
     count: number
     revenue: number
   }>
@@ -152,9 +143,6 @@ export default function RegistrationReportsPage() {
       // Calculate statistics
       if (registrationsList.length > 0) {
         const totalRevenue = registrationsList.reduce((sum, reg) => sum + (reg.amount_paid || 0), 0)
-        const paidCount = registrationsList.filter(r => r.payment_status === 'paid').length
-        const pendingCount = registrationsList.filter(r => r.payment_status === 'awaiting_payment').length
-        const failedCount = registrationsList.filter(r => r.payment_status === 'failed').length
         
         // Category breakdown
         const categoryMap = new Map<string, { count: number, revenue: number }>()
@@ -166,30 +154,11 @@ export default function RegistrationReportsPage() {
           categoryMap.set(category, existing)
         })
 
-        // Payment status breakdown
-        const statusMap = new Map<string, { count: number, revenue: number }>()
-        registrationsList.forEach(reg => {
-          const status = reg.payment_status
-          const existing = statusMap.get(status) || { count: 0, revenue: 0 }
-          existing.count += 1
-          existing.revenue += reg.amount_paid || 0
-          statusMap.set(status, existing)
-        })
-
         setStats({
           total_registrations: registrationsList.length,
           total_revenue: totalRevenue,
-          average_registration_fee: registrationsList.length > 0 ? totalRevenue / registrationsList.length : 0,
-          paid_registrations: paidCount,
-          pending_registrations: pendingCount,
-          failed_registrations: failedCount,
           category_breakdown: Array.from(categoryMap.entries()).map(([category, data]) => ({
             category,
-            count: data.count,
-            revenue: data.revenue
-          })),
-          payment_status_breakdown: Array.from(statusMap.entries()).map(([status, data]) => ({
-            status,
             count: data.count,
             revenue: data.revenue
           }))
@@ -198,12 +167,7 @@ export default function RegistrationReportsPage() {
         setStats({
           total_registrations: 0,
           total_revenue: 0,
-          average_registration_fee: 0,
-          paid_registrations: 0,
-          pending_registrations: 0,
-          failed_registrations: 0,
-          category_breakdown: [],
-          payment_status_breakdown: []
+          category_breakdown: []
         })
       }
 
@@ -215,12 +179,7 @@ export default function RegistrationReportsPage() {
       setStats({
         total_registrations: 0,
         total_revenue: 0,
-        average_registration_fee: 0,
-        paid_registrations: 0,
-        pending_registrations: 0,
-        failed_registrations: 0,
-        category_breakdown: [],
-        payment_status_breakdown: []
+        category_breakdown: []
       })
     } finally {
       setLoading(false)
@@ -272,23 +231,6 @@ export default function RegistrationReportsPage() {
   const formatDate = (dateString: string) => {
     if (dateString === 'N/A') return 'N/A'
     return new Date(dateString).toLocaleDateString()
-  }
-
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'text-green-600 bg-green-100'
-      case 'awaiting_payment':
-        return 'text-yellow-600 bg-yellow-100'
-      case 'processing':
-        return 'text-blue-600 bg-blue-100'
-      case 'failed':
-        return 'text-red-600 bg-red-100'
-      case 'refunded':
-        return 'text-gray-600 bg-gray-100'
-      default:
-        return 'text-gray-600 bg-gray-100'
-    }
   }
 
   const getRegistrationTypeColor = (type: string) => {
@@ -408,7 +350,7 @@ export default function RegistrationReportsPage() {
         <>
           {/* Summary Statistics */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow">
                 <h3 className="text-lg font-semibold text-gray-900">Total Registrations</h3>
                 <p className="text-3xl font-bold text-indigo-600">{stats.total_registrations}</p>
@@ -417,57 +359,26 @@ export default function RegistrationReportsPage() {
                 <h3 className="text-lg font-semibold text-gray-900">Total Revenue</h3>
                 <p className="text-3xl font-bold text-green-600">{formatCurrency(stats.total_revenue)}</p>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Paid Registrations</h3>
-                <p className="text-3xl font-bold text-green-600">{stats.paid_registrations}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900">Pending Registrations</h3>
-                <p className="text-3xl font-bold text-yellow-600">{stats.pending_registrations}</p>
-              </div>
             </div>
           )}
 
-          {/* Category and Payment Status Breakdown */}
-          {stats && (stats.category_breakdown.length > 0 || stats.payment_status_breakdown.length > 0) && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Category Breakdown */}
-              {stats.category_breakdown.length > 0 && (
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Breakdown</h3>
-                  <div className="space-y-3">
-                    {stats.category_breakdown.map((category) => (
-                      <div key={category.category} className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900">{category.category}</p>
-                          <p className="text-sm text-gray-500">{category.count} registrations</p>
-                        </div>
-                        <p className="font-semibold text-gray-900">{formatCurrency(category.revenue)}</p>
+          {/* Category Breakdown */}
+          {stats && stats.category_breakdown.length > 0 && (
+            <div className="mb-8">
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Breakdown</h3>
+                <div className="space-y-3">
+                  {stats.category_breakdown.map((category) => (
+                    <div key={category.category} className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-gray-900">{category.category}</p>
+                        <p className="text-sm text-gray-500">{category.count} registrations</p>
                       </div>
-                    ))}
-                  </div>
+                      <p className="font-semibold text-gray-900">{formatCurrency(category.revenue)}</p>
+                    </div>
+                  ))}
                 </div>
-              )}
-
-              {/* Payment Status Breakdown */}
-              {stats.payment_status_breakdown.length > 0 && (
-                <div className="bg-white p-6 rounded-lg shadow">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Status Breakdown</h3>
-                  <div className="space-y-3">
-                    {stats.payment_status_breakdown.map((status) => (
-                      <div key={status.status} className="flex justify-between items-center">
-                        <div>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatusColor(status.status)}`}>
-                            {status.status}
-                          </span>
-                          <p className="text-sm text-gray-500 mt-1">{status.count} registrations</p>
-                        </div>
-                        <p className="font-semibold text-gray-900">{formatCurrency(status.revenue)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -504,7 +415,6 @@ export default function RegistrationReportsPage() {
                         { key: 'full_name', label: 'Participant' },
                         { key: 'email', label: 'Email' },
                         { key: 'category_name', label: 'Category' },
-                        { key: 'payment_status', label: 'Payment Status' },
                         { key: 'amount_paid', label: 'Amount Paid' },
                         { key: 'registration_fee', label: 'Registration Fee' },
                         { key: 'registered_at', label: 'Registered At' },
@@ -538,11 +448,6 @@ export default function RegistrationReportsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {registration.category_name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatusColor(registration.payment_status)}`}>
-                            {registration.payment_status}
-                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                           {formatCurrency(registration.amount_paid)}

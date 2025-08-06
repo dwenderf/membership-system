@@ -530,8 +530,18 @@ export default function RegistrationReportsPage() {
 
           {/* Waitlist Section - Organized by Category */}
           {waitlistData && waitlistData.length > 0 && (() => {
-            // Group waitlist data by category
-            const waitlistByCategory = waitlistData.reduce((acc, waitlist) => {
+            // Filter waitlist data by search term
+            const filteredWaitlistData = waitlistData.filter(waitlist => {
+              const fullName = `${waitlist.first_name} ${waitlist.last_name}`.toLowerCase()
+              const email = waitlist.email.toLowerCase()
+              const category = waitlist.category_name.toLowerCase()
+              const search = searchTerm.toLowerCase()
+              
+              return fullName.includes(search) || email.includes(search) || category.includes(search)
+            })
+
+            // Group filtered waitlist data by category
+            const waitlistByCategory = filteredWaitlistData.reduce((acc, waitlist) => {
               const category = waitlist.category_name
               if (!acc[category]) {
                 acc[category] = []
@@ -542,8 +552,15 @@ export default function RegistrationReportsPage() {
 
             return (
               <div className="mb-8 space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Waitlist ({waitlistData.length} total)</h3>
-                {Object.entries(waitlistByCategory).map(([categoryName, categoryWaitlist]) => {
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Waitlist ({filteredWaitlistData.length}{filteredWaitlistData.length !== waitlistData.length ? ` of ${waitlistData.length}` : ''} total)
+                </h3>
+                {filteredWaitlistData.length === 0 ? (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <p className="text-gray-500 text-center">No waitlist entries match your search criteria.</p>
+                  </div>
+                ) : (
+                  Object.entries(waitlistByCategory).map(([categoryName, categoryWaitlist]) => {
                   const sortedCategoryWaitlist = sortWaitlistData(categoryWaitlist)
                   
                   return (
@@ -631,7 +648,8 @@ export default function RegistrationReportsPage() {
                       </div>
                     </div>
                   )
-                })}
+                })
+                )}
               </div>
             )
           })()}

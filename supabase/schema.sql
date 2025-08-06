@@ -135,6 +135,8 @@ CREATE TABLE payments (
     discount_amount INTEGER DEFAULT 0, -- in cents
     final_amount INTEGER NOT NULL, -- in cents
     stripe_payment_intent_id TEXT,
+    stripe_charge_id TEXT, -- Stripe charge ID (ch_*) for payment reconciliation
+    stripe_fee_amount INTEGER DEFAULT 0, -- Stripe fee in cents
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed', 'refunded', 'cancelled')),
     payment_method TEXT DEFAULT 'stripe',
     refund_reason TEXT,

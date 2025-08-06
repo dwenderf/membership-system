@@ -184,9 +184,20 @@ export class PaymentCompletionProcessor {
         this.logger.logPaymentProcessing('handle-xero-staging-records', '💰 Updating existing Xero staging records for paid purchase')
         await this.updateXeroStagingRecords(event, existingStagingRecords, { success: true })
       } else {
-        this.logger.logPaymentProcessing('handle-xero-staging-records', '⚠️ No existing staging records found for paid purchase - this should not happen in normal flow', undefined, 'warn')
-        // Fallback: create staging records (this shouldn't happen in normal flow)
-        await this.createXeroStagingRecords(event)
+        // Critical error: Payment completed but no staging record found
+        // This indicates a serious issue in the payment flow
+        this.logger.logPaymentProcessing('handle-xero-staging-records', '❌ CRITICAL: Payment completed but no staging record found - payment cannot be processed for accounting', {
+          payment_id: event.payment_id,
+          user_id: event.user_id,
+          amount: event.amount,
+          payment_intent_id: event.metadata?.payment_intent_id,
+          trigger_source: event.trigger_source,
+          error_type: 'missing_staging_record_for_payment'
+        }, 'error')
+        
+        // Do not create fallback staging records as this could cause incorrect accounting
+        // Manual intervention required to investigate and fix the payment flow issue
+        throw new Error(`Critical error: Payment ${event.payment_id} completed but no staging record found for user ${event.user_id}. Manual investigation required.`)
       }
       
     } catch (error) {
@@ -298,39 +309,20 @@ export class PaymentCompletionProcessor {
         }
       }
       
-      // If no records found by payment intent ID, fall back to finding the most recent staging record
+      // If no records found by payment intent ID, log error instead of falling back
       if (existingInvoicesByUserId.length === 0) {
-        this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ No staging records found by payment intent ID, falling back to most recent record', {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '❌ No staging records found for payment - payment cannot be linked to invoice', {
           user_id: event.user_id,
           payment_intent_id: event.metadata?.payment_intent_id || 'not provided',
-          trigger_source: event.trigger_source
-        }, 'warn')
+          payment_id: event.payment_id,
+          trigger_source: event.trigger_source,
+          amount: event.amount,
+          error_type: 'missing_staging_record'
+        }, 'error')
         
-        const { data: recentRecords, error: recentError } = await this.supabase
-          .from('xero_invoices')
-          .select('*')
-          .eq('staging_metadata->>user_id', event.user_id)
-          .eq('sync_status', 'staged')
-          .is('payment_id', null)
-          .order('staged_at', { ascending: false })
-          .limit(1)
-        
-        existingInvoicesByUserId = recentRecords || []
-        userIdError = recentError
-        
-        if (recentRecords && recentRecords.length > 0) {
-          this.logger.logPaymentProcessing('find-existing-staging-records', '⚠️ Using most recent staging record as fallback', {
-            found: true,
-            count: recentRecords.length,
-            firstRecord: {
-              id: recentRecords[0].id,
-              payment_id: recentRecords[0].payment_id,
-              sync_status: recentRecords[0].sync_status,
-              invoice_status: recentRecords[0].invoice_status,
-              staged_at: recentRecords[0].staged_at
-            }
-          }, 'warn')
-        }
+        // Return null instead of falling back to arbitrary records
+        // This prevents payment misallocation and forces explicit handling
+        return null
       }
       
       if (userIdError) {

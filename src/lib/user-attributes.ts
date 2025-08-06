@@ -24,7 +24,7 @@ export function getLgbtqStatusStyles(isLgbtq: boolean | null): string {
  * Convert raw goalie boolean to display label
  */
 export function getGoalieStatusLabel(isGoalie: boolean): string {
-  return isGoalie ? 'Goalie' : '—'
+  return isGoalie ? 'Goalie' : 'No'
 }
 
 /**

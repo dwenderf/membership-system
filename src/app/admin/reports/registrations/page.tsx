@@ -384,7 +384,7 @@ export default function RegistrationReportsPage() {
                         { key: 'full_name', label: 'Participant' },
                         { key: 'email', label: 'Email' },
                         { key: 'category_name', label: 'Category' },
-                        { key: 'is_lgbtq', label: 'LGBTQ' },
+                        { key: 'is_lgbtq', label: 'LGBTQ+' },
                         { key: 'is_goalie', label: 'Goalie' },
                         { key: 'amount_paid', label: 'Amount Paid' },
                         { key: 'registration_fee', label: 'Registration Fee' },

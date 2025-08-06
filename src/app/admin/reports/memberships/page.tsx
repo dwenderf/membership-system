@@ -207,11 +207,6 @@ export default function MembershipReportsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Membership Reports</h1>
-        <p className="text-gray-600">Detailed analytics and member listings by membership type</p>
-      </div>
-
       {/* Error Display */}
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">

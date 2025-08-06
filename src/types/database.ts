@@ -512,12 +512,15 @@ export type Database = {
           email: string | null
           onboarding_completed_at: string | null
           is_lgbtq: boolean | null
+          is_goalie: boolean
           membership_name: string
           membership_description: string | null
           total_members: number
           lgbtq_count: number
           prefer_not_to_say_count: number
           lgbtq_percent: number
+          goalie_count: number
+          goalie_percent: number
           days_to_expiration: number
           expiration_status: string
           lgbtq_status: string

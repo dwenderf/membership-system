@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 
 interface MembershipType {
   id: string
@@ -17,6 +18,7 @@ interface MemberData {
   expiration_date: string
   days_to_expiration: number
   is_lgbtq: boolean | null
+  is_goalie: boolean
   lgbtq_status: string
   expiration_status: string
 }
@@ -111,6 +113,7 @@ export default function MembershipReportsPage() {
         expiration_date: item.valid_until,
         days_to_expiration: item.days_to_expiration,
         is_lgbtq: item.is_lgbtq,
+        is_goalie: item.is_goalie || false,
         lgbtq_status: item.lgbtq_status,
         expiration_status: item.expiration_status
       })) || []
@@ -159,8 +162,17 @@ export default function MembershipReportsPage() {
   )
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
-    const aValue = a[sortField]
-    const bValue = b[sortField]
+    let aValue = a[sortField]
+    let bValue = b[sortField]
+    
+    // Handle boolean fields by converting to display labels for proper sorting
+    if (sortField === 'is_lgbtq') {
+      aValue = getLgbtqStatusLabel(a.is_lgbtq)
+      bValue = getLgbtqStatusLabel(b.is_lgbtq)
+    } else if (sortField === 'is_goalie') {
+      aValue = getGoalieStatusLabel(a.is_goalie)
+      bValue = getGoalieStatusLabel(b.is_goalie)
+    }
     
     if (sortField === 'days_to_expiration') {
       const aNum = typeof aValue === 'number' ? aValue : 0
@@ -316,6 +328,7 @@ export default function MembershipReportsPage() {
                         { key: 'full_name', label: 'Full Name' },
                         { key: 'email', label: 'Email' },
                         { key: 'lgbtq_status', label: 'LGBTQ+' },
+                        { key: 'is_goalie', label: 'Goalie' },
                         { key: 'member_since', label: 'Member Since' },
                         { key: 'expiration_date', label: 'Expiration Date' },
                         { key: 'days_to_expiration', label: 'Days to Expiration' }
@@ -350,14 +363,13 @@ export default function MembershipReportsPage() {
                           {member.email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            member.lgbtq_status === 'LGBTQ+' 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : member.lgbtq_status === 'Ally'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {member.lgbtq_status}
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(member.is_lgbtq)}`}>
+                            {getLgbtqStatusLabel(member.is_lgbtq)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(member.is_goalie)}`}>
+                            {getGoalieStatusLabel(member.is_goalie)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

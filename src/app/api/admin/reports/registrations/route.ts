@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
           last_name: user?.last_name || '',
           email: user?.email || 'Unknown',
           category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
+          category_id: item.registration_category_id || 'unknown',
           registration_category_name: registrationCategory?.custom_name || category?.name || 'Unknown Category',
           payment_status: item.payment_status || 'Unknown',
           amount_paid: item.amount_paid || 0,

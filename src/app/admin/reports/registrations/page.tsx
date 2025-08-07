@@ -31,6 +31,7 @@ interface RegistrationData {
   full_name: string
   email: string
   category_name: string
+  category_id: string
   registration_category_name: string
   payment_status: string
   amount_paid: number
@@ -70,6 +71,8 @@ export default function RegistrationReportsPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [waitlistSortField, setWaitlistSortField] = useState<keyof WaitlistData>('joined_at')
   const [waitlistSortDirection, setWaitlistSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [isWaitlistExpanded, setIsWaitlistExpanded] = useState(true)
+  const [isRegistrationsExpanded, setIsRegistrationsExpanded] = useState(true)
 
   const searchParams = useSearchParams()
 
@@ -145,6 +148,7 @@ export default function RegistrationReportsPage() {
         full_name: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A',
         email: item.email || 'N/A',
         category_name: item.category_name || item.registration_category_name || 'N/A',
+        category_id: item.category_id || 'unknown',
         registration_category_name: item.registration_category_name || 'N/A',
         payment_status: item.payment_status || 'N/A',
         amount_paid: item.amount_paid || 0,
@@ -427,107 +431,6 @@ export default function RegistrationReportsPage() {
             />
           </div>
 
-          {/* Registrations Table */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Registrations ({filteredRegistrations.length} of {registrationData.length})
-              </h3>
-            </div>
-            
-            {loading ? (
-              <div className="px-4 py-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Loading registrations...</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {[
-                        { key: 'full_name', label: 'Participant' },
-                        { key: 'email', label: 'Email' },
-                        { key: 'category_name', label: 'Category' },
-                        { key: 'is_lgbtq', label: 'LGBTQ+' },
-                        { key: 'is_goalie', label: 'Goalie' },
-                        { key: 'amount_paid', label: 'Amount Paid' },
-                        { key: 'registration_fee', label: 'Registration Fee' },
-                        { key: 'registered_at', label: 'Registered At' },
-                        { key: 'presale_code_used', label: 'Presale Code' }
-                      ].map(({ key, label }) => (
-                        <th
-                          key={key}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => handleSort(key as keyof RegistrationData)}
-                        >
-                          <div className="flex items-center">
-                            {label}
-                            {sortField === key && (
-                              <span className="ml-1">
-                                {sortDirection === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedRegistrations.map((registration, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {registration.full_name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {registration.email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryPillStyles()}`}>
-                            {registration.category_name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
-                            {getLgbtqStatusLabel(registration.is_lgbtq)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(registration.is_goalie)}`}>
-                            {getGoalieStatusLabel(registration.is_goalie)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                          {formatCurrency(registration.amount_paid)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(registration.registration_fee)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div>
-                            <div>{formatDateTime(registration.registered_at).date}</div>
-                            {formatDateTime(registration.registered_at).time && (
-                              <div className="text-xs text-gray-500">{formatDateTime(registration.registered_at).time}</div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {registration.presale_code_used ? (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                              {registration.presale_code_used}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
           {/* Waitlist Section - Organized by Category */}
           {waitlistData && waitlistData.length > 0 && (() => {
             // Filter waitlist data by search term
@@ -552,107 +455,282 @@ export default function RegistrationReportsPage() {
 
             return (
               <div className="mb-8 space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Waitlist ({filteredWaitlistData.length}{filteredWaitlistData.length !== waitlistData.length ? ` of ${waitlistData.length}` : ''} total)
-                </h3>
-                {filteredWaitlistData.length === 0 ? (
-                  <div className="bg-white p-6 rounded-lg shadow">
-                    <p className="text-gray-500 text-center">No waitlist entries match your search criteria.</p>
-                  </div>
-                ) : (
-                  Object.entries(waitlistByCategory).map(([categoryName, categoryWaitlist]) => {
-                  const sortedCategoryWaitlist = sortWaitlistData(categoryWaitlist)
-                  
-                  return (
-                    <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
-                      <h4 className="text-md font-semibold text-gray-900 mb-4">
-                        {categoryName} ({categoryWaitlist.length})
-                      </h4>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              {[
-                                { key: 'first_name', label: 'Participant' },
-                                { key: 'email', label: 'Email' },
-                                { key: 'category_name', label: 'Category' },
-                                { key: 'is_lgbtq', label: 'LGBTQ+' },
-                                { key: 'is_goalie', label: 'Goalie' },
-                                { key: 'joined_at', label: 'Joined' },
-                                { key: 'bypass_code_generated', label: 'Bypass Code' }
-                              ].map(({ key, label }) => (
-                                <th
-                                  key={key}
-                                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                                  onClick={() => handleWaitlistSort(key as keyof WaitlistData)}
-                                >
-                                  <div className="flex items-center">
-                                    {label}
-                                    {waitlistSortField === key && (
-                                      <span className="ml-1">
-                                        {waitlistSortDirection === 'asc' ? '↑' : '↓'}
-                                      </span>
-                                    )}
-                                  </div>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {sortedCategoryWaitlist.map((waitlist) => (
-                              <tr key={waitlist.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {waitlist.first_name} {waitlist.last_name}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {waitlist.email}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryPillStyles()}`}>
-                                    {waitlist.category_name}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(waitlist.is_lgbtq)}`}>
-                                    {getLgbtqStatusLabel(waitlist.is_lgbtq)}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(waitlist.is_goalie)}`}>
-                                    {getGoalieStatusLabel(waitlist.is_goalie)}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  <div>
-                                    <div>{formatDateTime(waitlist.joined_at).date}</div>
-                                    {formatDateTime(waitlist.joined_at).time && (
-                                      <div className="text-xs text-gray-500">{formatDateTime(waitlist.joined_at).time}</div>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  {waitlist.bypass_code_generated ? (
-                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                      Generated
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                      Not Generated
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Waitlist ({filteredWaitlistData.length}{filteredWaitlistData.length !== waitlistData.length ? ` of ${waitlistData.length}` : ''} total)
+                  </h3>
+                  <button
+                    onClick={() => setIsWaitlistExpanded(!isWaitlistExpanded)}
+                    className="flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+                  >
+                    {isWaitlistExpanded ? 'Collapse' : 'Expand'}
+                    <span className="ml-1">
+                      {isWaitlistExpanded ? '↑' : '↓'}
+                    </span>
+                  </button>
+                </div>
+                {isWaitlistExpanded && (
+                  <>
+                    {filteredWaitlistData.length === 0 ? (
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <p className="text-gray-500 text-center">No waitlist entries match your search criteria.</p>
                       </div>
-                    </div>
-                  )
-                })
+                    ) : (
+                      Object.entries(waitlistByCategory).map(([categoryName, categoryWaitlist]) => {
+                        const sortedCategoryWaitlist = sortWaitlistData(categoryWaitlist)
+                        
+                        return (
+                          <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
+                            <h4 className="text-md font-semibold text-gray-900 mb-4">
+                              {categoryName} ({categoryWaitlist.length})
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    {[
+                                      { key: 'first_name', label: 'Participant' },
+                                      { key: 'email', label: 'Email' },
+                                      { key: 'is_lgbtq', label: 'LGBTQ+' },
+                                      { key: 'is_goalie', label: 'Goalie' },
+                                      { key: 'joined_at', label: 'Joined' },
+                                      { key: 'bypass_code_generated', label: 'Bypass Code' }
+                                    ].map(({ key, label }) => (
+                                      <th
+                                        key={key}
+                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                        onClick={() => handleWaitlistSort(key as keyof WaitlistData)}
+                                      >
+                                        <div className="flex items-center">
+                                          {label}
+                                          {waitlistSortField === key && (
+                                            <span className="ml-1">
+                                              {waitlistSortDirection === 'asc' ? '↑' : '↓'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {sortedCategoryWaitlist.map((waitlist) => (
+                                    <tr key={waitlist.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {waitlist.first_name} {waitlist.last_name}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {waitlist.email}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(waitlist.is_lgbtq)}`}>
+                                          {getLgbtqStatusLabel(waitlist.is_lgbtq)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(waitlist.is_goalie)}`}>
+                                          {getGoalieStatusLabel(waitlist.is_goalie)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <div>
+                                          <div>{formatDateTime(waitlist.joined_at).date}</div>
+                                          {formatDateTime(waitlist.joined_at).time && (
+                                            <div className="text-xs text-gray-500">{formatDateTime(waitlist.joined_at).time}</div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {waitlist.bypass_code_generated ? (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                            Generated
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                            Not Generated
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </>
                 )}
               </div>
             )
           })()}
+
+          {/* Registrations Section - Organized by Category */}
+          {registrationData && registrationData.length > 0 && (() => {
+            // Group registration data by category
+            const registrationsByCategory = filteredRegistrations.reduce((acc, registration) => {
+              const category = registration.category_name
+              if (!acc[category]) {
+                acc[category] = []
+              }
+              acc[category].push(registration)
+              return acc
+            }, {} as Record<string, RegistrationData[]>)
+
+            return (
+              <div className="mb-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Registrations ({filteredRegistrations.length}{filteredRegistrations.length !== registrationData.length ? ` of ${registrationData.length}` : ''} total)
+                  </h3>
+                  <button
+                    onClick={() => setIsRegistrationsExpanded(!isRegistrationsExpanded)}
+                    className="flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+                  >
+                    {isRegistrationsExpanded ? 'Collapse' : 'Expand'}
+                    <span className="ml-1">
+                      {isRegistrationsExpanded ? '↑' : '↓'}
+                    </span>
+                  </button>
+                </div>
+                {isRegistrationsExpanded && (
+                  <>
+                    {loading ? (
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                          <p className="mt-2 text-gray-600">Loading registrations...</p>
+                        </div>
+                      </div>
+                    ) : filteredRegistrations.length === 0 ? (
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <p className="text-gray-500 text-center">No registrations match your search criteria.</p>
+                      </div>
+                    ) : (
+                      Object.entries(registrationsByCategory).map(([categoryName, categoryRegistrations]) => {
+                        const sortedCategoryRegistrations = [...categoryRegistrations].sort((a, b) => {
+                          let aValue = a[sortField]
+                          let bValue = b[sortField]
+                          
+                          // Handle boolean fields by converting to display labels for proper sorting
+                          if (sortField === 'is_lgbtq') {
+                            aValue = getLgbtqStatusLabel(a.is_lgbtq)
+                            bValue = getLgbtqStatusLabel(b.is_lgbtq)
+                          } else if (sortField === 'is_goalie') {
+                            aValue = getGoalieStatusLabel(a.is_goalie)
+                            bValue = getGoalieStatusLabel(b.is_goalie)
+                          }
+                          
+                          if (sortField === 'amount_paid' || sortField === 'registration_fee') {
+                            const aNum = typeof aValue === 'number' ? aValue : 0
+                            const bNum = typeof bValue === 'number' ? bValue : 0
+                            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
+                          }
+                          
+                          if (typeof aValue === 'string' && typeof bValue === 'string') {
+                            return sortDirection === 'asc' 
+                              ? aValue.localeCompare(bValue)
+                              : bValue.localeCompare(aValue)
+                          }
+                          
+                          return 0
+                        })
+                        
+                        return (
+                          <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
+                            <h4 className="text-md font-semibold text-gray-900 mb-4">
+                              {categoryName} ({categoryRegistrations.length})
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    {[
+                                      { key: 'full_name', label: 'Participant' },
+                                      { key: 'email', label: 'Email' },
+                                      { key: 'is_lgbtq', label: 'LGBTQ+' },
+                                      { key: 'is_goalie', label: 'Goalie' },
+                                      { key: 'amount_paid', label: 'Amount Paid' },
+                                      { key: 'registration_fee', label: 'Registration Fee' },
+                                      { key: 'registered_at', label: 'Registered At' },
+                                      { key: 'presale_code_used', label: 'Presale Code' }
+                                    ].map(({ key, label }) => (
+                                      <th
+                                        key={key}
+                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                        onClick={() => handleSort(key as keyof RegistrationData)}
+                                      >
+                                        <div className="flex items-center">
+                                          {label}
+                                          {sortField === key && (
+                                            <span className="ml-1">
+                                              {sortDirection === 'asc' ? '↑' : '↓'}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {sortedCategoryRegistrations.map((registration, index) => (
+                                    <tr key={index} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {registration.full_name}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {registration.email}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
+                                          {getLgbtqStatusLabel(registration.is_lgbtq)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(registration.is_goalie)}`}>
+                                          {getGoalieStatusLabel(registration.is_goalie)}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                        {formatCurrency(registration.amount_paid)}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {formatCurrency(registration.registration_fee)}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <div>
+                                          <div>{formatDateTime(registration.registered_at).date}</div>
+                                          {formatDateTime(registration.registered_at).time && (
+                                            <div className="text-xs text-gray-500">{formatDateTime(registration.registered_at).time}</div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {registration.presale_code_used ? (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                            {registration.presale_code_used}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-400">-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })()}
+
+
         </>
       )}
     </div>

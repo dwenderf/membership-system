@@ -19,7 +19,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   
   if (!authUser) {
-    redirect('/admin/users')
+    redirect('/admin/reports/users')
   }
 
   // Fetch user details
@@ -34,7 +34,7 @@ export default async function UserDetailPage({ params }: PageProps) {
       userId: params.id,
       error: userError?.message 
     })
-    redirect('/admin/users')
+    redirect('/admin/reports/users')
   }
 
   // Check if current user is viewing their own profile
@@ -101,7 +101,7 @@ export default async function UserDetailPage({ params }: PageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <Link 
-                  href="/admin/users"
+                  href="/admin/reports/users"
                   className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
                 >
                   ← Back to Users

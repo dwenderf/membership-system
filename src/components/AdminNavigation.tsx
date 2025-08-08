@@ -67,18 +67,14 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
       ]
     },
     { 
-      name: 'Users', 
-      href: '/admin/users', 
-      current: pathname.startsWith('/admin/users') 
-    },
-    { 
       name: 'Reports', 
       href: '/admin/reports/financial', 
       current: pathname.startsWith('/admin/reports'),
       submenu: [
         { name: 'Financial Reports', href: '/admin/reports/financial' },
         { name: 'Membership Reports', href: '/admin/reports/memberships' },
-        { name: 'Registration Reports', href: '/admin/reports/registrations' }
+        { name: 'Registration Reports', href: '/admin/reports/registrations' },
+        { name: 'User Reports', href: '/admin/reports/users' }
       ]
     }
   ]

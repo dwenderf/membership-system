@@ -27,7 +27,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
       userId: params.id,
       error: userError?.message 
     })
-    redirect('/admin/users')
+    redirect('/admin/reports/users')
   }
 
   // This would need to be implemented to fetch invoice details from Xero
@@ -41,7 +41,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
           {/* Header */}
           <div className="mb-8">
             <Link 
-              href={`/admin/users/${params.id}`}
+              href={`/admin/reports/users/${params.id}`}
               className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
             >
               ← Back to User Details
@@ -116,7 +116,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                 </div>
               </div>
               <Link
-                href={`/admin/users/${params.id}`}
+                href={`/admin/reports/users/${params.id}`}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
               >
                 Back to User Details

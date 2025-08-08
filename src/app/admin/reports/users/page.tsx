@@ -173,7 +173,7 @@ export default async function UsersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <Link
-                            href={`/admin/users/${user.id}`}
+                            href={`/admin/reports/users/${user.id}`}
                             className="text-blue-600 hover:text-blue-900"
                           >
                             View Details

@@ -67,6 +67,11 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
       ]
     },
     { 
+      name: 'Users', 
+      href: '/admin/users', 
+      current: pathname.startsWith('/admin/users') 
+    },
+    { 
       name: 'Reports', 
       href: '/admin/reports/financial', 
       current: pathname.startsWith('/admin/reports'),

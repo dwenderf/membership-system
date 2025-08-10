@@ -1,8 +1,11 @@
-import { CreditNote, LineItem, CurrencyCode, Contact } from 'xero-node'
-import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
+import { CreditNote, LineItem, CurrencyCode, Contact, LineAmountTypes } from 'xero-node'
+import { getAuthenticatedXeroClient, getActiveTenant } from './client'
 import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
+import { Logger } from '@/lib/logging/logger'
 import * as Sentry from '@sentry/nextjs'
+
+const logger = Logger.getInstance()
 
 export interface RefundCreditNoteData {
   refund_id: string
@@ -29,7 +32,7 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
   error?: string
 }> {
   try {
-    logXeroSync('credit-note-creation-start', 'Starting credit note creation', {
+    logger.logXeroSync('credit-note-creation-start', 'Starting credit note creation', {
       refundId: data.refund_id,
       paymentId: data.payment_id,
       amount: data.refund_amount
@@ -45,7 +48,7 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
 
     // Get or create Xero contact for the user
     const contactResult = await getOrCreateXeroContact(data.user_id)
-    if (!contactResult.success || !contactResult.contactId) {
+    if (!contactResult.success || !contactResult.xeroContactId) {
       throw new Error('Failed to get Xero contact for user')
     }
 
@@ -63,14 +66,14 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
     const creditNote: CreditNote = {
       type: 'ACCRECCREDIT', // Accounts Receivable Credit Note
       contact: {
-        contactID: contactResult.contactId
+        contactID: contactResult.xeroContactId
       },
       lineItems: lineItems,
       date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
       status: 'AUTHORISED',
-      currencyCode: 'USD' as CurrencyCode,
+      currencyCode: CurrencyCode.USD,
       reference: `Refund for Payment ${data.payment_id.slice(0, 8)}`,
-      lineAmountTypes: 'Exclusive'
+      lineAmountTypes: LineAmountTypes.Exclusive
     }
 
     // Add reason to reference if provided
@@ -86,10 +89,10 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
     }
 
     // Create credit note in Xero
-    logXeroSync('credit-note-api-call', 'Calling Xero API to create credit note', {
+    logger.logXeroSync('credit-note-api-call', 'Calling Xero API to create credit note', {
       tenantId,
       refundId: data.refund_id,
-      contactId: contactResult.contactId
+      contactId: contactResult.xeroContactId
     })
 
     const response = await xero.accountingApi.createCreditNotes(tenantId, {
@@ -118,7 +121,7 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
       // Don't fail the whole operation, credit note was created successfully
     }
 
-    logXeroSync('credit-note-created', 'Credit note created successfully', {
+    logger.logXeroSync('credit-note-created', 'Credit note created successfully', {
       refundId: data.refund_id,
       xeroCreditNoteId: createdCreditNote.creditNoteID,
       creditNoteNumber: createdCreditNote.creditNoteNumber,
@@ -134,7 +137,7 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     
-    logXeroSync('credit-note-error', 'Failed to create credit note', {
+    logger.logXeroSync('credit-note-error', 'Failed to create credit note', {
       refundId: data.refund_id,
       error: errorMessage
     })
@@ -229,12 +232,12 @@ export async function buildCreditNoteLineItems(
     })
 
     // Ensure the total matches exactly (handle rounding differences)
-    const totalAllocated = creditLineItems.reduce((sum, item) => sum + item.amount, 0)
+    const totalAllocated = creditLineItems.reduce((sum: number, item: any) => sum + item.amount, 0)
     const difference = refundAmount - totalAllocated
 
     if (difference !== 0 && creditLineItems.length > 0) {
       // Add/subtract the difference to the largest line item
-      const largestItem = creditLineItems.reduce((max, item) => 
+      const largestItem = creditLineItems.reduce((max: any, item: any) => 
         item.amount > max.amount ? item : max
       )
       largestItem.amount += difference
@@ -322,7 +325,7 @@ export async function processRefundWithXero(refundId: string): Promise<void> {
       throw new Error(result.error || 'Failed to create Xero credit note')
     }
 
-    logXeroSync('refund-xero-sync-complete', 'Refund successfully synced to Xero', {
+    logger.logXeroSync('refund-xero-sync-complete', 'Refund successfully synced to Xero', {
       refundId,
       xeroCreditNoteId: result.creditNoteId
     })
@@ -330,7 +333,7 @@ export async function processRefundWithXero(refundId: string): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     
-    logXeroSync('refund-xero-sync-error', 'Failed to sync refund to Xero', {
+    logger.logXeroSync('refund-xero-sync-error', 'Failed to sync refund to Xero', {
       refundId,
       error: errorMessage
     })

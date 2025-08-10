@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 import { processRefundWithXero } from '@/lib/xero/credit-notes'
+import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -175,6 +176,41 @@ export async function POST(request: NextRequest) {
           error: xeroError instanceof Error ? xeroError.message : 'Unknown error'
         })
       })
+
+      // Send refund notification email (async, don't wait for completion)
+      supabase
+        .from('users')
+        .select('first_name, last_name, email')
+        .eq('id', payment.user_id)
+        .single()
+        .then(({ data: userDetails }) => {
+          if (userDetails) {
+            emailService.sendRefundNotification({
+              userId: payment.user_id,
+              email: userDetails.email,
+              userName: `${userDetails.first_name} ${userDetails.last_name}`,
+              refundAmount: amount,
+              originalAmount: payment.final_amount,
+              reason: reason,
+              paymentDate: new Date(payment.completed_at || payment.created_at).toLocaleDateString(),
+              invoiceNumber: `PAY-${payment.id.slice(0, 8)}`,
+              refundDate: new Date().toLocaleDateString()
+            }).catch(emailError => {
+              logger.logSystem('refund-email-error', 'Failed to send refund notification email', {
+                refundId: refundRecord.id,
+                userId: payment.user_id,
+                error: emailError instanceof Error ? emailError.message : 'Unknown error'
+              })
+            })
+          }
+        })
+        .catch(userError => {
+          logger.logSystem('refund-email-user-error', 'Failed to fetch user details for refund email', {
+            refundId: refundRecord.id,
+            userId: payment.user_id,
+            error: userError instanceof Error ? userError.message : 'Unknown error'
+          })
+        })
 
       // Log successful refund
       logger.logSystem('refund-processed', 'Refund processed successfully', {

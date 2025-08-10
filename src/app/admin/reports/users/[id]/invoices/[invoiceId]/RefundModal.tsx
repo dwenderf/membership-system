@@ -140,6 +140,9 @@ export default function RefundModal({
           {success && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
               <div className="text-sm text-green-600">{success}</div>
+              <div className="text-xs text-green-500 mt-1">
+                The user will receive an email notification about this refund.
+              </div>
             </div>
           )}
 

@@ -19,27 +19,26 @@ interface User {
 interface UsersTableProps {
   users: User[]
   currentUserId?: string
-  enableSearch?: boolean
+  searchTerm?: string
 }
 
 type SortField = 'name' | 'email' | 'member_id' | 'account_type' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
-export default function UsersTable({ users, currentUserId }: UsersTableProps) {
+export default function UsersTable({ users, currentUserId, searchTerm = '' }: UsersTableProps) {
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [searchQuery, setSearchQuery] = useState('')
 
   // Filter users by search query (name or email)
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users
-    const q = searchQuery.trim().toLowerCase()
+    if (!searchTerm.trim()) return users
+    const q = searchTerm.trim().toLowerCase()
     return users.filter(u =>
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
       `${u.last_name} ${u.first_name}`.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q)
     )
-  }, [users, searchQuery])
+  }, [users, searchTerm])
 
   const sortedUsers = useMemo(() => {
     return [...filteredUsers].sort((a, b) => {
@@ -109,18 +108,7 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
   }
 
   return (
-    <div>
-      {/* Search Box */}
-      <div className="mb-4 flex items-center">
-        <input
-          type="text"
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Search by name or email..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-        />
-      </div>
-      <div className="overflow-x-auto">
+    <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -283,6 +271,5 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
           </tbody>
         </table>
       </div>
-    </div>
   )
 }

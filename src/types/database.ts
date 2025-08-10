@@ -288,6 +288,10 @@ export type Database = {
           status: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method: string
           stripe_fee_amount: number
+          refund_reason: string | null
+          refunded_by: string | null
+          xero_synced: boolean
+          xero_sync_error: string | null
           created_at: string
           completed_at: string | null
           updated_at: string
@@ -303,6 +307,10 @@ export type Database = {
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
           stripe_fee_amount?: number
+          refund_reason?: string | null
+          refunded_by?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
           created_at?: string
           completed_at?: string | null
           updated_at?: string
@@ -318,6 +326,66 @@ export type Database = {
           status?: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled'
           payment_method?: string
           stripe_fee_amount?: number
+          refund_reason?: string | null
+          refunded_by?: string | null
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          created_at?: string
+          completed_at?: string | null
+          updated_at?: string
+        }
+      }
+      refunds: {
+        Row: {
+          id: string
+          payment_id: string
+          user_id: string
+          amount: number
+          reason: string | null
+          stripe_refund_id: string | null
+          xero_credit_note_id: string | null
+          status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          processed_by: string
+          stripe_fee_refunded: number
+          xero_synced: boolean
+          xero_sync_error: string | null
+          failure_reason: string | null
+          created_at: string
+          completed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          payment_id: string
+          user_id: string
+          amount: number
+          reason?: string | null
+          stripe_refund_id?: string | null
+          xero_credit_note_id?: string | null
+          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          processed_by: string
+          stripe_fee_refunded?: number
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          failure_reason?: string | null
+          created_at?: string
+          completed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string
+          user_id?: string
+          amount?: number
+          reason?: string | null
+          stripe_refund_id?: string | null
+          xero_credit_note_id?: string | null
+          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          processed_by?: string
+          stripe_fee_refunded?: number
+          xero_synced?: boolean
+          xero_sync_error?: string | null
+          failure_reason?: string | null
           created_at?: string
           completed_at?: string | null
           updated_at?: string

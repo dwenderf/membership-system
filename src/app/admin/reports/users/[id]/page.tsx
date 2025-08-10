@@ -72,26 +72,46 @@ export default async function UserDetailPage({ params }: PageProps) {
     .eq('payment_status', 'paid')
     .order('created_at', { ascending: false })
 
-  // Fetch user's invoices from Xero (if Xero is connected)
+  // Fetch user's payments and invoices
   let invoices: any[] = []
-  try {
-    const { data: xeroStatus } = await supabase
-      .from('xero_oauth_tokens')
-      .select('tenant_id, tenant_name')
-      .eq('is_active', true)
-      .single()
+  
+  // Fetch payments with related Xero invoice data
+  const { data: userPayments } = await supabase
+    .from('payments')
+    .select(`
+      *,
+      xero_invoices!left (
+        id,
+        xero_invoice_id,
+        invoice_number,
+        invoice_status,
+        total_amount,
+        net_amount,
+        created_at,
+        xero_invoice_line_items (
+          id,
+          description,
+          line_amount,
+          account_code
+        )
+      )
+    `)
+    .eq('user_id', params.id)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
 
-    if (xeroStatus) {
-      // This would need to be implemented similar to the user invoices page
-      // For now, we'll leave this as a placeholder
-      invoices = []
-    }
-  } catch (error) {
-    logger.logSystem('xero-invoice-fetch-error', 'Error fetching user invoices from Xero', { 
-      userId: params.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-  }
+  // Transform payments into invoice-like objects for display
+  invoices = userPayments?.map(payment => ({
+    id: payment.id,
+    paymentId: payment.id,
+    number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+    date: payment.completed_at || payment.created_at,
+    total: payment.final_amount,
+    status: payment.status === 'refunded' ? 'Refunded' : 'Paid',
+    hasXeroInvoice: !!payment.xero_invoices?.[0],
+    xeroInvoiceId: payment.xero_invoices?.[0]?.id,
+    canRefund: payment.status === 'completed' && payment.final_amount > 0
+  })) || []
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -362,13 +382,23 @@ export default async function UserDetailPage({ params }: PageProps) {
                               {new Date(invoice.date).toLocaleDateString()}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatAmount(invoice.total)}
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-900">
+                                {formatAmount(invoice.total)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {invoice.status}
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {invoice.status}
-                            </div>
+                            {invoice.canRefund && (
+                              <Link
+                                href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                              >
+                                Manage
+                              </Link>
+                            )}
                           </div>
                         </div>
                       ))}

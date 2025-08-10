@@ -530,6 +530,133 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
   }
 }
 
+// Handle charge refunded events
+async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
+  try {
+    console.log('🔄 Processing charge refunded event...')
+    
+    // Get the payment record by payment intent ID
+    const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
+    
+    if (!paymentIntentId) {
+      console.log('⚠️ No payment intent ID found in refunded charge')
+      return
+    }
+    
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .single()
+    
+    if (paymentError || !payment) {
+      console.log('⚠️ No payment record found for refunded charge:', paymentIntentId)
+      return
+    }
+    
+    console.log(`💰 Processing refunds for payment ${payment.id}, charge ${charge.id}`)
+    
+    // Process each refund in the charge
+    if (charge.refunds && charge.refunds.data) {
+      for (const stripeRefund of charge.refunds.data) {
+        console.log(`💰 Processing refund ${stripeRefund.id} for amount: $${(stripeRefund.amount / 100).toFixed(2)}`)
+        
+        // Check if we already have this refund in our database
+        const { data: existingRefund } = await supabase
+          .from('refunds')
+          .select('*')
+          .eq('stripe_refund_id', stripeRefund.id)
+          .single()
+        
+        if (existingRefund) {
+          console.log(`✅ Refund ${stripeRefund.id} already exists in database`)
+          
+          // Update status if needed
+          if (existingRefund.status !== 'completed') {
+            await supabase
+              .from('refunds')
+              .update({
+                status: 'completed',
+                completed_at: new Date(stripeRefund.created * 1000).toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingRefund.id)
+            
+            console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
+          }
+          
+          continue
+        }
+        
+        // Create new refund record for refunds not initiated through our system
+        // (e.g., refunds processed directly in Stripe dashboard)
+        const refundReason = stripeRefund.metadata?.reason || 'Refund processed via Stripe'
+        const processedBy = stripeRefund.metadata?.processed_by || null
+        
+        const { data: newRefund, error: refundError } = await supabase
+          .from('refunds')
+          .insert({
+            payment_id: payment.id,
+            user_id: payment.user_id,
+            amount: stripeRefund.amount,
+            reason: refundReason,
+            stripe_refund_id: stripeRefund.id,
+            status: 'completed',
+            processed_by: processedBy || payment.user_id, // Fallback to payment user if no admin specified
+            completed_at: new Date(stripeRefund.created * 1000).toISOString(),
+          })
+          .select()
+          .single()
+        
+        if (refundError) {
+          console.error(`❌ Error creating refund record for ${stripeRefund.id}:`, refundError)
+          continue
+        }
+        
+        console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
+        
+        // Log the refund for audit trail
+        logger.logSystem('refund-webhook-processed', 'Refund processed via webhook', {
+          refundId: newRefund.id,
+          stripeRefundId: stripeRefund.id,
+          paymentId: payment.id,
+          amount: stripeRefund.amount,
+          reason: refundReason,
+          source: 'stripe_webhook'
+        })
+      }
+    }
+    
+    // Check if payment should be marked as refunded
+    const { data: allRefunds } = await supabase
+      .from('refunds')
+      .select('amount')
+      .eq('payment_id', payment.id)
+      .eq('status', 'completed')
+    
+    const totalRefunded = allRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0
+    
+    // If fully refunded, update payment status
+    if (totalRefunded >= payment.final_amount && payment.status !== 'refunded') {
+      await supabase
+        .from('payments')
+        .update({
+          status: 'refunded',
+          refund_reason: 'Fully refunded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id)
+      
+      console.log(`✅ Updated payment ${payment.id} status to refunded (total refunded: $${(totalRefunded / 100).toFixed(2)})`)
+    }
+    
+    console.log('✅ Successfully processed charge refunded event')
+    
+  } catch (error) {
+    console.error('❌ Error processing charge refunded event:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Log webhook receipt immediately for debugging
   try {
@@ -715,6 +842,19 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('Payment failed for payment intent:', paymentIntent.id)
+        break
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge
+        
+        console.log('🔍 Charge refunded webhook received:', {
+          chargeId: charge.id,
+          paymentIntentId: charge.payment_intent,
+          refunds: charge.refunds
+        })
+        
+        await handleChargeRefunded(supabase, charge)
         break
       }
 

@@ -46,8 +46,8 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
       let bValue: any
       switch (sortField) {
         case 'name':
-          aValue = `${a.last_name} ${a.first_name}`.toLowerCase()
-          bValue = `${b.last_name} ${b.first_name}`.toLowerCase()
+          aValue = `${a.first_name} ${a.last_name}`.toLowerCase()
+          bValue = `${b.first_name} ${b.last_name}`.toLowerCase()
           break
         case 'email':
           aValue = a.email.toLowerCase()

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
+import { processRefundWithXero } from '@/lib/xero/credit-notes'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -166,6 +167,14 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', paymentId)
       }
+
+      // Process Xero credit note (async, don't wait for completion)
+      processRefundWithXero(refundRecord.id).catch(xeroError => {
+        logger.logSystem('refund-xero-error', 'Failed to create Xero credit note', {
+          refundId: refundRecord.id,
+          error: xeroError instanceof Error ? xeroError.message : 'Unknown error'
+        })
+      })
 
       // Log successful refund
       logger.logSystem('refund-processed', 'Refund processed successfully', {

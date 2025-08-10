@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
+import { processRefundWithXero } from '@/lib/xero/credit-notes'
 import { logger } from '@/lib/logging/logger'
 
 // Force import server config
@@ -614,6 +615,11 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
         }
         
         console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
+        
+        // Process Xero credit note for external refunds (async)
+        processRefundWithXero(newRefund.id).catch(xeroError => {
+          console.error(`❌ Failed to create Xero credit note for external refund ${newRefund.id}:`, xeroError)
+        })
         
         // Log the refund for audit trail
         logger.logSystem('refund-webhook-processed', 'Refund processed via webhook', {

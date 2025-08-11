@@ -110,7 +110,8 @@ export default async function UserDetailPage({ params }: PageProps) {
     status: payment.status === 'refunded' ? 'Refunded' : 'Paid',
     hasXeroInvoice: !!payment.xero_invoices?.[0],
     xeroInvoiceId: payment.xero_invoices?.[0]?.id,
-    canRefund: payment.status === 'completed' && payment.final_amount > 0
+    canRefund: payment.status === 'completed' && payment.final_amount > 0,
+    lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
   })) || []
 
   return (
@@ -373,16 +374,25 @@ export default async function UserDetailPage({ params }: PageProps) {
                   {invoices.length > 0 ? (
                     <div className="space-y-4">
                       {invoices.map((invoice) => (
-                        <div key={invoice.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
-                          <div>
+                        <div key={invoice.id} className="flex justify-between items-start py-4 border-b border-gray-100 last:border-b-0">
+                          <div className="flex-1 min-w-0">
                             <div className="font-medium text-gray-900">
                               Invoice #{invoice.number}
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {new Date(invoice.date).toLocaleDateString()}
+                            <div className="text-sm text-gray-500 mb-2">
+                              {new Date(invoice.date).toLocaleDateString()} at {new Date(invoice.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
+                            {invoice.lineItems.length > 0 && (
+                              <div className="text-xs text-gray-600">
+                                {invoice.lineItems.map((item: any, index: number) => (
+                                  <div key={item.id || index} className="truncate">
+                                    {item.description}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-4 ml-4 flex-shrink-0">
                             <div className="text-right">
                               <div className="text-sm font-medium text-gray-900">
                                 {formatAmount(invoice.total)}
@@ -391,15 +401,13 @@ export default async function UserDetailPage({ params }: PageProps) {
                                 {invoice.status}
                               </div>
                             </div>
-                            {invoice.canRefund && (
-                              <Link
-                                href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
-                                prefetch={false}
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                              >
-                                Manage
-                              </Link>
-                            )}
+                            <Link
+                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                              prefetch={false}
+                              className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            >
+                              Details
+                            </Link>
                           </div>
                         </div>
                       ))}

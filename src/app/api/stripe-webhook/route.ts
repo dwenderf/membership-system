@@ -699,7 +699,7 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
     }
     
     // Create corresponding payment record for the refund (negative amount = money going out)
-    const { data: paymentStaging, error: paymentError } = await supabase
+    const { data: paymentStaging, error: paymentStagingError } = await supabase
       .from('xero_payments')
       .insert({
         xero_invoice_id: stagingRecord.id, // Links to the credit note record
@@ -726,8 +726,8 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
       .select()
       .single()
     
-    if (paymentError) {
-      console.error(`❌ Failed to create credit note payment staging record: ${paymentError.message}`)
+    if (paymentStagingError) {
+      console.error(`❌ Failed to create credit note payment staging record: ${paymentStagingError.message}`)
       // Clean up the credit note staging record if payment failed
       await supabase
         .from('xero_invoices')

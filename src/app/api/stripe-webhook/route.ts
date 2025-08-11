@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
-import { processRefundWithXero } from '@/lib/xero/credit-notes'
 import { logger } from '@/lib/logging/logger'
 
 // Force import server config
@@ -531,6 +530,168 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
   }
 }
 
+// Create staging record for credit note in xero_invoices table
+async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId: string, refundAmount: number): Promise<boolean> {
+  try {
+    console.log(`🔄 Staging credit note for refund ${refundId}`)
+    
+    // Get payment details for staging metadata
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        users (
+          id,
+          first_name,
+          last_name,
+          member_id,
+          email
+        )
+      `)
+      .eq('id', paymentId)
+      .single()
+    
+    if (paymentError || !payment) {
+      console.error(`❌ Failed to get payment details for staging: ${paymentError?.message}`)
+      return false
+    }
+    
+    // Get original invoice line items to build credit note line items
+    const { data: originalInvoice, error: invoiceError } = await supabase
+      .from('xero_invoices')
+      .select(`
+        *,
+        xero_invoice_line_items (
+          description,
+          line_amount,
+          account_code,
+          tax_type,
+          line_item_type
+        )
+      `)
+      .eq('payment_id', paymentId)
+      .single()
+    
+    let lineItems = []
+    if (originalInvoice?.xero_invoice_line_items) {
+      // Proportionally allocate refund across original line items
+      const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce((sum: number, item: any) => sum + item.line_amount, 0)
+      
+      lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+        const proportion = Math.abs(item.line_amount) / totalInvoiceAmount
+        const creditAmount = Math.round(refundAmount * proportion)
+        
+        return {
+          description: `Refund: ${item.description}`,
+          line_amount: creditAmount,
+          account_code: item.account_code,
+          tax_type: item.tax_type || 'NONE',
+          line_item_type: item.line_item_type || 'sales'
+        }
+      })
+      
+      // Ensure total matches exactly (handle rounding differences)
+      const totalAllocated = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0)
+      const difference = refundAmount - totalAllocated
+      
+      if (difference !== 0 && lineItems.length > 0) {
+        const largestItem = lineItems.reduce((max: any, item: any) => 
+          item.line_amount > max.line_amount ? item : max
+        )
+        largestItem.line_amount += difference
+      }
+    } else {
+      // Fallback: create generic refund line item
+      lineItems = [{
+        description: `Refund for Payment ${paymentId.slice(0, 8)}`,
+        line_amount: refundAmount,
+        account_code: '400', // Default sales account
+        tax_type: 'NONE',
+        line_item_type: 'sales'
+      }]
+    }
+    
+    // Create staging record in xero_invoices table
+    const { data: stagingRecord, error: stagingError } = await supabase
+      .from('xero_invoices')
+      .insert({
+        payment_id: paymentId,
+        tenant_id: null, // Will be populated during sync
+        xero_invoice_id: null, // Will be populated when synced to Xero
+        invoice_number: null, // Let Xero generate the number
+        invoice_type: 'ACCRECCREDIT', // Credit note type
+        invoice_status: 'AUTHORISED',
+        total_amount: refundAmount,
+        discount_amount: 0,
+        net_amount: refundAmount,
+        stripe_fee_amount: 0,
+        sync_status: 'pending', // Ready for sync
+        staged_at: new Date().toISOString(),
+        staging_metadata: {
+          refund_id: refundId,
+          user_id: payment.user_id,
+          refund_amount: refundAmount,
+          credit_note_type: 'refund',
+          reason: `Refund for Payment ${paymentId.slice(0, 8)}`,
+          stripe_refund_data: {
+            created_at: new Date().toISOString()
+          },
+          line_items: lineItems,
+          contact_info: {
+            user_id: payment.user_id,
+            first_name: payment.users?.first_name,
+            last_name: payment.users?.last_name,
+            member_id: payment.users?.member_id,
+            email: payment.users?.email
+          }
+        }
+      })
+      .select()
+      .single()
+    
+    if (stagingError) {
+      console.error(`❌ Failed to create credit note staging record: ${stagingError.message}`)
+      return false
+    }
+    
+    // Create line items for the credit note
+    if (lineItems.length > 0) {
+      const { error: lineItemsError } = await supabase
+        .from('xero_invoice_line_items')
+        .insert(
+          lineItems.map((item, index) => ({
+            xero_invoice_id: stagingRecord.id,
+            description: item.description,
+            quantity: 1,
+            unit_amount: Math.abs(item.line_amount) / 100, // Convert to dollars, ensure positive for credit
+            line_amount: item.line_amount,
+            account_code: item.account_code,
+            tax_type: item.tax_type,
+            line_item_type: item.line_item_type,
+            line_order: index + 1
+          }))
+        )
+      
+      if (lineItemsError) {
+        console.error(`❌ Failed to create credit note line items: ${lineItemsError.message}`)
+        // Clean up the staging record if line items failed
+        await supabase
+          .from('xero_invoices')
+          .delete()
+          .eq('id', stagingRecord.id)
+        return false
+      }
+    }
+    
+    console.log(`✅ Created credit note staging record ${stagingRecord.id} for refund ${refundId}`)
+    return true
+    
+  } catch (error) {
+    console.error(`❌ Error staging credit note for refund ${refundId}:`, error)
+    return false
+  }
+}
+
 // Handle charge refunded events
 async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
   try {
@@ -585,10 +746,11 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
             
             console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
             
-            // Process Xero credit note for completed refund (async)
-            processRefundWithXero(existingRefund.id).catch(xeroError => {
-              console.error(`❌ Failed to create Xero credit note for refund ${existingRefund.id}:`, xeroError)
-            })
+            // Stage credit note for Xero sync instead of direct API call
+            const stagingSuccess = await stageCreditNoteForXero(supabase, existingRefund.id, existingRefund.payment_id, existingRefund.amount)
+            if (!stagingSuccess) {
+              console.error(`❌ Failed to stage credit note for refund ${existingRefund.id}`)
+            }
           }
           
           continue
@@ -621,10 +783,11 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
         
         console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
         
-        // Process Xero credit note for external refunds (async)
-        processRefundWithXero(newRefund.id).catch(xeroError => {
-          console.error(`❌ Failed to create Xero credit note for external refund ${newRefund.id}:`, xeroError)
-        })
+        // Stage credit note for Xero sync instead of direct API call
+        const stagingSuccess = await stageCreditNoteForXero(supabase, newRefund.id, newRefund.payment_id, newRefund.amount)
+        if (!stagingSuccess) {
+          console.error(`❌ Failed to stage credit note for external refund ${newRefund.id}`)
+        }
         
         // Log the refund for audit trail
         logger.logSystem('refund-webhook-processed', 'Refund processed via webhook', {

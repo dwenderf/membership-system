@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
-import { processRefundWithXero } from '@/lib/xero/credit-notes'
+// Removed old direct Xero API call - using staging workflow instead
 import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
@@ -169,13 +169,8 @@ export async function POST(request: NextRequest) {
           .eq('id', paymentId)
       }
 
-      // Process Xero credit note (async, don't wait for completion)
-      processRefundWithXero(refundRecord.id).catch(xeroError => {
-        logger.logSystem('refund-xero-error', 'Failed to create Xero credit note', {
-          refundId: refundRecord.id,
-          error: xeroError instanceof Error ? xeroError.message : 'Unknown error'
-        })
-      })
+      // Note: Xero credit note will be created automatically via webhook when Stripe
+      // sends the charge.refunded event. The staging workflow handles this asynchronously.
 
       // Send refund notification email (async, don't wait for completion)
       supabase

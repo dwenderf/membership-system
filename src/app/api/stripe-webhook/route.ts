@@ -540,7 +540,7 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
       .from('payments')
       .select(`
         *,
-        users (
+        users!payments_user_id_fkey (
           id,
           first_name,
           last_name,

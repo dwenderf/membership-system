@@ -394,6 +394,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                             {invoice.canRefund && (
                               <Link
                                 href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                                prefetch={false}
                                 className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                               >
                                 Manage

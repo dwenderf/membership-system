@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatAmount, getInvoiceDueDate, isInvoiceOverdue, getDaysUntilDue } from '@/lib/invoice-utils'
+import { formatAmount, getInvoiceDueDate, isInvoiceOverdue, getDaysUntilDue } from '@/lib/format-utils'
 import { getOrganizationName } from '@/lib/organization'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'

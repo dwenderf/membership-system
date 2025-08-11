@@ -3,7 +3,8 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { getOrganizationName } from '@/lib/organization'
-import { getUserUnpaidInvoices, formatAmount } from '@/lib/invoice-utils'
+import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
+import { formatAmount } from '@/lib/format-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()

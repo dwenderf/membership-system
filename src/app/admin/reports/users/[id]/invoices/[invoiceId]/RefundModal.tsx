@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatAmount } from '@/lib/invoice-utils'
+import { formatAmount } from '@/lib/format-utils'
 
 interface RefundModalProps {
   paymentId: string

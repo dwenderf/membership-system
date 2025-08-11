@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
-import { formatAmount } from '@/lib/invoice-utils'
+import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import AdminToggleSection from './AdminToggleSection'
 

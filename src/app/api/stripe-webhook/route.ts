@@ -800,12 +800,27 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               .eq('id', existingRefund.id)
             
             console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
-            
+          }
+          
+          // Always check if credit note staging is needed (even if refund was already completed)
+          // Check if credit note has already been staged for this refund
+          const { data: existingStagedCreditNote } = await supabase
+            .from('xero_invoices')
+            .select('id')
+            .eq('payment_id', existingRefund.payment_id)
+            .eq('invoice_type', 'ACCRECCREDIT')
+            .eq('staging_metadata->refund_id', existingRefund.id)
+            .single()
+          
+          if (!existingStagedCreditNote) {
+            console.log(`🔄 No staged credit note found for refund ${existingRefund.id}, staging now...`)
             // Stage credit note for Xero sync instead of direct API call
             const stagingSuccess = await stageCreditNoteForXero(supabase, existingRefund.id, existingRefund.payment_id, existingRefund.amount)
             if (!stagingSuccess) {
               console.error(`❌ Failed to stage credit note for refund ${existingRefund.id}`)
             }
+          } else {
+            console.log(`✅ Credit note already staged for refund ${existingRefund.id}`)
           }
           
           continue

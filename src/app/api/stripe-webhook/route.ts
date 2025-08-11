@@ -684,6 +684,59 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
     }
     
     console.log(`✅ Created credit note staging record ${stagingRecord.id} for refund ${refundId}`)
+    
+    // Get Stripe bank account code for payment staging
+    const { data: stripeAccountCode, error: accountError } = await supabase
+      .from('system_accounting_codes')
+      .select('accounting_code')
+      .eq('code_type', 'stripe_bank_account')
+      .single()
+    
+    const bankAccountCode = stripeAccountCode?.accounting_code || '090' // Fallback
+    
+    if (accountError || !stripeAccountCode?.accounting_code) {
+      console.warn(`⚠️ Using fallback bank account code (090) for credit note payment. Error: ${accountError?.message}`)
+    }
+    
+    // Create corresponding payment record for the refund (negative amount = money going out)
+    const { data: paymentStaging, error: paymentError } = await supabase
+      .from('xero_payments')
+      .insert({
+        xero_invoice_id: stagingRecord.id, // Links to the credit note record
+        tenant_id: null, // Will be populated during sync
+        xero_payment_id: null, // Will be populated when synced to Xero
+        payment_method: 'stripe',
+        bank_account_code: bankAccountCode,
+        amount_paid: -Math.abs(refundAmount), // Negative amount = money going OUT
+        stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
+        reference: `Refund ${refundId.slice(0, 8)}`,
+        sync_status: 'pending', // Ready for sync (refund is confirmed by webhook)
+        staged_at: new Date().toISOString(),
+        staging_metadata: {
+          refund_id: refundId,
+          payment_id: paymentId,
+          refund_type: 'stripe_refund',
+          refund_amount: refundAmount,
+          stripe_refund_data: {
+            created_at: new Date().toISOString()
+          },
+          credit_note_id: stagingRecord.id
+        }
+      })
+      .select()
+      .single()
+    
+    if (paymentError) {
+      console.error(`❌ Failed to create credit note payment staging record: ${paymentError.message}`)
+      // Clean up the credit note staging record if payment failed
+      await supabase
+        .from('xero_invoices')
+        .delete()
+        .eq('id', stagingRecord.id)
+      return false
+    }
+    
+    console.log(`✅ Created credit note payment staging record ${paymentStaging.id} for refund ${refundId}`)
     return true
     
   } catch (error) {

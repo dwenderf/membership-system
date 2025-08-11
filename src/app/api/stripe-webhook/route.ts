@@ -584,6 +584,11 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               .eq('id', existingRefund.id)
             
             console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
+            
+            // Process Xero credit note for completed refund (async)
+            processRefundWithXero(existingRefund.id).catch(xeroError => {
+              console.error(`❌ Failed to create Xero credit note for refund ${existingRefund.id}:`, xeroError)
+            })
           }
           
           continue
@@ -852,12 +857,17 @@ export async function POST(request: NextRequest) {
       }
 
       case 'charge.refunded': {
-        const charge = event.data.object as Stripe.Charge
+        // Retrieve the charge with expanded refunds data
+        const chargeId = (event.data.object as Stripe.Charge).id
+        const charge = await stripe.charges.retrieve(chargeId, {
+          expand: ['refunds']
+        })
         
         console.log('🔍 Charge refunded webhook received:', {
           chargeId: charge.id,
           paymentIntentId: charge.payment_intent,
-          refunds: charge.refunds
+          refunds: charge.refunds?.data?.length || 0,
+          refundIds: charge.refunds?.data?.map(r => r.id) || []
         })
         
         await handleChargeRefunded(supabase, charge)

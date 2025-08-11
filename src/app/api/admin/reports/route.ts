@@ -379,7 +379,7 @@ export async function GET(request: NextRequest) {
           id,
           final_amount,
           created_at,
-          users (
+          users!payments_user_id_fkey (
             first_name,
             last_name
           )

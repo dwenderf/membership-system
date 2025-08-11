@@ -793,6 +793,8 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               .update({
                 status: 'completed',
                 completed_at: new Date(stripeRefund.created * 1000).toISOString(),
+                stripe_payment_intent_id: paymentIntentId,
+                stripe_charge_id: charge.id,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingRefund.id)
@@ -822,6 +824,8 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
             amount: stripeRefund.amount,
             reason: refundReason,
             stripe_refund_id: stripeRefund.id,
+            stripe_payment_intent_id: paymentIntentId,
+            stripe_charge_id: charge.id,
             status: 'completed',
             processed_by: processedBy || payment.user_id, // Fallback to payment user if no admin specified
             completed_at: new Date(stripeRefund.created * 1000).toISOString(),

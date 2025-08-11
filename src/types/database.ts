@@ -353,6 +353,8 @@ export type Database = {
           created_at: string
           completed_at: string | null
           updated_at: string
+          stripe_payment_intent_id: string | null
+          stripe_charge_id: string | null
         }
         Insert: {
           id?: string
@@ -371,6 +373,8 @@ export type Database = {
           created_at?: string
           completed_at?: string | null
           updated_at?: string
+          stripe_payment_intent_id?: string | null
+          stripe_charge_id?: string | null
         }
         Update: {
           id?: string
@@ -389,6 +393,8 @@ export type Database = {
           created_at?: string
           completed_at?: string | null
           updated_at?: string
+          stripe_payment_intent_id?: string | null
+          stripe_charge_id?: string | null
         }
       }
       xero_invoices: {

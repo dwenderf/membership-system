@@ -124,8 +124,7 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
             line_amount: item.line_amount,
             account_code: item.account_code,
             tax_type: item.tax_type,
-            line_item_type: item.line_item_type,
-            line_order: index + 1
+            line_item_type: item.line_item_type
           }))
         )
       

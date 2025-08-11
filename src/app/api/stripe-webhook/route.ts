@@ -659,7 +659,7 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
       const { error: lineItemsError } = await supabase
         .from('xero_invoice_line_items')
         .insert(
-          lineItems.map((item, index) => ({
+          lineItems.map((item: any) => ({
             xero_invoice_id: stagingRecord.id,
             description: item.description,
             quantity: 1,
@@ -667,8 +667,7 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
             line_amount: item.line_amount,
             account_code: item.account_code,
             tax_type: item.tax_type,
-            line_item_type: item.line_item_type,
-            line_order: index + 1
+            line_item_type: item.line_item_type
           }))
         )
       
@@ -880,7 +879,7 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
       .eq('payment_id', payment.id)
       .eq('status', 'completed')
     
-    const totalRefunded = allRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0
+    const totalRefunded = allRefunds?.reduce((sum: number, refund: any) => sum + refund.amount, 0) || 0
     
     // If fully refunded, update payment status
     if (totalRefunded >= payment.final_amount && payment.status !== 'refunded') {

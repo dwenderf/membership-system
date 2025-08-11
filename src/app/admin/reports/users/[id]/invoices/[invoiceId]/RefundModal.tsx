@@ -68,7 +68,7 @@ export default function RefundModal({
         body: JSON.stringify({
           paymentId,
           amount: amountInCents,
-          reason: reason.trim() || undefined
+          reason: reason.trim()
         })
       })
 
@@ -100,6 +100,16 @@ export default function RefundModal({
   const isValidAmount = () => {
     const amountInCents = Math.round(parseFloat(refundAmount) * 100)
     return !isNaN(amountInCents) && amountInCents > 0 && amountInCents <= availableAmount
+  }
+
+  // Validate that reason is provided
+  const isValidReason = () => {
+    return reason.trim().length > 0
+  }
+
+  // Check if form is valid for submission
+  const isFormValid = () => {
+    return isValidAmount() && isValidReason()
   }
 
   if (!isOpen) {
@@ -198,7 +208,7 @@ export default function RefundModal({
               {/* Reason */}
               <div className="mb-6">
                 <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason (optional)
+                  Reason <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   id="reason"
@@ -207,8 +217,14 @@ export default function RefundModal({
                   rows={3}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Explain the reason for this refund..."
+                  required
                   disabled={isProcessing}
                 />
+                {reason && !isValidReason() && (
+                  <div className="mt-1 text-xs text-red-600">
+                    Please provide a reason for the refund
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
@@ -224,7 +240,7 @@ export default function RefundModal({
                 <button
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isProcessing || !isValidAmount()}
+                  disabled={isProcessing || !isFormValid()}
                 >
                   {isProcessing ? 'Processing...' : 'Process Refund'}
                 </button>

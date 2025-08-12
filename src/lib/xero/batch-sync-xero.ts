@@ -1018,7 +1018,7 @@ export class XeroBatchSyncManager {
         account: {
           code: bankAccountCode
         },
-        amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
+        amount: Math.abs(paymentRecord.amount_paid) / 100, // Convert cents to dollars, ensure positive for Xero
         date: new Date().toISOString().split('T')[0],
         reference: paymentRecord.reference || (paymentRecord.staging_metadata as any)?.stripe_charge_id || invoiceRecord.invoice_number || ''
       }

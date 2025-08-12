@@ -102,11 +102,13 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     // Get pending invoices with details (only 'pending' - staged invoices are not ready)
+    // Separate regular invoices (ACCREC) from credit notes (ACCRECCREDIT)
     const { data: pendingInvoices, error: pendingInvoicesError } = await supabase
       .from('xero_invoices')
       .select(`
         id,
         sync_status,
+        invoice_type,
         net_amount,
         staging_metadata,
         payment_id,
@@ -123,10 +125,41 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('sync_status', 'pending')
+      .eq('invoice_type', 'ACCREC') // Only regular invoices
+      .order('staged_at', { ascending: true })
+
+    // Get pending credit notes with details (only 'pending' - staged credit notes are not ready)
+    const { data: pendingCreditNotes, error: pendingCreditNotesError } = await supabase
+      .from('xero_invoices')
+      .select(`
+        id,
+        sync_status,
+        invoice_type,
+        net_amount,
+        staging_metadata,
+        payment_id,
+        last_synced_at,
+        payments (
+          user_id,
+          status,
+          stripe_payment_intent_id,
+          users!payments_user_id_fkey (
+            first_name,
+            last_name,
+            member_id
+          )
+        )
+      `)
+      .eq('sync_status', 'pending')
+      .eq('invoice_type', 'ACCRECCREDIT') // Only credit notes
       .order('staged_at', { ascending: true })
 
     if (pendingInvoicesError) {
       console.error('Error fetching pending invoices:', pendingInvoicesError)
+    }
+
+    if (pendingCreditNotesError) {
+      console.error('Error fetching pending credit notes:', pendingCreditNotesError)
     }
 
     // Get pending payments with details (only 'pending' - staged payments are not ready)
@@ -259,9 +292,10 @@ export async function GET(request: NextRequest) {
       failed_operations: syncStats?.filter(s => s.status === 'error').length || 0,
       recent_operations: syncStats?.slice(0, 10) || [],
       pending_invoices: pendingInvoices?.length || 0,
+      pending_credit_notes: pendingCreditNotes?.length || 0,
       pending_payments: pendingPayments?.length || 0,
-      total_pending: (pendingInvoices?.length || 0) + (pendingPayments?.length || 0),
       pending_invoices_list: pendingInvoices || [],
+      pending_credit_notes_list: pendingCreditNotes || [],
       pending_payments_list: pendingPayments || [],
       failed_invoices: failedInvoicesOnly,
       failed_payments: failedPaymentsOnly,

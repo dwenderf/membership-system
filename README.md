@@ -961,17 +961,12 @@ https://my.nycpha.org/**
 - **Site URL:** `https://membership-system-nycpha-preview.vercel.app`
 - **Redirect URLs:**
   ```
-  https://membership-system-nycpha-preview.vercel.app/auth/callback
+  https://membership-system-git-*-nycpha.vercel.app/**
   https://membership-system-nycpha-preview.vercel.app/**
-  ```
-
-**For Local Development:**
-- **Site URL:** `http://localhost:3000`
-- **Redirect URLs:**
-  ```
-  http://localhost:3000/auth/callback
   http://localhost:3000/**
   ```
+
+**Note:** The wildcard pattern `/**` includes `/auth/callback`, so specific callback URLs are not needed when using wildcards.
 
 **Supabase Dashboard → Authentication → Sign In / Providers → Google**
 
@@ -1002,18 +997,39 @@ https://my.nycpha.org/**
 
 **Stripe Dashboard → Webhooks**
 
-**Endpoint URL:**
+You need separate webhook endpoints for each environment:
+
+**Production Webhook:**
 ```
 https://my.nycpha.org/api/stripe-webhook
 ```
 
+**Development/Preview Webhook:**
+```
+https://membership-system-nycpha-preview.vercel.app/api/stripe-webhook
+```
+
+**Feature Branch Testing (optional):**
+For testing specific feature branches, you can create additional webhooks:
+```
+https://membership-system-git-[branch-name]-nycpha.vercel.app/api/stripe-webhook
+```
+
 **Events to Send:**
-Select these specific events only:
+Select these specific events for each webhook:
 - `payment_intent.succeeded` - When payment completes successfully
 - `payment_intent.payment_failed` - When payment fails  
-- `payment_intent.canceled` - When payment is canceled
+- `payment_intent.canceled` - When payment is canceled (timeout/user abandonment)
+- `charge.refunded` - When a refund is processed (for refund system)
+- `charge.updated` - When balance transaction becomes available (for accurate fee tracking)
 
-**Important:** Only select these three events. The webhook is designed to handle these specific payment intent events for membership and registration payments.
+**Important:** 
+- Each webhook endpoint gets its own signing secret (`STRIPE_WEBHOOK_SECRET`)
+- Use production webhook only with live Stripe keys
+- Use development webhook with test Stripe keys
+- Only select these five events for each webhook
+
+**Note:** The `payment_intent.canceled` event helps track abandoned payments for analytics and cleanup, though the webhook handler will need to be updated to process this event.
 
 ##### **Xero OAuth Configuration**
 

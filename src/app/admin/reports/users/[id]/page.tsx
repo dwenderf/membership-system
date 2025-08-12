@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
-import { formatAmount } from '@/lib/invoice-utils'
+import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import AdminToggleSection from './AdminToggleSection'
 
@@ -41,19 +41,12 @@ export default async function UserDetailPage({ params }: PageProps) {
   // Check if current user is viewing their own profile
   const isViewingOwnProfile = authUser.id === params.id
 
-  // Fetch user's active memberships
+  // Fetch user's consolidated memberships (both active and expired)
   const { data: userMemberships } = await supabase
-    .from('user_memberships')
-    .select(`
-      *,
-      memberships (
-        name,
-        description
-      )
-    `)
+    .from('user_memberships_consolidated')
+    .select('*')
     .eq('user_id', params.id)
-    .gte('valid_until', new Date().toISOString().split('T')[0]) // Only active memberships
-    .order('valid_until', { ascending: true })
+    .order('latest_expiration', { ascending: false })
 
   // Fetch user's active registrations
   const { data: userRegistrations } = await supabase
@@ -72,26 +65,65 @@ export default async function UserDetailPage({ params }: PageProps) {
     .eq('payment_status', 'paid')
     .order('created_at', { ascending: false })
 
-  // Fetch user's invoices from Xero (if Xero is connected)
+  // Fetch user's payments and invoices
   let invoices: any[] = []
-  try {
-    const { data: xeroStatus } = await supabase
-      .from('xero_oauth_tokens')
-      .select('tenant_id, tenant_name')
-      .eq('is_active', true)
-      .single()
+  
+  // Fetch payments with related Xero invoice data and refunds
+  const { data: userPayments } = await supabase
+    .from('payments')
+    .select(`
+      *,
+      xero_invoices!left (
+        id,
+        xero_invoice_id,
+        invoice_number,
+        invoice_status,
+        total_amount,
+        net_amount,
+        created_at,
+        xero_invoice_line_items (
+          id,
+          description,
+          line_amount,
+          account_code
+        )
+      ),
+      refunds!left (
+        id,
+        amount,
+        status
+      )
+    `)
+    .eq('user_id', params.id)
+    .in('status', ['completed', 'refunded'])
+    .order('created_at', { ascending: false })
 
-    if (xeroStatus) {
-      // This would need to be implemented similar to the user invoices page
-      // For now, we'll leave this as a placeholder
-      invoices = []
+  // Transform payments into invoice-like objects for display
+  invoices = userPayments?.map(payment => {
+    // Calculate refund information
+    const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
+    const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
+    const netAmount = payment.final_amount - totalRefunded
+    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
+    const isFullyRefunded = totalRefunded >= payment.final_amount
+    
+    return {
+      id: payment.id,
+      paymentId: payment.id,
+      number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+      date: payment.completed_at || payment.created_at,
+      originalAmount: payment.final_amount,
+      totalRefunded: totalRefunded,
+      netAmount: netAmount,
+      status: payment.status,
+      isPartiallyRefunded: isPartiallyRefunded,
+      isFullyRefunded: isFullyRefunded,
+      hasXeroInvoice: !!payment.xero_invoices?.[0],
+      xeroInvoiceId: payment.xero_invoices?.[0]?.id,
+      canRefund: payment.status === 'completed' && netAmount > 0,
+      lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
     }
-  } catch (error) {
-    logger.logSystem('xero-invoice-fetch-error', 'Error fetching user invoices from Xero', { 
-      userId: params.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-  }
+  }) || []
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -253,54 +285,49 @@ export default async function UserDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Account Actions */}
-              <AdminToggleSection 
-                userId={user.id}
-                isAdmin={user.is_admin}
-                isViewingOwnProfile={isViewingOwnProfile}
-                userName={`${user.first_name} ${user.last_name}`}
-              />
-
-              {/* Active Memberships */}
-              {userMemberships && userMemberships.length > 0 && (
-                <div className="bg-white shadow rounded-lg mb-6">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-medium text-gray-900">Active Memberships</h2>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Current and future membership subscriptions
-                    </p>
-                  </div>
-                  <div className="px-6 py-4">
+              {/* User Memberships */}
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Memberships</h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    All membership types for this user, including active and expired
+                  </p>
+                </div>
+                <div className="px-6 py-4">
+                  {userMemberships && userMemberships.length > 0 ? (
                     <div className="space-y-4">
                       {userMemberships.map((membership) => (
-                        <div key={membership.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
+                        <div key={`${membership.user_id}-${membership.membership_id}`} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
                           <div>
                             <div className="font-medium text-gray-900">
-                              {membership.memberships?.name || 'Unknown Membership'}
+                              {membership.membership_name}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Valid until {new Date(membership.valid_until).toLocaleDateString()}
+                              Expires: {new Date(membership.latest_expiration).toLocaleDateString()}
                             </div>
-                            {membership.memberships?.description && (
-                              <div className="text-xs text-gray-400 mt-1">
-                                {membership.memberships.description}
-                              </div>
-                            )}
+                            <div className="text-sm text-gray-500">
+                              Member since: {new Date(membership.member_since).toLocaleDateString()}
+                            </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-medium text-green-600">
-                              {membership.amount_paid ? formatAmount(membership.amount_paid) : 'Free'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {membership.payment_status}
-                            </div>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              membership.is_active 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {membership.is_active ? 'Active' : 'Expired'}
+                            </span>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-gray-500 text-sm">No memberships found.</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Active Registrations */}
               {userRegistrations && userRegistrations.length > 0 && (
@@ -359,16 +386,54 @@ export default async function UserDetailPage({ params }: PageProps) {
                               Invoice #{invoice.number}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {new Date(invoice.date).toLocaleDateString()}
+                              {new Date(invoice.date).toLocaleDateString()} at {new Date(invoice.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Paid
+                              </span>
+                              {invoice.isPartiallyRefunded && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  Partially Refunded
+                                </span>
+                              )}
+                              {invoice.isFullyRefunded && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Fully Refunded
+                                </span>
+                              )}
+                            </div>
+                            {invoice.lineItems.length > 0 && (
+                              <div className="text-xs text-gray-400 mt-1">
+                                {invoice.lineItems.map((item: any, index: number) => (
+                                  <div key={item.id || index} className="truncate">
+                                    {item.description}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatAmount(invoice.total)}
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-900">
+                                {formatAmount(invoice.netAmount)}
+                                {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
+                                  <span className="text-xs text-gray-500 ml-1">Net</span>
+                                )}
+                              </div>
+                              {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
+                                <div className="text-xs text-gray-400">
+                                  {formatAmount(invoice.originalAmount)} original
+                                </div>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {invoice.status}
-                            </div>
+                            <Link
+                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                              prefetch={false}
+                              className="text-xs text-blue-600 hover:text-blue-500"
+                            >
+                              Details
+                            </Link>
                           </div>
                         </div>
                       ))}
@@ -402,7 +467,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Active Memberships</dt>
                       <dd className="mt-1 text-2xl font-semibold text-blue-600">
-                        {userMemberships?.length || 0}
+                        {userMemberships?.filter(m => m.is_active).length || 0}
                       </dd>
                     </div>
                     <div>
@@ -420,6 +485,14 @@ export default async function UserDetailPage({ params }: PageProps) {
                   </dl>
                 </div>
               </div>
+
+              {/* Account Actions */}
+              <AdminToggleSection 
+                userId={user.id}
+                isAdmin={user.is_admin}
+                isViewingOwnProfile={isViewingOwnProfile}
+                userName={`${user.first_name} ${user.last_name}`}
+              />
 
               {/* Account Status */}
               <div className="bg-white shadow rounded-lg">

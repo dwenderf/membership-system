@@ -4,13 +4,14 @@
  * Handles syncing staged records to Xero API with retry logic and error handling
  */
 
-import { Invoice, LineItem, Payment, CurrencyCode, AccountingApi } from 'xero-node'
+import { Invoice, LineItem, Payment, CurrencyCode, AccountingApi, CreditNote } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { getOrCreateXeroContact, generateContactName } from './contacts'
 import { createAdminClient } from '../supabase/admin'
 import { Database } from '../../types/database'
 import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
+import { centsToCents, centsToDollars } from '../../types/currency'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
@@ -295,14 +296,23 @@ export class XeroBatchSyncManager {
 
       console.log(`✅ Valid connection to tenant: ${activeTenant.tenant_name}`)
 
-      // Phase 3: Sync invoices
+      // Phase 3: Sync invoices and credit notes
       const invoiceStartTime = Date.now()
       if (pendingInvoices?.length) {
-        console.log(`📄 Phase 3: Syncing ${pendingInvoices.length} invoices...`)
+        console.log(`📄 Phase 3: Syncing ${pendingInvoices.length} invoices and credit notes...`)
+        
+        // Separate regular invoices from credit notes
+        const regularInvoices = pendingInvoices.filter(inv => inv.invoice_type === 'ACCREC')
+        const creditNotes = pendingInvoices.filter(inv => inv.invoice_type === 'ACCRECCREDIT')
+        
+        console.log(`📄 Found ${regularInvoices.length} regular invoices and ${creditNotes.length} credit notes`)
         
         const xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[] = []
+        const xeroCreditNotesToSync: {xeroCreditNote: CreditNote, invoiceRecord: XeroInvoiceRecord}[] = []
         const xeroInvoicesFailed: XeroInvoiceRecord[] = []
-        for (const invoiceRecord of pendingInvoices) {
+        
+        // Process regular invoices
+        for (const invoiceRecord of regularInvoices) {
           const xeroInvoice = await this.getXeroInvoiceFromRecord(invoiceRecord)
           if (xeroInvoice) {
             console.log('✅ Xero invoice created:', xeroInvoice)
@@ -310,22 +320,56 @@ export class XeroBatchSyncManager {
           }
           else{
             console.log('❌ Failed to create Xero invoice:', invoiceRecord)
-            await this.markInvoiceAsFailed(invoiceRecord.id, 'Failed to create Xero invoice')
+            await this.markItemAsFailed(invoiceRecord.id, 'Failed to create Xero invoice')
             xeroInvoicesFailed.push(invoiceRecord)
+          }
+        }
+        
+        // Process credit notes
+        for (const creditNoteRecord of creditNotes) {
+          const xeroCreditNote = await this.getXeroCreditNoteFromRecord(creditNoteRecord)
+          if (xeroCreditNote) {
+            console.log('✅ Xero credit note created:', xeroCreditNote)
+            xeroCreditNotesToSync.push({xeroCreditNote: xeroCreditNote, invoiceRecord: creditNoteRecord})
+          }
+          else{
+            console.log('❌ Failed to create Xero credit note:', creditNoteRecord)
+            await this.markItemAsFailed(creditNoteRecord.id, 'Failed to create Xero credit note')
+            xeroInvoicesFailed.push(creditNoteRecord)
           }
         }
 
         console.log('🔄 Xero invoices to sync:', xeroInvoicesToSync.length)
-        console.log('❌ Xero invoices failed:', xeroInvoicesFailed.length)
+        console.log('🔄 Xero credit notes to sync:', xeroCreditNotesToSync.length)
+        console.log('❌ Xero invoices/credit notes failed:', xeroInvoicesFailed.length)
 
-        const invoiceResult = await this.syncXeroInvoices(xeroInvoicesToSync, xeroApi, activeTenant.tenant_id)
+        // Sync regular invoices
+        let invoiceResult = true
+        if (xeroInvoicesToSync.length > 0) {
+          invoiceResult = await this.syncXeroInvoices(xeroInvoicesToSync, xeroApi, activeTenant.tenant_id)
+        }
         
-        if (invoiceResult) {
-          results.invoices.synced = xeroInvoicesToSync.length
-          console.log(`✅ Successfully synced ${xeroInvoicesToSync.length} invoices`)
+        // Sync credit notes
+        let creditNoteResult = true
+        if (xeroCreditNotesToSync.length > 0) {
+          creditNoteResult = await this.syncXeroCreditNotes(xeroCreditNotesToSync, xeroApi, activeTenant.tenant_id)
+        }
+        
+        // Update results based on both invoice and credit note sync results
+        const totalSynced = (invoiceResult ? xeroInvoicesToSync.length : 0) + (creditNoteResult ? xeroCreditNotesToSync.length : 0)
+        const totalFailed = (invoiceResult ? 0 : xeroInvoicesToSync.length) + (creditNoteResult ? 0 : xeroCreditNotesToSync.length)
+        
+        results.invoices.synced = totalSynced
+        results.invoices.failed = totalFailed
+        
+        if (invoiceResult && creditNoteResult) {
+          console.log(`✅ Successfully synced ${xeroInvoicesToSync.length} invoices and ${xeroCreditNotesToSync.length} credit notes`)
+        } else if (invoiceResult) {
+          console.log(`✅ Successfully synced ${xeroInvoicesToSync.length} invoices, ❌ Failed to sync ${xeroCreditNotesToSync.length} credit notes`)
+        } else if (creditNoteResult) {
+          console.log(`❌ Failed to sync ${xeroInvoicesToSync.length} invoices, ✅ Successfully synced ${xeroCreditNotesToSync.length} credit notes`)
         } else {
-          results.invoices.failed = xeroInvoicesToSync.length
-          console.log(`❌ Failed to sync ${xeroInvoicesToSync.length} invoices`)
+          console.log(`❌ Failed to sync ${xeroInvoicesToSync.length} invoices and ${xeroCreditNotesToSync.length} credit notes`)
         }
         
         results.invoices.failed += xeroInvoicesFailed.length
@@ -491,7 +535,7 @@ export class XeroBatchSyncManager {
             return null
           } else {
             console.log('❌ Contact sync failed with no valid contact ID:', contactResult.error)
-            await this.markInvoiceAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
+            await this.markItemAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
             return null
           }
         }
@@ -500,7 +544,7 @@ export class XeroBatchSyncManager {
       // Ensure we have a contact ID to proceed
       if (!contactResult.xeroContactId) {
         console.log('❌ No Xero contact ID available for invoice sync')
-        await this.markInvoiceAsFailed(invoiceRecord.id, 'No Xero contact ID available')
+        await this.markItemAsFailed(invoiceRecord.id, 'No Xero contact ID available')
         return null
       }
 
@@ -583,6 +627,109 @@ export class XeroBatchSyncManager {
       return null
     }
   }
+
+  /**
+   * Create a Xero credit note from a database record
+   */
+  async getXeroCreditNoteFromRecord(creditNoteRecord: XeroInvoiceRecord): Promise<CreditNote | null> {
+    let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
+    
+    try {
+      console.log('💳 Creating Xero credit note from record:', {
+        id: creditNoteRecord.id,
+        invoiceType: creditNoteRecord.invoice_type,
+        netAmount: creditNoteRecord.net_amount
+      })
+
+      // Get the active tenant for Xero sync
+      const { getActiveTenant } = await import('./client')
+      activeTenant = await getActiveTenant()
+      
+      if (!activeTenant) {
+        console.log('❌ No active Xero tenant available for credit note sync')
+        // Don't mark as failed - leave as pending for when Xero is reconnected
+        return null
+      }
+
+      // Parse staging metadata for refund details
+      const metadata = creditNoteRecord.staging_metadata as any
+      if (!metadata || !metadata.refund_id) {
+        console.error('❌ No refund metadata found in credit note record')
+        await this.markItemAsFailed(creditNoteRecord.id, 'No refund metadata available')
+        return null
+      }
+
+      // Get or create Xero contact
+      console.log('👤 Getting/creating Xero contact for credit note user:', metadata.customer?.id || metadata.user_id)
+      const contactResult = await getOrCreateXeroContact(metadata.customer?.id || metadata.user_id, activeTenant.tenant_id)
+      if (!contactResult.success || !contactResult.xeroContactId) {
+        console.error('❌ Failed to get/create Xero contact for credit note')
+        await this.markItemAsFailed(creditNoteRecord.id, 'Failed to get/create Xero contact')
+        return null
+      }
+
+      // Build line items from database (not metadata)
+      const lineItems: LineItem[] = []
+      if (creditNoteRecord.line_items && Array.isArray(creditNoteRecord.line_items)) {
+        // Use staged line items from database
+        console.log(`📋 Using ${creditNoteRecord.line_items.length} staged line items from database`)
+        for (const item of creditNoteRecord.line_items) {
+          // Line items are stored in cents in database, convert to dollars for Xero
+          const unitAmountInCents = centsToCents(Math.abs(item.unit_amount || item.line_amount)) // Use unit_amount if available, fallback to line_amount
+          const lineAmountInCents = centsToCents(Math.abs(item.line_amount))
+          
+          lineItems.push({
+            description: item.description || `Refund: ${metadata.reason || 'Refund'}`,
+            quantity: item.quantity || 1,
+            unitAmount: centsToDollars(unitAmountInCents), // Convert cents to dollars, ensure positive
+            accountCode: item.account_code || '400',
+            taxType: item.tax_type || 'NONE',
+            lineAmount: centsToDollars(lineAmountInCents) // Convert cents to dollars, ensure positive
+          })
+        }
+      } else {
+        // Fallback line item (should rarely be used now)
+        console.log('⚠️ No line items found in database, using fallback')
+        const fallbackAmountInCents = centsToCents(Math.abs(creditNoteRecord.net_amount))
+        lineItems.push({
+          description: metadata.reason || `Refund for Payment ${metadata.refund_id.slice(0, 8)}`,
+          quantity: 1,
+          unitAmount: centsToDollars(fallbackAmountInCents),
+          accountCode: '400',
+          taxType: 'NONE',
+          lineAmount: centsToDollars(fallbackAmountInCents)
+        })
+      }
+
+      // Create Xero credit note object
+      const creditNote: CreditNote = {
+        type: CreditNote.TypeEnum.ACCRECCREDIT,
+        contact: {
+          contactID: contactResult.xeroContactId
+        },
+        lineItems: lineItems,
+        date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
+        status: CreditNote.StatusEnum.AUTHORISED,
+        currencyCode: CurrencyCode.USD,
+        reference: metadata.reason || `Refund for Payment ${creditNoteRecord.payment_id?.slice(0, 8) || 'Unknown'}`
+      }
+
+      console.log('✅ Created Xero credit note object:', {
+        type: creditNote.type,
+        contactId: creditNote.contact?.contactID,
+        lineItemsCount: creditNote.lineItems?.length || 0,
+        total: lineItems.reduce((sum, item) => sum + (item.lineAmount || 0), 0),
+        reference: creditNote.reference
+      })
+
+      return creditNote
+
+    } catch (error) {
+      console.error('❌ Error creating Xero credit note from record:', error)
+      await this.markItemAsFailed(creditNoteRecord.id, `Error creating credit note: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      return null
+    }
+  }
     
   async syncXeroInvoices(xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<boolean> {
     try{
@@ -604,7 +751,7 @@ export class XeroBatchSyncManager {
       }
 
       // Mark invoice as synced in database
-      await this.markInvoiceAsSynced(
+      await this.markItemAsSynced(
         originalRecord.id,
         xeroInvoice.invoiceID!,
         xeroInvoice.invoiceNumber!,
@@ -658,6 +805,79 @@ export class XeroBatchSyncManager {
     return true
     } catch (error) {
       console.error('❌ Error syncing Xero invoices:', error)
+      return false
+    }
+  }
+
+  /**
+   * Sync credit notes to Xero using batch API
+   */
+  async syncXeroCreditNotes(xeroCreditNotesToSync: {xeroCreditNote: CreditNote, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<boolean> {
+    try{
+      const response = await xeroApi.accountingApi.createCreditNotes(
+        tenantId,
+        { creditNotes: xeroCreditNotesToSync.map(x => x.xeroCreditNote) }
+      )
+
+      const creditNotesSynced = response.body.creditNotes || []
+      
+      // Use array index to correlate request with response
+      for (let i = 0; i < creditNotesSynced.length; i++) {
+        const xeroCreditNote = creditNotesSynced[i]
+        const originalRecord = xeroCreditNotesToSync[i]?.invoiceRecord
+        
+        if (!originalRecord) {
+          console.error(`❌ No original record found for response index ${i}`)
+          continue
+        }
+
+        // Mark credit note as synced in database
+        await this.markItemAsSynced(
+          originalRecord.id,
+          xeroCreditNote.creditNoteID!,
+          xeroCreditNote.creditNoteNumber!,
+          tenantId
+        )
+
+        // Log success
+        await logXeroSync({
+          tenant_id: tenantId,
+          operation: 'credit_note_sync',
+          record_type: 'credit_note',
+          record_id: originalRecord.id,
+          xero_id: xeroCreditNote.creditNoteID,
+          success: true,
+          details: `Credit note ${xeroCreditNote.creditNoteNumber} created successfully`,
+          response_data: {
+            creditNote: {
+              creditNoteID: xeroCreditNote.creditNoteID,
+              creditNoteNumber: xeroCreditNote.creditNoteNumber,
+              status: xeroCreditNote.status,
+              type: xeroCreditNote.type,
+              total: xeroCreditNote.total,
+              subTotal: xeroCreditNote.subTotal,
+              date: xeroCreditNote.date,
+              currencyCode: xeroCreditNote.currencyCode
+            }
+          },
+          request_data: {
+            creditNote: {
+              type: xeroCreditNotesToSync[i].xeroCreditNote.type,
+              contact: xeroCreditNotesToSync[i].xeroCreditNote.contact,
+              lineItems: xeroCreditNotesToSync[i].xeroCreditNote.lineItems,
+              date: xeroCreditNotesToSync[i].xeroCreditNote.date,
+              reference: xeroCreditNotesToSync[i].xeroCreditNote.reference,
+              status: xeroCreditNotesToSync[i].xeroCreditNote.status,
+              currencyCode: xeroCreditNotesToSync[i].xeroCreditNote.currencyCode
+            }
+          }
+        })
+      }
+
+      console.log('✅ Xero credit note(s) created:', response.body.creditNotes?.length || 0)
+      return true
+    } catch (error) {
+      console.error('❌ Error syncing Xero credit notes:', error)
       return false
     }
   }
@@ -744,10 +964,10 @@ export class XeroBatchSyncManager {
         bankAccountCode: paymentRecord.bank_account_code
       })
 
-      // Get the associated invoice record
+      // Get the associated invoice/credit note record
       const { data: invoiceRecord } = await this.supabase
         .from('xero_invoices')
-        .select('xero_invoice_id, invoice_number')
+        .select('xero_invoice_id, invoice_number, invoice_type')
         .eq('id', paymentRecord.xero_invoice_id)
         .single()
 
@@ -757,7 +977,9 @@ export class XeroBatchSyncManager {
         return null
       }
 
-      console.log('📄 Found associated invoice:', invoiceRecord.xero_invoice_id)
+      const isInvoice = invoiceRecord.invoice_type === 'ACCREC'
+      const isCreditNote = invoiceRecord.invoice_type === 'ACCRECCREDIT'
+      console.log(`📄 Found associated ${isInvoice ? 'invoice' : 'credit note'}:`, invoiceRecord.xero_invoice_id)
 
       // Get the active tenant for Xero sync
       const { getActiveTenant } = await import('./client')
@@ -791,17 +1013,25 @@ export class XeroBatchSyncManager {
 
       const bankAccountCode = paymentRecord.bank_account_code || stripeAccountCode?.accounting_code || '090'
 
-      // Create payment object
+      // Create payment object - use invoice or creditNote depending on type
       const payment: Payment = {
-        invoice: {
-          invoiceID: invoiceRecord.xero_invoice_id
-        },
         account: {
           code: bankAccountCode
         },
-        amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
+        amount: Math.abs(paymentRecord.amount_paid) / 100, // Convert cents to dollars, ensure positive for Xero
         date: new Date().toISOString().split('T')[0],
         reference: paymentRecord.reference || (paymentRecord.staging_metadata as any)?.stripe_charge_id || invoiceRecord.invoice_number || ''
+      }
+
+      // Add either invoice or creditNote field based on the record type
+      if (isInvoice) {
+        payment.invoice = {
+          invoiceID: invoiceRecord.xero_invoice_id
+        }
+      } else if (isCreditNote) {
+        payment.creditNote = {
+          creditNoteID: invoiceRecord.xero_invoice_id
+        }
       }
 
       return payment
@@ -815,22 +1045,22 @@ export class XeroBatchSyncManager {
   /**
    * Mark invoice as successfully synced
    */
-  private async markInvoiceAsSynced(
+  private async markItemAsSynced(
     stagingId: string, 
-    xeroInvoiceId: string, 
-    invoiceNumber: string,
+    xeroId: string, 
+    number: string,
     tenantId?: string
   ) {
-    console.log('💾 Marking invoice as synced:', {
+    console.log('💾 Marking item as synced:', {
       stagingId,
-      xeroInvoiceId,
-      invoiceNumber,
+      xeroId,
+      number,
       tenantId
     })
     
     const updateData: any = {
-      xero_invoice_id: xeroInvoiceId,
-      invoice_number: invoiceNumber,
+      xero_invoice_id: xeroId,
+      invoice_number: number,
       invoice_status: 'AUTHORISED', // Any synced invoice should be AUTHORISED
       sync_status: 'synced',
       last_synced_at: new Date().toISOString(),
@@ -858,7 +1088,7 @@ export class XeroBatchSyncManager {
   /**
    * Mark invoice as failed
    */
-  private async markInvoiceAsFailed(stagingId: string, error: string) {
+  private async markItemAsFailed(stagingId: string, error: string) {
     await this.supabase
       .from('xero_invoices')
       .update({

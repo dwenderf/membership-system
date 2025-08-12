@@ -148,6 +148,32 @@ CREATE TABLE payments (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Refunds table
+-- Tracks all refund operations for payments with full audit trail
+CREATE TABLE refunds (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL, -- in cents, amount being refunded
+    reason TEXT, -- reason for the refund
+    stripe_refund_id TEXT, -- Stripe refund ID (re_*) for reconciliation
+    xero_credit_note_id UUID, -- Xero credit note ID if synced
+    status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
+    processed_by UUID NOT NULL REFERENCES users(id), -- admin who processed the refund
+    stripe_fee_refunded INTEGER DEFAULT 0, -- Stripe fee refunded amount in cents
+    xero_synced BOOLEAN DEFAULT FALSE,
+    xero_sync_error TEXT,
+    failure_reason TEXT, -- reason if refund failed
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure refund amount is positive
+    CONSTRAINT chk_refund_amount_positive CHECK (amount > 0),
+    -- Ensure Stripe fee refunded is not negative
+    CONSTRAINT chk_stripe_fee_refunded_not_negative CHECK (stripe_fee_refunded >= 0)
+);
+
 -- User memberships table (duration-based purchases)
 -- Stores individual membership purchases. Users can have multiple records 
 -- for the same membership type to support extensions and renewals.
@@ -399,6 +425,12 @@ CREATE INDEX idx_user_registrations_stripe_payment_intent_id ON user_registratio
 CREATE INDEX idx_payments_user_time ON payments(user_id, created_at);
 CREATE INDEX idx_payments_stripe_intent ON payments(stripe_payment_intent_id);
 CREATE INDEX idx_payments_xero_synced ON payments(xero_synced);
+CREATE INDEX idx_refunds_payment_id ON refunds(payment_id);
+CREATE INDEX idx_refunds_user_id ON refunds(user_id);
+CREATE INDEX idx_refunds_status ON refunds(status);
+CREATE INDEX idx_refunds_stripe_refund_id ON refunds(stripe_refund_id);
+CREATE INDEX idx_refunds_processed_by ON refunds(processed_by);
+CREATE INDEX idx_refunds_xero_synced ON refunds(xero_synced);
 CREATE INDEX idx_user_memberships_xero_synced ON user_memberships(xero_synced);
 -- Xero sync status is tracked in xero_invoices staging table
 CREATE INDEX idx_email_logs_user_time ON email_logs(user_id, sent_at);
@@ -595,6 +627,7 @@ ALTER TABLE access_code_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waitlists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 -- payment_items table removed
+ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_configurations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
 
@@ -655,6 +688,18 @@ CREATE POLICY "Users can update their own payments" ON payments
     WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all payments" ON payments
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND is_admin = TRUE
+        )
+    );
+
+-- Refunds policies (admin-only processing, users can view their own)
+CREATE POLICY "Users can view their own refunds" ON refunds
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all refunds" ON refunds
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM users 

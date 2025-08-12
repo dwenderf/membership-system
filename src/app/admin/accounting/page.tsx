@@ -90,9 +90,10 @@ interface SyncStats {
   failed_operations: number
   recent_operations: SyncLog[]
   pending_invoices: number
+  pending_credit_notes: number
   pending_payments: number
-  total_pending: number
   pending_invoices_list: PendingItem[]
+  pending_credit_notes_list: PendingItem[]
   pending_payments_list: PendingItem[]
   failed_invoices: FailedItem[]
   failed_payments: FailedItem[]
@@ -443,18 +444,18 @@ export default function AccountingIntegrationPage() {
                   <div className="text-2xl font-bold text-blue-600">{syncStats.pending_invoices}</div>
                   <div className="text-sm text-blue-800">Pending Invoices</div>
                 </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{syncStats.pending_credit_notes}</div>
+                  <div className="text-sm text-green-800">Pending Credit Notes</div>
+                </div>
                 <div className="bg-purple-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold text-purple-600">{syncStats.pending_payments}</div>
                   <div className="text-sm text-purple-800">Pending Payments</div>
                 </div>
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">{syncStats.total_pending}</div>
-                  <div className="text-sm text-orange-800">Total Pending</div>
-                </div>
               </div>
 
               {/* Pending Items List */}
-              {syncStats.total_pending > 0 && (
+              {(syncStats.pending_invoices > 0 || syncStats.pending_credit_notes > 0 || syncStats.pending_payments > 0) && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Pending Items Details</h3>
                   
@@ -494,6 +495,45 @@ export default function AccountingIntegrationPage() {
                             {item.payments?.stripe_payment_intent_id && (
                               <span className="text-xs font-mono">
                                 <strong>Payment Intent:</strong> {item.payments.stripe_payment_intent_id}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Pending Credit Notes */}
+                  {syncStats.pending_credit_notes_list.map((item) => {
+                    // For credit notes, the user info comes from staging_metadata since they're linked to refunds
+                    const metadata = item.staging_metadata as any
+                    const userDisplayName = metadata?.customer?.name || 'Unknown User'
+                    
+                    return (
+                      <div key={`pending-cn-${item.id}`} className="flex items-start p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Credit Note
+                              </span>
+                              <span className="ml-2 text-sm font-medium text-gray-900">
+                                {userDisplayName}
+                              </span>
+                              <span className="ml-2 text-xs text-gray-500 font-mono">
+                                ID: {item.id}
+                              </span>
+                            </div>
+                            <time className="text-xs text-gray-500">
+                              Staged: {new Date(item.last_synced_at).toLocaleString()}
+                            </time>
+                          </div>
+                          <div className="mt-1 flex items-center space-x-4 text-sm text-gray-600">
+                            <span><strong>Status:</strong> {item.sync_status}</span>
+                            <span><strong>Refund Amount:</strong> ${Math.abs(item.net_amount || 0) / 100}</span>
+                            {metadata?.refund_id && (
+                              <span className="text-xs font-mono">
+                                <strong>Refund ID:</strong> {metadata.refund_id.slice(0, 8)}...
                               </span>
                             )}
                           </div>

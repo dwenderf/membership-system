@@ -10,6 +10,7 @@ export const EMAIL_EVENTS = {
   REGISTRATION_COMPLETED: 'registration.completed',
   WAITLIST_ADDED: 'waitlist.added',
   PAYMENT_FAILED: 'payment.failed',
+  REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
   ACCOUNT_DELETED: 'account.deleted',
 } as const
@@ -303,6 +304,41 @@ class EmailService {
         seasonName: options.seasonName,
         position: options.position,
         waitlistDate: new Date().toLocaleDateString(),
+        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+      }
+    })
+  }
+
+  /**
+   * Send refund processed notification email
+   */
+  async sendRefundNotification(options: {
+    userId: string
+    email: string
+    userName: string
+    refundAmount: number
+    originalAmount: number
+    reason?: string
+    paymentDate: string
+    invoiceNumber?: string
+    refundDate?: string
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.REFUND_PROCESSED,
+      subject: `Refund Processed - $${(options.refundAmount / 100).toFixed(2)}`,
+      triggeredBy: 'admin_send',
+      templateId: process.env.LOOPS_REFUND_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        refundAmount: (options.refundAmount / 100).toFixed(2),
+        originalAmount: (options.originalAmount / 100).toFixed(2),
+        reason: options.reason || 'Refund processed by administrator',
+        paymentDate: options.paymentDate,
+        invoiceNumber: options.invoiceNumber || 'N/A',
+        refundDate: options.refundDate || new Date().toLocaleDateString(),
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
         dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
       }
     })

@@ -5,6 +5,8 @@ import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
+import { xeroStagingManager } from '@/lib/xero/staging'
+import { centsToCents } from '@/types/currency'
 
 // Force import server config
 
@@ -530,6 +532,173 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
   }
 }
 
+
+// Handle charge refunded events
+async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
+  try {
+    console.log('🔄 Processing charge refunded event...')
+    
+    // Get the payment record by payment intent ID
+    const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
+    
+    if (!paymentIntentId) {
+      console.log('⚠️ No payment intent ID found in refunded charge')
+      return
+    }
+    
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .single()
+    
+    if (paymentError || !payment) {
+      console.log('⚠️ No payment record found for refunded charge:', paymentIntentId)
+      return
+    }
+    
+    console.log(`💰 Processing refunds for payment ${payment.id}, charge ${charge.id}`)
+    
+    // Process each refund in the charge
+    if (charge.refunds && charge.refunds.data) {
+      for (const stripeRefund of charge.refunds.data) {
+        console.log(`💰 Processing refund ${stripeRefund.id} for amount: $${(stripeRefund.amount / 100).toFixed(2)}`)
+        
+        // Check if we already have this refund in our database
+        const { data: existingRefund } = await supabase
+          .from('refunds')
+          .select('*')
+          .eq('stripe_refund_id', stripeRefund.id)
+          .single()
+        
+        if (existingRefund) {
+          console.log(`✅ Refund ${stripeRefund.id} already exists in database`)
+          
+          // Update status if needed
+          if (existingRefund.status !== 'completed') {
+            await supabase
+              .from('refunds')
+              .update({
+                status: 'completed',
+                completed_at: new Date(stripeRefund.created * 1000).toISOString(),
+                stripe_payment_intent_id: paymentIntentId,
+                stripe_charge_id: charge.id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingRefund.id)
+            
+            console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
+          }
+          
+          // Always check if credit note staging is needed (even if refund was already completed)
+          // Check if credit note has already been staged for this refund
+          const { data: existingStagedCreditNote } = await supabase
+            .from('xero_invoices')
+            .select('id')
+            .eq('payment_id', existingRefund.payment_id)
+            .eq('invoice_type', 'ACCRECCREDIT')
+            .eq('staging_metadata->refund_id', existingRefund.id)
+            .single()
+          
+          if (!existingStagedCreditNote) {
+            console.log(`🔄 No staged credit note found for refund ${existingRefund.id}, staging now...`)
+            // Stage credit note for Xero sync using centralized staging manager
+            const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
+              existingRefund.id, 
+              existingRefund.payment_id, 
+              centsToCents(existingRefund.amount)
+            )
+            if (!stagingSuccess) {
+              console.error(`❌ Failed to stage credit note for refund ${existingRefund.id}`)
+            }
+          } else {
+            console.log(`✅ Credit note already staged for refund ${existingRefund.id}`)
+          }
+          
+          continue
+        }
+        
+        // Create new refund record for refunds not initiated through our system
+        // (e.g., refunds processed directly in Stripe dashboard)
+        const refundReason = stripeRefund.metadata?.reason || 'Refund processed via Stripe'
+        const processedBy = stripeRefund.metadata?.processed_by || null
+        
+        const { data: newRefund, error: refundError } = await supabase
+          .from('refunds')
+          .insert({
+            payment_id: payment.id,
+            user_id: payment.user_id,
+            amount: stripeRefund.amount,
+            reason: refundReason,
+            stripe_refund_id: stripeRefund.id,
+            stripe_payment_intent_id: paymentIntentId,
+            stripe_charge_id: charge.id,
+            status: 'completed',
+            processed_by: processedBy || payment.user_id, // Fallback to payment user if no admin specified
+            completed_at: new Date(stripeRefund.created * 1000).toISOString(),
+          })
+          .select()
+          .single()
+        
+        if (refundError) {
+          console.error(`❌ Error creating refund record for ${stripeRefund.id}:`, refundError)
+          continue
+        }
+        
+        console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
+        
+        // Stage credit note for Xero sync using centralized staging manager
+        const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
+          newRefund.id, 
+          newRefund.payment_id, 
+          centsToCents(newRefund.amount)
+        )
+        if (!stagingSuccess) {
+          console.error(`❌ Failed to stage credit note for external refund ${newRefund.id}`)
+        }
+        
+        // Log the refund for audit trail
+        logger.logSystem('refund-webhook-processed', 'Refund processed via webhook', {
+          refundId: newRefund.id,
+          stripeRefundId: stripeRefund.id,
+          paymentId: payment.id,
+          amount: stripeRefund.amount,
+          reason: refundReason,
+          source: 'stripe_webhook'
+        })
+      }
+    }
+    
+    // Check if payment should be marked as refunded
+    const { data: allRefunds } = await supabase
+      .from('refunds')
+      .select('amount')
+      .eq('payment_id', payment.id)
+      .eq('status', 'completed')
+    
+    const totalRefunded = allRefunds?.reduce((sum: number, refund: any) => sum + refund.amount, 0) || 0
+    
+    // If fully refunded, update payment status
+    if (totalRefunded >= payment.final_amount && payment.status !== 'refunded') {
+      await supabase
+        .from('payments')
+        .update({
+          status: 'refunded',
+          refund_reason: 'Fully refunded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id)
+      
+      console.log(`✅ Updated payment ${payment.id} status to refunded (total refunded: $${(totalRefunded / 100).toFixed(2)})`)
+    }
+    
+    console.log('✅ Successfully processed charge refunded event')
+    
+  } catch (error) {
+    console.error('❌ Error processing charge refunded event:', error)
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Log webhook receipt immediately for debugging
   try {
@@ -715,6 +884,24 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('Payment failed for payment intent:', paymentIntent.id)
+        break
+      }
+
+      case 'charge.refunded': {
+        // Retrieve the charge with expanded refunds data
+        const chargeId = (event.data.object as Stripe.Charge).id
+        const charge = await stripe.charges.retrieve(chargeId, {
+          expand: ['refunds']
+        })
+        
+        console.log('🔍 Charge refunded webhook received:', {
+          chargeId: charge.id,
+          paymentIntentId: charge.payment_intent,
+          refunds: charge.refunds?.data?.length || 0,
+          refundIds: charge.refunds?.data?.map(r => r.id) || []
+        })
+        
+        await handleChargeRefunded(supabase, charge)
         break
       }
 

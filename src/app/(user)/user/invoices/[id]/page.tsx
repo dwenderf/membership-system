@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatAmount } from '@/lib/invoice-utils'
+import { formatAmount } from '@/lib/format-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getAuthenticatedXeroClient, getActiveTenant } from '@/lib/xero/client'

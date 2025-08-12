@@ -9,7 +9,7 @@
 
 import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
-import { Cents, centsToCents } from '../../types/currency'
+import { Cents, centsToCents, negativeCents, centsToDollars } from '../../types/currency'
 
 /**
  * Data structure for staging Xero invoice and payment records
@@ -781,6 +781,240 @@ export class XeroStagingManager {
         },
         'error'
       )
+    }
+  }
+
+  /**
+   * Create staging records for a credit note (refund)
+   */
+  async createCreditNoteStaging(
+    refundId: string, 
+    paymentId: string, 
+    refundAmountCents: Cents
+  ): Promise<boolean> {
+    try {
+      logger.logXeroSync(
+        'staging-credit-note-start',
+        'Creating credit note staging for refund',
+        { refundId, paymentId, refundAmount: refundAmountCents },
+        'info'
+      )
+
+      // Get payment details for staging metadata
+      const { data: payment, error: paymentError } = await this.supabase
+        .from('payments')
+        .select(`
+          *,
+          users!payments_user_id_fkey (
+            id,
+            first_name,
+            last_name,
+            member_id,
+            email
+          )
+        `)
+        .eq('id', paymentId)
+        .single()
+      
+      if (paymentError || !payment) {
+        logger.logXeroSync(
+          'staging-credit-note-payment-error',
+          'Failed to get payment details for credit note staging',
+          { refundId, paymentId, error: paymentError?.message },
+          'error'
+        )
+        return false
+      }
+
+      // Get original invoice line items to build proportional credit note line items
+      const { data: originalInvoice, error: invoiceError } = await this.supabase
+        .from('xero_invoices')
+        .select(`
+          *,
+          xero_invoice_line_items (
+            description,
+            line_amount,
+            account_code,
+            tax_type,
+            line_item_type
+          )
+        `)
+        .eq('payment_id', paymentId)
+        .single()
+      
+      let lineItems = []
+      if (originalInvoice?.xero_invoice_line_items) {
+        // Proportionally allocate refund across original line items
+        const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
+          (sum: number, item: any) => sum + item.line_amount, 0
+        )
+        
+        lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+          const proportion = Math.abs(item.line_amount) / totalInvoiceAmount
+          const creditAmount = centsToCents(refundAmountCents * proportion)
+          
+          return {
+            description: `Credit: ${item.description}`,
+            line_amount: creditAmount, // Positive amount for credit note
+            account_code: item.account_code,
+            tax_type: item.tax_type,
+            line_item_type: item.line_item_type
+          }
+        })
+        
+        // Ensure total matches refund amount exactly (handle rounding)
+        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+        const difference = refundAmountCents - calculatedTotal
+        if (difference !== 0 && lineItems.length > 0) {
+          lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
+        }
+      } else {
+        // Fallback: Create a single line item for the full refund amount
+        lineItems = [{
+          description: 'Refund',
+          line_amount: refundAmountCents,
+          account_code: '200', // Default revenue account
+          tax_type: 'NONE',
+          line_item_type: 'refund'
+        }]
+      }
+
+      // Create credit note staging record in xero_invoices table
+      const { data: stagingRecord, error: stagingError } = await this.supabase
+        .from('xero_invoices')
+        .insert({
+          payment_id: paymentId,
+          invoice_type: 'ACCRECCREDIT', // Credit note type
+          invoice_status: 'DRAFT', // Will be created as draft in Xero
+          total_amount: refundAmountCents,
+          net_amount: refundAmountCents,
+          sync_status: 'pending', // Ready for sync
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            refund_id: refundId,
+            customer: {
+              id: payment.users.id,
+              name: `${payment.users.first_name} ${payment.users.last_name}`,
+              email: payment.users.email,
+              member_id: payment.users.member_id
+            },
+            refund_type: 'refund',
+            refund_amount: refundAmountCents,
+            original_payment_id: paymentId
+          }
+        })
+        .select()
+        .single()
+      
+      if (stagingError) {
+        logger.logXeroSync(
+          'staging-credit-note-create-error',
+          'Failed to create credit note staging record',
+          { refundId, error: stagingError.message },
+          'error'
+        )
+        return false
+      }
+
+      // Create line items for the credit note
+      if (lineItems.length > 0) {
+        const { error: lineItemsError } = await this.supabase
+          .from('xero_invoice_line_items')
+          .insert(
+            lineItems.map((item: any, index: number) => ({
+              xero_invoice_id: stagingRecord.id,
+              description: item.description,
+              quantity: 1,
+              unit_amount: Math.abs(item.line_amount), // Already in cents, just ensure positive
+              line_amount: item.line_amount, // Already in cents
+              account_code: item.account_code,
+              tax_type: item.tax_type || 'NONE',
+              line_item_type: item.line_item_type || 'refund'
+            }))
+          )
+        
+        if (lineItemsError) {
+          logger.logXeroSync(
+            'staging-credit-note-line-items-error',
+            'Failed to create credit note line items',
+            { refundId, error: lineItemsError.message },
+            'error'
+          )
+          // Clean up the staging record if line items failed
+          await this.supabase
+            .from('xero_invoices')
+            .delete()
+            .eq('id', stagingRecord.id)
+          return false
+        }
+      }
+
+      // Get Stripe bank account code for payment staging
+      const stripeBankAccountCode = await this.getStripeBankAccountCode()
+      
+      // Create corresponding payment record for the refund (negative amount = money going out)
+      const { data: paymentStaging, error: paymentStagingError } = await this.supabase
+        .from('xero_payments')
+        .insert({
+          xero_invoice_id: stagingRecord.id, // Links to the credit note record
+          tenant_id: null, // Will be populated during sync
+          xero_payment_id: null, // Will be populated when synced to Xero
+          payment_method: 'stripe',
+          bank_account_code: stripeBankAccountCode,
+          amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
+          stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
+          reference: `Refund ${refundId.slice(0, 8)}`,
+          sync_status: 'pending', // Ready for sync (refund is confirmed by webhook)
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            refund_id: refundId,
+            payment_id: paymentId,
+            refund_type: 'refund',
+            refund_amount: refundAmountCents,
+            credit_note_id: stagingRecord.id
+          }
+        })
+        .select()
+        .single()
+      
+      if (paymentStagingError) {
+        logger.logXeroSync(
+          'staging-credit-note-payment-error',
+          'Failed to create credit note payment staging record',
+          { refundId, error: paymentStagingError.message },
+          'error'
+        )
+        // Clean up the credit note staging record if payment failed
+        await this.supabase
+          .from('xero_invoices')
+          .delete()
+          .eq('id', stagingRecord.id)
+        return false
+      }
+
+      logger.logXeroSync(
+        'staging-credit-note-success',
+        'Credit note staging completed successfully',
+        { 
+          refundId, 
+          creditNoteId: stagingRecord.id, 
+          paymentId: paymentStaging.id 
+        },
+        'info'
+      )
+      return true
+      
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-credit-note-error',
+        'Error staging credit note for refund',
+        { 
+          refundId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
     }
   }
 

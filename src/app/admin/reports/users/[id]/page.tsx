@@ -68,7 +68,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   // Fetch user's payments and invoices
   let invoices: any[] = []
   
-  // Fetch payments with related Xero invoice data and refunds
+  // Fetch payments with related Xero invoice data and refunds (only original invoices, not credit notes)
   const { data: userPayments } = await supabase
     .from('payments')
     .select(`
@@ -81,6 +81,7 @@ export default async function UserDetailPage({ params }: PageProps) {
         total_amount,
         net_amount,
         created_at,
+        invoice_type,
         xero_invoice_line_items (
           id,
           description,
@@ -125,10 +126,13 @@ export default async function UserDetailPage({ params }: PageProps) {
     const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
     const isFullyRefunded = totalRefunded >= payment.final_amount
     
+    // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
+    const originalInvoice = payment.xero_invoices?.find((invoice: any) => invoice.invoice_type === 'ACCREC')
+    
     return {
       id: payment.id,
       paymentId: payment.id,
-      number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+      number: originalInvoice?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
       date: payment.completed_at || payment.created_at,
       originalAmount: payment.final_amount,
       totalRefunded: totalRefunded,
@@ -136,10 +140,10 @@ export default async function UserDetailPage({ params }: PageProps) {
       status: payment.status,
       isPartiallyRefunded: isPartiallyRefunded,
       isFullyRefunded: isFullyRefunded,
-      hasXeroInvoice: !!payment.xero_invoices?.[0],
-      xeroInvoiceId: payment.xero_invoices?.[0]?.id,
+      hasXeroInvoice: !!originalInvoice,
+      xeroInvoiceId: originalInvoice?.id,
       canRefund: payment.status === 'completed' && netAmount > 0,
-      lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || [],
+      lineItems: originalInvoice?.xero_invoice_line_items || [],
       invoice_type: 'ACCREC'
     }
   }) || []

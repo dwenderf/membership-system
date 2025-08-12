@@ -6,6 +6,7 @@ interface SyncCounts {
   pendingEmails: number
   failedEmails: number
   pendingInvoices: number
+  pendingCreditNotes: number
   pendingPayments: number
 }
 
@@ -14,6 +15,7 @@ export default function SyncButtons() {
     pendingEmails: 0,
     failedEmails: 0,
     pendingInvoices: 0,
+    pendingCreditNotes: 0,
     pendingPayments: 0
   })
   const [loading, setLoading] = useState({ emails: false, accounting: false })
@@ -52,6 +54,7 @@ export default function SyncButtons() {
         setCounts(prev => ({
           ...prev,
           pendingInvoices: accountingData.stats?.pending_invoices || 0,
+          pendingCreditNotes: accountingData.stats?.pending_credit_notes || 0,
           pendingPayments: accountingData.stats?.pending_payments || 0
         }))
       }
@@ -142,7 +145,7 @@ export default function SyncButtons() {
   }
 
   const totalPendingEmails = counts.pendingEmails
-  const totalPendingAccounting = counts.pendingInvoices + counts.pendingPayments
+  const totalPendingAccounting = counts.pendingInvoices + counts.pendingCreditNotes + counts.pendingPayments
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -225,7 +228,7 @@ export default function SyncButtons() {
           </div>
           {totalPendingAccounting > 0 && (
             <div className="mt-1 text-xs text-gray-400">
-              {counts.pendingInvoices} invoices • {counts.pendingPayments} payments
+              {counts.pendingInvoices} invoices • {counts.pendingCreditNotes} credit notes • {counts.pendingPayments} payments
             </div>
           )}
           {lastSync.accounting && (

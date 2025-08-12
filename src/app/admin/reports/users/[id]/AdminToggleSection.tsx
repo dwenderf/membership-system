@@ -70,20 +70,7 @@ export default function AdminToggleSection({
                 }
               </p>
             </div>
-            {isViewingOwnProfile ? (
-              <div className="text-right">
-                <button
-                  type="button"
-                  disabled
-                  className="px-4 py-2 rounded-md text-sm font-medium bg-gray-300 text-gray-500 cursor-not-allowed"
-                >
-                  Cannot Modify Own Status
-                </button>
-                <p className="text-xs text-gray-400 mt-1 max-w-32">
-                  For security, admins cannot remove their own access
-                </p>
-              </div>
-            ) : (
+            {!isViewingOwnProfile && (
               <button
                 onClick={handleToggleAdmin}
                 disabled={isLoading}

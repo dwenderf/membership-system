@@ -41,19 +41,12 @@ export default async function UserDetailPage({ params }: PageProps) {
   // Check if current user is viewing their own profile
   const isViewingOwnProfile = authUser.id === params.id
 
-  // Fetch user's active memberships
+  // Fetch user's consolidated memberships (both active and expired)
   const { data: userMemberships } = await supabase
-    .from('user_memberships')
-    .select(`
-      *,
-      memberships (
-        name,
-        description
-      )
-    `)
+    .from('user_memberships_consolidated')
+    .select('*')
     .eq('user_id', params.id)
-    .gte('valid_until', new Date().toISOString().split('T')[0]) // Only active memberships
-    .order('valid_until', { ascending: true })
+    .order('latest_expiration', { ascending: false })
 
   // Fetch user's active registrations
   const { data: userRegistrations } = await supabase
@@ -292,54 +285,54 @@ export default async function UserDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Account Actions */}
-              <AdminToggleSection 
-                userId={user.id}
-                isAdmin={user.is_admin}
-                isViewingOwnProfile={isViewingOwnProfile}
-                userName={`${user.first_name} ${user.last_name}`}
-              />
-
-              {/* Active Memberships */}
-              {userMemberships && userMemberships.length > 0 && (
-                <div className="bg-white shadow rounded-lg mb-6">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-medium text-gray-900">Active Memberships</h2>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Current and future membership subscriptions
-                    </p>
-                  </div>
-                  <div className="px-6 py-4">
+              {/* User Memberships */}
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Memberships</h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    All membership types for this user, including active and expired
+                  </p>
+                </div>
+                <div className="px-6 py-4">
+                  {userMemberships && userMemberships.length > 0 ? (
                     <div className="space-y-4">
                       {userMemberships.map((membership) => (
-                        <div key={membership.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
+                        <div key={`${membership.user_id}-${membership.membership_id}`} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
                           <div>
                             <div className="font-medium text-gray-900">
-                              {membership.memberships?.name || 'Unknown Membership'}
+                              {membership.membership_name}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Valid until {new Date(membership.valid_until).toLocaleDateString()}
+                              Expires: {new Date(membership.latest_expiration).toLocaleDateString()}
                             </div>
-                            {membership.memberships?.description && (
-                              <div className="text-xs text-gray-400 mt-1">
-                                {membership.memberships.description}
+                            <div className="text-sm text-gray-500">
+                              Member since: {new Date(membership.member_since).toLocaleDateString()}
+                            </div>
+                            {membership.membership_description && (
+                              <div className="text-sm text-gray-400 mt-1">
+                                {membership.membership_description}
                               </div>
                             )}
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-medium text-green-600">
-                              {membership.amount_paid ? formatAmount(membership.amount_paid) : 'Free'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {membership.payment_status}
-                            </div>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              membership.is_active 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {membership.is_active ? 'Active' : 'Expired'}
+                            </span>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-gray-500 text-sm">No memberships found.</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Active Registrations */}
               {userRegistrations && userRegistrations.length > 0 && (
@@ -479,7 +472,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Active Memberships</dt>
                       <dd className="mt-1 text-2xl font-semibold text-blue-600">
-                        {userMemberships?.length || 0}
+                        {userMemberships?.filter(m => m.is_active).length || 0}
                       </dd>
                     </div>
                     <div>
@@ -497,6 +490,14 @@ export default async function UserDetailPage({ params }: PageProps) {
                   </dl>
                 </div>
               </div>
+
+              {/* Account Actions */}
+              <AdminToggleSection 
+                userId={user.id}
+                isAdmin={user.is_admin}
+                isViewingOwnProfile={isViewingOwnProfile}
+                userName={`${user.first_name} ${user.last_name}`}
+              />
 
               {/* Account Status */}
               <div className="bg-white shadow rounded-lg">

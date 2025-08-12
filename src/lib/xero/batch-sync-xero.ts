@@ -964,10 +964,10 @@ export class XeroBatchSyncManager {
         bankAccountCode: paymentRecord.bank_account_code
       })
 
-      // Get the associated invoice record
+      // Get the associated invoice/credit note record
       const { data: invoiceRecord } = await this.supabase
         .from('xero_invoices')
-        .select('xero_invoice_id, invoice_number')
+        .select('xero_invoice_id, invoice_number, invoice_type')
         .eq('id', paymentRecord.xero_invoice_id)
         .single()
 
@@ -977,7 +977,9 @@ export class XeroBatchSyncManager {
         return null
       }
 
-      console.log('📄 Found associated invoice:', invoiceRecord.xero_invoice_id)
+      const isInvoice = invoiceRecord.invoice_type === 'ACCREC'
+      const isCreditNote = invoiceRecord.invoice_type === 'ACCRECCREDIT'
+      console.log(`📄 Found associated ${isInvoice ? 'invoice' : 'credit note'}:`, invoiceRecord.xero_invoice_id)
 
       // Get the active tenant for Xero sync
       const { getActiveTenant } = await import('./client')
@@ -1011,17 +1013,25 @@ export class XeroBatchSyncManager {
 
       const bankAccountCode = paymentRecord.bank_account_code || stripeAccountCode?.accounting_code || '090'
 
-      // Create payment object
+      // Create payment object - use invoice or creditNote depending on type
       const payment: Payment = {
-        invoice: {
-          invoiceID: invoiceRecord.xero_invoice_id
-        },
         account: {
           code: bankAccountCode
         },
         amount: paymentRecord.amount_paid / 100, // Convert cents to dollars
         date: new Date().toISOString().split('T')[0],
         reference: paymentRecord.reference || (paymentRecord.staging_metadata as any)?.stripe_charge_id || invoiceRecord.invoice_number || ''
+      }
+
+      // Add either invoice or creditNote field based on the record type
+      if (isInvoice) {
+        payment.invoice = {
+          invoiceID: invoiceRecord.xero_invoice_id
+        }
+      } else if (isCreditNote) {
+        payment.creditNote = {
+          creditNoteID: invoiceRecord.xero_invoice_id
+        }
       }
 
       return payment

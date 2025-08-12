@@ -507,11 +507,7 @@ export default function AccountingIntegrationPage() {
                   {syncStats.pending_credit_notes_list.map((item) => {
                     // For credit notes, the user info comes from staging_metadata since they're linked to refunds
                     const metadata = item.staging_metadata as any
-                    const userDisplayName = metadata?.contact_info?.first_name && metadata?.contact_info?.last_name 
-                      ? metadata.contact_info.member_id 
-                        ? `${metadata.contact_info.first_name} ${metadata.contact_info.last_name} - ${metadata.contact_info.member_id}`
-                        : `${metadata.contact_info.first_name} ${metadata.contact_info.last_name}`
-                      : 'Unknown User'
+                    const userDisplayName = metadata?.customer?.name || 'Unknown User'
                     
                     return (
                       <div key={`pending-cn-${item.id}`} className="flex items-start p-3 bg-green-50 rounded-lg border border-green-200">

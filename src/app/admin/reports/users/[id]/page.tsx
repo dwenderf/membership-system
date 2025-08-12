@@ -425,27 +425,27 @@ export default async function UserDetailPage({ params }: PageProps) {
                               </div>
                             )}
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatAmount(invoice.netAmount)}
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-900">
+                                {formatAmount(invoice.netAmount)}
+                                {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
+                                  <span className="text-xs text-gray-500 ml-1">Net</span>
+                                )}
+                              </div>
                               {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
-                                <span className="text-xs text-gray-500 ml-1">Net</span>
+                                <div className="text-xs text-gray-400">
+                                  {formatAmount(invoice.originalAmount)} original
+                                </div>
                               )}
                             </div>
-                            {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
-                              <div className="text-xs text-gray-400">
-                                {formatAmount(invoice.originalAmount)} original
-                              </div>
-                            )}
-                            <div className="mt-1">
-                              <Link
-                                href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
-                                prefetch={false}
-                                className="text-xs text-blue-600 hover:text-blue-500"
-                              >
-                                View Details
-                              </Link>
-                            </div>
+                            <Link
+                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                              prefetch={false}
+                              className="text-xs text-blue-600 hover:text-blue-500"
+                            >
+                              Details
+                            </Link>
                           </div>
                         </div>
                       ))}

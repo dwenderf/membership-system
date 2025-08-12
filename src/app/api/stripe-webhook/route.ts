@@ -663,8 +663,8 @@ async function stageCreditNoteForXero(supabase: any, refundId: string, paymentId
             xero_invoice_id: stagingRecord.id,
             description: item.description,
             quantity: 1,
-            unit_amount: Math.abs(item.line_amount) / 100, // Convert to dollars, ensure positive for credit
-            line_amount: item.line_amount,
+            unit_amount: Math.abs(item.line_amount) / 100, // Convert cents to dollars for unit_amount
+            line_amount: Math.round(item.line_amount), // Ensure line_amount is integer cents
             account_code: item.account_code,
             tax_type: item.tax_type,
             line_item_type: item.line_item_type

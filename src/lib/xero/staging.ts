@@ -925,7 +925,7 @@ export class XeroStagingManager {
               xero_invoice_id: stagingRecord.id,
               description: item.description,
               quantity: 1,
-              unit_amount: centsToDollars(centsToCents(Math.abs(item.line_amount))), // Convert cents to dollars for unit_amount
+              unit_amount: centsToCents(Math.abs(item.line_amount)), // Keep in cents for unit_amount
               line_amount: item.line_amount, // Keep in cents for line_amount
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',

@@ -631,12 +631,24 @@ export class XeroBatchSyncManager {
    * Create a Xero credit note from a database record
    */
   async getXeroCreditNoteFromRecord(creditNoteRecord: XeroInvoiceRecord): Promise<CreditNote | null> {
+    let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
+    
     try {
       console.log('💳 Creating Xero credit note from record:', {
         id: creditNoteRecord.id,
         invoiceType: creditNoteRecord.invoice_type,
         netAmount: creditNoteRecord.net_amount
       })
+
+      // Get the active tenant for Xero sync
+      const { getActiveTenant } = await import('./client')
+      activeTenant = await getActiveTenant()
+      
+      if (!activeTenant) {
+        console.log('❌ No active Xero tenant available for credit note sync')
+        // Don't mark as failed - leave as pending for when Xero is reconnected
+        return null
+      }
 
       // Parse staging metadata for refund details
       const metadata = creditNoteRecord.staging_metadata as any
@@ -647,7 +659,8 @@ export class XeroBatchSyncManager {
       }
 
       // Get or create Xero contact
-      const contactResult = await getOrCreateXeroContact(metadata.user_id)
+      console.log('👤 Getting/creating Xero contact for credit note user:', metadata.customer?.id || metadata.user_id)
+      const contactResult = await getOrCreateXeroContact(metadata.customer?.id || metadata.user_id, activeTenant.tenant_id)
       if (!contactResult.success || !contactResult.xeroContactId) {
         console.error('❌ Failed to get/create Xero contact for credit note')
         await this.markItemAsFailed(creditNoteRecord.id, 'Failed to get/create Xero contact')
@@ -681,13 +694,13 @@ export class XeroBatchSyncManager {
 
       // Create Xero credit note object
       const creditNote: CreditNote = {
-        type: 'ACCRECCREDIT',
+        type: CreditNote.TypeEnum.ACCRECCREDIT,
         contact: {
           contactID: contactResult.xeroContactId
         },
         lineItems: lineItems,
         date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        status: 'AUTHORISED',
+        status: CreditNote.StatusEnum.AUTHORISED,
         currencyCode: CurrencyCode.USD,
         reference: metadata.reason || `Refund for Payment ${creditNoteRecord.payment_id?.slice(0, 8) || 'Unknown'}`
       }

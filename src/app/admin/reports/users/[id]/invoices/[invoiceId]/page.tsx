@@ -98,7 +98,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
   }, 0) || 0
 
   const availableForRefund = payment.final_amount - totalRefunded
-  const canRefund = payment.status === 'completed' && availableForRefund > 0
+  const canRefund = payment.status === 'completed' && totalRefunded === 0
 
   const invoice = {
     id: payment.id,

@@ -308,11 +308,6 @@ export default async function UserDetailPage({ params }: PageProps) {
                             <div className="text-sm text-gray-500">
                               Member since: {new Date(membership.member_since).toLocaleDateString()}
                             </div>
-                            {membership.membership_description && (
-                              <div className="text-sm text-gray-400 mt-1">
-                                {membership.membership_description}
-                              </div>
-                            )}
                           </div>
                           <div className="text-right">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

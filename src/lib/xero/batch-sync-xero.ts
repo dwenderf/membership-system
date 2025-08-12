@@ -11,6 +11,7 @@ import { createAdminClient } from '../supabase/admin'
 import { Database } from '../../types/database'
 import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
+import { centsToCents, centsToDollars } from '../../types/currency'
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
@@ -667,28 +668,36 @@ export class XeroBatchSyncManager {
         return null
       }
 
-      // Build line items from staging metadata
+      // Build line items from database (not metadata)
       const lineItems: LineItem[] = []
-      if (metadata.line_items && Array.isArray(metadata.line_items)) {
-        for (const item of metadata.line_items) {
+      if (creditNoteRecord.line_items && Array.isArray(creditNoteRecord.line_items)) {
+        // Use staged line items from database
+        console.log(`📋 Using ${creditNoteRecord.line_items.length} staged line items from database`)
+        for (const item of creditNoteRecord.line_items) {
+          // Line items are stored in cents in database, convert to dollars for Xero
+          const unitAmountInCents = centsToCents(Math.abs(item.unit_amount || item.line_amount)) // Use unit_amount if available, fallback to line_amount
+          const lineAmountInCents = centsToCents(Math.abs(item.line_amount))
+          
           lineItems.push({
             description: item.description || `Refund: ${metadata.reason || 'Refund'}`,
-            quantity: 1,
-            unitAmount: Math.abs(item.line_amount) / 100, // Convert to dollars, ensure positive
+            quantity: item.quantity || 1,
+            unitAmount: centsToDollars(unitAmountInCents), // Convert cents to dollars, ensure positive
             accountCode: item.account_code || '400',
             taxType: item.tax_type || 'NONE',
-            lineAmount: Math.abs(item.line_amount) / 100
+            lineAmount: centsToDollars(lineAmountInCents) // Convert cents to dollars, ensure positive
           })
         }
       } else {
-        // Fallback line item
+        // Fallback line item (should rarely be used now)
+        console.log('⚠️ No line items found in database, using fallback')
+        const fallbackAmountInCents = centsToCents(Math.abs(creditNoteRecord.net_amount))
         lineItems.push({
           description: metadata.reason || `Refund for Payment ${metadata.refund_id.slice(0, 8)}`,
           quantity: 1,
-          unitAmount: Math.abs(creditNoteRecord.net_amount) / 100,
+          unitAmount: centsToDollars(fallbackAmountInCents),
           accountCode: '400',
           taxType: 'NONE',
-          lineAmount: Math.abs(creditNoteRecord.net_amount) / 100
+          lineAmount: centsToDollars(fallbackAmountInCents)
         })
       }
 

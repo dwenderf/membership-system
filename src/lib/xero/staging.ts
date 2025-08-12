@@ -863,7 +863,7 @@ export class XeroStagingManager {
         })
         
         // Ensure total matches refund amount exactly (handle rounding)
-        const calculatedTotal = lineItems.reduce((sum, item) => sum + item.line_amount, 0)
+        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
         const difference = refundAmountCents - calculatedTotal
         if (difference !== 0 && lineItems.length > 0) {
           lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
@@ -921,12 +921,12 @@ export class XeroStagingManager {
         const { error: lineItemsError } = await this.supabase
           .from('xero_invoice_line_items')
           .insert(
-            lineItems.map((item, index) => ({
+            lineItems.map((item: any, index: number) => ({
               xero_invoice_id: stagingRecord.id,
               description: item.description,
               quantity: 1,
-              unit_amount: centsToCents(Math.abs(item.line_amount)), // Keep in cents for unit_amount
-              line_amount: item.line_amount, // Keep in cents for line_amount
+              unit_amount: Math.abs(item.line_amount), // Already in cents, just ensure positive
+              line_amount: item.line_amount, // Already in cents
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',
               line_item_type: item.line_item_type || 'refund'

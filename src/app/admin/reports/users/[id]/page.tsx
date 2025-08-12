@@ -98,6 +98,24 @@ export default async function UserDetailPage({ params }: PageProps) {
     .in('status', ['completed', 'refunded'])
     .order('created_at', { ascending: false })
 
+  // Fetch credit notes for this user
+  const { data: userCreditNotes } = await supabase
+    .from('xero_invoices')
+    .select(`
+      *,
+      staging_metadata,
+      payments!xero_invoices_payment_id_fkey (
+        id,
+        final_amount,
+        completed_at,
+        created_at
+      )
+    `)
+    .eq('invoice_type', 'ACCRECCREDIT')
+    .eq('sync_status', 'synced')
+    .not('invoice_number', 'is', null)
+    .order('created_at', { ascending: false })
+
   // Transform payments into invoice-like objects for display
   invoices = userPayments?.map(payment => {
     // Calculate refund information
@@ -121,9 +139,41 @@ export default async function UserDetailPage({ params }: PageProps) {
       hasXeroInvoice: !!payment.xero_invoices?.[0],
       xeroInvoiceId: payment.xero_invoices?.[0]?.id,
       canRefund: payment.status === 'completed' && netAmount > 0,
-      lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
+      lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || [],
+      invoice_type: 'ACCREC'
     }
   }) || []
+
+  // Transform credit notes and add them to the invoices list
+  const creditNoteInvoices = userCreditNotes?.filter(creditNote => {
+    // Filter credit notes for this user by checking the staging metadata
+    const metadata = creditNote.staging_metadata as any
+    return metadata?.customer?.id === params.id
+  }).map(creditNote => {
+    const metadata = creditNote.staging_metadata as any
+    return {
+      id: creditNote.id,
+      paymentId: creditNote.payment_id,
+      number: creditNote.invoice_number,
+      date: creditNote.created_at,
+      originalAmount: Math.abs(creditNote.net_amount), // Credit notes are negative, show as positive
+      totalRefunded: 0, // Credit notes don't have refunds
+      netAmount: Math.abs(creditNote.net_amount),
+      status: 'credited',
+      isPartiallyRefunded: false,
+      isFullyRefunded: false,
+      hasXeroInvoice: true,
+      xeroInvoiceId: creditNote.id,
+      canRefund: false, // Credit notes cannot be refunded
+      lineItems: [],
+      invoice_type: 'ACCRECCREDIT'
+    }
+  }) || []
+
+  // Combine invoices and credit notes, then sort by date
+  invoices = [...invoices, ...creditNoteInvoices].sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -383,24 +433,32 @@ export default async function UserDetailPage({ params }: PageProps) {
                         <div key={invoice.id} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0">
                           <div>
                             <div className="font-medium text-gray-900">
-                              Invoice #{invoice.number}
+                              {invoice.invoice_type === 'ACCRECCREDIT' ? 'Credit Note' : 'Invoice'} {invoice.number.replace(/^#/, '')}
                             </div>
                             <div className="text-sm text-gray-500">
                               {new Date(invoice.date).toLocaleDateString()} at {new Date(invoice.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                             <div className="flex items-center space-x-2 mt-1">
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Paid
-                              </span>
-                              {invoice.isPartiallyRefunded && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                  Partially Refunded
+                              {invoice.invoice_type === 'ACCRECCREDIT' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  Credit Applied
                                 </span>
-                              )}
-                              {invoice.isFullyRefunded && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  Fully Refunded
-                                </span>
+                              ) : (
+                                <>
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Paid
+                                  </span>
+                                  {invoice.isPartiallyRefunded && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                      Partially Refunded
+                                    </span>
+                                  )}
+                                  {invoice.isFullyRefunded && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                      Fully Refunded
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                             {invoice.lineItems.length > 0 && (
@@ -427,13 +485,19 @@ export default async function UserDetailPage({ params }: PageProps) {
                                 </div>
                               )}
                             </div>
-                            <Link
-                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
-                              prefetch={false}
-                              className="text-xs text-blue-600 hover:text-blue-500"
-                            >
-                              Details
-                            </Link>
+                            {invoice.invoice_type === 'ACCRECCREDIT' ? (
+                              <span className="text-xs text-gray-400">
+                                Credit Note
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                                prefetch={false}
+                                className="text-xs text-blue-600 hover:text-blue-500"
+                              >
+                                Details
+                              </Link>
+                            )}
                           </div>
                         </div>
                       ))}

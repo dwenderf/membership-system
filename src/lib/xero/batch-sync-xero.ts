@@ -659,6 +659,25 @@ export class XeroBatchSyncManager {
         return null
       }
 
+      // Get the original invoice number for a better reference
+      let originalInvoiceNumber = 'Unknown'
+      if (creditNoteRecord.payment_id) {
+        try {
+          const { data: originalInvoice } = await this.supabase
+            .from('xero_invoices')
+            .select('invoice_number')
+            .eq('payment_id', creditNoteRecord.payment_id)
+            .eq('invoice_type', 'ACCREC')
+            .single()
+          
+          if (originalInvoice?.invoice_number) {
+            originalInvoiceNumber = originalInvoice.invoice_number
+          }
+        } catch (error) {
+          console.log('⚠️ Could not find original invoice number, using fallback')
+        }
+      }
+
       // Get or create Xero contact
       console.log('👤 Getting/creating Xero contact for credit note user:', metadata.customer?.id || metadata.user_id)
       const contactResult = await getOrCreateXeroContact(metadata.customer?.id || metadata.user_id, activeTenant.tenant_id)
@@ -692,7 +711,7 @@ export class XeroBatchSyncManager {
         console.log('⚠️ No line items found in database, using fallback')
         const fallbackAmountInCents = centsToCents(Math.abs(creditNoteRecord.net_amount))
         lineItems.push({
-          description: metadata.reason || `Refund for Payment ${metadata.refund_id.slice(0, 8)}`,
+          description: metadata.reason || `Refund for ${originalInvoiceNumber}`,
           quantity: 1,
           unitAmount: centsToDollars(fallbackAmountInCents),
           accountCode: '400',
@@ -711,7 +730,7 @@ export class XeroBatchSyncManager {
         date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
         status: CreditNote.StatusEnum.AUTHORISED,
         currencyCode: CurrencyCode.USD,
-        reference: metadata.reason || `Refund for Payment ${creditNoteRecord.payment_id?.slice(0, 8) || 'Unknown'}`
+        reference: metadata.reason || `Refund for ${originalInvoiceNumber}`
       }
 
       console.log('✅ Created Xero credit note object:', {

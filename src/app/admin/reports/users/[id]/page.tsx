@@ -75,7 +75,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   // Fetch user's payments and invoices
   let invoices: any[] = []
   
-  // Fetch payments with related Xero invoice data
+  // Fetch payments with related Xero invoice data and refunds
   const { data: userPayments } = await supabase
     .from('payments')
     .select(`
@@ -94,25 +94,43 @@ export default async function UserDetailPage({ params }: PageProps) {
           line_amount,
           account_code
         )
+      ),
+      refunds!left (
+        id,
+        amount,
+        status
       )
     `)
     .eq('user_id', params.id)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'refunded'])
     .order('created_at', { ascending: false })
 
   // Transform payments into invoice-like objects for display
-  invoices = userPayments?.map(payment => ({
-    id: payment.id,
-    paymentId: payment.id,
-    number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
-    date: payment.completed_at || payment.created_at,
-    total: payment.final_amount,
-    status: payment.status === 'refunded' ? 'Refunded' : 'Paid',
-    hasXeroInvoice: !!payment.xero_invoices?.[0],
-    xeroInvoiceId: payment.xero_invoices?.[0]?.id,
-    canRefund: payment.status === 'completed' && payment.final_amount > 0,
-    lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
-  })) || []
+  invoices = userPayments?.map(payment => {
+    // Calculate refund information
+    const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
+    const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
+    const netAmount = payment.final_amount - totalRefunded
+    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
+    const isFullyRefunded = totalRefunded >= payment.final_amount
+    
+    return {
+      id: payment.id,
+      paymentId: payment.id,
+      number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+      date: payment.completed_at || payment.created_at,
+      originalAmount: payment.final_amount,
+      totalRefunded: totalRefunded,
+      netAmount: netAmount,
+      status: payment.status,
+      isPartiallyRefunded: isPartiallyRefunded,
+      isFullyRefunded: isFullyRefunded,
+      hasXeroInvoice: !!payment.xero_invoices?.[0],
+      xeroInvoiceId: payment.xero_invoices?.[0]?.id,
+      canRefund: payment.status === 'completed' && netAmount > 0,
+      lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
+    }
+  }) || []
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -382,6 +400,21 @@ export default async function UserDetailPage({ params }: PageProps) {
                             <div className="text-sm text-gray-500">
                               {new Date(invoice.date).toLocaleDateString()} at {new Date(invoice.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Paid
+                              </span>
+                              {invoice.isPartiallyRefunded && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  Partially Refunded
+                                </span>
+                              )}
+                              {invoice.isFullyRefunded && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Fully Refunded
+                                </span>
+                              )}
+                            </div>
                             {invoice.lineItems.length > 0 && (
                               <div className="text-xs text-gray-400 mt-1">
                                 {invoice.lineItems.map((item: any, index: number) => (
@@ -394,11 +427,16 @@ export default async function UserDetailPage({ params }: PageProps) {
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium text-gray-900">
-                              {formatAmount(invoice.total)}
+                              {formatAmount(invoice.netAmount)}
+                              {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
+                                <span className="text-xs text-gray-500 ml-1">Net</span>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {invoice.status}
-                            </div>
+                            {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
+                              <div className="text-xs text-gray-400">
+                                {formatAmount(invoice.originalAmount)} original
+                              </div>
+                            )}
                             <div className="mt-1">
                               <Link
                                 href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}

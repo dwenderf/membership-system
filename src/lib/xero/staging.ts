@@ -850,12 +850,13 @@ export class XeroStagingManager {
         )
         
         lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
-          const proportion = Math.abs(item.line_amount) / totalInvoiceAmount
+          // Calculate proportion maintaining the sign of the original line item
+          const proportion = item.line_amount / totalInvoiceAmount
           const creditAmount = centsToCents(refundAmountCents * proportion)
           
           return {
             description: `Credit: ${item.description}`,
-            line_amount: creditAmount, // Positive amount for credit note
+            line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
             account_code: item.account_code,
             tax_type: item.tax_type,
             line_item_type: item.line_item_type

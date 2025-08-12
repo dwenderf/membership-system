@@ -3,8 +3,10 @@
 -- 1. Original invoice (ACCREC) 
 -- 2. Refund credit note (ACCRECCREDIT)
 
--- Drop the existing constraint that only allows one invoice per payment+tenant
+-- Drop the existing constraints and indexes that only allows one invoice per payment+tenant
+DROP INDEX IF EXISTS xero_invoices_payment_tenant_unique;
 ALTER TABLE xero_invoices DROP CONSTRAINT IF EXISTS xero_invoices_payment_tenant_unique;
+ALTER TABLE xero_invoices DROP CONSTRAINT IF EXISTS xero_invoices_payment_tenant_type_unique;
 
 -- Add new constraint that allows one invoice per payment+tenant+type
 -- This permits both an ACCREC invoice and ACCRECCREDIT credit note for the same payment

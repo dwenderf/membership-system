@@ -146,7 +146,8 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m5 5v1a4 4 0 01-4 4H8m0 0l3-3m-3 3l3 3"></path>
                     </svg>
-                    {payment.status === 'refunded' ? 'Fully Refunded' : 'Cannot Refund'}
+                    {totalRefunded >= payment.final_amount ? 'Fully Refunded' : 
+                     totalRefunded > 0 ? 'Partially Refunded' : 'Cannot Refund'}
                   </button>
                 )}
               </div>

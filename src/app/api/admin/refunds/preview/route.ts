@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
         .eq('id', refundRecord.id)
         
       return NextResponse.json({ 
-        error: 'Failed to create staging records' 
+        error: 'Failed to create staging records. This may be because the original invoice has not been synced to Xero yet, or there was an issue with the payment record.' 
       }, { status: 500 })
     }
 

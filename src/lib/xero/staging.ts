@@ -1042,7 +1042,16 @@ export class XeroStagingManager {
         .single()
       
       let lineItems = []
-      if (originalInvoice?.xero_invoice_line_items) {
+      if (invoiceError) {
+        logger.logXeroSync(
+          'staging-proportional-no-original-invoice',
+          'Original invoice not found for proportional refund, using fallback',
+          { refundId, paymentId, error: invoiceError.message },
+          'warn'
+        )
+      }
+      
+      if (originalInvoice?.xero_invoice_line_items && !invoiceError) {
         // Proportionally allocate refund across original line items
         const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
           (sum: number, item: any) => sum + item.line_amount, 0

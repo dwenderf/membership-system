@@ -47,6 +47,8 @@ export default function RefundModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [stagingData, setStagingData] = useState<any>(null)
+  const [isStaging, setIsStaging] = useState(false)
 
   const openModal = () => {
     setIsOpen(true)
@@ -59,7 +61,26 @@ export default function RefundModal({
     setSuccess('')
   }
 
-  const closeModal = () => {
+  const closeModal = async () => {
+    // If there's staging data, mark it as ignored
+    if (stagingData?.refund_id && stagingData?.staging_id) {
+      try {
+        await fetch('/api/admin/refunds/cancel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            refundId: stagingData.refund_id,
+            stagingId: stagingData.staging_id
+          })
+        })
+      } catch (error) {
+        console.error('Failed to cancel staged refund:', error)
+      }
+    }
+    
+    // Reset all state
     setIsOpen(false)
     setRefundType('proportional')
     setRefundAmount('')
@@ -68,6 +89,8 @@ export default function RefundModal({
     setReason('')
     setError('')
     setSuccess('')
+    setStagingData(null)
+    setIsStaging(false)
   }
 
   const validateDiscountCode = async (code: string) => {
@@ -149,35 +172,82 @@ export default function RefundModal({
     }
   }, [discountCode, refundType, paymentId, paymentAmount])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePreview = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setSuccess('')
-    setIsProcessing(true)
+    setIsStaging(true)
 
     try {
-      // Validate amount
-      const amountInCents = Math.round(parseFloat(refundAmount) * 100)
-      
-      if (isNaN(amountInCents) || amountInCents <= 0) {
-        setError('Please enter a valid refund amount')
-        return
+      let requestData: any = {
+        paymentId,
+        refundType
       }
 
-      if (amountInCents > availableAmount) {
-        setError(`Refund amount cannot exceed ${formatAmount(availableAmount)}`)
-        return
+      if (refundType === 'proportional') {
+        const amount = parseFloat(refundAmount)
+        
+        if (isNaN(amount) || amount <= 0) {
+          setError('Please enter a valid refund amount')
+          return
+        }
+
+        const amountInCents = Math.round(amount * 100)
+        if (amountInCents > availableAmount) {
+          setError(`Refund amount cannot exceed ${formatAmount(availableAmount)}`)
+          return
+        }
+
+        requestData.amount = amount
+      } else if (refundType === 'discount_code') {
+        if (!discountValidation?.isValid) {
+          setError('Please validate the discount code first')
+          return
+        }
+        requestData.discountValidation = discountValidation
       }
 
-      // Process refund
-      const response = await fetch('/api/admin/refunds', {
+      // Create staging records
+      const response = await fetch('/api/admin/refunds/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to stage refund')
+      }
+
+      setStagingData(data.staging)
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create refund staging')
+    } finally {
+      setIsStaging(false)
+    }
+  }
+
+  const handleConfirm = async () => {
+    if (!stagingData?.refund_id || !stagingData?.staging_id) {
+      setError('No staging data available')
+      return
+    }
+
+    setIsProcessing(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/admin/refunds/confirm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          paymentId,
-          amount: amountInCents,
+          refundId: stagingData.refund_id,
+          stagingId: stagingData.staging_id,
           reason: reason.trim()
         })
       })
@@ -188,7 +258,7 @@ export default function RefundModal({
         throw new Error(data.error || 'Failed to process refund')
       }
 
-      setSuccess(`Refund of ${formatAmount(amountInCents)} processed successfully`)
+      setSuccess(data.message)
       
       // Refresh the page after successful refund
       setTimeout(() => {
@@ -196,10 +266,34 @@ export default function RefundModal({
       }, 2000)
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setError(err instanceof Error ? err.message : 'Failed to process refund')
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  const handleCancel = async () => {
+    if (stagingData?.refund_id && stagingData?.staging_id) {
+      try {
+        await fetch('/api/admin/refunds/cancel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            refundId: stagingData.refund_id,
+            stagingId: stagingData.staging_id
+          })
+        })
+      } catch (error) {
+        console.error('Failed to cancel staged refund:', error)
+      }
+    }
+    
+    // Reset to form state
+    setStagingData(null)
+    setError('')
+    setSuccess('')
   }
 
   const handleFullRefund = () => {
@@ -292,8 +386,8 @@ export default function RefundModal({
             </div>
           )}
 
-          {!success && (
-            <form onSubmit={handleSubmit}>
+          {!success && !stagingData && (
+            <form onSubmit={handlePreview}>
               {/* Refund Type Selection */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -439,13 +533,118 @@ export default function RefundModal({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isProcessing || !isFormValid()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isStaging || !isFormValid()}
                 >
-                  {isProcessing ? 'Processing...' : 'Process Refund'}
+                  {isStaging ? 'Creating Preview...' : 'Preview Refund'}
                 </button>
               </div>
             </form>
+          )}
+
+          {/* Staging Preview */}
+          {!success && stagingData && (
+            <div>
+              <div className="mb-4">
+                <h4 className="text-lg font-medium text-gray-900 mb-2">Refund Preview</h4>
+                <p className="text-sm text-gray-600">
+                  Review the line items that will be created in Xero before confirming the refund.
+                </p>
+              </div>
+
+              {/* Refund Summary */}
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-sm">
+                  <div className="font-medium text-blue-900">
+                    {stagingData.refund_type === 'proportional' ? 'Proportional Refund' : 'Discount Code Refund'}: {formatAmount(stagingData.total_amount)}
+                  </div>
+                  {stagingData.discount_info && (
+                    <div className="text-blue-700 mt-1">
+                      {stagingData.discount_info.code} - {stagingData.discount_info.category}
+                      {stagingData.discount_info.is_partial && (
+                        <div className="text-xs text-orange-600 mt-1">
+                          {stagingData.discount_info.partial_message}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Line Items Preview */}
+              <div className="mb-6">
+                <h5 className="text-sm font-medium text-gray-900 mb-3">Credit Note Line Items</h5>
+                <div className="border rounded-md">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account Code</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {stagingData.line_items?.map((item: any, index: number) => (
+                        <tr key={index}>
+                          <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
+                          <td className="px-4 py-2 text-sm text-gray-500">{item.account_code}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                            {formatAmount(item.line_amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Confirmation Reason */}
+              <div className="mb-6">
+                <label htmlFor="confirmReason" className="block text-sm font-medium text-gray-700 mb-1">
+                  Final Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="confirmReason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Confirm the reason for this refund..."
+                  required
+                  disabled={isProcessing}
+                />
+              </div>
+
+              {/* Confirmation Actions */}
+              <div className="flex justify-between space-x-3">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={isProcessing}
+                >
+                  ← Back to Edit
+                </button>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    disabled={isProcessing}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isProcessing || !reason.trim()}
+                  >
+                    {isProcessing ? 'Processing Refund...' : 'Confirm & Process Refund'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

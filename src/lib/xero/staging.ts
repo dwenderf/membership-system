@@ -785,17 +785,216 @@ export class XeroStagingManager {
   }
 
   /**
-   * Create staging records for a credit note (refund)
+   * Create staging records for a discount-based credit note (refund)
    */
-  async createCreditNoteStaging(
+  async createDiscountCreditNoteStaging(
+    refundId: string,
+    paymentId: string, 
+    discountCode: string,
+    discountAmount: Cents,
+    discountAccountingCode: string,
+    discountCategoryName: string
+  ): Promise<string | false> {
+    try {
+      logger.logXeroSync(
+        'staging-discount-credit-note-start',
+        'Creating discount-based credit note staging',
+        { refundId, paymentId, discountCode, discountAmount },
+        'info'
+      )
+
+      // Get payment details for staging metadata
+      const { data: payment, error: paymentError } = await this.supabase
+        .from('payments')
+        .select(`
+          *,
+          users!payments_user_id_fkey (
+            id,
+            first_name,
+            last_name,
+            member_id,
+            email
+          )
+        `)
+        .eq('id', paymentId)
+        .single()
+      
+      if (paymentError || !payment) {
+        logger.logXeroSync(
+          'staging-discount-credit-note-payment-error',
+          'Failed to get payment details for discount credit note staging',
+          { refundId, paymentId, error: paymentError?.message },
+          'error'
+        )
+        return false
+      }
+
+      // Create single line item for discount refund
+      const lineItems = [{
+        description: `Credit: ${discountCategoryName} discount (${discountCode})`,
+        line_amount: discountAmount,
+        account_code: discountAccountingCode,
+        tax_type: 'NONE',
+        line_item_type: 'discount_refund'
+      }]
+
+      // Create credit note staging record in xero_invoices table
+      const { data: stagingRecord, error: stagingError } = await this.supabase
+        .from('xero_invoices')
+        .insert({
+          payment_id: paymentId,
+          invoice_type: 'ACCRECCREDIT', // Credit note type
+          invoice_status: 'DRAFT', // Will be created as draft in Xero
+          total_amount: discountAmount,
+          net_amount: discountAmount,
+          sync_status: 'staged', // Waiting for Stripe confirmation
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            refund_id: refundId,
+            customer: {
+              id: payment.users.id,
+              name: `${payment.users.first_name} ${payment.users.last_name}`,
+              email: payment.users.email,
+              member_id: payment.users.member_id
+            },
+            refund_type: 'discount_code',
+            discount_code: discountCode,
+            discount_category: discountCategoryName,
+            discount_accounting_code: discountAccountingCode,
+            refund_amount: discountAmount,
+            original_payment_id: paymentId
+          }
+        })
+        .select()
+        .single()
+      
+      if (stagingError) {
+        logger.logXeroSync(
+          'staging-discount-credit-note-create-error',
+          'Failed to create discount credit note staging record',
+          { refundId, error: stagingError.message },
+          'error'
+        )
+        return false
+      }
+
+      // Create line items for the credit note
+      const { error: lineItemsError } = await this.supabase
+        .from('xero_invoice_line_items')
+        .insert(
+          lineItems.map((item: any) => ({
+            xero_invoice_id: stagingRecord.id,
+            description: item.description,
+            quantity: 1,
+            unit_amount: item.line_amount,
+            line_amount: item.line_amount,
+            account_code: item.account_code,
+            tax_type: item.tax_type,
+            line_item_type: item.line_item_type
+          }))
+        )
+      
+      if (lineItemsError) {
+        logger.logXeroSync(
+          'staging-discount-credit-note-line-items-error',
+          'Failed to create discount credit note line items',
+          { refundId, error: lineItemsError.message },
+          'error'
+        )
+        // Clean up the staging record if line items failed
+        await this.supabase
+          .from('xero_invoices')
+          .delete()
+          .eq('id', stagingRecord.id)
+        return false
+      }
+
+      // Get Stripe bank account code for payment staging
+      const stripeBankAccountCode = await this.getStripeBankAccountCode()
+      
+      // Create corresponding payment record for the refund (negative amount = money going out)
+      const { data: paymentStaging, error: paymentStagingError } = await this.supabase
+        .from('xero_payments')
+        .insert({
+          xero_invoice_id: stagingRecord.id, // Links to the credit note record
+          tenant_id: null, // Will be populated during sync
+          xero_payment_id: null, // Will be populated when synced to Xero
+          payment_method: 'stripe',
+          bank_account_code: stripeBankAccountCode,
+          amount_paid: negativeCents(discountAmount), // Negative amount = money going OUT
+          stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
+          reference: `Discount Refund ${refundId.slice(0, 8)}`,
+          sync_status: 'staged', // Waiting for Stripe confirmation
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            refund_id: refundId,
+            payment_id: paymentId,
+            refund_type: 'discount_code',
+            discount_code: discountCode,
+            discount_category: discountCategoryName,
+            refund_amount: discountAmount,
+            credit_note_id: stagingRecord.id
+          }
+        })
+        .select()
+        .single()
+      
+      if (paymentStagingError) {
+        logger.logXeroSync(
+          'staging-discount-credit-note-payment-error',
+          'Failed to create discount credit note payment staging record',
+          { refundId, error: paymentStagingError.message },
+          'error'
+        )
+        // Clean up the credit note staging record if payment failed
+        await this.supabase
+          .from('xero_invoices')
+          .delete()
+          .eq('id', stagingRecord.id)
+        return false
+      }
+
+      logger.logXeroSync(
+        'staging-discount-credit-note-success',
+        'Discount credit note staging completed successfully',
+        { 
+          refundId, 
+          creditNoteId: stagingRecord.id, 
+          paymentId: paymentStaging.id,
+          discountCode,
+          discountAmount
+        },
+        'info'
+      )
+      
+      return stagingRecord.id // Return the staging record ID for reference
+      
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-discount-credit-note-error',
+        'Error staging discount credit note for refund',
+        { 
+          refundId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      return false
+    }
+  }
+
+  /**
+   * Create staging records for a proportional credit note (refund)
+   */
+  async createProportionalCreditNoteStaging(
     refundId: string, 
     paymentId: string, 
     refundAmountCents: Cents
-  ): Promise<boolean> {
+  ): Promise<string | false> {
     try {
       logger.logXeroSync(
-        'staging-credit-note-start',
-        'Creating credit note staging for refund',
+        'staging-proportional-credit-note-start',
+        'Creating proportional credit note staging for refund',
         { refundId, paymentId, refundAmount: refundAmountCents },
         'info'
       )
@@ -889,7 +1088,7 @@ export class XeroStagingManager {
           invoice_status: 'DRAFT', // Will be created as draft in Xero
           total_amount: refundAmountCents,
           net_amount: refundAmountCents,
-          sync_status: 'pending', // Ready for sync
+          sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
             refund_id: refundId,
@@ -965,7 +1164,7 @@ export class XeroStagingManager {
           amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
           stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
           reference: `Refund ${refundId.slice(0, 8)}`,
-          sync_status: 'pending', // Ready for sync (refund is confirmed by webhook)
+          sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
             refund_id: refundId,
@@ -1003,7 +1202,8 @@ export class XeroStagingManager {
         },
         'info'
       )
-      return true
+      
+      return stagingRecord.id // Return the staging record ID for reference
       
     } catch (error) {
       logger.logXeroSync(
@@ -1016,6 +1216,156 @@ export class XeroStagingManager {
         'error'
       )
       return false
+    }
+  }
+
+  /**
+   * Create staging records for refunds with type-specific handling
+   */
+  async createRefundStaging(
+    refundId: string,
+    paymentId: string,
+    refundType: 'proportional' | 'discount_code',
+    refundData: {
+      amount?: Cents // For proportional refunds
+      discountCode?: string // For discount refunds  
+      discountAmount?: Cents
+      discountAccountingCode?: string
+      discountCategoryName?: string
+    }
+  ): Promise<string | false> {
+    if (refundType === 'proportional' && refundData.amount) {
+      return this.createProportionalCreditNoteStaging(refundId, paymentId, refundData.amount)
+    } else if (refundType === 'discount_code' && refundData.discountCode && refundData.discountAmount) {
+      return this.createDiscountCreditNoteStaging(
+        refundId,
+        paymentId, 
+        refundData.discountCode,
+        refundData.discountAmount,
+        refundData.discountAccountingCode!,
+        refundData.discountCategoryName!
+      )
+    } else {
+      return false
+    }
+  }
+
+  /**
+   * Preview staging records that would be created for a refund
+   * Returns the actual line items and amounts that would be staged
+   */
+  async previewRefundStaging(
+    paymentId: string,
+    refundType: 'proportional' | 'discount_code',
+    refundData: {
+      amount?: Cents
+      discountCode?: string
+      discountAmount?: Cents
+      discountAccountingCode?: string
+      discountCategoryName?: string
+    }
+  ): Promise<{
+    success: boolean
+    lineItems?: Array<{
+      description: string
+      line_amount: number
+      account_code: string
+      tax_type: string
+    }>
+    totalAmount?: Cents
+    error?: string
+  }> {
+    try {
+      if (refundType === 'proportional' && refundData.amount) {
+        // Get original invoice line items to build proportional preview
+        const { data: originalInvoice, error: invoiceError } = await this.supabase
+          .from('xero_invoices')
+          .select(`
+            *,
+            xero_invoice_line_items (
+              description,
+              line_amount,
+              account_code,
+              tax_type
+            )
+          `)
+          .eq('payment_id', paymentId)
+          .single()
+        
+        if (invoiceError || !originalInvoice?.xero_invoice_line_items) {
+          return {
+            success: false,
+            error: 'Original invoice line items not found - cannot create proportional refund preview'
+          }
+        }
+
+        // Calculate proportional line items (same logic as createProportionalCreditNoteStaging)
+        const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
+          (sum: number, item: any) => sum + item.line_amount, 0
+        )
+        
+        const lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+          const proportion = item.line_amount / totalInvoiceAmount
+          const creditAmount = centsToCents(refundData.amount! * proportion)
+          
+          return {
+            description: `Credit: ${item.description}`,
+            line_amount: creditAmount,
+            account_code: item.account_code,
+            tax_type: item.tax_type
+          }
+        })
+
+        // Handle rounding to match exact refund amount
+        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+        const difference = refundData.amount - calculatedTotal
+        if (difference !== 0 && lineItems.length > 0) {
+          lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
+        }
+
+        return {
+          success: true,
+          lineItems,
+          totalAmount: refundData.amount
+        }
+
+      } else if (refundType === 'discount_code' && refundData.discountAmount && refundData.discountCode) {
+        // Simple discount refund preview
+        const lineItems = [{
+          description: `Credit: ${refundData.discountCategoryName} discount (${refundData.discountCode})`,
+          line_amount: refundData.discountAmount,
+          account_code: refundData.discountAccountingCode || 'DISCOUNT',
+          tax_type: 'NONE'
+        }]
+
+        return {
+          success: true,
+          lineItems,
+          totalAmount: refundData.discountAmount
+        }
+
+      } else {
+        return {
+          success: false,
+          error: 'Invalid refund data provided for preview'
+        }
+      }
+    } catch (error) {
+      logger.logXeroSync(
+        'staging-preview-error',
+        'Error generating refund staging preview',
+        { 
+          paymentId,
+          refundType,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'error'
+      )
+      
+      return {
+        success: false,
+        error: 'Failed to generate refund preview'
+      }
     }
   }
 

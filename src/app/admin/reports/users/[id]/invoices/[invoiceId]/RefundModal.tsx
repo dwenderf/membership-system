@@ -80,16 +80,32 @@ export default function RefundModal({
     setError('')
 
     try {
-      // For refund context, we need to adapt the validation
-      // We'll create a new endpoint or modify existing one
-      const response = await fetch('/api/validate-discount-code-refund', {
+      // First, get the registration associated with this payment
+      // Since a payment can have multiple registrations, we'll use the first one for season context
+      const registrationResponse = await fetch(`/api/admin/payments/${paymentId}/registrations`)
+      
+      if (!registrationResponse.ok) {
+        throw new Error('Failed to fetch registration information')
+      }
+      
+      const registrationData = await registrationResponse.json()
+      
+      if (!registrationData.registrations || registrationData.registrations.length === 0) {
+        throw new Error('No registration found for this payment')
+      }
+
+      // Use the first registration for season context
+      const registrationId = registrationData.registrations[0].registration_id
+
+      // Use existing discount validation endpoint
+      const response = await fetch('/api/validate-discount-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           code: code.trim(),
-          paymentId: paymentId,
+          registrationId: registrationId,
           amount: paymentAmount // Original payment amount
         })
       })
@@ -97,15 +113,24 @@ export default function RefundModal({
       const result = await response.json()
       setDiscountValidation(result)
 
-      if (result.isPartialDiscount && result.partialDiscountMessage) {
-        setError(result.partialDiscountMessage)
+      // Show all validation messages in main error area to prevent form jumping
+      if (result.isValid) {
+        if (result.isPartialDiscount && result.partialDiscountMessage) {
+          setError(result.partialDiscountMessage)
+        } else {
+          setError('') // Clear any previous errors
+        }
+      } else {
+        // Show validation error in main error area
+        setError(result.error || 'Failed to validate discount code')
       }
     } catch (err) {
       setDiscountValidation({
         isValid: false,
         error: 'Failed to validate discount code'
       })
-      setError('Failed to validate discount code')
+      // Also show error in main error area
+      setError(err instanceof Error ? err.message : 'Failed to validate discount code')
     } finally {
       setIsValidatingDiscount(false)
     }
@@ -374,11 +399,6 @@ export default function RefundModal({
                             {discountValidation.partialDiscountMessage}
                           </div>
                         )}
-                      </div>
-                    )}
-                    {discountValidation && !discountValidation.isValid && (
-                      <div className="mt-1 text-xs text-red-600">
-                        {discountValidation.error}
                       </div>
                     )}
                   </div>

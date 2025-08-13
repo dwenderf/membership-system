@@ -829,6 +829,13 @@ export class XeroStagingManager {
         return false
       }
 
+      // Get original invoice for reference
+      const { data: originalInvoice } = await this.supabase
+        .from('xero_invoices')
+        .select('invoice_number')
+        .eq('payment_id', paymentId)
+        .single()
+
       // Create single line item for discount refund
       const lineItems = [{
         description: `Credit: ${discountCategoryName} discount (${discountCode})`,
@@ -923,7 +930,7 @@ export class XeroStagingManager {
           bank_account_code: stripeBankAccountCode,
           amount_paid: negativeCents(discountAmount), // Negative amount = money going OUT
           stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
-          reference: `Discount Refund ${refundId.slice(0, 8)}`,
+          reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
@@ -1172,7 +1179,7 @@ export class XeroStagingManager {
           bank_account_code: stripeBankAccountCode,
           amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
           stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
-          reference: `Refund ${refundId.slice(0, 8)}`,
+          reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {

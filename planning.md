@@ -36,7 +36,114 @@
 - **API Endpoint Organization**: Moved unpaid invoices API to proper location
 - **TypeScript Types**: Updated database types for new user attributes
 
+### Refund Processing System ✅
+- **Complete Staging Workflow**: Implemented staging-first approach for credit note creation instead of direct Xero API calls
+- **Proportional Line Item Allocation**: Credit notes maintain proper accounting structure with positive/negative line items (e.g., $30 charge + (-$1 discount) = $29 credit)
+- **Enhanced Admin UI**: Improved invoice history display with proper credit note vs invoice labeling and detailed refund history
+- **Xero Integration**: Full credit note sync with payment allocation showing credits as "applied" in Xero
+- **Database Consistency**: Unified refund processing with proper currency handling and exact ID mapping
+- **UI/UX Improvements**: Clean admin interface with credit note line items, refund status tracking, and consolidated user views
+
 ## Pending Features & Improvements
+
+### Enhanced Refund System - Two-Type Refund Processing 🚧
+**Status**: UI Foundation Complete, API Endpoints Needed
+
+**Problem**: Current refund system only supports proportional refunds, but admins need to handle two distinct use cases:
+1. **Standard Refunds**: Injuries, accidental purchases, cancellations (proportional refund)
+2. **Discount Application**: User forgot to apply discount code at purchase time (retroactive discount)
+
+**Solution**: Enhanced RefundModal with two refund types and improved technical architecture.
+
+#### ✅ Completed: UI Foundation
+- **RefundModal Enhancement**: Added radio button selection for "Proportional Refund" vs "Apply Discount Code"
+- **Conditional Forms**: Different input fields based on selected refund type
+- **Real-time Validation Framework**: Foundation for discount code validation with preview
+- **Enhanced State Management**: All necessary state variables for both workflows
+- **Preview Functionality**: Shows discount details, refund amount, and partial discount messages
+
+#### 🚧 Remaining Implementation:
+
+**API Endpoints Needed:**
+```typescript
+// Adapt existing discount validation for refund context
+POST /api/validate-discount-code-refund
+{
+  code: string,
+  paymentId: string,    // Instead of registrationId
+  amount: number        // Original payment amount
+}
+
+// Enhanced refund creation with immediate staging
+POST /api/admin/refunds
+{
+  type: 'proportional' | 'discount_code',
+  paymentId: string,
+  amount?: number,      // For proportional refunds
+  discountCode?: string, // For discount code refunds
+  reason: string
+}
+// Response includes xero_invoices.id for exact webhook mapping
+```
+
+**Backend Enhancements:**
+
+1. **Discount Validation for Refunds** (`/src/app/api/validate-discount-code-refund/route.ts`):
+   - Adapt existing `/api/validate-discount-code` logic for refund context
+   - Determine season from payment/invoice instead of registration
+   - Maintain season usage limits and partial discount logic
+   - Return discount amount, accounting code, and category details
+
+2. **Enhanced Staging System** (`/src/lib/xero/staging.ts`):
+   ```typescript
+   // New method for discount-based credit notes
+   async createDiscountCreditNoteStaging(
+     refundId: string,
+     paymentId: string,
+     discountCode: DiscountCode,
+     refundAmountCents: Cents
+   ): Promise<{success: boolean, xeroInvoiceId?: string}>
+   
+   // Single line item with discount details instead of proportional allocation
+   lineItems = [{
+     description: `Discount Applied: ${discountCode.code} - ${discountCode.category.name}`,
+     line_amount: -discountCode.amount, // Negative for discount
+     account_code: discountCode.accounting_code,
+     discount_code_id: discountCode.id
+   }]
+   ```
+
+3. **Immediate Staging Architecture**:
+   - Create credit note staging records immediately when admin submits refund
+   - Mark as `sync_status: 'staged'` with full metadata
+   - Include `xero_invoice_id` in refund metadata for exact webhook mapping
+   - Eliminates search-and-match issues in webhook processing
+
+4. **Simplified Webhook Processing** (`/src/app/api/stripe-webhook/route.ts`):
+   ```typescript
+   // Direct lookup instead of payment_id searching
+   const xeroInvoiceId = refund.metadata?.xero_invoice_id
+   if (xeroInvoiceId) {
+     await supabase
+       .from('xero_invoices')
+       .update({ sync_status: 'pending' })
+       .eq('id', xeroInvoiceId)
+   }
+   ```
+
+**Benefits:**
+- **Exact ID Mapping**: Eliminates constraint violations and search ambiguity
+- **Two Clear Use Cases**: Addresses real-world admin needs
+- **Preview Before Submit**: Admins see exactly what will happen
+- **Reuses Existing Logic**: Leverages proven discount validation system
+- **Improved Reliability**: Immediate staging + exact mapping = fewer edge cases
+
+**Files to Create/Modify:**
+- `✅ /src/app/admin/reports/users/[id]/invoices/[invoiceId]/RefundModal.tsx` - Enhanced UI
+- `🚧 /src/app/api/validate-discount-code-refund/route.ts` - New validation endpoint
+- `🚧 /src/lib/xero/staging.ts` - Add `createDiscountCreditNoteStaging` method
+- `🚧 /src/app/api/admin/refunds/route.ts` - Update to handle both refund types
+- `🚧 /src/app/api/stripe-webhook/route.ts` - Simplify with exact ID mapping
 
 ### Database Architecture Cleanup - Remove payment_items Table
 **Priority: HIGH** - Currently causing production errors

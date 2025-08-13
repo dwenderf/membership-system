@@ -63,7 +63,7 @@ export default function RefundModal({
 
   const closeModal = async () => {
     // If there's staging data, mark it as ignored
-    if (stagingData?.refund_id && stagingData?.staging_id) {
+    if (stagingData?.staging_id) {
       try {
         await fetch('/api/admin/refunds/cancel', {
           method: 'POST',
@@ -71,7 +71,7 @@ export default function RefundModal({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            refundId: stagingData.refund_id,
+            refundId: stagingData.refund_id, // Will be null during preview
             stagingId: stagingData.staging_id
           })
         })
@@ -231,7 +231,7 @@ export default function RefundModal({
   }
 
   const handleConfirm = async () => {
-    if (!stagingData?.refund_id || !stagingData?.staging_id) {
+    if (!stagingData?.staging_id) {
       setError('No staging data available')
       return
     }
@@ -246,8 +246,9 @@ export default function RefundModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          refundId: stagingData.refund_id,
           stagingId: stagingData.staging_id,
+          paymentId: stagingData.payment_info.payment_id,
+          refundAmount: stagingData.total_amount,
           reason: reason.trim()
         })
       })
@@ -273,7 +274,7 @@ export default function RefundModal({
   }
 
   const handleCancel = async () => {
-    if (stagingData?.refund_id && stagingData?.staging_id) {
+    if (stagingData?.staging_id) {
       try {
         await fetch('/api/admin/refunds/cancel', {
           method: 'POST',
@@ -281,7 +282,7 @@ export default function RefundModal({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            refundId: stagingData.refund_id,
+            refundId: stagingData.refund_id, // Will be null during preview
             stagingId: stagingData.staging_id
           })
         })

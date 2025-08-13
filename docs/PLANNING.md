@@ -426,6 +426,50 @@ email_logs (
 - Payment export capabilities
 - Revenue reporting by category
 
+### Enhanced Refund System 🚧
+**Status**: UI Foundation Complete, API Implementation Pending
+
+The refund system addresses two primary use cases for admin-initiated refunds:
+1. **Standard Refunds**: Injuries, accidental purchases, cancellations
+2. **Retroactive Discount Application**: User forgot to apply discount code at purchase
+
+#### Completed Features ✅
+- **Staging-First Architecture**: Credit notes use database staging before Xero sync
+- **Proportional Line Item Allocation**: Maintains accounting structure (positive charges + negative discounts)
+- **Enhanced Admin UI**: Comprehensive refund history with credit note line items
+- **Xero Integration**: Full credit note sync with payment allocation
+- **Two-Type RefundModal**: Radio selection between proportional and discount code refunds
+- **Real-time Validation Framework**: Foundation for discount code validation with preview
+
+#### Architecture Benefits
+- **Exact ID Mapping**: Eliminates webhook search-and-match edge cases
+- **Immediate Staging**: Credit notes staged when admin submits, not when webhook arrives
+- **Proper Accounting**: Credit notes preserve original invoice structure
+- **Season Usage Tracking**: Discount validation respects per-season usage limits
+
+#### Remaining Implementation 🚧
+- **Discount Validation API**: Adapt existing logic for refund context (season from payment vs registration)
+- **Enhanced Staging Methods**: Discount-based credit notes with single line items vs proportional allocation
+- **Webhook Simplification**: Direct xero_invoice_id lookup instead of payment_id searching
+- **Preview Functionality**: Show exact line items and amounts before submission
+
+#### Technical Architecture
+```typescript
+// Two refund pathways:
+type RefundType = 'proportional' | 'discount_code'
+
+// Proportional: Current behavior
+- Calculate proportional line items based on original invoice
+- Maintain positive/negative amounts (charges/discounts)
+- Create multiple line items matching original structure
+
+// Discount Code: New behavior  
+- Validate discount code with season usage limits
+- Create single line item for discount amount
+- Use discount's accounting code and category
+- Handle partial discounts when hitting usage caps
+```
+
 ## Security Considerations
 
 ### Authentication

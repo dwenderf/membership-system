@@ -3,6 +3,27 @@
 import { useState } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 
+type RefundType = 'proportional' | 'discount_code'
+
+interface DiscountValidation {
+  isValid: boolean
+  discountCode?: {
+    id: string
+    code: string
+    percentage: number
+    category: {
+      id: string
+      name: string
+      accounting_code: string
+      max_discount_per_user_per_season: number | null
+    }
+  }
+  discountAmount?: number
+  isPartialDiscount?: boolean
+  partialDiscountMessage?: string
+  error?: string
+}
+
 interface RefundModalProps {
   paymentId: string
   availableAmount: number
@@ -17,7 +38,11 @@ export default function RefundModal({
   invoiceNumber 
 }: RefundModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [refundType, setRefundType] = useState<RefundType>('proportional')
   const [refundAmount, setRefundAmount] = useState('')
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountValidation, setDiscountValidation] = useState<DiscountValidation | null>(null)
+  const [isValidatingDiscount, setIsValidatingDiscount] = useState(false)
   const [reason, setReason] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
@@ -25,7 +50,10 @@ export default function RefundModal({
 
   const openModal = () => {
     setIsOpen(true)
+    setRefundType('proportional')
     setRefundAmount('')
+    setDiscountCode('')
+    setDiscountValidation(null)
     setReason('')
     setError('')
     setSuccess('')
@@ -33,10 +61,54 @@ export default function RefundModal({
 
   const closeModal = () => {
     setIsOpen(false)
+    setRefundType('proportional')
     setRefundAmount('')
+    setDiscountCode('')
+    setDiscountValidation(null)
     setReason('')
     setError('')
     setSuccess('')
+  }
+
+  const validateDiscountCode = async (code: string) => {
+    if (!code.trim()) {
+      setDiscountValidation(null)
+      return
+    }
+
+    setIsValidatingDiscount(true)
+    setError('')
+
+    try {
+      // For refund context, we need to adapt the validation
+      // We'll create a new endpoint or modify existing one
+      const response = await fetch('/api/validate-discount-code-refund', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code.trim(),
+          paymentId: paymentId,
+          amount: paymentAmount // Original payment amount
+        })
+      })
+
+      const result = await response.json()
+      setDiscountValidation(result)
+
+      if (result.isPartialDiscount && result.partialDiscountMessage) {
+        setError(result.partialDiscountMessage)
+      }
+    } catch (err) {
+      setDiscountValidation({
+        isValid: false,
+        error: 'Failed to validate discount code'
+      })
+      setError('Failed to validate discount code')
+    } finally {
+      setIsValidatingDiscount(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,9 +179,23 @@ export default function RefundModal({
     return reason.trim().length > 0
   }
 
+  // Get effective refund amount based on type
+  const getEffectiveRefundAmount = () => {
+    if (refundType === 'discount_code' && discountValidation?.isValid) {
+      return discountValidation.discountAmount || 0
+    }
+    return Math.round(parseFloat(refundAmount) * 100)
+  }
+
   // Check if form is valid for submission
   const isFormValid = () => {
-    return isValidAmount() && isValidReason()
+    const hasValidReason = isValidReason()
+    
+    if (refundType === 'proportional') {
+      return isValidAmount() && hasValidReason
+    } else {
+      return discountValidation?.isValid && hasValidReason
+    }
   }
 
   if (!isOpen) {
@@ -170,7 +256,43 @@ export default function RefundModal({
 
           {!success && (
             <form onSubmit={handleSubmit}>
-              {/* Refund amount */}
+              {/* Refund Type Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Refund Type
+                </label>
+                <div className="flex space-x-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      name="refundType"
+                      value="proportional"
+                      checked={refundType === 'proportional'}
+                      onChange={(e) => setRefundType(e.target.value as RefundType)}
+                      className="form-radio h-4 w-4 text-blue-600"
+                      disabled={isProcessing}
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Proportional Refund</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      name="refundType"
+                      value="discount_code"
+                      checked={refundType === 'discount_code'}
+                      onChange={(e) => setRefundType(e.target.value as RefundType)}
+                      className="form-radio h-4 w-4 text-blue-600"
+                      disabled={isProcessing}
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Apply Discount Code</span>
+                  </label>
+                </div>
+              </div>
+
+              {refundType === 'proportional' ? (
+                /* Proportional Refund Fields */
+                <>
+                  {/* Refund amount */}
               <div className="mb-4">
                 <label htmlFor="refundAmount" className="block text-sm font-medium text-gray-700 mb-1">
                   Refund Amount ($)
@@ -204,8 +326,56 @@ export default function RefundModal({
                   </div>
                 )}
               </div>
+                </>
+              ) : (
+                /* Discount Code Refund Fields */
+                <>
+                  <div className="mb-4">
+                    <label htmlFor="discountCode" className="block text-sm font-medium text-gray-700 mb-1">
+                      Discount Code
+                    </label>
+                    <input
+                      type="text"
+                      id="discountCode"
+                      value={discountCode}
+                      onChange={(e) => {
+                        setDiscountCode(e.target.value)
+                        validateDiscountCode(e.target.value)
+                      }}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter discount code"
+                      disabled={isProcessing || isValidatingDiscount}
+                    />
+                    {isValidatingDiscount && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        Validating discount code...
+                      </div>
+                    )}
+                    {discountValidation?.isValid && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                        <div className="text-sm text-green-800 font-medium">
+                          {discountValidation.discountCode?.code} - {discountValidation.discountCode?.category.name}
+                        </div>
+                        <div className="text-sm text-green-600">
+                          Refund Amount: {formatAmount(discountValidation.discountAmount || 0)}
+                        </div>
+                        {discountValidation.isPartialDiscount && (
+                          <div className="text-xs text-orange-600 mt-1">
+                            {discountValidation.partialDiscountMessage}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {discountValidation && !discountValidation.isValid && (
+                      <div className="mt-1 text-xs text-red-600">
+                        {discountValidation.error}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
-              {/* Reason */}
+              {/* Reason - common to both types */}
               <div className="mb-6">
                 <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
                   Reason <span className="text-red-500">*</span>

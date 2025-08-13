@@ -694,16 +694,16 @@ export class XeroBatchSyncManager {
         console.log(`📋 Using ${creditNoteRecord.line_items.length} staged line items from database`)
         for (const item of creditNoteRecord.line_items) {
           // Line items are stored in cents in database, convert to dollars for Xero
-          const unitAmountInCents = centsToCents(Math.abs(item.unit_amount || item.line_amount)) // Use unit_amount if available, fallback to line_amount
-          const lineAmountInCents = centsToCents(Math.abs(item.line_amount))
+          const unitAmountInCents = centsToCents(item.unit_amount || item.line_amount) // Use unit_amount if available, fallback to line_amount, maintain sign
+          const lineAmountInCents = centsToCents(item.line_amount) // Maintain sign for proper accounting
           
           lineItems.push({
             description: item.description || `Refund: ${metadata.reason || 'Refund'}`,
             quantity: item.quantity || 1,
-            unitAmount: centsToDollars(unitAmountInCents), // Convert cents to dollars, ensure positive
+            unitAmount: centsToDollars(unitAmountInCents), // Convert cents to dollars, maintain sign
             accountCode: item.account_code || '400',
             taxType: item.tax_type || 'NONE',
-            lineAmount: centsToDollars(lineAmountInCents) // Convert cents to dollars, ensure positive
+            lineAmount: centsToDollars(lineAmountInCents) // Convert cents to dollars, maintain sign
           })
         }
       } else {

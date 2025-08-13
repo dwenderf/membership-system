@@ -133,30 +133,88 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Generate preview of refund staging without creating actual records
-    // Use the xeroStagingManager preview method instead of creating real staging
-    console.log('[refunds/preview] Calling xeroStagingManager.previewRefundStaging', { paymentId, refundType, refundData })
-    const previewResult = await xeroStagingManager.previewRefundStaging(
+    // Create staging records that will be used for the actual refund
+    // First create a refund record to get ID for staging
+    const refundAmount = refundData.amount || refundData.discountAmount || 0
+    
+    // Ensure amount is positive (required by DB constraint)
+    if (refundAmount <= 0) {
+      return NextResponse.json({ 
+        error: 'Refund amount must be greater than 0' 
+      }, { status: 400 })
+    }
+
+    const { data: refundRecord, error: insertError } = await supabase
+      .from('refunds')
+      .insert({
+        payment_id: paymentId,
+        user_id: payment.user_id,
+        amount: refundAmount,
+        reason: `Staged ${refundType} refund`, // Will be updated when confirmed
+        status: 'pending', // Valid status - will remain pending until confirmed
+        processed_by: authUser.id,
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('[refunds/preview] Failed to create refund record:', insertError)
+      return NextResponse.json({ 
+        error: 'Failed to create refund staging record' 
+      }, { status: 500 })
+    }
+
+    console.log('[refunds/preview] Created refund record:', refundRecord.id)
+
+    // Create staging records using the refund ID
+    console.log('[refunds/preview] Calling xeroStagingManager.createRefundStaging', { refundId: refundRecord.id, paymentId, refundType, refundData })
+    const stagingId = await xeroStagingManager.createRefundStaging(
+      refundRecord.id,
       paymentId,
       refundType,
       refundData
     )
-    console.log('[refunds/preview] Preview result:', previewResult)
+    console.log('[refunds/preview] Staging result:', stagingId)
 
-    if (!previewResult.success) {
-      console.error('[refunds/preview] Preview failed:', previewResult.error)
+    if (!stagingId) {
+      // Clean up the refund record if staging failed
+      await supabase
+        .from('refunds')
+        .delete()
+        .eq('id', refundRecord.id)
+        
       return NextResponse.json({ 
-        error: previewResult.error || 'Failed to generate refund preview' 
+        error: 'Failed to create staging records. This may be because the original invoice has not been synced to Xero yet, or there was an issue with the payment record.' 
       }, { status: 500 })
     }
 
-    console.log('[refunds/preview] Success, returning preview response')
+    // Get the actual staged line items to show to admin
+    const { data: stagedInvoice } = await supabase
+      .from('xero_invoices')
+      .select(`
+        id,
+        total_amount,
+        invoice_type,
+        sync_status,
+        xero_invoice_line_items (
+          description,
+          line_amount,
+          account_code,
+          tax_type
+        )
+      `)
+      .eq('id', stagingId)
+      .single()
+
+    console.log('[refunds/preview] Success, returning staging response')
     return NextResponse.json({
       success: true,
-      preview: {
+      staging: {
+        refund_id: refundRecord.id,
+        staging_id: stagingId,
         refund_type: refundType,
-        total_amount: previewResult.totalAmount || 0,
-        line_items: previewResult.lineItems || [],
+        total_amount: stagedInvoice?.total_amount || 0,
+        line_items: stagedInvoice?.xero_invoice_line_items || [],
         payment_info: {
           payment_id: paymentId,
           original_amount: payment.final_amount,

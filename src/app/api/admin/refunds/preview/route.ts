@@ -113,73 +113,26 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create staging records first (they'll be marked 'ignore' if user cancels)
-    // First create a refund record to get ID for staging
-    const { data: refundRecord, error: insertError } = await supabase
-      .from('refunds')
-      .insert({
-        payment_id: paymentId,
-        user_id: payment.user_id,
-        amount: refundData.amount || refundData.discountAmount,
-        reason: `Staged ${refundType} refund`, // Will be updated when confirmed
-        status: 'staged', // New status for staged but not submitted
-        processed_by: authUser.id,
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      return NextResponse.json({ 
-        error: 'Failed to create refund staging record' 
-      }, { status: 500 })
-    }
-
-    // Create staging records using the refund ID
-    const stagingId = await xeroStagingManager.createRefundStaging(
-      refundRecord.id,
+    // Generate preview of refund staging without creating actual records
+    // Use the xeroStagingManager preview method instead of creating real staging
+    const previewResult = await xeroStagingManager.previewRefundStaging(
       paymentId,
       refundType,
       refundData
     )
 
-    if (!stagingId) {
-      // Clean up the refund record if staging failed
-      await supabase
-        .from('refunds')
-        .delete()
-        .eq('id', refundRecord.id)
-        
+    if (!previewResult.success) {
       return NextResponse.json({ 
-        error: 'Failed to create staging records. This may be because the original invoice has not been synced to Xero yet, or there was an issue with the payment record.' 
+        error: previewResult.error || 'Failed to generate refund preview' 
       }, { status: 500 })
     }
 
-    // Get the actual staged line items to show to admin
-    const { data: stagedInvoice } = await supabase
-      .from('xero_invoices')
-      .select(`
-        id,
-        total_amount,
-        invoice_type,
-        sync_status,
-        xero_invoice_line_items (
-          description,
-          line_amount,
-          account_code,
-          tax_type
-        )
-      `)
-      .eq('id', stagingId)
-      .single()
-
     return NextResponse.json({
       success: true,
-      staging: {
-        refund_id: refundRecord.id,
-        staging_id: stagingId,
+      preview: {
         refund_type: refundType,
-        total_amount: stagedInvoice?.total_amount || 0,
-        line_items: stagedInvoice?.xero_invoice_line_items || [],
+        total_amount: previewResult.totalAmount || 0,
+        line_items: previewResult.lineItems || [],
         payment_info: {
           payment_id: paymentId,
           original_amount: payment.final_amount,

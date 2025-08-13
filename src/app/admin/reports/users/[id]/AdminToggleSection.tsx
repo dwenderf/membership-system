@@ -66,7 +66,7 @@ export default function AdminToggleSection({
               <p className="text-sm text-gray-500">
                 {isViewingOwnProfile 
                   ? 'You cannot modify your own admin status'
-                  : 'Grant or revoke administrative privileges'
+                  : 'Grant or revoke admin privileges'
                 }
               </p>
             </div>
@@ -74,7 +74,7 @@ export default function AdminToggleSection({
               <button
                 onClick={handleToggleAdmin}
                 disabled={isLoading}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                   isLoading
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : isAdmin
@@ -85,8 +85,8 @@ export default function AdminToggleSection({
                 {isLoading 
                   ? 'Updating...' 
                   : isAdmin 
-                  ? 'Remove Admin Access' 
-                  : 'Grant Admin Access'
+                  ? 'Revoke' 
+                  : 'Grant'
                 }
               </button>
             )}

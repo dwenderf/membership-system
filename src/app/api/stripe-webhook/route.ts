@@ -590,29 +590,46 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
             console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
           }
           
-          // Always check if credit note staging is needed (even if refund was already completed)
-          // Check if credit note has already been staged for this refund
-          const { data: existingStagedCreditNote } = await supabase
-            .from('xero_invoices')
-            .select('id')
-            .eq('payment_id', existingRefund.payment_id)
-            .eq('invoice_type', 'ACCRECCREDIT')
-            .eq('staging_metadata->refund_id', existingRefund.id)
-            .single()
-          
-          if (!existingStagedCreditNote) {
-            console.log(`🔄 No staged credit note found for refund ${existingRefund.id}, staging now...`)
-            // Stage credit note for Xero sync using centralized staging manager
-            const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
-              existingRefund.id, 
-              existingRefund.payment_id, 
-              centsToCents(existingRefund.amount)
-            )
-            if (!stagingSuccess) {
-              console.error(`❌ Failed to stage credit note for refund ${existingRefund.id}`)
-            }
+          // NEW ARCHITECTURE: Check for staging_id in Stripe metadata
+          const stagingId = stripeRefund.metadata?.staging_id
+          if (stagingId) {
+            console.log(`🔄 Found staging_id ${stagingId} in metadata, updating staging records to pending`)
+            
+            // Move staging records from 'staged' to 'pending' for batch sync
+            await supabase
+              .from('xero_invoices')
+              .update({
+                sync_status: 'pending',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', stagingId)
+              .eq('sync_status', 'staged')
+
+            await supabase
+              .from('xero_payments')
+              .update({
+                sync_status: 'pending',
+                updated_at: new Date().toISOString()
+              })
+              .eq('xero_invoice_id', stagingId)
+              .eq('sync_status', 'staged')
+            
+            console.log(`✅ Updated staging records ${stagingId} to pending status`)
           } else {
-            console.log(`✅ Credit note already staged for refund ${existingRefund.id}`)
+            // EXTERNAL REFUND: No staging_id means this was processed outside our system
+            console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)
+            
+            // Log alert for manual intervention at ERROR level for Sentry reporting
+            logger.logSystem('external-refund-detected', 'External refund requires manual Xero credit note creation', {
+              refundId: existingRefund.id,
+              stripeRefundId: stripeRefund.id,
+              paymentId: payment.id,
+              amount: stripeRefund.amount,
+              source: 'external_stripe_refund',
+              action_required: 'Manual Xero credit note creation needed'
+            }, 'error')
+            
+            console.log(`🚨 MANUAL INTERVENTION REQUIRED: External refund ${stripeRefund.id} detected - admin must manually create Xero credit note`)
           }
           
           continue
@@ -647,25 +664,18 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
         
         console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
         
-        // Stage credit note for Xero sync using centralized staging manager
-        const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
-          newRefund.id, 
-          newRefund.payment_id, 
-          centsToCents(newRefund.amount)
-        )
-        if (!stagingSuccess) {
-          console.error(`❌ Failed to stage credit note for external refund ${newRefund.id}`)
-        }
-        
-        // Log the refund for audit trail
-        logger.logSystem('refund-webhook-processed', 'Refund processed via webhook', {
+        // Log alert for manual intervention - no automatic Xero credit note creation
+        logger.logSystem('external-refund-created', 'External refund detected - manual Xero credit note required', {
           refundId: newRefund.id,
           stripeRefundId: stripeRefund.id,
           paymentId: payment.id,
           amount: stripeRefund.amount,
           reason: refundReason,
-          source: 'stripe_webhook'
-        })
+          source: 'external_stripe_dashboard',
+          action_required: 'Admin must manually create Xero credit note to match this refund'
+        }, 'error')
+        
+        console.log(`🚨 EXTERNAL REFUND ALERT: Refund ${stripeRefund.id} was processed outside our system - manual Xero credit note creation required`)
       }
     }
     

@@ -29,31 +29,34 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { refundId, stagingId } = body
 
-    if (!refundId || !stagingId) {
+    if (!stagingId) {
       return NextResponse.json({ 
-        error: 'Refund ID and staging ID are required' 
+        error: 'Staging ID is required' 
       }, { status: 400 })
     }
 
-    // Mark refund record as ignored
-    const { error: refundError } = await supabase
-      .from('refunds')
-      .update({
-        status: 'ignore',
-        failure_reason: 'Cancelled by admin before Stripe submission',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', refundId)
-      .eq('status', 'staged') // Only cancel if still staged
+    // Only cancel refund record if it exists (during confirmation phase)
+    // During preview phase, refundId will be null and no refund record exists
+    if (refundId) {
+      const { error: refundError } = await supabase
+        .from('refunds')
+        .update({
+          status: 'cancelled',
+          failure_reason: 'Cancelled by admin before Stripe submission',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', refundId)
+        .eq('status', 'pending') // Only cancel if still pending
 
-    if (refundError) {
-      logger.logSystem('refund-cancel-error', 'Failed to cancel staged refund', { 
-        refundId,
-        error: refundError.message 
-      })
-      return NextResponse.json({ 
-        error: 'Failed to cancel refund' 
-      }, { status: 500 })
+      if (refundError) {
+        logger.logSystem('refund-cancel-error', 'Failed to cancel pending refund', { 
+          refundId,
+          error: refundError.message 
+        })
+        return NextResponse.json({ 
+          error: 'Failed to cancel refund' 
+        }, { status: 500 })
+      }
     }
 
     // Mark staging records as ignored
@@ -75,8 +78,8 @@ export async function POST(request: NextRequest) {
       .eq('xero_invoice_id', stagingId)
       .eq('sync_status', 'staged')
 
-    logger.logSystem('refund-cancelled', 'Staged refund cancelled by admin', {
-      refundId,
+    logger.logSystem('refund-cancelled', 'Refund staging cancelled by admin', {
+      refundId: refundId || 'none (preview only)',
       stagingId,
       cancelledBy: authUser.id
     })

@@ -788,7 +788,7 @@ export class XeroStagingManager {
    * Create staging records for a discount-based credit note (refund)
    */
   async createDiscountCreditNoteStaging(
-    refundId: string,
+    refundId: string | null,
     paymentId: string, 
     discountCode: string,
     discountAmount: Cents,
@@ -850,7 +850,7 @@ export class XeroStagingManager {
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
-            refund_id: refundId,
+            refund_id: refundId || null,
             customer: {
               id: payment.users.id,
               name: `${payment.users.first_name} ${payment.users.last_name}`,
@@ -927,7 +927,7 @@ export class XeroStagingManager {
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
-            refund_id: refundId,
+            refund_id: refundId || null,
             payment_id: paymentId,
             refund_type: 'discount_code',
             discount_code: discountCode,
@@ -987,7 +987,7 @@ export class XeroStagingManager {
    * Create staging records for a proportional credit note (refund)
    */
   async createProportionalCreditNoteStaging(
-    refundId: string, 
+    refundId: string | null, 
     paymentId: string, 
     refundAmountCents: Cents
   ): Promise<string | false> {
@@ -1100,7 +1100,7 @@ export class XeroStagingManager {
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
-            refund_id: refundId,
+            refund_id: refundId || null,
             customer: {
               id: payment.users.id,
               name: `${payment.users.first_name} ${payment.users.last_name}`,
@@ -1176,7 +1176,7 @@ export class XeroStagingManager {
           sync_status: 'staged', // Waiting for Stripe confirmation
           staged_at: new Date().toISOString(),
           staging_metadata: {
-            refund_id: refundId,
+            refund_id: refundId || null,
             payment_id: paymentId,
             refund_type: 'refund',
             refund_amount: refundAmountCents,
@@ -1232,7 +1232,7 @@ export class XeroStagingManager {
    * Create staging records for refunds with type-specific handling
    */
   async createRefundStaging(
-    refundId: string,
+    refundId: string | null, // Null during preview, actual ID during confirmation
     paymentId: string,
     refundType: 'proportional' | 'discount_code',
     refundData: {

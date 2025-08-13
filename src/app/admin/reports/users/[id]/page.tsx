@@ -124,7 +124,7 @@ export default async function UserDetailPage({ params }: PageProps) {
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
     const netAmount = payment.final_amount - totalRefunded
     const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
-    const isFullyRefunded = totalRefunded >= payment.final_amount
+    const isFullyRefunded = payment.final_amount > 0 && totalRefunded >= payment.final_amount
     
     // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
     const originalInvoice = payment.xero_invoices?.find((invoice: any) => invoice.invoice_type === 'ACCREC')

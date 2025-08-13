@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 
 type RefundType = 'proportional' | 'discount_code'
@@ -110,6 +110,19 @@ export default function RefundModal({
       setIsValidatingDiscount(false)
     }
   }
+
+  // Debounced discount code validation using useEffect
+  useEffect(() => {
+    if (discountCode && refundType === 'discount_code') {
+      const timeoutId = setTimeout(() => {
+        validateDiscountCode(discountCode)
+      }, 500) // Debounce validation by 500ms
+      
+      return () => clearTimeout(timeoutId)
+    } else {
+      setDiscountValidation(null)
+    }
+  }, [discountCode, refundType, paymentId, paymentAmount])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -338,12 +351,9 @@ export default function RefundModal({
                       type="text"
                       id="discountCode"
                       value={discountCode}
-                      onChange={(e) => {
-                        setDiscountCode(e.target.value)
-                        validateDiscountCode(e.target.value)
-                      }}
+                      onChange={(e) => setDiscountCode(e.target.value.toUpperCase().trim())}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter discount code"
+                      placeholder="Enter discount code (e.g., PRIDE100)"
                       disabled={isProcessing || isValidatingDiscount}
                     />
                     {isValidatingDiscount && (

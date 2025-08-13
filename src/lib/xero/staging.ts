@@ -926,7 +926,7 @@ export class XeroStagingManager {
               xero_invoice_id: stagingRecord.id,
               description: item.description,
               quantity: 1,
-              unit_amount: Math.abs(item.line_amount), // Already in cents, just ensure positive
+              unit_amount: item.line_amount, // Already in cents, maintain sign
               line_amount: item.line_amount, // Already in cents
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',

@@ -489,19 +489,13 @@ export default async function UserDetailPage({ params }: PageProps) {
                                 </div>
                               )}
                             </div>
-                            {invoice.invoice_type === 'ACCRECCREDIT' ? (
-                              <span className="text-xs text-gray-400">
-                                Credit Note
-                              </span>
-                            ) : (
-                              <Link
-                                href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
-                                prefetch={false}
-                                className="text-xs text-blue-600 hover:text-blue-500"
-                              >
-                                Details
-                              </Link>
-                            )}
+                            <Link
+                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                              prefetch={false}
+                              className="text-xs text-blue-600 hover:text-blue-500"
+                            >
+                              Details
+                            </Link>
                           </div>
                         </div>
                       ))}

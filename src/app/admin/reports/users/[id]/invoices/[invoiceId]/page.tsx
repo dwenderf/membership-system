@@ -92,8 +92,35 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
     .eq('payment_id', payment.id)
     .order('created_at', { ascending: false })
 
+  // Fetch credit notes for each refund to get line item details
+  const refundsWithCreditNotes = await Promise.all(
+    (refunds || []).map(async (refund) => {
+      const { data: creditNote } = await supabase
+        .from('xero_invoices')
+        .select(`
+          id,
+          invoice_number,
+          xero_invoice_line_items(
+            id,
+            description,
+            line_amount,
+            account_code
+          )
+        `)
+        .eq('payment_id', payment.id)
+        .eq('invoice_type', 'ACCRECCREDIT')
+        .eq('staging_metadata->>refund_id', refund.id)
+        .maybeSingle()
+
+      return {
+        ...refund,
+        credit_note: creditNote
+      }
+    })
+  )
+
   // Calculate refund summary
-  const totalRefunded = refunds?.reduce((sum, refund) => {
+  const totalRefunded = refundsWithCreditNotes?.reduce((sum, refund) => {
     return refund.status === 'completed' ? sum + refund.amount : sum
   }, 0) || 0
 
@@ -188,7 +215,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                 {payment.stripe_payment_intent_id && (
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Stripe Payment ID</dt>
-                    <dd className="mt-1 text-sm text-gray-900 font-mono text-xs">
+                    <dd className="mt-1 text-xs text-gray-900 font-mono">
                       {payment.stripe_payment_intent_id}
                     </dd>
                   </div>
@@ -236,13 +263,14 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
             {/* Refund History Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Refund History</h3>
-              {refunds && refunds.length > 0 ? (
-                <div className="space-y-4">
-                  {refunds.map((refund) => (
-                    <div key={refund.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3">
+              {refundsWithCreditNotes && refundsWithCreditNotes.length > 0 ? (
+                <div className="space-y-6">
+                  {refundsWithCreditNotes.map((refund) => (
+                    <div key={refund.id} className="pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Refund Status</dt>
+                          <dd className="mt-1">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               refund.status === 'completed' ? 'bg-green-100 text-green-800' :
                               refund.status === 'failed' ? 'bg-red-100 text-red-800' :
@@ -251,28 +279,82 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                             }`}>
                               {refund.status.charAt(0).toUpperCase() + refund.status.slice(1)}
                             </span>
-                            <span className="text-lg font-medium text-gray-900">
-                              -{formatAmount(refund.amount)}
-                            </span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Refund Amount</dt>
+                          <dd className="mt-1 text-sm text-gray-900">-{formatAmount(refund.amount)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Refund Date</dt>
+                          <dd className="mt-1 text-sm text-gray-900">
+                            {new Date(refund.created_at).toLocaleDateString()}
+                          </dd>
+                        </div>
+                        {refund.credit_note?.invoice_number && (
+                          <div>
+                            <dt className="text-sm font-medium text-gray-500">Credit Note Number</dt>
+                            <dd className="mt-1 text-sm text-gray-900">{refund.credit_note.invoice_number}</dd>
                           </div>
-                          {refund.reason && (
-                            <p className="mt-1 text-sm text-gray-600">{refund.reason}</p>
-                          )}
-                          <div className="mt-2 text-xs text-gray-500">
-                            Processed by {refund.processed_by_user?.first_name} {refund.processed_by_user?.last_name} on {new Date(refund.created_at).toLocaleDateString()}
+                        )}
+                        {refund.stripe_refund_id && (
+                          <div>
+                            <dt className="text-sm font-medium text-gray-500">Stripe Refund ID</dt>
+                            <dd className="mt-1 text-xs text-gray-900 font-mono">
+                              {refund.stripe_refund_id}
+                            </dd>
                           </div>
-                          {refund.stripe_refund_id && (
-                            <div className="mt-1 text-xs text-gray-400 font-mono">
-                              Stripe ID: {refund.stripe_refund_id}
-                            </div>
-                          )}
-                          {refund.failure_reason && (
-                            <div className="mt-1 text-xs text-red-600">
-                              Failure reason: {refund.failure_reason}
-                            </div>
-                          )}
+                        )}
+                        <div>
+                          <dt className="text-sm font-medium text-gray-500">Processed By</dt>
+                          <dd className="mt-1 text-sm text-gray-900">
+                            {refund.processed_by_user?.first_name} {refund.processed_by_user?.last_name}
+                          </dd>
                         </div>
                       </div>
+                      
+                      {refund.reason && (
+                        <div className="mb-4">
+                          <dt className="text-sm font-medium text-gray-500">Reason</dt>
+                          <dd className="mt-1 text-sm text-gray-900">{refund.reason}</dd>
+                        </div>
+                      )}
+                      
+                      {refund.failure_reason && (
+                        <div className="mb-4">
+                          <dt className="text-sm font-medium text-gray-500">Failure Reason</dt>
+                          <dd className="mt-1 text-sm text-red-600">{refund.failure_reason}</dd>
+                        </div>
+                      )}
+
+                      {/* Credit Note Line Items */}
+                      {refund.credit_note?.xero_invoice_line_items && refund.credit_note.xero_invoice_line_items.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="text-sm font-medium text-gray-900 mb-3">Credit Note Line Items</h4>
+                          <div className="border rounded-md">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account Code</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {refund.credit_note.xero_invoice_line_items.map((item: any) => (
+                                  <tr key={item.id}>
+                                    <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-500">{item.account_code}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                      {formatAmount(item.line_amount)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

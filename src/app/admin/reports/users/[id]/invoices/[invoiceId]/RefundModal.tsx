@@ -66,6 +66,13 @@ export default function RefundModal({
     }
   }
 
+  // Reset to proportional if user was on discount_code but payment is not a registration
+  useEffect(() => {
+    if (isRegistrationPayment === false && refundType === 'discount_code') {
+      setRefundType('proportional')
+    }
+  }, [isRegistrationPayment, refundType])
+
   const openModal = () => {
     setIsOpen(true)
     setRefundType('proportional')
@@ -414,39 +421,23 @@ export default function RefundModal({
                     />
                     <span className="ml-2 text-sm text-gray-700">Proportional Refund</span>
                   </label>
-                  <label className="inline-flex items-center">
-                    <input
-                      type="radio"
-                      name="refundType"
-                      value="discount_code"
-                      checked={refundType === 'discount_code'}
-                      onChange={(e) => {
-                        if (e.target.value === 'discount_code' && isRegistrationPayment === false) {
-                          // Don't allow selection, but also set error message
-                          setError('Discount code refunds can only be applied to registrations.')
-                          return
-                        }
-                        setRefundType(e.target.value as RefundType)
-                        setError('') // Clear any previous errors
-                      }}
-                      className="form-radio h-4 w-4 text-blue-600"
-                      disabled={isProcessing || (isRegistrationPayment === false)}
-                    />
-                    <span className={`ml-2 text-sm ${isRegistrationPayment === false ? 'text-gray-400' : 'text-gray-700'}`}>
-                      Apply Discount Code
-                    </span>
-                  </label>
+                  {/* Only show discount code option for registration payments */}
+                  {isRegistrationPayment && (
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name="refundType"
+                        value="discount_code"
+                        checked={refundType === 'discount_code'}
+                        onChange={(e) => setRefundType(e.target.value as RefundType)}
+                        className="form-radio h-4 w-4 text-blue-600"
+                        disabled={isProcessing}
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Apply Discount Code</span>
+                    </label>
+                  )}
                 </div>
               </div>
-
-              {/* Subtle note for membership payments */}
-              {isRegistrationPayment === false && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500">
-                    Note: Discount code refunds are only available for registration payments.
-                  </p>
-                </div>
-              )}
 
               {refundType === 'proportional' ? (
                 /* Proportional Refund Fields */

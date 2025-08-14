@@ -78,7 +78,7 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
     return (
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount Usage</h3>
-        <div className="text-gray-500 text-sm">No discount usage found for current seasons.</div>
+        <div className="text-gray-500 text-sm">No recent discount usage.</div>
       </div>
     )
   }

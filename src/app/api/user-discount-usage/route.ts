@@ -49,8 +49,6 @@ export async function GET(request: NextRequest) {
       `)
       .eq('user_id', userId)
       .gte('seasons.end_date', new Date().toISOString().split('T')[0])
-      .order('seasons.name', { ascending: false })
-      .order('discount_categories.name', { ascending: true })
 
     if (usageError) {
       console.error('Error fetching discount usage:', usageError)
@@ -77,15 +75,19 @@ export async function GET(request: NextRequest) {
     })
 
     // Convert to array format for easier frontend consumption
-    const structuredUsage = Object.entries(groupedUsage).map(([seasonName, categories]) => ({
-      seasonName,
-      categories: Object.entries(categories).map(([categoryName, data]) => ({
-        categoryName,
-        categoryId: data.categoryId,
-        totalAmount: data.amount
-      })),
-      totalAmount: Object.values(categories).reduce((sum, data) => sum + data.amount, 0)
-    }))
+    const structuredUsage = Object.entries(groupedUsage)
+      .map(([seasonName, categories]) => ({
+        seasonName,
+        categories: Object.entries(categories)
+          .map(([categoryName, data]) => ({
+            categoryName,
+            categoryId: data.categoryId,
+            totalAmount: data.amount
+          }))
+          .sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
+        totalAmount: Object.values(categories).reduce((sum, data) => sum + data.amount, 0)
+      }))
+      .sort((a, b) => b.seasonName.localeCompare(a.seasonName))
 
     return NextResponse.json({
       success: true,

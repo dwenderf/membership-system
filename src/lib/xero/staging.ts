@@ -845,7 +845,8 @@ export class XeroStagingManager {
         line_amount: discountAmount,
         account_code: discountAccountingCode,
         tax_type: 'NONE',
-        line_item_type: 'discount'
+        line_item_type: 'discount',
+        discount_code_id: discountCodeId
       }]
 
       // Create credit note staging record in xero_invoices table
@@ -897,7 +898,8 @@ export class XeroStagingManager {
             line_amount: item.line_amount,
             account_code: item.account_code,
             tax_type: item.tax_type,
-            line_item_type: item.line_item_type
+            line_item_type: item.line_item_type,
+            discount_code_id: item.discount_code_id
           }))
         )
       

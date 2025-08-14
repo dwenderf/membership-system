@@ -124,6 +124,9 @@ export default function RefundModal({
       return
     }
 
+    // Store current cursor position before validation
+    const currentPosition = discountCodeInputRef.current?.selectionStart || 0
+
     setIsValidatingDiscount(true)
     setError('')
 
@@ -171,12 +174,14 @@ export default function RefundModal({
       // Don't set main error for validation - let inline validation handle it
     } finally {
       setIsValidatingDiscount(false)
-      // Restore focus to the discount code input after validation
+      // Restore focus and cursor position after validation
       setTimeout(() => {
         if (discountCodeInputRef.current) {
           discountCodeInputRef.current.focus()
+          // Restore cursor position
+          discountCodeInputRef.current.setSelectionRange(currentPosition, currentPosition)
         }
-      }, 0)
+      }, 50) // Slightly longer timeout to ensure DOM has settled
     }
   }
 
@@ -499,7 +504,7 @@ export default function RefundModal({
                       onChange={(e) => setDiscountCode(e.target.value.toUpperCase().trim())}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter discount code (e.g., PRIDE100)"
-                      disabled={isProcessing || isValidatingDiscount}
+                      disabled={isProcessing}
                     />
                     
                     {/* Validation States - Fixed layout */}

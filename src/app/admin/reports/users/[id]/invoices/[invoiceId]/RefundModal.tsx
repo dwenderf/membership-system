@@ -49,6 +49,22 @@ export default function RefundModal({
   const [success, setSuccess] = useState('')
   const [stagingData, setStagingData] = useState<any>(null)
   const [isStaging, setIsStaging] = useState(false)
+  const [isRegistrationPayment, setIsRegistrationPayment] = useState<boolean | null>(null)
+
+  const checkIfRegistrationPayment = async () => {
+    try {
+      const response = await fetch(`/api/admin/payments/${paymentId}/registrations`)
+      if (response.ok) {
+        const data = await response.json()
+        setIsRegistrationPayment(data.registrations && data.registrations.length > 0)
+      } else {
+        setIsRegistrationPayment(false)
+      }
+    } catch (error) {
+      console.error('Error checking payment type:', error)
+      setIsRegistrationPayment(false)
+    }
+  }
 
   const openModal = () => {
     setIsOpen(true)
@@ -59,6 +75,7 @@ export default function RefundModal({
     setReason('')
     setError('')
     setSuccess('')
+    checkIfRegistrationPayment() // Check payment type when modal opens
   }
 
   const closeModal = async () => {
@@ -129,7 +146,8 @@ export default function RefundModal({
         body: JSON.stringify({
           code: code.trim(),
           registrationId: registrationId,
-          amount: paymentAmount // Original payment amount
+          amount: paymentAmount, // Original payment amount
+          isRefund: true // Flag to indicate this is a refund validation
         })
       })
 
@@ -413,14 +431,42 @@ export default function RefundModal({
                       name="refundType"
                       value="discount_code"
                       checked={refundType === 'discount_code'}
-                      onChange={(e) => setRefundType(e.target.value as RefundType)}
+                      onChange={(e) => {
+                        if (e.target.value === 'discount_code' && isRegistrationPayment === false) {
+                          // Don't allow selection, but also set error message
+                          setError('Discount code refunds can only be applied to registrations.')
+                          return
+                        }
+                        setRefundType(e.target.value as RefundType)
+                        setError('') // Clear any previous errors
+                      }}
                       className="form-radio h-4 w-4 text-blue-600"
-                      disabled={isProcessing}
+                      disabled={isProcessing || (isRegistrationPayment === false)}
                     />
-                    <span className="ml-2 text-sm text-gray-700">Apply Discount Code</span>
+                    <span className={`ml-2 text-sm ${isRegistrationPayment === false ? 'text-gray-400' : 'text-gray-700'}`}>
+                      Apply Discount Code
+                    </span>
                   </label>
                 </div>
               </div>
+
+              {/* Warning for membership payments */}
+              {isRegistrationPayment === false && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-yellow-700">
+                        Discount code refunds can only be applied to registrations.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {refundType === 'proportional' ? (
                 /* Proportional Refund Fields */

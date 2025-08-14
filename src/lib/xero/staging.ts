@@ -793,7 +793,9 @@ export class XeroStagingManager {
     discountCode: string,
     discountAmount: Cents,
     discountAccountingCode: string,
-    discountCategoryName: string
+    discountCategoryName: string,
+    discountCodeId?: string,
+    discountCategoryId?: string
   ): Promise<string | false> {
     try {
       logger.logXeroSync(
@@ -859,15 +861,12 @@ export class XeroStagingManager {
           staged_at: new Date().toISOString(),
           staging_metadata: {
             refund_id: refundId || null,
-            customer: {
-              id: payment.users.id,
-              name: `${payment.users.first_name} ${payment.users.last_name}`,
-              email: payment.users.email,
-              member_id: payment.users.member_id
-            },
+            user_id: payment.users.id, // Use same format as invoices for consistency
             refund_type: 'discount_code',
             discount_code: discountCode,
+            discount_code_id: discountCodeId,
             discount_category: discountCategoryName,
+            discount_category_id: discountCategoryId,
             discount_accounting_code: discountAccountingCode,
             refund_amount: discountAmount,
             original_payment_id: paymentId
@@ -1257,7 +1256,9 @@ export class XeroStagingManager {
         refundData.discountCode,
         refundData.discountAmount,
         refundData.discountAccountingCode!,
-        refundData.discountCategoryName!
+        refundData.discountCategoryName!,
+        refundData.discountCodeId,
+        refundData.discountCategoryId
       )
     } else {
       return false

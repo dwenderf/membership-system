@@ -762,29 +762,56 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
       // - Positive for discount code refunds (uses more capacity)
       // - Negative for proportional refunds with original discounts (gives back capacity)
       const amountSaved = lineItem.line_amount
+      const discountCategoryId = lineItem.discount_codes?.discount_category_id
 
-      await supabase
-        .from('discount_usage')
-        .insert({
-          user_id: userId,
-          discount_code_id: lineItem.discount_code_id,
-          discount_category_id: lineItem.discount_codes?.discount_category_id,
-          season_id: registrationData.registrations.season_id,
-          amount_saved: amountSaved,
-          registration_id: registrationData.registration_id,
-          payment_id: paymentId,
-          refund_id: refundId,
-          used_at: new Date().toISOString()
-        })
+      if (amountSaved > 0) {
+        // SCENARIO 1: Discount code refund - INSERT new record
+        const { error: insertError } = await supabase
+          .from('discount_usage')
+          .insert({
+            user_id: userId,
+            discount_code_id: lineItem.discount_code_id,
+            discount_category_id: discountCategoryId,
+            season_id: registrationData.registrations.season_id,
+            amount_saved: amountSaved,
+            registration_id: registrationData.registration_id,
+            used_at: new Date().toISOString()
+          })
 
-      console.log(`✅ Processed discount usage for refund:`, {
-        userId,
-        discountCodeId: lineItem.discount_code_id,
-        seasonId: registrationData.registrations.season_id,
-        amountSaved,
-        refundId,
-        type: amountSaved > 0 ? 'discount_code_refund' : 'proportional_refund_reversal'
-      })
+        if (insertError) {
+          console.error(`❌ Error inserting discount usage for refund:`, insertError)
+        } else {
+          console.log(`✅ Inserted discount usage for discount code refund:`, {
+            userId,
+            discountCodeId: lineItem.discount_code_id,
+            discountCategoryId,
+            seasonId: registrationData.registrations.season_id,
+            amountSaved
+          })
+        }
+
+      } else if (amountSaved < 0) {
+        // SCENARIO 2: Proportional refund reversing original discount - UPDATE existing record
+        const { error: updateError } = await supabase
+          .from('discount_usage')
+          .update({
+            amount_saved: supabase.raw('amount_saved + ?', [amountSaved]) // Adding negative amount = subtraction
+          })
+          .eq('user_id', userId)
+          .eq('discount_category_id', discountCategoryId)
+          .eq('season_id', registrationData.registrations.season_id)
+
+        if (updateError) {
+          console.error(`❌ Error updating discount usage for proportional refund:`, updateError)
+        } else {
+          console.log(`✅ Updated discount usage for proportional refund reversal:`, {
+            userId,
+            discountCategoryId,
+            seasonId: registrationData.registrations.season_id,
+            amountAdjustment: amountSaved
+          })
+        }
+      }
     }
 
   } catch (error) {

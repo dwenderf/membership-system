@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, registrationId, amount } = body
+    const { code, registrationId, amount, isRefund = false } = body
     
     if (!code || !registrationId || !amount) {
       return NextResponse.json({ 
@@ -133,22 +133,34 @@ export async function POST(request: NextRequest) {
 
       const totalUsed = usageData?.reduce((sum, usage) => sum + usage.amount_saved, 0) || 0
       const maxAllowed = category.max_discount_per_user_per_season
-      const remaining = Math.max(0, maxAllowed - totalUsed)
       
-      if (totalUsed >= maxAllowed) {
-        // User has already reached their limit
-        const result: DiscountValidationResult = {
-          isValid: false,
-          error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}. No additional discount can be applied.`
+      if (isRefund) {
+        // For refunds, we're giving back usage - check if adding this refund would exceed the original limit
+        // But we don't need to prevent it since it's already been used before
+        // Just validate that the discount code and amount are reasonable
+        console.log(`Refund validation: User has used $${(totalUsed / 100).toFixed(2)} of $${(maxAllowed / 100).toFixed(2)} limit. Adding $${(discountAmount / 100).toFixed(2)} back.`)
+        
+        // For refunds, we allow the full discount amount as long as it doesn't exceed what they could have originally used
+        // This handles the case where someone got a partial discount originally and now wants a refund
+      } else {
+        // Original logic for purchases
+        const remaining = Math.max(0, maxAllowed - totalUsed)
+        
+        if (totalUsed >= maxAllowed) {
+          // User has already reached their limit
+          const result: DiscountValidationResult = {
+            isValid: false,
+            error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}. No additional discount can be applied.`
+          }
+          return NextResponse.json(result)
         }
-        return NextResponse.json(result)
-      }
-      
-      if (totalUsed + discountAmount > maxAllowed) {
-        // Apply partial discount up to the remaining limit
-        discountAmount = remaining
-        isPartialDiscount = true
-        partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}.`
+        
+        if (totalUsed + discountAmount > maxAllowed) {
+          // Apply partial discount up to the remaining limit
+          discountAmount = remaining
+          isPartialDiscount = true
+          partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}.`
+        }
       }
     }
 

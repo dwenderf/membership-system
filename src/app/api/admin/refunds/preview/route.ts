@@ -121,9 +121,11 @@ export async function POST(request: NextRequest) {
 
       refundData = {
         discountCode: discountValidation.discountCode.code,
+        discountCodeId: discountValidation.discountCode.id,
         discountAmount: centsToCents(discountAmount),
         discountAccountingCode: discountValidation.discountCode.category.accounting_code,
-        discountCategoryName: discountValidation.discountCode.category.name
+        discountCategoryName: discountValidation.discountCode.category.name,
+        discountCategoryId: discountValidation.discountCode.category.id
       }
 
     } else {

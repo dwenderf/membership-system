@@ -134,52 +134,7 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', refund.id)
 
-      // Check if this is a discount code refund and add usage tracking
-      const { data: stagingRecord } = await supabase
-        .from('xero_invoices')
-        .select('staging_metadata')
-        .eq('id', stagingId)
-        .single()
-
-      const stagingMetadata = stagingRecord?.staging_metadata as any
-      if (stagingMetadata?.refund_type === 'discount_code') {
-        // This is a discount code refund - add positive usage to give back the discount capacity
-        const { data: registrationData } = await supabase
-          .from('user_registrations')
-          .select(`
-            registration_id,
-            registrations!inner (
-              season_id
-            )
-          `)
-          .eq('payment_id', paymentId)
-          .limit(1)
-          .single()
-
-        if (registrationData) {
-          // Add discount usage record (positive amount = giving back capacity)
-          await supabase
-            .from('discount_usage')
-            .insert({
-              user_id: payment.user_id,
-              discount_code_id: stagingMetadata.discount_code_id,
-              discount_category_id: stagingMetadata.discount_category_id,
-              season_id: registrationData.registrations.season_id,
-              amount_saved: refundAmount, // Positive amount gives back capacity
-              registration_id: registrationData.registration_id,
-              payment_id: paymentId,
-              refund_id: refund.id,
-              used_at: new Date().toISOString()
-            })
-
-          console.log('Added discount usage tracking for refund:', {
-            userId: payment.user_id,
-            discountCodeId: stagingMetadata.discount_code_id,
-            seasonId: registrationData.registrations.season_id,
-            amountSaved: refundAmount
-          })
-        }
-      }
+      // Discount usage tracking will be handled by the webhook after successful refund
 
       // Staging records will be moved from 'staged' to 'pending' by webhook
       // when it receives the charge.refunded event

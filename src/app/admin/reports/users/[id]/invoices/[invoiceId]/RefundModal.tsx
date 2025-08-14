@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 
 type RefundType = 'proportional' | 'discount_code'
@@ -50,6 +50,7 @@ export default function RefundModal({
   const [stagingData, setStagingData] = useState<any>(null)
   const [isStaging, setIsStaging] = useState(false)
   const [isRegistrationPayment, setIsRegistrationPayment] = useState<boolean | null>(null)
+  const discountCodeInputRef = useRef<HTMLInputElement>(null)
 
   const checkIfRegistrationPayment = async () => {
     try {
@@ -170,6 +171,12 @@ export default function RefundModal({
       // Don't set main error for validation - let inline validation handle it
     } finally {
       setIsValidatingDiscount(false)
+      // Restore focus to the discount code input after validation
+      setTimeout(() => {
+        if (discountCodeInputRef.current) {
+          discountCodeInputRef.current.focus()
+        }
+      }, 0)
     }
   }
 
@@ -485,6 +492,7 @@ export default function RefundModal({
                       Discount Code
                     </label>
                     <input
+                      ref={discountCodeInputRef}
                       type="text"
                       id="discountCode"
                       value={discountCode}

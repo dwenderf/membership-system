@@ -84,11 +84,18 @@ export async function POST(request: NextRequest) {
 
     try {
       // Update staging records with the newly created refund ID
+      // First get the existing staging metadata to preserve it
+      const { data: existingStaging } = await supabase
+        .from('xero_invoices')
+        .select('staging_metadata')
+        .eq('id', stagingId)
+        .single()
+
       await supabase
         .from('xero_invoices')
         .update({
           'staging_metadata': {
-            ...{}, // We'll update this properly in a moment
+            ...(existingStaging?.staging_metadata || {}), // Preserve existing metadata
             refund_id: refund.id
           }
         })

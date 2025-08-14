@@ -1111,12 +1111,7 @@ export class XeroStagingManager {
           staged_at: new Date().toISOString(),
           staging_metadata: {
             refund_id: refundId || null,
-            customer: {
-              id: payment.users.id,
-              name: `${payment.users.first_name} ${payment.users.last_name}`,
-              email: payment.users.email,
-              member_id: payment.users.member_id
-            },
+            user_id: payment.users.id, // Use same format as invoices
             refund_type: 'refund',
             refund_amount: refundAmountCents,
             original_payment_id: paymentId
@@ -1148,7 +1143,7 @@ export class XeroStagingManager {
               line_amount: item.line_amount, // Already in cents
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',
-              line_item_type: item.line_item_type || 'refund'
+              line_item_type: item.line_item_type
             }))
           )
         

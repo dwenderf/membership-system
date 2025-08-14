@@ -56,10 +56,12 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount Usage</h3>
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="p-5">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
         </div>
       </div>
     )
@@ -67,25 +69,30 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount Usage</h3>
-        <div className="text-red-600 text-sm">{error}</div>
+      <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="p-5">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
+          <div className="text-red-600 text-sm">{error}</div>
+        </div>
       </div>
     )
   }
 
   if (!data?.discountUsage || data.discountUsage.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount Usage</h3>
-        <div className="text-gray-500 text-sm">No recent discount usage.</div>
+      <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="p-5">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
+          <div className="text-sm text-gray-600">No recent discount usage.</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Discount Usage</h3>
+    <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="p-5">
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
       
       <div className="space-y-4">
         {data.discountUsage.map((season) => (
@@ -122,6 +129,7 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

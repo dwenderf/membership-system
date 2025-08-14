@@ -80,12 +80,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Validate payment has Stripe payment intent
-    if (!refund.payment.stripe_payment_intent_id) {
-      return NextResponse.json({ 
-        error: 'Cannot refund payment without Stripe payment intent' 
-      }, { status: 400 })
-    }
+    // Payment validation was already done above - payment.stripe_payment_intent_id exists
 
     try {
       // Update staging records with the newly created refund ID

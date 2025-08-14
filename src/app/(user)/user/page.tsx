@@ -5,6 +5,7 @@ import { getBaseUrl } from '@/lib/url-utils'
 import { getOrganizationName } from '@/lib/organization'
 import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
 import { formatAmount } from '@/lib/format-utils'
+import DiscountUsage from '@/components/DiscountUsage'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -409,6 +410,9 @@ export default async function UserDashboardPage() {
           </div>
         </div>
         )}
+
+        {/* Discount Usage */}
+        <DiscountUsage />
       </div>
 
     </div>

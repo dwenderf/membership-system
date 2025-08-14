@@ -615,6 +615,9 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               .eq('sync_status', 'staged')
             
             console.log(`✅ Updated staging records ${stagingId} to pending status`)
+
+            // Process discount usage for refund line items
+            await processRefundDiscountUsage(stagingId, existingRefund.id, payment.id, payment.user_id)
           } else {
             // EXTERNAL REFUND: No staging_id means this was processed outside our system
             console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)
@@ -706,6 +709,87 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
     
   } catch (error) {
     console.error('❌ Error processing charge refunded event:', error)
+  }
+}
+
+// Helper function to process discount usage for refund line items
+async function processRefundDiscountUsage(stagingId: string, refundId: string, paymentId: string, userId: string) {
+  try {
+    const supabase = createAdminClient()
+    
+    // Get refund line items with discount information
+    const { data: refundLineItems } = await supabase
+      .from('xero_invoice_line_items')
+      .select(`
+        line_amount,
+        line_item_type,
+        discount_code_id,
+        discount_codes (
+          id,
+          discount_category_id
+        )
+      `)
+      .eq('xero_invoice_id', stagingId)
+      .eq('line_item_type', 'discount')
+      .not('discount_code_id', 'is', null)
+
+    if (!refundLineItems || refundLineItems.length === 0) {
+      console.log(`No discount line items found for refund staging ${stagingId}`)
+      return
+    }
+
+    // Get registration data for season context
+    const { data: registrationData } = await supabase
+      .from('user_registrations')
+      .select(`
+        registration_id,
+        registrations!inner (
+          season_id
+        )
+      `)
+      .eq('payment_id', paymentId)
+      .limit(1)
+      .single()
+
+    if (!registrationData) {
+      console.log(`No registration found for payment ${paymentId}`)
+      return
+    }
+
+    // Process each discount line item
+    for (const lineItem of refundLineItems) {
+      // Line item amounts already have correct signs:
+      // - Positive for discount code refunds (uses more capacity)
+      // - Negative for proportional refunds with original discounts (gives back capacity)
+      const amountSaved = lineItem.line_amount
+
+      await supabase
+        .from('discount_usage')
+        .insert({
+          user_id: userId,
+          discount_code_id: lineItem.discount_code_id,
+          discount_category_id: lineItem.discount_codes?.discount_category_id,
+          season_id: registrationData.registrations.season_id,
+          amount_saved: amountSaved,
+          registration_id: registrationData.registration_id,
+          payment_id: paymentId,
+          refund_id: refundId,
+          used_at: new Date().toISOString()
+        })
+
+      console.log(`✅ Processed discount usage for refund:`, {
+        userId,
+        discountCodeId: lineItem.discount_code_id,
+        seasonId: registrationData.registrations.season_id,
+        amountSaved,
+        refundId,
+        type: amountSaved > 0 ? 'discount_code_refund' : 'proportional_refund_reversal'
+      })
+    }
+
+  } catch (error) {
+    console.error('❌ Error processing refund discount usage:', error)
+    // Don't throw - we don't want to fail the entire webhook for this
   }
 }
 

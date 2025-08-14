@@ -834,6 +834,7 @@ export class XeroStagingManager {
         .from('xero_invoices')
         .select('invoice_number')
         .eq('payment_id', paymentId)
+        .eq('invoice_type', 'ACCREC')
         .single()
 
       // Create single line item for discount refund
@@ -1033,6 +1034,7 @@ export class XeroStagingManager {
       }
 
       // Get original invoice line items to build proportional credit note line items
+      // Only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
       const { data: originalInvoice, error: invoiceError } = await this.supabase
         .from('xero_invoices')
         .select(`
@@ -1046,6 +1048,7 @@ export class XeroStagingManager {
           )
         `)
         .eq('payment_id', paymentId)
+        .eq('invoice_type', 'ACCREC')
         .single()
       
       let lineItems = []
@@ -1085,14 +1088,14 @@ export class XeroStagingManager {
           lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
         }
       } else {
-        // Fallback: Create a single line item for the full refund amount
-        lineItems = [{
-          description: 'Refund',
-          line_amount: refundAmountCents,
-          account_code: '200', // Default revenue account
-          tax_type: 'NONE',
-          line_item_type: 'refund'
-        }]
+        // No fallback - this indicates a serious issue that needs admin attention
+        logger.logXeroSync(
+          'staging-proportional-no-line-items-error',
+          'Cannot create proportional refund - original invoice has no line items',
+          { refundId, paymentId, originalInvoiceId: originalInvoice?.id },
+          'error'
+        )
+        throw new Error('Cannot create proportional refund: Original invoice line items not found. This indicates a data integrity issue that requires admin investigation.')
       }
 
       // Create credit note staging record in xero_invoices table

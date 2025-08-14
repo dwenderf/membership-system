@@ -7,6 +7,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
+import { emailService } from '@/lib/email/service'
 
 // Force import server config
 
@@ -618,6 +619,9 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
 
             // Process discount usage for refund line items
             await processRefundDiscountUsage(stagingId, existingRefund.id, payment.id, payment.user_id)
+            
+            // Send refund notification email
+            await sendRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
           } else {
             // EXTERNAL REFUND: No staging_id means this was processed outside our system
             console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)
@@ -816,6 +820,78 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
 
   } catch (error) {
     console.error('❌ Error processing refund discount usage:', error)
+    // Don't throw - we don't want to fail the entire webhook for this
+  }
+}
+
+// Helper function to send refund notification email
+async function sendRefundNotificationEmail(refundId: string, userId: string, paymentId: string) {
+  try {
+    const supabase = createAdminClient()
+    
+    // Get user details
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('first_name, last_name, email')
+      .eq('id', userId)
+      .single()
+    
+    if (userError || !user) {
+      console.error(`❌ Failed to fetch user details for refund email:`, userError)
+      return
+    }
+    
+    // Get refund details
+    const { data: refund, error: refundError } = await supabase
+      .from('refunds')
+      .select('amount, reason, created_at')
+      .eq('id', refundId)
+      .single()
+    
+    if (refundError || !refund) {
+      console.error(`❌ Failed to fetch refund details for email:`, refundError)
+      return
+    }
+    
+    // Get payment details
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select('final_amount, completed_at, created_at')
+      .eq('id', paymentId)
+      .single()
+    
+    if (paymentError || !payment) {
+      console.error(`❌ Failed to fetch payment details for refund email:`, paymentError)
+      return
+    }
+    
+    // Get original invoice number for better user experience
+    const { data: invoice } = await supabase
+      .from('xero_invoices')
+      .select('invoice_number')
+      .eq('payment_id', paymentId)
+      .eq('invoice_type', 'ACCREC')
+      .single()
+    
+    const invoiceNumber = invoice?.invoice_number || `PAY-${paymentId.slice(0, 8)}`
+    
+    // Send the refund notification using the existing email service
+    await emailService.sendRefundNotification({
+      userId: userId,
+      email: user.email,
+      userName: `${user.first_name} ${user.last_name}`,
+      refundAmount: refund.amount,
+      originalAmount: payment.final_amount,
+      reason: refund.reason,
+      paymentDate: new Date(payment.completed_at || payment.created_at).toLocaleDateString(),
+      invoiceNumber: invoiceNumber,
+      refundDate: new Date(refund.created_at).toLocaleDateString()
+    })
+    
+    console.log(`✅ Sent refund notification email to ${user.email} for refund ${refundId}`)
+    
+  } catch (error) {
+    console.error('❌ Error sending refund notification email:', error)
     // Don't throw - we don't want to fail the entire webhook for this
   }
 }

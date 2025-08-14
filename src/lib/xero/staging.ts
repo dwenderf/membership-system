@@ -1245,6 +1245,8 @@ export class XeroStagingManager {
       discountAmount?: Cents
       discountAccountingCode?: string
       discountCategoryName?: string
+      discountCodeId?: string
+      discountCategoryId?: string
     }
   ): Promise<string | false> {
     if (refundType === 'proportional' && refundData.amount) {

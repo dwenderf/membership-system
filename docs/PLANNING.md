@@ -439,7 +439,9 @@ The refund system addresses two primary use cases for admin-initiated refunds:
 - **Enhanced Admin UI**: Comprehensive refund history with credit note line items
 - **Xero Integration**: Full credit note sync with payment allocation
 - **Two-Type RefundModal**: Radio selection between proportional and discount code refunds
-- **Real-time Validation Framework**: Foundation for discount code validation with preview
+- **Working Discount Validation**: Real-time discount code validation using existing API endpoint with proper debouncing
+- **Form Stability**: Moved validation messages to main error area to prevent form jumping
+- **API Integration**: Created `/api/admin/payments/[paymentId]/registrations` endpoint for season context
 
 #### Architecture Benefits
 - **Exact ID Mapping**: Eliminates webhook search-and-match edge cases
@@ -448,10 +450,10 @@ The refund system addresses two primary use cases for admin-initiated refunds:
 - **Season Usage Tracking**: Discount validation respects per-season usage limits
 
 #### Remaining Implementation 🚧
-- **Discount Validation API**: Adapt existing logic for refund context (season from payment vs registration)
 - **Enhanced Staging Methods**: Discount-based credit notes with single line items vs proportional allocation
 - **Webhook Simplification**: Direct xero_invoice_id lookup instead of payment_id searching
 - **Preview Functionality**: Show exact line items and amounts before submission
+- **Refund API Enhancement**: Update to support both refund types with immediate staging
 
 #### Technical Architecture
 ```typescript

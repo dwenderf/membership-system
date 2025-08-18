@@ -173,8 +173,8 @@ async function handleFreeMembership({
       'info'
     )
 
-    const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: true })
-    if (!stagingSuccess) {
+    const freeStagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: true })
+    if (!freeStagingRecord) {
       logger.logPaymentProcessing(
         'staging-creation-failed',
         'Failed to create Xero staging record for free membership',
@@ -622,8 +622,8 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
-    const stagingSuccess = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
-    if (!stagingSuccess) {
+    const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
+    if (!stagingRecord) {
       logger.logPaymentProcessing(
         'staging-creation-failed',
         'Failed to create Xero staging record for paid membership',
@@ -708,26 +708,16 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
-    // First get the current staging metadata, then update it
-    const { data: existingRecord } = await supabase
-      .from('xero_invoices')
-      .select('staging_metadata')
-      .eq('staging_metadata->>user_id', user.id)
-      .eq('sync_status', 'staged')
-      .is('payment_id', null)
-      .single()
-
+    // Use the staging record we created earlier and update its metadata
     const updatedMetadata = {
-      ...existingRecord?.staging_metadata,
+      ...stagingRecord.staging_metadata,
       stripe_payment_intent_id: paymentIntent.id
     }
 
     const { error: stagingStripeUpdateError } = await supabase
       .from('xero_invoices')
       .update({ staging_metadata: updatedMetadata })
-      .eq('staging_metadata->>user_id', user.id)
-      .eq('sync_status', 'staged')
-      .is('payment_id', null)
+      .eq('id', stagingRecord.id)
 
     if (stagingStripeUpdateError) {
       logger.logPaymentProcessing(
@@ -809,62 +799,41 @@ export async function POST(request: NextRequest) {
       }
 
       // Also update the xero_payments staging metadata with payment_id
-      // First get the invoice ID
-      const { data: invoiceData, error: invoiceQueryError } = await supabase
-        .from('xero_invoices')
-        .select('id')
-        .eq('staging_metadata->>user_id', user.id)
+      // Use the staging record we already have
+      const { error: xeroPaymentUpdateError } = await supabase
+        .from('xero_payments')
+        .update({ 
+          staging_metadata: {
+            payment_id: paymentRecord.id,
+            stripe_payment_intent_id: paymentIntent.id,
+            created_at: new Date().toISOString()
+          }
+        })
+        .eq('xero_invoice_id', stagingRecord.id)
         .eq('sync_status', 'staged')
-        .eq('payment_id', paymentRecord.id)
-        .single()
 
-      if (invoiceQueryError) {
+      if (xeroPaymentUpdateError) {
         logger.logPaymentProcessing(
-          'xero-invoice-query-failed',
-          'Failed to query xero_invoices for payment update',
+          'xero-payment-staging-update-failed',
+          'Failed to update xero_payments staging metadata',
           { 
             userId: user.id, 
             paymentId: paymentRecord.id,
-            error: invoiceQueryError.message
+            error: xeroPaymentUpdateError.message
           },
           'warn'
         )
-      } else if (invoiceData) {
-        const { error: xeroPaymentUpdateError } = await supabase
-          .from('xero_payments')
-          .update({ 
-            staging_metadata: {
-              payment_id: paymentRecord.id,
-              stripe_payment_intent_id: paymentIntent.id,
-              created_at: new Date().toISOString()
-            }
-          })
-          .eq('xero_invoice_id', invoiceData.id)
-          .eq('sync_status', 'staged')
-
-        if (xeroPaymentUpdateError) {
-          logger.logPaymentProcessing(
-            'xero-payment-staging-update-failed',
-            'Failed to update xero_payments staging metadata',
-            { 
-              userId: user.id, 
-              paymentId: paymentRecord.id,
-              error: xeroPaymentUpdateError.message
-            },
-            'warn'
-          )
-          // Don't fail the transaction, but log the issue
-        } else {
-          logger.logPaymentProcessing(
-            'xero-payment-staging-update-success',
-            'Successfully updated xero_payments staging metadata',
-            { 
-              userId: user.id, 
-              paymentId: paymentRecord.id
-            },
-            'info'
-          )
-        }
+        // Don't fail the transaction, but log the issue
+      } else {
+        logger.logPaymentProcessing(
+          'xero-payment-staging-update-success',
+          'Successfully updated xero_payments staging metadata',
+          { 
+            userId: user.id, 
+            paymentId: paymentRecord.id
+          },
+          'info'
+        )
       }
     }
 

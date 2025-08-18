@@ -172,7 +172,7 @@ export class XeroStagingManager {
    * Create staging records immediately with provided invoice data
    * (for immediate staging at purchase time)
    */
-  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<boolean> {
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<any | null> {
     try {
       logger.logXeroSync(
         'staging-immediate-start',
@@ -182,9 +182,9 @@ export class XeroStagingManager {
       )
 
       // Create staging record without tenant_id - will be populated during sync
-      const success = await this.createInvoiceStaging(data, null, options)
+      const stagingRecord = await this.createInvoiceStaging(data, null, options)
       
-      return success
+      return stagingRecord
     } catch (error) {
       logger.logXeroSync(
         'staging-immediate-error',
@@ -195,7 +195,7 @@ export class XeroStagingManager {
         },
         'error'
       )
-      return false
+      return null
     }
   }
 
@@ -291,7 +291,7 @@ export class XeroStagingManager {
     data: StagingPaymentData, 
     tenantId: string | null,
     options?: { isFree?: boolean }
-  ): Promise<boolean> {
+  ): Promise<any | null> {
     try {
       // Let Xero generate its own invoice number - don't set one here
       
@@ -332,7 +332,7 @@ export class XeroStagingManager {
           },
           'error'
         )
-        return false
+        return null
       }
 
       // Link the business record to the Xero invoice
@@ -405,7 +405,7 @@ export class XeroStagingManager {
             },
             'error'
           )
-          return false
+          return null
         }
       }
 
@@ -414,11 +414,12 @@ export class XeroStagingManager {
         'Staging records created for tenant',
         { 
           tenantId,
-          isFree: options?.isFree || false
+          isFree: options?.isFree || false,
+          stagingRecordId: invoiceStaging.id
         },
         'info'
       )
-      return true
+      return invoiceStaging
       
     } catch (error) {
       logger.logXeroSync(
@@ -430,7 +431,7 @@ export class XeroStagingManager {
         },
         'error'
       )
-      return false
+      return null
     }
   }
 

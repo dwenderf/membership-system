@@ -766,7 +766,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
       // - Positive for discount code refunds (uses more capacity)
       // - Negative for proportional refunds with original discounts (gives back capacity)
       const amountSaved = lineItem.line_amount
-      const discountCategoryId = lineItem.discount_codes?.discount_category_id
+      const discountCategoryId = lineItem.discount_codes?.[0]?.discount_category_id
 
       if (amountSaved > 0) {
         // SCENARIO 1: Discount code refund - INSERT new record
@@ -776,7 +776,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
             user_id: userId,
             discount_code_id: lineItem.discount_code_id,
             discount_category_id: discountCategoryId,
-            season_id: registrationData.registrations.season_id,
+            season_id: registrationData.registrations[0]?.season_id,
             amount_saved: amountSaved,
             registration_id: registrationData.registration_id,
             used_at: new Date().toISOString()
@@ -789,31 +789,43 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
             userId,
             discountCodeId: lineItem.discount_code_id,
             discountCategoryId,
-            seasonId: registrationData.registrations.season_id,
+            seasonId: registrationData.registrations[0]?.season_id,
             amountSaved
           })
         }
 
       } else if (amountSaved < 0) {
         // SCENARIO 2: Proportional refund reversing original discount - UPDATE existing record
-        const { error: updateError } = await supabase
+        // First, fetch the current amount_saved
+        const { data: usageRecord, error: fetchError } = await supabase
           .from('discount_usage')
-          .update({
-            amount_saved: supabase.raw('amount_saved + ?', [amountSaved]) // Adding negative amount = subtraction
-          })
+          .select('id, amount_saved')
           .eq('user_id', userId)
           .eq('discount_category_id', discountCategoryId)
-          .eq('season_id', registrationData.registrations.season_id)
+          .eq('season_id', registrationData.registrations[0]?.season_id)
+          .single();
 
-        if (updateError) {
-          console.error(`❌ Error updating discount usage for proportional refund:`, updateError)
+        if (fetchError || !usageRecord) {
+          console.error(`❌ Error fetching discount usage for proportional refund:`, fetchError);
         } else {
-          console.log(`✅ Updated discount usage for proportional refund reversal:`, {
-            userId,
-            discountCategoryId,
-            seasonId: registrationData.registrations.season_id,
-            amountAdjustment: amountSaved
-          })
+          const newAmountSaved = (usageRecord.amount_saved || 0) + amountSaved;
+          const { error: updateError } = await supabase
+            .from('discount_usage')
+            .update({
+              amount_saved: newAmountSaved
+            })
+            .eq('id', usageRecord.id);
+
+          if (updateError) {
+            console.error(`❌ Error updating discount usage for proportional refund:`, updateError);
+          } else {
+            console.log(`✅ Updated discount usage for proportional refund reversal:`, {
+              userId,
+              discountCategoryId,
+              seasonId: registrationData.registrations[0]?.season_id,
+              amountAdjustment: amountSaved
+            });
+          }
         }
       }
     }

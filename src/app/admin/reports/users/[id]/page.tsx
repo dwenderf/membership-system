@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
@@ -14,6 +14,7 @@ interface PageProps {
 
 export default async function UserDetailPage({ params }: PageProps) {
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
   const logger = Logger.getInstance()
 
   // Get current authenticated user
@@ -42,7 +43,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   const isViewingOwnProfile = authUser.id === params.id
 
   // Fetch user's consolidated memberships (both active and expired)
-  const { data: userMemberships } = await supabase
+  const { data: userMemberships } = await adminSupabase
     .from('user_memberships_consolidated')
     .select('*')
     .eq('user_id', params.id)
@@ -69,7 +70,7 @@ export default async function UserDetailPage({ params }: PageProps) {
   let invoices: any[] = []
   
   // Fetch payments with related Xero invoice data and refunds (only original invoices, not credit notes)
-  const { data: userPayments } = await supabase
+  const { data: userPayments } = await adminSupabase
     .from('payments')
     .select(`
       *,
@@ -100,7 +101,7 @@ export default async function UserDetailPage({ params }: PageProps) {
     .order('created_at', { ascending: false })
 
   // Fetch credit notes for this user
-  const { data: userCreditNotes } = await supabase
+  const { data: userCreditNotes } = await adminSupabase
     .from('xero_invoices')
     .select(`
       *,

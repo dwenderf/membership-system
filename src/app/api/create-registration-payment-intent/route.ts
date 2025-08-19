@@ -12,7 +12,6 @@ import { centsToCents } from '@/types/currency'
 
 // Force import server config
 
-import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -347,7 +346,7 @@ async function handleFreeRegistration({
       'info'
     )
 
-    const { error: stagingUpdateError } = await supabase
+    const { error: stagingUpdateError } = await adminSupabase
       .from('xero_invoices')
       .update({ payment_id: paymentRecord.id })
       .eq('id', freeStagingRecord.id)
@@ -523,6 +522,7 @@ export async function POST(request: NextRequest) {
   
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -1326,15 +1326,30 @@ export async function POST(request: NextRequest) {
     )
 
     // Use the staging record we created earlier and update its metadata
+    const currentMetadata = stagingRecord.staging_metadata || {}
     const updatedMetadata = {
-      ...stagingRecord.staging_metadata,
+      ...currentMetadata,
       stripe_payment_intent_id: paymentIntent.id
     }
 
-    const { error: stagingStripeUpdateError } = await supabase
+    logger.logPaymentProcessing(
+      'staging-stripe-link-attempt',
+      'Attempting to update staging metadata with payment intent ID',
+      { 
+        userId: user.id, 
+        paymentIntentId: paymentIntent.id,
+        stagingRecordId: stagingRecord.id,
+        currentMetadata,
+        updatedMetadata
+      },
+      'info'
+    )
+
+    const { error: stagingStripeUpdateError, data: updatedRecord } = await adminSupabase
       .from('xero_invoices')
       .update({ staging_metadata: updatedMetadata })
       .eq('id', stagingRecord.id)
+      .select('staging_metadata')
 
     if (stagingStripeUpdateError) {
       logger.logPaymentProcessing(
@@ -1343,11 +1358,26 @@ export async function POST(request: NextRequest) {
         { 
           userId: user.id, 
           paymentIntentId: paymentIntent.id,
+          stagingRecordId: stagingRecord.id,
           error: stagingStripeUpdateError.message
         },
         'error'
       )
       // Don't fail the transaction, but log the issue
+    } else {
+      const finalMetadata = updatedRecord?.[0]?.staging_metadata
+      logger.logPaymentProcessing(
+        'staging-stripe-link-success',
+        'Successfully updated staging metadata with payment intent ID',
+        { 
+          userId: user.id, 
+          paymentIntentId: paymentIntent.id,
+          stagingRecordId: stagingRecord.id,
+          finalMetadata,
+          paymentIntentInMetadata: finalMetadata?.stripe_payment_intent_id
+        },
+        'info'
+      )
     }
 
     // Create payment record in database
@@ -1407,7 +1437,7 @@ export async function POST(request: NextRequest) {
         'info'
       )
 
-      const { error: stagingPaymentUpdateError } = await supabase
+      const { error: stagingPaymentUpdateError } = await adminSupabase
         .from('xero_invoices')
         .update({ payment_id: paymentRecord.id })
         .eq('staging_metadata->>user_id', user.id)
@@ -1430,7 +1460,7 @@ export async function POST(request: NextRequest) {
 
       // Also update the xero_payments staging metadata with payment_id
       // Use the staging record we already have
-      const { error: xeroPaymentUpdateError } = await supabase
+      const { error: xeroPaymentUpdateError } = await adminSupabase
         .from('xero_payments')
         .update({ 
           staging_metadata: {

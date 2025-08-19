@@ -346,7 +346,7 @@ export default function RegistrationPurchase({
         // Show success message
         showSuccess(
           'Waitlist Joined!', 
-          `You've been added to the waitlist. You're #${result.position} in line.`
+          `You've been added to the waitlist. We'll notify you if a spot opens up.`
         )
         
       } catch (err) {
@@ -492,7 +492,7 @@ export default function RegistrationPurchase({
                               
                               if (remaining <= 0) {
                                 if (categoryWaitlistEntry) {
-                                  return `On waitlist - Position #${categoryWaitlistEntry.position}`
+                                  return `On waitlist`
                                 } else {
                                   return 'Full - No spots remaining'
                                 }
@@ -581,7 +581,7 @@ export default function RegistrationPurchase({
                               
                               if (remaining <= 0) {
                                 if (categoryWaitlistEntry) {
-                                  return `On waitlist - Position #${categoryWaitlistEntry.position}`
+                                  return `On waitlist`
                                 } else {
                                   return 'Full - No spots remaining'
                                 }

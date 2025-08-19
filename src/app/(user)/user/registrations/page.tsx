@@ -235,7 +235,7 @@ export default async function UserRegistrationsPage() {
                         </div>
                         <div className="ml-4 flex-shrink-0">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Position #{waitlistEntry.position}
+                            On Waitlist
                           </span>
                         </div>
                       </div>
@@ -322,7 +322,7 @@ export default async function UserRegistrationsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">
-                          Position #{waitlistEntry.position}
+                          On Waitlist
                         </p>
                         <p className="text-sm text-gray-500">
                           Joined: {new Date(waitlistEntry.joined_at).toLocaleDateString()}

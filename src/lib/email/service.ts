@@ -165,7 +165,7 @@ class EmailService {
         validUntil: options.validUntil,
         paymentIntentId: options.paymentIntentId,
         purchaseDate: new Date().toLocaleDateString(),
-        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
   }
@@ -192,7 +192,7 @@ class EmailService {
         membershipName: options.membershipName,
         expirationDate: options.expirationDate,
         daysUntilExpiration: options.daysUntilExpiration,
-        renewUrl: `${process.env.NEXTAUTH_URL}/user/memberships`
+        renewUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`
       }
     })
   }
@@ -213,8 +213,8 @@ class EmailService {
       triggeredBy: 'automated',
       data: {
         userName: options.userName,
-        dashboardUrl: `${process.env.NEXTAUTH_URL}/user`,
-        membershipUrl: `${process.env.NEXTAUTH_URL}/user/memberships`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+        membershipUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`
       }
     })
   }
@@ -239,7 +239,7 @@ class EmailService {
         userName: options.userName,
         deletedAt: new Date(options.deletedAt).toLocaleDateString(),
         supportEmail: options.supportEmail || 'support@hockeyassociation.org',
-        loginUrl: `${process.env.NEXTAUTH_URL}/auth/login`
+        loginUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/login`
       }
     })
   }
@@ -273,7 +273,7 @@ class EmailService {
         amount: (options.amount / 100).toFixed(2),
         registrationDate: new Date().toLocaleDateString(),
         paymentIntentId: options.paymentIntentId,
-        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
   }
@@ -302,9 +302,8 @@ class EmailService {
         registrationName: options.registrationName,
         categoryName: options.categoryName,
         seasonName: options.seasonName,
-        position: options.position,
         waitlistDate: new Date().toLocaleDateString(),
-        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
   }
@@ -339,7 +338,7 @@ class EmailService {
         invoiceNumber: options.invoiceNumber || 'N/A',
         refundDate: options.refundDate || new Date().toLocaleDateString(),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
-        dashboardUrl: `${process.env.NEXTAUTH_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
   }

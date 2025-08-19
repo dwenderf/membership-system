@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     if (existingWaitlist) {
       return NextResponse.json({ 
-        error: `You are already on the waitlist for this category (position #${existingWaitlist.position})` 
+        error: `You are already on the waitlist for this category` 
       }, { status: 400 })
     }
 

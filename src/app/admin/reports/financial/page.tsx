@@ -314,14 +314,14 @@ export default function ReportsPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Net Revenue</h3>
               <p className={`text-3xl font-bold ${
                 ((reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) + reportData.summary.registrations.totalAmount) -
-                reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) -
+                reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) +
                 (reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)) >= 0 
                   ? 'text-green-600' 
                   : 'text-red-600'
               }`}>
                 {formatCurrency(
                   (reportData.summary.memberships.reduce((sum, m) => sum + m.totalAmount, 0) + reportData.summary.registrations.totalAmount) -
-                  reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) -
+                  reportData.summary.discountUsage.reduce((sum, d) => sum + d.totalAmount, 0) +
                   (reportData.summary.donationsReceived.totalAmount - reportData.summary.donationsGiven.totalAmount)
                 )}
               </p>

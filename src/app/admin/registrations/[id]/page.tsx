@@ -4,6 +4,7 @@ import ClientTimestamp from '@/components/ClientTimestamp'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
+import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDndList'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
@@ -133,6 +134,7 @@ export default async function RegistrationDetailPage({
               <div className="bg-white shadow rounded-lg p-6">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">Registration Details</h2>
                 <dl className="space-y-4">
+                  {/* ...existing code for registration details... */}
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Type</dt>
                     <dd className="mt-1 text-sm text-gray-900 capitalize">
@@ -145,7 +147,6 @@ export default async function RegistrationDetailPage({
                       </span>
                     </dd>
                   </div>
-                  
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Season</dt>
                     <dd className="mt-1 text-sm text-gray-900">
@@ -157,7 +158,6 @@ export default async function RegistrationDetailPage({
                       )}
                     </dd>
                   </div>
-
                   {season && (
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Season Dates</dt>
@@ -166,9 +166,6 @@ export default async function RegistrationDetailPage({
                       </dd>
                     </div>
                   )}
-
-
-
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Discount Codes</dt>
                     <dd className="mt-1 text-sm text-gray-900">
@@ -179,7 +176,6 @@ export default async function RegistrationDetailPage({
                       )}
                     </dd>
                   </div>
-
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Registration Timing</dt>
                     <dd className="mt-1 text-sm text-gray-900">
@@ -211,7 +207,6 @@ export default async function RegistrationDetailPage({
                       )}
                     </dd>
                   </div>
-
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Created</dt>
                     <dd className="mt-1 text-sm text-gray-900">
@@ -222,7 +217,7 @@ export default async function RegistrationDetailPage({
               </div>
             </div>
 
-            {/* Registration Categories */}
+            {/* Registration Categories - now with drag-and-drop */}
             <div className="lg:col-span-2">
               <div className="bg-white shadow rounded-lg">
                 <div className="px-6 py-4 border-b border-gray-200">
@@ -233,7 +228,6 @@ export default async function RegistrationDetailPage({
                     </span>
                   </div>
                 </div>
-
                 {!categories || categories.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-gray-500 text-lg mb-4">No categories created yet</div>
@@ -248,89 +242,9 @@ export default async function RegistrationDetailPage({
                     </Link>
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-200">
-                    {categories.map((category) => {
-                      const current_count = categoryRegistrationCounts[category.id] || 0
-                      const isAtCapacity = category.max_capacity && current_count >= category.max_capacity
-                      const capacityPercentage = category.max_capacity 
-                        ? (current_count / category.max_capacity) * 100 
-                        : 0
-
-                      return (
-                        <div key={category.id} className="px-6 py-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center">
-                                <h3 className="text-lg font-medium text-gray-900">
-                                  {getCategoryDisplayName(category)}
-                                </h3>
-                                {isCategoryCustom(category) && (
-                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                    Custom
-                                  </span>
-                                )}
-                                {isAtCapacity ? (
-                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                    Full
-                                  </span>
-                                ) : (
-                                  <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Open
-                                  </span>
-                                )}
-                              </div>
-                              
-                              <div className="mt-1 flex items-center text-sm text-gray-500">
-                                <span>
-                                  {current_count} registered
-                                  {category.max_capacity && ` of ${category.max_capacity} spots`}
-                                </span>
-                                {category.max_capacity && (
-                                  <span className="mx-2">
-                                    ({Math.round(capacityPercentage)}% full)
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="mt-1 text-sm text-gray-500">
-                                <span className="font-medium text-gray-700">
-                                  Price: ${(category.price / 100).toFixed(2)}
-                                </span>
-                                {category.memberships && (
-                                  <span className="ml-4">
-                                    Requires: {category.memberships.name}
-                                  </span>
-                                )}
-                              </div>
-
-                              {category.max_capacity && (
-                                <div className="mt-2">
-                                  <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className={`h-2 rounded-full transition-all duration-300 ${
-                                        capacityPercentage >= 100 ? 'bg-red-500' :
-                                        capacityPercentage >= 80 ? 'bg-yellow-500' :
-                                        'bg-green-500'
-                                      }`}
-                                      style={{ width: `${Math.min(capacityPercentage, 100)}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="ml-4 flex items-center space-x-2">
-                              <Link
-                                href={`/admin/registrations/${id}/categories/${category.id}/edit`}
-                                className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                              >
-                                Edit
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <div className="p-4">
+                    {/* Drag-and-drop list for registration categories */}
+                    <RegistrationCategoriesDndList categories={categories} registrationId={id} />
                   </div>
                 )}
               </div>

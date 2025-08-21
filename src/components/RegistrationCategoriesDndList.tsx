@@ -56,23 +56,19 @@ export default function RegistrationCategoriesDndList({ categories, registration
             const displayName = category.custom_name || category.name
             const priceDisplay = category.price !== undefined && category.price !== null ? `$${(category.price / 100).toFixed(2)}` : null
             const capacityDisplay = category.max_capacity ? `${category.max_capacity} spots` : 'Unlimited'
-            // You may want to show registration count if available, but not in this component's props
             return (
               <SortableItem key={category.id} id={category.id}>
-                <div className="flex items-center px-6 py-4 bg-white">
-                  {/* Grab handle */}
-                  <span className="mr-4 cursor-grab text-gray-400 select-none" title="Drag to reorder">
-                    <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
-                      <circle cx="5" cy="6" r="1.5" fill="currentColor" />
-                      <circle cx="5" cy="10" r="1.5" fill="currentColor" />
-                      <circle cx="5" cy="14" r="1.5" fill="currentColor" />
-                      <circle cx="15" cy="6" r="1.5" fill="currentColor" />
-                      <circle cx="15" cy="10" r="1.5" fill="currentColor" />
-                      <circle cx="15" cy="14" r="1.5" fill="currentColor" />
+                <div className="flex items-stretch px-0 py-4 bg-white">
+                  {/* Taller grab handle, aligned left */}
+                  <div className="flex flex-col justify-center items-center px-4 select-none cursor-grab" style={{ minWidth: '32px' }} title="Drag to reorder">
+                    <svg width="20" height="40" fill="none" viewBox="0 0 20 40">
+                      <circle cx="10" cy="8" r="2" fill="currentColor" />
+                      <circle cx="10" cy="20" r="2" fill="currentColor" />
+                      <circle cx="10" cy="32" r="2" fill="currentColor" />
                     </svg>
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex items-center">
+                  </div>
+                  <div className="flex-1 px-2">
+                    <div className="flex items-center mb-2">
                       <span className="text-lg font-medium text-gray-900">{displayName}</span>
                       {isCustom && (
                         <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -88,17 +84,17 @@ export default function RegistrationCategoriesDndList({ categories, registration
                     <div className="mt-1 text-sm text-gray-500">
                       {category.description}
                     </div>
-                    <div className="mt-1 text-sm text-gray-500">
+                    <div className="mt-1 text-sm text-gray-500 flex flex-wrap items-center gap-x-4">
                       {priceDisplay && <span className="font-medium text-gray-700">Price: {priceDisplay}</span>}
                       {category.memberships && (
-                        <span className="ml-4">Requires: {category.memberships.name}</span>
+                        <span>Requires: {category.memberships.name}</span>
                       )}
                       {category.max_capacity !== undefined && (
-                        <span className="ml-4">Capacity: {capacityDisplay}</span>
+                        <span>Capacity: {capacityDisplay}</span>
                       )}
                     </div>
                   </div>
-                  <div className="ml-4 flex items-center space-x-2">
+                  <div className="flex items-center px-4">
                     <a
                       href={`/admin/registrations/${registrationId}/categories/${category.id}/edit`}
                       className="text-blue-600 hover:text-blue-500 text-sm font-medium"

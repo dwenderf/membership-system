@@ -280,6 +280,17 @@ export default async function BrowseRegistrationsPage() {
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
                 const registrationStatus = getRegistrationStatus(registration)
 
+                // Sort registration_categories by sort_order, then by category name
+                const sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
+                  if (a.sort_order !== b.sort_order) {
+                    return (a.sort_order ?? 9999) - (b.sort_order ?? 9999)
+                  }
+                  // Fallback to alphabetical by category name
+                  const nameA = a.categories?.name?.toLowerCase() || ''
+                  const nameB = b.categories?.name?.toLowerCase() || ''
+                  return nameA.localeCompare(nameB)
+                })
+
                 return (
                   <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg transition-shadow ${
                     isAlreadyRegistered 
@@ -329,7 +340,6 @@ export default async function BrowseRegistrationsPage() {
                           {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
                         </p>
                       </div>
-
 
                       <div className="mt-5">
                         {isAlreadyRegistered ? (
@@ -393,10 +403,10 @@ export default async function BrowseRegistrationsPage() {
                             registration={{
                               ...registration,
                               // Add current count to categories
-                              registration_categories: registration.registration_categories?.map((cat: any) => ({
+                              registration_categories: sortedCategories.map((cat: any) => ({
                                 ...cat,
                                 current_count: categoryRegistrationCounts[cat.id] || 0
-                              })) || []
+                              }))
                             }}
                             userEmail={user.email || ''}
                             activeMemberships={activeMemberships}

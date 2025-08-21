@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createAdminClient()
+  const supabase = await createClient()
+  const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -26,7 +27,7 @@ export async function GET(
     }
 
     // Get the category
-    const { data: category, error } = await supabase
+    const { data: category, error } = await adminSupabase
       .from('categories')
       .select('*')
       .eq('id', params.id)
@@ -48,7 +49,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-  const supabase = createAdminClient()
+  const supabase = await createClient()
+  const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -68,7 +70,7 @@ export async function PUT(
     }
 
     // Check if category exists
-    const { data: existingCategory } = await supabase
+    const { data: existingCategory } = await adminSupabase
       .from('categories')
       .select('*')
       .eq('id', params.id)
@@ -86,7 +88,7 @@ export async function PUT(
     }
 
     // Check for duplicate name among system categories (excluding this one)
-    const { data: duplicateCategory } = await supabase
+    const { data: duplicateCategory } = await adminSupabase
       .from('categories')
       .select('id')
       .eq('name', name.trim())
@@ -99,7 +101,7 @@ export async function PUT(
     }
 
     // Update the category
-    const { data: updatedCategory, error } = await supabase
+    const { data: updatedCategory, error } = await adminSupabase
       .from('categories')
       .update({
         name: name.trim(),

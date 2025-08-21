@@ -51,17 +51,54 @@ export default function RegistrationCategoriesDndList({ categories, registration
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
         <div className="divide-y divide-gray-200">
-          {items.map((category) => (
-            <SortableItem key={category.id} id={category.id}>
-              <div className="flex items-center justify-between px-6 py-4 bg-white">
-                <div>
-                  <div className="font-medium text-gray-900">{category.custom_name || category.name}</div>
-                  <div className="text-sm text-gray-500">{category.description}</div>
+          {items.map((category) => {
+            const isCustom = !!category.custom_name
+            const priceDisplay = category.price !== undefined && category.price !== null ? `$${(category.price / 100).toFixed(2)}` : null
+            const capacityDisplay = category.max_capacity ? `${category.max_capacity} spots` : 'Unlimited'
+            return (
+              <SortableItem key={category.id} id={category.id}>
+                <div className="flex items-center justify-between px-6 py-4 bg-white">
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {category.custom_name || category.name}
+                      </h3>
+                      {isCustom && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Custom
+                        </span>
+                      )}
+                      {!isCustom && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          System
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {category.description}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {priceDisplay && <span className="font-medium text-gray-700">Price: {priceDisplay}</span>}
+                      {category.memberships && (
+                        <span className="ml-4">Requires: {category.memberships.name}</span>
+                      )}
+                      {category.max_capacity !== undefined && (
+                        <span className="ml-4">Capacity: {capacityDisplay}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ml-4 flex items-center space-x-2">
+                    <a
+                      href={`/admin/registrations/${registrationId}/categories/${category.id}/edit`}
+                      className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+                    >
+                      Edit
+                    </a>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500">Order: {category.sort_order}</div>
-              </div>
-            </SortableItem>
-          ))}
+              </SortableItem>
+            )
+          })}
         </div>
       </SortableContext>
     </DndContext>

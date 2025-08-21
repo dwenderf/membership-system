@@ -387,12 +387,88 @@ The Hockey Association Team
 
 This ensures all email templates are properly documented and maintainable.
 
-### 5. Testing Email Integration
+### 5. Custom SMTP Configuration (Optional)
+
+By default, Supabase handles authentication emails (magic links, password resets) using their email service. For a more professional experience with custom branding and domain, you can configure custom SMTP using Google Workspace.
+
+#### Setting Up Google Workspace SMTP
+
+**Prerequisites:**
+- Google Workspace account with admin access
+- Custom domain (e.g., `nycpha.org`)
+- Email address for sending auth emails (e.g., `noreply@nycpha.org`)
+
+**Step 1: Create App Password**
+1. Go to [Google Account Security](https://myaccount.google.com/security)
+2. Enable **2-Step Verification** (required for app passwords)
+3. Go to **App passwords** section
+4. Generate an app password for "Mail"
+5. **Copy the 16-character password** (without spaces: `abcd1234efgh5678`)
+
+**Step 2: Configure Supabase SMTP**
+1. Go to **Supabase Dashboard** → **Authentication** → **Settings**
+2. Scroll down to **SMTP Settings**
+3. **Enable Custom SMTP** toggle
+4. Configure these settings:
+   ```
+   SMTP Host: smtp.gmail.com
+   SMTP Port: 587
+   SMTP User: noreply@nycpha.org
+   SMTP Pass: abcd1234efgh5678 (app password - no spaces)
+   Sender Email: noreply@nycpha.org
+   Sender Name: NYC PHA
+   ```
+5. Click **Save**
+
+**Step 3: Add Email Logo (Optional)**
+1. Host your logo at `https://yourdomain.com/images/logo-email.png`
+2. Go to **Authentication** → **Email Templates** 
+3. Customize templates with your logo:
+   ```html
+   <div style="margin-bottom: 30px;">
+     <img src="https://yourdomain.com/images/logo-email.png" 
+          alt="Your Organization Logo" 
+          style="max-width: 240px; height: auto; display: block;">
+   </div>
+   
+   <h2>Welcome to your account!</h2>
+   <p>Please click <a href="{{ .ConfirmationURL }}">this link</a> to log in.</p>
+   
+   <br><br>
+   
+   <div>
+     <img src="https://yourdomain.com/images/logo-email.png" 
+          alt="Your Organization Logo" 
+          style="max-width: 240px; height: auto; display: block;">
+   </div>
+   ```
+
+**Step 4: Test Configuration**
+1. Try logging in with a magic link
+2. Check that emails are sent from your custom domain
+3. Verify logo appears correctly in email templates
+4. Test with different email clients (Gmail, Outlook, etc.)
+
+**Benefits of Custom SMTP:**
+- ✅ **Professional branding** - Emails sent from your domain
+- ✅ **Custom logo** - Add your organization's visual identity
+- ✅ **Better deliverability** - Google Workspace reputation
+- ✅ **Consistent experience** - Matches your organization's communications
+
+**Troubleshooting SMTP:**
+- **Authentication failed**: Ensure app password has no spaces
+- **Port issues**: Use port 587 with STARTTLS (not 465 with SSL)
+- **Logo not showing**: Check image URL is publicly accessible
+- **Emails not sending**: Verify sender email exists in Google Workspace
+
+### 6. Testing Email Integration
 
 1. Complete the Loops setup above
-2. Make a test membership purchase in your application
-3. Check the `email_logs` table in Supabase to verify delivery status
-4. Confirm the email was received with proper variable substitution
+2. If using custom SMTP, test the magic link authentication
+3. Make a test membership purchase in your application
+4. Check the `email_logs` table in Supabase to verify delivery status
+5. Confirm the email was received with proper variable substitution
+6. Test both authentication emails (via SMTP) and transactional emails (via Loops)
 
 ## Error Monitoring Setup (Sentry)
 

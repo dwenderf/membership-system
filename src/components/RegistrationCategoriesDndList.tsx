@@ -53,16 +53,27 @@ export default function RegistrationCategoriesDndList({ categories, registration
         <div className="divide-y divide-gray-200">
           {items.map((category) => {
             const isCustom = !!category.custom_name
+            const displayName = category.custom_name || category.name
             const priceDisplay = category.price !== undefined && category.price !== null ? `$${(category.price / 100).toFixed(2)}` : null
             const capacityDisplay = category.max_capacity ? `${category.max_capacity} spots` : 'Unlimited'
+            // You may want to show registration count if available, but not in this component's props
             return (
               <SortableItem key={category.id} id={category.id}>
-                <div className="flex items-center justify-between px-6 py-4 bg-white">
+                <div className="flex items-center px-6 py-4 bg-white">
+                  {/* Grab handle */}
+                  <span className="mr-4 cursor-grab text-gray-400 select-none" title="Drag to reorder">
+                    <svg width="20" height="20" fill="none" viewBox="0 0 20 20">
+                      <circle cx="5" cy="6" r="1.5" fill="currentColor" />
+                      <circle cx="5" cy="10" r="1.5" fill="currentColor" />
+                      <circle cx="5" cy="14" r="1.5" fill="currentColor" />
+                      <circle cx="15" cy="6" r="1.5" fill="currentColor" />
+                      <circle cx="15" cy="10" r="1.5" fill="currentColor" />
+                      <circle cx="15" cy="14" r="1.5" fill="currentColor" />
+                    </svg>
+                  </span>
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {category.custom_name || category.name}
-                      </h3>
+                      <span className="text-lg font-medium text-gray-900">{displayName}</span>
                       {isCustom && (
                         <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                           Custom

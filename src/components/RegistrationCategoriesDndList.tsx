@@ -7,7 +7,7 @@ import {SortableItem} from "./SortableItem"
 
 export interface RegistrationCategory {
   id: string
-  name: string
+  name?: string
   description?: string | null
   sort_order: number
   max_capacity?: number | null
@@ -15,6 +15,11 @@ export interface RegistrationCategory {
   memberships?: { id: string; name: string } | null
   custom_name?: string | null
   category_type?: string
+  categories?: {
+    name?: string
+    description?: string | null
+    category_type?: string
+  }
 }
 
 interface Props {
@@ -53,7 +58,7 @@ export default function RegistrationCategoriesDndList({ categories, registration
         <div className="divide-y divide-gray-200">
           {items.map((category) => {
             const isCustom = !!category.custom_name
-            const displayName = category.custom_name || category.name
+            const displayName = category.custom_name || (category.categories?.name ?? category.name) || 'Unnamed Category'
             const priceDisplay = category.price !== undefined && category.price !== null ? `$${(category.price / 100).toFixed(2)}` : null
             const capacityDisplay = category.max_capacity ? `${category.max_capacity} spots` : 'Unlimited'
             return (

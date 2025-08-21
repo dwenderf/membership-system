@@ -1,7 +1,8 @@
+"use client"
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import {
   DndContext,
   closestCenter
@@ -47,26 +48,39 @@ export default async function RegistrationCategoriesPage() {
   // ...existing code...
 
   // System Categories Drag-and-Drop List
-  function SystemCategoriesDndList({ categories }) {
-    const [items, setItems] = useState(categories.map(cat => cat.id))
-    const [catMap, setCatMap] = useState(() => {
-      const map = {}
-      categories.forEach(cat => { map[cat.id] = cat })
+  interface Category {
+    id: string
+    name: string
+    description?: string
+    created_at: string
+    sort_order?: number
+    [key: string]: any
+  }
+
+  interface SystemCategoriesDndListProps {
+    categories: Category[]
+  }
+
+  function SystemCategoriesDndList({ categories }: SystemCategoriesDndListProps) {
+    const [items, setItems] = useState<string[]>(categories.map((cat: Category) => cat.id))
+    const [catMap, setCatMap] = useState<Record<string, Category>>(() => {
+      const map: Record<string, Category> = {}
+      categories.forEach((cat: Category) => { map[cat.id] = cat })
       return map
     })
 
     // Update local state when categories change
     React.useEffect(() => {
-      setItems(categories.map(cat => cat.id))
+      setItems(categories.map((cat: Category) => cat.id))
       setCatMap(() => {
-        const map = {}
-        categories.forEach(cat => { map[cat.id] = cat })
+        const map: Record<string, Category> = {}
+        categories.forEach((cat: Category) => { map[cat.id] = cat })
         return map
       })
     }, [categories])
 
     // Handle drag end
-    const handleDragEnd = async (event) => {
+  const handleDragEnd = async (event: any) => {
       const { active, over } = event
       if (active.id !== over?.id) {
         const oldIndex = items.indexOf(active.id)
@@ -88,9 +102,9 @@ export default async function RegistrationCategoriesPage() {
     }
 
     // Sortable item component
-    function SortableItem({ id }) {
+    function SortableItem({ id }: { id: string }) {
       const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-      const style = {
+      const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
         transition,
         background: isDragging ? '#e0e7ff' : 'white',

@@ -394,23 +394,6 @@ export default function EditRegistrationCategoryPage() {
                 </p>
               </div>
 
-              {/* Sort Order */}
-              <div>
-                <label htmlFor="sort_order" className="block text-sm font-medium text-gray-700">
-                  Display Order (optional)
-                </label>
-                <input
-                  type="number"
-                  id="sort_order"
-                  min="0"
-                  value={formData.sort_order}
-                  onChange={(e) => setFormData(prev => ({ ...prev, sort_order: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Order in which this category appears (defaults to last)
-                </p>
-              </div>
 
               {/* Submit Buttons */}
               <div className="flex justify-end space-x-3">

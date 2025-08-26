@@ -30,26 +30,14 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      let result
-      if (authMethod === 'magic') {
-        // Magic link
-        result = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          }
-        })
-      } else {
-        // OTP code - explicitly omit emailRedirectTo to force OTP mode
-        result = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: false
-          }
-        })
-      }
-      
-      const { error } = result
+      // Always send the same email (with both OTP and magic link)
+      // The user's choice only affects the UI flow, not the email content
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        }
+      })
 
       if (error) {
         setMessage(error.message)
@@ -63,17 +51,10 @@ export default function LoginPage() {
         setMessage(successMessage)
         showSuccess('Email sent!', successMessage)
         
-        // Show magic link warning after successful send
-        if (authMethod === 'magic') {
-          setShowMagicLinkWarning(true)
-        }
-        
-        // For OTP method, redirect to verification page
-        if (authMethod === 'otp') {
-          // Store email in sessionStorage for the verification page
-          sessionStorage.setItem('otp_email', email)
-          router.push('/auth/verify-otp')
-        }
+        // Always redirect to verification page, but store the user's preferred method
+        sessionStorage.setItem('otp_email', email)
+        sessionStorage.setItem('auth_method_preference', authMethod)
+        router.push('/auth/verify-otp')
       }
     } catch (error: any) {
       console.error('Login error:', error)

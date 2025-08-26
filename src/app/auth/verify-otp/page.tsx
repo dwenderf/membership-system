@@ -27,21 +27,28 @@ export default function VerifyOTPPage() {
     const storedEmail = sessionStorage.getItem('otp_email')
     const storedMethod = sessionStorage.getItem('auth_method_preference') as 'magic' | 'otp'
     
+    console.log('Stored email:', storedEmail) // Debug
+    console.log('Stored method:', storedMethod) // Debug
+    
     if (storedEmail) {
       setEmail(storedEmail)
       setPreferredMethod(storedMethod || 'otp')
       
       // Show OTP input immediately if user chose OTP method
       if (storedMethod === 'otp') {
+        console.log('Setting showOtpInput to true') // Debug
         setShowOtpInput(true)
         // Focus first input after a short delay to ensure DOM is ready
         setTimeout(() => {
           if (otpInputs.current[0]) {
             otpInputs.current[0].focus()
           }
-        }, 100)
+        }, 200)
+      } else {
+        console.log('Method is magic, not showing OTP input yet') // Debug
       }
     } else {
+      console.log('No stored email, redirecting to login') // Debug
       // Redirect back to login if no email stored
       router.push('/auth/login')
     }
@@ -172,7 +179,7 @@ export default function VerifyOTPPage() {
             <img 
               src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png" 
               alt="NYC PHA" 
-              className="h-12 w-auto"
+              className="h-16 w-auto max-w-full"
             />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
@@ -225,6 +232,11 @@ export default function VerifyOTPPage() {
               {message}
             </div>
           )}
+          
+          {/* Debug info */}
+          <div className="text-xs text-gray-400 text-center">
+            Debug: showOtpInput={showOtpInput.toString()}, preferredMethod={preferredMethod}
+          </div>
           
           {/* Only show OTP form when appropriate */}
           {showOtpInput && (

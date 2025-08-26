@@ -48,13 +48,16 @@ export default function LoginPage() {
           ? 'Check your email for the login link!'
           : 'Check your email for your 6-digit code!'
           
-        setMessage(successMessage)
         showSuccess('Email sent!', successMessage)
         
-        // Always redirect to verification page, but store the user's preferred method
+        // Store user preferences and redirect to verification page
         sessionStorage.setItem('otp_email', email)
         sessionStorage.setItem('auth_method_preference', authMethod)
-        router.push('/auth/verify-otp')
+        
+        // Small delay to ensure sessionStorage is written
+        setTimeout(() => {
+          router.push('/auth/verify-otp')
+        }, 100)
       }
     } catch (error: any) {
       console.error('Login error:', error)

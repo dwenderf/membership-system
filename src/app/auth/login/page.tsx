@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [authMethod, setAuthMethod] = useState<'magic' | 'otp'>('magic')
+  const [showMagicLinkWarning, setShowMagicLinkWarning] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -29,18 +30,31 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      const authOptions = authMethod === 'magic' 
-        ? { emailRedirectTo: `${window.location.origin}/auth/callback` }
-        : {} // Empty options = OTP code
+      let result
+      if (authMethod === 'magic') {
+        // Magic link
+        result = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          }
+        })
+      } else {
+        // OTP code - explicitly omit emailRedirectTo to force OTP mode
+        result = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false
+          }
+        })
+      }
       
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: authOptions,
-      })
+      const { error } = result
 
       if (error) {
         setMessage(error.message)
         showError('Login failed', error.message)
+        setShowMagicLinkWarning(false) // Hide warning on error
       } else {
         const successMessage = authMethod === 'magic'
           ? 'Check your email for the login link!'
@@ -48,6 +62,11 @@ export default function LoginPage() {
           
         setMessage(successMessage)
         showSuccess('Email sent!', successMessage)
+        
+        // Show magic link warning after successful send
+        if (authMethod === 'magic') {
+          setShowMagicLinkWarning(true)
+        }
         
         // For OTP method, redirect to verification page
         if (authMethod === 'otp') {
@@ -122,12 +141,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png" 
+              alt="NYC PHA" 
+              className="h-12 w-auto"
+            />
+          </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {getSystemTitle()}
-          </p>
         </div>
         
         <div className="mt-8 space-y-6">
@@ -138,6 +161,25 @@ export default function LoginPage() {
                 : 'bg-red-50 text-red-800'
             }`}>
               {message}
+            </div>
+          )}
+          
+          {/* Magic link warning - only shows after successful magic link send */}
+          {showMagicLinkWarning && (
+            <div className="p-3 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium">Important:</h3>
+                  <div className="mt-1 text-sm">
+                    Magic links must be opened in the same browser where you requested them. If you have issues, try the 6-digit code option instead.
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           
@@ -182,11 +224,6 @@ export default function LoginPage() {
                 <div className="text-xs mt-1 opacity-75">Enter code from email</div>
               </button>
             </div>
-            {authMethod === 'magic' && (
-              <p className="text-xs text-gray-500 mt-2">
-                💡 Magic links must be opened in the same browser where you request them
-              </p>
-            )}
           </div>
           
           <form className="space-y-4" onSubmit={handleEmailAuth}>

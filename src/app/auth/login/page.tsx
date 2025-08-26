@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [authMethod, setAuthMethod] = useState<'magic' | 'otp'>('magic')
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -20,7 +21,7 @@ export default function LoginPage() {
     return emailRegex.test(email.trim())
   }
 
-  const handleMagicLink = async (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     
     // Set loading state immediately
@@ -28,19 +29,32 @@ export default function LoginPage() {
     setMessage('')
 
     try {
+      const authOptions = authMethod === 'magic' 
+        ? { emailRedirectTo: `${window.location.origin}/auth/callback` }
+        : {} // Empty options = OTP code
+      
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        options: authOptions,
       })
 
       if (error) {
         setMessage(error.message)
         showError('Login failed', error.message)
       } else {
-        setMessage('Check your email for the login link!')
-        showSuccess('Email sent!', 'Check your email for the login link')
+        const successMessage = authMethod === 'magic'
+          ? 'Check your email for the login link!'
+          : 'Check your email for your 6-digit code!'
+          
+        setMessage(successMessage)
+        showSuccess('Email sent!', successMessage)
+        
+        // For OTP method, redirect to verification page
+        if (authMethod === 'otp') {
+          // Store email in sessionStorage for the verification page
+          sessionStorage.setItem('otp_email', email)
+          router.push('/auth/verify-otp')
+        }
       }
     } catch (error: any) {
       console.error('Login error:', error)
@@ -127,7 +141,55 @@ export default function LoginPage() {
             </div>
           )}
           
-          <form className="space-y-4" onSubmit={handleMagicLink}>
+          {/* Auth method toggle */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-3 block">
+              Choose your login method:
+            </label>
+            <div className="flex rounded-md shadow-sm" role="group">
+              <button 
+                type="button"
+                onClick={() => setAuthMethod('magic')}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-l-lg border transition-colors ${
+                  authMethod === 'magic' 
+                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' 
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  <span>Magic Link</span>
+                </div>
+                <div className="text-xs mt-1 opacity-75">Click link in email</div>
+              </button>
+              <button
+                type="button" 
+                onClick={() => setAuthMethod('otp')}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-r-lg border-t border-r border-b transition-colors ${
+                  authMethod === 'otp'
+                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                  </svg>
+                  <span>6-Digit Code</span>
+                </div>
+                <div className="text-xs mt-1 opacity-75">Enter code from email</div>
+              </button>
+            </div>
+            {authMethod === 'magic' && (
+              <p className="text-xs text-gray-500 mt-2">
+                💡 Magic links must be opened in the same browser where you request them
+              </p>
+            )}
+          </div>
+          
+          <form className="space-y-4" onSubmit={handleEmailAuth}>
             <div>
               <label htmlFor="email" className="sr-only">
                 Email address
@@ -151,7 +213,12 @@ export default function LoginPage() {
                 disabled={loading || !isValidEmail(email)}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Sending...' : 'Send Magic Link'}
+                {loading 
+                  ? 'Sending...' 
+                  : authMethod === 'magic' 
+                    ? 'Send Magic Link' 
+                    : 'Send 6-Digit Code'
+                }
               </button>
             </div>
           </form>

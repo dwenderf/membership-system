@@ -2,7 +2,7 @@
 
 ## Phase 1: Core Alternate Registration System (Admin-Only)
 
-- [ ] 1. Set up database schema for alternate registration system
+- [x] 1. Set up database schema for alternate registration system
   - Create database migration for new tables and schema modifications
   - Add Setup Intent fields to users table (stripe_setup_intent_id, stripe_payment_method_id, setup_intent_status, payment_method_updated_at)
   - Add alternate configuration fields to registrations table (allow_alternates, alternate_price, alternate_accounting_code)

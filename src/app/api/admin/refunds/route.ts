@@ -6,7 +6,7 @@ import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: process.env.STRIPE_API_VERSION as any,
 })
 
 // POST /api/admin/refunds - Process new refunds
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check if current user is admin
     const { data: { user: authUser } } = await supabase.auth.getUser()
-    
+
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!paymentId || !amount || amount <= 0) {
-      return NextResponse.json({ 
-        error: 'Payment ID and positive refund amount are required' 
+      return NextResponse.json({
+        error: 'Payment ID and positive refund amount are required'
       }, { status: 400 })
     }
 
@@ -51,24 +51,24 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (paymentError || !payment) {
-      logger.logSystem('refund-error', 'Payment not found', { 
+      logger.logSystem('refund-error', 'Payment not found', {
         paymentId,
-        error: paymentError?.message 
+        error: paymentError?.message
       })
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
     }
 
     // Validate payment status
     if (payment.status !== 'completed') {
-      return NextResponse.json({ 
-        error: 'Can only refund completed payments' 
+      return NextResponse.json({
+        error: 'Can only refund completed payments'
       }, { status: 400 })
     }
 
     // Check if payment has Stripe payment intent
     if (!payment.stripe_payment_intent_id) {
-      return NextResponse.json({ 
-        error: 'Cannot refund payment without Stripe payment intent' 
+      return NextResponse.json({
+        error: 'Cannot refund payment without Stripe payment intent'
       }, { status: 400 })
     }
 
@@ -80,9 +80,9 @@ export async function POST(request: NextRequest) {
       .in('status', ['completed', 'processing', 'pending'])
 
     if (refundsError) {
-      logger.logSystem('refund-error', 'Failed to check existing refunds', { 
+      logger.logSystem('refund-error', 'Failed to check existing refunds', {
         paymentId,
-        error: refundsError.message 
+        error: refundsError.message
       })
       return NextResponse.json({ error: 'Failed to validate refund' }, { status: 500 })
     }
@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
 
     // Validate refund amount
     if (amount > availableForRefund) {
-      return NextResponse.json({ 
-        error: `Cannot refund $${(amount / 100).toFixed(2)}. Only $${(availableForRefund / 100).toFixed(2)} available for refund.` 
+      return NextResponse.json({
+        error: `Cannot refund $${(amount / 100).toFixed(2)}. Only $${(availableForRefund / 100).toFixed(2)} available for refund.`
       }, { status: 400 })
     }
 
@@ -112,10 +112,10 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      logger.logSystem('refund-error', 'Failed to create refund record', { 
+      logger.logSystem('refund-error', 'Failed to create refund record', {
         paymentId,
         amount,
-        error: insertError.message 
+        error: insertError.message
       })
       return NextResponse.json({ error: 'Failed to create refund' }, { status: 500 })
     }
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
         .eq('id', refundRecord.id)
 
       if (updateError) {
-        logger.logSystem('refund-warning', 'Stripe refund succeeded but failed to update database', { 
+        logger.logSystem('refund-warning', 'Stripe refund succeeded but failed to update database', {
           refundId: refundRecord.id,
           stripeRefundId: stripeRefund.id,
-          error: updateError.message 
+          error: updateError.message
         })
       }
 
@@ -173,14 +173,25 @@ export async function POST(request: NextRequest) {
       // sends the charge.refunded event. The staging workflow handles this asynchronously.
 
       // Send refund notification email (async, don't wait for completion)
-      supabase
-        .from('users')
-        .select('first_name, last_name, email')
-        .eq('id', payment.user_id)
-        .single()
-        .then(({ data: userDetails }) => {
+      const sendRefundEmail = async () => {
+        try {
+          const { data: userDetails, error: userError } = await supabase
+            .from('users')
+            .select('first_name, last_name, email')
+            .eq('id', payment.user_id)
+            .single()
+
+          if (userError) {
+            logger.logSystem('refund-email-user-error', 'Failed to fetch user details for refund email', {
+              refundId: refundRecord.id,
+              userId: payment.user_id,
+              error: userError.message
+            })
+            return
+          }
+
           if (userDetails) {
-            emailService.sendRefundNotification({
+            await emailService.sendRefundNotification({
               userId: payment.user_id,
               email: userDetails.email,
               userName: `${userDetails.first_name} ${userDetails.last_name}`,
@@ -190,22 +201,19 @@ export async function POST(request: NextRequest) {
               paymentDate: new Date(payment.completed_at || payment.created_at).toLocaleDateString(),
               invoiceNumber: `PAY-${payment.id.slice(0, 8)}`,
               refundDate: new Date().toLocaleDateString()
-            }).catch(emailError => {
-              logger.logSystem('refund-email-error', 'Failed to send refund notification email', {
-                refundId: refundRecord.id,
-                userId: payment.user_id,
-                error: emailError instanceof Error ? emailError.message : 'Unknown error'
-              })
             })
           }
-        })
-        .catch(userError => {
-          logger.logSystem('refund-email-user-error', 'Failed to fetch user details for refund email', {
+        } catch (error) {
+          logger.logSystem('refund-email-error', 'Failed to send refund notification email', {
             refundId: refundRecord.id,
             userId: payment.user_id,
-            error: userError instanceof Error ? userError.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error'
           })
-        })
+        }
+      }
+
+      // Execute email sending without waiting for completion
+      sendRefundEmail()
 
       // Log successful refund
       logger.logSystem('refund-processed', 'Refund processed successfully', {
@@ -238,20 +246,20 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', refundRecord.id)
 
-      logger.logSystem('refund-error', 'Stripe refund failed', { 
+      logger.logSystem('refund-error', 'Stripe refund failed', {
         refundId: refundRecord.id,
         paymentId,
         amount,
         error: stripeError instanceof Error ? stripeError.message : 'Unknown error'
       })
 
-      return NextResponse.json({ 
-        error: 'Refund processing failed. Please try again later.' 
+      return NextResponse.json({
+        error: 'Refund processing failed. Please try again later.'
       }, { status: 500 })
     }
 
   } catch (error) {
-    logger.logSystem('refund-error', 'Unexpected error processing refund', { 
+    logger.logSystem('refund-error', 'Unexpected error processing refund', {
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

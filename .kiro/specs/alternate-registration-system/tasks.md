@@ -14,7 +14,7 @@
   - Add unique constraints to prevent duplicate registrations and selections
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.3, 9.1, 9.2_
 
-- [ ] 2. Implement Stripe Setup Intent integration
+- [x] 2. Implement Stripe Setup Intent integration
   - Create Setup Intent service for payment method management
   - Implement createSetupIntent function to save payment methods without charging
   - Implement confirmSetupIntent function to handle successful payment method setup

@@ -4,13 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: process.env.STRIPE_API_VERSION as any,
 })
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -19,14 +19,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { paymentIntentId, isRegistration } = body
-    
+
     if (!paymentIntentId) {
       return NextResponse.json({ error: 'Payment intent ID required' }, { status: 400 })
     }
 
     // Get the payment intent from Stripe to access metadata
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
-    
+
     // Verify this payment intent belongs to the authenticated user
     if (paymentIntent.metadata.userId !== user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     // Build invoice data based on payment type
     let xeroInvoiceData: PrePaymentInvoiceData
-    
+
     if (isRegistration) {
       // Build registration invoice data
       const registrationId = paymentIntent.metadata.registrationId
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       const originalAmount = parseInt(paymentIntent.metadata.originalAmount || '0')
       const discountAmount = parseInt(paymentIntent.metadata.discountAmount || '0')
       const discountCode = paymentIntent.metadata.discountCode
-      
+
       // Get registration details
       const { data: registration } = await supabase
         .from('registrations')
@@ -56,14 +56,14 @@ export async function POST(request: NextRequest) {
         .eq('id', registrationId)
         .eq('registration_categories.id', categoryId)
         .single()
-      
+
       if (!registration) {
         return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
       }
-      
+
       const selectedCategory = registration.registration_categories[0]
       const categoryName = selectedCategory.category?.name || selectedCategory.custom_name || 'Registration'
-      
+
       // Build payment items - always show full registration price
       const paymentItems = [{
         item_type: 'registration' as const,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       if (discountCode && discountAmount > 0) {
         const discountCategoryName = paymentIntent.metadata.discountCategoryName || 'Registration Discount'
         const discountAccountingCode = paymentIntent.metadata.accountingCode
-        
+
         discountItems.push({
           code: discountCode,
           amount_saved: discountAmount,
@@ -103,21 +103,21 @@ export async function POST(request: NextRequest) {
       const paymentOption = paymentIntent.metadata.paymentOption
       const assistanceAmount = parseInt(paymentIntent.metadata.assistanceAmount || '0')
       const donationAmount = parseInt(paymentIntent.metadata.donationAmount || '0')
-      
+
       // Get membership details
       const { data: membership } = await supabase
         .from('memberships')
         .select('*')
         .eq('id', membershipId)
         .single()
-      
+
       if (!membership) {
         return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
       }
-      
+
       // Always use full membership price for the main line item
       const basePrice = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-      
+
       // Build payment items - always show full membership price
       const paymentItems: Array<{
         item_type: 'membership' | 'registration' | 'discount' | 'donation'
@@ -167,14 +167,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the invoice in Xero
-    const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, { 
+    const invoiceResult = await createXeroInvoiceBeforePayment(xeroInvoiceData, {
       markAsAuthorised: true // Mark as AUTHORISED since payment succeeded
     })
-    
+
     if (!invoiceResult.success) {
-      return NextResponse.json({ 
-        error: 'Failed to create Xero invoice', 
-        details: invoiceResult.error 
+      return NextResponse.json({
+        error: 'Failed to create Xero invoice',
+        details: invoiceResult.error
       }, { status: 500 })
     }
 
@@ -186,11 +186,11 @@ export async function POST(request: NextRequest) {
           .select('id')
           .eq('stripe_payment_intent_id', paymentIntentId)
           .single()
-        
+
         if (paymentRecord) {
           await supabase
             .from('xero_invoices')
-            .update({ 
+            .update({
               payment_id: paymentRecord.id,
               sync_status: 'synced',
               last_synced_at: new Date().toISOString()

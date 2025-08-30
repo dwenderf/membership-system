@@ -114,6 +114,7 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_API_VERSION=2025-07-30.basil
 
 # Email Integration
 LOOPS_API_KEY=your_loops_api_key
@@ -648,6 +649,7 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 STRIPE_SECRET_KEY=sk_live_your_stripe_live_secret_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_live_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_production_webhook_secret
+STRIPE_API_VERSION=2025-07-30.basil
 ```
 
 **Email & Monitoring:**

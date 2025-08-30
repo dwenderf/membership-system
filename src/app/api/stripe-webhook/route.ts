@@ -19,39 +19,39 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
     const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
       expand: ['latest_charge', 'latest_charge.balance_transaction']
     })
-    
+
     console.log(`🔍 Retrieved payment intent with charge data:`, {
       hasLatestCharge: !!expandedPaymentIntent.latest_charge,
       chargeType: typeof expandedPaymentIntent.latest_charge,
-      chargeKeys: expandedPaymentIntent.latest_charge && typeof expandedPaymentIntent.latest_charge === 'object' 
-        ? Object.keys(expandedPaymentIntent.latest_charge) 
+      chargeKeys: expandedPaymentIntent.latest_charge && typeof expandedPaymentIntent.latest_charge === 'object'
+        ? Object.keys(expandedPaymentIntent.latest_charge)
         : 'N/A'
     })
-    
-    if (expandedPaymentIntent.latest_charge && 
-        typeof expandedPaymentIntent.latest_charge === 'object' && 
-        'id' in expandedPaymentIntent.latest_charge) {
-      
+
+    if (expandedPaymentIntent.latest_charge &&
+      typeof expandedPaymentIntent.latest_charge === 'object' &&
+      'id' in expandedPaymentIntent.latest_charge) {
+
       const chargeId = expandedPaymentIntent.latest_charge.id
       console.log(`🔍 Found charge ID: ${chargeId}, checking for balance transaction...`)
-      
+
       // Check if balance transaction is available in the expanded charge
-      if ('balance_transaction' in expandedPaymentIntent.latest_charge && 
-          expandedPaymentIntent.latest_charge.balance_transaction &&
-          typeof expandedPaymentIntent.latest_charge.balance_transaction === 'object' &&
-          'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
-        
+      if ('balance_transaction' in expandedPaymentIntent.latest_charge &&
+        expandedPaymentIntent.latest_charge.balance_transaction &&
+        typeof expandedPaymentIntent.latest_charge.balance_transaction === 'object' &&
+        'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
+
         const stripeFeeAmount = expandedPaymentIntent.latest_charge.balance_transaction.fee
         console.log(`✅ Retrieved actual Stripe fee from balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
       }
-      
+
       // Fallback: retrieve the charge directly to get the fee
       console.log(`🔍 Balance transaction not available, retrieving charge directly...`)
       const charge = await stripe.charges.retrieve(chargeId as string, {
         expand: ['balance_transaction']
       })
-      
+
       console.log(`🔍 Retrieved charge data:`, {
         chargeId: charge.id,
         hasBalanceTransaction: !!charge.balance_transaction,
@@ -62,11 +62,11 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
         feeType: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? typeof charge.balance_transaction.fee : 'undefined',
         feeValue: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? charge.balance_transaction.fee : undefined
       })
-      
-      if (charge.balance_transaction && 
-          typeof charge.balance_transaction === 'object' && 
-          'fee' in charge.balance_transaction &&
-          typeof charge.balance_transaction.fee === 'number') {
+
+      if (charge.balance_transaction &&
+        typeof charge.balance_transaction === 'object' &&
+        'fee' in charge.balance_transaction &&
+        typeof charge.balance_transaction.fee === 'number') {
         const stripeFeeAmount = charge.balance_transaction.fee
         console.log(`✅ Retrieved actual Stripe fee from charge balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
@@ -86,7 +86,7 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: process.env.STRIPE_API_VERSION as any,
 })
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
@@ -104,13 +104,13 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 
   if (existingMembership) {
     console.log('User membership already exists for payment intent:', paymentIntent.id)
-    
+
     // Update payment status from 'pending' to 'paid' if needed
     if (existingMembership.payment_status === 'pending') {
       console.log('Updating existing membership payment status from pending to paid')
       const { data: updatedMembership, error: updateError } = await supabase
         .from('user_memberships')
-        .update({ 
+        .update({
           payment_status: 'paid',
           amount_paid: paymentIntent.amount,
           purchased_at: new Date().toISOString()
@@ -118,18 +118,18 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
         .eq('id', existingMembership.id)
         .select()
         .single()
-      
+
       if (updateError) {
         console.error('Error updating membership payment status:', updateError)
         throw new Error('Failed to update membership payment status')
       }
-      
+
       membershipRecord = updatedMembership
       console.log('Successfully updated membership payment status to paid')
-      } else {
-    membershipRecord = existingMembership
-  }
-} else {
+    } else {
+      membershipRecord = existingMembership
+    }
+  } else {
     // Calculate dates - need to determine if this extends an existing membership
     const { data: userMemberships } = await supabase
       .from('user_memberships')
@@ -145,20 +145,20 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     // Create user membership record (handle duplicate gracefully)
     try {
       const { data: newMembership, error: membershipError } = await supabase
-      .from('user_memberships')
-      .insert({
-        user_id: userId,
-        membership_id: membershipId,
-        valid_from: startDate.toISOString().split('T')[0],
-        valid_until: endDate.toISOString().split('T')[0],
-        months_purchased: durationMonths,
-        payment_status: 'paid',
-        stripe_payment_intent_id: paymentIntent.id,
-        amount_paid: paymentIntent.amount,
-        purchased_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+        .from('user_memberships')
+        .insert({
+          user_id: userId,
+          membership_id: membershipId,
+          valid_from: startDate.toISOString().split('T')[0],
+          valid_until: endDate.toISOString().split('T')[0],
+          months_purchased: durationMonths,
+          payment_status: 'paid',
+          stripe_payment_intent_id: paymentIntent.id,
+          amount_paid: paymentIntent.amount,
+          purchased_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
 
       if (membershipError) {
         if (membershipError.code === '23505') { // Duplicate key error
@@ -168,16 +168,16 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
             .select('*')
             .eq('stripe_payment_intent_id', paymentIntent.id)
             .single()
-          
+
           if (fetchError || !existingMembership) {
             console.error('Error fetching existing membership:', fetchError)
             throw new Error('Failed to fetch existing membership')
           }
-          
+
           membershipRecord = existingMembership
         } else {
-      console.error('Error creating user membership:', membershipError)
-      throw new Error('Failed to create membership')
+          console.error('Error creating user membership:', membershipError)
+          throw new Error('Failed to create membership')
         }
       } else {
         membershipRecord = newMembership
@@ -190,7 +190,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 
   // Get actual Stripe fees and charge ID from the charge
   const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
-  
+
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
@@ -209,7 +209,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
-    
+
     // Update user_memberships record with payment_id
     const { error: membershipUpdateError } = await adminSupabase
       .from('user_memberships')
@@ -240,7 +240,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
     amount: paymentIntent.amount
   })
-  
+
   try {
     console.log('🔄 Payment completion processor parameters:', {
       event_type: 'user_memberships',
@@ -250,7 +250,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       amount: paymentIntent.amount,
       trigger_source: 'stripe_webhook_membership'
     })
-    
+
     console.log('🔄 Calling paymentProcessor.processPaymentCompletion...')
     const processorResult = await paymentProcessor.processPaymentCompletion({
       event_type: 'user_memberships',
@@ -283,9 +283,9 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, registrationId: string) {
   // Note: Webhook doesn't have access to categoryId, so we'll need to get it from the registration
   // For now, let's keep the direct database update in webhooks since they're backup/redundancy
-  
+
   let userRegistration: any
-  
+
   // First, check if registration already exists and is paid
   const { data: existingPaidRegistration } = await supabase
     .from('user_registrations')
@@ -299,34 +299,34 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     console.log('Registration already paid, using existing record:', existingPaidRegistration.id)
     userRegistration = existingPaidRegistration
   } else {
-  // Update user registration record from awaiting_payment/processing to paid
+    // Update user registration record from awaiting_payment/processing to paid
     const { data: updatedRegistration, error: registrationError } = await supabase
-    .from('user_registrations')
-    .update({
-      payment_status: 'paid',
-      registered_at: new Date().toISOString(),
-    })
-    .eq('user_id', userId)
-    .eq('registration_id', registrationId)
-    .in('payment_status', ['awaiting_payment', 'processing'])
-    .select()
-    .single()
+      .from('user_registrations')
+      .update({
+        payment_status: 'paid',
+        registered_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('registration_id', registrationId)
+      .in('payment_status', ['awaiting_payment', 'processing'])
+      .select()
+      .single()
 
     if (registrationError || !updatedRegistration) {
-    console.error('Error updating user registration:', registrationError)
+      console.error('Error updating user registration:', registrationError)
       console.error('Registration update failed for:', { userId, registrationId })
-      
+
       // Try to find any registration record for debugging
       const { data: allRegistrations } = await supabase
         .from('user_registrations')
         .select('*')
         .eq('user_id', userId)
         .eq('registration_id', registrationId)
-      
+
       console.error('All registration records found:', allRegistrations)
-    throw new Error('Failed to update registration')
+      throw new Error('Failed to update registration')
     }
-    
+
     userRegistration = updatedRegistration
   }
 
@@ -363,22 +363,22 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 
         if (!existingUsage) {
           // Record discount usage only if it doesn't already exist
-        const { error: usageError } = await supabase
-          .from('discount_usage')
-          .insert({
-            user_id: userId,
-            discount_code_id: discountCodeRecord.id,
-            discount_category_id: discountCategoryId,
-            season_id: registration.season_id,
-            amount_saved: discountAmount,
-            registration_id: registrationId,
-          })
+          const { error: usageError } = await supabase
+            .from('discount_usage')
+            .insert({
+              user_id: userId,
+              discount_code_id: discountCodeRecord.id,
+              discount_category_id: discountCategoryId,
+              season_id: registration.season_id,
+              amount_saved: discountAmount,
+              registration_id: registrationId,
+            })
 
-        if (usageError) {
-          console.error('Error recording discount usage:', usageError)
-          // Don't fail the payment - just log the error
-        } else {
-          console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
+          if (usageError) {
+            console.error('Error recording discount usage:', usageError)
+            // Don't fail the payment - just log the error
+          } else {
+            console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
           }
         } else {
           console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntent.id)
@@ -389,7 +389,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 
   // Get actual Stripe fees and charge ID from the charge
   const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
-  
+
   // Update payment record
   const { data: updatedPayment, error: paymentUpdateError } = await supabase
     .from('payments')
@@ -408,7 +408,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
-    
+
     // Update user_registrations record with payment_id
     const { error: registrationUpdateError } = await supabase
       .from('user_registrations')
@@ -438,7 +438,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
     amount: paymentIntent.amount
   })
-  
+
   try {
     console.log('🔄 Registration payment completion processor parameters:', {
       event_type: 'user_registrations',
@@ -448,7 +448,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       amount: paymentIntent.amount,
       trigger_source: 'stripe_webhook_registration'
     })
-    
+
     console.log('🔄 Calling paymentProcessor.processPaymentCompletion for registration...')
     const processorResult = await paymentProcessor.processPaymentCompletion({
       event_type: 'user_registrations',
@@ -481,36 +481,36 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
   try {
     console.log('🔄 Processing charge updated event for fee update...')
-    
+
     // Get the payment record by payment intent ID
     const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
     if (!paymentIntentId) {
       console.log('⚠️ No payment intent ID found in charge')
       return
     }
-    
+
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('*')
       .eq('stripe_payment_intent_id', paymentIntentId)
       .single()
-    
+
     if (paymentError || !payment) {
       console.log('⚠️ No payment record found for charge update:', paymentIntentId)
       return
     }
-    
+
     // Get the balance transaction to retrieve the fee
     const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction as string)
-    
+
     if (!balanceTransaction || !balanceTransaction.fee) {
       console.log('⚠️ No fee found in balance transaction:', charge.balance_transaction)
       return
     }
-    
+
     const feeAmount = balanceTransaction.fee
     console.log(`💰 Found fee in balance transaction: $${(feeAmount / 100).toFixed(2)}`)
-    
+
     // Update the payment record with the fee
     const { error: updateError } = await supabase
       .from('payments')
@@ -519,15 +519,15 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
         updated_at: new Date().toISOString()
       })
       .eq('id', payment.id)
-    
+
     if (updateError) {
       console.error('❌ Error updating payment with fee:', updateError)
       return
     }
-    
+
     console.log(`✅ Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`)
     console.log('✅ Successfully processed charge updated event - fee updated in database')
-    
+
   } catch (error) {
     console.error('❌ Error processing charge updated event:', error)
   }
@@ -538,43 +538,43 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
 async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
   try {
     console.log('🔄 Processing charge refunded event...')
-    
+
     // Get the payment record by payment intent ID
     const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
-    
+
     if (!paymentIntentId) {
       console.log('⚠️ No payment intent ID found in refunded charge')
       return
     }
-    
+
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('*')
       .eq('stripe_payment_intent_id', paymentIntentId)
       .single()
-    
+
     if (paymentError || !payment) {
       console.log('⚠️ No payment record found for refunded charge:', paymentIntentId)
       return
     }
-    
+
     console.log(`💰 Processing refunds for payment ${payment.id}, charge ${charge.id}`)
-    
+
     // Process each refund in the charge
     if (charge.refunds && charge.refunds.data) {
       for (const stripeRefund of charge.refunds.data) {
         console.log(`💰 Processing refund ${stripeRefund.id} for amount: $${(stripeRefund.amount / 100).toFixed(2)}`)
-        
+
         // Check if we already have this refund in our database
         const { data: existingRefund } = await supabase
           .from('refunds')
           .select('*')
           .eq('stripe_refund_id', stripeRefund.id)
           .single()
-        
+
         if (existingRefund) {
           console.log(`✅ Refund ${stripeRefund.id} already exists in database`)
-          
+
           // Update status if needed
           if (existingRefund.status !== 'completed') {
             await supabase
@@ -587,15 +587,15 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingRefund.id)
-            
+
             console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
           }
-          
+
           // NEW ARCHITECTURE: Check for staging_id in Stripe metadata
           const stagingId = stripeRefund.metadata?.staging_id
           if (stagingId) {
             console.log(`🔄 Found staging_id ${stagingId} in metadata, updating staging records to pending`)
-            
+
             // Move staging records from 'staged' to 'pending' for batch sync
             await supabase
               .from('xero_invoices')
@@ -614,18 +614,18 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               })
               .eq('xero_invoice_id', stagingId)
               .eq('sync_status', 'staged')
-            
+
             console.log(`✅ Updated staging records ${stagingId} to pending status`)
 
             // Process discount usage for refund line items
             await processRefundDiscountUsage(stagingId, existingRefund.id, payment.id, payment.user_id)
-            
+
             // Send refund notification email
             await sendRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
           } else {
             // EXTERNAL REFUND: No staging_id means this was processed outside our system
             console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)
-            
+
             // Log alert for manual intervention at ERROR level for Sentry reporting
             logger.logSystem('external-refund-detected', 'External refund requires manual Xero credit note creation', {
               refundId: existingRefund.id,
@@ -635,18 +635,18 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
               source: 'external_stripe_refund',
               action_required: 'Manual Xero credit note creation needed'
             }, 'error')
-            
+
             console.log(`🚨 MANUAL INTERVENTION REQUIRED: External refund ${stripeRefund.id} detected - admin must manually create Xero credit note`)
           }
-          
+
           continue
         }
-        
+
         // Create new refund record for refunds not initiated through our system
         // (e.g., refunds processed directly in Stripe dashboard)
         const refundReason = stripeRefund.metadata?.reason || 'Refund processed via Stripe'
         const processedBy = stripeRefund.metadata?.processed_by || null
-        
+
         const { data: newRefund, error: refundError } = await supabase
           .from('refunds')
           .insert({
@@ -663,14 +663,14 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
           })
           .select()
           .single()
-        
+
         if (refundError) {
           console.error(`❌ Error creating refund record for ${stripeRefund.id}:`, refundError)
           continue
         }
-        
+
         console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
-        
+
         // Log alert for manual intervention - no automatic Xero credit note creation
         logger.logSystem('external-refund-created', 'External refund detected - manual Xero credit note required', {
           refundId: newRefund.id,
@@ -681,20 +681,20 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
           source: 'external_stripe_dashboard',
           action_required: 'Admin must manually create Xero credit note to match this refund'
         }, 'error')
-        
+
         console.log(`🚨 EXTERNAL REFUND ALERT: Refund ${stripeRefund.id} was processed outside our system - manual Xero credit note creation required`)
       }
     }
-    
+
     // Check if payment should be marked as refunded
     const { data: allRefunds } = await supabase
       .from('refunds')
       .select('amount')
       .eq('payment_id', payment.id)
       .eq('status', 'completed')
-    
+
     const totalRefunded = allRefunds?.reduce((sum: number, refund: any) => sum + refund.amount, 0) || 0
-    
+
     // If fully refunded, update payment status
     if (totalRefunded >= payment.final_amount && payment.status !== 'refunded') {
       await supabase
@@ -705,12 +705,12 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
           updated_at: new Date().toISOString()
         })
         .eq('id', payment.id)
-      
+
       console.log(`✅ Updated payment ${payment.id} status to refunded (total refunded: $${(totalRefunded / 100).toFixed(2)})`)
     }
-    
+
     console.log('✅ Successfully processed charge refunded event')
-    
+
   } catch (error) {
     console.error('❌ Error processing charge refunded event:', error)
   }
@@ -720,7 +720,7 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
 async function processRefundDiscountUsage(stagingId: string, refundId: string, paymentId: string, userId: string) {
   try {
     const supabase = createAdminClient()
-    
+
     // Get refund line items with discount information
     const { data: refundLineItems } = await supabase
       .from('xero_invoice_line_items')
@@ -840,43 +840,43 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
 async function sendRefundNotificationEmail(refundId: string, userId: string, paymentId: string) {
   try {
     const supabase = createAdminClient()
-    
+
     // Get user details
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('first_name, last_name, email')
       .eq('id', userId)
       .single()
-    
+
     if (userError || !user) {
       console.error(`❌ Failed to fetch user details for refund email:`, userError)
       return
     }
-    
+
     // Get refund details
     const { data: refund, error: refundError } = await supabase
       .from('refunds')
       .select('amount, reason, created_at')
       .eq('id', refundId)
       .single()
-    
+
     if (refundError || !refund) {
       console.error(`❌ Failed to fetch refund details for email:`, refundError)
       return
     }
-    
+
     // Get payment details
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('final_amount, completed_at, created_at')
       .eq('id', paymentId)
       .single()
-    
+
     if (paymentError || !payment) {
       console.error(`❌ Failed to fetch payment details for refund email:`, paymentError)
       return
     }
-    
+
     // Get original invoice number for better user experience
     const { data: invoice } = await supabase
       .from('xero_invoices')
@@ -884,9 +884,9 @@ async function sendRefundNotificationEmail(refundId: string, userId: string, pay
       .eq('payment_id', paymentId)
       .eq('invoice_type', 'ACCREC')
       .single()
-    
+
     const invoiceNumber = invoice?.invoice_number || `PAY-${paymentId.slice(0, 8)}`
-    
+
     // Send the refund notification using the existing email service
     await emailService.sendRefundNotification({
       userId: userId,
@@ -899,9 +899,9 @@ async function sendRefundNotificationEmail(refundId: string, userId: string, pay
       invoiceNumber: invoiceNumber,
       refundDate: new Date(refund.created_at).toLocaleDateString()
     })
-    
+
     console.log(`✅ Sent refund notification email to ${user.email} for refund ${refundId}`)
-    
+
   } catch (error) {
     console.error('❌ Error sending refund notification email:', error)
     // Don't throw - we don't want to fail the entire webhook for this
@@ -923,7 +923,7 @@ export async function POST(request: NextRequest) {
 
   try {
     event = stripe.webhooks.constructEvent(body, signature, endpointSecret)
-    
+
     // Log webhook event immediately after signature verification
     console.log('🔄 Webhook event received:', {
       type: event.type,
@@ -946,59 +946,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    
 
-    
+
+
     switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-        
-        // Debug: Log all metadata to see what we're receiving
-        console.log('🔍 Payment intent metadata received:', {
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount,
-          status: paymentIntent.status,
-          allMetadata: paymentIntent.metadata
-        })
-        
-        // Extract metadata
-        const userId = paymentIntent.metadata.userId
-        const membershipId = paymentIntent.metadata.membershipId
-        const registrationId = paymentIntent.metadata.registrationId
-        const durationMonths = paymentIntent.metadata.durationMonths ? parseInt(paymentIntent.metadata.durationMonths) : null
 
-        // Handle membership payment
-        if (userId && membershipId && durationMonths && !isNaN(durationMonths)) {
-          await handleMembershipPayment(supabase, supabase, paymentIntent, userId, membershipId, durationMonths)
-        }
-        // Handle registration payment  
-        else if (userId && registrationId) {
-          await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
-        }
-        else {
-          console.error('❌ Missing required metadata in payment intent:', paymentIntent.id, {
-            userId,
-            membershipId,
-            registrationId,
-            durationMonths,
-            hasDurationMonths: !!paymentIntent.metadata.durationMonths,
-            allMetadataKeys: Object.keys(paymentIntent.metadata),
-            allMetadata: paymentIntent.metadata
-          })
-        }
-        break
-      }
-      
+
       case 'charge.updated': {
         const charge = event.data.object as Stripe.Charge
-        
+
         console.log('🔍 Charge updated webhook received:', {
           chargeId: charge.id,
           paymentIntentId: charge.payment_intent,
           hasBalanceTransaction: !!charge.balance_transaction,
           balanceTransactionId: charge.balance_transaction
         })
-        
+
         // Only process if balance transaction is now available
         if (charge.balance_transaction && typeof charge.balance_transaction === 'string') {
           await handleChargeUpdated(supabase, charge)
@@ -1012,9 +975,281 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      case 'payment_intent.payment_failed': {
+
+
+      case 'charge.refunded': {
+        // Retrieve the charge with expanded refunds data
+        const chargeId = (event.data.object as Stripe.Charge).id
+        const charge = await stripe.charges.retrieve(chargeId, {
+          expand: ['refunds']
+        })
+
+        console.log('🔍 Charge refunded webhook received:', {
+          chargeId: charge.id,
+          paymentIntentId: charge.payment_intent,
+          refunds: charge.refunds?.data?.length || 0,
+          refundIds: charge.refunds?.data?.map(r => r.id) || []
+        })
+
+        await handleChargeRefunded(supabase, charge)
+        break
+      }
+
+      case 'setup_intent.succeeded': {
+        const setupIntent = event.data.object as Stripe.SetupIntent
+
+        console.log('🔄 Processing setup_intent.succeeded:', {
+          setupIntentId: setupIntent.id,
+          status: setupIntent.status,
+          paymentMethodId: setupIntent.payment_method,
+          metadata: setupIntent.metadata
+        })
+
+        const userId = setupIntent.metadata?.userId
+        if (!userId) {
+          console.error('❌ Setup Intent missing userId in metadata:', setupIntent.id)
+          break
+        }
+
+        if (!setupIntent.payment_method) {
+          console.error('❌ Setup Intent missing payment method:', setupIntent.id)
+          break
+        }
+
+        try {
+          // Update user record with payment method
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              stripe_payment_method_id: setupIntent.payment_method as string,
+              setup_intent_status: 'succeeded',
+              payment_method_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+
+          if (updateError) {
+            console.error('❌ Failed to update user with payment method:', updateError)
+            throw updateError
+          }
+
+          console.log('✅ Successfully updated user with payment method:', {
+            userId,
+            setupIntentId: setupIntent.id,
+            paymentMethodId: setupIntent.payment_method
+          })
+        } catch (error) {
+          console.error('❌ Error processing setup_intent.succeeded:', error)
+          throw error
+        }
+        break
+      }
+
+      case 'setup_intent.setup_failed': {
+        const setupIntent = event.data.object as Stripe.SetupIntent
+
+        console.log('🔄 Processing setup_intent.setup_failed:', {
+          setupIntentId: setupIntent.id,
+          status: setupIntent.status,
+          lastSetupError: setupIntent.last_setup_error,
+          metadata: setupIntent.metadata
+        })
+
+        const userId = setupIntent.metadata?.userId
+        if (!userId) {
+          console.error('❌ Setup Intent missing userId in metadata:', setupIntent.id)
+          break
+        }
+
+        try {
+          // Update user record to reflect failed status
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              setup_intent_status: 'failed',
+              payment_method_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+
+          if (updateError) {
+            console.error('❌ Failed to update user with failed setup status:', updateError)
+            throw updateError
+          }
+
+          console.log('✅ Successfully updated user with failed setup status:', {
+            userId,
+            setupIntentId: setupIntent.id
+          })
+        } catch (error) {
+          console.error('❌ Error processing setup_intent.setup_failed:', error)
+          throw error
+        }
+        break
+      }
+
+      case 'payment_method.detached': {
+        const paymentMethod = event.data.object as Stripe.PaymentMethod
+
+        console.log('🔄 Processing payment_method.detached:', {
+          paymentMethodId: paymentMethod.id,
+          customerId: paymentMethod.customer
+        })
+
+        try {
+          // Find user with this payment method and clean up
+          const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('stripe_payment_method_id', paymentMethod.id)
+            .single()
+
+          if (userError || !user) {
+            console.log('ℹ️ No user found with this payment method, skipping cleanup')
+            break
+          }
+
+          // Update user record
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              stripe_payment_method_id: null,
+              stripe_setup_intent_id: null,
+              setup_intent_status: null,
+              payment_method_updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id)
+
+          if (updateError) {
+            console.error('❌ Failed to update user after payment method detachment:', updateError)
+            throw updateError
+          }
+
+          // Remove user from all alternate registrations
+          const { error: alternateRemovalError } = await supabase
+            .from('user_alternate_registrations')
+            .delete()
+            .eq('user_id', user.id)
+
+          if (alternateRemovalError) {
+            console.error('❌ Failed to remove user from alternate registrations:', alternateRemovalError)
+            // Don't throw - this is not critical
+          }
+
+          console.log('✅ Successfully cleaned up user data after payment method detachment:', {
+            userId: user.id,
+            paymentMethodId: paymentMethod.id
+          })
+        } catch (error) {
+          console.error('❌ Error processing payment_method.detached:', error)
+          throw error
+        }
+        break
+      }
+
+      case 'payment_intent.succeeded': {
+        // Check if this is an alternate payment
         const paymentIntent = event.data.object as Stripe.PaymentIntent
-        
+
+        if (paymentIntent.metadata?.purpose === 'alternate_selection') {
+          console.log('🔄 Processing alternate selection payment:', {
+            paymentIntentId: paymentIntent.id,
+            userId: paymentIntent.metadata.userId,
+            registrationId: paymentIntent.metadata.registrationId,
+            gameDescription: paymentIntent.metadata.gameDescription
+          })
+
+          try {
+            // Update payment record status
+            const { error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString()
+              })
+              .eq('stripe_payment_intent_id', paymentIntent.id)
+
+            if (paymentUpdateError) {
+              console.error('❌ Failed to update alternate payment record:', paymentUpdateError)
+              throw paymentUpdateError
+            }
+
+            console.log('✅ Successfully updated alternate payment record')
+          } catch (error) {
+            console.error('❌ Error processing alternate payment_intent.succeeded:', error)
+            throw error
+          }
+          break
+        }
+
+        // Fall through to existing payment_intent.succeeded handling for regular payments
+        const userId = paymentIntent.metadata.userId
+        const membershipId = paymentIntent.metadata.membershipId
+        const registrationId = paymentIntent.metadata.registrationId
+        const durationMonths = paymentIntent.metadata.durationMonths ? parseInt(paymentIntent.metadata.durationMonths) : null
+
+        // Handle membership payment
+        if (membershipId && userId && durationMonths) {
+          await handleMembershipPayment(supabase, supabase, paymentIntent, userId, membershipId, durationMonths)
+        }
+        // Handle registration payment
+        else if (registrationId && userId) {
+          await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
+        }
+        else {
+          console.error('❌ Payment intent missing required metadata:', {
+            paymentIntentId: paymentIntent.id,
+            hasUserId: !!userId,
+            hasMembershipId: !!membershipId,
+            hasRegistrationId: !!registrationId,
+            hasDurationMonths: !!durationMonths,
+            allMetadata: paymentIntent.metadata
+          })
+        }
+        break
+      }
+
+      case 'payment_intent.payment_failed': {
+        // Check if this is an alternate payment
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+
+        if (paymentIntent.metadata?.purpose === 'alternate_selection') {
+          console.log('🔄 Processing failed alternate selection payment:', {
+            paymentIntentId: paymentIntent.id,
+            userId: paymentIntent.metadata.userId,
+            registrationId: paymentIntent.metadata.registrationId,
+            gameDescription: paymentIntent.metadata.gameDescription
+          })
+
+          try {
+            // Update payment record status
+            const { error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'failed',
+                updated_at: new Date().toISOString()
+              })
+              .eq('stripe_payment_intent_id', paymentIntent.id)
+
+            if (paymentUpdateError) {
+              console.error('❌ Failed to update failed alternate payment record:', paymentUpdateError)
+              throw paymentUpdateError
+            }
+
+            // TODO: Send notification to captain and alternate about failed payment
+            // This could be handled by the payment completion processor
+
+            console.log('✅ Successfully updated failed alternate payment record')
+          } catch (error) {
+            console.error('❌ Error processing failed alternate payment:', error)
+            throw error
+          }
+          break
+        }
+
+        // Fall through to existing payment_intent.payment_failed handling for regular payments
+        const userId = paymentIntent.metadata.userId
+        const membershipId = paymentIntent.metadata.membershipId
+        const registrationId = paymentIntent.metadata.registrationId
+
         // Update payment record
         await supabase
           .from('payments')
@@ -1029,13 +1264,13 @@ export async function POST(request: NextRequest) {
         try {
           const invoiceNumber = paymentIntent.metadata.invoiceNumber
           const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
-          
+
           if (invoiceNumber && xeroInvoiceId) {
             console.log(`🗑️ Cleaning up draft invoice ${invoiceNumber} after payment failure`)
-            
+
             // Delete the draft invoice from Xero
             const deleteResult = await deleteXeroDraftInvoice(xeroInvoiceId)
-            
+
             if (deleteResult.success) {
               // Delete the draft invoice from our database
               await supabase
@@ -1043,7 +1278,7 @@ export async function POST(request: NextRequest) {
                 .delete()
                 .eq('xero_invoice_id', xeroInvoiceId)
                 .eq('sync_status', 'pending') // Only delete if still pending
-              
+
               console.log(`✅ Fully cleaned up draft invoice ${invoiceNumber} after payment failure`)
             } else {
               console.warn(`⚠️ Failed to delete invoice from Xero: ${deleteResult.error}`)
@@ -1062,13 +1297,9 @@ export async function POST(request: NextRequest) {
 
         // Trigger payment completion processor for failed payment emails
         try {
-          const userId = paymentIntent.metadata.userId
-          const membershipId = paymentIntent.metadata.membershipId
-          const registrationId = paymentIntent.metadata.registrationId
-
           if (userId) {
             const eventType = membershipId ? 'user_memberships' : (registrationId ? 'user_registrations' : null)
-            
+
             if (eventType) {
               await paymentProcessor.processPaymentCompletion({
                 event_type: eventType,
@@ -1092,25 +1323,15 @@ export async function POST(request: NextRequest) {
           // Don't fail the webhook - payment failure was already recorded
         }
 
-        console.log('Payment failed for payment intent:', paymentIntent.id)
-        break
-      }
-
-      case 'charge.refunded': {
-        // Retrieve the charge with expanded refunds data
-        const chargeId = (event.data.object as Stripe.Charge).id
-        const charge = await stripe.charges.retrieve(chargeId, {
-          expand: ['refunds']
-        })
-        
-        console.log('🔍 Charge refunded webhook received:', {
-          chargeId: charge.id,
-          paymentIntentId: charge.payment_intent,
-          refunds: charge.refunds?.data?.length || 0,
-          refundIds: charge.refunds?.data?.map(r => r.id) || []
-        })
-        
-        await handleChargeRefunded(supabase, charge)
+        if (!userId) {
+          console.error('❌ Failed payment intent missing required metadata:', {
+            paymentIntentId: paymentIntent.id,
+            hasUserId: !!userId,
+            hasMembershipId: !!membershipId,
+            hasRegistrationId: !!registrationId,
+            allMetadata: paymentIntent.metadata
+          })
+        }
         break
       }
 
@@ -1127,7 +1348,7 @@ export async function POST(request: NextRequest) {
       eventType: event.type,
       paymentIntentId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
     })
-    
+
     // Report critical webhook error via Logger (automatically sends to Sentry)
     logger.logPaymentProcessing(
       'webhook-processing-error',
@@ -1141,7 +1362,7 @@ export async function POST(request: NextRequest) {
       },
       'error'
     )
-    
+
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }

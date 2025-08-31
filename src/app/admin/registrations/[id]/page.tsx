@@ -8,6 +8,9 @@ import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDn
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
+import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
+// TODO: Import component when implemented
+// import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
 
 export default async function RegistrationDetailPage({
   params,
@@ -16,9 +19,9 @@ export default async function RegistrationDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     redirect('/auth/login')
   }
@@ -92,13 +95,12 @@ export default async function RegistrationDetailPage({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-2">
-                  <EditableRegistrationName 
+                  <EditableRegistrationName
                     registrationId={id}
                     initialName={registration.name}
                   />
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    getStatusBadgeStyle(getRegistrationStatus(registration))
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeStyle(getRegistrationStatus(registration))
+                    }`}>
                     {getStatusDisplayText(getRegistrationStatus(registration))}
                   </span>
                   {!registration.is_active && (
@@ -138,11 +140,10 @@ export default async function RegistrationDetailPage({
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Type</dt>
                     <dd className="mt-1 text-sm text-gray-900 capitalize">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
                         registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                        'bg-purple-100 text-purple-800'
-                      }`}>
+                          'bg-purple-100 text-purple-800'
+                        }`}>
                         {registration.type}
                       </span>
                     </dd>
@@ -174,6 +175,19 @@ export default async function RegistrationDetailPage({
                       ) : (
                         <span className="text-red-600">Not Allowed</span>
                       )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Alternates</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      <EditableAlternateConfiguration
+                        registrationId={id}
+                        initialConfig={{
+                          allow_alternates: registration.allow_alternates || false,
+                          alternate_price: registration.alternate_price,
+                          alternate_accounting_code: registration.alternate_accounting_code
+                        }}
+                      />
                     </dd>
                   </div>
                   <div>

@@ -23,7 +23,7 @@
   - Update existing webhook processing to handle alternate payment events
   - _Requirements: 1.4, 8.1, 8.2, 11.1, 11.3_
 
-- [ ] 3. Create user alternate registration API endpoints
+- [x] 3. Create user alternate registration API endpoints
   - Implement POST /api/user-alternate-registrations endpoint for users to register as alternates for registrations
   - Add validation to prevent regular participants from registering as alternates
   - Add logic to check for existing Setup Intent before creating new one
@@ -33,7 +33,7 @@
   - Create unit tests for user alternate registration logic
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10_
 
-- [ ] 4. Implement registration configuration for alternates
+- [x] 4. Implement registration configuration for alternates
   - Add alternate configuration fields to registration creation/edit forms
   - Implement validation requiring price and accounting code when alternates are enabled
   - Update registration display logic to show alternate options when enabled

@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-// TODO: Import components when they are implemented
-// import GameCreationForm from '@/components/GameCreationForm'
-// import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
+import GameCreationForm from '@/components/GameCreationForm'
+import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
 
 interface Game {
   id: string
@@ -208,33 +207,23 @@ export default function RegistrationGamesPage() {
 
         {/* Game Creation Form */}
         {showCreateForm && registration.allow_alternates && (
-          <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h3 className="text-lg font-medium text-blue-900 mb-2">Create New Game</h3>
-            <p className="text-blue-700 mb-4">Game creation form will be implemented here.</p>
-            <button
-              onClick={() => setShowCreateForm(false)}
-              className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
-            >
-              Cancel
-            </button>
+          <div className="mb-8">
+            <GameCreationForm
+              registrationId={registrationId}
+              onGameCreated={handleGameCreated}
+              onCancel={() => setShowCreateForm(false)}
+            />
           </div>
         )}
 
         {/* Alternate Selection Interface */}
         {selectedGame && (
-          <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Select Alternates for Game: {selectedGame.gameDescription}
-              </h2>
-              <button
-                onClick={() => setSelectedGame(null)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
-            <p className="text-green-700">Alternate selection interface will be implemented here.</p>
+          <div className="mb-8">
+            <AlternateSelectionInterface
+              gameId={selectedGame.id}
+              onSelectionComplete={handleSelectionComplete}
+              onCancel={() => setSelectedGame(null)}
+            />
           </div>
         )}
 

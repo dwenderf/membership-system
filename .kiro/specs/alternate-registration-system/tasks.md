@@ -41,7 +41,7 @@
   - Create tests for registration alternate configuration
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 5. Develop game creation and alternate selection system (Admin-Only)
+- [x] 5. Develop game creation and alternate selection system (Admin-Only)
   - Create game creation interface for admins to create games that need alternates (POST /api/alternate-registrations)
   - Implement game management interface showing all games for a registration
   - Create available alternates list view showing users who registered as alternates for the registration

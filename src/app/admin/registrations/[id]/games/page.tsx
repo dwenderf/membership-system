@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import GameCreationForm from '@/components/GameCreationForm'
 import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
@@ -147,6 +148,14 @@ export default function RegistrationGamesPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <Link
+                  href={`/admin/registrations/${registrationId}`}
+                  className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+                >
+                  ← Back to Registration
+                </Link>
+              </div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Games & Alternate Selection
               </h1>

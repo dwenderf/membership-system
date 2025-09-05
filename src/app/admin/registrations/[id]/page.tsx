@@ -120,6 +120,14 @@ export default async function RegistrationDetailPage({
                 >
                   Edit Timing
                 </Link>
+                {registration.allow_alternates && (
+                  <Link
+                    href={`/admin/registrations/${id}/games`}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Manage Games
+                  </Link>
+                )}
                 <Link
                   href={`/admin/registrations/${id}/categories/new`}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

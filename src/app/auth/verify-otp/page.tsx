@@ -123,10 +123,12 @@ export default function VerifyOTPPage() {
       if (error) {
         setMessage(error.message)
         showError('Verification failed', error.message)
+        setLoading(false) // Only reset loading on error
       } else {
         showSuccess('Success!', 'You have been logged in')
         // Clear stored email
         sessionStorage.removeItem('otp_email')
+        // Keep loading=true to prevent double-clicks during redirect
         // Redirect to dashboard or intended page
         router.push('/user')
       }
@@ -135,8 +137,7 @@ export default function VerifyOTPPage() {
       const errorMessage = error?.message || 'An error occurred. Please try again.'
       setMessage(errorMessage)
       showError('Verification failed', errorMessage)
-    } finally {
-      setLoading(false)
+      setLoading(false) // Only reset loading on error
     }
   }
 

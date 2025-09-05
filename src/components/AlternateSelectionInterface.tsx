@@ -334,7 +334,7 @@ export default function AlternateSelectionInterface({
                       
                       {alternate.discountCode?.isOverLimit && alternate.discountCode.usageStatus && (
                         <div className="text-xs text-orange-600 mt-1">
-                          Would exceed limit: ${alternate.discountCode.usageStatus.currentUsage/100} + ${alternate.discountCode.discountAmount/100} > ${alternate.discountCode.usageStatus.limit/100}
+                          Would exceed limit: ${alternate.discountCode.usageStatus.currentUsage/100} + ${alternate.discountCode.discountAmount/100} &gt; ${alternate.discountCode.usageStatus.limit/100}
                         </div>
                       )}
                     </div>

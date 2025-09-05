@@ -7,7 +7,7 @@ import { logger } from '@/lib/logging/logger'
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Check authentication
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) {
@@ -45,9 +45,9 @@ export async function GET(request: NextRequest) {
         userId: authUser.id,
         error: error.message
       })
-      
-      return NextResponse.json({ 
-        error: 'Failed to fetch alternate registrations' 
+
+      return NextResponse.json({
+        error: 'Failed to fetch alternate registrations'
       }, { status: 500 })
     }
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       alternateRegistrations: alternateRegistrations || [],
       paymentMethodStatus: {
         hasValidPaymentMethod,
-        message: hasValidPaymentMethod 
+        message: hasValidPaymentMethod
           ? 'Payment method is set up and ready for alternate selection'
           : 'Payment method setup required for alternate selection'
       }
@@ -74,9 +74,9 @@ export async function GET(request: NextRequest) {
     logger.logSystem('get-alternate-registrations-error', 'Unexpected error fetching alternate registrations', {
       error: error instanceof Error ? error.message : String(error)
     })
-    
-    return NextResponse.json({ 
-      error: 'Internal server error' 
+
+    return NextResponse.json({
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Check authentication
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) {
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
 
     // Check if registration allows alternates
     if (!registration.allow_alternates) {
-      return NextResponse.json({ 
-        error: 'This registration does not allow alternates' 
+      return NextResponse.json({
+        error: 'This registration does not allow alternates'
       }, { status: 400 })
     }
 
@@ -138,8 +138,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingRegistration) {
-      return NextResponse.json({ 
-        error: 'You are already registered as a regular participant for this registration' 
+      return NextResponse.json({
+        error: 'You are already registered as a regular participant for this registration'
       }, { status: 400 })
     }
 
@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingAlternate) {
-      return NextResponse.json({ 
-        error: 'You are already registered as an alternate for this registration' 
+      return NextResponse.json({
+        error: 'You are already registered as an alternate for this registration'
       }, { status: 400 })
     }
 
@@ -192,10 +192,10 @@ export async function POST(request: NextRequest) {
           .eq('discount_code_id', discountCodeId)
 
         const currentUsage = usageCount?.length || 0
-        
+
         if (currentUsage >= discount.usage_limit) {
-          return NextResponse.json({ 
-            error: 'You have exceeded the usage limit for this discount code' 
+          return NextResponse.json({
+            error: 'You have exceeded the usage limit for this discount code'
           }, { status: 400 })
         }
       }
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user has a valid payment method, create Setup Intent if needed
     let setupIntentClientSecret = null
-    
+
     if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
       try {
         // Create new Setup Intent
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
           {
             userId: user.id,
             registrationId,
-            setupIntentId: setupIntentResult.setupIntentId
+            setupIntentId: setupIntentResult.setupIntent.id
           },
           'info'
         )
@@ -233,9 +233,9 @@ export async function POST(request: NextRequest) {
           },
           'error'
         )
-        
-        return NextResponse.json({ 
-          error: 'Failed to set up payment method. Please try again.' 
+
+        return NextResponse.json({
+          error: 'Failed to set up payment method. Please try again.'
         }, { status: 500 })
       }
     }
@@ -258,9 +258,9 @@ export async function POST(request: NextRequest) {
         registrationId,
         error: insertError.message
       })
-      
-      return NextResponse.json({ 
-        error: 'Failed to register as alternate. Please try again.' 
+
+      return NextResponse.json({
+        error: 'Failed to register as alternate. Please try again.'
       }, { status: 500 })
     }
 
@@ -298,9 +298,9 @@ export async function POST(request: NextRequest) {
     logger.logSystem('alternate-registration-error', 'Unexpected error in alternate registration', {
       error: error instanceof Error ? error.message : String(error)
     })
-    
-    return NextResponse.json({ 
-      error: 'Internal server error' 
+
+    return NextResponse.json({
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }

@@ -1,10 +1,13 @@
 // Test file for user alternate registrations API endpoints
-// Currently disabled - Jest configuration needed
-
-/*
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import { POST, GET } from '@/app/api/user-alternate-registrations/route'
 import { NextRequest } from 'next/server'
+
+// Jest globals are available, but we need to declare them for TypeScript
+declare const jest: any
+declare const describe: any
+declare const it: any
+declare const expect: any
+declare const beforeEach: any
 
 // Mock dependencies
 jest.mock('@/lib/supabase/server')
@@ -68,8 +71,8 @@ describe('/api/user-alternate-registrations', () => {
     })
 
     it('should require registrationId', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({ 
-        data: { user: { id: 'user-123' } } 
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
       })
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
@@ -85,8 +88,8 @@ describe('/api/user-alternate-registrations', () => {
     })
 
     it('should prevent registration when alternates are not allowed', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({ 
-        data: { user: { id: 'user-123' } } 
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
       })
 
       // Mock user lookup
@@ -126,8 +129,8 @@ describe('/api/user-alternate-registrations', () => {
     })
 
     it('should prevent duplicate alternate registration', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({ 
-        data: { user: { id: 'user-123' } } 
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
       })
 
       // Mock user lookup
@@ -147,9 +150,9 @@ describe('/api/user-alternate-registrations', () => {
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             single: jest.fn(() => Promise.resolve({
-              data: { 
-                id: 'reg-123', 
-                name: 'Test Registration', 
+              data: {
+                id: 'reg-123',
+                name: 'Test Registration',
                 allow_alternates: true,
                 alternate_price: 5000,
                 alternate_accounting_code: 'ALT001'
@@ -203,8 +206,8 @@ describe('/api/user-alternate-registrations', () => {
     })
 
     it('should successfully register as alternate with valid payment method', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({ 
-        data: { user: { id: 'user-123' } } 
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
       })
 
       // Mock user lookup with valid payment method
@@ -212,9 +215,9 @@ describe('/api/user-alternate-registrations', () => {
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             single: jest.fn(() => Promise.resolve({
-              data: { 
-                id: 'user-123', 
-                first_name: 'John', 
+              data: {
+                id: 'user-123',
+                first_name: 'John',
                 last_name: 'Doe',
                 stripe_payment_method_id: 'pm_123',
                 setup_intent_status: 'succeeded'
@@ -230,9 +233,9 @@ describe('/api/user-alternate-registrations', () => {
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             single: jest.fn(() => Promise.resolve({
-              data: { 
-                id: 'reg-123', 
-                name: 'Test Registration', 
+              data: {
+                id: 'reg-123',
+                name: 'Test Registration',
                 allow_alternates: true,
                 alternate_price: 5000,
                 alternate_accounting_code: 'ALT001'
@@ -271,7 +274,7 @@ describe('/api/user-alternate-registrations', () => {
         insert: jest.fn(() => ({
           select: jest.fn(() => ({
             single: jest.fn(() => Promise.resolve({
-              data: { 
+              data: {
                 id: 'alt-reg-123',
                 user_id: 'user-123',
                 registration_id: 'reg-123',
@@ -311,8 +314,8 @@ describe('/api/user-alternate-registrations', () => {
     })
 
     it('should return user alternate registrations', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({ 
-        data: { user: { id: 'user-123' } } 
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
       })
 
       // Mock alternate registrations query
@@ -342,7 +345,7 @@ describe('/api/user-alternate-registrations', () => {
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             single: jest.fn(() => Promise.resolve({
-              data: { 
+              data: {
                 stripe_payment_method_id: 'pm_123',
                 setup_intent_status: 'succeeded'
               },
@@ -362,4 +365,3 @@ describe('/api/user-alternate-registrations', () => {
     })
   })
 })
-*/

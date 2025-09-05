@@ -573,6 +573,289 @@ src/
 └── types/              # TypeScript type definitions
 ```
 
+## Testing
+
+The application uses Jest with TypeScript support for comprehensive unit and integration testing.
+
+### Test Framework Setup
+
+**Configuration:**
+- **Test Runner**: Jest with `ts-jest` preset
+- **Environment**: Node.js environment for API testing
+- **Module Mapping**: `@/` aliases resolve to `src/` directory
+- **Coverage**: Comprehensive coverage reporting with HTML output
+
+**Key Files:**
+- `jest.config.js` - Jest configuration with TypeScript support
+- `jest.setup.js` - Global test setup and mocks
+- `src/__tests__/` - Test files organized by feature
+
+### Setting Up Jest (First Time Setup)
+
+If you're setting up Jest for the first time or encountering issues, follow these steps:
+
+#### 1. Install Jest Dependencies
+
+```bash
+# Install Jest and TypeScript support
+npm install --save-dev jest ts-jest @types/jest
+
+# Install additional testing utilities (optional)
+npm install --save-dev @testing-library/jest-dom
+```
+
+#### 2. Create Jest Configuration
+
+Create `jest.config.js` in your project root:
+
+```javascript
+/** @type {import('jest').Config} */
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src'],
+  testMatch: [
+    '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/src/**/*.{test,spec}.{js,jsx,ts,tsx}'
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
+    '!src/**/node_modules/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  transform: {
+    '^.+\\.(ts|tsx)$': 'ts-jest',
+  },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  testTimeout: 10000,
+  verbose: true,
+}
+```
+
+#### 3. Create Jest Setup File
+
+Create `jest.setup.js` in your project root:
+
+```javascript
+// Mock environment variables
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321'
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
+
+// Mock Next.js modules that aren't available in test environment
+jest.mock('next/headers', () => ({
+  cookies: jest.fn(() => ({
+    get: jest.fn(),
+    set: jest.fn(),
+    delete: jest.fn(),
+  })),
+}))
+
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(() => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+  })),
+  useSearchParams: jest.fn(() => ({
+    get: jest.fn(),
+  })),
+}))
+```
+
+#### 4. Update Package.json Scripts
+
+Add test scripts to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "test": "npx jest",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --coverage"
+  }
+}
+```
+
+#### 5. Common Setup Issues & Solutions
+
+**Issue: "moduleNameMapping" validation warning**
+- **Solution**: Use `moduleNameMapper` (not `moduleNameMapping`) in jest.config.js
+
+**Issue: Cannot find module '@/lib/...' errors**
+- **Solution**: Ensure `moduleNameMapper` is correctly configured with `'^@/(.*)$': '<rootDir>/src/$1'`
+
+**Issue: WSL/Windows path compatibility problems**
+- **Solution**: Run tests in WSL terminal instead of Windows PowerShell
+- Use `npx jest` in package.json scripts instead of direct `jest` command
+
+**Issue: Permission errors during npm install**
+- **Solution**: Use `npx jest` instead of global jest installation
+- Ensure you're running in the correct directory with proper permissions
+
+**Issue: TypeScript compilation errors in tests**
+- **Solution**: Ensure `ts-jest` is installed and configured in jest.config.js
+- Check that your tsconfig.json includes the test directories
+
+**Issue: Cannot find module '@jest/globals' errors**
+- **Solution**: Remove `@jest/globals` imports from test files
+- Jest globals (`describe`, `it`, `expect`, `jest`, `beforeEach`) are available automatically
+- Change `import { describe, it, expect, jest } from '@jest/globals'` to just import your actual modules
+
+#### 6. Verify Setup
+
+Test your Jest configuration:
+
+```bash
+# Run Jest to verify setup
+npm test
+
+# Should show: "No tests found" or run existing tests
+# If you see configuration errors, review the steps above
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run specific test file
+npm test -- user-alternate-registrations.test.ts
+
+# Run tests matching pattern
+npm test -- --testNamePattern="should require authentication"
+```
+
+### Test Structure
+
+Tests are organized by feature and API endpoint:
+
+```
+src/__tests__/
+├── api/
+│   ├── admin/
+│   │   └── registrations/
+│   │       └── alternates.test.ts     # Admin alternate management
+│   └── user-alternate-registrations.test.ts  # User alternate registration
+└── components/                        # Component tests (future)
+```
+
+### Current Test Coverage
+
+**API Endpoints Tested:**
+- **Admin Alternate Management** (`/api/admin/registrations/[id]/alternates`)
+  - Authentication and authorization
+  - Input validation and error handling
+  - Enable/disable alternate configurations
+  - Registration cleanup on disable
+- **User Alternate Registration** (`/api/user-alternate-registrations`)
+  - User authentication requirements
+  - Duplicate registration prevention
+  - Payment method validation
+  - Registration retrieval
+
+**Test Categories:**
+- ✅ **Authentication**: Ensures proper user authentication
+- ✅ **Authorization**: Verifies admin privilege requirements
+- ✅ **Validation**: Tests input validation and error responses
+- ✅ **Business Logic**: Validates core functionality
+- ✅ **Error Handling**: Tests edge cases and failure scenarios
+
+### Mock Configuration
+
+The test suite includes comprehensive mocking for external dependencies:
+
+**Supabase Mocking:**
+```javascript
+// Mocked database operations
+const mockSupabase = {
+  from: jest.fn(() => ({
+    select: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn()
+  }))
+}
+```
+
+**Service Mocking:**
+- **SetupIntentService**: Payment method validation
+- **Logger**: Application logging
+- **Authentication**: User session management
+
+### Writing New Tests
+
+When adding new API endpoints or features:
+
+1. **Create test file** in appropriate `__tests__` directory
+2. **Follow naming convention**: `feature-name.test.ts`
+3. **Include test categories**:
+   ```javascript
+   describe('/api/your-endpoint', () => {
+     describe('POST - Create resource', () => {
+       it('should require authentication', async () => {
+         // Test authentication requirement
+       })
+       
+       it('should validate required fields', async () => {
+         // Test input validation
+       })
+       
+       it('should successfully create resource', async () => {
+         // Test successful operation
+       })
+     })
+   })
+   ```
+
+4. **Mock external dependencies** using Jest mocks
+5. **Test both success and failure scenarios**
+6. **Verify proper error responses and status codes**
+
+### Test Environment Variables
+
+Tests use mocked environment variables configured in `jest.setup.js`:
+
+```javascript
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321'
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
+```
+
+### Best Practices
+
+- **Isolation**: Each test should be independent and not rely on other tests
+- **Mocking**: Mock external services to ensure tests run reliably
+- **Descriptive Names**: Use clear, descriptive test names that explain the expected behavior
+- **Edge Cases**: Test both happy path and error scenarios
+- **Authentication**: Always test authentication and authorization requirements
+- **Cleanup**: Ensure tests clean up any side effects
+
+### Future Testing Enhancements
+
+Planned additions to the test suite:
+- **Component Testing**: React component unit tests
+- **Integration Testing**: End-to-end API workflow tests
+- **Performance Testing**: Load testing for critical endpoints
+- **Database Testing**: Direct database operation testing
+- **Email Testing**: Email delivery and template testing
+
 ## Key Services
 
 - **Email Service** (`src/lib/email/service.ts`): Handles all email communications

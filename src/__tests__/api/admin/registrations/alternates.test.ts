@@ -1,10 +1,13 @@
 // Test file for admin alternate registration configuration API
-// Currently disabled - Jest configuration needed
-
-/*
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import { PUT } from '@/app/api/admin/registrations/[id]/alternates/route'
 import { NextRequest } from 'next/server'
+
+// Jest globals are available, but we need to declare them for TypeScript
+declare const jest: any
+declare const describe: any
+declare const it: any
+declare const expect: any
+declare const beforeEach: any
 
 // Mock dependencies
 jest.mock('@/lib/supabase/server')
@@ -313,4 +316,3 @@ describe('/api/admin/registrations/[id]/alternates', () => {
     })
   })
 })
-*/

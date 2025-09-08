@@ -556,9 +556,7 @@ export default function RegistrationPurchase({
               // Overall availability
               const isUnavailableDueToExistingRegistration = isRegularCategoryUnavailable || isAlternateCategoryUnavailable
               
-              // Visual state logic
-              const isCurrentlySelected = selectedCategoryId === category.id
-              const shouldShowAsSelected = isCurrentlySelected || isUnavailableDueToExistingRegistration
+              // Visual state logic - no additional variables needed
               
               return (
                 <label
@@ -577,7 +575,7 @@ export default function RegistrationPurchase({
                     type="radio"
                     name="category"
                     value={category.id}
-                    checked={shouldShowAsSelected}
+                    checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration}
                     onChange={(e) => !isUnavailableDueToExistingRegistration && setSelectedCategoryId(e.target.value)}
                     disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration}
                     className="sr-only"
@@ -635,8 +633,8 @@ export default function RegistrationPurchase({
                       </div>
                     </div>
                     <div className={`text-sm font-medium ${
-                      shouldShowAsSelected ? 'text-blue-900' : 
-                      shouldGreyOut ? 'text-gray-500' : 'text-gray-900'
+                      isUnavailableDueToExistingRegistration ? 'text-blue-900' :
+                      selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                     }`}>
                       ${(categoryPrice / 100).toFixed(2)}
                     </div>

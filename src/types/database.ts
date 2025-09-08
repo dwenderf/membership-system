@@ -161,6 +161,8 @@ export type Database = {
           alternate_price: number | null
           alternate_accounting_code: string | null
           created_at: string
+          updated_at: string
+          updated_by: string | null
         }
         Insert: {
           id?: string
@@ -178,6 +180,8 @@ export type Database = {
           alternate_price?: number | null
           alternate_accounting_code?: string | null
           created_at?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           id?: string
@@ -195,7 +199,18 @@ export type Database = {
           alternate_price?: number | null
           alternate_accounting_code?: string | null
           created_at?: string
+          updated_at?: string
+          updated_by?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "registrations_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_memberships: {
         Row: {

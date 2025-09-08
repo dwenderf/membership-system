@@ -9,8 +9,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
-// TODO: Import component when implemented
-// import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
+import GamesPreview from '@/components/GamesPreview'
 
 export default async function RegistrationDetailPage({
   params,
@@ -240,7 +239,7 @@ export default async function RegistrationDetailPage({
             </div>
 
             {/* Registration Categories - now with drag-and-drop */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-6">
               <div className="bg-white shadow rounded-lg">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex justify-between items-center">
@@ -270,6 +269,26 @@ export default async function RegistrationDetailPage({
                   </div>
                 )}
               </div>
+
+              {/* Games Section - Only show if alternates are enabled */}
+              {registration.allow_alternates && (
+                <div className="bg-white shadow rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-lg font-medium text-gray-900">Games</h2>
+                      <Link
+                        href={`/admin/registrations/${id}/games`}
+                        className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Manage All Games
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <GamesPreview registrationId={id} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

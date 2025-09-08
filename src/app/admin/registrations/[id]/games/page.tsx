@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import GameCreationForm from '@/components/GameCreationForm'
 import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
 
 interface Game {
@@ -36,7 +35,6 @@ export default function RegistrationGamesPage() {
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showCreateForm, setShowCreateForm] = useState(false)
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [selectionResults, setSelectionResults] = useState<any>(null)
 
@@ -79,11 +77,6 @@ export default function RegistrationGamesPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleGameCreated = (newGame: any) => {
-    setGames(prev => [newGame, ...prev])
-    setShowCreateForm(false)
   }
 
   const handleSelectionComplete = (results: any) => {
@@ -163,15 +156,6 @@ export default function RegistrationGamesPage() {
                 Registration: <span className="font-medium">{registration.name}</span>
               </p>
             </div>
-
-            {registration.allow_alternates && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                Create New Game
-              </button>
-            )}
           </div>
 
           {!registration.allow_alternates && (
@@ -214,16 +198,7 @@ export default function RegistrationGamesPage() {
           </div>
         )}
 
-        {/* Game Creation Form */}
-        {showCreateForm && registration.allow_alternates && (
-          <div className="mb-8">
-            <GameCreationForm
-              registrationId={registrationId}
-              onGameCreated={handleGameCreated}
-              onCancel={() => setShowCreateForm(false)}
-            />
-          </div>
-        )}
+
 
         {/* Alternate Selection Interface */}
         {selectedGame && (
@@ -245,17 +220,16 @@ export default function RegistrationGamesPage() {
 
             {games.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No games created yet.
-                {registration.allow_alternates && (
-                  <div className="mt-2">
-                    <button
-                      onClick={() => setShowCreateForm(true)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      Create your first game
-                    </button>
-                  </div>
-                )}
+                <p>No games created yet.</p>
+                <p className="mt-2 text-sm">
+                  Games can be created from the main registration page.
+                </p>
+                <Link
+                  href={`/admin/registrations/${registrationId}`}
+                  className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Go to Registration Page
+                </Link>
               </div>
             ) : (
               <div className="space-y-4">

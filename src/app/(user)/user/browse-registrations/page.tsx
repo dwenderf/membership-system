@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
+import AlternateRegistrationButton from '@/components/AlternateRegistrationButton'
 import Link from 'next/link'
 
 // Helper function to safely parse date strings without timezone conversion
@@ -73,6 +74,12 @@ export default async function BrowseRegistrationsPage() {
     .select('registration_id')
     .eq('user_id', user.id)
     .eq('payment_status', 'paid')
+
+  // Get user's alternate registrations
+  const { data: userAlternateRegistrations } = await supabase
+    .from('user_alternate_registrations')
+    .select('registration_id')
+    .eq('user_id', user.id)
 
   // Get available registrations for current/future seasons
   // First get current/future seasons
@@ -148,6 +155,7 @@ export default async function BrowseRegistrationsPage() {
   const consolidatedMembershipList = Object.values(consolidatedMemberships)
   const hasActiveMembership = consolidatedMembershipList.length > 0
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
+  const userAlternateRegistrationIds = userAlternateRegistrations?.map(uar => uar.registration_id) || []
 
   // Check if any memberships are expiring soon (≤90 days)
   const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership: any) => {
@@ -399,20 +407,32 @@ export default async function BrowseRegistrationsPage() {
                             </button>
                           </div>
                         ) : (
-                          <RegistrationPurchase
-                            registration={{
-                              ...registration,
-                              // Add current count to categories
-                              registration_categories: sortedCategories.map((cat: any) => ({
-                                ...cat,
-                                current_count: categoryRegistrationCounts[cat.id] || 0
-                              }))
-                            }}
-                            userEmail={user.email || ''}
-                            activeMemberships={activeMemberships}
-                            isEligible={hasEligibleMembership}
-                            isLgbtq={userProfile?.is_lgbtq || false}
-                          />
+                          <div className="space-y-4">
+                            <RegistrationPurchase
+                              registration={{
+                                ...registration,
+                                // Add current count to categories
+                                registration_categories: sortedCategories.map((cat: any) => ({
+                                  ...cat,
+                                  current_count: categoryRegistrationCounts[cat.id] || 0
+                                }))
+                              }}
+                              userEmail={user.email || ''}
+                              activeMemberships={activeMemberships}
+                              isEligible={hasEligibleMembership}
+                              isLgbtq={userProfile?.is_lgbtq || false}
+                            />
+                            
+                            {/* Alternate Registration Option */}
+                            <AlternateRegistrationButton
+                              registrationId={registration.id}
+                              registrationName={registration.name}
+                              isAlreadyRegistered={isAlreadyRegistered}
+                              isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
+                              allowAlternates={registration.allow_alternates || false}
+                              alternatePrice={registration.alternate_price}
+                            />
+                          </div>
                         )}
                       </div>
                     </div>

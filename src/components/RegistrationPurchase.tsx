@@ -600,6 +600,11 @@ export default function RegistrationPurchase({
                             Requires: {category.memberships?.name}
                           </div>
                         )}
+                        {isAlternateCategory && (
+                          <div className="text-xs text-green-700 mt-1">
+                            No cost to register as alternate. You agree to pay ${(categoryPrice / 100).toFixed(2)} if selected for games.
+                          </div>
+                        )}
                         {category.max_capacity && (
                           <div className={`text-xs ${
                             (() => {

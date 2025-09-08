@@ -329,9 +329,11 @@ export default async function UserDashboardPage() {
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
                           {/* Category tag */}
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                            {getCategoryDisplayName(registration.registration_category)}
-                          </span>
+                          {registration.registration_category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {getCategoryDisplayName(registration.registration_category)}
+                            </span>
+                          )}
                           {/* Alternate tag if applicable */}
                           {isAlternate && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">

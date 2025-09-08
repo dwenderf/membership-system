@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
         registration:registrations(
           *,
           season:seasons(*)
+        ),
+        registration_category:registration_categories(
+          *,
+          categories:category_id(name, description)
         )
       `)
       .eq('user_id', user.id)

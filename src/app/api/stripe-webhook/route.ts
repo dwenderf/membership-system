@@ -1005,7 +1005,7 @@ export async function POST(request: NextRequest) {
           metadata: setupIntent.metadata
         })
 
-        const userId = setupIntent.metadata?.userId
+        const userId = setupIntent.metadata?.supabase_user_id || setupIntent.metadata?.userId
         if (!userId) {
           console.error('❌ Setup Intent missing userId in metadata:', setupIntent.id)
           break

@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
-import AlternateRegistrationButton from '@/components/AlternateRegistrationButton'
 import Link from 'next/link'
 
 // Helper function to safely parse date strings without timezone conversion
@@ -407,32 +406,22 @@ export default async function BrowseRegistrationsPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="space-y-4">
-                            <RegistrationPurchase
-                              registration={{
-                                ...registration,
-                                // Add current count to categories
-                                registration_categories: sortedCategories.map((cat: any) => ({
-                                  ...cat,
-                                  current_count: categoryRegistrationCounts[cat.id] || 0
-                                }))
-                              }}
-                              userEmail={user.email || ''}
-                              activeMemberships={activeMemberships}
-                              isEligible={hasEligibleMembership}
-                              isLgbtq={userProfile?.is_lgbtq || false}
-                            />
-                            
-                            {/* Alternate Registration Option */}
-                            <AlternateRegistrationButton
-                              registrationId={registration.id}
-                              registrationName={registration.name}
-                              isAlreadyRegistered={isAlreadyRegistered}
-                              isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
-                              allowAlternates={registration.allow_alternates || false}
-                              alternatePrice={registration.alternate_price}
-                            />
-                          </div>
+                          <RegistrationPurchase
+                            registration={{
+                              ...registration,
+                              // Add current count to categories
+                              registration_categories: sortedCategories.map((cat: any) => ({
+                                ...cat,
+                                current_count: categoryRegistrationCounts[cat.id] || 0
+                              }))
+                            }}
+                            userEmail={user.email || ''}
+                            activeMemberships={activeMemberships}
+                            isEligible={hasEligibleMembership}
+                            isLgbtq={userProfile?.is_lgbtq || false}
+                            isAlreadyRegistered={isAlreadyRegistered}
+                            isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
+                          />
                         )}
                       </div>
                     </div>

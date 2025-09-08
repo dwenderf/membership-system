@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
+import SetupIntentForm from './SetupIntentForm'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -49,6 +50,9 @@ interface Registration {
   registration_end_at?: string | null
   presale_code?: string | null
   allow_lgbtq_presale?: boolean
+  allow_alternates?: boolean
+  alternate_price?: number | null
+  alternate_accounting_code?: string | null
   season?: {
     name: string
     start_date: string
@@ -63,6 +67,8 @@ interface RegistrationPurchaseProps {
   activeMemberships?: UserMembership[]
   isEligible: boolean
   isLgbtq: boolean
+  isAlreadyRegistered?: boolean
+  isAlreadyAlternate?: boolean
 }
 
 export default function RegistrationPurchase({ 
@@ -70,11 +76,15 @@ export default function RegistrationPurchase({
   userEmail, 
   activeMemberships = [],
   isEligible,
-  isLgbtq
+  isLgbtq,
+  isAlreadyRegistered = false,
+  isAlreadyAlternate = false
 }: RegistrationPurchaseProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [showSetupIntentForm, setShowSetupIntentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null)
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,7 +129,9 @@ export default function RegistrationPurchase({
     }
 
     setShowPaymentForm(false)
+    setShowSetupIntentForm(false)
     setClientSecret(null)
+    setSetupIntentClientSecret(null)
     setPaymentIntentId(null)
     setSelectedCategoryId(null) // Clear selected category
     setDiscountCode('')
@@ -151,7 +163,9 @@ export default function RegistrationPurchase({
 
     await cleanupProcessingReservation()
     setShowPaymentForm(false)
+    setShowSetupIntentForm(false)
     setClientSecret(null)
+    setSetupIntentClientSecret(null)
     setPaymentIntentId(null)
     setSelectedCategoryId(null)
     setDiscountCode('')
@@ -160,8 +174,25 @@ export default function RegistrationPurchase({
     showError('Payment Timer Expired', 'Your reserved spot has been released. Please try registering again.')
   }
 
-  const categories = registration.registration_categories || []
+  const baseCategories = registration.registration_categories || []
+  
+  // Add alternate as a pseudo-category if allowed
+  const alternateCategory = registration.allow_alternates ? {
+    id: 'alternate',
+    custom_name: 'Alternate',
+    price: registration.alternate_price || 0,
+    max_capacity: null,
+    current_count: 0,
+    required_membership_id: null,
+    categories: { name: 'Alternate' }
+  } : null
+  
+  const categories = alternateCategory ? [...baseCategories, alternateCategory] : baseCategories
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId)
+  const isAlternateSelected = selectedCategoryId === 'alternate'
+  
+  // Check if user is already registered as alternate (for UI state)
+  const isUserAlreadyAlternate = isAlreadyAlternate
   
   // Get pricing for selected category
   const originalAmount = selectedCategory?.price ?? 0
@@ -292,6 +323,78 @@ export default function RegistrationPurchase({
       return
     }
 
+    // Handle alternate registration differently
+    if (isAlternateSelected) {
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        const response = await fetch('/api/user-alternate-registrations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            registration_id: registration.id,
+            discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          
+          // Handle case where user needs to set up payment method
+          if (errorData.requiresSetupIntent) {
+            // Create setup intent and show setup form
+            try {
+              const setupResponse = await fetch('/api/create-setup-intent', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              })
+
+              if (!setupResponse.ok) {
+                const setupErrorData = await setupResponse.json()
+                throw new Error(setupErrorData.error || 'Failed to create setup intent')
+              }
+
+              const { clientSecret } = await setupResponse.json()
+              setSetupIntentClientSecret(clientSecret)
+              setShowSetupIntentForm(true)
+              setIsLoading(false)
+              return
+            } catch (setupError) {
+              const setupErrorMessage = setupError instanceof Error ? setupError.message : 'Failed to setup payment method'
+              setError(setupErrorMessage)
+              showError('Setup Error', setupErrorMessage)
+              setIsLoading(false)
+              return
+            }
+          }
+          
+          throw new Error(errorData.error || 'Failed to register as alternate')
+        }
+
+        showSuccess(
+          'Alternate Registration Complete!',
+          'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
+        )
+        
+        // Refresh the page to show updated status
+        setTimeout(() => window.location.reload(), 2000)
+        
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+        setError(errorMessage)
+        showError('Alternate Registration Error', errorMessage)
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
+
+    // Regular category registration logic
     if (!isCategoryEligible) {
       setError('You need the required membership for this category')
       return
@@ -440,34 +543,59 @@ export default function RegistrationPurchase({
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
               const categoryPrice = category.price ?? 0
               
+              // Determine availability logic
+              const isAlternateCategory = category.id === 'alternate'
+              const isRegularCategory = !isAlternateCategory
+              
+              // For regular categories: unavailable if user is already registered for ANY regular category
+              const isRegularCategoryUnavailable = isRegularCategory && isAlreadyRegistered
+              
+              // For alternate category: unavailable if user is already registered as alternate
+              const isAlternateCategoryUnavailable = isAlternateCategory && isUserAlreadyAlternate
+              
+              // Overall availability
+              const isUnavailableDueToExistingRegistration = isRegularCategoryUnavailable || isAlternateCategoryUnavailable
+              
+              // Visual state logic
+              const isCurrentlySelected = selectedCategoryId === category.id
+              const shouldShowAsSelected = isCurrentlySelected || isUnavailableDueToExistingRegistration
+              
               return (
                 <label
                   key={category.id}
-                  className={`relative flex cursor-pointer rounded-lg border p-3 focus:outline-none ${
-                    selectedCategoryId === category.id
-                      ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
+                  className={`relative flex rounded-lg border p-3 focus:outline-none ${
+                    isUnavailableDueToExistingRegistration
+                      ? 'border-blue-400 bg-blue-50 cursor-default'
+                      : selectedCategoryId === category.id
+                      ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50 cursor-pointer'
                       : hasRequiredMembership
-                      ? 'border-gray-300 hover:border-gray-400'
-                      : 'border-yellow-300 bg-yellow-50'
-                  } ${!hasRequiredMembership ? 'cursor-not-allowed' : ''}`}
+                      ? 'border-gray-300 hover:border-gray-400 cursor-pointer'
+                      : 'border-yellow-300 bg-yellow-50 cursor-not-allowed'
+                  }`}
                 >
                   <input
                     type="radio"
                     name="category"
                     value={category.id}
-                    checked={selectedCategoryId === category.id}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    disabled={!hasRequiredMembership}
+                    checked={shouldShowAsSelected}
+                    onChange={(e) => !isUnavailableDueToExistingRegistration && setSelectedCategoryId(e.target.value)}
+                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration}
                     className="sr-only"
                   />
                   <div className="flex w-full justify-between">
                     <div className="flex items-center">
                       <div className="text-sm">
                         <div className={`font-medium ${
+                          isUnavailableDueToExistingRegistration ? 'text-blue-900' :
                           selectedCategoryId === category.id ? 'text-blue-900' : 
                           hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
+                          {isUnavailableDueToExistingRegistration && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {category.id === 'alternate' ? 'Registered as Alternate' : 'Already Registered'}
+                            </span>
+                          )}
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
@@ -507,7 +635,8 @@ export default function RegistrationPurchase({
                       </div>
                     </div>
                     <div className={`text-sm font-medium ${
-                      selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
+                      shouldShowAsSelected ? 'text-blue-900' : 
+                      shouldGreyOut ? 'text-gray-500' : 'text-gray-900'
                     }`}>
                       ${(categoryPrice / 100).toFixed(2)}
                     </div>
@@ -835,15 +964,19 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist)}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))}
         className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
-          isCategoryAtCapacity 
+          (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
+            ? 'bg-blue-500 cursor-default'
+            : isCategoryAtCapacity 
             ? (isUserOnWaitlist ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed')
             : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
         }`}
       >
         {isLoading ? 'Processing...' : 
          !selectedCategoryId ? 'Select Category to Continue' :
+         (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Already Registered' :
+         (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Already Registered as Alternate' :
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
@@ -851,6 +984,79 @@ export default function RegistrationPurchase({
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
       </button>
+
+      {/* Setup Intent Form Modal */}
+      {showSetupIntentForm && setupIntentClientSecret && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={closeModal}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Setup Payment Method</h3>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+            
+            <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
+              <SetupIntentForm
+                registrationName={registration.name}
+                alternatePrice={registration.alternate_price}
+                onSuccess={async () => {
+                  // Close setup form
+                  setShowSetupIntentForm(false)
+                  setSetupIntentClientSecret(null)
+                  
+                  // Now try the alternate registration again
+                  try {
+                    const response = await fetch('/api/user-alternate-registrations', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        registration_id: registration.id,
+                        discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
+                      }),
+                    })
+
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to register as alternate')
+                    }
+
+                    showSuccess(
+                      'Alternate Registration Complete!',
+                      'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
+                    )
+                    
+                    // Refresh the page to show updated status
+                    setTimeout(() => window.location.reload(), 2000)
+                    
+                  } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                    setError(errorMessage)
+                    showError('Alternate Registration Error', errorMessage)
+                  }
+                }}
+                onError={(error) => {
+                  setError(error)
+                  setShowSetupIntentForm(false)
+                  setSetupIntentClientSecret(null)
+                }}
+              />
+            </Elements>
+          </div>
+        </div>
+      )}
 
       {/* Payment Form Modal */}
       {showPaymentForm && (
@@ -909,7 +1115,9 @@ export default function RegistrationPurchase({
                   paymentIntentId={paymentIntentId || undefined}
                   onSuccess={() => {
                     setShowPaymentForm(false)
+                    setShowSetupIntentForm(false)
                     setClientSecret(null)
+                    setSetupIntentClientSecret(null)
                     // Reset form state
                     setSelectedCategoryId(null)
                     setDiscountCode('')
@@ -930,6 +1138,7 @@ export default function RegistrationPurchase({
                   onError={(error) => {
                     setError(error)
                     setShowPaymentForm(false)
+                    setShowSetupIntentForm(false)
                     
                     // Show error notification
                     showError(

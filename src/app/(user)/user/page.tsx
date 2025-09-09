@@ -6,7 +6,6 @@ import { getOrganizationName } from '@/lib/organization'
 import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
 import { formatAmount } from '@/lib/format-utils'
 import DiscountUsage from '@/components/DiscountUsage'
-import PaymentMethodManager from '@/components/PaymentMethodManager'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -484,11 +483,7 @@ export default async function UserDashboardPage() {
         <DiscountUsage />
       </div>
 
-      {/* Payment Method Management */}
-      <div className="mt-8">
-        <PaymentMethodManager />
-      </div>
-
+      
     </div>
   )
 }

@@ -83,6 +83,11 @@ export default function RegistrationPurchase({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showSetupIntentForm, setShowSetupIntentForm] = useState(false)
+  
+  // Debug: Log when setup intent form state changes
+  useEffect(() => {
+    console.log('🔄 showSetupIntentForm state changed:', showSetupIntentForm)
+  }, [showSetupIntentForm])
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -342,6 +347,7 @@ export default function RegistrationPurchase({
           
           // Handle case where user needs to set up payment method
           if (errorData.requiresSetupIntent) {
+            console.log('🔄 Showing setup intent form for payment method setup')
             // Show setup intent form
             setShowSetupIntentForm(true)
             setIsLoading(false)

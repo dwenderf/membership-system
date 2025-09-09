@@ -14,6 +14,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { registration_id, discount_code_id } = body
+    
+
 
     if (!registration_id) {
       return NextResponse.json({ error: 'Registration ID is required' }, { status: 400 })
@@ -75,6 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (!userProfile?.stripe_payment_method_id || userProfile.setup_intent_status !== 'succeeded') {
+
+      
       return NextResponse.json({
         error: 'You need to set up a payment method before registering as an alternate',
         requiresSetupIntent: true

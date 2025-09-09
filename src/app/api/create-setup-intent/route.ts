@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
@@ -17,41 +17,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's Stripe customer ID using admin client to bypass RLS
-    const adminSupabase = createAdminClient()
-    const { data: userProfile } = await adminSupabase
-      .from('users')
-      .select('stripe_customer_id, email')
-      .eq('id', user.id)
-      .single()
-
-    if (!userProfile) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
-    }
-
-    let customerId = userProfile.stripe_customer_id
-
-    // Create Stripe customer if doesn't exist
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: userProfile.email,
-        metadata: {
-          supabase_user_id: user.id,
-        },
-      })
-
-      customerId = customer.id
-
-      // Update user profile with customer ID
-      await adminSupabase
-        .from('users')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
-    }
+    // Create Stripe customer for this setup intent
+    const customer = await stripe.customers.create({
+      email: user.email || '',
+      metadata: {
+        supabase_user_id: user.id,
+      },
+    })
 
     // Create Setup Intent
     const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
+      customer: customer.id,
       payment_method_types: ['card'],
       usage: 'off_session', // For future payments
       metadata: {
@@ -59,15 +35,6 @@ export async function POST(request: NextRequest) {
         purpose: 'alternate_registration',
       },
     })
-
-    // Update user profile with setup intent info
-    await adminSupabase
-      .from('users')
-      .update({
-        stripe_setup_intent_id: setupIntent.id,
-        setup_intent_status: 'requires_payment_method',
-      })
-      .eq('id', user.id)
 
     return NextResponse.json({
       clientSecret: setupIntent.client_secret,

@@ -582,7 +582,7 @@ export default function RegistrationPurchase({
                           </div>
                         )}
                         {isAlternateCategory && (
-                          <div className="text-xs text-green-700 mt-1">
+                          <div className="text-xs text-gray-600 mt-1">
                             No cost to register as alternate. You agree to pay ${(categoryPrice / 100).toFixed(2)} if selected for games.
                           </div>
                         )}
@@ -972,35 +972,23 @@ export default function RegistrationPurchase({
       {/* Setup Intent Form Modal */}
       {showSetupIntentForm && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50"
           onClick={closeModal}
         >
           <div 
-            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Setup Payment Method</h3>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <span className="sr-only">Close</span>
-                ✕
-              </button>
-            </div>
-            
             <PaymentMethodSetup
-              showModal={false}
+              showModal={true}
               title="Setup Payment Method"
               description="Save your payment method to register as an alternate."
               registrationName={registration.name}
               alternatePrice={registration.alternate_price}
-              buttonText="Save Payment Method"
+              buttonText="Save Payment Method & Register as Alternate"
               onSuccess={async () => {
                 // Close setup form
                 setShowSetupIntentForm(false)
-                
                 // Now try the alternate registration again
                 try {
                   const response = await fetch('/api/user-alternate-registrations', {
@@ -1013,20 +1001,16 @@ export default function RegistrationPurchase({
                       discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
                     }),
                   })
-
                   if (!response.ok) {
                     const errorData = await response.json()
                     throw new Error(errorData.error || 'Failed to register as alternate')
                   }
-
                   showSuccess(
                     'Alternate Registration Complete!',
                     'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
                   )
-                  
                   // Refresh the page to show updated status
                   setTimeout(() => window.location.reload(), 2000)
-                  
                 } catch (err) {
                   const errorMessage = err instanceof Error ? err.message : 'An error occurred'
                   setError(errorMessage)

@@ -299,13 +299,7 @@ export default async function BrowseRegistrationsPage() {
                 })
 
                 return (
-                  <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg transition-shadow ${
-                    isAlreadyRegistered 
-                      ? 'border-l-4 border-blue-400' 
-                      : hasEligibleMembership 
-                      ? 'border-l-4 border-green-400 hover:shadow-md' 
-                      : 'border-l-4 border-yellow-400 hover:shadow-md'
-                  }`}>
+                  <div key={registration.id} className="bg-white overflow-hidden shadow rounded-lg transition-shadow">
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">

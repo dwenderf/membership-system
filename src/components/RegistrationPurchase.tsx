@@ -996,8 +996,7 @@ export default function RegistrationPurchase({
               description="Save your payment method to register as an alternate."
               registrationName={registration.name}
               alternatePrice={registration.alternate_price}
-              buttonText="Save Payment Method & Register as Alternate"
-              buttonClassName="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition-colors"
+              buttonText="Save Payment Method"
               onSuccess={async () => {
                 // Close setup form
                 setShowSetupIntentForm(false)

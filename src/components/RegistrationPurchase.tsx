@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
-import SetupIntentForm from './SetupIntentForm'
+import PaymentMethodSetup from './PaymentMethodSetup'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -84,7 +84,6 @@ export default function RegistrationPurchase({
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showSetupIntentForm, setShowSetupIntentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null)
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,7 +130,6 @@ export default function RegistrationPurchase({
     setShowPaymentForm(false)
     setShowSetupIntentForm(false)
     setClientSecret(null)
-    setSetupIntentClientSecret(null)
     setPaymentIntentId(null)
     setSelectedCategoryId(null) // Clear selected category
     setDiscountCode('')
@@ -165,7 +163,6 @@ export default function RegistrationPurchase({
     setShowPaymentForm(false)
     setShowSetupIntentForm(false)
     setClientSecret(null)
-    setSetupIntentClientSecret(null)
     setPaymentIntentId(null)
     setSelectedCategoryId(null)
     setDiscountCode('')
@@ -345,32 +342,10 @@ export default function RegistrationPurchase({
           
           // Handle case where user needs to set up payment method
           if (errorData.requiresSetupIntent) {
-            // Create setup intent and show setup form
-            try {
-              const setupResponse = await fetch('/api/create-setup-intent', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              })
-
-              if (!setupResponse.ok) {
-                const setupErrorData = await setupResponse.json()
-                throw new Error(setupErrorData.error || 'Failed to create setup intent')
-              }
-
-              const { clientSecret } = await setupResponse.json()
-              setSetupIntentClientSecret(clientSecret)
-              setShowSetupIntentForm(true)
-              setIsLoading(false)
-              return
-            } catch (setupError) {
-              const setupErrorMessage = setupError instanceof Error ? setupError.message : 'Failed to setup payment method'
-              setError(setupErrorMessage)
-              showError('Setup Error', setupErrorMessage)
-              setIsLoading(false)
-              return
-            }
+            // Show setup intent form
+            setShowSetupIntentForm(true)
+            setIsLoading(false)
+            return
           }
           
           throw new Error(errorData.error || 'Failed to register as alternate')
@@ -989,7 +964,7 @@ export default function RegistrationPurchase({
       </button>
 
       {/* Setup Intent Form Modal */}
-      {showSetupIntentForm && setupIntentClientSecret && (
+      {showSetupIntentForm && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
           onClick={closeModal}
@@ -1009,54 +984,52 @@ export default function RegistrationPurchase({
               </button>
             </div>
             
-            <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
-              <SetupIntentForm
-                registrationName={registration.name}
-                alternatePrice={registration.alternate_price}
-                onSuccess={async () => {
-                  // Close setup form
-                  setShowSetupIntentForm(false)
-                  setSetupIntentClientSecret(null)
-                  
-                  // Now try the alternate registration again
-                  try {
-                    const response = await fetch('/api/user-alternate-registrations', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        registration_id: registration.id,
-                        discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
-                      }),
-                    })
+            <PaymentMethodSetup
+              showModal={false}
+              title="Setup Payment Method"
+              description="Save your payment method to register as an alternate."
+              registrationName={registration.name}
+              alternatePrice={registration.alternate_price}
+              buttonText="Save Payment Method & Register as Alternate"
+              buttonClassName="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition-colors"
+              onSuccess={async () => {
+                // Close setup form
+                setShowSetupIntentForm(false)
+                
+                // Now try the alternate registration again
+                try {
+                  const response = await fetch('/api/user-alternate-registrations', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      registration_id: registration.id,
+                      discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
+                    }),
+                  })
 
-                    if (!response.ok) {
-                      const errorData = await response.json()
-                      throw new Error(errorData.error || 'Failed to register as alternate')
-                    }
-
-                    showSuccess(
-                      'Alternate Registration Complete!',
-                      'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
-                    )
-                    
-                    // Refresh the page to show updated status
-                    setTimeout(() => window.location.reload(), 2000)
-                    
-                  } catch (err) {
-                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-                    setError(errorMessage)
-                    showError('Alternate Registration Error', errorMessage)
+                  if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.error || 'Failed to register as alternate')
                   }
-                }}
-                onError={(error) => {
-                  setError(error)
-                  setShowSetupIntentForm(false)
-                  setSetupIntentClientSecret(null)
-                }}
-              />
-            </Elements>
+
+                  showSuccess(
+                    'Alternate Registration Complete!',
+                    'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
+                  )
+                  
+                  // Refresh the page to show updated status
+                  setTimeout(() => window.location.reload(), 2000)
+                  
+                } catch (err) {
+                  const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                  setError(errorMessage)
+                  showError('Alternate Registration Error', errorMessage)
+                }
+              }}
+              onCancel={closeModal}
+            />
           </div>
         </div>
       )}

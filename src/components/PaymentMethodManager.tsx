@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import PaymentMethodSetup from './PaymentMethodSetup'
 
 interface PaymentMethod {
   id: string
@@ -138,9 +139,19 @@ export default function PaymentMethodManager() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No payment method saved</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            You'll need to save a payment method when registering as an alternate.
+          <p className="mt-1 text-sm text-gray-500 mb-4">
+            Save a payment method to register as an alternate for events.
           </p>
+          
+          <PaymentMethodSetup
+            title="Save Payment Method"
+            description="Save a payment method for alternate registrations and future transactions."
+            buttonText="Add Payment Method"
+            buttonClassName="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+            onSuccess={() => {
+              loadPaymentMethod() // Reload to show the new payment method
+            }}
+          />
         </div>
       )}
     </div>

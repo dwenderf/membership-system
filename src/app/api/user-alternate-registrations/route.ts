@@ -1,13 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -62,17 +62,22 @@ export async function POST(request: NextRequest) {
       validatedDiscountCodeId = discount_code_id
     }
 
-    // Check if user has a saved payment method (Setup Intent)
-    const { data: userProfile } = await supabase
+    // Check if user has a saved payment method (Setup Intent) using admin client to bypass RLS
+    const adminSupabase = createAdminClient()
+    const { data: userProfile } = await adminSupabase
       .from('users')
       .select('stripe_payment_method_id, setup_intent_status')
       .eq('id', user.id)
       .single()
 
+    if (!userProfile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
+    }
+
     if (!userProfile?.stripe_payment_method_id || userProfile.setup_intent_status !== 'succeeded') {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'You need to set up a payment method before registering as an alternate',
-        requiresSetupIntent: true 
+        requiresSetupIntent: true
       }, { status: 400 })
     }
 
@@ -92,8 +97,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to register as alternate' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       alternateRegistration,
       message: 'Successfully registered as alternate'
     })
@@ -107,10 +112,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

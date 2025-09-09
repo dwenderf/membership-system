@@ -1,24 +1,25 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: process.env.STRIPE_API_VERSION as Stripe.LatestApiVersion,
 })
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's Stripe customer ID
-    const { data: userProfile } = await supabase
+    // Get user's Stripe customer ID using admin client to bypass RLS
+    const adminSupabase = createAdminClient()
+    const { data: userProfile } = await adminSupabase
       .from('users')
       .select('stripe_customer_id, email')
       .eq('id', user.id)
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       customerId = customer.id
 
       // Update user profile with customer ID
-      await supabase
+      await adminSupabase
         .from('users')
         .update({ stripe_customer_id: customerId })
         .eq('id', user.id)
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Update user profile with setup intent info
-    await supabase
+    await adminSupabase
       .from('users')
       .update({
         stripe_setup_intent_id: setupIntent.id,

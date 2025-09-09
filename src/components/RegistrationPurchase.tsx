@@ -1093,7 +1093,6 @@ export default function RegistrationPurchase({
                     setShowPaymentForm(false)
                     setShowSetupIntentForm(false)
                     setClientSecret(null)
-                    setSetupIntentClientSecret(null)
                     // Reset form state
                     setSelectedCategoryId(null)
                     setDiscountCode('')

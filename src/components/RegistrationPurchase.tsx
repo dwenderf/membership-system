@@ -752,10 +752,27 @@ export default function RegistrationPurchase({
                 </span>
               </div>
             )}
-            <div className="flex justify-between border-t pt-2 font-medium">
-              <span className="text-gray-900">Total:</span>
-              <span className="text-gray-900">${(originalAmount / 100).toFixed(2)}</span>
-            </div>
+            {discountValidation?.isValid ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="text-gray-900">${(originalAmount / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-green-600">
+                  <span>Discount ({discountValidation.discountCode.code}):</span>
+                  <span>-${(discountAmount / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 font-medium">
+                  <span className="text-gray-900">Total:</span>
+                  <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between border-t pt-2 font-medium">
+                <span className="text-gray-900">Total:</span>
+                <span className="text-gray-900">${(originalAmount / 100).toFixed(2)}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

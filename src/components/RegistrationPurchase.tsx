@@ -760,15 +760,7 @@ export default function RegistrationPurchase({
         </div>
       )}
 
-      {/* Select Category Message - Only show if no category selected */}
-      {!selectedCategoryId && (
-        <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
-          <p className="text-sm text-blue-800">
-            <span className="font-medium">Select a category above</span> to see registration details.
-          </p>
-        </div>
-      )}
-
+      
       {/* Season Coverage Warning */}
       {shouldShowSeasonWarning && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">

@@ -977,17 +977,26 @@ export default function RegistrationPurchase({
       {/* Setup Intent Form Modal */}
       {showSetupIntentForm && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={closeModal}
         >
           <div 
             className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-medium text-gray-900">Setup Payment Method</h3>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Save your payment method to register as an alternate.</p>
             <PaymentMethodSetup
-              showModal={true}
-              title="Setup Payment Method"
-              description="Save your payment method to register as an alternate."
+              showModal={false}
               registrationName={registration.name}
               alternatePrice={registration.alternate_price}
               buttonText="Save Payment Method & Register as Alternate"
@@ -1022,7 +1031,6 @@ export default function RegistrationPurchase({
                   showError('Alternate Registration Error', errorMessage)
                 }
               }}
-              onCancel={closeModal}
             />
           </div>
         </div>
@@ -1031,7 +1039,7 @@ export default function RegistrationPurchase({
       {/* Payment Form Modal */}
       {showPaymentForm && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={closeModal}
         >
           <div 

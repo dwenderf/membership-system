@@ -146,6 +146,7 @@ export default function PaymentMethodManager() {
           <PaymentMethodSetup
             title="Save Payment Method"
             description="Save a payment method for alternate registrations and future transactions."
+            showModal={false}
             buttonText="Add Payment Method"
             buttonClassName="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
             onSuccess={() => {

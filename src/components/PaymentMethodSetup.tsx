@@ -111,7 +111,7 @@ export default function PaymentMethodSetup({
   // Modal version with transparent background
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={handleClose}
     >
       <div 

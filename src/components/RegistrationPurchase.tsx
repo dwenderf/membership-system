@@ -44,15 +44,11 @@ interface Registration {
   id: string
   name: string
   type: string
-  is_active: boolean
-  presale_start_at?: string | null
-  regular_start_at?: string | null
-  registration_end_at?: string | null
-  presale_code?: string | null
-  allow_lgbtq_presale?: boolean
-  allow_alternates?: boolean
   alternate_price?: number | null
   alternate_accounting_code?: string | null
+  allow_alternates?: boolean
+  allow_lgbtq_presale?: boolean
+  presale_code?: string | null
   season?: {
     name: string
     start_date: string

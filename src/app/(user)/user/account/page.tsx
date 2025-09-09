@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
+import dynamic from 'next/dynamic'
+
+const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -188,6 +191,9 @@ export default function AccountPage() {
           </dl>
         </div>
       </div>
+
+      {/* Payment Methods */}
+      <PaymentMethodsSection />
 
       {/* Account Actions */}
       <div className="bg-white shadow rounded-lg">

@@ -65,7 +65,7 @@ export async function GET(
         id,
         user_id,
         discount_code_id,
-        registered_at,
+        created_at,
         users (
           id,
           first_name,
@@ -171,7 +171,7 @@ export async function GET(
         firstName: user?.first_name,
         lastName: user?.last_name,
         email: user?.email,
-        registeredAt: alternate.registered_at,
+        registeredAt: alternate.created_at,
         hasValidPaymentMethod,
         isAlreadySelected: selectedUserIds.has(user?.id),
         discountCode: discountCode ? {
@@ -198,7 +198,7 @@ export async function GET(
         return a.isAlreadySelected ? 1 : -1
       }
       
-      // Then by registration date (earliest first)
+      // Then by registration date (earliest first)  
       return new Date(a.registeredAt).getTime() - new Date(b.registeredAt).getTime()
     })
 

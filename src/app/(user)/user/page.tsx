@@ -73,6 +73,31 @@ export default async function UserDashboardPage() {
     .order('created_at', { ascending: false })
     .limit(5)
 
+  // Get user's alternate selections (games they've been selected for and billed)
+  const { data: userAlternateSelections } = await supabase
+    .from('alternate_selections')
+    .select(`
+      *,
+      alternate_registration:alternate_registrations(
+        id,
+        game_description,
+        game_date,
+        registration:registrations(
+          id,
+          name,
+          season:seasons(name, start_date, end_date)
+        )
+      ),
+      payment:payments(
+        id,
+        amount,
+        created_at
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('selected_at', { ascending: false })
+    .limit(10)
+
   // Get user's current waitlist entries
   const { data: userWaitlistEntries } = await supabase
     .from('waitlists')
@@ -446,6 +471,7 @@ export default async function UserDashboardPage() {
         {/* Discount Usage */}
         <DiscountUsage />
       </div>
+
 
       
     </div>

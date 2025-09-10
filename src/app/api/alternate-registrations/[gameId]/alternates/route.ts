@@ -77,8 +77,7 @@ export async function GET(
         discount_codes (
           id,
           code,
-          discount_type,
-          discount_value,
+          percentage,
           category:discount_categories (
             name,
             max_discount_per_user_per_season
@@ -145,12 +144,8 @@ export async function GET(
       if (discountCode && game.registrations) {
         const basePrice = game.registrations.alternate_price || 0
         
-        // Calculate discount amount
-        if (discountCode.discount_type === 'percentage') {
-          discountAmount = Math.round((basePrice * discountCode.discount_value) / 100)
-        } else {
-          discountAmount = Math.min(discountCode.discount_value, basePrice)
-        }
+        // Calculate discount amount (discount codes are always percentage-based)
+        discountAmount = Math.round((basePrice * discountCode.percentage) / 100)
 
         // Check usage limits
         if (discountCode.category?.max_discount_per_user_per_season) {
@@ -182,8 +177,7 @@ export async function GET(
         discountCode: discountCode ? {
           id: discountCode.id,
           code: discountCode.code,
-          discountType: discountCode.discount_type,
-          discountValue: discountCode.discount_value,
+          percentage: discountCode.percentage,
           discountAmount,
           categoryName: discountCode.category?.name,
           isOverLimit,

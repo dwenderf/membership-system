@@ -334,7 +334,7 @@ export default function RegistrationPurchase({
           },
           body: JSON.stringify({
             registration_id: registration.id,
-            discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
+            discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
           }),
         })
 
@@ -1012,7 +1012,7 @@ export default function RegistrationPurchase({
                     },
                     body: JSON.stringify({
                       registration_id: registration.id,
-                      discount_code_id: discountValidation?.isValid ? discountValidation.discountCodeId : null,
+                      discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
                     }),
                   })
                   if (!response.ok) {

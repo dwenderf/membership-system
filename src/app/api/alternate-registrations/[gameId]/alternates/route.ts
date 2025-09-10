@@ -81,7 +81,7 @@ export async function GET(
           discount_value,
           category:discount_categories (
             name,
-            usage_limit_per_user_per_season
+            max_discount_per_user_per_season
           )
         )
       `)
@@ -153,10 +153,10 @@ export async function GET(
         }
 
         // Check usage limits
-        if (discountCode.category?.usage_limit_per_user_per_season) {
+        if (discountCode.category?.max_discount_per_user_per_season) {
           const usageKey = `${user?.id}-${discountCode.category.id}`
           const currentUsage = usageByUserAndCategory.get(usageKey) || 0
-          const limit = discountCode.category.usage_limit_per_user_per_season
+          const limit = discountCode.category.max_discount_per_user_per_season
           
           isOverLimit = (currentUsage + discountAmount) > limit
           usageStatus = {

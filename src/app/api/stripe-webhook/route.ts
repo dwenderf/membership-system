@@ -1022,6 +1022,7 @@ export async function POST(request: NextRequest) {
             .from('users')
             .update({
               stripe_payment_method_id: setupIntent.payment_method as string,
+              stripe_setup_intent_id: setupIntent.id,
               setup_intent_status: 'succeeded',
               payment_method_updated_at: new Date().toISOString()
             })
@@ -1039,6 +1040,47 @@ export async function POST(request: NextRequest) {
           })
         } catch (error) {
           console.error('❌ Error processing setup_intent.succeeded:', error)
+          throw error
+        }
+        break
+      }
+
+      case 'setup_intent.canceled': {
+        const setupIntent = event.data.object as Stripe.SetupIntent
+        console.log('🔄 Processing setup_intent.canceled:', {
+          setupIntentId: setupIntent.id,
+          status: setupIntent.status,
+          metadata: setupIntent.metadata
+        })
+
+        const userId = setupIntent.metadata?.supabase_user_id || setupIntent.metadata?.userId
+        if (!userId) {
+          console.error('❌ Setup Intent (canceled) missing userId in metadata:', setupIntent.id)
+          break
+        }
+
+        try {
+          // Clear setup intent info on user (do not touch existing payment method)
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              stripe_setup_intent_id: null,
+              setup_intent_status: 'canceled',
+              payment_method_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+
+          if (updateError) {
+            console.error('❌ Failed to update user on setup_intent.canceled:', updateError)
+            throw updateError
+          }
+
+          console.log('✅ Successfully updated user on setup_intent.canceled:', {
+            userId,
+            setupIntentId: setupIntent.id
+          })
+        } catch (error) {
+          console.error('❌ Error processing setup_intent.canceled:', error)
           throw error
         }
         break

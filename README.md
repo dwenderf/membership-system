@@ -1381,6 +1381,9 @@ Select these specific events for each webhook:
 - `payment_intent.succeeded` - When payment completes successfully
 - `payment_intent.payment_failed` - When payment fails  
 - `payment_intent.canceled` - When payment is canceled (timeout/user abandonment)
+- `setup_intent.succeeded` - When a payment method setup completes successfully
+- `setup_intent.setup_failed` - When a payment method setup fails
+- `setup_intent.canceled` - When a payment method setup is canceled (timeout/user abandonment)
 - `charge.refunded` - When a refund is processed (for refund system)
 - `charge.updated` - When balance transaction becomes available (for accurate fee tracking)
 
@@ -1388,7 +1391,7 @@ Select these specific events for each webhook:
 - Each webhook endpoint gets its own signing secret (`STRIPE_WEBHOOK_SECRET`)
 - Use production webhook only with live Stripe keys
 - Use development webhook with test Stripe keys
-- Only select these five events for each webhook
+- Select the events listed above (payment_intent.*, setup_intent.*, charge.refunded, charge.updated) for each webhook
 
 **Note:** The `payment_intent.canceled` event helps track abandoned payments for analytics and cleanup, though the webhook handler will need to be updated to process this event.
 

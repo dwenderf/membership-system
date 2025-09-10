@@ -23,6 +23,9 @@ export default function SetupIntentForm({
   const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
   const [postalCode, setPostalCode] = useState('')
+  const [cardNumberComplete, setCardNumberComplete] = useState(false)
+  const [cardExpiryComplete, setCardExpiryComplete] = useState(false)
+  const [cardCvcComplete, setCardCvcComplete] = useState(false)
   const { showSuccess, showError } = useToast()
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -128,6 +131,7 @@ export default function SetupIntentForm({
         <div className="space-y-3">
           <div className="border border-gray-300 rounded-md p-3 bg-white">
             <CardNumberElement
+              onChange={(e) => setCardNumberComplete(e.complete)}
               options={{
                 style: {
                   base: {
@@ -147,6 +151,7 @@ export default function SetupIntentForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="border border-gray-300 rounded-md p-3 bg-white">
               <CardExpiryElement
+                onChange={(e) => setCardExpiryComplete(e.complete)}
                 options={{
                   style: {
                     base: { fontSize: '16px', color: '#424770' },
@@ -157,6 +162,7 @@ export default function SetupIntentForm({
             </div>
             <div className="border border-gray-300 rounded-md p-3 bg-white">
               <CardCvcElement
+                onChange={(e) => setCardCvcComplete(e.complete)}
                 options={{
                   style: {
                     base: { fontSize: '16px', color: '#424770' },
@@ -184,7 +190,7 @@ export default function SetupIntentForm({
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={!stripe || isProcessing}
+        disabled={!stripe || isProcessing || !cardNumberComplete || !cardExpiryComplete || !cardCvcComplete || postalCode.trim().length === 0}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition-colors"
       >
         {isProcessing ? 'Saving Payment Method...' : buttonText}

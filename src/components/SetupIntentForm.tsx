@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useStripe, useElements, CardElement } from '@stripe/react-stripe-js'
+import { useStripe, useElements, CardNumberElement, CardExpiryElement, CardCvcElement } from '@stripe/react-stripe-js'
 import { useToast } from '@/contexts/ToastContext'
 
 interface SetupIntentFormProps {
@@ -22,6 +22,7 @@ export default function SetupIntentForm({
   const stripe = useStripe()
   const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [postalCode, setPostalCode] = useState('')
   const { showSuccess, showError } = useToast()
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -33,9 +34,9 @@ export default function SetupIntentForm({
 
     setIsProcessing(true)
 
-    const cardElement = elements.getElement(CardElement)
-    if (!cardElement) {
-      onError('Card element not found')
+    const cardNumberElement = elements.getElement(CardNumberElement)
+    if (!cardNumberElement) {
+      onError('Card details not found')
       setIsProcessing(false)
       return
     }
@@ -62,7 +63,12 @@ export default function SetupIntentForm({
         clientSecret,
         {
           payment_method: {
-            card: cardElement,
+            card: cardNumberElement,
+            billing_details: {
+              address: {
+                postal_code: postalCode || undefined,
+              },
+            },
           },
         }
       )
@@ -103,21 +109,14 @@ export default function SetupIntentForm({
               <h4 className="text-sm font-medium text-blue-800 mb-2">
                 Payment Authorization for Alternate Registration
               </h4>
-              <div className="text-sm text-blue-700 space-y-2">
+              <div className="text-sm text-blue-700 space-y-1">
                 <p>
-                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate for any games.</strong>
+                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate.</strong>
                 </p>
-                <div className="bg-blue-100 rounded p-3 mt-3">
-                  <p className="font-medium">For {registrationName}:</p>
-                  <p>
-                    • You'll only be charged if selected for specific games
-                    {alternatePrice && (
-                      <>• Charge amount: <strong>${(alternatePrice / 100).toFixed(2)} per game</strong></>
-                    )}
-                  </p>
-                  <p>• You'll receive email notification when selected and charged</p>
-                  <p>• You can remove this authorization anytime from your account settings</p>
-                </div>
+                <p>You can remove this authorization anytime from your account settings.</p>
+                {alternatePrice !== null && (
+                  <p>Charge amount: ${(alternatePrice / 100).toFixed(2)} per game</p>
+                )}
               </div>
             </div>
           </div>
@@ -129,23 +128,59 @@ export default function SetupIntentForm({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Payment Method
         </label>
-        <div className="border border-gray-300 rounded-md p-3 bg-white">
-          <CardElement
-            options={{
-              style: {
-                base: {
-                  fontSize: '16px',
-                  color: '#424770',
-                  '::placeholder': {
-                    color: '#aab7c4',
+        <div className="space-y-3">
+          <div className="border border-gray-300 rounded-md p-3 bg-white">
+            <CardNumberElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    '::placeholder': {
+                      color: '#aab7c4',
+                    },
+                  },
+                  invalid: {
+                    color: '#9e2146',
                   },
                 },
-                invalid: {
-                  color: '#9e2146',
-                },
-              },
-            }}
-          />
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="border border-gray-300 rounded-md p-3 bg-white">
+              <CardExpiryElement
+                options={{
+                  style: {
+                    base: { fontSize: '16px', color: '#424770' },
+                    invalid: { color: '#9e2146' },
+                  },
+                }}
+              />
+            </div>
+            <div className="border border-gray-300 rounded-md p-3 bg-white">
+              <CardCvcElement
+                options={{
+                  style: {
+                    base: { fontSize: '16px', color: '#424770' },
+                    invalid: { color: '#9e2146' },
+                  },
+                }}
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                placeholder="Postal Code"
+                className="w-full border border-gray-300 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+          <div className="text-xs text-gray-500">
+            Your payment information is securely processed by Stripe. We never store your card details.
+          </div>
         </div>
       </div>
 
@@ -158,9 +193,6 @@ export default function SetupIntentForm({
         {isProcessing ? 'Saving Payment Method...' : buttonText}
       </button>
 
-      <div className="text-xs text-gray-500 text-center">
-        Your payment information is securely processed by Stripe. We never store your card details.
-      </div>
-    </form>
+          </form>
   )
 }

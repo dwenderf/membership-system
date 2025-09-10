@@ -114,7 +114,7 @@ export default function PaymentMethodManager() {
             <button
               onClick={handleRemoveClick}
               disabled={removing}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
             >
               {removing ? 'Removing...' : 'Remove'}
             </button>
@@ -161,7 +161,10 @@ export default function PaymentMethodManager() {
         message={
           <div className="space-y-3">
             <p>
-              Are you sure you want to remove your saved payment method? This action cannot be undone.
+              Are you sure you want to remove your saved payment method?
+            </p>
+            <p>
+              Removing your payment method will also remove you from any teams you are registered for as an alternate.
             </p>
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
               <div className="flex items-start">

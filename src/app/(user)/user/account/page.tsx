@@ -64,11 +64,19 @@ export default function AccountPage() {
 
       {/* Profile Information */}
       <div className="bg-white shadow rounded-lg mb-6">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">Profile Information</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Your personal details and contact information
-          </p>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-start">
+          <div>
+            <h2 className="text-lg font-medium text-gray-900">Profile Information</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Your personal details and contact information
+            </p>
+          </div>
+          <a
+            href="/user/account/edit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Edit Profile
+          </a>
         </div>
         <div className="px-6 py-4">
           <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
@@ -200,50 +208,16 @@ export default function AccountPage() {
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-medium text-gray-900">Account Actions</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Manage your account settings and preferences
+            Manage your account settings
           </p>
         </div>
         <div className="px-6 py-4">
-          <div className="space-y-4">
-            {/* Edit Profile */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">Edit Profile</h3>
-                <p className="text-sm text-gray-500">Update your personal information</p>
-              </div>
-              <a
-                href="/user/account/edit"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors min-w-[120px] text-center"
-              >
-                Edit Profile
-              </a>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900">Sign Out</h3>
+              <p className="text-sm text-gray-500">Sign out of your account</p>
             </div>
-
-            {/* Email Preferences - Coming Soon */}
-            <div className="flex items-center justify-between border-t pt-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">Email Preferences</h3>
-                <p className="text-sm text-gray-500">Manage your notification settings</p>
-              </div>
-              <button
-                disabled
-                className="bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed min-w-[120px] text-center"
-              >
-                Coming Soon
-              </button>
-            </div>
-
-            {/* Sign Out */}
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">Sign Out</h3>
-                  <p className="text-sm text-gray-500">Sign out of your account</p>
-                </div>
-                <SignOutButton />
-              </div>
-            </div>
-
+            <SignOutButton />
           </div>
         </div>
       </div>

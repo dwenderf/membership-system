@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
+import ConfirmationDialog from './ConfirmationDialog'
 
 interface PaymentMethod {
   id: string
@@ -19,6 +20,7 @@ export default function PaymentMethodsSection() {
   const [loading, setLoading] = useState(true)
   const [removing, setRemoving] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [alternateRegs, setAlternateRegs] = useState<any[]>([])
   const { showSuccess, showError } = useToast()
 
@@ -74,18 +76,12 @@ export default function PaymentMethodsSection() {
     }).length
   }, [alternateRegs])
 
-  const removePaymentMethod = async () => {
+  const handleRemoveClick = () => {
+    setShowConfirmDialog(true)
+  }
+
+  const handleConfirmRemove = async () => {
     if (!paymentMethod) return
-
-    // Build confirmation message with warning if applicable
-    const warning = activeAlternateCount > 0
-      ? `\n\nWarning: You currently have ${activeAlternateCount} active alternate registration${activeAlternateCount !== 1 ? 's' : ''}. Removing your payment method will remove you from those alternates.`
-      : ''
-
-    const confirmed = window.confirm(
-      `Remove saved payment method?${warning}\n\nThis action cannot be undone.`
-    )
-    if (!confirmed) return
 
     setRemoving(true)
     try {
@@ -106,6 +102,7 @@ export default function PaymentMethodsSection() {
       // Optimistically update UI; webhook will sync DB
       setPaymentMethod(null)
       setAlternateRegs([])
+      setShowConfirmDialog(false)
       // Optionally refresh once after webhook has time to process
       setTimeout(() => { void loadPaymentMethod(); void loadAlternateRegistrations() }, 1000)
     } catch (err) {
@@ -143,7 +140,7 @@ export default function PaymentMethodsSection() {
       <div className="px-6 py-6">
         {paymentMethod ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="flex-shrink-0">
                   <svg className="h-8 w-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
@@ -160,9 +157,9 @@ export default function PaymentMethodsSection() {
                 </div>
               </div>
               <button
-                onClick={removePaymentMethod}
+                onClick={handleRemoveClick}
                 disabled={removing}
-                className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {removing ? 'Removing…' : 'Remove'}
               </button>
@@ -224,6 +221,36 @@ export default function PaymentMethodsSection() {
           </div>
         )}
       </div>
+
+      <ConfirmationDialog
+        isOpen={showConfirmDialog}
+        title="Remove Payment Method?"
+        message={
+          <div className="space-y-3">
+            <p>
+              Are you sure you want to remove your saved payment method? This action cannot be undone.
+            </p>
+            {activeAlternateCount > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <div className="flex items-start">
+                  <svg className="h-5 w-5 text-orange-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-sm text-orange-700">
+                    <p className="font-medium">Warning:</p>
+                    <p>You currently have {activeAlternateCount} active alternate registration{activeAlternateCount !== 1 ? 's' : ''}. Removing your payment method will also remove you from those alternate lists.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        }
+        confirmText="Remove Payment Method"
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setShowConfirmDialog(false)}
+        isLoading={removing}
+        variant="danger"
+      />
     </div>
   )
 }

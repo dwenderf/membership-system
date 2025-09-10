@@ -67,10 +67,17 @@ export default async function BrowseRegistrationsPage() {
     .eq('payment_status', 'paid')
     .gte('valid_until', new Date().toISOString().split('T')[0])
 
-  // Get user's existing registrations to filter out
+  // Get user's existing registrations with category details
   const { data: userRegistrations } = await supabase
     .from('user_registrations')
-    .select('registration_id')
+    .select(`
+      registration_id,
+      registration_category_id,
+      registration_category:registration_categories(
+        id,
+        categories:category_id(name)
+      )
+    `)
     .eq('user_id', user.id)
     .eq('payment_status', 'paid')
 
@@ -287,8 +294,11 @@ export default async function BrowseRegistrationsPage() {
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
                 const registrationStatus = getRegistrationStatus(registration)
 
+                // Find which category the user is registered for (if any)
+                const userRegisteredCategory = userRegistrations?.find(ur => ur.registration_id === registration.id)
+
                 // Sort registration_categories by sort_order, then by category name
-                const sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
+                let sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
                   if (a.sort_order !== b.sort_order) {
                     return (a.sort_order ?? 9999) - (b.sort_order ?? 9999)
                   }
@@ -297,6 +307,14 @@ export default async function BrowseRegistrationsPage() {
                   const nameB = b.categories?.name?.toLowerCase() || ''
                   return nameA.localeCompare(nameB)
                 })
+
+                // If user is already registered for a category, only show that category + alternates
+                if (userRegisteredCategory) {
+                  sortedCategories = sortedCategories.filter((cat: any) => 
+                    cat.id === userRegisteredCategory.registration_category_id || 
+                    cat.categories?.name?.toLowerCase() === 'alternate'
+                  )
+                }
 
                 return (
                   <div key={registration.id} className="bg-white overflow-hidden shadow rounded-lg transition-shadow">
@@ -322,11 +340,6 @@ export default async function BrowseRegistrationsPage() {
                             {registrationStatus === 'coming_soon' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                                 Coming Soon
-                              </span>
-                            )}
-                            {isAlreadyRegistered && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                Registered
                               </span>
                             )}
                           </div>

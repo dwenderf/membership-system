@@ -568,7 +568,7 @@ export default function RegistrationPurchase({
                           {categoryName}
                           {isUnavailableDueToExistingRegistration && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              {category.id === 'alternate' ? 'Registered as Alternate' : 'Already Registered'}
+                              Registered
                             </span>
                           )}
                         </div>
@@ -964,8 +964,8 @@ export default function RegistrationPurchase({
       >
         {isLoading ? 'Processing...' : 
          !selectedCategoryId ? 'Select Category to Continue' :
-         (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Already Registered' :
-         (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Already Registered as Alternate' :
+         (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Registered' :
+         (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Registered' :
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :

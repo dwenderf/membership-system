@@ -106,7 +106,7 @@ export default async function UserRegistrationsPage() {
         alternate_price,
         season:seasons(name, start_date, end_date)
       ),
-      discount_code:discount_codes(code, discount_amount, discount_type)
+      discount_code:discount_codes(code, percentage)
     `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
@@ -136,7 +136,7 @@ export default async function UserRegistrationsPage() {
       ),
       payment:payments(
         id,
-        amount,
+        total_amount,
         created_at
       )
     `)
@@ -334,7 +334,7 @@ export default async function UserRegistrationsPage() {
                           </p>
                           {alternateReg.discount_code && (
                             <p className="text-xs text-green-600">
-                              Discount: {alternateReg.discount_code.code}
+                              Discount: {alternateReg.discount_code.code} ({alternateReg.discount_code.percentage}%)
                             </p>
                           )}
                         </div>

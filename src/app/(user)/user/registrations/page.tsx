@@ -111,13 +111,10 @@ export default async function UserRegistrationsPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  // Debug: Log any errors
+  // Log errors only
   if (alternateRegsError) {
     console.error('Error fetching alternate registrations:', alternateRegsError)
   }
-  console.log('User ID:', user.id)
-  console.log('Raw alternate registrations data:', userAlternateRegistrations)
-  console.log('Number of alternate registrations:', userAlternateRegistrations?.length || 0)
 
   // Get user's alternate selections (games they've been selected for and billed)
   const { data: userAlternateSelections, error: alternateSelectionsError } = await supabase
@@ -143,12 +140,10 @@ export default async function UserRegistrationsPage() {
     .eq('user_id', user.id)
     .order('selected_at', { ascending: false })
 
-  // Debug: Log any errors and data
+  // Log errors only
   if (alternateSelectionsError) {
     console.error('Error fetching alternate selections:', alternateSelectionsError)
   }
-  console.log('Alternate registrations data:', userAlternateRegistrations)
-  console.log('Alternate selections data:', userAlternateSelections)
 
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
@@ -185,14 +180,9 @@ export default async function UserRegistrationsPage() {
   // Split alternate registrations into current and past
   const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
     const season = ar.registration?.season
-    if (!season) {
-      console.log('Alternate registration missing season:', ar)
-      return false
-    }
+    if (!season) return false
     const endDate = new Date(season.end_date)
-    const now = new Date()
-    console.log(`Checking alternate registration ${ar.registration?.name}: end date ${endDate.toISOString()} vs now ${now.toISOString()}`, endDate >= now)
-    return endDate >= now
+    return endDate >= new Date()
   }) || []
 
   const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
@@ -201,9 +191,6 @@ export default async function UserRegistrationsPage() {
     const endDate = new Date(season.end_date)
     return endDate < new Date()
   }) || []
-
-  console.log('Current alternate registrations:', currentAlternateRegistrations.length)
-  console.log('Past alternate registrations:', pastAlternateRegistrations.length)
 
   return (
     <div className="px-4 py-6 sm:px-0">

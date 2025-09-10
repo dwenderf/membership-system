@@ -114,10 +114,7 @@ export default function SetupIntentForm({
                   <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate.</strong>
                 </p>
                 <p>You can remove this authorization anytime from your account settings.</p>
-                {alternatePrice !== null && (
-                  <p>Charge amount: ${(alternatePrice / 100).toFixed(2)} per game</p>
-                )}
-              </div>
+                              </div>
             </div>
           </div>
         </div>

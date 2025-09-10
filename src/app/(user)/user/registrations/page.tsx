@@ -220,17 +220,6 @@ export default async function UserRegistrationsPage() {
                             {userRegistration.registration?.season?.name}
                           </p>
                         </div>
-                        <div className="ml-4 flex-shrink-0">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            userRegistration.payment_status === 'paid' 
-                              ? 'bg-green-100 text-green-800'
-                              : userRegistration.payment_status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {userRegistration.payment_status}
-                          </span>
-                        </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-900">
@@ -242,6 +231,11 @@ export default async function UserRegistrationsPage() {
                       </div>
                     </div>
                     <div className="mt-2">
+                      {userRegistration.registration_category && (
+                        <p className="text-sm text-gray-600">
+                          Category: {getCategoryDisplayName(userRegistration.registration_category)}
+                        </p>
+                      )}
                       <p className="text-sm text-gray-600">
                         Type: {userRegistration.registration?.type}
                       </p>
@@ -305,11 +299,6 @@ export default async function UserRegistrationsPage() {
                             <p className="text-sm text-gray-600">
                               {alternateReg.registration?.season?.name}
                             </p>
-                          </div>
-                          <div className="ml-4 flex-shrink-0">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Alternate
-                            </span>
                           </div>
                         </div>
                         <div className="text-right">

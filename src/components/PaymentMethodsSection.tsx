@@ -22,18 +22,21 @@ export default function PaymentMethodsSection() {
   const [alternateRegs, setAlternateRegs] = useState<any[]>([])
   const { showSuccess, showError } = useToast()
 
-  const loadPaymentMethod = async () => {
+  const loadPaymentMethod = async (): Promise<PaymentMethod | null> => {
     try {
       const response = await fetch('/api/user-payment-method')
       if (response.ok) {
         const data = await response.json()
         setPaymentMethod(data.paymentMethod)
+        return data.paymentMethod
       } else {
         setPaymentMethod(null)
+        return null
       }
     } catch (error) {
       console.error('Error loading payment method:', error)
       setPaymentMethod(null)
+      return null
     }
   }
 
@@ -100,8 +103,11 @@ export default function PaymentMethodsSection() {
         : 'Your payment method was removed successfully.'
       )
 
-      // Refresh data
-      await Promise.all([loadPaymentMethod(), loadAlternateRegistrations()])
+      // Optimistically update UI; webhook will sync DB
+      setPaymentMethod(null)
+      setAlternateRegs([])
+      // Optionally refresh once after webhook has time to process
+      setTimeout(() => { void loadPaymentMethod(); void loadAlternateRegistrations() }, 1000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       showError('Removal Failed', message)
@@ -205,10 +211,11 @@ export default function PaymentMethodsSection() {
                   title="Save Payment Method"
                   description="Save a payment method for alternate registrations and future transactions."
                   buttonText="Save Payment Method"
-                  onSuccess={async () => {
+                  onSuccess={() => {
                     setShowSetup(false)
-                    await loadPaymentMethod()
                     showSuccess('Payment Method Saved', 'Your payment method was saved successfully.')
+                    // Allow webhook to persist, then refresh once
+                    setTimeout(() => { void loadPaymentMethod() }, 1000)
                   }}
                   onCancel={() => setShowSetup(false)}
                 />

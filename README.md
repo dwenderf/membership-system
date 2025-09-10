@@ -1383,7 +1383,7 @@ Select these specific events for each webhook:
 - `payment_intent.canceled` - When payment is canceled (timeout/user abandonment)
 - `setup_intent.succeeded` - When a payment method setup completes successfully
 - `setup_intent.setup_failed` - When a payment method setup fails
-- `setup_intent.canceled` - When a payment method setup is canceled (timeout/user abandonment)
+- `payment_method.detached` - When a payment method removed (user revokes payment setup)
 - `charge.refunded` - When a refund is processed (for refund system)
 - `charge.updated` - When balance transaction becomes available (for accurate fee tracking)
 

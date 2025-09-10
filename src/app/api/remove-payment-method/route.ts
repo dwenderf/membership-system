@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
@@ -9,6 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
     
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -18,7 +19,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get user's payment method info
-    const { data: userProfile } = await supabase
+    const { data: userProfile } = await adminSupabase
       .from('users')
       .select('stripe_payment_method_id')
       .eq('id', user.id)
@@ -31,33 +32,7 @@ export async function DELETE(request: NextRequest) {
     // Detach payment method from Stripe
     await stripe.paymentMethods.detach(userProfile.stripe_payment_method_id)
 
-    // Remove all alternate registrations for this user
-    const { error: deleteAlternatesError } = await supabase
-      .from('user_alternate_registrations')
-      .delete()
-      .eq('user_id', user.id)
-
-    if (deleteAlternatesError) {
-      console.error('Error removing alternate registrations:', deleteAlternatesError)
-      // Continue anyway - payment method removal is more important
-    }
-
-    // Update user profile to remove payment method info
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        stripe_payment_method_id: null,
-        stripe_setup_intent_id: null,
-        setup_intent_status: null,
-        payment_method_updated_at: null
-      })
-      .eq('id', user.id)
-
-    if (updateError) {
-      console.error('Error updating user profile:', updateError)
-      return NextResponse.json({ error: 'Failed to update user profile' }, { status: 500 })
-    }
-
+    // Rely on webhook 'payment_method.detached' to clear DB fields and remove alternates
     return NextResponse.json({ success: true })
 
   } catch (error) {

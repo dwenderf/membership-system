@@ -81,6 +81,17 @@ export default function SetupIntentForm({
       }
 
       if (setupIntent?.status === 'succeeded') {
+        // Persist immediately to avoid relying on webhook timing
+        try {
+          await fetch('/api/confirm-setup-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ setupIntentId: setupIntent.id })
+          })
+        } catch (persistErr) {
+          console.warn('Non-blocking: failed to confirm setup intent inline', persistErr)
+        }
+
         showSuccess(
           'Payment Method Saved!',
           'Your payment method has been securely saved for future alternate registrations.'

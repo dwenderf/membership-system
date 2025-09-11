@@ -28,16 +28,30 @@ export class AlternatePaymentService {
       const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
-      // Get user's payment method
+      // Get user's payment method and customer
       const { data: user, error: userError } = await supabase
         .from('users')
-        .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name')
+        .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name, stripe_customer_id')
         .eq('id', userId)
         .single()
 
       if (userError || !user) {
         throw new Error('User not found')
       }
+
+      // Debug logging to see what we actually got
+      logger.logPaymentProcessing(
+        'user-payment-data-debug',
+        'User payment data retrieved',
+        {
+          userId,
+          hasPaymentMethod: !!user.stripe_payment_method_id,
+          setupIntentStatus: user.setup_intent_status,
+          hasCustomerId: !!user.stripe_customer_id,
+          customerId: user.stripe_customer_id
+        },
+        'info'
+      )
 
       if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
         throw new Error('User does not have a valid payment method')

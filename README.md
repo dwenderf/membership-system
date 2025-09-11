@@ -31,18 +31,21 @@ The `reports_financial_data` view is the primary source for financial reporting.
 The `xero_invoice_line_items.line_item_type` field categorizes financial data into four main types:
 
 #### 1. **Memberships** (`line_item_type = 'membership'`)
+
 - **Purpose**: Track membership fee payments
 - **Amount**: Positive (charged to customer)
 - **Reports Section**: Memberships breakdown
 - **Example**: Annual membership fee, monthly membership fee
 
 #### 2. **Registrations** (`line_item_type = 'registration'`)
+
 - **Purpose**: Track registration fee payments
 - **Amount**: Positive (charged to customer)
 - **Reports Section**: Registrations breakdown
 - **Example**: Team registration fee, event registration fee
 
 #### 3. **Discounts** (`line_item_type = 'discount'`)
+
 - **Purpose**: Track actual discount codes applied
 - **Amount**: Negative (credit to customer)
 - **Reports Section**: Discount Usage (grouped by category)
@@ -50,8 +53,9 @@ The `xero_invoice_line_items.line_item_type` field categorizes financial data in
 - **Example**: PRIDE50 scholarship code, board member discount
 
 #### 4. **Donations** (`line_item_type = 'donation'`)
+
 - **Purpose**: Track financial assistance and additional donations
-- **Amount**: 
+- **Amount**:
   - **Positive**: Donation received (additional donation)
   - **Negative**: Donation given (financial assistance)
 - **Reports Section**: Donations (received vs given)
@@ -150,13 +154,15 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
    - Copy the **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - Copy the **service_role** key → `SUPABASE_SERVICE_ROLE_KEY`
    - Go to **Settings** → **Data API** to get the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   
+
    **Note:** Use the **new API keys** (not the legacy ones). The new keys use an improved JWT format and are the recommended approach.
 
 3. Run the database schema:
+
    ```bash
    # Apply the schema.sql file in your Supabase SQL editor
    ```
+
 4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
 
 ### 4. Run Development Server
@@ -199,7 +205,8 @@ The system uses Loops.so for transactional email delivery. Follow these steps to
    - `dashboardUrl` - Link to user dashboard
 
 3. **Email Template Example:**
-   ```
+
+   ```text
    Hi [userName],
 
    Great news! Your membership purchase has been confirmed and your access is now active.
@@ -236,12 +243,14 @@ The system includes several other email types that need templates configured:
 #### Welcome Email Template (`LOOPS_WELCOME_TEMPLATE_ID`)
 
 **Data Variables:**
+
 - `userName` - New user's full name
 - `dashboardUrl` - Link to user dashboard
 - `membershipUrl` - Link to membership purchase page
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 Welcome to the Hockey Association! 🏒
@@ -262,6 +271,7 @@ The Hockey Association Team
 #### Membership Expiration Warning (`LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID`)
 
 **Data Variables:**
+
 - `userName` - Member's full name
 - `membershipName` - Type of membership expiring
 - `expirationDate` - When membership expires
@@ -269,7 +279,8 @@ The Hockey Association Team
 - `renewUrl` - Link to renewal page
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 Your [membershipName] will expire in [daysUntilExpiration] days on [expirationDate].
@@ -286,6 +297,7 @@ The Hockey Association Team
 #### Payment Failed Notification (`LOOPS_PAYMENT_FAILED_TEMPLATE_ID`)
 
 **Data Variables:**
+
 - `userName` - Customer's full name
 - `membershipName` - Type of membership attempted
 - `amount` - Payment amount that failed
@@ -293,7 +305,8 @@ The Hockey Association Team
 - `retryUrl` - Link to retry payment
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 We were unable to process your payment for [membershipName] in the amount of $[amount].
@@ -310,6 +323,7 @@ The Hockey Association Team
 #### Registration Confirmation Template (`LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID`)
 
 **Data Variables:**
+
 - `userName` - Customer's full name
 - `registrationName` - Name of event/team registered for
 - `categoryName` - Registration category (Player, Goalie, etc.)
@@ -320,7 +334,8 @@ The Hockey Association Team
 - `dashboardUrl` - Link to user dashboard
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 Congratulations! Your registration has been confirmed and payment processed successfully.
@@ -348,6 +363,7 @@ The Hockey Association Team
 #### Waitlist Added Notification Template (`LOOPS_WAITLIST_ADDED_TEMPLATE_ID`)
 
 **Data Variables:**
+
 - `userName` - Customer's full name
 - `registrationName` - Name of event/team they were waitlisted for
 - `categoryName` - Registration category (Player, Goalie, etc.)
@@ -357,7 +373,8 @@ The Hockey Association Team
 - `dashboardUrl` - Link to user dashboard
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 You've been added to the waitlist for [registrationName].
@@ -379,7 +396,9 @@ The Hockey Association Team
 ```
 
 #### Alternate Selection Confirmation Template (`LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID`)
+
 **Data Variables:**
+
 - `userName` - Customer's full name
 - `registrationName` - Name of registration (e.g., "Rec League - Fall/Winter 2025-26")
 - `seasonName` - Season name
@@ -391,7 +410,8 @@ The Hockey Association Team
 - `dashboardUrl` - Link to user dashboard
 
 **Template Example:**
-```
+
+```text
 Hi [userName],
 
 You've been confirmed as an alternate for [gameDescription]!
@@ -431,11 +451,13 @@ By default, Supabase handles authentication emails (magic links, password resets
 #### Setting Up Google Workspace SMTP
 
 **Prerequisites:**
+
 - Google Workspace account with admin access
 - Custom domain (e.g., `nycpha.org`)
 - Email address for sending auth emails (e.g., `noreply@nycpha.org`)
 
 **Step 1: Create App Password**
+
 1. Go to [Google Account Security](https://myaccount.google.com/security)
 2. Enable **2-Step Verification** (required for app passwords)
 3. Go to **App passwords** section
@@ -443,11 +465,13 @@ By default, Supabase handles authentication emails (magic links, password resets
 5. **Copy the 16-character password** (without spaces: `abcd1234efgh5678`)
 
 **Step 2: Configure Supabase SMTP**
+
 1. Go to **Supabase Dashboard** → **Authentication** → **Settings**
 2. Scroll down to **SMTP Settings**
 3. **Enable Custom SMTP** toggle
 4. Configure these settings:
-   ```
+
+   ```text
    SMTP Host: smtp.gmail.com
    SMTP Port: 587
    SMTP User: noreply@nycpha.org
@@ -455,12 +479,15 @@ By default, Supabase handles authentication emails (magic links, password resets
    Sender Email: noreply@nycpha.org
    Sender Name: NYC PHA
    ```
+
 5. Click **Save**
 
 **Step 3: Add Email Logo (Optional)**
+
 1. Host your logo at `https://yourdomain.com/images/logo-email.png`
-2. Go to **Authentication** → **Email Templates** 
+2. Go to **Authentication** → **Email Templates**
 3. Customize templates with your logo:
+
    ```html
    <div style="margin-bottom: 30px;">
      <img src="https://yourdomain.com/images/logo-email.png" 
@@ -481,18 +508,21 @@ By default, Supabase handles authentication emails (magic links, password resets
    ```
 
 **Step 4: Test Configuration**
+
 1. Try logging in with a magic link
 2. Check that emails are sent from your custom domain
 3. Verify logo appears correctly in email templates
 4. Test with different email clients (Gmail, Outlook, etc.)
 
 **Benefits of Custom SMTP:**
+
 - ✅ **Professional branding** - Emails sent from your domain
 - ✅ **Custom logo** - Add your organization's visual identity
 - ✅ **Better deliverability** - Google Workspace reputation
 - ✅ **Consistent experience** - Matches your organization's communications
 
 **Troubleshooting SMTP:**
+
 - **Authentication failed**: Ensure app password has no spaces
 - **Port issues**: Use port 587 with STARTTLS (not 465 with SSL)
 - **Logo not showing**: Check image URL is publicly accessible
@@ -521,6 +551,7 @@ The application uses Sentry for error monitoring and alerting, particularly for 
 ### 2. Configure Environment Variables
 
 **Both Development & Production:**
+
 ```bash
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
@@ -541,7 +572,8 @@ The system automatically captures and alerts on:
 ### 4. Alert Configuration
 
 **Development Environment**: Minimal alerts for testing
-**Production Environment**: 
+**Production Environment**:
+
 - Email/Slack notifications for critical errors
 - Real-time monitoring of payment inconsistencies
 - Performance tracking for payment operations
@@ -559,12 +591,14 @@ The application uses Stripe in test mode for development. Use these test card nu
 ### Test Credit Card Numbers
 
 #### **Successful Payments:**
+
 - **Visa**: `4242 4242 4242 4242`
 - **Visa (debit)**: `4000 0566 5566 5556`
 - **Mastercard**: `5555 5555 5555 4444`
 - **American Express**: `3782 822463 10005`
 
 #### **Payment Failures:**
+
 - **Generic decline**: `4000 0000 0000 0002`
 - **Insufficient funds**: `4000 0000 0000 9995`
 - **Lost card**: `4000 0000 0000 9987`
@@ -574,6 +608,7 @@ The application uses Stripe in test mode for development. Use these test card nu
 - **Processing error**: `4000 0000 0000 0119`
 
 #### **For All Test Cards:**
+
 - **Expiry Date**: Use any future date (e.g., `12/34`)
 - **CVC**: Use any 3-digit number (e.g., `123`)
 - **ZIP Code**: Use any 5-digit number (e.g., `12345`)
@@ -588,13 +623,14 @@ The application uses Stripe in test mode for development. Use these test card nu
 ### Stripe Link Testing
 
 The application supports Stripe Link for one-click payments:
+
 - Use test card `4242 4242 4242 4242` with email `test@example.com`
 - Complete the first purchase to set up Link
 - Subsequent purchases will offer one-click Link payments
 
 ## Project Structure
 
-```
+```text
 src/
 ├── app/                 # Next.js app directory
 ├── components/          # React components
@@ -616,12 +652,14 @@ The application uses Jest with TypeScript support for comprehensive unit and int
 ### Test Framework Setup
 
 **Configuration:**
+
 - **Test Runner**: Jest with `ts-jest` preset
 - **Environment**: Node.js environment for API testing
 - **Module Mapping**: `@/` aliases resolve to `src/` directory
 - **Coverage**: Comprehensive coverage reporting with HTML output
 
 **Key Files:**
+
 - `jest.config.js` - Jest configuration with TypeScript support
 - `jest.setup.js` - Global test setup and mocks
 - `src/__tests__/` - Test files organized by feature
@@ -723,24 +761,30 @@ Add test scripts to your `package.json`:
 #### 5. Common Setup Issues & Solutions
 
 **Issue: "moduleNameMapping" validation warning**
+
 - **Solution**: Use `moduleNameMapper` (not `moduleNameMapping`) in jest.config.js
 
 **Issue: Cannot find module '@/lib/...' errors**
+
 - **Solution**: Ensure `moduleNameMapper` is correctly configured with `'^@/(.*)$': '<rootDir>/src/$1'`
 
 **Issue: WSL/Windows path compatibility problems**
+
 - **Solution**: Run tests in WSL terminal instead of Windows PowerShell
 - Use `npx jest` in package.json scripts instead of direct `jest` command
 
 **Issue: Permission errors during npm install**
+
 - **Solution**: Use `npx jest` instead of global jest installation
 - Ensure you're running in the correct directory with proper permissions
 
 **Issue: TypeScript compilation errors in tests**
+
 - **Solution**: Ensure `ts-jest` is installed and configured in jest.config.js
 - Check that your tsconfig.json includes the test directories
 
 **Issue: Cannot find module '@jest/globals' errors**
+
 - **Solution**: Remove `@jest/globals` imports from test files
 - Jest globals (`describe`, `it`, `expect`, `jest`, `beforeEach`) are available automatically
 - Change `import { describe, it, expect, jest } from '@jest/globals'` to just import your actual modules
@@ -780,7 +824,7 @@ npm test -- --testNamePattern="should require authentication"
 
 Tests are organized by feature and API endpoint:
 
-```
+```text
 src/__tests__/
 ├── api/
 │   ├── admin/
@@ -793,6 +837,7 @@ src/__tests__/
 ### Current Test Coverage
 
 **API Endpoints Tested:**
+
 - **Admin Alternate Management** (`/api/admin/registrations/[id]/alternates`)
   - Authentication and authorization
   - Input validation and error handling
@@ -805,6 +850,7 @@ src/__tests__/
   - Registration retrieval
 
 **Test Categories:**
+
 - ✅ **Authentication**: Ensures proper user authentication
 - ✅ **Authorization**: Verifies admin privilege requirements
 - ✅ **Validation**: Tests input validation and error responses
@@ -816,6 +862,7 @@ src/__tests__/
 The test suite includes comprehensive mocking for external dependencies:
 
 **Supabase Mocking:**
+
 ```javascript
 // Mocked database operations
 const mockSupabase = {
@@ -831,6 +878,7 @@ const mockSupabase = {
 ```
 
 **Service Mocking:**
+
 - **SetupIntentService**: Payment method validation
 - **Logger**: Application logging
 - **Authentication**: User session management
@@ -842,6 +890,7 @@ When adding new API endpoints or features:
 1. **Create test file** in appropriate `__tests__` directory
 2. **Follow naming convention**: `feature-name.test.ts`
 3. **Include test categories**:
+
    ```javascript
    describe('/api/your-endpoint', () => {
      describe('POST - Create resource', () => {
@@ -886,6 +935,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
 ### Future Testing Enhancements
 
 Planned additions to the test suite:
+
 - **Component Testing**: React component unit tests
 - **Integration Testing**: End-to-end API workflow tests
 - **Performance Testing**: Load testing for critical endpoints
@@ -913,27 +963,32 @@ Planned additions to the test suite:
 The application is designed to deploy on Vercel with optimal Next.js integration and built-in cron job support for Xero token management.
 
 #### Prerequisites
+
 - Vercel account (free tier available)
 - GitHub/GitLab/Bitbucket repository
 - All services configured (Supabase, Stripe, Loops.so, etc.)
 
 #### Step 1: Install Vercel CLI
+
 ```bash
 npm install -g vercel
 ```
 
 #### Step 2: Login to Vercel
+
 ```bash
 vercel login
 ```
 
 #### Step 3: Deploy from Repository
+
 ```bash
 # From your project directory
 vercel --prod
 ```
 
 Follow the prompts:
+
 - **Project name**: Choose a name for your project
 - **Directory**: Use current directory (default)
 - **Settings**: Accept defaults for Next.js project
@@ -941,11 +996,13 @@ Follow the prompts:
 #### Step 4: Configure Environment Variables
 
 In your Vercel dashboard, add all environment variables from your `.env.local`.
-Replace your-domain with: 
+Replace your-domain with:
+
 - Staging/Testing: membership-system-nycpha-preview
 - Production: membership-system-nycpha
 
 **Application Configuration:**
+
 ```bash
 NEXTAUTH_URL=https://your-domain.vercel.app
 NEXTAUTH_SECRET=your_nextauth_secret
@@ -953,6 +1010,7 @@ CRON_SECRET=your_random_cron_secret_for_cron_jobs
 ```
 
 **Database & Authentication:**
+
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -964,6 +1022,7 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 **Note:** For Supabase API keys, use the **new API keys** (not legacy) from your **production Supabase project** (not development). Go to Settings → API → "API Keys" tab and create new keys if needed.
 
 **Payment Processing:**
+
 ```bash
 STRIPE_SECRET_KEY=sk_live_your_stripe_live_secret_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_live_publishable_key
@@ -972,6 +1031,7 @@ STRIPE_API_VERSION=2025-07-30.basil
 ```
 
 **Email & Monitoring:**
+
 ```bash
 LOOPS_API_KEY=your_loops_api_key
 LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
@@ -996,7 +1056,7 @@ SENTRY_PROJECT=membership-system
    - Set redirect URI: `https://your-production-domain.com/api/xero/callback`
 
 2. **Create Preview Xero App:**
-   - Create another app (name it "Your App - Preview") 
+   - Create another app (name it "Your App - Preview")
    - Set redirect URI: `https://your-preview-domain.vercel.app/api/xero/callback`
 
 ```bash
@@ -1010,6 +1070,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 #### Step 5: Update Service Configurations
 
 **Supabase Authentication:**
+
 1. Go to your Supabase Dashboard → Authentication → URL Configuration
 2. Update **Site URL** to: `https://your-domain.vercel.app`
 3. Add to **Redirect URLs**:
@@ -1017,16 +1078,19 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
    - `https://your-domain.vercel.app/**` (wildcard for all auth flows)
 
 **Stripe Webhooks:**
+
 1. Go to your Stripe Dashboard → Webhooks
 2. Update endpoint URL to: `https://your-domain.vercel.app/api/stripe-webhook`
 3. Copy the new webhook secret to `STRIPE_WEBHOOK_SECRET`
 
 **Google OAuth:**
+
 1. Go to Google Cloud Console → Credentials
 2. Update authorized redirect URIs to include:
    - `https://your-domain.vercel.app/api/auth/callback/google`
 
 **Xero OAuth:**
+
 1. Go to Xero Developer Portal → Your App
 2. Update OAuth 2.0 redirect URI to:
    - `https://your-domain.vercel.app/api/xero/callback`
@@ -1034,6 +1098,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 #### Step 6: Verify Deployment
 
 **Automatic Features (Vercel handles these):**
+
 - ✅ **Next.js Build**: Automatic build optimization
 - ✅ **Serverless Functions**: API routes automatically deployed
 - ✅ **Cron Jobs**: Background processing runs daily (Xero operations + maintenance tasks)
@@ -1041,6 +1106,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 - ✅ **CDN**: Global edge network for fast loading
 
 **Test Your Deployment:**
+
 1. Visit your production URL
 2. Test user registration and login
 3. Make a test purchase with Stripe test cards
@@ -1076,21 +1142,26 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 The application uses Vercel Cron jobs for background processing. **Vercel Pro plan is required** for the advanced cron job scheduling used in this system.
 
 **1. Upgrade to Vercel Pro:**
+
 1. Go to your Vercel account settings
 2. Upgrade to **Pro plan** ($20/month)
 3. Wait 5-10 minutes for the upgrade to propagate
 
 **2. Configure CRON_SECRET Environment Variable:**
+
 1. Go to your Vercel project dashboard
 2. Navigate to **Settings** → **Environment Variables**
 3. Add `CRON_SECRET` with a random string value
 4. Generate a secure random string:
+
    ```bash
    openssl rand -base64 32
    ```
+
 5. Set the value for **Production** environment
 
 **3. Verify Cron Jobs in Vercel Dashboard:**
+
 1. Go to **Settings** → **Cron Jobs**
 2. You should see 3 active cron jobs:
    - `xero-sync` - Every 5 minutes (Xero invoice/payment sync)
@@ -1100,12 +1171,14 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 **Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
 
 **2. Verify CRON_SECRET Environment Variable:**
+
 - Ensure `CRON_SECRET` is set in your Vercel environment variables
 - This secret is used to authenticate cron job requests
 - Generate a random string if not already set
 
 **3. Test Cron Jobs (Optional):**
 You can manually test cron jobs using curl:
+
 ```bash
 # Test email sync operations (replace with your domain and secret)
 curl -X GET https://your-domain.vercel.app/api/cron/email-sync \
@@ -1121,6 +1194,7 @@ curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
 ```
 
 **4. Monitor Cron Job Execution:**
+
 - Check Vercel dashboard → **Functions** → **Cron Jobs** for execution logs
 - Review application logs for cron job activity
 - Monitor admin interface for sync status
@@ -1130,11 +1204,13 @@ curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
 #### Monitoring & Maintenance
 
 **Vercel Dashboard:**
+
 - Monitor deployment logs and function execution
 - View usage analytics and performance metrics
 - Manage environment variables and domains
 
 **Application Health:**
+
 - **Stripe**: Monitor payment processing in Stripe dashboard
 - **Supabase**: Check database performance and connection pools
 - **Loops.so**: Monitor email delivery rates and engagement
@@ -1144,21 +1220,25 @@ curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
 #### Troubleshooting Common Issues
 
 **Build Failures:**
+
 - Check environment variables are properly set
 - Verify all dependencies are installed
 - Review build logs in Vercel dashboard
 
 **Runtime Errors:**
+
 - Check Sentry for detailed error reports
 - Verify database connections and API keys
 - Test payment flows with Stripe test cards
 
 **Email Issues:**
+
 - Verify Loops.so templates and API key
 - Check email logs in Supabase `email_logs` table
 - Test with different email providers
 
 **Xero Sync Issues:**
+
 - Verify OAuth redirect URI matches exactly
 - Check Xero token expiration (automatic refresh should work)
 - Review sync logs in admin interface
@@ -1174,12 +1254,14 @@ Located in `scripts/debug/`, these scripts help investigate specific issues:
 #### User Invoice and Payment Debugging
 
 **`debug-user-invoices.js`** - Investigate a specific user's invoices and payments:
+
 ```bash
 # Usage: node debug-user-invoices.js <user_id>
 node scripts/debug/debug-user-invoices.js 79e9a75e-2580-4d56-8d10-d1a6f8542118
 ```
 
 **What it shows:**
+
 - User details (name, email, member ID)
 - All payments for the user
 - All Xero invoices linked to the user
@@ -1189,12 +1271,14 @@ node scripts/debug/debug-user-invoices.js 79e9a75e-2580-4d56-8d10-d1a6f8542118
 #### Xero Sync Log Debugging
 
 **`debug-user-sync-logs.js`** - Investigate Xero sync operations for a specific user:
+
 ```bash
 # Usage: node debug-user-sync-logs.js <user_id>
 node scripts/debug/debug-user-sync-logs.js 79e9a75e-2580-4d56-8d10-d1a6f8542118
 ```
 
 **What it shows:**
+
 - All Xero sync operations for the user's payments
 - Failed sync operations and error messages
 - Potential duplicate operations (race conditions)
@@ -1216,18 +1300,21 @@ source .env.local
 ### Common Debugging Scenarios
 
 **Duplicate Xero Invoices:**
+
 ```bash
 # Check if a user has duplicate invoice numbers
 node scripts/debug/debug-user-invoices.js <user_id>
 ```
 
 **Failed Xero Sync:**
+
 ```bash
 # Check sync logs for failed operations
 node scripts/debug/debug-user-sync-logs.js <user_id>
 ```
 
 **Payment Processing Issues:**
+
 ```bash
 # Check all payment and invoice data for a user
 node scripts/debug/debug-user-invoices.js <user_id>
@@ -1252,6 +1339,7 @@ For direct database access, use the Supabase dashboard:
 ## Support
 
 For questions about the codebase or setup process, refer to:
+
 - **Planning Document**: `PLANNING.md` for detailed architecture
 - **Database Schema**: `supabase/schema.sql` for data models
 - **Email Logs**: Check Supabase `email_logs` table for debugging
@@ -1263,6 +1351,7 @@ For questions about the codebase or setup process, refer to:
 The system includes automatic Xero integration for seamless accounting and bookkeeping.
 
 **📚 Important Resources:**
+
 - **[Xero API Rate Limits](https://developer.xero.com/documentation/guides/oauth2/limits/)** - Current rate limits and best practices
 
 ### Setting Up Xero Integration
@@ -1275,10 +1364,10 @@ The system includes automatic Xero integration for seamless accounting and bookk
    - **App Type**: Web app
    - **App Name**: "Hockey Association Membership System"
    - **Company/Application URL**: Your domain (e.g., `https://yourdomain.com`)
-   - **OAuth 2.0 redirect URI**: 
+   - **OAuth 2.0 redirect URI**:
      - Development: `http://localhost:3000/api/xero/callback`
      - Production: `https://yourdomain.com/api/xero/callback`
-   - **Scopes**: 
+   - **Scopes**:
      - `accounting.transactions` - Create and manage invoices
      - `accounting.contacts` - Create and manage contacts
      - `accounting.settings` - Read chart of accounts
@@ -1306,6 +1395,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 #### 4. Xero Setup Recommendations
 
 **Chart of Accounts Setup:**
+
 - `MEMBERSHIP` - Membership revenue account
 - `REGISTRATION` - Registration revenue account  
 - `DONATION` - Donation revenue account
@@ -1315,6 +1405,7 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 - `DISCOUNT-BOARD` - Board member discount tracking
 
 **Bank Account Configuration:**
+
 - Set up your Stripe account in Xero's bank accounts
 - Use account code `STRIPE` for automatic payment recording
 
@@ -1327,14 +1418,16 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 **Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID**
 
 **Authorized JavaScript origins:**
-```
+
+```text
 http://localhost:3000
 https://membership-system-nycpha-preview.vercel.app
 https://my.nycpha.org
 ```
 
 **Authorized redirect URIs:**
-```
+
+```text
 http://localhost:3000/api/auth/callback/google
 https://membership-system-nycpha-preview.vercel.app/api/auth/callback/google
 https://my.nycpha.org/api/auth/callback/google
@@ -1345,20 +1438,24 @@ https://my.nycpha.org/api/auth/callback/google
 **Supabase Dashboard → Authentication → URL Configuration**
 
 **Site URL:**
-```
+
+```text
 https://my.nycpha.org
 ```
 
 **Redirect URLs:**
-```
+
+```text
 https://my.nycpha.org/auth/callback
 https://my.nycpha.org/**
 ```
 
 **For Development Environment:**
+
 - **Site URL:** `https://membership-system-nycpha-preview.vercel.app`
 - **Redirect URLs:**
-  ```
+
+  ```text
   https://membership-system-git-*-nycpha.vercel.app/**
   https://membership-system-nycpha-preview.vercel.app/**
   http://localhost:3000/**
@@ -1376,11 +1473,12 @@ https://my.nycpha.org/**
 **Client Secret:** Your Google OAuth client secret
 
 **Where to get Google OAuth credentials:**
+
 1. **Go to** [Google Cloud Console](https://console.cloud.google.com/)
 2. **Navigate to** APIs & Services → Credentials
 3. **Find your OAuth 2.0 Client ID** (or create a new one)
 4. **Copy the Client ID**
-5. **For Client Secret:** 
+5. **For Client Secret:**
    - **If you have an existing secret:** You cannot view it again (security feature)
    - **Create a new Client Secret:** Click "Reset Secret" or "Create New Secret"
    - **Copy the new secret immediately** (it's only shown once)
@@ -1388,6 +1486,7 @@ https://my.nycpha.org/**
 **Note:** You'll need to configure these settings for each Supabase project (development and production databases).
 
 **Security Settings:**
+
 - **DO NOT enable "Skip nonce checks"** - This is a security feature that should remain enabled
 - **Keep all default security settings** unless you have a specific reason to change them
 
@@ -1398,23 +1497,27 @@ https://my.nycpha.org/**
 You need separate webhook endpoints for each environment:
 
 **Production Webhook:**
-```
+
+```text
 https://my.nycpha.org/api/stripe-webhook
 ```
 
 **Development/Preview Webhook:**
-```
+
+```text
 https://membership-system-nycpha-preview.vercel.app/api/stripe-webhook
 ```
 
 **Feature Branch Testing (optional):**
 For testing specific feature branches, you can create additional webhooks:
-```
+
+```text
 https://membership-system-git-[branch-name]-nycpha.vercel.app/api/stripe-webhook
 ```
 
 **Events to Send:**
 Select these specific events for each webhook:
+
 - `payment_intent.succeeded` - When payment completes successfully
 - `payment_intent.payment_failed` - When payment fails  
 - `payment_intent.canceled` - When payment is canceled (timeout/user abandonment)
@@ -1424,7 +1527,8 @@ Select these specific events for each webhook:
 - `charge.refunded` - When a refund is processed (for refund system)
 - `charge.updated` - When balance transaction becomes available (for accurate fee tracking)
 
-**Important:** 
+**Important:**
+
 - Each webhook endpoint gets its own signing secret (`STRIPE_WEBHOOK_SECRET`)
 - Use production webhook only with live Stripe keys
 - Use development webhook with test Stripe keys
@@ -1437,7 +1541,8 @@ Select these specific events for each webhook:
 **Xero Developer Portal → Your App → OAuth 2.0**
 
 **Redirect URI:**
-```
+
+```text
 https://my.nycpha.org/api/xero/callback
 ```
 
@@ -1447,7 +1552,7 @@ The system implements a robust, multi-stage payment processing pipeline that ens
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────┐
 │   Stripe        │    │  Payment Completion │    │  Xero Batch     │
 │   Webhook       │───▶│  Processor          │───▶│  Sync Manager   │
@@ -1466,7 +1571,7 @@ The system implements a **fire-and-forget email processing architecture** optimi
 
 #### Email Processing Flow
 
-```
+```text
 Payment Completion (Fast Response):
 ┌─────────────────────────────────────┐
 │ PaymentCompletionProcessor          │
@@ -1496,21 +1601,25 @@ Scheduled Tasks (Cron):
 #### Key Design Principles
 
 **1. Single Source of Truth**
+
 - Only `PaymentCompletionProcessor` handles staged email processing
 - No duplicate processing from background services
 - Eliminates race conditions and duplicate emails
 
 **2. Fire-and-Forget Processing**
+
 - Payment completion doesn't wait for email processing
 - Immediate response to users for better UX
 - Background failures don't affect payment completion
 
 **3. Serverless-Optimized**
+
 - No long-running processes or `setInterval` calls
 - All scheduled tasks handled by Vercel cron endpoints
 - Removed unused scheduled processing methods
 
 **4. Simple Email Processing**
+
 - No complex batch job system for emails
 - Direct processing of staged emails with delays
 - Clear separation between staging and sending
@@ -1518,16 +1627,19 @@ Scheduled Tasks (Cron):
 #### Email Processing Components
 
 **Email Staging Manager** (`src/lib/email/staging.ts`)
+
 - Stages emails in database for batch processing
 - Handles email delays and rate limiting
 - Processes emails one by one with configurable delays
 
 **Email Processing Manager** (`src/lib/email/batch-sync-email.ts`)
+
 - Simplified email processing utility
 - No complex batch job system
 - Direct processing of staged emails
 
 **Payment Completion Processor** (`src/lib/payment-completion-processor.ts`)
+
 - Stages confirmation emails during payment completion
 - Triggers fire-and-forget email processing
 - Ensures emails are queued for immediate delivery
@@ -1544,14 +1656,17 @@ Scheduled Tasks (Cron):
 ### Detailed Flow
 
 #### 1. Payment Initiation
+
 - User completes payment via Stripe
 - Payment intent created with metadata (user_id, membership_id, etc.)
 - User redirected to success/failure page
 
 #### 2. Stripe Webhook Processing
+
 **Event**: `payment_intent.succeeded` or `payment_intent.payment_failed`
 
 **Webhook Handler** (`src/app/api/stripe-webhook/route.ts`):
+
 - ✅ **Validates webhook signature** for security
 - ✅ **Updates core business records**:
   - `user_memberships` or `user_registrations` → `payment_status: 'paid'`
@@ -1562,9 +1677,11 @@ Scheduled Tasks (Cron):
 **Key Design Principle**: Webhook focuses solely on core business record updates and delegates all complex processing to the Payment Completion Processor.
 
 #### 3. Payment Completion Processor
+
 **Service**: `src/lib/payment-completion-processor.ts`
 
 **Responsibilities**:
+
 - ✅ **Xero Staging Record Management**:
   - Creates/updates `xero_invoices` and `xero_payments` staging records
   - Transitions records from `'staged'` → `'pending'` → `'synced'`
@@ -1577,6 +1694,7 @@ Scheduled Tasks (Cron):
   - Ensures proper sequencing of operations
 
 **Staging Record Search Logic**:
+
 ```typescript
 // 1. Search by payment_id (for completed payments)
 // 2. Search by user_id in staging_metadata (for staged records)
@@ -1585,21 +1703,25 @@ Scheduled Tasks (Cron):
 ```
 
 #### 4. Xero Batch Sync Manager
+
 **Service**: `src/lib/xero/batch-sync.ts`
 
 **Singleton Pattern with Concurrency Protection**:
+
 - ✅ **Prevents concurrent execution** - Only one sync operation at a time
 - ✅ **Rate limit protection** - 2-second minimum delay between syncs
 - ✅ **Comprehensive logging** - Unique call IDs for transparency
 - ✅ **State management** - Tracks running status and timing
 
 **Sync Process**:
+
 1. **Phase 1**: Query pending records from database
 2. **Phase 2**: Connect to Xero (with token refresh if needed)
 3. **Phase 3**: Sync invoices (create contacts, generate invoices)
 4. **Phase 4**: Sync payments (record payments against invoices)
 
 **Rate Limiting Strategy**:
+
 ```typescript
 // Minimum 2-second delay between sync operations
 private readonly MIN_DELAY_BETWEEN_SYNCS = 2000
@@ -1612,19 +1734,23 @@ if (remainingDelay > 0) {
 ```
 
 #### 5. Xero API Integration
+
 **Contact Management**:
+
 - ✅ **Smart contact creation** with member ID integration
 - ✅ **Archived contact handling** with intelligent resolution
 - ✅ **Naming convention**: "First Last - MemberID" format
 - ✅ **Duplicate prevention** with name-first search strategy
 
 **Invoice Generation**:
+
 - ✅ **Detailed line items** for membership/registration fees
 - ✅ **Discount code integration** as negative line items
 - ✅ **Professional formatting** using Xero templates
 - ✅ **Status tracking** (DRAFT → AUTHORISED)
 
 **Payment Recording**:
+
 - ✅ **Net amount recording** (gross minus Stripe fees)
 - ✅ **Bank account integration** with Stripe account codes
 - ✅ **Reference tracking** with payment intent IDs
@@ -1633,6 +1759,7 @@ if (remainingDelay > 0) {
 ### Data Flow States
 
 #### Staging Record Lifecycle
+
 ```
 ┌─────────┐    ┌──────────┐    ┌─────────┐    ┌─────────┐
 │ staged  │───▶│ pending  │───▶│ synced  │───▶│ failed  │
@@ -1645,6 +1772,7 @@ if (remainingDelay > 0) {
 ```
 
 #### Payment Status Flow
+
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │ processing  │───▶│ completed   │───▶│ synced      │
@@ -1657,18 +1785,21 @@ if (remainingDelay > 0) {
 ### Error Handling & Resilience
 
 #### Graceful Degradation
+
 - ✅ **Payment processing continues** even if Xero sync fails
 - ✅ **Email delivery independent** of Xero operations
 - ✅ **Staging records preserved** for retry mechanisms
 - ✅ **Webhook idempotency** prevents duplicate processing
 
 #### Retry Mechanisms
+
 - ✅ **Automatic retry** via cron jobs every 2 minutes
 - ✅ **Manual sync options** in admin interface
 - ✅ **Failed record tracking** with detailed error logging
 - ✅ **Token refresh** handles Xero authentication expiry
 
 #### Monitoring & Alerting
+
 - ✅ **Sentry integration** for critical error tracking
 - ✅ **Comprehensive logging** with unique call IDs
 - ✅ **Admin dashboard** for sync status monitoring
@@ -1677,12 +1808,14 @@ if (remainingDelay > 0) {
 ### Performance Optimizations
 
 #### Batch Processing
+
 - ✅ **Intelligent batching** based on record count
 - ✅ **Concurrency control** to prevent API rate limits
 - ✅ **Optimized queries** with proper indexing
 - ✅ **Memory management** for large datasets
 
 #### Rate Limit Management
+
 - ✅ **2-second minimum delays** between sync operations
 - ✅ **API call spacing** within batch operations
 - ✅ **Token refresh optimization** to minimize API calls
@@ -1691,12 +1824,14 @@ if (remainingDelay > 0) {
 ### Security Considerations
 
 #### Data Protection
+
 - ✅ **Webhook signature validation** prevents unauthorized calls
 - ✅ **Environment-specific Xero apps** prevent tenant conflicts
 - ✅ **Token encryption** in database storage
 - ✅ **RLS policies** protect sensitive data
 
 #### Access Control
+
 - ✅ **Admin-only sync operations** require proper authentication
 - ✅ **Audit logging** for all sync operations
 - ✅ **Error masking** prevents sensitive data exposure
@@ -1705,6 +1840,7 @@ if (remainingDelay > 0) {
 ### Testing & Validation
 
 #### Test Scenarios
+
 1. **Successful Payment Flow**: Complete end-to-end processing
 2. **Payment Failure**: Proper cleanup and notifications
 3. **Xero Sync Failure**: Graceful degradation and retry
@@ -1713,6 +1849,7 @@ if (remainingDelay > 0) {
 6. **Token Expiry**: Automatic refresh handling
 
 #### Monitoring Points
+
 - ✅ **Webhook delivery** via Stripe dashboard
 - ✅ **Database record states** in Supabase
 - ✅ **Xero sync status** in admin interface
@@ -1742,6 +1879,7 @@ if (remainingDelay > 0) {
 **Invoices**: All records with `sync_status IN ('pending', 'staged')`
 
 **Payments**: Filtered by:
+
 - `sync_status IN ('pending', 'staged')`
 - `payments.status = 'completed'`
 - `payments.payment_method != 'free'`
@@ -1771,10 +1909,12 @@ The admin interface provides manual sync options:
 #### Contact Management & Conflict Resolution
 
 **Xero Contact Constraints:**
+
 - ✅ **Unique Names Required**: Xero enforces unique contact names
 - ⚠️ **Duplicate Emails Allowed**: Xero permits multiple contacts with same email address
 
 **Our Contact Strategy:**
+
 1. **Member ID Integration**: All users are assigned unique member IDs (e.g., 1001, 1002)
 2. **Naming Convention**: Contacts created as "First Last - MemberID" (e.g., "David Wender - 1001")
 3. **Intelligent Archived Contact Handling**: Smart detection and resolution of archived contact conflicts
@@ -1796,7 +1936,7 @@ This prevents the system from picking up the wrong contact when you have multipl
 
 Our system follows an intelligent 5-step process to handle archived contacts while minimizing duplication:
 
-1. ✅ **Search by exact contact name first** → Look for "First Last - MemberID" 
+1. ✅ **Search by exact contact name first** → Look for "First Last - MemberID"
 2. ✅ **Fall back to email search** → Get all contacts with user's email address
 3. ✅ **Look for non-archived alternatives** → Find contacts that aren't archived  
 4. ✅ **Check naming convention** → Does contact name start with "First Last - MemberID"?
@@ -1806,26 +1946,31 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 #### Archived Contact Resolution Scenarios
 
 **Scenario 1: Perfect Match Found**
+
 - **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1002"
 - **Action**: ✅ **Use existing active contact as-is**
 - **Result**: No new contact created, maintains data integrity
 
 **Scenario 2: Legacy Contact Found**  
+
 - **Situation**: Find archived "David Wender - 1002", find active "David Wender" (old format)
 - **Action**: ✅ **Update to "David Wender - 1002"** (standardized naming)
 - **Result**: Legacy contact updated to follow naming convention
 
 **Scenario 3: Different Member Found**
-- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1001" 
+
+- **Situation**: Find archived "David Wender - 1002", find active "David Wender - 1001"
 - **Action**: ✅ **Use existing "David Wender - 1001" as-is** (already correct format)
 - **Result**: Uses different member's contact (same person, different membership)
 
 **Scenario 4: Archived Contact with Exact Name**
+
 - **Situation**: Find archived "David Wender - 1002" (exact name match)
 - **Action**: ✅ **Rename to "David Wender - 1002 - Archived"** then create new "David Wender - 1002"
 - **Result**: Archived contact preserved, new active contact created
 
 **Scenario 5: No Alternatives - Create New**
+
 - **Situation**: Find archived "David Wender - 1002", no other active contacts found
 - **Action**: ✅ **Create new "David Wender - 1002"**
 - **Result**: New contact created with clean naming
@@ -1844,6 +1989,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 #### Troubleshooting
 
 **Common Issues:**
+
 - **Token Expired**: Tokens refresh automatically, but you can reconnect manually (refresh tokens expire after 60 days)
 - **Sync Failures**: Check the sync logs in the admin interface for detailed error messages
 - **Missing Invoices**: Use the bulk sync feature to catch up on historical data
@@ -1851,6 +1997,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 - **Archived Contacts**: System automatically creates new contacts when encountering archived ones
 
 **Error Monitoring:**
+
 - All sync operations are logged to Sentry for monitoring
 - Detailed sync logs available in admin interface
 - Failed syncs don't affect payment processing
@@ -1872,6 +2019,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 **Problem Solved**: Duplicate email processing and slow payment completion responses due to complex batch job systems.
 
 **Changes Made**:
+
 - ✅ **Removed duplicate email processing** - Only PaymentCompletionProcessor handles staged emails
 - ✅ **Simplified batch processing** - Removed complex batch job system for emails
 - ✅ **Fire-and-forget processing** - Payment completion doesn't wait for emails/Xero sync
@@ -1879,6 +2027,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 - ✅ **Cleaner codebase** - Removed 738+ lines of unused code
 
 **Performance Improvements**:
+
 - **Faster payment completion** - Immediate response to users
 - **No duplicate emails** - Single source of truth for email processing
 - **Better error isolation** - Background failures don't affect payment completion
@@ -1887,18 +2036,21 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 ### Architecture Cleanup
 
 **Removed Components**:
+
 - ❌ `ScheduledBatchProcessor` - Unused scheduled processing logic
 - ❌ Complex batch job system for emails - Unnecessary complexity
 - ❌ Unused `Database` imports - Cleaned up imports
 - ❌ Duplicate email processing paths - Single source of truth
 
 **Optimized Components**:
+
 - ✅ `BatchProcessor` - Kept for Xero sync operations (actively used)
 - ✅ `EmailProcessingManager` - Simplified email processing utility
 - ✅ `PaymentCompletionProcessor` - Fire-and-forget architecture
 - ✅ Cron endpoints - Handle all scheduled tasks in serverless environment
 
 **Current Architecture**:
+
 ```
 Payment Completion (Fast):
 ┌─────────────────────────────────────┐

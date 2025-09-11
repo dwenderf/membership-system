@@ -65,6 +65,23 @@ export class AlternatePaymentService {
         userId
       )
 
+      // Debug logging to trace the null net_amount issue
+      logger.logPaymentProcessing(
+        'charge-alternate-debug',
+        'Creating staging data for alternate charge',
+        {
+          userId,
+          registrationId,
+          gameDescription,
+          basePrice: registration.alternate_price,
+          finalAmount,
+          discountAmount,
+          finalAmountConverted: centsToCents(finalAmount),
+          discountCodeId
+        },
+        'info'
+      )
+
       // Create staging record for Xero
       const stagingData: StagingPaymentData = {
         user_id: userId,
@@ -249,12 +266,8 @@ export class AlternatePaymentService {
         if (!discountError && discount) {
           discountCode = discount
 
-          // Calculate discount amount
-          if (discount.discount_type === 'percentage') {
-            discountAmount = Math.round((basePrice * discount.discount_value) / 100)
-          } else {
-            discountAmount = Math.min(discount.discount_value, basePrice)
-          }
+          // Calculate discount amount (all discounts are percentage-based)
+          discountAmount = Math.round((basePrice * discount.percentage) / 100)
 
           // Check usage limits
           if (discount.usage_limit && discount.usage_limit > 0) {
@@ -281,6 +294,22 @@ export class AlternatePaymentService {
       }
 
       const finalAmount = Math.max(0, basePrice - discountAmount)
+
+      // Debug logging to trace the null net_amount issue
+      logger.logPaymentProcessing(
+        'calculate-charge-amount-debug',
+        'Charge calculation details',
+        {
+          registrationId,
+          discountCodeId,
+          userId,
+          basePrice,
+          discountAmount,
+          finalAmount,
+          discountCodeFound: !!discountCode
+        },
+        'info'
+      )
 
       return {
         finalAmount,

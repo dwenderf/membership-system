@@ -242,13 +242,15 @@ export class XeroBatchSyncManager {
   private async performSync(): Promise<{
     invoices: { synced: number; failed: number }
     payments: { synced: number; failed: number }
+    connectionStatus: 'valid' | 'failed' | 'no_tenant'
   }> {
     const startTime = Date.now()
     console.log('🔄 Starting intelligent batch sync of pending Xero records...')
 
     const results = {
       invoices: { synced: 0, failed: 0 },
-      payments: { synced: 0, failed: 0 }
+      payments: { synced: 0, failed: 0 },
+      connectionStatus: 'valid' as 'valid' | 'failed' | 'no_tenant'
     }
 
     try {
@@ -277,6 +279,7 @@ export class XeroBatchSyncManager {
       const activeTenant = await getActiveTenant()
       if (!activeTenant) {
         console.log('⚠️ No active Xero tenants found - skipping sync to preserve pending status')
+        results.connectionStatus = 'no_tenant'
         return results
       }
 
@@ -286,11 +289,13 @@ export class XeroBatchSyncManager {
       const isValid = await validateXeroConnection(activeTenant.tenant_id)
       if (!isValid) {
         console.log('⚠️ No valid Xero connections found - skipping sync to preserve pending status')
+        results.connectionStatus = 'failed'
         return results
       }
       const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
       if (!xeroApi) {
         console.log('⚠️ No Xero Authenticated Xero Client found - skipping sync to preserve pending status')
+        results.connectionStatus = 'failed'
         return results
       }
 

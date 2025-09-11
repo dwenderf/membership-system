@@ -1180,7 +1180,7 @@ export async function POST(request: NextRequest) {
             // Ensure alternate_selections record exists (fallback for failed initial creation)
             const gameId = paymentIntent.metadata.gameId
             if (gameId) {
-              const { error: selectionError } = await adminSupabase
+              const { error: selectionError } = await supabase
                 .from('alternate_selections')
                 .upsert({
                   alternate_registration_id: gameId,

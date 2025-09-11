@@ -10,7 +10,7 @@ export interface StagedEmailData {
   email_data?: Record<string, any>
   triggered_by?: 'user_action' | 'admin_send' | 'automated'
   triggered_by_user_id?: string
-  related_entity_type?: 'user_memberships' | 'user_registrations' | 'payments'
+  related_entity_type?: 'user_memberships' | 'user_registrations' | 'payments' | 'alternate_selections'
   related_entity_id?: string
   payment_id?: string
 }

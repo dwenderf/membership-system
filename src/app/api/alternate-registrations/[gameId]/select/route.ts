@@ -60,7 +60,8 @@ export async function POST(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
-    if (!game.registrations?.allow_alternates) {
+    const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations
+    if (!registration || !registration.allow_alternates) {
       return NextResponse.json({ 
         error: 'This registration does not allow alternates' 
       }, { status: 400 })
@@ -120,12 +121,13 @@ export async function POST(
     let failedSelections = 0
 
     for (const alternate of availableAlternates) {
+      const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
       try {
         // Validate payment method
-        if (!alternate.users?.stripe_payment_method_id || alternate.users?.setup_intent_status !== 'succeeded') {
+        if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
           results.push({
             userId: alternate.user_id,
-            userName: `${alternate.users?.first_name} ${alternate.users?.last_name}`,
+            userName: `${user?.first_name} ${user?.last_name}`,
             success: false,
             error: 'No valid payment method'
           })
@@ -165,7 +167,7 @@ export async function POST(
             
             results.push({
               userId: alternate.user_id,
-              userName: `${alternate.users?.first_name} ${alternate.users?.last_name}`,
+              userName: `${user?.first_name} ${user?.last_name}`,
               success: false,
               error: 'Payment succeeded but failed to record selection'
             })
@@ -173,7 +175,7 @@ export async function POST(
           } else {
             results.push({
               userId: alternate.user_id,
-              userName: `${alternate.users?.first_name} ${alternate.users?.last_name}`,
+              userName: `${user?.first_name} ${user?.last_name}`,
               success: true,
               paymentId: chargeResult.paymentId,
               amountCharged: chargeResult.amountCharged
@@ -184,7 +186,7 @@ export async function POST(
         } else {
           results.push({
             userId: alternate.user_id,
-            userName: `${alternate.users?.first_name} ${alternate.users?.last_name}`,
+            userName: `${user?.first_name} ${user?.last_name}`,
             success: false,
             error: 'Payment failed'
           })
@@ -200,7 +202,7 @@ export async function POST(
 
         results.push({
           userId: alternate.user_id,
-          userName: `${alternate.users?.first_name} ${alternate.users?.last_name}`,
+          userName: `${user?.first_name} ${user?.last_name}`,
           success: false,
           error: error instanceof Error ? error.message : 'Processing failed'
         })
@@ -234,7 +236,7 @@ export async function POST(
       game: {
         id: game.id,
         description: game.game_description,
-        registrationName: game.registrations?.name
+        registrationName: registration?.name
       }
     })
 

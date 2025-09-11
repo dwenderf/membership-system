@@ -52,7 +52,8 @@ export async function GET(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
-    if (!game.registrations?.allow_alternates) {
+    const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations
+    if (!registration || !registration.allow_alternates) {
       return NextResponse.json({ 
         error: 'This registration does not allow alternates' 
       }, { status: 400 })
@@ -79,6 +80,7 @@ export async function GET(
           code,
           percentage,
           category:discount_categories (
+            id,
             name,
             max_discount_per_user_per_season
           )
@@ -130,28 +132,30 @@ export async function GET(
 
     // Format alternates data with payment status and discount info
     const formattedAlternates = (alternates || []).map(alternate => {
-      const user = alternate.users
-      const discountCode = alternate.discount_codes
+      const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
+      const discountCode = Array.isArray(alternate.discount_codes) ? alternate.discount_codes[0] : alternate.discount_codes
       
       // Check if user has valid payment method
-      const hasValidPaymentMethod = user?.stripe_payment_method_id && user?.setup_intent_status === 'succeeded'
+      const hasValidPaymentMethod = user && user.stripe_payment_method_id && user.setup_intent_status === 'succeeded'
       
       // Calculate discount amount and check usage limits
       let discountAmount = 0
       let isOverLimit = false
       let usageStatus = null
+      let category = null
 
-      if (discountCode && game.registrations) {
-        const basePrice = game.registrations.alternate_price || 0
+      if (discountCode && registration) {
+        const basePrice = registration.alternate_price || 0
         
         // Calculate discount amount (discount codes are always percentage-based)
         discountAmount = Math.round((basePrice * discountCode.percentage) / 100)
 
         // Check usage limits
-        if (discountCode.category?.max_discount_per_user_per_season) {
-          const usageKey = `${user?.id}-${discountCode.category.id}`
+        category = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
+        if (category && category.max_discount_per_user_per_season) {
+          const usageKey = `${user?.id}-${category.id}`
           const currentUsage = usageByUserAndCategory.get(usageKey) || 0
-          const limit = discountCode.category.max_discount_per_user_per_season
+          const limit = category.max_discount_per_user_per_season
           
           isOverLimit = (currentUsage + discountAmount) > limit
           usageStatus = {
@@ -163,7 +167,7 @@ export async function GET(
         }
       }
 
-      const finalAmount = Math.max(0, (game.registrations?.alternate_price || 0) - discountAmount)
+      const finalAmount = Math.max(0, (registration?.alternate_price || 0) - discountAmount)
 
       return {
         id: alternate.id,
@@ -179,12 +183,12 @@ export async function GET(
           code: discountCode.code,
           percentage: discountCode.percentage,
           discountAmount,
-          categoryName: discountCode.category?.name,
+          categoryName: category?.name,
           isOverLimit,
           usageStatus
         } : null,
         pricing: {
-          basePrice: game.registrations?.alternate_price || 0,
+          basePrice: registration?.alternate_price || 0,
           discountAmount,
           finalAmount
         }
@@ -206,11 +210,11 @@ export async function GET(
       game: {
         id: game.id,
         registrationId: game.registration_id,
-        registrationName: game.registrations?.name,
+        registrationName: registration?.name,
         gameDescription: game.game_description,
         gameDate: game.game_date,
-        alternatePrice: game.registrations?.alternate_price,
-        alternateAccountingCode: game.registrations?.alternate_accounting_code
+        alternatePrice: registration?.alternate_price,
+        alternateAccountingCode: registration?.alternate_accounting_code
       },
       alternates: formattedAlternates,
       summary: {

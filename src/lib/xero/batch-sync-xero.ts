@@ -178,6 +178,7 @@ export class XeroBatchSyncManager {
   async syncAllPendingRecords(): Promise<{
     invoices: { synced: number; failed: number }
     payments: { synced: number; failed: number }
+    connectionStatus: 'valid' | 'failed' | 'no_tenant'
   }> {
     const callTime = new Date()
     const callId = Math.random().toString(36).substring(2, 8) // Short unique ID for tracking
@@ -194,7 +195,8 @@ export class XeroBatchSyncManager {
       console.log(`⚠️ [${callId}] No existing promise found, returning empty result`)
       return {
         invoices: { synced: 0, failed: 0 },
-        payments: { synced: 0, failed: 0 }
+        payments: { synced: 0, failed: 0 },
+        connectionStatus: 'valid' as 'valid' | 'failed' | 'no_tenant'
       }
     }
 

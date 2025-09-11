@@ -138,6 +138,7 @@ export async function POST(
           alternate.user_id,
           game.registration_id,
           game.game_description,
+          gameId,
           alternate.discount_code_id || undefined
         )
 
@@ -149,6 +150,7 @@ export async function POST(
               alternate_registration_id: gameId,
               user_id: alternate.user_id,
               payment_id: chargeResult.paymentId,
+              amount_charged: chargeResult.amountCharged,
               selected_by: authUser.id,
               selected_at: new Date().toISOString()
             })

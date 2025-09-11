@@ -22,6 +22,7 @@ export class AlternatePaymentService {
     userId: string,
     registrationId: string,
     gameDescription: string,
+    gameId: string,
     discountCodeId?: string
   ): Promise<AlternateChargeResult> {
     try {
@@ -38,20 +39,6 @@ export class AlternatePaymentService {
       if (userError || !user) {
         throw new Error('User not found')
       }
-
-      // Debug logging to see what we actually got
-      logger.logPaymentProcessing(
-        'user-payment-data-debug',
-        'User payment data retrieved',
-        {
-          userId,
-          hasPaymentMethod: !!user.stripe_payment_method_id,
-          setupIntentStatus: user.setup_intent_status,
-          hasCustomerId: !!user.stripe_customer_id,
-          customerId: user.stripe_customer_id
-        },
-        'info'
-      )
 
       if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
         throw new Error('User does not have a valid payment method')
@@ -104,12 +91,41 @@ export class AlternatePaymentService {
 
       // Add discount line item if applicable
       if (discountAmount > 0 && discountCode) {
+        if (!discountCode.category?.accounting_code) {
+          const error = new Error(`Discount code ${discountCode.code} has no accounting code configured`)
+          logger.logPaymentProcessing(
+            'discount-accounting-code-missing',
+            'Critical: Discount code missing accounting code',
+            {
+              discountCodeId: discountCode.id,
+              discountCode: discountCode.code,
+              categoryId: discountCode.category?.id,
+              userId,
+              registrationId,
+              gameDescription
+            },
+            'error'
+          )
+          // Report to Sentry
+          const { captureException } = await import('@sentry/nextjs')
+          captureException(error, {
+            extra: {
+              discountCodeId: discountCode.id,
+              discountCode: discountCode.code,
+              categoryId: discountCode.category?.id,
+              userId,
+              registrationId
+            }
+          })
+          throw error
+        }
+
         stagingData.payment_items.push({
           item_type: 'discount' as const,
           item_id: null,
           item_amount: centsToCents(-discountAmount),
           description: `Discount: ${discountCode.code} - ${gameDescription}`,
-          accounting_code: discountCode.accounting_code
+          accounting_code: discountCode.category.accounting_code
         })
       }
 
@@ -121,6 +137,21 @@ export class AlternatePaymentService {
 
       // Handle free charge (after discount)
       if (finalAmount === 0) {
+        logger.logPaymentProcessing(
+          'free-alternate-charge-processing',
+          'Processing free alternate charge (no Stripe payment needed)',
+          {
+            userId,
+            registrationId,
+            gameDescription,
+            gameId,
+            basePrice: registration.alternate_price,
+            discountAmount,
+            finalAmount: 0
+          },
+          'info'
+        )
+        
         return await this.handleFreeAlternateCharge(
           userId,
           registrationId,
@@ -142,6 +173,7 @@ export class AlternatePaymentService {
         metadata: {
           userId: userId,
           registrationId: registrationId,
+          gameId: gameId,
           gameDescription: gameDescription,
           userName: `${user.first_name} ${user.last_name}`,
           purpose: 'alternate_selection',

@@ -1160,21 +1160,49 @@ export async function POST(request: NextRequest) {
           })
 
           try {
-            // Update payment record status
-            const { error: paymentUpdateError } = await supabase
+            // Update payment record status and get the payment record
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
                 completed_at: new Date().toISOString()
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
-
-            if (paymentUpdateError) {
+              .select()
+              .single()
+              
+            if (paymentUpdateError || !updatedPayment) {
               console.error('❌ Failed to update alternate payment record:', paymentUpdateError)
-              throw paymentUpdateError
+              throw paymentUpdateError || new Error('No payment record found')
             }
-
             console.log('✅ Successfully updated alternate payment record')
+
+            // Ensure alternate_selections record exists (fallback for failed initial creation)
+            const gameId = paymentIntent.metadata.gameId
+            if (gameId) {
+              const { error: selectionError } = await adminSupabase
+                .from('alternate_selections')
+                .upsert({
+                  alternate_registration_id: gameId,
+                  user_id: paymentIntent.metadata.userId,
+                  payment_id: updatedPayment.id,
+                  amount_charged: paymentIntent.amount,
+                  selected_by: paymentIntent.metadata.selectedBy || paymentIntent.metadata.userId, // Fallback to userId if selectedBy not available
+                  selected_at: new Date().toISOString()
+                }, {
+                  onConflict: 'alternate_registration_id,user_id', // Prevent duplicates
+                  ignoreDuplicates: false // We want to update if it exists
+                })
+
+              if (selectionError) {
+                console.error('❌ Failed to create/update alternate selection record in webhook:', selectionError)
+                // Don't throw - payment succeeded, this is just record keeping
+              } else {
+                console.log('✅ Successfully ensured alternate selection record exists')
+              }
+            } else {
+              console.warn('⚠️ No gameId in payment metadata - cannot create alternate selection record')
+            }
           } catch (error) {
             console.error('❌ Error processing alternate payment_intent.succeeded:', error)
             throw error

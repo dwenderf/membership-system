@@ -679,7 +679,9 @@ export default function AccountingIntegrationPage() {
                                   {log.operation_type.replace('_', ' ')} - {log.entity_type}
                                 </div>
                                 {log.error_message && (
-                                  <div className="text-xs text-red-600">{log.error_message}</div>
+                                  <div className={`text-xs ${log.status === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                                    {log.error_message}
+                                  </div>
                                 )}
                               </div>
                             </div>

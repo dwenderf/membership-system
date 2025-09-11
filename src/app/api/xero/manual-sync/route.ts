@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: 'Connection failed',
-        message: 'Xero connection authentication failed. Please reconnect your Xero integration.',
+        message: 'Xero connection authentication failed during validation. This sometimes happens when tokens become corrupted. If this continues, try disconnecting and reconnecting your Xero integration.',
         connectionStatus: results.connectionStatus,
-        suggestion: 'Go to Settings → Integrations and reconnect Xero'
+        suggestion: 'Go to Settings → Integrations to reset the connection if needed'
       }, { status: 403 })
     }
 

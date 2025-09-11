@@ -1187,21 +1187,43 @@ export async function POST(request: NextRequest) {
                   user_id: paymentIntent.metadata.userId,
                   payment_id: updatedPayment.id,
                   amount_charged: paymentIntent.amount,
-                  selected_by: paymentIntent.metadata.selectedBy || paymentIntent.metadata.userId, // Fallback to userId if selectedBy not available
+                  selected_by: paymentIntent.metadata.selectedBy || paymentIntent.metadata.userId,
                   selected_at: new Date().toISOString()
                 }, {
-                  onConflict: 'alternate_registration_id,user_id', // Prevent duplicates
-                  ignoreDuplicates: false // We want to update if it exists
+                  onConflict: 'alternate_registration_id,user_id',
+                  ignoreDuplicates: false
                 })
 
               if (selectionError) {
                 console.error('❌ Failed to create/update alternate selection record in webhook:', selectionError)
-                // Don't throw - payment succeeded, this is just record keeping
               } else {
                 console.log('✅ Successfully ensured alternate selection record exists')
               }
             } else {
               console.warn('⚠️ No gameId in payment metadata - cannot create alternate selection record')
+            }
+
+            // Process through payment completion processor for Xero updates and emails
+            try {
+              console.log('🔄 Triggering payment completion processor for alternate selection...')
+              const completionEvent = {
+                event_type: 'alternate_selections' as const,
+                record_id: null, // Not needed for alternate selections
+                user_id: paymentIntent.metadata.userId,
+                payment_id: updatedPayment.id,
+                amount: paymentIntent.amount,
+                trigger_source: 'stripe_webhook_alternate',
+                timestamp: new Date().toISOString(),
+                metadata: {
+                  payment_intent_id: paymentIntent.id
+                }
+              }
+              
+              await paymentProcessor.processPaymentCompletion(completionEvent)
+              console.log('✅ Successfully processed alternate selection payment completion')
+            } catch (processorError) {
+              console.error('❌ Payment completion processor failed for alternate selection:', processorError)
+              // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
             console.error('❌ Error processing alternate payment_intent.succeeded:', error)

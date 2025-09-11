@@ -18,7 +18,7 @@ import { centsToDollars } from '@/types/currency'
 import { toNYDateString } from '@/lib/date-utils'
 
 export type PaymentCompletionEvent = {
-  event_type: 'payments' | 'user_memberships' | 'user_registrations'
+  event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
   record_id: string | null
   user_id: string
   payment_id: string | null
@@ -108,11 +108,19 @@ export class EmailProcessor {
         })
         await this.stageRegistrationConfirmationEmail(event, user)
       } 
+      // Handle alternate selection emails
+      else if (event.trigger_source === 'stripe_webhook_alternate') {
+        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering alternate selection email staging', { 
+          triggerSource: event.trigger_source,
+          amount: event.amount
+        })
+        await this.stageAlternateSelectionConfirmationEmail(event, user)
+      }
       // Unknown trigger source
       else {
         this.logger.logPaymentProcessing('process-confirmation-emails', '⚠️ Unknown trigger source, no email staged', { 
           triggerSource: event.trigger_source,
-          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration']
+          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration', 'stripe_webhook_alternate']
         }, 'warn')
       }
 
@@ -417,6 +425,118 @@ export class EmailProcessor {
       
     } catch (error) {
       this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Failed to stage registration email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
+    }
+  }
+
+  /**
+   * Stage alternate selection confirmation email
+   */
+  private async stageAlternateSelectionConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+    this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '📧 Starting alternate selection email staging', { 
+      paymentId: event.payment_id,
+      userEmail: user.email
+    })
+    
+    try {
+      if (!event.payment_id) {
+        this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '❌ No payment_id available for alternate selection lookup')
+        return
+      }
+      
+      // Check for existing email to prevent duplicates
+      const existingEmail = await this.checkExistingEmail(event, 'alternate_selection.completed')
+      if (existingEmail) {
+        this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '⚠️ Email already staged, skipping duplicate', { 
+          existingEmailId: existingEmail.id,
+          userEmail: user.email
+        })
+        return
+      }
+      
+      // Get alternate selection details by payment_id
+      const { data: alternateSelection, error: selectionError } = await this.supabase
+        .from('alternate_selections')
+        .select(`
+          *,
+          alternate_registration:alternate_registrations (
+            game_description,
+            game_date,
+            registration:registrations (
+              name,
+              season:seasons (name)
+            )
+          )
+        `)
+        .eq('payment_id', event.payment_id)
+        .single()
+      
+      if (selectionError || !alternateSelection) {
+        this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '❌ Failed to find alternate selection details', { 
+          paymentId: event.payment_id,
+          error: selectionError?.message
+        })
+        return
+      }
+      
+      // Get payment details for amount information
+      const { data: payment } = await this.supabase
+        .from('payments')
+        .select('final_amount')
+        .eq('id', event.payment_id)
+        .single()
+      
+      const templateId = process.env.LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID
+      if (!templateId) {
+        this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '❌ LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID not configured', undefined, 'error')
+        return
+      }
+      
+      // Format game date for display
+      const gameDate = new Date(alternateSelection.alternate_registration.game_date)
+      const formattedDate = gameDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        timeZone: 'America/New_York'
+      })
+      const formattedTime = gameDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        timeZone: 'America/New_York'
+      })
+      
+      // Stage the email for batch processing
+      const stagingResult = await emailStagingManager.stageEmail({
+        user_id: event.user_id,
+        email_address: user.email,
+        event_type: 'alternate_selection.completed',
+        subject: `Alternate Selection Confirmation - ${alternateSelection.alternate_registration.game_description}`,
+        template_id: templateId,
+        email_data: {
+          userName: `${user.first_name} ${user.last_name}`,
+          registrationName: alternateSelection.alternate_registration.registration.name,
+          seasonName: alternateSelection.alternate_registration.registration.season?.name || '',
+          gameDescription: alternateSelection.alternate_registration.game_description,
+          gameDate: formattedDate,
+          gameTime: formattedTime,
+          amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
+          purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
+          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+        },
+        related_entity_type: 'alternate_selections',
+        related_entity_id: alternateSelection.id,
+        payment_id: event.payment_id
+      })
+      
+      this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '📧 Email staging result', { 
+        success: stagingResult,
+        email: user.email,
+        gameDescription: alternateSelection.alternate_registration.game_description
+      })
+      
+    } catch (error) {
+      this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '❌ Failed to stage alternate selection email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }
   }
 }

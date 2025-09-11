@@ -124,6 +124,8 @@ LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -373,6 +375,40 @@ WHAT'S NEXT:
 • We'll contact you with further instructions if selected
 
 Thank you for your interest in joining the team!
+The Hockey Association Team
+```
+
+#### Alternate Selection Confirmation Template (`LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID`)
+**Data Variables:**
+- `userName` - Customer's full name
+- `registrationName` - Name of registration (e.g., "Rec League - Fall/Winter 2025-26")
+- `seasonName` - Season name
+- `gameDescription` - Description of the specific game (e.g., "Game 1")
+- `gameDate` - Formatted game date (e.g., "Monday, September 11, 2025")
+- `gameTime` - Formatted game time (e.g., "7:00 PM")
+- `amount` - Amount charged as formatted number (e.g., 22.50)
+- `purchaseDate` - Formatted purchase date (e.g., "September 11, 2025")
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+```
+Hi [userName],
+
+You've been confirmed as an alternate for [gameDescription]!
+
+GAME DETAILS:
+- Registration: [registrationName] ([seasonName])
+- Game: [gameDescription]
+- Date & Time: [gameDate] at [gameTime]
+- Amount Paid: $[amount]
+- Confirmation Date: [purchaseDate]
+
+WHAT'S NEXT:
+• You're now on the alternate list for this game
+• You'll be contacted if a spot becomes available
+• Check your status anytime: [dashboardUrl]
+
+Thanks for being part of the team!
 The Hockey Association Team
 ```
 
@@ -944,6 +980,7 @@ LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system

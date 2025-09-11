@@ -219,7 +219,7 @@ export default function AccountingIntegrationPage() {
         await fetchXeroStatus()
       } else {
         const errorData = await response.json()
-        showError(errorData.error || 'Failed to trigger manual sync')
+        showError(errorData.message || errorData.error || 'Failed to trigger manual sync')
       }
     } catch (error) {
       showError('Failed to trigger manual sync')

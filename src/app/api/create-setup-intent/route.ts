@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
@@ -9,6 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
 
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -24,6 +25,19 @@ export async function POST(request: NextRequest) {
         supabase_user_id: user.id,
       },
     })
+
+    // Store the customer ID in the users table immediately
+    const { error: updateError } = await adminSupabase
+      .from('users')
+      .update({
+        stripe_customer_id: customer.id,
+      })
+      .eq('id', user.id)
+
+    if (updateError) {
+      console.error('Failed to store customer ID:', updateError)
+      // Continue with setup intent creation even if this fails
+    }
 
     // Create Setup Intent
     const setupIntent = await stripe.setupIntents.create({

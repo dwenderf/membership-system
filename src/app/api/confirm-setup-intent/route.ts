@@ -41,12 +41,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Setup intent does not belong to current user' }, { status: 403 })
     }
 
+    // Get the customer ID from the setup intent
+    const customerId = setupIntent.customer as string
+
     // Persist on user profile (idempotent if webhook already ran)
     const { error: updateError } = await adminSupabase
       .from('users')
       .update({
         stripe_payment_method_id: setupIntent.payment_method as string,
         stripe_setup_intent_id: setupIntent.id,
+        stripe_customer_id: customerId, // Store customer ID as backup
         setup_intent_status: 'succeeded',
         payment_method_updated_at: new Date().toISOString(),
       })

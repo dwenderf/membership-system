@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useToast } from '@/contexts/ToastContext'
 import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
 
 interface Game {
@@ -39,6 +40,7 @@ export default function RegistrationGamesPage() {
   const [selectionResults, setSelectionResults] = useState<any>(null)
 
   const supabase = createClient()
+  const { showError, showSuccess } = useToast()
 
   useEffect(() => {
     if (registrationId) {
@@ -82,6 +84,20 @@ export default function RegistrationGamesPage() {
   const handleSelectionComplete = (results: any) => {
     setSelectionResults(results)
     setSelectedGame(null)
+    
+    // Show appropriate toast notifications
+    const { summary } = results
+    if (summary.failedSelections > 0 && summary.successfulSelections === 0) {
+      // All selections failed
+      showError(`All ${summary.failedSelections} alternate selections failed. Check payment methods and try again.`)
+    } else if (summary.failedSelections > 0) {
+      // Some succeeded, some failed  
+      showError(`${summary.failedSelections} of ${summary.totalProcessed} selections failed. ${summary.successfulSelections} were successful.`)
+    } else {
+      // All succeeded
+      showSuccess(`Successfully selected ${summary.successfulSelections} alternates. Total charged: $${(summary.totalAmountCharged / 100).toFixed(2)}`)
+    }
+    
     // Refresh games to update selection counts
     fetchRegistrationAndGames()
   }
@@ -168,35 +184,52 @@ export default function RegistrationGamesPage() {
         </div>
 
         {/* Selection Results */}
-        {selectionResults && (
-          <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-md">
-            <h3 className="text-lg font-medium text-green-900 mb-2">Selection Complete</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-green-800">Total Selected:</span>
-                <div className="text-green-700">{selectionResults.summary.totalSelected}</div>
+        {selectionResults && (() => {
+          const { summary } = selectionResults
+          const hasFailures = summary.failedSelections > 0
+          const allFailed = summary.failedSelections > 0 && summary.successfulSelections === 0
+          
+          // Color scheme based on results
+          const colorScheme = allFailed 
+            ? { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-900', label: 'text-red-800', value: 'text-red-700', button: 'text-red-600 hover:text-red-800' }
+            : hasFailures 
+              ? { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900', label: 'text-yellow-800', value: 'text-yellow-700', button: 'text-yellow-600 hover:text-yellow-800' }
+              : { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-900', label: 'text-green-800', value: 'text-green-700', button: 'text-green-600 hover:text-green-800' }
+          
+          const title = allFailed ? 'Selection Failed' : hasFailures ? 'Selection Partially Complete' : 'Selection Complete'
+          
+          return (
+            <div className={`mb-8 p-4 ${colorScheme.bg} border ${colorScheme.border} rounded-md`}>
+              <h3 className={`text-lg font-medium ${colorScheme.text} mb-2`}>{title}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className={`font-medium ${colorScheme.label}`}>Total Selected:</span>
+                  <div className={colorScheme.value}>{summary.totalSelected}</div>
+                </div>
+                <div>
+                  <span className={`font-medium ${colorScheme.label}`}>Successful:</span>
+                  <div className={colorScheme.value}>{summary.successfulSelections}</div>
+                </div>
+                <div>
+                  <span className={`font-medium ${colorScheme.label}`}>Failed:</span>
+                  <div className={`${summary.failedSelections > 0 ? 'text-red-700 font-semibold' : colorScheme.value}`}>
+                    {summary.failedSelections}
+                  </div>
+                </div>
+                <div>
+                  <span className={`font-medium ${colorScheme.label}`}>Total Charged:</span>
+                  <div className={colorScheme.value}>{formatCurrency(summary.totalAmountCharged)}</div>
+                </div>
               </div>
-              <div>
-                <span className="font-medium text-green-800">Successful:</span>
-                <div className="text-green-700">{selectionResults.summary.successfulSelections}</div>
-              </div>
-              <div>
-                <span className="font-medium text-green-800">Failed:</span>
-                <div className="text-green-700">{selectionResults.summary.failedSelections}</div>
-              </div>
-              <div>
-                <span className="font-medium text-green-800">Total Charged:</span>
-                <div className="text-green-700">{formatCurrency(selectionResults.summary.totalAmountCharged)}</div>
-              </div>
+              <button
+                onClick={() => setSelectionResults(null)}
+                className={`mt-2 text-sm ${colorScheme.button}`}
+              >
+                Dismiss
+              </button>
             </div>
-            <button
-              onClick={() => setSelectionResults(null)}
-              className="mt-2 text-sm text-green-600 hover:text-green-800"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+          )
+        })()}
 
 
 

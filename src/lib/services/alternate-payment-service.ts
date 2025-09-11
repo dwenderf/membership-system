@@ -43,6 +43,10 @@ export class AlternatePaymentService {
         throw new Error('User does not have a valid payment method')
       }
 
+      if (!user.stripe_customer_id) {
+        throw new Error('User does not have a Stripe customer ID')
+      }
+
       // Get registration details for pricing
       const { data: registration, error: registrationError } = await supabase
         .from('registrations')
@@ -63,23 +67,6 @@ export class AlternatePaymentService {
         registrationId,
         discountCodeId,
         userId
-      )
-
-      // Debug logging to trace the null net_amount issue
-      logger.logPaymentProcessing(
-        'charge-alternate-debug',
-        'Creating staging data for alternate charge',
-        {
-          userId,
-          registrationId,
-          gameDescription,
-          basePrice: registration.alternate_price,
-          finalAmount,
-          discountAmount,
-          finalAmountConverted: centsToCents(finalAmount),
-          discountCodeId
-        },
-        'info'
       )
 
       // Create staging record for Xero
@@ -134,7 +121,7 @@ export class AlternatePaymentService {
         amount: centsToCents(finalAmount),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,
-        customer: undefined, // We can create customer later if needed
+        customer: user.stripe_customer_id, // Use the stored customer ID
         confirm: true, // Immediately attempt to charge
         off_session: true, // This is an off-session payment
         receipt_email: user.email,
@@ -294,22 +281,6 @@ export class AlternatePaymentService {
       }
 
       const finalAmount = Math.max(0, basePrice - discountAmount)
-
-      // Debug logging to trace the null net_amount issue
-      logger.logPaymentProcessing(
-        'calculate-charge-amount-debug',
-        'Charge calculation details',
-        {
-          registrationId,
-          discountCodeId,
-          userId,
-          basePrice,
-          discountAmount,
-          finalAmount,
-          discountCodeFound: !!discountCode
-        },
-        'info'
-      )
 
       return {
         finalAmount,

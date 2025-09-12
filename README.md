@@ -1760,7 +1760,7 @@ if (remainingDelay > 0) {
 
 #### Staging Record Lifecycle
 
-```
+```text
 ┌─────────┐    ┌──────────┐    ┌─────────┐    ┌─────────┐
 │ staged  │───▶│ pending  │───▶│ synced  │───▶│ failed  │
 └─────────┘    └──────────┘    └─────────┘    └─────────┘
@@ -1773,7 +1773,7 @@ if (remainingDelay > 0) {
 
 #### Payment Status Flow
 
-```
+```text
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │ processing  │───▶│ completed   │───▶│ synced      │
 └─────────────┘    └─────────────┘    └─────────────┘
@@ -2051,7 +2051,7 @@ Our system follows an intelligent 5-step process to handle archived contacts whi
 
 **Current Architecture**:
 
-```
+```text
 Payment Completion (Fast):
 ┌─────────────────────────────────────┐
 │ PaymentCompletionProcessor          │

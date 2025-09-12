@@ -478,10 +478,10 @@ export class EmailProcessor {
         return
       }
       
-      // Get payment details for amount information
+      // Get payment details for amount and payment intent information
       const { data: payment } = await this.supabase
         .from('payments')
-        .select('final_amount')
+        .select('final_amount, stripe_payment_intent_id')
         .eq('id', event.payment_id)
         .single()
       
@@ -521,6 +521,7 @@ export class EmailProcessor {
           gameDate: formattedDate,
           gameTime: formattedTime,
           amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
+          paymentIntentId: payment?.stripe_payment_intent_id || 'unknown',
           purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
           dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
         },

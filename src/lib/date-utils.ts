@@ -51,22 +51,17 @@ export function convertToNYTimezone(dateTimeLocal: string): string {
   const [year, month, day] = datePart.split('-')
   const [hour, minute] = timePart.split(':')
   
-  // Create a date object representing this time in NY timezone
-  // We'll use the Intl.DateTimeFormat trick to handle EST/EDT automatically
-  const inputDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute))
+  // Create two date objects - one interpreted as local time, one as NY time
+  const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute))
   
-  // Get the timezone offset for NY on this specific date
-  const nyFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'longOffset'
-  })
+  // Get what this same date/time would be in NY timezone
+  const nyDate = new Date(localDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
   
-  const nyOffset = nyFormatter.formatToParts(inputDate)
-    .find(part => part.type === 'timeZoneName')?.value || '-05:00'
+  // Calculate the difference between local and NY interpretations
+  const offset = localDate.getTime() - nyDate.getTime()
   
-  // Create the ISO string with NY timezone
-  const isoString = `${datePart}T${timePart}:00${nyOffset}`
+  // Apply the offset to treat the input as NY time
+  const correctedDate = new Date(localDate.getTime() + offset)
   
-  // Convert to UTC and return ISO string
-  return new Date(isoString).toISOString()
+  return correctedDate.toISOString()
 }

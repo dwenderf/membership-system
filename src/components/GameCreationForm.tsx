@@ -133,7 +133,15 @@ export default function GameCreationForm({
             type="datetime-local"
             id="gameDate"
             value={gameDate}
-            onChange={(e) => setGameDate(e.target.value)}
+            onChange={(e) => {
+              let value = e.target.value
+              // If user selects a date without time, default to 12:00
+              if (value && value.length === 10) { // Date only (YYYY-MM-DD)
+                value += 'T12:00'
+              }
+              setGameDate(value)
+            }}
+            step="300"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={loading}
             required

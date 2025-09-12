@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { convertToNYTimezone } from '@/lib/date-utils'
 
 interface GameCreationFormProps {
   registrationId: string
@@ -8,14 +9,6 @@ interface GameCreationFormProps {
   onCancel: () => void
 }
 
-// Helper function to convert datetime-local input to proper timestamp for storage
-// This uses the same proven approach as the timing page
-const formatForDB = (dateTimeLocal: string): string => {
-  if (!dateTimeLocal) return ''
-  // This works correctly: datetime-local is treated as local time,
-  // then toISOString() converts to UTC with proper timezone handling
-  return new Date(dateTimeLocal).toISOString()
-}
 
 export default function GameCreationForm({ 
   registrationId, 
@@ -78,8 +71,8 @@ export default function GameCreationForm({
         body: JSON.stringify({
           registrationId,
           gameDescription: gameDescription.trim(),
-          // Convert datetime-local to proper timestamp for storage
-          gameDate: gameDate ? formatForDB(gameDate) : null
+          // Convert datetime-local to America/New_York timezone for storage
+          gameDate: gameDate ? convertToNYTimezone(gameDate) : null
         })
       })
 

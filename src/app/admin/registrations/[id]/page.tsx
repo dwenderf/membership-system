@@ -112,28 +112,6 @@ export default async function RegistrationDetailPage({
                   Registration details and category management
                 </p>
               </div>
-              <div className="flex space-x-3">
-                <Link
-                  href={`/admin/registrations/${id}/timing`}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Edit Timing
-                </Link>
-                {registration.allow_alternates && (
-                  <Link
-                    href={`/admin/registrations/${id}/games`}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Manage Games
-                  </Link>
-                )}
-                <Link
-                  href={`/admin/registrations/${id}/categories/new`}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Add Category
-                </Link>
-              </div>
             </div>
           </div>
 
@@ -198,7 +176,15 @@ export default async function RegistrationDetailPage({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">Registration Timing</dt>
+                    <dt className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Registration Timing</span>
+                      <Link
+                        href={`/admin/registrations/${id}/timing`}
+                        className="text-xs text-blue-600 hover:text-blue-500 font-medium"
+                      >
+                        Edit
+                      </Link>
+                    </dt>
                     <dd className="mt-1 text-sm text-gray-900">
                       {registration.presale_start_at || registration.regular_start_at || registration.registration_end_at ? (
                         <div className="space-y-1">
@@ -244,9 +230,12 @@ export default async function RegistrationDetailPage({
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900">Registration Categories</h2>
-                    <span className="text-sm text-gray-500">
-                      {categories?.length || 0} categories
-                    </span>
+                    <Link
+                      href={`/admin/registrations/${id}/categories/new`}
+                      className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Add Category
+                    </Link>
                   </div>
                 </div>
                 {!categories || categories.length === 0 ? (

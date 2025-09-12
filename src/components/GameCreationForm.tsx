@@ -146,6 +146,9 @@ export default function GameCreationForm({
             disabled={loading}
             required
           />
+          <p className="text-xs text-gray-500 mt-1">
+            Select date and time in 5-minute intervals. Your browser may show 12-hour (AM/PM) or 24-hour format.
+          </p>
           {gameDate && gameDescription && (
             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-sm font-medium text-blue-900">

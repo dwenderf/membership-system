@@ -492,7 +492,10 @@ export class EmailProcessor {
       }
       
       // Format game date for display
+      // Note: Database stores TIMESTAMP WITH TIME ZONE, so we should preserve the original timezone
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
+      
+      // Format date and time in Eastern Time (the timezone for NYCGHA events)
       const formattedDate = gameDate.toLocaleDateString('en-US', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -500,6 +503,8 @@ export class EmailProcessor {
         day: 'numeric',
         timeZone: 'America/New_York'
       })
+      
+      // For time, we want to show what time it actually is in New York, regardless of how it was stored
       const formattedTime = gameDate.toLocaleTimeString('en-US', { 
         hour: 'numeric', 
         minute: '2-digit',

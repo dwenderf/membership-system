@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Game {
   id: string
@@ -50,13 +51,15 @@ interface GameAlternatesCardProps {
   registration: Registration
   dateTag: { text: string; isUrgent: boolean } | null
   userAccess: AlternatesAccessResult
+  onCountsUpdated?: (gameId: string, selectedCount: number, availableCount: number) => void
 }
 
 export default function GameAlternatesCard({ 
   game, 
   registration, 
   dateTag, 
-  userAccess 
+  userAccess,
+  onCountsUpdated
 }: GameAlternatesCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [alternates, setAlternates] = useState<Alternate[]>([])
@@ -64,6 +67,7 @@ export default function GameAlternatesCard({
   const [error, setError] = useState('')
   const [selecting, setSelecting] = useState(false)
   const [selectedAlternates, setSelectedAlternates] = useState<Set<string>>(new Set())
+  const { showSuccess, showError } = useToast()
 
   // Fetch alternates when expanded
   useEffect(() => {
@@ -130,20 +134,39 @@ export default function GameAlternatesCard({
       // Refresh alternates list to show updated selection status
       await fetchAlternates()
       setSelectedAlternates(new Set())
+      setError('') // Clear any previous errors
       
-      // Show success message or handle results
+      // Handle results and show appropriate toasts
       if (data.results) {
         const successful = data.results.filter((r: any) => r.success).length
         const failed = data.results.filter((r: any) => !r.success).length
         
         if (failed > 0) {
-          setError(`${successful} alternates selected successfully, ${failed} failed`)
+          showError(
+            'Some Alternates Failed', 
+            `${successful} alternates charged successfully, ${failed} failed`
+          )
+        } else if (successful > 0) {
+          showSuccess(
+            'Alternates Selected',
+            `${successful} alternate${successful !== 1 ? 's' : ''} charged successfully`
+          )
+        }
+        
+        // Update counts in parent component
+        if (onCountsUpdated) {
+          // Calculate new counts after refresh
+          const newSelectedCount = (game.selected_count || 0) + successful
+          const newAvailableCount = Math.max(0, (game.available_count || 0) - successful)
+          onCountsUpdated(game.id, newSelectedCount, newAvailableCount)
         }
       }
       
     } catch (err) {
       console.error('Error selecting alternates:', err)
-      setError(err instanceof Error ? err.message : 'Failed to select alternates')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to select alternates'
+      setError(errorMessage)
+      showError('Selection Failed', errorMessage)
     } finally {
       setSelecting(false)
     }

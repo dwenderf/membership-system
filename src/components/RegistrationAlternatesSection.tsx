@@ -85,6 +85,14 @@ export default function RegistrationAlternatesSection({
     setShowCreateForm(false)
   }
 
+  const handleCountsUpdated = (gameId: string, selectedCount: number, availableCount: number) => {
+    setGames(prev => prev.map(game => 
+      game.id === gameId 
+        ? { ...game, selected_count: selectedCount, available_count: availableCount }
+        : game
+    ))
+  }
+
   const getGameDateTag = (gameDate: string | null) => {
     if (!gameDate) return null
     
@@ -169,6 +177,7 @@ export default function RegistrationAlternatesSection({
                 registration={registration}
                 dateTag={getGameDateTag(game.game_date)}
                 userAccess={userAccess}
+                onCountsUpdated={handleCountsUpdated}
               />
             ))}
           </div>

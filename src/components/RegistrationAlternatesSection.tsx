@@ -92,8 +92,8 @@ export default function RegistrationAlternatesSection({
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex justify-between items-center">
           <div>
-            <h3 className="text-lg font-medium text-gray-900">{registration.name}</h3>
-            <div className="flex items-center space-x-2 mt-1">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-lg font-medium text-gray-900">{registration.name}</h3>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
                 registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :

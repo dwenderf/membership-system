@@ -26,6 +26,8 @@ interface Game {
   game_description: string
   game_date: string | null
   created_at: string
+  selected_count?: number
+  available_count?: number
 }
 
 interface RegistrationAlternatesSectionProps {
@@ -67,6 +69,7 @@ export default function RegistrationAlternatesSection({
   }
 
   const handleGameCreated = (game: Game) => {
+    // Add the new game to the list - it should have complete data now
     setGames(prev => [...prev, game])
     setShowCreateForm(false)
   }
@@ -95,7 +98,6 @@ export default function RegistrationAlternatesSection({
           <div>
             <h3 className="text-lg font-medium text-gray-900">{registration.name}</h3>
             <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
-              <span className="capitalize">{registration.type}</span>
               {registration.seasons && (
                 <span>{registration.seasons.name}</span>
               )}

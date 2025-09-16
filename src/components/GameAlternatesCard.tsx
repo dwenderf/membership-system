@@ -9,6 +9,8 @@ interface Game {
   game_description: string
   game_date: string | null
   created_at: string
+  selected_count?: number
+  available_count?: number
 }
 
 interface Registration {
@@ -147,8 +149,10 @@ export default function GameAlternatesCard({
     }
   }
 
+  // Use pre-calculated counts from API when available, otherwise calculate from loaded alternates
   const availableAlternates = alternates.filter(alt => !alt.isAlreadySelected)
-  const selectedCount = alternates.filter(alt => alt.isAlreadySelected).length
+  const selectedCount = game.selected_count ?? alternates.filter(alt => alt.isAlreadySelected).length
+  const availableCount = game.available_count ?? availableAlternates.length
 
   const formatGameDateTime = (dateStr: string | null) => {
     if (!dateStr) return ''
@@ -195,8 +199,10 @@ export default function GameAlternatesCard({
               <p className="text-sm text-gray-500 mt-1">No date specified</p>
             )}
             <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-              <span>{availableAlternates.length} available</span>
-              <span>{selectedCount} selected</span>
+              <span>{availableCount} available</span>
+              <span className={selectedCount > 0 ? 'text-green-600 font-medium' : ''}>
+                {selectedCount} selected
+              </span>
             </div>
           </div>
           <div className="flex items-center">
@@ -264,7 +270,11 @@ export default function GameAlternatesCard({
                 {alternates
                   .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
                   .map(alternate => (
-                    <div key={alternate.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
+                    <div key={alternate.id} className={`flex items-center justify-between p-3 border rounded-md ${
+                      alternate.isAlreadySelected 
+                        ? 'bg-green-50 border-green-200' 
+                        : 'border-gray-200'
+                    }`}>
                       <div className="flex items-center space-x-3">
                         <input
                           type="checkbox"
@@ -276,11 +286,6 @@ export default function GameAlternatesCard({
                         <div>
                           <div className="font-medium text-gray-900">
                             {alternate.firstName} {alternate.lastName}
-                            {alternate.isAlreadySelected && (
-                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                Selected
-                              </span>
-                            )}
                           </div>
                           <div className="text-sm text-gray-500">{alternate.email}</div>
                           {alternate.discountCode && (

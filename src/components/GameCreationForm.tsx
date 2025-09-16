@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { convertToNYTimezone } from '@/lib/date-utils'
+import { useToast } from '@/contexts/ToastContext'
 
 interface GameCreationFormProps {
   registrationId: string
@@ -19,6 +20,7 @@ export default function GameCreationForm({
   const [gameDate, setGameDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { showSuccess, showError } = useToast()
   
   // Format date for display when form is complete
   const formatGameDateTime = (dateValue: string) => {
@@ -82,14 +84,21 @@ export default function GameCreationForm({
         throw new Error(data.error || 'Failed to create game')
       }
 
+      // Show success toast
+      showSuccess('Game Created', `"${gameDescription.trim()}" has been created successfully`)
+      
+      // Update parent component with new game data
       onGameCreated(data.game)
       
       // Reset form
       setGameDescription('')
       setGameDate('')
+      setError('') // Clear any previous errors
       
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create game')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create game'
+      setError(errorMessage)
+      showError('Failed to Create Game', errorMessage)
     } finally {
       setLoading(false)
     }

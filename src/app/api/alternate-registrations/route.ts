@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 
-    // Get games for this registration with selection counts
+    // Get games for this registration with selection counts and available alternates
     const { data: games, error: gamesError } = await supabase
       .from('alternate_registrations')
       .select(`
@@ -80,14 +80,36 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Format games data
-    const formattedGames = (games || []).map(game => ({
-      id: game.id,
-      registration_id: game.registration_id,
-      game_description: game.game_description,
-      game_date: game.game_date,
-      created_at: game.created_at
-    }))
+    // Get total available alternates for this registration
+    const { data: totalAlternates, error: alternatesError } = await supabase
+      .from('user_alternate_registrations')
+      .select('id')
+      .eq('registration_id', registrationId)
+
+    if (alternatesError) {
+      logger.logSystem('get-alternates-error', 'Failed to fetch alternates count', {
+        registrationId,
+        error: alternatesError.message
+      })
+    }
+
+    const totalAvailableCount = totalAlternates?.length || 0
+
+    // Format games data with counts
+    const formattedGames = (games || []).map(game => {
+      const selectedCount = Array.isArray(game.alternate_selections) ? game.alternate_selections.length : 0
+      const availableCount = Math.max(0, totalAvailableCount - selectedCount)
+      
+      return {
+        id: game.id,
+        registration_id: game.registration_id,
+        game_description: game.game_description,
+        game_date: game.game_date,
+        created_at: game.created_at,
+        selected_count: selectedCount,
+        available_count: availableCount
+      }
+    })
 
     return NextResponse.json({
       games: formattedGames,
@@ -206,17 +228,13 @@ export async function POST(request: NextRequest) {
       createdBy: authUser.id
     })
 
-    // Format response
+    // Format response - using snake_case to match component expectations
     const formattedGame = {
       id: newGame.id,
-      registrationId: newGame.registration_id,
-      registrationName: registration.name,
-      gameDescription: newGame.game_description,
-      gameDate: newGame.game_date,
-      alternatePrice: registration.alternate_price,
-      alternateAccountingCode: registration.alternate_accounting_code,
-      createdAt: newGame.created_at,
-      alternateSelections: 0
+      registration_id: newGame.registration_id,
+      game_description: newGame.game_description,
+      game_date: newGame.game_date,
+      created_at: newGame.created_at
     }
 
     return NextResponse.json({

@@ -83,15 +83,10 @@ export async function GET(request: NextRequest) {
     // Format games data
     const formattedGames = (games || []).map(game => ({
       id: game.id,
-      registrationId: game.registration_id,
-      registrationName: registration.name,
-      seasonName: registration.seasons?.name || 'Unknown Season',
-      gameDescription: game.game_description,
-      gameDate: game.game_date,
-      alternatePrice: registration.alternate_price || 0,
-      alternateAccountingCode: registration.alternate_accounting_code || '',
-      createdAt: game.created_at,
-      alternateSelections: game.alternate_selections?.length || 0
+      registration_id: game.registration_id,
+      game_description: game.game_description,
+      game_date: game.game_date,
+      created_at: game.created_at
     }))
 
     return NextResponse.json({

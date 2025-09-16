@@ -156,9 +156,11 @@ export default function GameAlternatesCard({
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
       month: 'short', 
-      day: 'numeric',
+      day: 'numeric'
+    }) + ' at ' + date.toLocaleTimeString('en-US', {
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     })
   }
 
@@ -172,7 +174,9 @@ export default function GameAlternatesCard({
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-3">
-              <h4 className="text-lg font-medium text-gray-900">{game.game_description}</h4>
+              <h4 className="text-lg font-medium text-gray-900">
+                {game.game_description || 'Untitled Game'}
+              </h4>
               {dateTag && (
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   dateTag === 'Today' ? 'bg-green-100 text-green-800' :
@@ -183,10 +187,12 @@ export default function GameAlternatesCard({
                 </span>
               )}
             </div>
-            {game.game_date && (
+            {game.game_date ? (
               <p className="text-sm text-gray-600 mt-1">
                 {formatGameDateTime(game.game_date)}
               </p>
+            ) : (
+              <p className="text-sm text-gray-500 mt-1">No date specified</p>
             )}
             <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
               <span>{availableAlternates.length} available</span>

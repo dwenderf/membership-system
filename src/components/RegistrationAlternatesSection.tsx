@@ -5,6 +5,7 @@ import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import GameAlternatesCard from '@/components/GameAlternatesCard'
 import GameCreationForm from '@/components/GameCreationForm'
 import ActivityHeatmap from '@/components/ActivityHeatmap'
+import WeeklyActivityGrid from '@/components/WeeklyActivityGrid'
 
 interface Registration {
   id: string
@@ -44,6 +45,7 @@ export default function RegistrationAlternatesSection({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('weekly')
 
   // Fetch games for this registration
   useEffect(() => {
@@ -135,17 +137,54 @@ export default function RegistrationAlternatesSection({
         </div>
       </div>
 
-      {/* Activity Heatmap - Only show if there are games */}
+      {/* Activity Views - Only show if there are games */}
       {!loading && games.length > 0 && (
         <div className="px-6 py-4 border-b border-gray-200">
-          <ActivityHeatmap
-            games={games}
-            registration={registration}
-            onDateClick={(date) => {
-              // TODO: Could implement filtering by date in the future
-              console.log('Date clicked:', date)
-            }}
-          />
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-900">Season Overview</h3>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode('weekly')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'weekly'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Weekly
+              </button>
+              <button
+                onClick={() => setViewMode('daily')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'daily'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Daily
+              </button>
+            </div>
+          </div>
+          
+          {viewMode === 'weekly' ? (
+            <WeeklyActivityGrid
+              games={games}
+              registration={registration}
+              onWeekClick={(weekStart) => {
+                // TODO: Could implement filtering by week in the future
+                console.log('Week clicked:', weekStart)
+              }}
+            />
+          ) : (
+            <ActivityHeatmap
+              games={games}
+              registration={registration}
+              onDateClick={(date) => {
+                // TODO: Could implement filtering by date in the future
+                console.log('Date clicked:', date)
+              }}
+            />
+          )}
         </div>
       )}
 

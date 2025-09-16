@@ -149,9 +149,8 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+    <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-900">Season Activity</h3>
         <div className="flex items-center space-x-2 text-xs text-gray-500">
           <span>Less</span>
           <div className="flex space-x-1">
@@ -180,17 +179,34 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
           tooltipDataAttrs={getTooltipDataAttrs}
           onClick={handleClick}
           showWeekdayLabels={true}
-          weekdayLabels={['', '', '', '', 'Fri', 'Sat', 'Sun']} // Only show labels for our activity days
+          showMonthLabels={true}
+          horizontal={true}
+          gutterSize={2}
+          showOutOfRangeDays={false}
         />
       </div>
 
       <style jsx>{`
         .activity-heatmap-container {
           font-size: 12px;
+          max-width: 800px;
+          overflow-x: auto;
         }
         
         .activity-heatmap-container :global(.react-calendar-heatmap) {
-          max-width: 100%;
+          width: 100%;
+          height: auto;
+        }
+        
+        .activity-heatmap-container :global(.react-calendar-heatmap svg) {
+          width: 100%;
+          height: 120px;
+          max-width: 800px;
+        }
+        
+        .activity-heatmap-container :global(.react-calendar-heatmap rect) {
+          width: 10px;
+          height: 10px;
         }
         
         .activity-heatmap-container :global(.react-calendar-heatmap text) {

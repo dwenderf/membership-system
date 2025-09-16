@@ -94,24 +94,6 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
 
   return (
     <div className="space-y-6">
-      {/* All Registrations Overview */}
-      {!overviewLoading && registrationsWithGames.length > 0 && (
-        <AllRegistrationsActivityGrid
-          registrations={registrationsWithGames}
-          onRegistrationWeekClick={(registrationId, weekStart) => {
-            // Auto-select the registration when user clicks on a week
-            setSelectedRegistration(registrationId)
-            console.log('Week clicked:', registrationId, weekStart)
-          }}
-        />
-      )}
-
-      {overviewLoading && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="text-center text-gray-500">Loading overview...</div>
-        </div>
-      )}
-
       {/* Registration Selection */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between">
@@ -141,6 +123,24 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
           </div>
         </div>
       </div>
+
+      {/* All Registrations Overview */}
+      {!overviewLoading && registrationsWithGames.length > 0 && (
+        <AllRegistrationsActivityGrid
+          registrations={registrationsWithGames}
+          onRegistrationWeekClick={(registrationId, weekStart) => {
+            // Auto-select the registration when user clicks on a week
+            setSelectedRegistration(registrationId)
+            console.log('Week clicked:', registrationId, weekStart)
+          }}
+        />
+      )}
+
+      {overviewLoading && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-center text-gray-500">Loading overview...</div>
+        </div>
+      )}
 
       {/* Selected Registration Section */}
       {selectedRegistrationData ? (

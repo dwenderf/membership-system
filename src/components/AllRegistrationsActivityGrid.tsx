@@ -178,11 +178,11 @@ export default function AllRegistrationsActivityGrid({
       return `${registration.name} - Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): No games`
     }
 
-    const gamesList = week.games.map(game => 
-      `${game.game_description} (${game.selected_count || 0} selected)`
-    ).join(', ')
+    const gamesCount = week.games.length
+    const firstGame = week.games[0]?.game_description || 'Game'
+    const moreText = gamesCount > 1 ? ` + ${gamesCount - 1} more` : ''
 
-    return `${registration.name} - Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): ${week.totalSelected} alternates selected\nGames: ${gamesList}`
+    return `${registration.name} - Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): ${week.totalSelected} alternates selected - ${firstGame}${moreText}`
   }
 
   const handleWeekClick = (registrationId: string, week: WeekData) => {
@@ -216,27 +216,29 @@ export default function AllRegistrationsActivityGrid({
         </div>
       </div>
 
-      <div className="space-y-2">
-        {registrationData.map(({ registration, weeks }) => (
-          <div key={registration.id} className="flex items-center space-x-2">
-            {/* Registration name */}
-            <div className="w-32 text-xs font-medium text-gray-700 truncate" title={registration.name}>
-              {registration.name}
+      <div className="overflow-x-auto">
+        <div className="space-y-2" style={{ minWidth: `${32 * 8 + totalWeeks * 16}px` }}>
+          {registrationData.map(({ registration, weeks }) => (
+            <div key={registration.id} className="flex items-center space-x-2">
+              {/* Registration name - fixed width */}
+              <div className="w-32 text-xs font-medium text-gray-700 truncate flex-shrink-0" title={registration.name}>
+                {registration.name}
+              </div>
+              
+              {/* Weekly grid for this registration */}
+              <div className="flex gap-1 flex-shrink-0">
+                {weeks.map(week => (
+                  <div
+                    key={week.weekStart}
+                    className={`w-3 h-3 rounded-sm cursor-pointer hover:ring-2 hover:ring-gray-400 transition-all ${getColorClass(week.totalSelected)}`}
+                    title={getTooltip(registration, week)}
+                    onClick={() => handleWeekClick(registration.id, week)}
+                  />
+                ))}
+              </div>
             </div>
-            
-            {/* Weekly grid for this registration */}
-            <div className="flex gap-1">
-              {weeks.map(week => (
-                <div
-                  key={week.weekStart}
-                  className={`w-3 h-3 rounded-sm cursor-pointer hover:ring-2 hover:ring-gray-400 transition-all ${getColorClass(week.totalSelected)}`}
-                  title={getTooltip(registration, week)}
-                  onClick={() => handleWeekClick(registration.id, week)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="mt-3 text-xs text-gray-500">

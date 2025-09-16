@@ -43,6 +43,14 @@ interface HeatmapValue {
 
 export default function ActivityHeatmap({ games, registration, onDateClick }: ActivityHeatmapProps) {
   const { startDate, endDate, heatmapData } = useMemo(() => {
+    // Safety check - ensure we have valid data
+    if (!registration || !Array.isArray(games)) {
+      return {
+        startDate: new Date(),
+        endDate: new Date(),
+        heatmapData: []
+      }
+    }
     // Get season dates or fallback to 6 months
     const today = new Date()
     const seasonStart = registration.seasons 
@@ -101,9 +109,15 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
   }, [games, registration])
 
   const getTooltipDataAttrs = (value: HeatmapValue | null) => {
-    if (!value || value.games.length === 0) {
+    if (!value) {
       return {
-        'data-tip': `${value?.date || 'No date'}: No games scheduled`
+        'data-tip': 'No date'
+      }
+    }
+
+    if (!value.games || value.games.length === 0) {
+      return {
+        'data-tip': `${value.date}: No games scheduled`
       }
     }
 
@@ -115,7 +129,7 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     })
 
     const gamesSummary = value.games.map(game => 
-      `${game.game_description} (${game.selected_count || 0} selected)`
+      `${game.game_description || 'Untitled Game'} (${game.selected_count || 0} selected)`
     ).join(', ')
 
     return {
@@ -124,9 +138,14 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
   }
 
   const handleClick = (value: HeatmapValue | null) => {
-    if (value && value.games.length > 0 && onDateClick) {
+    if (value && value.games && value.games.length > 0 && onDateClick) {
       onDateClick(value.date)
     }
+  }
+
+  // Don't render if we have no valid data
+  if (!registration || !Array.isArray(games) || heatmapData.length === 0) {
+    return null
   }
 
   return (

@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get registration_id from query params
+    // Get registrationId from query params
     const { searchParams } = new URL(request.url)
-    const registrationId = searchParams.get('registration_id')
+    const registrationId = searchParams.get('registrationId')
 
     if (!registrationId) {
       return NextResponse.json({ error: 'Registration ID is required' }, { status: 400 })

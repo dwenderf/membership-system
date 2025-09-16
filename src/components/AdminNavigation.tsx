@@ -43,11 +43,13 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
       href: '/admin/seasons', 
       current: pathname.startsWith('/admin/seasons') || 
                pathname.startsWith('/admin/memberships') || 
-               pathname.startsWith('/admin/registrations'),
+               pathname.startsWith('/admin/registrations') ||
+               pathname.startsWith('/admin/alternates'),
       submenu: [
         { name: 'Seasons', href: '/admin/seasons' },
         { name: 'Memberships', href: '/admin/memberships' },
-        { name: 'Registrations', href: '/admin/registrations' }
+        { name: 'Registrations', href: '/admin/registrations' },
+        { name: 'Alternates', href: '/admin/alternates' }
       ]
     },
     { 

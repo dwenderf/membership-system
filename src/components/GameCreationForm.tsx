@@ -144,10 +144,23 @@ export default function GameCreationForm({
             value={gameDate}
             onChange={(e) => {
               let value = e.target.value
+              
               // If user selects a date without time, default to 12:00
               if (value && value.length === 10) { // Date only (YYYY-MM-DD)
                 value += 'T12:00'
               }
+              
+              // Round time to nearest 5-minute increment
+              if (value && value.includes('T')) {
+                const [datePart, timePart] = value.split('T')
+                if (timePart && timePart.includes(':')) {
+                  const [hours, minutes] = timePart.split(':')
+                  const roundedMinutes = Math.round(parseInt(minutes) / 5) * 5
+                  const formattedMinutes = roundedMinutes.toString().padStart(2, '0')
+                  value = `${datePart}T${hours}:${formattedMinutes}`
+                }
+              }
+              
               setGameDate(value)
             }}
             step="300"

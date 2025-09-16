@@ -69,8 +69,19 @@ export default function RegistrationAlternatesSection({
   }
 
   const handleGameCreated = (game: Game) => {
-    // Add the new game to the list - it should have complete data now
-    setGames(prev => [...prev, game])
+    // Add the new game to the list and sort by game_date (descending, like the API)
+    setGames(prev => {
+      const newGames = [...prev, game]
+      return newGames.sort((a, b) => {
+        // Handle null dates - put them at the end
+        if (!a.game_date && !b.game_date) return 0
+        if (!a.game_date) return 1
+        if (!b.game_date) return -1
+        
+        // Sort by date descending (newest first)
+        return new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
+      })
+    })
     setShowCreateForm(false)
   }
 

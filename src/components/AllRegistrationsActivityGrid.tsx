@@ -175,14 +175,18 @@ export default function AllRegistrationsActivityGrid({
     })
 
     if (week.games.length === 0) {
-      return `${registration.name} - Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): No games`
+      return `${registration.name}
+Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)})
+No games scheduled`
     }
 
     const gamesCount = week.games.length
     const firstGame = week.games[0]?.game_description || 'Game'
     const moreText = gamesCount > 1 ? ` + ${gamesCount - 1} more` : ''
 
-    return `${registration.name} - Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): ${week.totalSelected} alternates selected - ${firstGame}${moreText}`
+    return `${registration.name}
+Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)})
+${week.totalSelected} alternates selected - ${firstGame}${moreText}`
   }
 
   const handleWeekClick = (registrationId: string, week: WeekData) => {
@@ -216,7 +220,7 @@ export default function AllRegistrationsActivityGrid({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto pb-2">
         <div className="space-y-2" style={{ minWidth: `${32 * 8 + totalWeeks * 16}px` }}>
           {registrationData.map(({ registration, weeks }) => (
             <div key={registration.id} className="flex items-center space-x-2">

@@ -7,15 +7,12 @@ import GameCreationForm from '@/components/GameCreationForm'
 
 interface Game {
   id: string
-  registrationId: string
-  registrationName: string
-  seasonName: string
-  gameDescription: string
-  gameDate: string
-  alternatePrice: number
-  alternateAccountingCode: string
-  createdAt: string
-  alternateSelections: number
+  registration_id: string
+  game_description: string
+  game_date: string | null
+  created_at: string
+  selected_count?: number
+  available_count?: number
 }
 
 interface GamesPreviewProps {
@@ -36,7 +33,7 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
 
   const fetchGames = async () => {
     try {
-      const response = await fetch(`/api/alternate-registrations?registration_id=${registrationId}`)
+      const response = await fetch(`/api/alternate-registrations?registrationId=${registrationId}`)
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -61,13 +58,14 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
     return new Date(dateString).toLocaleDateString()
   }
 
-  const isPastGame = (gameDate: string) => {
+  const isPastGame = (gameDate: string | null) => {
+    if (!gameDate) return false
     return new Date(gameDate) <= new Date()
   }
 
   // Separate future and past games
-  const futureGames = games.filter(game => !isPastGame(game.gameDate))
-  const pastGames = games.filter(game => isPastGame(game.gameDate))
+  const futureGames = games.filter(game => !isPastGame(game.game_date))
+  const pastGames = games.filter(game => isPastGame(game.game_date))
 
   if (loading) {
     return (
@@ -136,10 +134,10 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-gray-900">
-                      {game.gameDescription}
+                      {game.game_description}
                     </h4>
                     <div className="mt-1 text-xs text-gray-500">
-                      {formatDate(game.gameDate)} • {game.alternateSelections} alternates selected
+                      {game.game_date ? formatDate(game.game_date) : 'No date'} • {game.selected_count || 0} alternates selected
                     </div>
                   </div>
                   <Link
@@ -180,10 +178,10 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-gray-700">
-                      {game.gameDescription}
+                      {game.game_description}
                     </h4>
                     <div className="mt-1 text-xs text-gray-500">
-                      {formatDate(game.gameDate)} • {game.alternateSelections} alternates selected
+                      {game.game_date ? formatDate(game.game_date) : 'No date'} • {game.selected_count || 0} alternates selected
                     </div>
                   </div>
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">

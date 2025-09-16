@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import GameAlternatesCard from '@/components/GameAlternatesCard'
 import GameCreationForm from '@/components/GameCreationForm'
+import ActivityHeatmap from '@/components/ActivityHeatmap'
 
 interface Registration {
   id: string
@@ -133,6 +134,20 @@ export default function RegistrationAlternatesSection({
           </button>
         </div>
       </div>
+
+      {/* Activity Heatmap - Only show if there are games */}
+      {!loading && games.length > 0 && (
+        <div className="px-6 py-4 border-b border-gray-200">
+          <ActivityHeatmap
+            games={games}
+            registration={registration}
+            onDateClick={(date) => {
+              // TODO: Could implement filtering by date in the future
+              console.log('Date clicked:', date)
+            }}
+          />
+        </div>
+      )}
 
       {/* Create Game Form */}
       {showCreateForm && (

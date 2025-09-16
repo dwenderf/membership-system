@@ -25,57 +25,63 @@ interface AlternatesManagerProps {
 }
 
 export default function AlternatesManager({ registrations, userAccess }: AlternatesManagerProps) {
-  const [selectedRegistration, setSelectedRegistration] = useState<string>('all')
+  const [selectedRegistration, setSelectedRegistration] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
-  // Filter registrations based on selection
-  const filteredRegistrations = selectedRegistration === 'all' 
-    ? registrations 
-    : registrations.filter(reg => reg.id === selectedRegistration)
+  // Get the selected registration object
+  const selectedRegistrationData = selectedRegistration 
+    ? registrations.find(reg => reg.id === selectedRegistration)
+    : null
 
   return (
     <div className="space-y-6">
-      {/* Filter Controls */}
+      {/* Registration Selection */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">Filter by Registration</h2>
+          <h2 className="text-lg font-medium text-gray-900">Select Registration</h2>
           <div className="flex items-center space-x-4">
             <select
               value={selectedRegistration}
               onChange={(e) => setSelectedRegistration(e.target.value)}
               className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              <option value="all">All Registrations</option>
+              <option value="" disabled>Select Registration...</option>
               {registrations.map(reg => (
                 <option key={reg.id} value={reg.id}>
-                  {reg.name} ({reg.type})
+                  {reg.name}
+                  {reg.seasons && ` (${reg.seasons.name})`}
                 </option>
               ))}
             </select>
-            <span className="text-sm text-gray-500">
-              {filteredRegistrations.length} registration{filteredRegistrations.length !== 1 ? 's' : ''}
-            </span>
+            {selectedRegistrationData && (
+              <span className="text-sm text-gray-500">
+                {selectedRegistrationData.alternate_price 
+                  ? `$${(selectedRegistrationData.alternate_price / 100).toFixed(2)} per alternate` 
+                  : 'No alternate pricing set'
+                }
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Registration Sections */}
-      <div className="space-y-6">
-        {filteredRegistrations.map(registration => (
-          <RegistrationAlternatesSection
-            key={registration.id}
-            registration={registration}
-            userAccess={userAccess}
-          />
-        ))}
-      </div>
-
-      {filteredRegistrations.length === 0 && selectedRegistration !== 'all' && (
+      {/* Selected Registration Section */}
+      {selectedRegistrationData ? (
+        <RegistrationAlternatesSection
+          registration={selectedRegistrationData}
+          userAccess={userAccess}
+        />
+      ) : (
         <div className="bg-white shadow rounded-lg p-12 text-center">
-          <div className="text-gray-500 text-lg mb-4">No Registration Found</div>
-          <p className="text-sm text-gray-600">
-            The selected registration may have been removed or disabled.
+          <div className="text-gray-500 text-lg mb-4">Select a Registration to Begin</div>
+          <p className="text-sm text-gray-600 mb-4">
+            Choose a registration from the dropdown above to view and manage its alternates.
           </p>
+          <div className="flex items-center justify-center">
+            <div className="text-sm text-gray-500">
+              📋 {registrations.length} registration{registrations.length !== 1 ? 's' : ''} available
+            </div>
+          </div>
         </div>
       )}
     </div>

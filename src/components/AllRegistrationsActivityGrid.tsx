@@ -181,12 +181,14 @@ No games scheduled`
     }
 
     const gamesCount = week.games.length
-    const firstGame = week.games[0]?.game_description || 'Game'
+    const firstGame = week.games[0]
+    const alternateText = firstGame?.selected_count === 1 ? 'alternate' : 'alternates'
+    const firstGameText = `${firstGame?.game_description || 'Game'}: ${firstGame?.selected_count || 0} ${alternateText}`
     const moreText = gamesCount > 1 ? ` + ${gamesCount - 1} more` : ''
 
     return `${registration.name}
 Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)})
-${week.totalSelected} alternates selected - ${firstGame}${moreText}`
+${firstGameText}${moreText}`
   }
 
   const handleWeekClick = (registrationId: string, week: WeekData) => {

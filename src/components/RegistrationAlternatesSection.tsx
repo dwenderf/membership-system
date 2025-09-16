@@ -79,11 +79,12 @@ export default function RegistrationAlternatesSection({
     const diffTime = game.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Tomorrow'
-    if (diffDays > 0) return `in ${diffDays} days`
-    if (diffDays === -1) return 'Yesterday'
-    return `${Math.abs(diffDays)} days ago`
+    if (diffDays === 0) return { text: 'Today', isUrgent: true }
+    if (diffDays === 1) return { text: 'Tomorrow', isUrgent: true }
+    if (diffDays > 0 && diffDays < 4) return { text: `in ${diffDays} days`, isUrgent: true }
+    if (diffDays > 0) return { text: `in ${diffDays} days`, isUrgent: false }
+    if (diffDays === -1) return { text: 'Yesterday', isUrgent: false }
+    return { text: `${Math.abs(diffDays)} days ago`, isUrgent: false }
   }
 
   return (
@@ -92,24 +93,14 @@ export default function RegistrationAlternatesSection({
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex justify-between items-center">
           <div>
-            <div className="flex items-center space-x-3">
-              <h3 className="text-lg font-medium text-gray-900">{registration.name}</h3>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                'bg-purple-100 text-purple-800'
-              }`}>
-                {registration.type}
-              </span>
+            <h3 className="text-lg font-medium text-gray-900">{registration.name}</h3>
+            <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
+              <span className="capitalize">{registration.type}</span>
               {registration.seasons && (
-                <span className="text-xs text-gray-500">
-                  {registration.seasons.name}
-                </span>
+                <span>{registration.seasons.name}</span>
               )}
               {registration.alternate_price && (
-                <span className="text-xs text-gray-500">
-                  ${(registration.alternate_price / 100).toFixed(2)} per alternate
-                </span>
+                <span>${(registration.alternate_price / 100).toFixed(2)} per alternate</span>
               )}
             </div>
           </div>

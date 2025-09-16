@@ -46,7 +46,7 @@ interface Alternate {
 interface GameAlternatesCardProps {
   game: Game
   registration: Registration
-  dateTag: string | null
+  dateTag: { text: string; isUrgent: boolean } | null
   userAccess: AlternatesAccessResult
 }
 
@@ -179,11 +179,11 @@ export default function GameAlternatesCard({
               </h4>
               {dateTag && (
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  dateTag === 'Today' ? 'bg-green-100 text-green-800' :
-                  dateTag.includes('ago') ? 'bg-gray-100 text-gray-800' :
+                  dateTag.isUrgent ? 'bg-green-100 text-green-800' :
+                  dateTag.text.includes('ago') ? 'bg-gray-100 text-gray-800' :
                   'bg-blue-100 text-blue-800'
                 }`}>
-                  {dateTag}
+                  {dateTag.text}
                 </span>
               )}
             </div>

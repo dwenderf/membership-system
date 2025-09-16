@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import RegistrationAlternatesSection from '@/components/RegistrationAlternatesSection'
+import AllRegistrationsActivityGrid from '@/components/AllRegistrationsActivityGrid'
 
 interface Registration {
   id: string
@@ -24,17 +25,93 @@ interface AlternatesManagerProps {
   userAccess: AlternatesAccessResult
 }
 
+interface RegistrationWithGames extends Registration {
+  games: Array<{
+    id: string
+    registration_id: string
+    game_description: string
+    game_date: string | null
+    created_at: string
+    selected_count?: number
+    available_count?: number
+  }>
+}
+
 export default function AlternatesManager({ registrations, userAccess }: AlternatesManagerProps) {
   const [selectedRegistration, setSelectedRegistration] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [registrationsWithGames, setRegistrationsWithGames] = useState<RegistrationWithGames[]>([])
+  const [overviewLoading, setOverviewLoading] = useState(true)
 
   // Get the selected registration object
   const selectedRegistrationData = selectedRegistration 
     ? registrations.find(reg => reg.id === selectedRegistration)
     : null
 
+  // Fetch games for all registrations for the overview
+  useEffect(() => {
+    fetchAllRegistrationsGames()
+  }, [registrations])
+
+  const fetchAllRegistrationsGames = async () => {
+    try {
+      setOverviewLoading(true)
+      
+      // Fetch games for each registration
+      const registrationsWithGamesData = await Promise.all(
+        registrations.map(async (registration) => {
+          try {
+            const response = await fetch(`/api/alternate-registrations?registrationId=${registration.id}`)
+            if (response.ok) {
+              const data = await response.json()
+              return {
+                ...registration,
+                games: data.games || []
+              }
+            } else {
+              return {
+                ...registration,
+                games: []
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching games for ${registration.name}:`, error)
+            return {
+              ...registration,
+              games: []
+            }
+          }
+        })
+      )
+      
+      setRegistrationsWithGames(registrationsWithGamesData)
+    } catch (error) {
+      console.error('Error fetching all registrations games:', error)
+    } finally {
+      setOverviewLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* All Registrations Overview */}
+      {!overviewLoading && registrationsWithGames.length > 0 && (
+        <AllRegistrationsActivityGrid
+          registrations={registrationsWithGames}
+          onRegistrationWeekClick={(registrationId, weekStart) => {
+            // Auto-select the registration when user clicks on a week
+            setSelectedRegistration(registrationId)
+            console.log('Week clicked:', registrationId, weekStart)
+          }}
+        />
+      )}
+
+      {overviewLoading && (
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-center text-gray-500">Loading overview...</div>
+        </div>
+      )}
+
       {/* Registration Selection */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between">

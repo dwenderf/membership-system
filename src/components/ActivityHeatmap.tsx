@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import CalendarHeatmap from 'react-calendar-heatmap'
 // Note: CSS styles are handled inline below to avoid import conflicts
 
 interface Game {
@@ -108,7 +107,7 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     }
   }, [games, registration])
 
-  const getTooltipDataAttrs = (value: HeatmapValue | null) => {
+  const getTooltipDataAttrs = (value: HeatmapValue | undefined) => {
     if (!value) {
       return {
         'data-tip': 'No date'
@@ -137,124 +136,13 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     }
   }
 
-  const handleClick = (value: HeatmapValue | null) => {
+  const handleClick = (value: HeatmapValue | undefined) => {
     if (value && value.games && value.games.length > 0 && onDateClick) {
       onDateClick(value.date)
     }
   }
 
   // Don't render if we have no valid data
-  if (!registration || !Array.isArray(games) || heatmapData.length === 0) {
-    return null
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2 text-xs text-gray-500">
-          <span>Less</span>
-          <div className="flex space-x-1">
-            <div className="w-3 h-3 bg-gray-100 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-100 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-300 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-700 rounded-sm"></div>
-          </div>
-          <span>More</span>
-        </div>
-      </div>
-
-      <div className="activity-heatmap-container">
-        <CalendarHeatmap
-          startDate={startDate}
-          endDate={endDate}
-          values={heatmapData}
-          classForValue={(value: HeatmapValue | null) => {
-            if (!value || value.count === 0) return 'color-empty'
-            if (value.count <= 2) return 'color-scale-1'
-            if (value.count <= 4) return 'color-scale-2'
-            if (value.count <= 6) return 'color-scale-3'
-            return 'color-scale-4'
-          }}
-          tooltipDataAttrs={getTooltipDataAttrs}
-          onClick={handleClick}
-          showWeekdayLabels={true}
-          showMonthLabels={true}
-          horizontal={true}
-          gutterSize={2}
-          showOutOfRangeDays={false}
-        />
-      </div>
-
-      <style jsx>{`
-        .activity-heatmap-container {
-          font-size: 12px;
-          max-width: 800px;
-          overflow-x: auto;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap) {
-          width: 100%;
-          height: auto;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap svg) {
-          width: 100%;
-          height: 120px;
-          max-width: 800px;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap rect) {
-          width: 10px;
-          height: 10px;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap text) {
-          fill: #767676;
-          font-size: 10px;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .color-empty) {
-          fill: #ebedf0;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .color-scale-1) {
-          fill: #c6e48b;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .color-scale-2) {
-          fill: #7bc96f;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .color-scale-3) {
-          fill: #239a3b;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .color-scale-4) {
-          fill: #196127;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap rect) {
-          cursor: pointer;
-          rx: 2;
-          ry: 2;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap rect:hover) {
-          stroke: #333;
-          stroke-width: 1px;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .month-label) {
-          font-size: 10px;
-          fill: #767676;
-        }
-        
-        .activity-heatmap-container :global(.react-calendar-heatmap .day-label) {
-          font-size: 9px;
-          fill: #767676;
-        }
-      `}</style>
-    </div>
-  )
+  // ...existing code...
+  // TODO: Render your custom heatmap component here
 }

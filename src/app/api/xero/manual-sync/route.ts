@@ -43,14 +43,39 @@ export async function POST(request: NextRequest) {
       }
     )
     
+    // Check for connection failures
+    if (results.connectionStatus === 'failed') {
+      console.log('❌ Manual Xero sync failed: Connection authentication failed')
+      return NextResponse.json({
+        success: false,
+        error: 'Connection failed',
+        message: 'Xero connection authentication failed during validation. This sometimes happens when tokens become corrupted. If this continues, try disconnecting and reconnecting your Xero integration.',
+        connectionStatus: results.connectionStatus,
+        suggestion: 'Go to Settings → Integrations to reset the connection if needed'
+      }, { status: 403 })
+    }
+
+    if (results.connectionStatus === 'no_tenant') {
+      console.log('❌ Manual Xero sync failed: No Xero tenant connected')
+      return NextResponse.json({
+        success: false,
+        error: 'No connection',
+        message: 'No Xero organization is connected. Please set up your Xero integration.',
+        connectionStatus: results.connectionStatus,
+        suggestion: 'Go to Settings → Integrations and connect Xero'
+      }, { status: 400 })
+    }
+
     console.log('✅ Manual Xero sync completed:', {
       invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
-      payments: `${results.payments.synced} synced, ${results.payments.failed} failed`
+      payments: `${results.payments.synced} synced, ${results.payments.failed} failed`,
+      connectionStatus: results.connectionStatus
     })
 
     return NextResponse.json({
       success: true,
       message: 'Manual sync completed',
+      connectionStatus: results.connectionStatus,
       results: {
         invoices: {
           synced: results.invoices.synced,

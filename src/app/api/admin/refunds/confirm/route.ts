@@ -4,7 +4,7 @@ import { Logger } from '@/lib/logging/logger'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: process.env.STRIPE_API_VERSION as any,
 })
 
 // POST /api/admin/refunds/confirm - Submit staged refund to Stripe

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
+import { formatAmount } from '@/lib/format-utils'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -93,6 +94,57 @@ export default async function UserRegistrationsPage() {
     .is('removed_at', null)
     .order('joined_at', { ascending: false })
 
+  // Get user's alternate registrations
+  const { data: userAlternateRegistrations, error: alternateRegsError } = await supabase
+    .from('user_alternate_registrations')
+    .select(`
+      *,
+      registration:registrations(
+        id,
+        name,
+        type,
+        alternate_price,
+        season:seasons(name, start_date, end_date)
+      ),
+      discount_code:discount_codes(code, percentage)
+    `)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  // Log errors only
+  if (alternateRegsError) {
+    console.error('Error fetching alternate registrations:', alternateRegsError)
+  }
+
+  // Get user's alternate selections (games they've been selected for and billed)
+  const { data: userAlternateSelections, error: alternateSelectionsError } = await supabase
+    .from('alternate_selections')
+    .select(`
+      *,
+      alternate_registration:alternate_registrations(
+        id,
+        game_description,
+        game_date,
+        registration:registrations(
+          id,
+          name,
+          season:seasons(name, start_date, end_date)
+        )
+      ),
+      payment:payments(
+        id,
+        total_amount,
+        created_at
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('selected_at', { ascending: false })
+
+  // Log errors only
+  if (alternateSelectionsError) {
+    console.error('Error fetching alternate selections:', alternateSelectionsError)
+  }
+
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
@@ -120,6 +172,21 @@ export default async function UserRegistrationsPage() {
 
   const pastWaitlistEntries = userWaitlistEntries?.filter(we => {
     const season = we.registration?.season
+    if (!season) return false
+    const endDate = new Date(season.end_date)
+    return endDate < new Date()
+  }) || []
+
+  // Split alternate registrations into current and past
+  const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
+    const season = ar.registration?.season
+    if (!season) return false
+    const endDate = new Date(season.end_date)
+    return endDate >= new Date()
+  }) || []
+
+  const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
+    const season = ar.registration?.season
     if (!season) return false
     const endDate = new Date(season.end_date)
     return endDate < new Date()
@@ -153,17 +220,6 @@ export default async function UserRegistrationsPage() {
                             {userRegistration.registration?.season?.name}
                           </p>
                         </div>
-                        <div className="ml-4 flex-shrink-0">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            userRegistration.payment_status === 'paid' 
-                              ? 'bg-green-100 text-green-800'
-                              : userRegistration.payment_status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {userRegistration.payment_status}
-                          </span>
-                        </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-900">
@@ -175,6 +231,11 @@ export default async function UserRegistrationsPage() {
                       </div>
                     </div>
                     <div className="mt-2">
+                      {userRegistration.registration_category && (
+                        <p className="text-sm text-gray-600">
+                          Category: {getCategoryDisplayName(userRegistration.registration_category)}
+                        </p>
+                      )}
                       <p className="text-sm text-gray-600">
                         Type: {userRegistration.registration?.type}
                       </p>
@@ -210,6 +271,125 @@ export default async function UserRegistrationsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Alternate Registrations */}
+      <div className="mb-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Alternate Registrations</h2>
+        {currentAlternateRegistrations.length > 0 ? (
+          <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul className="divide-y divide-gray-200">
+              {currentAlternateRegistrations.map((alternateReg) => {
+                // Find games this user was selected for in this registration
+                const gamesSelected = userAlternateSelections?.filter(selection => 
+                  selection.alternate_registration?.registration?.id === alternateReg.registration?.id
+                ) || []
+
+                return (
+                  <li key={alternateReg.id}>
+                    <div className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {alternateReg.registration?.name}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {alternateReg.registration?.season?.name}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-900">
+                            {formatAmount(alternateReg.registration?.alternate_price || 0)} per game
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Registered: {new Date(alternateReg.created_at).toLocaleDateString()}
+                          </p>
+                          {alternateReg.discount_code && (
+                            <p className="text-xs text-green-600">
+                              Discount: {alternateReg.discount_code.code} ({alternateReg.discount_code.percentage}%)
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <p className="text-sm text-gray-600">
+                          Type: {alternateReg.registration?.type}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Season: {formatDateString(alternateReg.registration?.season?.start_date || '')} - {formatDateString(alternateReg.registration?.season?.end_date || '')}
+                        </p>
+                      </div>
+                      
+                      {/* Games Selected & Billed */}
+                      {gamesSelected.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-900 mb-3">Games Selected & Billed</h4>
+                          <div className="space-y-2">
+                            {gamesSelected.map((selection) => (
+                              <div key={selection.id} className="bg-blue-50 rounded-lg p-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-blue-900">
+                                      {selection.alternate_registration?.game_description}
+                                    </p>
+                                    {selection.alternate_registration?.game_date && (
+                                      <p className="text-sm text-blue-700 mt-1">
+                                        Game Date: {new Date(selection.alternate_registration.game_date).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                    <p className="text-xs text-blue-600 mt-1">
+                                      Selected: {new Date(selection.selected_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div className="text-right ml-4">
+                                    <p className="text-sm font-semibold text-blue-900">
+                                      {formatAmount(selection.amount_charged)}
+                                    </p>
+                                    {selection.payment && (
+                                      <p className="text-xs text-blue-700">
+                                        Paid: {new Date(selection.payment.created_at).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-3 pt-2 border-t border-blue-200 bg-blue-50 rounded-b-lg px-3 py-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-blue-900">
+                                Total Games: {gamesSelected.length}
+                              </span>
+                              <span className="text-sm font-semibold text-blue-900">
+                                Total Billed: {formatAmount(gamesSelected.reduce((sum, selection) => sum + selection.amount_charged, 0))}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {gamesSelected.length === 0 && (
+                        <div className="mt-3 text-center py-2">
+                          <p className="text-sm text-gray-500 italic">
+                            No games selected yet
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : (
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              You are not currently registered as an alternate for any teams or events.
+            </p>
           </div>
         )}
       </div>

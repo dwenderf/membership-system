@@ -67,12 +67,25 @@ export default async function BrowseRegistrationsPage() {
     .eq('payment_status', 'paid')
     .gte('valid_until', new Date().toISOString().split('T')[0])
 
-  // Get user's existing registrations to filter out
+  // Get user's existing registrations with category details
   const { data: userRegistrations } = await supabase
     .from('user_registrations')
-    .select('registration_id')
+    .select(`
+      registration_id,
+      registration_category_id,
+      registration_category:registration_categories(
+        id,
+        categories:category_id(name)
+      )
+    `)
     .eq('user_id', user.id)
     .eq('payment_status', 'paid')
+
+  // Get user's alternate registrations
+  const { data: userAlternateRegistrations } = await supabase
+    .from('user_alternate_registrations')
+    .select('registration_id')
+    .eq('user_id', user.id)
 
   // Get available registrations for current/future seasons
   // First get current/future seasons
@@ -148,6 +161,7 @@ export default async function BrowseRegistrationsPage() {
   const consolidatedMembershipList = Object.values(consolidatedMemberships)
   const hasActiveMembership = consolidatedMembershipList.length > 0
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
+  const userAlternateRegistrationIds = userAlternateRegistrations?.map(uar => uar.registration_id) || []
 
   // Check if any memberships are expiring soon (≤90 days)
   const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership: any) => {
@@ -280,8 +294,11 @@ export default async function BrowseRegistrationsPage() {
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
                 const registrationStatus = getRegistrationStatus(registration)
 
+                // Find which category the user is registered for (if any)
+                const userRegisteredCategory = userRegistrations?.find(ur => ur.registration_id === registration.id)
+
                 // Sort registration_categories by sort_order, then by category name
-                const sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
+                let sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
                   if (a.sort_order !== b.sort_order) {
                     return (a.sort_order ?? 9999) - (b.sort_order ?? 9999)
                   }
@@ -291,14 +308,16 @@ export default async function BrowseRegistrationsPage() {
                   return nameA.localeCompare(nameB)
                 })
 
+                // If user is already registered for a category, only show that category + alternates
+                if (userRegisteredCategory) {
+                  sortedCategories = sortedCategories.filter((cat: any) => 
+                    cat.id === userRegisteredCategory.registration_category_id || 
+                    cat.categories?.name?.toLowerCase() === 'alternate'
+                  )
+                }
+
                 return (
-                  <div key={registration.id} className={`bg-white overflow-hidden shadow rounded-lg transition-shadow ${
-                    isAlreadyRegistered 
-                      ? 'border-l-4 border-blue-400' 
-                      : hasEligibleMembership 
-                      ? 'border-l-4 border-green-400 hover:shadow-md' 
-                      : 'border-l-4 border-yellow-400 hover:shadow-md'
-                  }`}>
+                  <div key={registration.id} className="bg-white overflow-hidden shadow rounded-lg transition-shadow">
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -323,11 +342,6 @@ export default async function BrowseRegistrationsPage() {
                                 Coming Soon
                               </span>
                             )}
-                            {isAlreadyRegistered && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                Registered
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -342,40 +356,7 @@ export default async function BrowseRegistrationsPage() {
                       </div>
 
                       <div className="mt-5">
-                        {isAlreadyRegistered ? (
-                          registration.type === 'team' ? (
-                            // Team registrations: show registered state with explanation
-                            <div className="space-y-3">
-                              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                                <div className="flex items-center">
-                                  <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                  </svg>
-                                  <span className="text-sm font-medium text-blue-800">
-                                    You're already registered for this team
-                                  </span>
-                                </div>
-                                <p className="text-xs text-blue-700 mt-1">
-                                  Each player can only register once per team. Need changes? Contact an admin.
-                                </p>
-                              </div>
-                              <Link
-                                href="/user/registrations"
-                                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-md text-sm font-medium text-center block transition-colors"
-                              >
-                                View My Registration →
-                              </Link>
-                            </div>
-                          ) : (
-                            // Events/Scrimmages: simple registered state
-                            <Link
-                              href="/user/registrations"
-                              className="w-full bg-blue-100 text-blue-800 px-4 py-2 rounded-md text-sm font-medium text-center block"
-                            >
-                              View in My Registrations
-                            </Link>
-                          )
-                        ) : registrationStatus === 'coming_soon' ? (
+                        {registrationStatus === 'coming_soon' ? (
                           // Coming Soon: Show timing information with disabled state
                           <div className="space-y-3">
                             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
@@ -412,6 +393,8 @@ export default async function BrowseRegistrationsPage() {
                             activeMemberships={activeMemberships}
                             isEligible={hasEligibleMembership}
                             isLgbtq={userProfile?.is_lgbtq || false}
+                            isAlreadyRegistered={isAlreadyRegistered}
+                            isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
                           />
                         )}
                       </div>

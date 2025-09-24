@@ -37,3 +37,31 @@ export function toNYDateString(date?: Date | string): string {
   const dateObj = date ? new Date(date) : new Date()
   return dateObj.toLocaleDateString('en-US', { timeZone: 'America/New_York' })
 }
+
+/**
+ * Convert datetime-local input to America/New_York timezone for database storage
+ * Automatically handles EST/EDT based on the specific date
+ * Used when storing user-entered datetime values that should be treated as NY time
+ */
+export function convertToNYTimezone(dateTimeLocal: string): string {
+  if (!dateTimeLocal) return ''
+  
+  // Parse the datetime-local value (e.g., "2025-09-28T17:30")
+  const [datePart, timePart] = dateTimeLocal.split('T')
+  const [year, month, day] = datePart.split('-')
+  const [hour, minute] = timePart.split(':')
+  
+  // Create two date objects - one interpreted as local time, one as NY time
+  const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute))
+  
+  // Get what this same date/time would be in NY timezone
+  const nyDate = new Date(localDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  
+  // Calculate the difference between local and NY interpretations
+  const offset = localDate.getTime() - nyDate.getTime()
+  
+  // Apply the offset to treat the input as NY time
+  const correctedDate = new Date(localDate.getTime() + offset)
+  
+  return correctedDate.toISOString()
+}

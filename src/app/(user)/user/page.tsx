@@ -45,11 +45,58 @@ export default async function UserDashboardPage() {
     })
     if (registrationsResponse.ok) {
       const allRegistrations = await registrationsResponse.json()
-      userRegistrations = allRegistrations.slice(0, 5) // Limit to 5 for dashboard
+      // Filter to only active registrations (where season hasn't expired)
+      const activeRegistrations = allRegistrations.filter((reg: any) => {
+        const season = reg.registration?.season
+        if (!season) return false
+        const endDate = new Date(season.end_date)
+        return endDate >= new Date()
+      })
+      userRegistrations = activeRegistrations.slice(0, 5) // Limit to 5 for dashboard
     }
   } catch (error) {
     console.error('Error fetching user registrations:', error)
   }
+
+  // Get user's alternate registrations
+  const { data: userAlternateRegistrations } = await supabase
+    .from('user_alternate_registrations')
+    .select(`
+      *,
+      registration:registrations(
+        id,
+        name,
+        season:seasons(name, start_date, end_date)
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  // Get user's alternate selections (games they've been selected for and billed)
+  const { data: userAlternateSelections } = await supabase
+    .from('alternate_selections')
+    .select(`
+      *,
+      alternate_registration:alternate_registrations(
+        id,
+        game_description,
+        game_date,
+        registration:registrations(
+          id,
+          name,
+          season:seasons(name, start_date, end_date)
+        )
+      ),
+      payment:payments(
+        id,
+        amount,
+        created_at
+      )
+    `)
+    .eq('user_id', user.id)
+    .order('selected_at', { ascending: false })
+    .limit(10)
 
   // Get user's current waitlist entries
   const { data: userWaitlistEntries } = await supabase
@@ -234,116 +281,126 @@ export default async function UserDashboardPage() {
               )}
             </div>
             <div className="mt-5">
-              {!hasActiveMembership ? (
-                // No active memberships - encourage purchase
-                <a
-                  href="/user/browse-memberships"
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-                >
-                  Get Membership
-                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </a>
-              ) : hasExpiredMembership ? (
-                // Has expired memberships - encourage renewal
-                <a
-                  href="/user/browse-memberships"
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-                >
-                  Renew Membership
-                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </a>
-              ) : hasExpiringSoonMembership ? (
-                // Has expiring soon memberships - encourage extension
-                <a
-                  href="/user/browse-memberships"
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-                >
-                  Extend Membership
-                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </a>
-              ) : (
-                // Healthy memberships - browse for more
-                <a
-                  href="/user/browse-memberships"
-                  className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-                >
-                  Browse Memberships
-                  <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </a>
-              )}
+              <a
+                href="/user/browse-memberships"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+              >
+                Browse Memberships
+                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </a>
             </div>
           </div>
         </div>
 
-        {/* Recent Registrations */}
+        {/* Active Registrations */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5 flex flex-col h-full">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Recent Registrations & Waitlists
+              Registrations
             </h3>
             <div className="flex-grow">
-              {(userRegistrations && userRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
+              {(userRegistrations && userRegistrations.length > 0) || (userAlternateRegistrations && userAlternateRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
                 <div className="mt-4 space-y-3">
-                  {/* Show recent registrations */}
-                  {userRegistrations?.slice(0, 2).map((registration) => (
-                    <div key={`reg-${registration.id}`} className="flex justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {registration.registration?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {registration.registration?.season?.name}
-                        </p>
+                  {/* Show active registrations */}
+                  {userRegistrations?.slice(0, 3).map((registration) => {
+                    const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === registration.registration?.id)
+                    return (
+                      <div key={`reg-${registration.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {registration.registration?.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {registration.registration?.season?.name}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          {/* Category tag */}
+                          {registration.registration_category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {getCategoryDisplayName(registration.registration_category)}
+                            </span>
+                          )}
+                          {/* Alternate tag if applicable */}
+                          {isAlternate && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                              Alternate
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        registration.payment_status === 'paid' 
-                          ? 'bg-green-100 text-green-800'
-                          : registration.payment_status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {registration.payment_status}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   
-                  {/* Show recent waitlist entries */}
-                  {userWaitlistEntries?.slice(0, 2).map((waitlistEntry) => (
-                    <div key={`wait-${waitlistEntry.id}`} className="flex justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
+                  {/* Show alternate-only registrations (where user is alternate but not regular participant) */}
+                  {userAlternateRegistrations?.filter(alt => {
+                    // Only show if user is NOT already registered as regular participant
+                    return !userRegistrations?.some(reg => reg.registration?.id === alt.registration?.id)
+                  }).slice(0, 2).map((alternateReg) => {
+                    // Filter to only active seasons
+                    const season = alternateReg.registration?.season
+                    if (!season) return null
+                    const endDate = new Date(season.end_date)
+                    if (endDate < new Date()) return null
+                    
+                    return (
+                      <div key={`alt-${alternateReg.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {alternateReg.registration?.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {alternateReg.registration?.season?.name}
+                          </p>
+                        </div>
+                        <div className="ml-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                            Alternate
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Show active waitlist entries */}
+                  {userWaitlistEntries?.filter(waitlistEntry => {
+                    // Filter to only active seasons
+                    const season = waitlistEntry.registration?.season
+                    if (!season) return false
+                    const endDate = new Date(season.end_date)
+                    return endDate >= new Date()
+                  }).slice(0, 2).map((waitlistEntry) => (
+                    <div key={`wait-${waitlistEntry.id}`} className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
                           {waitlistEntry.registration?.name}
                         </p>
                         <p className="text-sm text-gray-500">
-                          {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
+                          {waitlistEntry.registration?.season?.name}
                         </p>
                       </div>
-                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        On Waitlist
+                      <div className="ml-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Waitlist
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-gray-600">
-                  No registrations or waitlists yet. Browse available registrations to get started.
+                  No active registrations yet. Browse available registrations to get started.
                 </p>
               )}
             </div>
             <div className="mt-5">
               <a
-                href="/user/browse-registrations"
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+              href="/user/browse-registrations"
+              className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
               >
-                Browse Available Registrations
+              Browse Registrations
                 <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
@@ -415,6 +472,8 @@ export default async function UserDashboardPage() {
         <DiscountUsage />
       </div>
 
+
+      
     </div>
   )
 }

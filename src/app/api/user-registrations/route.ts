@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
         registration:registrations(
           *,
           season:seasons(*)
+        ),
+        registration_category:registration_categories(
+          *,
+          categories:category_id(name, description)
         )
       `)
       .eq('user_id', user.id)
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(userRegistrations || [])
-    
+
   } catch (error) {
     console.error('Error in user registrations API:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

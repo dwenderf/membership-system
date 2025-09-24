@@ -219,7 +219,7 @@ export default function AccountingIntegrationPage() {
         await fetchXeroStatus()
       } else {
         const errorData = await response.json()
-        showError(errorData.error || 'Failed to trigger manual sync')
+        showError(errorData.message || errorData.error || 'Failed to trigger manual sync')
       }
     } catch (error) {
       showError('Failed to trigger manual sync')
@@ -406,7 +406,7 @@ export default function AccountingIntegrationPage() {
                 {isXeroConnected && (
                   <button
                     onClick={handleManualSync}
-                    disabled={syncing || syncStats.total_pending === 0}
+                    disabled={syncing || (syncStats.pending_invoices + syncStats.pending_credit_notes + syncStats.pending_payments) === 0}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {syncing ? (
@@ -587,7 +587,7 @@ export default function AccountingIntegrationPage() {
                 </div>
               )}
 
-              {syncStats.total_pending === 0 && (
+              {(syncStats.pending_invoices + syncStats.pending_credit_notes + syncStats.pending_payments) === 0 && (
                 <div className="text-center py-4">
                   <div className="text-green-600 text-sm font-medium">✅ All items are synced to Xero</div>
                   <div className="text-gray-500 text-xs mt-1">The automatic sync service runs every 2 minutes</div>
@@ -679,7 +679,9 @@ export default function AccountingIntegrationPage() {
                                   {log.operation_type.replace('_', ' ')} - {log.entity_type}
                                 </div>
                                 {log.error_message && (
-                                  <div className="text-xs text-red-600">{log.error_message}</div>
+                                  <div className={`text-xs ${log.status === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                                    {log.error_message}
+                                  </div>
                                 )}
                               </div>
                             </div>

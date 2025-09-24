@@ -12,6 +12,10 @@ export type Database = {
           tags: string[] | null
           is_lgbtq: boolean | null
           is_goalie: boolean
+          stripe_setup_intent_id: string | null
+          stripe_payment_method_id: string | null
+          setup_intent_status: 'pending' | 'succeeded' | 'failed' | null
+          payment_method_updated_at: string | null
           created_at: string
           updated_at: string
         }
@@ -25,6 +29,10 @@ export type Database = {
           tags?: string[] | null
           is_lgbtq?: boolean | null
           is_goalie?: boolean
+          stripe_setup_intent_id?: string | null
+          stripe_payment_method_id?: string | null
+          setup_intent_status?: 'pending' | 'succeeded' | 'failed' | null
+          payment_method_updated_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -38,6 +46,10 @@ export type Database = {
           tags?: string[] | null
           is_lgbtq?: boolean | null
           is_goalie?: boolean
+          stripe_setup_intent_id?: string | null
+          stripe_payment_method_id?: string | null
+          setup_intent_status?: 'pending' | 'succeeded' | 'failed' | null
+          payment_method_updated_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -145,7 +157,12 @@ export type Database = {
           registration_end_at: string | null
           presale_code: string | null
           allow_lgbtq_presale: boolean
+          allow_alternates: boolean
+          alternate_price: number | null
+          alternate_accounting_code: string | null
           created_at: string
+          updated_at: string
+          updated_by: string | null
         }
         Insert: {
           id?: string
@@ -159,7 +176,12 @@ export type Database = {
           registration_end_at?: string | null
           presale_code?: string | null
           allow_lgbtq_presale?: boolean
+          allow_alternates?: boolean
+          alternate_price?: number | null
+          alternate_accounting_code?: string | null
           created_at?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           id?: string
@@ -173,8 +195,22 @@ export type Database = {
           registration_end_at?: string | null
           presale_code?: string | null
           allow_lgbtq_presale?: boolean
+          allow_alternates?: boolean
+          alternate_price?: number | null
+          alternate_accounting_code?: string | null
           created_at?: string
+          updated_at?: string
+          updated_by?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "registrations_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_memberships: {
         Row: {
@@ -571,6 +607,215 @@ export type Database = {
           line_amount?: number
           created_at?: string
         }
+      }
+      user_alternate_registrations: {
+        Row: {
+          id: string
+          user_id: string
+          registration_id: string
+          discount_code_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          registration_id: string
+          discount_code_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          registration_id?: string
+          discount_code_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_alternate_registrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_alternate_registrations_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_alternate_registrations_discount_code_id_fkey"
+            columns: ["discount_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      alternate_registrations: {
+        Row: {
+          id: string
+          registration_id: string
+          game_description: string
+          game_date: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          registration_id: string
+          game_description: string
+          game_date?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          registration_id?: string
+          game_description?: string
+          game_date?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alternate_registrations_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternate_registrations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      alternate_selections: {
+        Row: {
+          id: string
+          alternate_registration_id: string
+          user_id: string
+          discount_code_id: string | null
+          payment_id: string | null
+          amount_charged: number
+          selected_by: string
+          selected_at: string
+        }
+        Insert: {
+          id?: string
+          alternate_registration_id: string
+          user_id: string
+          discount_code_id?: string | null
+          payment_id?: string | null
+          amount_charged: number
+          selected_by: string
+          selected_at?: string
+        }
+        Update: {
+          id?: string
+          alternate_registration_id?: string
+          user_id?: string
+          discount_code_id?: string | null
+          payment_id?: string | null
+          amount_charged?: number
+          selected_by?: string
+          selected_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alternate_selections_alternate_registration_id_fkey"
+            columns: ["alternate_registration_id"]
+            isOneToOne: false
+            referencedRelation: "alternate_registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternate_selections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternate_selections_discount_code_id_fkey"
+            columns: ["discount_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternate_selections_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternate_selections_selected_by_fkey"
+            columns: ["selected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      registration_captains: {
+        Row: {
+          id: string
+          registration_id: string
+          user_id: string
+          assigned_at: string
+          assigned_by: string
+        }
+        Insert: {
+          id?: string
+          registration_id: string
+          user_id: string
+          assigned_at?: string
+          assigned_by: string
+        }
+        Update: {
+          id?: string
+          registration_id?: string
+          user_id?: string
+          assigned_at?: string
+          assigned_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_captains_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registration_captains_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registration_captains_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

@@ -53,7 +53,7 @@ import { emailProcessor } from '@/lib/email'
 import { Logger } from '@/lib/logging/logger'
 
 type PaymentCompletionEvent = {
-  event_type: 'payments' | 'user_memberships' | 'user_registrations'
+  event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
   record_id: string | null
   user_id: string
   payment_id: string | null

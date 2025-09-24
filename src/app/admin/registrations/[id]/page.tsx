@@ -8,6 +8,8 @@ import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDn
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
+import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
+import GamesPreview from '@/components/GamesPreview'
 
 export default async function RegistrationDetailPage({
   params,
@@ -16,9 +18,9 @@ export default async function RegistrationDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     redirect('/auth/login')
   }
@@ -92,13 +94,12 @@ export default async function RegistrationDetailPage({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-2">
-                  <EditableRegistrationName 
+                  <EditableRegistrationName
                     registrationId={id}
                     initialName={registration.name}
                   />
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    getStatusBadgeStyle(getRegistrationStatus(registration))
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeStyle(getRegistrationStatus(registration))
+                    }`}>
                     {getStatusDisplayText(getRegistrationStatus(registration))}
                   </span>
                   {!registration.is_active && (
@@ -110,20 +111,6 @@ export default async function RegistrationDetailPage({
                 <p className="mt-1 text-sm text-gray-600">
                   Registration details and category management
                 </p>
-              </div>
-              <div className="flex space-x-3">
-                <Link
-                  href={`/admin/registrations/${id}/timing`}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Edit Timing
-                </Link>
-                <Link
-                  href={`/admin/registrations/${id}/categories/new`}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Add Category
-                </Link>
               </div>
             </div>
           </div>
@@ -138,11 +125,10 @@ export default async function RegistrationDetailPage({
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Type</dt>
                     <dd className="mt-1 text-sm text-gray-900 capitalize">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
                         registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                        'bg-purple-100 text-purple-800'
-                      }`}>
+                          'bg-purple-100 text-purple-800'
+                        }`}>
                         {registration.type}
                       </span>
                     </dd>
@@ -177,7 +163,28 @@ export default async function RegistrationDetailPage({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">Registration Timing</dt>
+                    <dt className="text-sm font-medium text-gray-500">Alternates</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      <EditableAlternateConfiguration
+                        registrationId={id}
+                        initialConfig={{
+                          allow_alternates: registration.allow_alternates || false,
+                          alternate_price: registration.alternate_price,
+                          alternate_accounting_code: registration.alternate_accounting_code
+                        }}
+                      />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Registration Timing</span>
+                      <Link
+                        href={`/admin/registrations/${id}/timing`}
+                        className="text-xs text-blue-600 hover:text-blue-500 font-medium"
+                      >
+                        Edit
+                      </Link>
+                    </dt>
                     <dd className="mt-1 text-sm text-gray-900">
                       {registration.presale_start_at || registration.regular_start_at || registration.registration_end_at ? (
                         <div className="space-y-1">
@@ -218,14 +225,17 @@ export default async function RegistrationDetailPage({
             </div>
 
             {/* Registration Categories - now with drag-and-drop */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-6">
               <div className="bg-white shadow rounded-lg">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-medium text-gray-900">Registration Categories</h2>
-                    <span className="text-sm text-gray-500">
-                      {categories?.length || 0} categories
-                    </span>
+                    <Link
+                      href={`/admin/registrations/${id}/categories/new`}
+                      className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Add Category
+                    </Link>
                   </div>
                 </div>
                 {!categories || categories.length === 0 ? (
@@ -248,6 +258,26 @@ export default async function RegistrationDetailPage({
                   </div>
                 )}
               </div>
+
+              {/* Games Section - Only show if alternates are enabled */}
+              {registration.allow_alternates && (
+                <div className="bg-white shadow rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-lg font-medium text-gray-900">Games</h2>
+                      <Link
+                        href={`/admin/registrations/${id}/games`}
+                        className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        Manage All Games
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <GamesPreview registrationId={id} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

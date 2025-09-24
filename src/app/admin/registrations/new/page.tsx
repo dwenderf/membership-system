@@ -15,6 +15,9 @@ export default function NewRegistrationPage() {
     name: '',
     type: 'team' as 'team' | 'scrimmage' | 'event',
     allow_discounts: true,
+    allow_alternates: false,
+    alternate_price: '',
+    alternate_accounting_code: '',
   })
   
   const [seasons, setSeasons] = useState<any[]>([])
@@ -87,6 +90,9 @@ export default function NewRegistrationPage() {
         name: formData.name,
         type: formData.type,
         allow_discounts: formData.allow_discounts,
+        allow_alternates: formData.allow_alternates,
+        alternate_price: formData.allow_alternates ? parseInt(formData.alternate_price) * 100 : null, // Convert to cents
+        alternate_accounting_code: formData.allow_alternates ? formData.alternate_accounting_code : null,
       }
 
       const { error: insertError } = await supabase
@@ -126,7 +132,12 @@ export default function NewRegistrationPage() {
   const canCreateRegistration = formData.season_id && 
                                formData.name.trim() && 
                                !registrationNameExists &&
-                               accountingCodesValid === true
+                               accountingCodesValid === true &&
+                               (!formData.allow_alternates || (
+                                 formData.alternate_price.trim() && 
+                                 parseFloat(formData.alternate_price) > 0 &&
+                                 formData.alternate_accounting_code.trim()
+                               ))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -295,6 +306,81 @@ export default function NewRegistrationPage() {
                 </label>
               </div>
 
+              {/* Allow Alternates */}
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    id="allow_alternates"
+                    type="checkbox"
+                    checked={formData.allow_alternates}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      allow_alternates: e.target.checked,
+                      // Clear alternate fields if unchecked
+                      alternate_price: e.target.checked ? prev.alternate_price : '',
+                      alternate_accounting_code: e.target.checked ? prev.alternate_accounting_code : ''
+                    }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="allow_alternates" className="ml-2 block text-sm text-gray-900">
+                    Allow alternates for this registration
+                  </label>
+                </div>
+
+                {formData.allow_alternates && (
+                  <div className="ml-6 space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="text-sm text-blue-800 mb-3">
+                      <strong>Alternate Configuration:</strong> Set the price and accounting code for alternate selections.
+                    </div>
+                    
+                    {/* Alternate Price */}
+                    <div>
+                      <label htmlFor="alternate_price" className="block text-sm font-medium text-gray-700">
+                        Alternate Price (USD)
+                      </label>
+                      <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          id="alternate_price"
+                          value={formData.alternate_price}
+                          onChange={(e) => setFormData(prev => ({ ...prev, alternate_price: e.target.value }))}
+                          className="block w-full pl-7 pr-12 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                          required={formData.allow_alternates}
+                        />
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Price charged when an alternate is selected for a game
+                      </p>
+                    </div>
+
+                    {/* Alternate Accounting Code */}
+                    <div>
+                      <label htmlFor="alternate_accounting_code" className="block text-sm font-medium text-gray-700">
+                        Alternate Accounting Code
+                      </label>
+                      <input
+                        type="text"
+                        id="alternate_accounting_code"
+                        value={formData.alternate_accounting_code}
+                        onChange={(e) => setFormData(prev => ({ ...prev, alternate_accounting_code: e.target.value }))}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="e.g., ALT001"
+                        required={formData.allow_alternates}
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        Accounting code used for alternate charges in Xero
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Preview */}
               {selectedSeason && (
                 <div className={`border rounded-md p-4 ${registrationNameExists ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
@@ -318,6 +404,28 @@ export default function NewRegistrationPage() {
                       <dt className="text-sm font-medium text-gray-500">Membership Requirements</dt>
                       <dd className="text-sm text-gray-900">
                         Set per category
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Alternates</dt>
+                      <dd className="text-sm text-gray-900">
+                        {formData.allow_alternates ? (
+                          <div className="space-y-1">
+                            <div>Enabled</div>
+                            {formData.alternate_price && (
+                              <div className="text-xs text-gray-600">
+                                Price: ${parseFloat(formData.alternate_price).toFixed(2)}
+                              </div>
+                            )}
+                            {formData.alternate_accounting_code && (
+                              <div className="text-xs text-gray-600">
+                                Code: {formData.alternate_accounting_code}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          'Disabled'
+                        )}
                       </dd>
                     </div>
                   </dl>

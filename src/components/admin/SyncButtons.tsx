@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/contexts/ToastContext'
 
 interface SyncCounts {
   pendingEmails: number
@@ -24,6 +25,8 @@ export default function SyncButtons() {
     emails?: { time: string; processed: number; failed: number }; 
     accounting?: { time: string; processed: number; failed: number } 
   }>({})
+  
+  const { showError, showSuccess } = useToast()
 
   // Fetch counts on component mount
   useEffect(() => {
@@ -125,20 +128,33 @@ export default function SyncButtons() {
     try {
       const response = await fetch('/api/xero/manual-sync', { method: 'POST' })
       if (response.ok) {
+        const data = await response.json()
+        const { total_synced, total_failed } = data.results
+        
         setLastSync(prev => ({ 
           ...prev, 
           accounting: {
             time: new Date().toLocaleTimeString(),
-            processed: 0,
-            failed: 0
+            processed: total_synced,
+            failed: total_failed
           }
         }))
+        
+        if (total_failed === 0) {
+          showSuccess(`Manual sync completed successfully: ${total_synced} items synced`)
+        } else if (total_synced === 0) {
+          showError(`Manual sync failed: ${total_failed} items failed to sync`)
+        } else {
+          showError(`Manual sync partially completed: ${total_synced} synced, ${total_failed} failed`)
+        }
+        
         await fetchCounts() // Refresh counts
       } else {
-        console.error('Accounting sync failed')
+        const errorData = await response.json()
+        showError(errorData.message || errorData.error || 'Failed to trigger manual sync')
       }
     } catch (error) {
-      console.error('Accounting sync error:', error)
+      showError('Failed to trigger manual sync')
     } finally {
       setLoading(prev => ({ ...prev, accounting: false }))
     }

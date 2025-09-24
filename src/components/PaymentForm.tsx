@@ -30,6 +30,9 @@ interface PaymentFormProps {
   
   // Payment intent ID for status updates
   paymentIntentId?: string
+  
+  // Whether to save payment method for future use
+  shouldSavePaymentMethod?: boolean
 }
 
 export default function PaymentForm({
@@ -45,7 +48,8 @@ export default function PaymentForm({
   onError,
   reservationExpiresAt,
   onTimerExpired,
-  paymentIntentId
+  paymentIntentId,
+  shouldSavePaymentMethod = false
 }: PaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()

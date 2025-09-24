@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
+import PaymentMethodNotice from './PaymentMethodNotice'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
@@ -50,6 +51,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [paymentOption, setPaymentOption] = useState<'assistance' | 'donation' | 'standard' | null>(null)
   const [requestedPurchaseAmount, setAssistanceAmount] = useState<string>('') // Display value
   const [donationAmount, setDonationAmount] = useState<string>('50.00') // Display value
+  const [shouldSavePaymentMethod, setShouldSavePaymentMethod] = useState(false)
   
   const { showSuccess, showError } = useToast()
 
@@ -142,6 +144,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         paymentOption: paymentOption,
         assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined, // Positive assistance amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
+        savePaymentMethod: shouldSavePaymentMethod,
       }
 
       const result = await handlePaymentFlow(paymentData)
@@ -499,6 +502,17 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         </div>
       )}
 
+      {/* Payment Method Notice - Only show for paid memberships */}
+      {selectedDuration && paymentOption && finalAmount > 0 && (
+        <div className="mb-4">
+          <PaymentMethodNotice
+            userEmail={userEmail}
+            onSavePaymentChange={setShouldSavePaymentMethod}
+            showForAlternate={false}
+          />
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -555,6 +569,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                   startDate={startDate}
                   endDate={endDate}
                   userEmail={userEmail}
+                  shouldSavePaymentMethod={shouldSavePaymentMethod}
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setClientSecret(null)

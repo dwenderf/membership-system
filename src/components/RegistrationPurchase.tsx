@@ -5,6 +5,7 @@ import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import PaymentMethodSetup from './PaymentMethodSetup'
+import PaymentMethodNotice from './PaymentMethodNotice'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -94,6 +95,7 @@ export default function RegistrationPurchase({
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false)
   const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
+  const [shouldSavePaymentMethod, setShouldSavePaymentMethod] = useState(false)
   const { showSuccess, showError } = useToast()
 
   // Cleanup function to remove processing reservation
@@ -452,6 +454,7 @@ export default function RegistrationPurchase({
           amount: originalAmount, // Use original amount, let backend apply discount
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
+          savePaymentMethod: shouldSavePaymentMethod,
         }),
       })
 
@@ -943,6 +946,17 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Payment Method Notice - Only show for non-alternate categories that require payment */}
+      {selectedCategory && !isAlternateSelected && originalAmount > 0 && isTimingAvailable && !isCategoryAtCapacity && (
+        <div className="mb-4">
+          <PaymentMethodNotice
+            userEmail={userEmail}
+            onSavePaymentChange={setShouldSavePaymentMethod}
+            showForAlternate={false}
+          />
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -1091,6 +1105,7 @@ export default function RegistrationPurchase({
                   reservationExpiresAt={reservationExpiresAt || undefined}
                   onTimerExpired={handleTimerExpired}
                   paymentIntentId={paymentIntentId || undefined}
+                  shouldSavePaymentMethod={shouldSavePaymentMethod}
                   onSuccess={() => {
                     setShowPaymentForm(false)
                     setShowSetupIntentForm(false)

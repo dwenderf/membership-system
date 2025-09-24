@@ -129,7 +129,7 @@ LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
-LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -429,6 +429,30 @@ WHAT'S NEXT:
 • Check your status anytime: [dashboardUrl]
 
 Thanks for being part of the team!
+The Hockey Association Team
+```
+
+#### Payment Method Removed Notification Template (`LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `paymentMethod` - Last 4 digits of removed payment method (e.g., "****1234")
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+Your payment method [paymentMethod] has been successfully removed from your account.
+
+WHAT THIS MEANS:
+• You've been removed from all alternate registrations
+• You'll need to add a new payment method to register as an alternate again
+• Your existing team registrations are not affected
+
+If you didn't request this change or have questions, please contact our support team immediately.
+
 The Hockey Association Team
 ```
 
@@ -1041,6 +1065,7 @@ LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system

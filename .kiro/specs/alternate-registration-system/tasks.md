@@ -55,7 +55,7 @@
   - Integrate with existing payment staging flow (xero_invoices, xero_payments, xero_invoice_line_items)
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
 
-- [ ] 6. Implement payment method management for users
+- [x] 6. Implement payment method management for users
   - Create user dashboard for viewing saved payment methods
   - Add payment method display showing last 4 digits, card type, and expiration
   - Implement payment authorization removal with warning about alternate list removal
@@ -64,7 +64,7 @@
   - Add proper cleanup when payment methods are removed
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-- [ ] 7. Set up email notification system
+- [x] 7. Set up email notification system
   - Create LOOPS email template for alternate selection notifications
   - Create LOOPS email template for payment authorization removal
   - Add environment variables for LOOPS template IDs
@@ -73,7 +73,7 @@
   - Create tests for email notification functionality
   - _Requirements: 4.1, 4.2, 4.6, 5.5, 5.6_
 
-- [ ] 8. Implement webhook processing and error handling
+- [x] 8. Implement webhook processing and error handling
   - Add Stripe webhook handlers for payment_intent.succeeded events from alternate charges
   - Add Stripe webhook handlers for payment_intent.payment_failed events
   - Implement webhook signature verification for security
@@ -83,7 +83,7 @@
   - Create tests for webhook processing functionality
   - _Requirements: 8.5, 8.6, 11.2, 11.4, 11.5, 11.6, 11.7_
 
-- [ ] 9. Add Phase 1 testing and deployment
+- [x] 9. Add Phase 1 testing and deployment
   - Create integration tests for complete alternate registration flow
   - Add tests for payment method setup and charging workflow
   - Create tests for discount limit validation and application

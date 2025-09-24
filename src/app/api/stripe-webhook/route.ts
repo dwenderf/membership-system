@@ -1100,7 +1100,7 @@ export async function POST(request: NextRequest) {
           // Find user with this payment method and clean up
           const { data: user, error: userError } = await supabase
             .from('users')
-            .select('id')
+            .select('id, first_name, last_name, email')
             .eq('stripe_payment_method_id', paymentMethod.id)
             .single()
 
@@ -1108,6 +1108,9 @@ export async function POST(request: NextRequest) {
             console.log('ℹ️ No user found with this payment method, skipping cleanup')
             break
           }
+
+          // Get payment method details for email
+          const lastFourDigits = paymentMethod.card?.last4 || '****'
 
           // Update user record
           const { error: updateError } = await supabase
@@ -1134,6 +1137,23 @@ export async function POST(request: NextRequest) {
           if (alternateRemovalError) {
             console.error('❌ Failed to remove user from alternate registrations:', alternateRemovalError)
             // Don't throw - this is not critical
+          }
+
+          // Stage email notification for payment method removal
+          const { emailStagingManager } = await import('@/lib/email/staging')
+          
+          if (process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID) {
+            await emailStagingManager.stageEmail({
+              user_id: user.id,
+              email_address: user.email,
+              event_type: 'payment_method.removed',
+              subject: 'Payment Method Removed',
+              template_id: process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID,
+              email_data: {
+                userName: `${user.first_name} ${user.last_name}`,
+                paymentMethod: `****${lastFourDigits}`
+              }
+            })
           }
 
           console.log('✅ Successfully cleaned up user data after payment method detachment:', {

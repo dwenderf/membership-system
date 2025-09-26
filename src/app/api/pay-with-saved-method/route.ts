@@ -19,6 +19,7 @@ interface PayWithSavedMethodRequest {
   categoryId?: string
   presaleCode?: string
   discountCode?: string
+  existingPaymentIntentId?: string // Payment intent to cancel
   
   // For memberships  
   membershipId?: string
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: PayWithSavedMethodRequest = await request.json()
-    const { amount, registrationId, categoryId, membershipId, durationMonths, discountCode } = body
+    const { amount, registrationId, categoryId, membershipId, durationMonths, discountCode, existingPaymentIntentId } = body
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
@@ -101,6 +102,36 @@ export async function POST(request: NextRequest) {
       const error = new Error('No Stripe customer ID found')
       capturePaymentError(error, paymentContext, 'error')
       return NextResponse.json({ error: 'Payment setup incomplete' }, { status: 400 })
+    }
+
+    // Cancel existing payment intent if provided (to free up reservation)
+    if (existingPaymentIntentId) {
+      try {
+        await stripe.paymentIntents.cancel(existingPaymentIntentId)
+        logger.logPaymentProcessing(
+          'saved-method-cancelled-existing-intent',
+          'Cancelled existing payment intent when using saved method',
+          { 
+            userId: user.id, 
+            cancelledPaymentIntentId: existingPaymentIntentId,
+            registrationId,
+            membershipId
+          },
+          'info'
+        )
+      } catch (cancelError) {
+        logger.logPaymentProcessing(
+          'saved-method-cancel-failed',
+          'Failed to cancel existing payment intent',
+          { 
+            userId: user.id, 
+            existingPaymentIntentId,
+            error: cancelError instanceof Error ? cancelError.message : String(cancelError)
+          },
+          'warn'
+        )
+        // Continue anyway - the saved method payment should still work
+      }
     }
 
     let finalAmount = amount

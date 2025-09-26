@@ -466,14 +466,8 @@ export default function RegistrationPurchase({
       return
     }
 
-    // Check if user has saved payment method and show confirmation screen
-    if (userHasSavedPaymentMethod && finalAmount > 0) {
-      setShowConfirmationScreen(true)
-      setIsLoading(false)
-      return
-    }
-
-    // Regular registration flow - open payment modal AFTER getting fresh payment intent
+    // For paid registrations, always create payment intent first to start reservation timer
+    // This ensures fairness - all users get the same 5-minute window regardless of payment method
     try {
       const response = await fetch('/api/create-registration-payment-intent', {
         method: 'POST',
@@ -514,7 +508,13 @@ export default function RegistrationPurchase({
       setClientSecret(clientSecret)
       setPaymentIntentId(intentId)
       setReservationExpiresAt(expiresAt || null)
-      setShowPaymentForm(true) // Only show form after we have fresh payment intent data
+      
+      // Now check if user has saved payment method and show appropriate UI
+      if (userHasSavedPaymentMethod && finalAmount > 0) {
+        setShowConfirmationScreen(true) // Show confirmation screen with timer
+      } else {
+        setShowPaymentForm(true) // Show regular payment form
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)
@@ -546,6 +546,7 @@ export default function RegistrationPurchase({
           amount: originalAmount,
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
+          existingPaymentIntentId: paymentIntentId, // Cancel this when using saved method
         }),
       })
 

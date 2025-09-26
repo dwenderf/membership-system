@@ -578,10 +578,46 @@ export default function RegistrationPurchase({
   }
 
   // Handle using different payment method
-  const handleUseDifferentMethod = () => {
+  const handleUseDifferentMethod = async () => {
     setShowConfirmationScreen(false)
-    // Continue with regular payment flow
-    handlePurchase()
+    setIsLoading(true)
+    
+    // Continue with regular payment flow (bypass saved method check)
+    try {
+      const response = await fetch('/api/create-registration-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          registrationId: registration.id,
+          categoryId: selectedCategoryId,
+          amount: originalAmount,
+          presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
+          discountCode: discountValidation?.isValid ? discountCode.trim() : null,
+          savePaymentMethod: shouldSavePaymentMethod,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create payment intent')
+      }
+
+      const data = await response.json()
+      setClientSecret(data.clientSecret)
+      setPaymentIntentId(data.paymentIntentId)
+      setReservationExpiresAt(data.reservationExpiresAt)
+      setShowPaymentForm(true)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
+      showError(
+        'Setup Error',
+        'Unable to initialize payment. Please try again.'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

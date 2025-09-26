@@ -616,7 +616,7 @@ async function processMembershipCompletion(
       payment_status: 'paid',
       valid_from: startDate.toISOString().split('T')[0],
       valid_until: endDate.toISOString().split('T')[0],
-      duration_months: durationMonths,
+      months_purchased: durationMonths,
       purchased_at: new Date().toISOString()
     })
     .select('id')

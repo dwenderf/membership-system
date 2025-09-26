@@ -255,10 +255,55 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
 
   // Handle using different payment method
-  const handleUseDifferentMethod = () => {
+  const handleUseDifferentMethod = async () => {
+    if (!selectedDuration || !paymentOption) return
+
     setShowConfirmationScreen(false)
-    // Continue with regular payment flow
-    handlePurchase()
+    setIsLoading(true)
+    setError(null)
+    
+    // Continue with regular payment flow (bypass saved method check)
+    try {
+      const paymentData: PaymentFlowData = {
+        amount: finalAmount,
+        membershipId: membership.id,
+        durationMonths: selectedDuration,
+        paymentOption: paymentOption,
+        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
+        donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
+        savePaymentMethod: shouldSavePaymentMethod,
+      }
+
+      const result = await handlePaymentFlow(paymentData)
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process payment')
+      }
+
+      if (result.isFree) {
+        // Free membership completed
+        setPurchaseCompleted(true)
+        showSuccess(
+          'Membership Activated!',
+          result.message || 'Your free membership has been activated successfully.'
+        )
+        return
+      }
+      
+      // Paid membership - show payment form
+      setShowPaymentForm(true)
+      setClientSecret(result.clientSecret!)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
+      setShowPaymentForm(false)
+      showError(
+        'Setup Error', 
+        'Unable to initialize payment. Please try again.'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Show success state if purchase completed

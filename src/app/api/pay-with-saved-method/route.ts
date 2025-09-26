@@ -675,10 +675,23 @@ async function processMembershipCompletion(
 ) {
   const supabase = await createClient()
 
-  // Calculate membership dates (you'll need to implement this logic)
-  const startDate = new Date()
-  const endDate = new Date()
-  endDate.setMonth(endDate.getMonth() + durationMonths)
+  // Get user's existing memberships to calculate proper start date
+  const { data: existingMemberships } = await supabase
+    .from('user_memberships')
+    .select(`
+      valid_until,
+      membership:memberships(id)
+    `)
+    .eq('user_id', userId)
+    .eq('payment_status', 'paid')
+
+  // Calculate proper membership dates using the utility functions
+  const { calculateMembershipDates } = await import('@/lib/membership-utils')
+  const { startDate, endDate } = calculateMembershipDates(
+    membershipId,
+    durationMonths,
+    existingMemberships || []
+  )
 
   // Create user membership record
   const { data: membershipRecord, error: membershipError } = await supabase

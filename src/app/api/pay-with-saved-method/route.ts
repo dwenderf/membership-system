@@ -386,9 +386,10 @@ export async function POST(request: NextRequest) {
       .update({ payment_id: paymentRecord.id })
       .eq('id', stagingRecord.id)
 
-    // Process registration or membership creation
+    // Process registration or membership creation and get the actual record IDs
+    let actualRecordId: string
     if (isRegistration) {
-      await processRegistrationCompletion(
+      const registrationRecord = await processRegistrationCompletion(
         user.id,
         registrationId!,
         categoryId!,
@@ -396,14 +397,18 @@ export async function POST(request: NextRequest) {
         body.presaleCode,
         validatedDiscountCode?.id
       )
+      actualRecordId = registrationRecord.id
     } else if (isMembership) {
-      await processMembershipCompletion(
+      const membershipRecord = await processMembershipCompletion(
         user.id,
         membershipId!,
         durationMonths!,
         paymentRecord.id,
         body
       )
+      actualRecordId = membershipRecord.id
+    } else {
+      actualRecordId = paymentRecord.id // Fallback to payment ID
     }
 
     // Record discount usage if applicable
@@ -416,16 +421,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Trigger post-payment processing
+    // Trigger post-payment processing with the correct record ID
     try {
       const recordType = isRegistration ? 'user_registrations' : 'user_memberships'
+      const triggerSource = finalAmount === 0 
+        ? (isRegistration ? 'free_registration' : 'free_membership')
+        : (isRegistration ? 'user_registrations' : 'user_memberships')
+      
       await paymentProcessor.processPaymentCompletion({
         event_type: recordType,
-        record_id: paymentRecord.id, // We'll update this with the actual record ID after creation
+        record_id: actualRecordId, // Now using the actual registration/membership record ID
         user_id: user.id,
         payment_id: paymentRecord.id,
         amount: finalAmount,
-        trigger_source: 'saved_method_payment',
+        trigger_source: triggerSource,
         timestamp: new Date().toISOString()
       })
     } catch (error) {
@@ -435,6 +444,7 @@ export async function POST(request: NextRequest) {
         { 
           userId: user.id, 
           paymentId: paymentRecord.id,
+          actualRecordId,
           error: error instanceof Error ? error.message : String(error)
         },
         'warn'
@@ -528,9 +538,10 @@ async function handleFreePayment(
       .update({ payment_id: paymentRecord.id })
       .eq('id', stagingRecord.id)
 
-    // Process registration or membership creation
+    // Process registration or membership creation and get the actual record IDs
+    let actualRecordId: string
     if (isRegistration) {
-      await processRegistrationCompletion(
+      const registrationRecord = await processRegistrationCompletion(
         userId,
         registrationId!,
         categoryId!,
@@ -538,13 +549,45 @@ async function handleFreePayment(
         body?.presaleCode,
         discountCodeId
       )
+      actualRecordId = registrationRecord.id
     } else if (membershipId && durationMonths) {
-      await processMembershipCompletion(
+      const membershipRecord = await processMembershipCompletion(
         userId,
         membershipId,
         durationMonths,
         paymentRecord.id,
         body
+      )
+      actualRecordId = membershipRecord.id
+    } else {
+      actualRecordId = paymentRecord.id // Fallback to payment ID
+    }
+
+    // Trigger post-payment processing for free payments too
+    try {
+      const recordType = isRegistration ? 'user_registrations' : 'user_memberships'
+      const triggerSource = isRegistration ? 'free_registration' : 'free_membership'
+      
+      await paymentProcessor.processPaymentCompletion({
+        event_type: recordType,
+        record_id: actualRecordId,
+        user_id: userId,
+        payment_id: paymentRecord.id,
+        amount: 0,
+        trigger_source: triggerSource,
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      logger.logPaymentProcessing(
+        'saved-method-free-post-processing-error',
+        'Failed to trigger post-payment processing for free payment',
+        { 
+          userId, 
+          paymentId: paymentRecord.id,
+          actualRecordId,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        'warn'
       )
     }
 

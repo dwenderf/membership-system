@@ -58,15 +58,17 @@ export function formatPaymentMethodWithExpiry(paymentMethod?: {
  * Gets the payment method info from the API response format
  */
 export function extractPaymentMethodInfo(apiResponse: any): PaymentMethodInfo {
-  if (!apiResponse?.paymentMethod) {
+  if (!apiResponse?.paymentMethod?.card) {
     return { hasPaymentMethod: false }
   }
 
+  const card = apiResponse.paymentMethod.card
+
   return {
     hasPaymentMethod: true,
-    last4: apiResponse.paymentMethod.last4,
-    brand: apiResponse.paymentMethod.brand,
-    exp_month: apiResponse.paymentMethod.exp_month,
-    exp_year: apiResponse.paymentMethod.exp_year
+    last4: card.last4,
+    brand: card.brand,
+    exp_month: card.exp_month,
+    exp_year: card.exp_year
   }
 }

@@ -1,12 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-interface PaymentMethodInfo {
-  hasPaymentMethod: boolean
-  last4?: string
-  brand?: string
-}
+import { formatPaymentMethodDescription, extractPaymentMethodInfo, type PaymentMethodInfo } from '@/lib/payment-method-utils'
 
 interface PaymentConfirmationScreenProps {
   // Common props
@@ -91,11 +86,7 @@ export default function PaymentConfirmationScreen({
       const response = await fetch('/api/user-payment-method')
       if (response.ok) {
         const data = await response.json()
-        setPaymentInfo({
-          hasPaymentMethod: !!data.paymentMethod,
-          last4: data.paymentMethod?.last4,
-          brand: data.paymentMethod?.brand
-        })
+        setPaymentInfo(extractPaymentMethodInfo(data))
       } else {
         setPaymentInfo({ hasPaymentMethod: false })
       }
@@ -133,10 +124,7 @@ export default function PaymentConfirmationScreen({
     return null
   }
 
-  const cardDisplay = paymentInfo.brand && paymentInfo.last4 
-    ? `${paymentInfo.brand.toUpperCase()} •••• ${paymentInfo.last4}`
-    : 'Saved payment method'
-
+  const paymentMethodDescription = formatPaymentMethodDescription(paymentInfo)
   const isRegistration = !!registrationName
   const finalAmount = amount / 100
 
@@ -237,23 +225,6 @@ export default function PaymentConfirmationScreen({
         </div>
       </div>
 
-      {/* Saved Payment Method */}
-      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-medium text-blue-900">Saved Payment Method</h4>
-            <div className="mt-1 text-sm text-blue-700">
-              {cardDisplay}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Action Buttons */}
       <div className="space-y-3">
         <button
@@ -270,7 +241,7 @@ export default function PaymentConfirmationScreen({
               Processing Payment...
             </div>
           ) : (
-            `Pay $${finalAmount.toFixed(2)} with ${cardDisplay}`
+            `Pay $${finalAmount.toFixed(2)} with ${paymentMethodDescription}`
           )}
         </button>
         

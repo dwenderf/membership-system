@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatPaymentMethodDescription, extractPaymentMethodInfo, type PaymentMethodInfo } from '@/lib/payment-method-utils'
 
 interface PaymentMethodNoticeProps {
   userEmail: string
@@ -8,11 +9,7 @@ interface PaymentMethodNoticeProps {
   showForAlternate?: boolean // Different messaging for alternate registrations
 }
 
-interface PaymentMethodInfo {
-  hasPaymentMethod: boolean
-  last4?: string
-  brand?: string
-}
+// PaymentMethodInfo is now imported from utils
 
 export default function PaymentMethodNotice({ 
   userEmail, 
@@ -36,11 +33,7 @@ export default function PaymentMethodNotice({
       const response = await fetch('/api/user-payment-method')
       if (response.ok) {
         const data = await response.json()
-        setPaymentInfo({
-          hasPaymentMethod: !!data.paymentMethod,
-          last4: data.paymentMethod?.last4,
-          brand: data.paymentMethod?.brand
-        })
+        setPaymentInfo(extractPaymentMethodInfo(data))
       } else {
         setPaymentInfo({ hasPaymentMethod: false })
       }
@@ -66,9 +59,7 @@ export default function PaymentMethodNotice({
 
   // User has a saved payment method
   if (paymentInfo.hasPaymentMethod) {
-    const cardDisplay = paymentInfo.brand && paymentInfo.last4 
-      ? `${paymentInfo.brand.toUpperCase()} •••• ${paymentInfo.last4}`
-      : 'Saved payment method'
+    const cardDisplay = formatPaymentMethodDescription(paymentInfo)
 
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

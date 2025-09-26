@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import ConfirmationDialog from './ConfirmationDialog'
+import { formatPaymentMethodDescription } from '@/lib/payment-method-utils'
 
 interface PaymentMethod {
   id: string
@@ -149,7 +150,7 @@ export default function PaymentMethodsSection() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-gray-900">
-                    {paymentMethod.card.brand.toUpperCase()} •••• {paymentMethod.card.last4}
+                    {formatPaymentMethodDescription(paymentMethod.card)}
                   </div>
                   <div className="text-sm text-gray-500">
                     Expires {paymentMethod.card.exp_month.toString().padStart(2, '0')}/{paymentMethod.card.exp_year}

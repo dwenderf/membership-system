@@ -197,9 +197,14 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       
       // Check if user has saved payment method and show appropriate UI
       if (userHasSavedPaymentMethod && finalAmount > 0) {
-        setShowConfirmationScreen(true)
-        // Get payment method details for the confirmation screen
-        await handleConfirmSavedMethod()
+        // Get payment method details first, then show confirmation screen
+        const paymentMethodId = await handleConfirmSavedMethod()
+        if (paymentMethodId) {
+          setShowConfirmationScreen(true)
+        } else {
+          // Fall back to regular payment form if payment method details fail
+          setShowPaymentForm(true)
+        }
       } else {
         setShowPaymentForm(true)
       }
@@ -219,8 +224,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
 
   // Handle saved method payment confirmation setup
-  const handleConfirmSavedMethod = async () => {
-    if (!selectedDuration || !paymentOption || !clientSecret) return
+  const handleConfirmSavedMethod = async (): Promise<string | null> => {
+    if (!selectedDuration || !paymentOption || !clientSecret) return null
 
     try {
       const response = await fetch('/api/get-payment-method-details', {
@@ -240,6 +245,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
 
       const result = await response.json()
       setSavedPaymentMethodId(result.paymentMethodId)
+      return result.paymentMethodId
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
@@ -248,6 +254,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       // Reset UI state on error
       setShowConfirmationScreen(false)
       setIsLoading(false)
+      return null
     }
   }
 

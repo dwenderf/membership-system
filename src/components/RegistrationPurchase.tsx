@@ -513,9 +513,14 @@ export default function RegistrationPurchase({
       
       // Now check if user has saved payment method and show appropriate UI
       if (userHasSavedPaymentMethod && finalAmount > 0) {
-        setShowConfirmationScreen(true) // Show confirmation screen with timer
-        // Get payment method details for the confirmation screen
-        await handleConfirmSavedMethod()
+        // Get payment method details first, then show confirmation screen
+        const paymentMethodId = await handleConfirmSavedMethod()
+        if (paymentMethodId) {
+          setShowConfirmationScreen(true) // Show confirmation screen with timer
+        } else {
+          // Fall back to regular payment form if payment method details fail
+          setShowPaymentForm(true)
+        }
       } else {
         setShowPaymentForm(true) // Show regular payment form
       }
@@ -535,8 +540,8 @@ export default function RegistrationPurchase({
   }
 
   // Handle saved method payment confirmation setup
-  const handleConfirmSavedMethod = async () => {
-    if (!selectedCategoryId || !clientSecret) return
+  const handleConfirmSavedMethod = async (): Promise<string | null> => {
+    if (!selectedCategoryId || !clientSecret) return null
 
     try {
       const response = await fetch('/api/get-payment-method-details', {
@@ -556,6 +561,7 @@ export default function RegistrationPurchase({
 
       const result = await response.json()
       setSavedPaymentMethodId(result.paymentMethodId)
+      return result.paymentMethodId
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
@@ -564,6 +570,7 @@ export default function RegistrationPurchase({
       // Reset UI state on error
       setShowConfirmationScreen(false)
       setIsLoading(false)
+      return null
     }
   }
 

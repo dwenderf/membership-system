@@ -110,8 +110,12 @@ export default function RegistrationPurchase({
         const response = await fetch('/api/user-payment-method')
         if (response.ok) {
           const data = await response.json()
-          setUserHasSavedPaymentMethod(!!data.paymentMethod)
+          console.log('Payment method check response:', data)
+          const hasPaymentMethod = !!data.paymentMethod
+          console.log('Has saved payment method:', hasPaymentMethod)
+          setUserHasSavedPaymentMethod(hasPaymentMethod)
         } else {
+          console.log('Payment method check failed with status:', response.status)
           setUserHasSavedPaymentMethod(false)
         }
       } catch (error) {
@@ -512,7 +516,9 @@ export default function RegistrationPurchase({
       setReservationExpiresAt(expiresAt || null)
       
       // Now check if user has saved payment method and show appropriate UI
+      console.log('Purchase decision:', { userHasSavedPaymentMethod, finalAmount, condition: userHasSavedPaymentMethod && finalAmount > 0 })
       if (userHasSavedPaymentMethod && finalAmount > 0) {
+        console.log('Using saved payment method flow')
         // Get payment method details first, then show confirmation screen
         const paymentMethodId = await handleConfirmSavedMethod()
         if (paymentMethodId) {
@@ -522,6 +528,7 @@ export default function RegistrationPurchase({
           setShowPaymentForm(true)
         }
       } else {
+        console.log('Using regular payment form flow')
         setShowPaymentForm(true) // Show regular payment form
       }
     } catch (err) {

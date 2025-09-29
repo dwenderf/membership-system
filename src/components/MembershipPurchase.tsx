@@ -56,6 +56,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [shouldSavePaymentMethod, setShouldSavePaymentMethod] = useState(false)
   const [showConfirmationScreen, setShowConfirmationScreen] = useState(false)
   const [userHasSavedPaymentMethod, setUserHasSavedPaymentMethod] = useState<boolean | null>(null)
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   
   const { showSuccess, showError } = useToast()
 
@@ -161,13 +163,6 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     setError(null)
     
     try {
-      // Check if user has saved payment method and show confirmation screen
-      if (userHasSavedPaymentMethod && finalAmount > 0) {
-        setShowConfirmationScreen(true)
-        setIsLoading(false)
-        return
-      }
-
       const paymentData: PaymentFlowData = {
         amount: finalAmount,
         membershipId: membership.id,
@@ -179,7 +174,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         expectedValidFrom: startDate.toISOString().split('T')[0],
         expectedValidUntil: endDate.toISOString().split('T')[0],
       }
-
+      
       const result = await handlePaymentFlow(paymentData)
       
       if (!result.success) {
@@ -196,9 +191,18 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         return
       }
       
-      // Paid membership - show payment form
-      setShowPaymentForm(true)
+      // Set payment intent details
       setClientSecret(result.clientSecret!)
+      setPaymentIntentId(result.paymentIntentId!)
+      
+      // Check if user has saved payment method and show appropriate UI
+      if (userHasSavedPaymentMethod && finalAmount > 0) {
+        setShowConfirmationScreen(true)
+        // Get payment method details for the confirmation screen
+        await handleConfirmSavedMethod()
+      } else {
+        setShowPaymentForm(true)
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMessage)
@@ -214,52 +218,59 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     }
   }
 
-  // Handle saved method payment confirmation
+  // Handle saved method payment confirmation setup
   const handleConfirmSavedMethod = async () => {
-    if (!selectedDuration || !paymentOption) return
+    if (!selectedDuration || !paymentOption || !clientSecret) return
 
     try {
-      const response = await fetch('/api/pay-with-saved-method', {
+      const response = await fetch('/api/get-payment-method-details', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          membershipId: membership.id,
-          durationMonths: selectedDuration,
-          amount: finalAmount,
-          paymentOption: paymentOption,
-          assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
-          donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
-          expectedValidFrom: startDate.toISOString().split('T')[0],
-          expectedValidUntil: endDate.toISOString().split('T')[0],
+          clientSecret: clientSecret,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Payment failed')
+        throw new Error(errorData.error || 'Failed to get payment method details')
       }
 
       const result = await response.json()
-      
-      setShowConfirmationScreen(false)
-      setPurchaseCompleted(true)
-      setError(null)
-      
-      showSuccess(
-        'Membership Activated!',
-        result.message || 'Your membership has been activated successfully.'
-      )
+      setSavedPaymentMethodId(result.paymentMethodId)
       
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Payment failed'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
       setError(errorMessage)
-      showError('Payment Failed', errorMessage)
+      showError('Payment Setup Failed', errorMessage)
       // Reset UI state on error
       setShowConfirmationScreen(false)
       setIsLoading(false)
     }
+  }
+
+  // Handle successful payment completion (called from SavedPaymentConfirmation)
+  const handleSavedPaymentSuccess = () => {
+    setShowConfirmationScreen(false)
+    setPurchaseCompleted(true)
+    setError(null)
+    setIsLoading(false)
+    
+    showSuccess(
+      'Membership Activated!',
+      'Your membership has been activated successfully.'
+    )
+  }
+
+  // Handle payment error (called from SavedPaymentConfirmation)
+  const handleSavedPaymentError = (errorMessage: string) => {
+    setError(errorMessage)
+    showError('Payment Failed', errorMessage)
+    // Reset UI state on error
+    setShowConfirmationScreen(false)
+    setIsLoading(false)
   }
 
   // Handle using different payment method
@@ -766,15 +777,20 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           onClick={() => setShowConfirmationScreen(false)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <PaymentConfirmationScreen
-              userEmail={userEmail}
-              amount={finalAmount}
-              membershipName={membership.name}
-              durationMonths={selectedDuration || 0}
-              onConfirmSavedMethod={handleConfirmSavedMethod}
-              onUseDifferentMethod={handleUseDifferentMethod}
-              onCancel={() => setShowConfirmationScreen(false)}
-            />
+            <Elements stripe={stripePromise} options={{ clientSecret: clientSecret! }}>
+              <SavedPaymentConfirmation
+                userEmail={userEmail}
+                amount={finalAmount}
+                clientSecret={clientSecret!}
+                paymentMethodId={savedPaymentMethodId || ''}
+                membershipName={membership.name}
+                durationMonths={selectedDuration || 0}
+                onSuccess={handleSavedPaymentSuccess}
+                onError={handleSavedPaymentError}
+                onUseDifferentMethod={handleUseDifferentMethod}
+                onCancel={() => setShowConfirmationScreen(false)}
+              />
+            </Elements>
           </div>
         </div>
       )}

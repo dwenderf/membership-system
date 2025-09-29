@@ -651,26 +651,58 @@ async function processRegistrationCompletion(
     (cat: any) => cat.id === categoryId
   )
 
-  // Create user registration record
-  const { data: registrationRecord, error: registrationError } = await adminSupabase
+  // Check if user already has a reservation/registration record (from timer flow)
+  const { data: existingRegistration } = await supabase
     .from('user_registrations')
-    .insert({
-      user_id: userId,
-      registration_id: registrationId,
-      registration_category_id: categoryId,
-      user_membership_id: activeMembership?.id || null,
-      payment_status: 'paid',
-      payment_id: paymentId,
-      registration_fee: selectedCategory?.price || 0,
-      amount_paid: 0, // Will be updated based on final payment amount
-      registered_at: new Date().toISOString(),
-      presale_code_used: presaleCode || null,
-    })
-    .select('id')
+    .select('id, payment_status')
+    .eq('user_id', userId)
+    .eq('registration_id', registrationId)
     .single()
 
-  if (registrationError) {
-    throw new Error(`Failed to create registration record: ${registrationError.message}`)
+  let registrationRecord
+
+  if (existingRegistration) {
+    // Update existing reservation to paid status
+    const { data: updatedRegistration, error: updateError } = await adminSupabase
+      .from('user_registrations')
+      .update({
+        payment_status: 'paid',
+        payment_id: paymentId,
+        user_membership_id: activeMembership?.id || null,
+        registered_at: new Date().toISOString(),
+        presale_code_used: presaleCode || null,
+      })
+      .eq('id', existingRegistration.id)
+      .select('id')
+      .single()
+
+    if (updateError) {
+      throw new Error(`Failed to update registration record: ${updateError.message}`)
+    }
+    registrationRecord = updatedRegistration
+  } else {
+    // Create new registration record (fallback for cases without reservation)
+    const { data: newRegistration, error: registrationError } = await adminSupabase
+      .from('user_registrations')
+      .insert({
+        user_id: userId,
+        registration_id: registrationId,
+        registration_category_id: categoryId,
+        user_membership_id: activeMembership?.id || null,
+        payment_status: 'paid',
+        payment_id: paymentId,
+        registration_fee: selectedCategory?.price || 0,
+        amount_paid: 0, // Will be updated based on final payment amount
+        registered_at: new Date().toISOString(),
+        presale_code_used: presaleCode || null,
+      })
+      .select('id')
+      .single()
+
+    if (registrationError) {
+      throw new Error(`Failed to create registration record: ${registrationError.message}`)
+    }
+    registrationRecord = newRegistration
   }
 
   return registrationRecord

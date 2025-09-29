@@ -534,6 +534,9 @@ export default function RegistrationPurchase({
   const handleConfirmSavedMethod = async () => {
     if (!selectedCategoryId) return
 
+    setIsLoading(true)
+    setError(null)
+
     try {
       const response = await fetch('/api/pay-with-saved-method', {
         method: 'POST',
@@ -562,6 +565,7 @@ export default function RegistrationPurchase({
       setDiscountCode('')
       setDiscountValidation(null)
       setError(null)
+      setIsLoading(false)
       
       showSuccess(
         'Registration Complete!',
@@ -575,6 +579,9 @@ export default function RegistrationPurchase({
       const errorMessage = err instanceof Error ? err.message : 'Payment failed'
       setError(errorMessage)
       showError('Payment Failed', errorMessage)
+      // Reset UI state on error
+      setShowConfirmationScreen(false)
+      setIsLoading(false)
     }
   }
 

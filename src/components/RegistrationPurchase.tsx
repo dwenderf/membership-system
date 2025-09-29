@@ -7,6 +7,7 @@ import PaymentForm from './PaymentForm'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
 import PaymentConfirmationScreen from './PaymentConfirmationScreen'
+import SavedPaymentConfirmation from './SavedPaymentConfirmation'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -99,6 +100,7 @@ export default function RegistrationPurchase({
   const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
   const [shouldSavePaymentMethod, setShouldSavePaymentMethod] = useState(false)
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method
@@ -512,6 +514,8 @@ export default function RegistrationPurchase({
       // Now check if user has saved payment method and show appropriate UI
       if (userHasSavedPaymentMethod && finalAmount > 0) {
         setShowConfirmationScreen(true) // Show confirmation screen with timer
+        // Get payment method details for the confirmation screen
+        await handleConfirmSavedMethod()
       } else {
         setShowPaymentForm(true) // Show regular payment form
       }
@@ -530,59 +534,64 @@ export default function RegistrationPurchase({
     }
   }
 
-  // Handle saved method payment confirmation
+  // Handle saved method payment confirmation setup
   const handleConfirmSavedMethod = async () => {
-    if (!selectedCategoryId) return
-
-    setIsLoading(true)
-    setError(null)
+    if (!selectedCategoryId || !clientSecret) return
 
     try {
-      const response = await fetch('/api/pay-with-saved-method', {
+      const response = await fetch('/api/get-payment-method-details', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          registrationId: registration.id,
-          categoryId: selectedCategoryId,
-          amount: originalAmount,
-          presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
-          discountCode: discountValidation?.isValid ? discountCode.trim() : null,
-          existingPaymentIntentId: paymentIntentId, // Cancel this when using saved method
+          clientSecret: clientSecret,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Payment failed')
+        throw new Error(errorData.error || 'Failed to get payment method details')
       }
 
       const result = await response.json()
-      
-      setShowConfirmationScreen(false)
-      setSelectedCategoryId(null)
-      setDiscountCode('')
-      setDiscountValidation(null)
-      setError(null)
-      setIsLoading(false)
-      
-      showSuccess(
-        'Registration Complete!',
-        result.message || 'Your registration has been completed successfully.'
-      )
-      
-      // Refresh the page to show updated registration status
-      setTimeout(() => window.location.reload(), 2000)
+      setSavedPaymentMethodId(result.paymentMethodId)
       
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Payment failed'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
       setError(errorMessage)
-      showError('Payment Failed', errorMessage)
+      showError('Payment Setup Failed', errorMessage)
       // Reset UI state on error
       setShowConfirmationScreen(false)
       setIsLoading(false)
     }
+  }
+
+  // Handle successful payment completion (called from SavedPaymentConfirmation)
+  const handleSavedPaymentSuccess = () => {
+    setShowConfirmationScreen(false)
+    setSelectedCategoryId(null)
+    setDiscountCode('')
+    setDiscountValidation(null)
+    setError(null)
+    setIsLoading(false)
+    
+    showSuccess(
+      'Registration Complete!',
+      'Your registration has been completed successfully.'
+    )
+    
+    // Refresh the page to show updated registration status
+    setTimeout(() => window.location.reload(), 2000)
+  }
+
+  // Handle payment error (called from SavedPaymentConfirmation)
+  const handleSavedPaymentError = (errorMessage: string) => {
+    setError(errorMessage)
+    showError('Payment Failed', errorMessage)
+    // Reset UI state on error
+    setShowConfirmationScreen(false)
+    setIsLoading(false)
   }
 
   // Handle using different payment method
@@ -1298,27 +1307,32 @@ export default function RegistrationPurchase({
       )}
 
       {/* Payment Confirmation Screen Modal */}
-      {showConfirmationScreen && (
+      {showConfirmationScreen && clientSecret && (
         <div 
           className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={closeModal}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <PaymentConfirmationScreen
-              userEmail={userEmail}
-              amount={finalAmount}
-              originalAmount={originalAmount}
-              discountAmount={discountAmount}
-              discountCode={discountValidation?.isValid ? discountCode : undefined}
-              registrationName={registration.name}
-              categoryName={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : ''}
-              seasonName={registration.season?.name}
-              reservationExpiresAt={reservationExpiresAt || undefined}
-              onTimerExpired={handleTimerExpired}
-              onConfirmSavedMethod={handleConfirmSavedMethod}
-              onUseDifferentMethod={handleUseDifferentMethod}
-              onCancel={closeModal}
-            />
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <SavedPaymentConfirmation
+                userEmail={userEmail}
+                amount={finalAmount}
+                clientSecret={clientSecret}
+                paymentMethodId={savedPaymentMethodId || ''}
+                originalAmount={originalAmount}
+                discountAmount={discountAmount}
+                discountCode={discountValidation?.isValid ? discountCode : undefined}
+                registrationName={registration.name}
+                categoryName={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : ''}
+                seasonName={registration.season?.name}
+                reservationExpiresAt={reservationExpiresAt || undefined}
+                onTimerExpired={handleTimerExpired}
+                onSuccess={handleSavedPaymentSuccess}
+                onError={handleSavedPaymentError}
+                onUseDifferentMethod={handleUseDifferentMethod}
+                onCancel={closeModal}
+              />
+            </Elements>
           </div>
         </div>
       )}

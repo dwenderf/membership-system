@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+
+// TODO: DEPRECATION NOTICE
+// This endpoint is being phased out in favor of using Stripe's payment intent confirmation flow
+// RegistrationPurchase now uses the new unified approach via SavedPaymentConfirmation component
+// MembershipPurchase still uses this endpoint and needs to be updated
+// Once MembershipPurchase is updated, this entire endpoint can be removed
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'

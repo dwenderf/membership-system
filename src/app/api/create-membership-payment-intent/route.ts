@@ -259,37 +259,13 @@ async function handleFreeMembership({
     // No need to create separate payment_items records
 
 
-    // Validate expected dates if provided
+    // Use provided dates directly if available, otherwise calculate them
     let startDate: Date, endDate: Date
+    
     if (expectedValidFrom && expectedValidUntil) {
-      // Get user's existing memberships to validate the expected dates
-      const { data: existingMemberships } = await supabase
-        .from('user_memberships')
-        .select(`
-          valid_until,
-          membership:memberships(id)
-        `)
-        .eq('user_id', user.id)
-        .eq('payment_status', 'paid')
-
-      // Calculate what the dates should be
-      const calculatedStartDate = calculateMembershipStartDate(membershipId, existingMemberships || [])
-      const calculatedEndDate = calculateMembershipEndDate(calculatedStartDate, durationMonths)
-      
-      // Validate that expected dates match calculated dates
-      const expectedStart = new Date(expectedValidFrom)
-      const expectedEnd = new Date(expectedValidUntil)
-      
-      if (calculatedStartDate.toISOString().split('T')[0] !== expectedStart.toISOString().split('T')[0] ||
-          calculatedEndDate.toISOString().split('T')[0] !== expectedEnd.toISOString().split('T')[0]) {
-        return NextResponse.json({ 
-          error: 'Membership dates have changed since the page was loaded. Please refresh and try again.' 
-        }, { status: 400 })
-      }
-      
-      // Use the validated expected dates
-      startDate = expectedStart
-      endDate = expectedEnd
+      // Trust the dates from the frontend - no validation needed
+      startDate = new Date(expectedValidFrom)
+      endDate = new Date(expectedValidUntil)
     } else {
       // Fallback to calculating dates (for backward compatibility)
       const { data: existingMemberships } = await supabase

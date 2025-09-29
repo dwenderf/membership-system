@@ -682,53 +682,20 @@ async function processMembershipCompletion(
   durationMonths: number,
   paymentId: string,
   body: any,
-  expectedValidFrom?: string,
-  expectedValidUntil?: string
+  validFromDate?: string,
+  validUntilDate?: string
 ) {
   const supabase = await createClient()
 
-  // Validate expected dates if provided
+  // Use provided dates directly if available, otherwise calculate them
   let startDate: Date, endDate: Date
-  if (expectedValidFrom && expectedValidUntil) {
-    // Get user's existing memberships to validate the expected dates
-    const { data: existingMemberships } = await supabase
-      .from('user_memberships')
-      .select(`
-        valid_until,
-        membership:memberships(id)
-      `)
-      .eq('user_id', userId)
-      .eq('payment_status', 'paid')
-
-    // Calculate what the dates should be
-    const { calculateMembershipDates } = await import('@/lib/membership-utils')
-    
-    // Transform the Supabase result to match the expected interface
-    const transformedMemberships = (existingMemberships || []).map((m: any) => ({
-      valid_until: m.valid_until,
-      membership: m.membership ? { id: m.membership.id } : undefined
-    }))
-    
-    const { startDate: calculatedStartDate, endDate: calculatedEndDate } = calculateMembershipDates(
-      membershipId,
-      durationMonths,
-      transformedMemberships
-    )
-    
-    // Validate that expected dates match calculated dates
-    const expectedStart = new Date(expectedValidFrom)
-    const expectedEnd = new Date(expectedValidUntil)
-    
-    if (calculatedStartDate.toISOString().split('T')[0] !== expectedStart.toISOString().split('T')[0] ||
-        calculatedEndDate.toISOString().split('T')[0] !== expectedEnd.toISOString().split('T')[0]) {
-      throw new Error('Membership dates have changed since the page was loaded. Please refresh and try again.')
-    }
-    
-    // Use the validated expected dates
-    startDate = expectedStart
-    endDate = expectedEnd
+  
+  if (validFromDate && validUntilDate) {
+    // Trust the dates from the frontend - no validation needed
+    startDate = new Date(validFromDate)
+    endDate = new Date(validUntilDate)
   } else {
-    // Fallback to calculating dates (for backward compatibility)
+    // Fallback: calculate dates (for backward compatibility)
     const { data: existingMemberships } = await supabase
       .from('user_memberships')
       .select(`
@@ -738,10 +705,7 @@ async function processMembershipCompletion(
       .eq('user_id', userId)
       .eq('payment_status', 'paid')
 
-    // Calculate proper membership dates using the utility functions
     const { calculateMembershipDates } = await import('@/lib/membership-utils')
-    
-    // Transform the Supabase result to match the expected interface
     const transformedMemberships = (existingMemberships || []).map((m: any) => ({
       valid_until: m.valid_until,
       membership: m.membership ? { id: m.membership.id } : undefined

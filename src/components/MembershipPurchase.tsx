@@ -255,6 +255,9 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       const errorMessage = err instanceof Error ? err.message : 'Payment failed'
       setError(errorMessage)
       showError('Payment Failed', errorMessage)
+      // Reset UI state on error
+      setShowConfirmationScreen(false)
+      setIsLoading(false)
     }
   }
 

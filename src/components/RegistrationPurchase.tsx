@@ -516,19 +516,25 @@ export default function RegistrationPurchase({
       setReservationExpiresAt(expiresAt || null)
       
       // Now check if user has saved payment method and show appropriate UI
-      console.log('Purchase decision:', { userHasSavedPaymentMethod, finalAmount, condition: userHasSavedPaymentMethod && finalAmount > 0 })
+      console.log('🔍 [CLIENT] Purchase decision:', { userHasSavedPaymentMethod, finalAmount, condition: userHasSavedPaymentMethod && finalAmount > 0 })
+      
       if (userHasSavedPaymentMethod && finalAmount > 0) {
-        console.log('Using saved payment method flow')
+        console.log('🔍 [CLIENT] Using saved payment method flow')
+        
         // Get payment method details first, then show confirmation screen
         const paymentMethodId = await handleConfirmSavedMethod()
+        console.log('🔍 [CLIENT] Payment method ID result:', paymentMethodId)
+        
         if (paymentMethodId) {
+          console.log('🔍 [CLIENT] Showing confirmation screen')
           setShowConfirmationScreen(true) // Show confirmation screen with timer
         } else {
+          console.log('🔍 [CLIENT] Falling back to regular payment form - payment method ID was null')
           // Fall back to regular payment form if payment method details fail
           setShowPaymentForm(true)
         }
       } else {
-        console.log('Using regular payment form flow')
+        console.log('🔍 [CLIENT] Using regular payment form flow')
         setShowPaymentForm(true) // Show regular payment form
       }
     } catch (err) {
@@ -548,9 +554,15 @@ export default function RegistrationPurchase({
 
   // Handle saved method payment confirmation setup
   const handleConfirmSavedMethod = async (): Promise<string | null> => {
-    if (!selectedCategoryId || !clientSecret) return null
+    console.log('🔍 [CLIENT] handleConfirmSavedMethod called', { selectedCategoryId, clientSecret: !!clientSecret })
+    
+    if (!selectedCategoryId || !clientSecret) {
+      console.log('🔍 [CLIENT] handleConfirmSavedMethod early return - missing data')
+      return null
+    }
 
     try {
+      console.log('🔍 [CLIENT] Calling /api/get-payment-method-details')
       const response = await fetch('/api/get-payment-method-details', {
         method: 'POST',
         headers: {
@@ -562,15 +574,18 @@ export default function RegistrationPurchase({
       })
 
       if (!response.ok) {
+        console.log('🔍 [CLIENT] get-payment-method-details failed with status:', response.status)
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to get payment method details')
       }
 
       const result = await response.json()
+      console.log('🔍 [CLIENT] get-payment-method-details success:', { paymentMethodId: result.paymentMethodId })
       setSavedPaymentMethodId(result.paymentMethodId)
       return result.paymentMethodId
       
     } catch (err) {
+      console.log('🔍 [CLIENT] handleConfirmSavedMethod error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
       setError(errorMessage)
       showError('Payment Setup Failed', errorMessage)

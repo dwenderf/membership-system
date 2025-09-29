@@ -175,6 +175,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined, // Positive assistance amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
+        expectedValidFrom: startDate.toISOString().split('T')[0],
+        expectedValidUntil: endDate.toISOString().split('T')[0],
       }
 
       const result = await handlePaymentFlow(paymentData)
@@ -228,6 +230,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           paymentOption: paymentOption,
           assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
           donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
+          expectedValidFrom: startDate.toISOString().split('T')[0],
+          expectedValidUntil: endDate.toISOString().split('T')[0],
         }),
       })
 
@@ -272,6 +276,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
+        expectedValidFrom: startDate.toISOString().split('T')[0],
+        expectedValidUntil: endDate.toISOString().split('T')[0],
       }
 
       const result = await handlePaymentFlow(paymentData)
@@ -760,7 +766,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
               userEmail={userEmail}
               amount={finalAmount}
               membershipName={membership.name}
-              durationMonths={selectedDuration}
+              durationMonths={selectedDuration || 0}
               onConfirmSavedMethod={handleConfirmSavedMethod}
               onUseDifferentMethod={handleUseDifferentMethod}
               onCancel={() => setShowConfirmationScreen(false)}

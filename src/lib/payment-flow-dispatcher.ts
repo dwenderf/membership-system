@@ -1,6 +1,7 @@
 export interface PaymentFlowData {
   // Common fields
   amount: number // Final amount in cents
+  savePaymentMethod?: boolean
   
   // For memberships
   membershipId?: string
@@ -8,6 +9,8 @@ export interface PaymentFlowData {
   paymentOption?: 'assistance' | 'donation' | 'standard'
   assistanceAmount?: number
   donationAmount?: number
+  expectedValidFrom?: string // Expected start date (YYYY-MM-DD)
+  expectedValidUntil?: string // Expected end date (YYYY-MM-DD)
   
   // For registrations
   registrationId?: string
@@ -72,7 +75,9 @@ async function handleZeroPaymentFlow(
           amount: 0,
           paymentOption: paymentData.paymentOption,
           assistanceAmount: paymentData.assistanceAmount,
-          donationAmount: paymentData.donationAmount
+          donationAmount: paymentData.donationAmount,
+          expectedValidFrom: paymentData.expectedValidFrom,
+          expectedValidUntil: paymentData.expectedValidUntil
         }
 
     const response = await fetch(endpoint, {
@@ -133,7 +138,9 @@ async function handlePaidPaymentFlow(
           amount: paymentData.amount,
           paymentOption: paymentData.paymentOption,
           assistanceAmount: paymentData.assistanceAmount,
-          donationAmount: paymentData.donationAmount
+          donationAmount: paymentData.donationAmount,
+          expectedValidFrom: paymentData.expectedValidFrom,
+          expectedValidUntil: paymentData.expectedValidUntil
         }
 
     const response = await fetch(endpoint, {

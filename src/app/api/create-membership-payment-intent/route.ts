@@ -26,7 +26,9 @@ async function handleFreeMembership({
   durationMonths,
   assistanceAmount,
   paymentContext,
-  startTime
+  startTime,
+  expectedValidFrom,
+  expectedValidUntil
 }: {
   supabase: any
   user: any
@@ -37,6 +39,8 @@ async function handleFreeMembership({
   assistanceAmount?: number
   paymentContext: any
   startTime: number
+  expectedValidFrom?: string
+  expectedValidUntil?: string
 }) {
   try {
     const adminSupabase = createAdminClient()
@@ -255,9 +259,51 @@ async function handleFreeMembership({
     // No need to create separate payment_items records
 
 
-    // Create the membership record directly (similar to webhook processing)
-    const startDate = calculateMembershipStartDate(membershipId, [])
-    const endDate = calculateMembershipEndDate(startDate, durationMonths)
+    // Validate expected dates if provided
+    let startDate: Date, endDate: Date
+    if (expectedValidFrom && expectedValidUntil) {
+      // Get user's existing memberships to validate the expected dates
+      const { data: existingMemberships } = await supabase
+        .from('user_memberships')
+        .select(`
+          valid_until,
+          membership:memberships(id)
+        `)
+        .eq('user_id', user.id)
+        .eq('payment_status', 'paid')
+
+      // Calculate what the dates should be
+      const calculatedStartDate = calculateMembershipStartDate(membershipId, existingMemberships || [])
+      const calculatedEndDate = calculateMembershipEndDate(calculatedStartDate, durationMonths)
+      
+      // Validate that expected dates match calculated dates
+      const expectedStart = new Date(expectedValidFrom)
+      const expectedEnd = new Date(expectedValidUntil)
+      
+      if (calculatedStartDate.toISOString().split('T')[0] !== expectedStart.toISOString().split('T')[0] ||
+          calculatedEndDate.toISOString().split('T')[0] !== expectedEnd.toISOString().split('T')[0]) {
+        return NextResponse.json({ 
+          error: 'Membership dates have changed since the page was loaded. Please refresh and try again.' 
+        }, { status: 400 })
+      }
+      
+      // Use the validated expected dates
+      startDate = expectedStart
+      endDate = expectedEnd
+    } else {
+      // Fallback to calculating dates (for backward compatibility)
+      const { data: existingMemberships } = await supabase
+        .from('user_memberships')
+        .select(`
+          valid_until,
+          membership:memberships(id)
+        `)
+        .eq('user_id', user.id)
+        .eq('payment_status', 'paid')
+
+      startDate = calculateMembershipStartDate(membershipId, existingMemberships || [])
+      endDate = calculateMembershipEndDate(startDate, durationMonths)
+    }
 
     const { data: membershipRecord, error: membershipError } = await supabase
       .from('user_memberships')
@@ -384,7 +430,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount } = body
+    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil } = body
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
@@ -420,7 +466,9 @@ export async function POST(request: NextRequest) {
         durationMonths,
         assistanceAmount,
         paymentContext,
-        startTime
+        startTime,
+        expectedValidFrom,
+        expectedValidUntil
       })
     }
 

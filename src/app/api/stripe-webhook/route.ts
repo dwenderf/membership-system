@@ -139,8 +139,18 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       .gte('valid_until', new Date().toISOString().split('T')[0])
       .order('valid_until', { ascending: false })
 
-    const startDate = calculateMembershipStartDate(membershipId, userMemberships || [])
-    const endDate = calculateMembershipEndDate(startDate, durationMonths)
+    // Use expected dates from payment intent metadata if available, otherwise calculate them
+    let startDate: Date, endDate: Date
+    
+    if (paymentIntent.metadata.expectedValidFrom && paymentIntent.metadata.expectedValidUntil) {
+      // Use the dates that were shown to the user on the frontend
+      startDate = new Date(paymentIntent.metadata.expectedValidFrom)
+      endDate = new Date(paymentIntent.metadata.expectedValidUntil)
+    } else {
+      // Fallback to calculation (for backward compatibility with old payment intents)
+      startDate = calculateMembershipStartDate(membershipId, userMemberships || [])
+      endDate = calculateMembershipEndDate(startDate, durationMonths)
+    }
 
     // Create user membership record (handle duplicate gracefully)
     try {

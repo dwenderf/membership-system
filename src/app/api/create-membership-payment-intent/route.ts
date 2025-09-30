@@ -702,6 +702,8 @@ export async function POST(request: NextRequest) {
         paymentOption: paymentOption || 'standard',
         ...(paymentOption === 'assistance' && assistanceAmount && { assistanceAmount: assistanceAmount.toString() }),
         ...(paymentOption === 'donation' && donationAmount && { donationAmount: donationAmount.toString() }),
+        ...(expectedValidFrom && { expectedValidFrom }),
+        ...(expectedValidUntil && { expectedValidUntil }),
       },
       description: getDescription(),
     }

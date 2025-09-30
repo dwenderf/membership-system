@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
@@ -198,7 +198,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       // Check if user has saved payment method and show appropriate UI
       if (userHasSavedPaymentMethod && finalAmount > 0) {
         // Get payment method details first, then show confirmation screen
-        const paymentMethodId = await handleConfirmSavedMethod()
+        const paymentMethodId = await handleConfirmSavedMethod(result.clientSecret!)
         if (paymentMethodId) {
           setShowConfirmationScreen(true)
         } else {
@@ -224,8 +224,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
 
   // Handle saved method payment confirmation setup
-  const handleConfirmSavedMethod = async (): Promise<string | null> => {
-    if (!selectedDuration || !paymentOption || !clientSecret) return null
+  const handleConfirmSavedMethod = async (clientSecretParam: string): Promise<string | null> => {
+    if (!selectedDuration || !paymentOption || !clientSecretParam) return null
 
     try {
       const response = await fetch('/api/get-payment-method-details', {
@@ -234,7 +234,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          clientSecret: clientSecret,
+          clientSecret: clientSecretParam,
         }),
       })
 

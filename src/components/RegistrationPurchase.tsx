@@ -570,7 +570,7 @@ export default function RegistrationPurchase({
         }).catch(() => {})
         
         // Get payment method details first, then show confirmation screen
-        const paymentMethodId = await handleConfirmSavedMethod()
+        const paymentMethodId = await handleConfirmSavedMethod(clientSecret)
         
         // Log to server
         fetch('/api/debug/log', {
@@ -626,10 +626,10 @@ export default function RegistrationPurchase({
   }
 
   // Handle saved method payment confirmation setup
-  const handleConfirmSavedMethod = async (): Promise<string | null> => {
-    console.log('🔍 [CLIENT] handleConfirmSavedMethod called', { selectedCategoryId, clientSecret: !!clientSecret })
+  const handleConfirmSavedMethod = async (clientSecretParam: string): Promise<string | null> => {
+    console.log('🔍 [CLIENT] handleConfirmSavedMethod called', { selectedCategoryId, clientSecret: !!clientSecretParam })
     
-    if (!selectedCategoryId || !clientSecret) {
+    if (!selectedCategoryId || !clientSecretParam) {
       console.log('🔍 [CLIENT] handleConfirmSavedMethod early return - missing data')
       return null
     }
@@ -642,7 +642,7 @@ export default function RegistrationPurchase({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          clientSecret: clientSecret,
+          clientSecret: clientSecretParam,
         }),
       })
 

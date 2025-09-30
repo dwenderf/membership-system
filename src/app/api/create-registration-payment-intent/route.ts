@@ -1274,7 +1274,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Create payment intent with explicit Link support
-    const paymentIntentParams = {
+    const paymentIntentParams: any = {
       amount: centsToCents(finalAmount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
@@ -1297,6 +1297,11 @@ export async function POST(request: NextRequest) {
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
       },
       description: getDescription(),
+    }
+
+    // Add customer parameter if user has a Stripe customer ID (required for saved payment methods)
+    if (userProfile.stripe_customer_id) {
+      paymentIntentParams.customer = userProfile.stripe_customer_id
     }
     
     const paymentIntent = await stripe.paymentIntents.create({

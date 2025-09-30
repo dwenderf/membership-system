@@ -107,53 +107,16 @@ export default function RegistrationPurchase({
   useEffect(() => {
     const checkSavedPaymentMethod = async () => {
       try {
-        // Log to server
-        fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Checking for saved payment method...' })
-        }).catch(() => {})
-        
         const response = await fetch('/api/user-payment-method')
         if (response.ok) {
           const data = await response.json()
           const hasPaymentMethod = !!data.paymentMethod
-          
-          // Log to server
-          fetch('/api/debug/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              message: 'Payment method check result', 
-              data: { hasPaymentMethod, paymentMethodId: data.paymentMethod?.id }
-            })
-          }).catch(() => {})
-          
           setUserHasSavedPaymentMethod(hasPaymentMethod)
         } else {
-          // Log to server
-          fetch('/api/debug/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              message: 'Payment method check failed',
-              data: { status: response.status }
-            })
-          }).catch(() => {})
-          
           setUserHasSavedPaymentMethod(false)
         }
       } catch (error) {
-        // Log to server
-        fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: 'Payment method check error',
-            data: { error: error instanceof Error ? error.message : 'Unknown error' }
-          })
-        }).catch(() => {})
-        
+        console.error('Error checking saved payment method:', error)
         setUserHasSavedPaymentMethod(false)
       }
     }
@@ -551,63 +514,17 @@ export default function RegistrationPurchase({
       
       // Now check if user has saved payment method and show appropriate UI
       
-      // Log to server
-      fetch('/api/debug/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: 'Purchase decision', 
-          data: { userHasSavedPaymentMethod, finalAmount, condition: userHasSavedPaymentMethod && finalAmount > 0 }
-        })
-      }).catch(() => {})
-      
       if (userHasSavedPaymentMethod && finalAmount > 0) {
-        // Log to server
-        fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Using saved payment method flow' })
-        }).catch(() => {})
-        
         // Get payment method details first, then show confirmation screen
         const paymentMethodId = await handleConfirmSavedMethod(clientSecret)
         
-        // Log to server
-        fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: 'Payment method ID result',
-            data: { paymentMethodId: paymentMethodId || 'null' }
-          })
-        }).catch(() => {})
-        
         if (paymentMethodId) {
-          fetch('/api/debug/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'Showing confirmation screen' })
-          }).catch(() => {})
-          
           setShowConfirmationScreen(true) // Show confirmation screen with timer
         } else {
-          fetch('/api/debug/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: 'Falling back to regular payment form - payment method ID was null' })
-          }).catch(() => {})
-          
           // Fall back to regular payment form if payment method details fail
           setShowPaymentForm(true)
         }
       } else {
-        // Log to server
-        fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Using regular payment form flow' })
-        }).catch(() => {})
-        
         setShowPaymentForm(true) // Show regular payment form
       }
     } catch (err) {

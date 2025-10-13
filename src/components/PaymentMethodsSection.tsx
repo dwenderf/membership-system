@@ -88,8 +88,10 @@ export default function PaymentMethodsSection() {
   }
 
   const handleUpdateClick = () => {
+    console.log('🔄 Update clicked - closing modal and showing setup')
     setShowManageModal(false)
     setShowSetup(true)
+    console.log('🔄 State updated - showManageModal: false, showSetup: true')
   }
 
   const handleConfirmRemove = async () => {
@@ -150,6 +152,7 @@ export default function PaymentMethodsSection() {
       </div>
 
       <div className="px-6 py-6">
+        {console.log('💳 Render - paymentMethod:', !!paymentMethod, 'showSetup:', showSetup, 'showManageModal:', showManageModal)}
         {paymentMethod && !showSetup ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">

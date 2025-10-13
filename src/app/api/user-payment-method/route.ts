@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!userProfile?.stripe_payment_method_id || userProfile.setup_intent_status !== 'succeeded') {
+    // Payment method can be saved either via setup intent (setup_intent_status = 'succeeded')
+    // or via payment intent with setup_future_usage (no setup_intent_status set)
+    if (!userProfile?.stripe_payment_method_id) {
       return NextResponse.json({ paymentMethod: null })
     }
 

@@ -130,7 +130,8 @@ async function handlePaidPaymentFlow(
           categoryId: paymentData.categoryId,
           amount: paymentData.amount,
           presaleCode: paymentData.presaleCode,
-          discountCode: paymentData.discountCode
+          discountCode: paymentData.discountCode,
+          savePaymentMethod: paymentData.savePaymentMethod
         }
       : {
           membershipId: paymentData.membershipId,
@@ -140,7 +141,8 @@ async function handlePaidPaymentFlow(
           assistanceAmount: paymentData.assistanceAmount,
           donationAmount: paymentData.donationAmount,
           expectedValidFrom: paymentData.expectedValidFrom,
-          expectedValidUntil: paymentData.expectedValidUntil
+          expectedValidUntil: paymentData.expectedValidUntil,
+          savePaymentMethod: paymentData.savePaymentMethod
         }
 
     const response = await fetch(endpoint, {

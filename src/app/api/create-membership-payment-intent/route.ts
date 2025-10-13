@@ -407,6 +407,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil, savePaymentMethod } = body
+
+    console.log('💳 Create membership payment intent - savePaymentMethod flag:', {
+      savePaymentMethod,
+      savePaymentMethodType: typeof savePaymentMethod,
+      bodyKeys: Object.keys(body)
+    })
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {

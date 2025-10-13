@@ -97,7 +97,18 @@ export default function PaymentMethodSetup({
             <div className="text-sm text-gray-500">Setting up secure payment...</div>
           </div>
         ) : setupIntentClientSecret ? (
-          <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret: setupIntentClientSecret,
+              appearance: {
+                variables: {
+                  colorPrimary: '#0570de',
+                },
+              },
+              loader: 'auto',
+            }}
+          >
             <SetupIntentForm
               registrationName={registrationName || "Payment Method Setup"}
               alternatePrice={alternatePrice ?? 0}
@@ -148,7 +159,18 @@ export default function PaymentMethodSetup({
             <div className="text-sm text-gray-500">Setting up secure payment...</div>
           </div>
         ) : setupIntentClientSecret ? (
-          <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret: setupIntentClientSecret,
+              appearance: {
+                variables: {
+                  colorPrimary: '#0570de',
+                },
+              },
+              loader: 'auto',
+            }}
+          >
             <SetupIntentForm
               registrationName={registrationName || "Payment Method Setup"}
               alternatePrice={alternatePrice ?? 0}

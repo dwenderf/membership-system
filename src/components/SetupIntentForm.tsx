@@ -146,6 +146,7 @@ export default function SetupIntentForm({
             <CardNumberElement
               onChange={(e) => setCardNumberComplete(e.complete)}
               options={{
+                disableLink: true,
                 style: {
                   base: {
                     fontSize: '16px',

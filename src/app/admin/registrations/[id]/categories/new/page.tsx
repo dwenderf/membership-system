@@ -179,6 +179,7 @@ export default function NewRegistrationCategoryPage() {
         setError(insertError.message)
       } else {
         router.push(`/admin/registrations/${registrationId}`)
+        router.refresh()
       }
     } catch {
       setError('An unexpected error occurred')
@@ -247,6 +248,7 @@ export default function NewRegistrationCategoryPage() {
         setError(insertError.message)
       } else {
         router.push(`/admin/registrations/${registrationId}`)
+        router.refresh()
       }
     } catch {
       setError('An unexpected error occurred')

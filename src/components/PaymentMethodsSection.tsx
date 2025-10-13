@@ -150,7 +150,7 @@ export default function PaymentMethodsSection() {
       </div>
 
       <div className="px-6 py-6">
-        {paymentMethod ? (
+        {paymentMethod && !showSetup ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">

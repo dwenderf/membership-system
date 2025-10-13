@@ -33,7 +33,10 @@ export default function SetupIntentForm({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
+    console.log('💳 Setup intent form submit started', { isUpdate })
+
     if (!stripe || !elements) {
+      console.log('❌ Stripe or elements not ready')
       return
     }
 
@@ -41,12 +44,14 @@ export default function SetupIntentForm({
 
     const cardNumberElement = elements.getElement(CardNumberElement)
     if (!cardNumberElement) {
+      console.log('❌ Card number element not found')
       onError('Card details not found')
       setIsProcessing(false)
       return
     }
 
     try {
+      console.log('💳 Confirming setup intent...')
       // Fetch the clientSecret from your backend
       const response = await fetch('/api/create-setup-intent', {
         method: 'POST',
@@ -83,23 +88,39 @@ export default function SetupIntentForm({
       }
 
       if (setupIntent?.status === 'succeeded') {
+        console.log('✅ Setup intent succeeded:', setupIntent.id)
+
         // Persist immediately to avoid relying on webhook timing
         try {
-          await fetch('/api/confirm-setup-intent', {
+          console.log('💳 Confirming setup intent in backend...', { setupIntentId: setupIntent.id, isUpdate })
+          const confirmResponse = await fetch('/api/confirm-setup-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ setupIntentId: setupIntent.id, isUpdate })
           })
+
+          if (!confirmResponse.ok) {
+            const errorData = await confirmResponse.json()
+            console.error('❌ Failed to confirm setup intent:', errorData)
+            throw new Error(errorData.error || 'Failed to confirm setup intent')
+          }
+
+          console.log('✅ Setup intent confirmed in backend')
         } catch (persistErr) {
-          console.warn('Non-blocking: failed to confirm setup intent inline', persistErr)
+          console.error('❌ Failed to confirm setup intent:', persistErr)
+          throw persistErr
         }
 
         showSuccess(
-          'Payment Method Saved!',
-          'Your payment method has been securely saved for future alternate registrations.'
+          isUpdate ? 'Payment Method Updated!' : 'Payment Method Saved!',
+          isUpdate
+            ? 'Your payment method has been updated successfully.'
+            : 'Your payment method has been securely saved for future alternate registrations.'
         )
+        console.log('✅ Calling onSuccess callback')
         onSuccess()
       } else {
+        console.log('❌ Setup intent status:', setupIntent?.status)
         throw new Error('Setup intent was not successful')
       }
 

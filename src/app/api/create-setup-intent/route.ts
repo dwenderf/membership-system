@@ -21,8 +21,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const { isUpdate } = body
 
-    console.log('💳 Create setup intent:', { userId: user.id, isUpdate })
-
     // Get or create Stripe customer
     const { data: userProfile } = await supabase
       .from('users')
@@ -54,8 +52,6 @@ export async function POST(request: NextRequest) {
       if (updateError) {
         console.error('Failed to store customer ID:', updateError)
       }
-    } else {
-      console.log('💳 Using existing Stripe customer:', customerId)
     }
 
     // Create Setup Intent (only 'card' payment method type - no Link)

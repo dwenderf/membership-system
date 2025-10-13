@@ -33,10 +33,7 @@ export default function SetupIntentForm({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
-    console.log('💳 Setup intent form submit started', { isUpdate })
-
     if (!stripe || !elements) {
-      console.log('❌ Stripe or elements not ready')
       return
     }
 
@@ -44,14 +41,12 @@ export default function SetupIntentForm({
 
     const cardNumberElement = elements.getElement(CardNumberElement)
     if (!cardNumberElement) {
-      console.log('❌ Card number element not found')
       onError('Card details not found')
       setIsProcessing(false)
       return
     }
 
     try {
-      console.log('💳 Confirming setup intent...')
       // Fetch the clientSecret from your backend
       const response = await fetch('/api/create-setup-intent', {
         method: 'POST',
@@ -88,11 +83,8 @@ export default function SetupIntentForm({
       }
 
       if (setupIntent?.status === 'succeeded') {
-        console.log('✅ Setup intent succeeded:', setupIntent.id)
-
         // Persist immediately to avoid relying on webhook timing
         try {
-          console.log('💳 Confirming setup intent in backend...', { setupIntentId: setupIntent.id, isUpdate })
           const confirmResponse = await fetch('/api/confirm-setup-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -101,13 +93,10 @@ export default function SetupIntentForm({
 
           if (!confirmResponse.ok) {
             const errorData = await confirmResponse.json()
-            console.error('❌ Failed to confirm setup intent:', errorData)
             throw new Error(errorData.error || 'Failed to confirm setup intent')
           }
-
-          console.log('✅ Setup intent confirmed in backend')
         } catch (persistErr) {
-          console.error('❌ Failed to confirm setup intent:', persistErr)
+          console.error('Failed to confirm setup intent:', persistErr)
           throw persistErr
         }
 
@@ -117,10 +106,8 @@ export default function SetupIntentForm({
             ? 'Your payment method has been updated successfully.'
             : 'Your payment method has been securely saved for future alternate registrations.'
         )
-        console.log('✅ Calling onSuccess callback')
         onSuccess()
       } else {
-        console.log('❌ Setup intent status:', setupIntent?.status)
         throw new Error('Setup intent was not successful')
       }
 
@@ -144,14 +131,14 @@ export default function SetupIntentForm({
             </svg>
             <div>
               <h4 className="text-sm font-medium text-blue-800 mb-2">
-                Payment Authorization for Alternate Registration
+                Payment Authorization
               </h4>
               <div className="text-sm text-blue-700 space-y-1">
                 <p>
-                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate.</strong>
+                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate, selected from a waitlist, or in other cases where payment is required.</strong>
                 </p>
                 <p>You can remove this authorization anytime from your account settings.</p>
-                              </div>
+              </div>
             </div>
           </div>
         </div>

@@ -55,13 +55,6 @@ export async function POST(request: NextRequest) {
     // Retrieve the payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
 
-    console.log('💳 Confirm membership payment - payment intent details:', {
-      paymentIntentId,
-      hasPaymentMethod: !!paymentIntent.payment_method,
-      setupFutureUsage: paymentIntent.setup_future_usage,
-      status: paymentIntent.status
-    })
-
     // Update context with payment details
     paymentContext.amountCents = paymentIntent.amount
     paymentContext.membershipId = paymentIntent.metadata.membershipId

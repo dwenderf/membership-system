@@ -32,8 +32,7 @@ export async function GET(request: NextRequest) {
         ),
         discount_codes (
           code,
-          discount_type,
-          discount_value
+          percentage
         )
       `)
       .eq('user_id', authUser.id)

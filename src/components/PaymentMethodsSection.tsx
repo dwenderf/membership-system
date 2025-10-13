@@ -21,6 +21,7 @@ export default function PaymentMethodsSection() {
   const [loading, setLoading] = useState(true)
   const [removing, setRemoving] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [alternateRegs, setAlternateRegs] = useState<any[]>([])
@@ -88,10 +89,8 @@ export default function PaymentMethodsSection() {
   }
 
   const handleUpdateClick = () => {
-    console.log('🔄 Update clicked - closing modal and showing setup')
     setShowManageModal(false)
-    setShowSetup(true)
-    console.log('🔄 State updated - showManageModal: false, showSetup: true')
+    setShowUpdateModal(true)
   }
 
   const handleConfirmRemove = async () => {
@@ -152,8 +151,7 @@ export default function PaymentMethodsSection() {
       </div>
 
       <div className="px-6 py-6">
-        {console.log('💳 Render - paymentMethod:', !!paymentMethod, 'showSetup:', showSetup, 'showManageModal:', showManageModal)}
-        {paymentMethod && !showSetup ? (
+        {paymentMethod ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -215,11 +213,9 @@ export default function PaymentMethodsSection() {
               <div>
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900">{paymentMethod ? 'Update' : 'Add'} Payment Method</h3>
+                    <h3 className="text-sm font-medium text-gray-900">Add Payment Method</h3>
                     <p className="text-sm text-gray-500">
-                      {paymentMethod
-                        ? 'Your new payment method will replace the existing one. Your alternate registrations will remain active.'
-                        : 'Save a payment method for alternate registrations and future transactions.'}
+                      Save a payment method for alternate registrations and future transactions.
                     </p>
                   </div>
                   <button
@@ -233,20 +229,13 @@ export default function PaymentMethodsSection() {
                 </div>
                 <PaymentMethodSetup
                   showModal={false}
-                  title={paymentMethod ? 'Update Payment Method' : 'Save Payment Method'}
-                  description={paymentMethod
-                    ? 'Your new payment method will replace the existing one.'
-                    : 'Save a payment method for alternate registrations and future transactions.'}
-                  buttonText={paymentMethod ? 'Update Payment Method' : 'Save Payment Method'}
-                  isUpdate={!!paymentMethod}
+                  title="Save Payment Method"
+                  description="Save a payment method for alternate registrations and future transactions."
+                  buttonText="Save Payment Method"
+                  isUpdate={false}
                   onSuccess={() => {
                     setShowSetup(false)
-                    showSuccess(
-                      paymentMethod ? 'Payment Method Updated' : 'Payment Method Saved',
-                      paymentMethod
-                        ? 'Your payment method was updated successfully. Your alternate registrations remain active.'
-                        : 'Your payment method was saved successfully.'
-                    )
+                    showSuccess('Payment Method Saved', 'Your payment method was saved successfully.')
                     // Allow webhook to persist, then refresh once
                     setTimeout(() => { void loadPaymentMethod() }, 1000)
                   }}
@@ -257,6 +246,26 @@ export default function PaymentMethodsSection() {
           </div>
         )}
       </div>
+
+      {/* Update Payment Method Modal */}
+      {showUpdateModal && (
+        <PaymentMethodSetup
+          showModal={true}
+          title="Update Payment Method"
+          description="Your new payment method will replace the existing one. Your alternate registrations will remain active."
+          buttonText="Update Payment Method"
+          isUpdate={true}
+          onSuccess={() => {
+            setShowUpdateModal(false)
+            showSuccess(
+              'Payment Method Updated',
+              'Your payment method was updated successfully. Your alternate registrations remain active.'
+            )
+            setTimeout(() => { void loadPaymentMethod() }, 1000)
+          }}
+          onCancel={() => setShowUpdateModal(false)}
+        />
+      )}
 
       {/* Manage Modal */}
       <ConfirmationDialog

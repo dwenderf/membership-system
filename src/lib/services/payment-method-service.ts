@@ -7,6 +7,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 /**
+ * Check if a user has a valid saved payment method
+ * Payment methods can be saved via setup intent OR via payment intent with setup_future_usage
+ */
+export async function getUserSavedPaymentMethodId(
+  userId: string,
+  supabase: any
+): Promise<string | null> {
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('stripe_payment_method_id, setup_intent_status')
+    .eq('id', userId)
+    .single()
+
+  // Payment method can be saved either via:
+  // 1. Setup intent (setup_intent_status = 'succeeded')
+  // 2. Payment intent with setup_future_usage (no setup_intent_status set)
+  if (!userProfile?.stripe_payment_method_id) {
+    return null
+  }
+
+  return userProfile.stripe_payment_method_id
+}
+
+/**
  * Save payment method from a completed payment intent to user profile
  * This is called after successful payment when user opted to save their payment method
  */

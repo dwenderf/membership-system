@@ -156,21 +156,6 @@ export default async function UserDashboardPage() {
   
   const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
-  
-  // Check for expired memberships
-  const expiredMemberships = paidMemberships.filter(um => {
-    const validUntil = new Date(um.valid_until)
-    return validUntil <= now
-  })
-  const hasExpiredMembership = expiredMemberships.length > 0
-  
-  // Check if any active membership expires within 90 days
-  const expiringSoonMemberships = activeMemberships.filter((consolidated: any) => {
-    const validUntil = new Date(consolidated.validUntil)
-    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    return daysUntilExpiration <= 90
-  })
-  const hasExpiringSoonMembership = expiringSoonMemberships.length > 0
 
   // Check for unpaid invoices (only for admins)
   const unpaidInvoices = userProfile?.is_admin 
@@ -227,55 +212,33 @@ export default async function UserDashboardPage() {
         {/* Membership Status */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5 flex flex-col h-full">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  !hasActiveMembership 
-                    ? 'bg-red-100 text-red-800'
-                    : hasExpiredMembership
-                    ? 'bg-red-100 text-red-800'
-                    : hasExpiringSoonMembership
-                    ? 'bg-yellow-100 text-yellow-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {!hasActiveMembership 
-                    ? 'No Active Membership'
-                    : hasExpiredMembership
-                    ? 'Membership Expired'
-                    : hasExpiringSoonMembership
-                    ? 'Expiring Soon'
-                    : 'Active Member'
-                  }
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex-grow">
+            <div className="flex-grow">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
                 Membership Status
               </h3>
               {hasActiveMembership ? (
-                <div className="mt-2">
+                <div className="mt-4 space-y-3">
                   {activeMemberships.map((consolidatedMembership: any) => {
                     const validUntil = new Date(consolidatedMembership.validUntil)
                     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                     const isExpiringSoon = daysUntilExpiration <= 90
-                    
+
                     return (
                       <div key={consolidatedMembership.membershipId} className="text-sm text-gray-600">
                         <strong>{consolidatedMembership.membership?.name}</strong>
                         <br />
-                        Valid until: {validUntil.toLocaleDateString()}
-                        {isExpiringSoon && (
-                          <div className="text-yellow-600 font-medium mt-1">
-                            ⚠️ Expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}
-                          </div>
-                        )}
+                        <span className="inline-flex items-center gap-2">
+                          <span>Valid until: {validUntil.toLocaleDateString()}</span>
+                          {isExpiringSoon && (
+                            <span>⚠️ Expires Soon</span>
+                          )}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-4 text-sm text-gray-600">
                   You don't have an active membership. Purchase one to access registrations.
                 </p>
               )}

@@ -10,14 +10,16 @@ interface SetupIntentFormProps {
   registrationName: string
   alternatePrice: number | null
   buttonText?: string
+  isUpdate?: boolean
 }
 
-export default function SetupIntentForm({ 
-  onSuccess, 
-  onError, 
+export default function SetupIntentForm({
+  onSuccess,
+  onError,
   registrationName,
   alternatePrice,
-  buttonText = "Save Payment Method"
+  buttonText = "Save Payment Method",
+  isUpdate = false
 }: SetupIntentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
@@ -86,7 +88,7 @@ export default function SetupIntentForm({
           await fetch('/api/confirm-setup-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ setupIntentId: setupIntent.id })
+            body: JSON.stringify({ setupIntentId: setupIntent.id, isUpdate })
           })
         } catch (persistErr) {
           console.warn('Non-blocking: failed to confirm setup intent inline', persistErr)

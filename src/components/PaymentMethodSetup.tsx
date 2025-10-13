@@ -16,6 +16,7 @@ interface PaymentMethodSetupProps {
   showModal?: boolean
   buttonText?: string
   buttonClassName?: string
+  isUpdate?: boolean
 }
 
 export default function PaymentMethodSetup({
@@ -27,7 +28,8 @@ export default function PaymentMethodSetup({
   alternatePrice,
   showModal = true,
   buttonText = "Save Payment Method",
-  buttonClassName = "w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+  buttonClassName = "w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors",
+  isUpdate = false
 }: PaymentMethodSetupProps) {
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -46,6 +48,7 @@ export default function PaymentMethodSetup({
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ isUpdate }),
         })
 
         if (!response.ok) {
@@ -94,13 +97,25 @@ export default function PaymentMethodSetup({
             <div className="text-sm text-gray-500">Setting up secure payment...</div>
           </div>
         ) : setupIntentClientSecret ? (
-          <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret: setupIntentClientSecret,
+              appearance: {
+                variables: {
+                  colorPrimary: '#0570de',
+                },
+              },
+              loader: 'auto',
+            }}
+          >
             <SetupIntentForm
               registrationName={registrationName || "Payment Method Setup"}
               alternatePrice={alternatePrice ?? 0}
               onSuccess={handleSuccess}
               onError={handleError}
               buttonText={buttonText}
+              isUpdate={isUpdate}
             />
           </Elements>
         ) : null}
@@ -144,13 +159,25 @@ export default function PaymentMethodSetup({
             <div className="text-sm text-gray-500">Setting up secure payment...</div>
           </div>
         ) : setupIntentClientSecret ? (
-          <Elements stripe={stripePromise} options={{ clientSecret: setupIntentClientSecret }}>
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret: setupIntentClientSecret,
+              appearance: {
+                variables: {
+                  colorPrimary: '#0570de',
+                },
+              },
+              loader: 'auto',
+            }}
+          >
             <SetupIntentForm
               registrationName={registrationName || "Payment Method Setup"}
               alternatePrice={alternatePrice ?? 0}
               onSuccess={handleSuccess}
               onError={handleError}
               buttonText={buttonText}
+              isUpdate={isUpdate}
             />
           </Elements>
         ) : null}

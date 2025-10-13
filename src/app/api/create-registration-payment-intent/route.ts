@@ -531,7 +531,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode, discountCode } = body
+    const { registrationId, categoryId, amount, presaleCode, discountCode, savePaymentMethod } = body
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
@@ -1273,12 +1273,13 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
-    // Create payment intent with explicit Link support
-    const paymentIntentParams = {
+    // Create payment intent
+    const paymentIntentParams: any = {
       amount: centsToCents(finalAmount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
-      payment_method_types: ['card', 'link'],
+      payment_method_types: ['card'],
+      ...(savePaymentMethod && { setup_future_usage: 'off_session' }),
       metadata: {
         userId: user.id,
         registrationId: registrationId,
@@ -1297,6 +1298,11 @@ export async function POST(request: NextRequest) {
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
       },
       description: getDescription(),
+    }
+
+    // Add customer parameter if user has a Stripe customer ID (required for saved payment methods)
+    if (userProfile.stripe_customer_id) {
+      paymentIntentParams.customer = userProfile.stripe_customer_id
     }
     
     const paymentIntent = await stripe.paymentIntents.create({

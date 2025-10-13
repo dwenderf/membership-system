@@ -26,7 +26,9 @@ async function handleFreeMembership({
   durationMonths,
   assistanceAmount,
   paymentContext,
-  startTime
+  startTime,
+  expectedValidFrom,
+  expectedValidUntil
 }: {
   supabase: any
   user: any
@@ -37,6 +39,8 @@ async function handleFreeMembership({
   assistanceAmount?: number
   paymentContext: any
   startTime: number
+  expectedValidFrom?: string
+  expectedValidUntil?: string
 }) {
   try {
     const adminSupabase = createAdminClient()
@@ -255,9 +259,27 @@ async function handleFreeMembership({
     // No need to create separate payment_items records
 
 
-    // Create the membership record directly (similar to webhook processing)
-    const startDate = calculateMembershipStartDate(membershipId, [])
-    const endDate = calculateMembershipEndDate(startDate, durationMonths)
+    // Use provided dates directly if available, otherwise calculate them
+    let startDate: Date, endDate: Date
+    
+    if (expectedValidFrom && expectedValidUntil) {
+      // Trust the dates from the frontend - no validation needed
+      startDate = new Date(expectedValidFrom)
+      endDate = new Date(expectedValidUntil)
+    } else {
+      // Fallback to calculating dates (for backward compatibility)
+      const { data: existingMemberships } = await supabase
+        .from('user_memberships')
+        .select(`
+          valid_until,
+          membership:memberships(id)
+        `)
+        .eq('user_id', user.id)
+        .eq('payment_status', 'paid')
+
+      startDate = calculateMembershipStartDate(membershipId, existingMemberships || [])
+      endDate = calculateMembershipEndDate(startDate, durationMonths)
+    }
 
     const { data: membershipRecord, error: membershipError } = await supabase
       .from('user_memberships')
@@ -384,8 +406,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount } = body
-    
+    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil, savePaymentMethod } = body
+
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
       userId: user.id,
@@ -420,7 +442,9 @@ export async function POST(request: NextRequest) {
         durationMonths,
         assistanceAmount,
         paymentContext,
-        startTime
+        startTime,
+        expectedValidFrom,
+        expectedValidUntil
       })
     }
 
@@ -663,12 +687,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create payment intent with explicit Link support
-    const paymentIntentParams = {
+    // Create payment intent
+    const paymentIntentParams: any = {
       amount: centsToCents(amountToCharge), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
-      payment_method_types: ['card', 'link'],
+      payment_method_types: ['card'],
+      ...(savePaymentMethod && { setup_future_usage: 'off_session' }),
       metadata: {
         userId: user.id,
         membershipId: membershipId,
@@ -678,8 +703,15 @@ export async function POST(request: NextRequest) {
         paymentOption: paymentOption || 'standard',
         ...(paymentOption === 'assistance' && assistanceAmount && { assistanceAmount: assistanceAmount.toString() }),
         ...(paymentOption === 'donation' && donationAmount && { donationAmount: donationAmount.toString() }),
+        ...(expectedValidFrom && { expectedValidFrom }),
+        ...(expectedValidUntil && { expectedValidUntil }),
       },
       description: getDescription(),
+    }
+
+    // Add customer parameter if user has a Stripe customer ID (required for saved payment methods)
+    if (userProfile.stripe_customer_id) {
+      paymentIntentParams.customer = userProfile.stripe_customer_id
     }
     
     const paymentIntent = await stripe.paymentIntents.create({

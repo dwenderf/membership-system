@@ -70,9 +70,48 @@ export default function EditRegistrationTimingPage() {
     fetchData()
   }, [registrationId])
 
+  const handlePublishToggle = async (newIsActive: boolean) => {
+    setError('')
+
+    try {
+      // Convert datetime-local strings to ISO timestamps
+      const formatForDB = (dateTimeLocal: string) => {
+        if (!dateTimeLocal) return null
+        return new Date(dateTimeLocal).toISOString()
+      }
+
+      const updateData = {
+        is_active: newIsActive,
+        presale_start_at: formatForDB(formData.presale_start_at),
+        regular_start_at: formatForDB(formData.regular_start_at),
+        registration_end_at: formatForDB(formData.registration_end_at),
+        presale_code: formData.presale_code.trim() || null,
+        allow_lgbtq_presale: formData.allow_lgbtq_presale,
+      }
+
+      const { error: updateError } = await supabase
+        .from('registrations')
+        .update(updateData)
+        .eq('id', registrationId)
+
+      if (updateError) {
+        setError(updateError.message)
+        // Revert checkbox state on error
+        setFormData(prev => ({ ...prev, is_active: !newIsActive }))
+      } else {
+        // Update was successful, form data already updated
+        router.refresh()
+      }
+    } catch {
+      setError('An unexpected error occurred')
+      // Revert checkbox state on error
+      setFormData(prev => ({ ...prev, is_active: !newIsActive }))
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     setLoading(true)
     setError('')
 
@@ -94,13 +133,13 @@ export default function EditRegistrationTimingPage() {
         setLoading(false)
         return
       }
-      
+
       if (regularDate && endDate && regularDate >= endDate) {
         setError('General registration start date must be before registration end date')
         setLoading(false)
         return
       }
-      
+
       if (presaleDate && endDate && presaleDate >= endDate) {
         setError('Pre-sale start date must be before registration end date')
         setLoading(false)
@@ -127,6 +166,7 @@ export default function EditRegistrationTimingPage() {
       } else {
         // Keep loading state active during navigation
         router.push(`/admin/registrations/${registrationId}`)
+        router.refresh()
       }
     } catch {
       setError('An unexpected error occurred')
@@ -167,8 +207,8 @@ export default function EditRegistrationTimingPage() {
 
               {/* Active Status */}
               <div className={`border rounded-md p-4 ${
-                formData.is_active 
-                  ? 'bg-green-50 border-green-200' 
+                formData.is_active
+                  ? 'bg-green-50 border-green-200'
                   : 'bg-yellow-50 border-yellow-200'
               }`}>
                 <div className="flex items-center">
@@ -176,7 +216,11 @@ export default function EditRegistrationTimingPage() {
                     type="checkbox"
                     id="is_active"
                     checked={formData.is_active}
-                    onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                    onChange={(e) => {
+                      const newValue = e.target.checked
+                      setFormData(prev => ({ ...prev, is_active: newValue }))
+                      handlePublishToggle(newValue)
+                    }}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor="is_active" className={`ml-3 text-sm font-medium ${
@@ -188,7 +232,7 @@ export default function EditRegistrationTimingPage() {
                 <p className={`mt-2 text-sm ${
                   formData.is_active ? 'text-green-700' : 'text-yellow-700'
                 }`}>
-                  {formData.is_active 
+                  {formData.is_active
                     ? "Registration is published and visible to users (subject to timing restrictions below)."
                     : "Registration is in draft mode and hidden from all users."
                   }

@@ -10,14 +10,16 @@ interface SetupIntentFormProps {
   registrationName: string
   alternatePrice: number | null
   buttonText?: string
+  isUpdate?: boolean
 }
 
-export default function SetupIntentForm({ 
-  onSuccess, 
-  onError, 
+export default function SetupIntentForm({
+  onSuccess,
+  onError,
   registrationName,
   alternatePrice,
-  buttonText = "Save Payment Method"
+  buttonText = "Save Payment Method",
+  isUpdate = false
 }: SetupIntentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
@@ -83,18 +85,26 @@ export default function SetupIntentForm({
       if (setupIntent?.status === 'succeeded') {
         // Persist immediately to avoid relying on webhook timing
         try {
-          await fetch('/api/confirm-setup-intent', {
+          const confirmResponse = await fetch('/api/confirm-setup-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ setupIntentId: setupIntent.id })
+            body: JSON.stringify({ setupIntentId: setupIntent.id, isUpdate })
           })
+
+          if (!confirmResponse.ok) {
+            const errorData = await confirmResponse.json()
+            throw new Error(errorData.error || 'Failed to confirm setup intent')
+          }
         } catch (persistErr) {
-          console.warn('Non-blocking: failed to confirm setup intent inline', persistErr)
+          console.error('Failed to confirm setup intent:', persistErr)
+          throw persistErr
         }
 
         showSuccess(
-          'Payment Method Saved!',
-          'Your payment method has been securely saved for future alternate registrations.'
+          isUpdate ? 'Payment Method Updated!' : 'Payment Method Saved!',
+          isUpdate
+            ? 'Your payment method has been updated successfully.'
+            : 'Your payment method has been securely saved for future alternate registrations.'
         )
         onSuccess()
       } else {
@@ -121,14 +131,14 @@ export default function SetupIntentForm({
             </svg>
             <div>
               <h4 className="text-sm font-medium text-blue-800 mb-2">
-                Payment Authorization for Alternate Registration
+                Payment Authorization
               </h4>
               <div className="text-sm text-blue-700 space-y-1">
                 <p>
-                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate.</strong>
+                  <strong>By saving your payment method, you authorize us to charge your card if you are selected as an alternate, selected from a waitlist, or in other cases where payment is required.</strong>
                 </p>
                 <p>You can remove this authorization anytime from your account settings.</p>
-                              </div>
+              </div>
             </div>
           </div>
         </div>
@@ -144,6 +154,7 @@ export default function SetupIntentForm({
             <CardNumberElement
               onChange={(e) => setCardNumberComplete(e.complete)}
               options={{
+                disableLink: true,
                 style: {
                   base: {
                     fontSize: '16px',

@@ -18,35 +18,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create Stripe customer for this setup intent
-    const customer = await stripe.customers.create({
-      email: user.email || '',
-      metadata: {
-        supabase_user_id: user.id,
-      },
-    })
+    const body = await request.json().catch(() => ({}))
+    const { isUpdate } = body
 
-    // Store the customer ID in the users table immediately
-    const { error: updateError } = await adminSupabase
+    // Get or create Stripe customer
+    const { data: userProfile } = await supabase
       .from('users')
-      .update({
-        stripe_customer_id: customer.id,
-      })
+      .select('stripe_customer_id')
       .eq('id', user.id)
+      .single()
 
-    if (updateError) {
-      console.error('Failed to store customer ID:', updateError)
-      // Continue with setup intent creation even if this fails
+    let customerId = userProfile?.stripe_customer_id
+
+    // If updating and customer exists, use existing customer
+    // Otherwise create new customer
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email || '',
+        metadata: {
+          supabase_user_id: user.id,
+        },
+      })
+      customerId = customer.id
+
+      // Store the customer ID in the users table
+      const { error: updateError } = await adminSupabase
+        .from('users')
+        .update({
+          stripe_customer_id: customerId,
+        })
+        .eq('id', user.id)
+
+      if (updateError) {
+        console.error('Failed to store customer ID:', updateError)
+      }
     }
 
-    // Create Setup Intent
+    // Create Setup Intent (only 'card' payment method type - no Link)
     const setupIntent = await stripe.setupIntents.create({
-      customer: customer.id,
+      customer: customerId,
       payment_method_types: ['card'],
       usage: 'off_session', // For future payments
       metadata: {
         supabase_user_id: user.id,
-        purpose: 'alternate_registration',
+        userId: user.id,
+        purpose: isUpdate ? 'update_payment_method' : 'alternate_registration',
       },
     })
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import ConfirmationDialog from './ConfirmationDialog'
+import { formatPaymentMethodDescription } from '@/lib/payment-method-utils'
 
 interface PaymentMethod {
   id: string
@@ -20,6 +21,8 @@ export default function PaymentMethodsSection() {
   const [loading, setLoading] = useState(true)
   const [removing, setRemoving] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [showManageModal, setShowManageModal] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [alternateRegs, setAlternateRegs] = useState<any[]>([])
   const { showSuccess, showError } = useToast()
@@ -76,8 +79,18 @@ export default function PaymentMethodsSection() {
     }).length
   }, [alternateRegs])
 
+  const handleManageClick = () => {
+    setShowManageModal(true)
+  }
+
   const handleRemoveClick = () => {
+    setShowManageModal(false)
     setShowConfirmDialog(true)
+  }
+
+  const handleUpdateClick = () => {
+    setShowManageModal(false)
+    setShowUpdateModal(true)
   }
 
   const handleConfirmRemove = async () => {
@@ -149,7 +162,7 @@ export default function PaymentMethodsSection() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-gray-900">
-                    {paymentMethod.card.brand.toUpperCase()} •••• {paymentMethod.card.last4}
+                    {formatPaymentMethodDescription(paymentMethod.card)}
                   </div>
                   <div className="text-sm text-gray-500">
                     Expires {paymentMethod.card.exp_month.toString().padStart(2, '0')}/{paymentMethod.card.exp_year}
@@ -157,11 +170,10 @@ export default function PaymentMethodsSection() {
                 </div>
               </div>
               <button
-                onClick={handleRemoveClick}
-                disabled={removing}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+                onClick={handleManageClick}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors min-w-[120px]"
               >
-                {removing ? 'Removing…' : 'Remove'}
+                Manage
               </button>
             </div>
 
@@ -199,15 +211,28 @@ export default function PaymentMethodsSection() {
               </div>
             ) : (
               <div>
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium text-gray-900">Add Payment Method</h3>
-                  <p className="text-sm text-gray-500">Save a payment method for alternate registrations and future transactions.</p>
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900">Add Payment Method</h3>
+                    <p className="text-sm text-gray-500">
+                      Save a payment method for alternate registrations and future transactions.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSetup(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
                 <PaymentMethodSetup
                   showModal={false}
                   title="Save Payment Method"
                   description="Save a payment method for alternate registrations and future transactions."
                   buttonText="Save Payment Method"
+                  isUpdate={false}
                   onSuccess={() => {
                     setShowSetup(false)
                     showSuccess('Payment Method Saved', 'Your payment method was saved successfully.')
@@ -222,6 +247,80 @@ export default function PaymentMethodsSection() {
         )}
       </div>
 
+      {/* Update Payment Method Modal */}
+      {showUpdateModal && (
+        <PaymentMethodSetup
+          showModal={true}
+          title="Update Payment Method"
+          description="Your new payment method will replace the existing one. Your alternate registrations will remain active."
+          buttonText="Update Payment Method"
+          isUpdate={true}
+          onSuccess={() => {
+            setShowUpdateModal(false)
+            showSuccess(
+              'Payment Method Updated',
+              'Your payment method was updated successfully. Your alternate registrations remain active.'
+            )
+            setTimeout(() => { void loadPaymentMethod() }, 1000)
+          }}
+          onCancel={() => setShowUpdateModal(false)}
+        />
+      )}
+
+      {/* Manage Modal */}
+      <ConfirmationDialog
+        isOpen={showManageModal}
+        title="Manage Payment Method"
+        message={
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Choose an action for your saved payment method:
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleUpdateClick}
+                className="w-full flex items-center justify-between p-4 border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 text-blue-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-900">Update Payment Method</div>
+                    <div className="text-xs text-gray-500">Replace with a new card (keeps alternate registrations)</div>
+                  </div>
+                </div>
+                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button
+                onClick={handleRemoveClick}
+                className="w-full flex items-center justify-between p-4 border border-gray-300 rounded-lg hover:border-red-500 hover:bg-red-50 transition-colors"
+              >
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 text-red-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-900">Remove Payment Method</div>
+                    <div className="text-xs text-gray-500">Delete entirely (removes from alternate registrations)</div>
+                  </div>
+                </div>
+                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        }
+        confirmText=""
+        onConfirm={() => {}}
+        onCancel={() => setShowManageModal(false)}
+        hideButtons={true}
+      />
+
+      {/* Remove Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showConfirmDialog}
         title="Remove Payment Method?"

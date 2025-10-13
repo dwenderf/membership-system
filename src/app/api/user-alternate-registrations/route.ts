@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
           alternate_accounting_code,
           season:seasons(name, start_date, end_date)
         ),
-        discount_code:discount_codes(code, discount_amount, discount_type)
+        discount_code:discount_codes(code, percentage)
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })

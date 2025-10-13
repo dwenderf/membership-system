@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-service'
 
 // Force import server config
 
@@ -262,6 +263,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Save payment method if requested
+    await savePaymentMethodFromIntent(paymentIntent, user.id, supabase)
+
     // Update payment record status
     const { data: updatedPayment, error: updateError } = await supabase
       .from('payments')
@@ -279,7 +283,7 @@ export async function POST(request: NextRequest) {
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
       console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
-      
+
       // Update user_registrations record with payment_id
       const { error: registrationUpdateError } = await supabase
         .from('user_registrations')

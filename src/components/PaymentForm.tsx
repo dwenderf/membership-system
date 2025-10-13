@@ -224,9 +224,9 @@ export default function PaymentForm({
         const isRegistration = registrationId && categoryId
         
         // Create the record (membership or registration) - Xero invoice will be handled by payment completion processor
-        const endpoint = isRegistration 
+        const endpoint = isRegistration
           ? '/api/confirm-registration-payment'
-          : '/api/confirm-payment'
+          : '/api/confirm-membership-payment'
         
         const body = isRegistration
           ? {

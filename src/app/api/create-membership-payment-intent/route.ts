@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil } = body
+    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil, savePaymentMethod } = body
     
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
@@ -693,6 +693,7 @@ export async function POST(request: NextRequest) {
       currency: 'usd',
       receipt_email: userProfile.email,
       payment_method_types: ['card'],
+      ...(savePaymentMethod && { setup_future_usage: 'off_session' }),
       metadata: {
         userId: user.id,
         membershipId: membershipId,

@@ -1273,12 +1273,12 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
-    // Create payment intent with explicit Link support
+    // Create payment intent
     const paymentIntentParams: any = {
       amount: centsToCents(finalAmount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
-      payment_method_types: ['card', 'link'],
+      payment_method_types: ['card'],
       metadata: {
         userId: user.id,
         registrationId: registrationId,

@@ -347,13 +347,17 @@ export default function PaymentForm({
         </div>
       ) : (
         <>
-          <PaymentElement 
+          <PaymentElement
             options={{
               defaultValues: {
                 billingDetails: {
                   email: userEmail,
                 },
               },
+              wallets: {
+                applePay: 'never',
+                googlePay: 'never'
+              }
             }}
             onReady={() => {
               setIsElementsReady(true)

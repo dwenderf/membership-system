@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
+import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
 
 interface Registration {
   id: string
@@ -52,9 +53,15 @@ interface WaitlistData {
   category_id: string
   position: number
   joined_at: string
-  bypass_code_generated: boolean
   is_lgbtq: boolean | null
   is_goalie: boolean
+  hasValidPaymentMethod: boolean
+  discount_code_id: string | null
+  discount_code: string | null
+  discount_percentage: number | null
+  base_price: number
+  discount_amount: number
+  final_amount: number
 }
 
 
@@ -73,6 +80,8 @@ export default function RegistrationReportsPage() {
   const [waitlistSortDirection, setWaitlistSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isWaitlistExpanded, setIsWaitlistExpanded] = useState(true)
   const [isRegistrationsExpanded, setIsRegistrationsExpanded] = useState(true)
+  const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
+  const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
 
   const searchParams = useSearchParams()
 
@@ -170,9 +179,15 @@ export default function RegistrationReportsPage() {
         category_id: item.category_id || '',
         position: item.position || 0,
         joined_at: item.joined_at || 'N/A',
-        bypass_code_generated: item.bypass_code_generated || false,
         is_lgbtq: item.is_lgbtq,
-        is_goalie: item.is_goalie || false
+        is_goalie: item.is_goalie || false,
+        hasValidPaymentMethod: item.hasValidPaymentMethod || false,
+        discount_code_id: item.discount_code_id,
+        discount_code: item.discount_code,
+        discount_percentage: item.discount_percentage,
+        base_price: item.base_price || 0,
+        discount_amount: item.discount_amount || 0,
+        final_amount: item.final_amount || 0
       })) || []
 
       console.log('Processed registrations:', registrationsList.length)
@@ -493,8 +508,7 @@ export default function RegistrationReportsPage() {
                                       { key: 'email', label: 'Email' },
                                       { key: 'is_lgbtq', label: 'LGBTQ+' },
                                       { key: 'is_goalie', label: 'Goalie' },
-                                      { key: 'joined_at', label: 'Joined' },
-                                      { key: 'bypass_code_generated', label: 'Bypass Code' }
+                                      { key: 'joined_at', label: 'Joined' }
                                     ].map(({ key, label }) => (
                                       <th
                                         key={key}
@@ -511,6 +525,9 @@ export default function RegistrationReportsPage() {
                                         </div>
                                       </th>
                                     ))}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Action
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -541,15 +558,28 @@ export default function RegistrationReportsPage() {
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {waitlist.bypass_code_generated ? (
-                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            Generated
-                                          </span>
-                                        ) : (
-                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                            Not Generated
-                                          </span>
-                                        )}
+                                        <div className="flex items-center space-x-2">
+                                          {waitlist.discount_code && (
+                                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                              {waitlist.discount_code} (-{waitlist.discount_percentage}%)
+                                            </span>
+                                          )}
+                                          <button
+                                            onClick={() => {
+                                              setSelectedWaitlistEntry(waitlist)
+                                              setShowWaitlistSelectionModal(true)
+                                            }}
+                                            disabled={!waitlist.hasValidPaymentMethod}
+                                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${
+                                              waitlist.hasValidPaymentMethod
+                                                ? 'text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                                                : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                            }`}
+                                            title={waitlist.hasValidPaymentMethod ? 'Select user from waitlist' : 'User must set up payment method first'}
+                                          >
+                                            Select
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   ))}
@@ -732,6 +762,26 @@ export default function RegistrationReportsPage() {
 
 
         </>
+      )}
+
+      {/* Waitlist Selection Modal */}
+      {showWaitlistSelectionModal && selectedWaitlistEntry && selectedRegistration && (
+        <WaitlistSelectionModal
+          waitlistEntry={selectedWaitlistEntry}
+          registrationName={selectedRegistration.name}
+          onSuccess={() => {
+            setShowWaitlistSelectionModal(false)
+            setSelectedWaitlistEntry(null)
+            // Refresh the data to show updated waitlist
+            if (selectedRegistration) {
+              fetchRegistrationData(selectedRegistration.id)
+            }
+          }}
+          onCancel={() => {
+            setShowWaitlistSelectionModal(false)
+            setSelectedWaitlistEntry(null)
+          }}
+        />
       )}
     </div>
   )

@@ -79,14 +79,24 @@ export async function GET(request: NextRequest) {
             id,
             email,
             first_name,
-            last_name
+            last_name,
+            is_lgbtq,
+            is_goalie,
+            stripe_payment_method_id,
+            setup_intent_status
           ),
           registration_categories (
             id,
             custom_name,
+            price,
             categories (
               name
             )
+          ),
+          discount_codes (
+            id,
+            code,
+            percentage
           )
         `)
         .eq('registration_id', registrationId)
@@ -132,6 +142,15 @@ export async function GET(request: NextRequest) {
         const user = Array.isArray(item.users) ? item.users[0] : item.users
         const registrationCategory = Array.isArray(item.registration_categories) ? item.registration_categories[0] : item.registration_categories
         const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
+        const discountCode = Array.isArray(item.discount_codes) ? item.discount_codes[0] : item.discount_codes
+
+        // Calculate pricing
+        const basePrice = registrationCategory?.price || 0
+        const discountAmount = discountCode ? Math.round((basePrice * discountCode.percentage) / 100) : 0
+        const finalAmount = Math.max(0, basePrice - discountAmount)
+
+        // Check payment method status
+        const hasValidPaymentMethod = user?.stripe_payment_method_id && user?.setup_intent_status === 'succeeded'
 
         return {
           id: item.id,
@@ -143,9 +162,15 @@ export async function GET(request: NextRequest) {
           category_id: item.registration_category_id,
           position: item.position,
           joined_at: item.joined_at,
-          bypass_code_generated: item.bypass_code_generated || false,
           is_lgbtq: user?.is_lgbtq,
-          is_goalie: user?.is_goalie || false
+          is_goalie: user?.is_goalie || false,
+          hasValidPaymentMethod,
+          discount_code_id: discountCode?.id || null,
+          discount_code: discountCode?.code || null,
+          discount_percentage: discountCode?.percentage || null,
+          base_price: basePrice,
+          discount_amount: discountAmount,
+          final_amount: finalAmount
         }
       }) || []
 

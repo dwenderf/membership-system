@@ -128,6 +128,7 @@ LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 
@@ -392,6 +393,47 @@ WHAT'S NEXT:
 • We'll contact you with further instructions if selected
 
 Thank you for your interest in joining the team!
+The Hockey Association Team
+```
+
+#### Waitlist Selected Confirmation Template (`LOOPS_WAITLIST_SELECTED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `registrationName` - Name of event/team
+- `categoryName` - Registration category
+- `seasonName` - Season name and dates
+- `amountCharged` - Amount charged (formatted as currency, e.g., "$50.00")
+- `discountApplied` - Optional discount details (e.g., "CODE25: -$25.00")
+- `paymentDate` - Date of charge
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+Great news! You've been selected from the waitlist for [registrationName].
+
+REGISTRATION CONFIRMATION:
+- Event/Team: [registrationName]
+- Category: [categoryName]
+- Season: [seasonName]
+- Amount Charged: [amountCharged]
+- Payment Date: [paymentDate]
+[if discountApplied]
+- Discount Applied: [discountApplied]
+[endif]
+
+WHAT'S NEXT:
+• Your payment method has been charged
+• You're now fully registered
+• View your registration: [dashboardUrl]
+
+Questions? Reply to this email anytime.
+
+Best,
 The Hockey Association Team
 ```
 
@@ -1064,6 +1106,7 @@ LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here

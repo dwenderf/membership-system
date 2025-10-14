@@ -9,6 +9,7 @@ export const EMAIL_EVENTS = {
   MEMBERSHIP_EXPIRED: 'membership.expired',
   REGISTRATION_COMPLETED: 'registration.completed',
   WAITLIST_ADDED: 'waitlist.added',
+  WAITLIST_SELECTED: 'waitlist.selected',
   PAYMENT_FAILED: 'payment.failed',
   REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
@@ -304,6 +305,39 @@ class EmailService {
         seasonName: options.seasonName,
         waitlistDate: new Date().toLocaleDateString(),
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+      }
+    })
+  }
+
+  /**
+   * Send waitlist selected confirmation email
+   */
+  async sendWaitlistSelectedNotification(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    categoryName: string
+    seasonName: string
+    amountCharged: number
+    discountApplied?: string
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.WAITLIST_SELECTED,
+      subject: `Selected from Waitlist - ${options.registrationName}`,
+      triggeredBy: 'admin_send',
+      templateId: process.env.LOOPS_WAITLIST_SELECTED_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        registrationName: options.registrationName,
+        categoryName: options.categoryName,
+        seasonName: options.seasonName,
+        amountCharged: `$${(options.amountCharged / 100).toFixed(2)}`,
+        discountApplied: options.discountApplied || '',
+        paymentDate: new Date().toLocaleDateString(),
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
       }
     })
   }

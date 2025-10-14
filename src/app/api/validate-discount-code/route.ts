@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 interface DiscountValidationResult {
   isValid: boolean
+  discountCodeId?: string // Discount code ID for easy access
   discountCode?: {
     id: string
     code: string
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
     // Valid discount code
     const result: DiscountValidationResult = {
       isValid: true,
+      discountCodeId: discountCode.id, // Add for easy access
       discountCode: {
         id: discountCode.id,
         code: discountCode.code,

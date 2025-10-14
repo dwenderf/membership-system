@@ -926,15 +926,16 @@ export class XeroBatchSyncManager {
             console.log(`✅ Element ${i} has no validation errors, marking as synced`)
             // This invoice succeeded - mark it as synced
             const xeroInvoiceId = element.InvoiceID
-            if (xeroInvoiceId && xeroInvoiceId !== '00000000-0000-0000-0000-000000000000') {
-              await this.markItemAsSynced(originalRecord.id, xeroInvoiceId, tenantId)
+            const xeroInvoiceNumber = element.InvoiceNumber
+            if (xeroInvoiceId && xeroInvoiceId !== '00000000-0000-0000-0000-000000000000' && xeroInvoiceNumber) {
+              await this.markItemAsSynced(originalRecord.id, xeroInvoiceId, xeroInvoiceNumber, tenantId)
               await logXeroSync({
                 tenant_id: tenantId,
                 operation: 'invoice_sync',
                 record_type: 'invoice',
                 record_id: originalRecord.id,
                 success: true,
-                details: 'Invoice synced successfully',
+                details: `Invoice ${xeroInvoiceNumber} synced successfully`,
                 response_data: { invoice: element }
               })
               syncedCount++

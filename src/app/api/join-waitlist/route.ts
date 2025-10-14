@@ -188,7 +188,11 @@ export async function POST(request: NextRequest) {
       .from('registrations')
       .select(`
         name,
-        seasons!inner (name)
+        seasons:season_id (
+          name,
+          start_date,
+          end_date
+        )
       `)
       .eq('id', registrationId)
       .single()
@@ -215,13 +219,18 @@ export async function POST(request: NextRequest) {
 
       // Send waitlist notification email
       try {
+        const season = registration.seasons
+        const seasonName = season
+          ? `${season.name} (${new Date(season.start_date).toLocaleDateString()} - ${new Date(season.end_date).toLocaleDateString()})`
+          : 'Unknown Season'
+
         await emailService.sendWaitlistAddedNotification({
           userId: user.id,
           email: userData.email,
           userName: `${userData.first_name} ${userData.last_name}`,
           registrationName: registration.name,
           categoryName: categoryDisplayName,
-          seasonName: registration.seasons?.[0]?.name || 'Unknown Season',
+          seasonName: seasonName,
           position: nextPosition
         })
       } catch (emailError) {

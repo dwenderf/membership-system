@@ -787,13 +787,14 @@ export default function RegistrationReportsPage() {
       {showWaitlistSelectionModal && selectedWaitlistEntry && selectedRegistration && (
         <WaitlistSelectionModal
           waitlistEntry={selectedWaitlistEntry}
-          registrationName={selectedRegistration.name}
+          registrationName={registrations.find(r => r.id === selectedRegistration)?.name || ''}
           onSuccess={() => {
             setShowWaitlistSelectionModal(false)
             setSelectedWaitlistEntry(null)
-            // Refresh the data to show updated waitlist
+            // Refresh both the registration tiles (to update waitlist count) and the registration data
+            fetchRegistrations()
             if (selectedRegistration) {
-              fetchRegistrationData(selectedRegistration.id)
+              fetchRegistrationData(selectedRegistration)
             }
           }}
           onCancel={() => {

@@ -863,18 +863,19 @@ export class XeroBatchSyncManager {
     } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
-      // The Xero SDK wraps errors - check both error.response.body and error.body
-      // Also check if error itself has body property
-      const errorBody = error?.response?.body || error?.body || error
+      // The Xero SDK may serialize the error as a JSON string
+      let parsedError = error
+      if (typeof error === 'string') {
+        try {
+          parsedError = JSON.parse(error)
+        } catch (e) {
+          // If parsing fails, use original error
+          parsedError = error
+        }
+      }
 
-      console.log('🔍 Debug error body detection:', {
-        hasErrorResponseBody: !!error?.response?.body,
-        hasErrorBody: !!error?.body,
-        hasErrorElements: !!error?.Elements,
-        errorBodyHasElements: !!errorBody?.Elements,
-        errorBodyType: typeof errorBody,
-        errorBodyKeys: errorBody ? Object.keys(errorBody).slice(0, 10) : []
-      })
+      // The Xero SDK wraps errors - check both error.response.body and error.body
+      const errorBody = parsedError?.response?.body || parsedError?.body || parsedError
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {

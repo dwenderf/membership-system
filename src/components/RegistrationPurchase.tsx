@@ -709,8 +709,8 @@ export default function RegistrationPurchase({
                 <label
                   key={category.id}
                   className={`relative flex rounded-lg border p-3 focus:outline-none ${
-                    isUnavailableDueToExistingRegistration
-                      ? 'border-blue-400 bg-blue-50 cursor-default'
+                    isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id]
+                      ? 'border-gray-300 bg-gray-50 opacity-60 cursor-default'
                       : selectedCategoryId === category.id
                       ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50 cursor-pointer'
                       : hasRequiredMembership
@@ -722,16 +722,16 @@ export default function RegistrationPurchase({
                     type="radio"
                     name="category"
                     value={category.id}
-                    checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration}
-                    onChange={(e) => !isUnavailableDueToExistingRegistration && setSelectedCategoryId(e.target.value)}
-                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration}
+                    checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
+                    onChange={(e) => !(isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id]) && setSelectedCategoryId(e.target.value)}
+                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
                     className="sr-only"
                   />
                   <div className="flex w-full justify-between">
                     <div className="flex items-center">
                       <div className="text-sm">
                         <div className={`font-medium ${
-                          isUnavailableDueToExistingRegistration ? 'text-blue-900' :
+                          isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id] ? 'text-gray-700' :
                           selectedCategoryId === category.id ? 'text-blue-900' :
                           hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
@@ -773,6 +773,11 @@ export default function RegistrationPurchase({
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
 
+                              // Don't show capacity text if user is on waitlist
+                              if (categoryWaitlistEntry) {
+                                return null
+                              }
+
                               if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
@@ -786,7 +791,7 @@ export default function RegistrationPurchase({
                       </div>
                     </div>
                     <div className={`text-sm font-medium ${
-                      isUnavailableDueToExistingRegistration ? 'text-blue-900' :
+                      isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id] ? 'text-gray-700' :
                       selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                     }`}>
                       ${(categoryPrice / 100).toFixed(2)}
@@ -809,20 +814,25 @@ export default function RegistrationPurchase({
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
               const categoryPrice = category.price ?? 0
               
+              const isOnWaitlist = !!userWaitlistEntries[category.id]
+
               return (
-                <label key={category.id} className="cursor-pointer">
+                <label key={category.id} className={isOnWaitlist ? 'cursor-default' : 'cursor-pointer'}>
                   <input
                     type="radio"
                     name="registrationCategory"
                     value={category.id}
-                    checked={selectedCategoryId === category.id}
-                    onChange={() => setSelectedCategoryId(category.id)}
+                    checked={selectedCategoryId === category.id || isOnWaitlist}
+                    onChange={() => !isOnWaitlist && setSelectedCategoryId(category.id)}
+                    disabled={isOnWaitlist}
                     className="sr-only"
                   />
                   <div className={`border rounded-lg p-3 transition-colors ${
-                    selectedCategoryId === category.id
-                      ? hasRequiredMembership 
-                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50' 
+                    isOnWaitlist
+                      ? 'border-gray-300 bg-gray-50 opacity-60'
+                      : selectedCategoryId === category.id
+                      ? hasRequiredMembership
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
                         : 'border-yellow-500 bg-yellow-50'
                       : hasRequiredMembership
                       ? 'border-gray-300 hover:border-gray-400'
@@ -831,6 +841,7 @@ export default function RegistrationPurchase({
                     <div className="flex justify-between">
                       <div>
                         <div className={`font-medium text-sm ${
+                          isOnWaitlist ? 'text-gray-700' :
                           selectedCategoryId === category.id
                             ? hasRequiredMembership ? 'text-blue-900' : 'text-yellow-800'
                             : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
@@ -864,6 +875,11 @@ export default function RegistrationPurchase({
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
 
+                              // Don't show capacity text if user is on waitlist
+                              if (categoryWaitlistEntry) {
+                                return null
+                              }
+
                               if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
@@ -876,6 +892,7 @@ export default function RegistrationPurchase({
                         )}
                       </div>
                       <div className={`text-sm font-medium ${
+                        isOnWaitlist ? 'text-gray-700' :
                         selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                       }`}>
                         ${(categoryPrice / 100).toFixed(2)}

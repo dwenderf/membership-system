@@ -526,6 +526,9 @@ export default function RegistrationReportsPage() {
                                       </th>
                                     ))}
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Discount Code
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                       Action
                                     </th>
                                   </tr>
@@ -558,28 +561,30 @@ export default function RegistrationReportsPage() {
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <div className="flex items-center space-x-2">
-                                          {waitlist.discount_code && (
-                                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                                              {waitlist.discount_code} (-{waitlist.discount_percentage}%)
-                                            </span>
-                                          )}
-                                          <button
-                                            onClick={() => {
-                                              setSelectedWaitlistEntry(waitlist)
-                                              setShowWaitlistSelectionModal(true)
-                                            }}
-                                            disabled={!waitlist.hasValidPaymentMethod}
-                                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${
-                                              waitlist.hasValidPaymentMethod
-                                                ? 'text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-                                                : 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                                            }`}
-                                            title={waitlist.hasValidPaymentMethod ? 'Select user from waitlist' : 'User must set up payment method first'}
-                                          >
-                                            Select
-                                          </button>
-                                        </div>
+                                        {waitlist.discount_code ? (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                            {waitlist.discount_code} (-{waitlist.discount_percentage}%)
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-400">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button
+                                          onClick={() => {
+                                            setSelectedWaitlistEntry(waitlist)
+                                            setShowWaitlistSelectionModal(true)
+                                          }}
+                                          disabled={!waitlist.hasValidPaymentMethod}
+                                          className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${
+                                            waitlist.hasValidPaymentMethod
+                                              ? 'text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                                              : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                          }`}
+                                          title={waitlist.hasValidPaymentMethod ? 'Select user from waitlist' : 'User must set up payment method first'}
+                                        >
+                                          Select
+                                        </button>
                                       </td>
                                     </tr>
                                   ))}

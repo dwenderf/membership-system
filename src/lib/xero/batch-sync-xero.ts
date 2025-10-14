@@ -351,32 +351,32 @@ export class XeroBatchSyncManager {
         console.log('❌ Xero invoices/credit notes failed:', xeroInvoicesFailed.length)
 
         // Sync regular invoices
-        let invoiceResult = true
+        let invoiceResult = { success: true, synced: 0, failed: 0 }
         if (xeroInvoicesToSync.length > 0) {
           invoiceResult = await this.syncXeroInvoices(xeroInvoicesToSync, xeroApi, activeTenant.tenant_id)
         }
-        
+
         // Sync credit notes
         let creditNoteResult = true
         if (xeroCreditNotesToSync.length > 0) {
           creditNoteResult = await this.syncXeroCreditNotes(xeroCreditNotesToSync, xeroApi, activeTenant.tenant_id)
         }
-        
+
         // Update results based on both invoice and credit note sync results
-        const totalSynced = (invoiceResult ? xeroInvoicesToSync.length : 0) + (creditNoteResult ? xeroCreditNotesToSync.length : 0)
-        const totalFailed = (invoiceResult ? 0 : xeroInvoicesToSync.length) + (creditNoteResult ? 0 : xeroCreditNotesToSync.length)
-        
+        const totalSynced = invoiceResult.synced + (creditNoteResult ? xeroCreditNotesToSync.length : 0)
+        const totalFailed = invoiceResult.failed + (creditNoteResult ? 0 : xeroCreditNotesToSync.length)
+
         results.invoices.synced = totalSynced
         results.invoices.failed = totalFailed
-        
-        if (invoiceResult && creditNoteResult) {
-          console.log(`✅ Successfully synced ${xeroInvoicesToSync.length} invoices and ${xeroCreditNotesToSync.length} credit notes`)
-        } else if (invoiceResult) {
-          console.log(`✅ Successfully synced ${xeroInvoicesToSync.length} invoices, ❌ Failed to sync ${xeroCreditNotesToSync.length} credit notes`)
-        } else if (creditNoteResult) {
-          console.log(`❌ Failed to sync ${xeroInvoicesToSync.length} invoices, ✅ Successfully synced ${xeroCreditNotesToSync.length} credit notes`)
-        } else {
-          console.log(`❌ Failed to sync ${xeroInvoicesToSync.length} invoices and ${xeroCreditNotesToSync.length} credit notes`)
+
+        console.log(`📊 Invoice sync completed: ${invoiceResult.synced} synced, ${invoiceResult.failed} failed`)
+        if (xeroCreditNotesToSync.length > 0) {
+          if (creditNoteResult) {
+            console.log(`✅ Successfully synced ${xeroCreditNotesToSync.length} credit notes`)
+          } else {
+            console.log(`❌ Failed to sync ${xeroCreditNotesToSync.length} credit notes`)
+          }
+        }
         }
         
         results.invoices.failed += xeroInvoicesFailed.length
@@ -757,7 +757,10 @@ export class XeroBatchSyncManager {
     }
   }
     
-  async syncXeroInvoices(xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<boolean> {
+  async syncXeroInvoices(xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<{ success: boolean; synced: number; failed: number }> {
+    let syncedCount = 0
+    let failedCount = 0
+
     try{
     const response = await xeroApi.accountingApi.createInvoices(
       tenantId,
@@ -765,7 +768,7 @@ export class XeroBatchSyncManager {
     )
 
     const invoicesSynced = response.body.invoices || []
-    
+
     // Use array index to correlate request with response
     for (let i = 0; i < invoicesSynced.length; i++) {
       const xeroInvoice = invoicesSynced[i]
@@ -804,6 +807,7 @@ export class XeroBatchSyncManager {
           }
         })
 
+        failedCount++
         continue
       }
 
@@ -851,15 +855,12 @@ export class XeroBatchSyncManager {
           }
         }
       })
+
+      syncedCount++
     }
 
-
- 
-
-
-
-    console.log('✅ Xero invoice(s) created:', response.body.invoices?.length || 0)
-    return true
+    console.log(`✅ Xero invoice sync completed: ${syncedCount} synced, ${failedCount} failed`)
+    return { success: true, synced: syncedCount, failed: failedCount }
     } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
@@ -920,6 +921,7 @@ export class XeroBatchSyncManager {
                 invoice: xeroInvoicesToSync[i]?.xeroInvoice
               }
             })
+            failedCount++
           } else {
             console.log(`✅ Element ${i} has no validation errors, marking as synced`)
             // This invoice succeeded - mark it as synced
@@ -935,6 +937,7 @@ export class XeroBatchSyncManager {
                 details: 'Invoice synced successfully',
                 response_data: { invoice: element }
               })
+              syncedCount++
             }
           }
         }
@@ -948,10 +951,12 @@ export class XeroBatchSyncManager {
             item.invoiceRecord.id,
             `Batch sync error: ${errorMessage}`
           )
+          failedCount++
         }
       }
 
-      return false
+      console.log(`❌ Xero invoice sync completed with errors: ${syncedCount} synced, ${failedCount} failed`)
+      return { success: false, synced: syncedCount, failed: failedCount }
     }
   }
 

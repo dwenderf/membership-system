@@ -863,38 +863,18 @@ export class XeroBatchSyncManager {
     } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
-      // Debug: log error structure in detail
-      console.log('🔍 Error details:', {
-        hasResponse: !!error?.response,
-        hasBody: !!error?.body,
-        responseStatus: error?.response?.statusCode || error?.response?.status,
-        responseStatusText: error?.response?.statusText,
-        errorMessage: error?.message,
+      // The Xero SDK wraps errors - check both error.response.body and error.body
+      // Also check if error itself has body property
+      const errorBody = error?.response?.body || error?.body || error
+
+      console.log('🔍 Debug error body detection:', {
+        hasErrorResponseBody: !!error?.response?.body,
+        hasErrorBody: !!error?.body,
+        hasErrorElements: !!error?.Elements,
+        errorBodyHasElements: !!errorBody?.Elements,
+        errorBodyType: typeof errorBody,
+        errorBodyKeys: errorBody ? Object.keys(errorBody).slice(0, 10) : []
       })
-
-      if (error?.response?.body) {
-        console.log('🔍 Response body structure:', {
-          type: typeof error.response.body,
-          keys: Object.keys(error.response.body),
-          hasElements: !!error.response.body.Elements,
-          elementsLength: error.response.body.Elements?.length
-        })
-        if (error.response.body.Elements) {
-          console.log('🔍 First Element structure:', {
-            keys: Object.keys(error.response.body.Elements[0] || {}),
-            hasInvoices: !!error.response.body.Elements[0]?.Invoices,
-            hasValidationErrors: !!error.response.body.Elements[0]?.ValidationErrors
-          })
-        }
-        console.log('🔍 Full response body:', JSON.stringify(error.response.body, null, 2))
-      }
-
-      if (error?.body) {
-        console.log('🔍 Direct body:', JSON.stringify(error.body, null, 2))
-      }
-
-      // Xero API errors have structure: error.response.body.Elements[].Invoices[].ValidationErrors[]
-      const errorBody = error?.response?.body || error?.body
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {

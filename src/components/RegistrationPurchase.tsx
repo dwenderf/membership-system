@@ -1253,13 +1253,15 @@ export default function RegistrationPurchase({
                     }
                     const result = await response.json()
                     // Update local state to reflect new waitlist entry
-                    setUserWaitlistEntries(prev => ({
-                      ...prev,
-                      [selectedCategoryId]: {
-                        position: result.position,
-                        id: result.waitlistId
-                      }
-                    }))
+                    if (selectedCategoryId) {
+                      setUserWaitlistEntries(prev => ({
+                        ...prev,
+                        [selectedCategoryId]: {
+                          position: result.position,
+                          id: result.waitlistId
+                        }
+                      }))
+                    }
                     showSuccess(
                       'Waitlist Joined!',
                       `You've been added to the waitlist. We'll notify you if a spot opens up.`

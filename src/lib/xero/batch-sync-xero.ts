@@ -863,64 +863,80 @@ export class XeroBatchSyncManager {
     } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
-      // Debug: log error structure
-      console.log('🔍 Error structure:', {
-        hasResponse: !!error?.response,
-        hasResponseBody: !!error?.response?.body,
-        hasBody: !!error?.body,
-        responseBodyKeys: error?.response?.body ? Object.keys(error.response.body) : [],
-        bodyKeys: error?.body ? Object.keys(error.body) : [],
-        hasElements: !!error?.response?.body?.Elements || !!error?.body?.Elements
-      })
+      // Debug: log full error structure to understand format
+      console.log('🔍 Full error object:', JSON.stringify(error, null, 2))
 
-      // Check if error has response body with Elements (individual invoice errors from Xero)
+      // Xero API errors have structure: error.response.body.Elements[].Invoices[].ValidationErrors[]
       const errorBody = error?.response?.body || error?.body
+
+      // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
-        console.log('📋 Processing individual invoice errors from Xero response')
+        console.log('📋 Processing individual invoice errors from Xero batch response')
 
-        // Process each invoice in the error response
-        for (let i = 0; i < errorBody.Elements.length; i++) {
-          const xeroInvoice = errorBody.Elements[i]
-          const originalRecord = xeroInvoicesToSync[i]?.invoiceRecord
+        // Each Element contains Invoices array with ValidationErrors
+        for (const element of errorBody.Elements) {
+          if (element.Invoices && Array.isArray(element.Invoices)) {
+            for (const invoice of element.Invoices) {
+              // Find matching original record by invoice number or other identifier
+              const originalRecord = xeroInvoicesToSync.find(x =>
+                x.xeroInvoice.invoiceNumber === invoice.InvoiceNumber
+              )?.invoiceRecord
 
-          if (!originalRecord) {
-            console.error(`❌ No original record found for error response index ${i}`)
-            continue
+              if (!originalRecord) {
+                console.error(`❌ No original record found for invoice ${invoice.InvoiceNumber}`)
+                continue
+              }
+
+              // Extract validation errors
+              const validationErrors = invoice.ValidationErrors || []
+              if (validationErrors.length > 0) {
+                const errorMessages = validationErrors.map((e: any) => e.Message).join('; ')
+                console.error(`❌ Invoice ${invoice.InvoiceNumber} validation failed:`, errorMessages)
+
+                // Mark invoice as failed with specific error
+                await this.markItemAsFailed(
+                  originalRecord.id,
+                  `Xero validation error: ${errorMessages}`
+                )
+
+                // Log failure
+                await logXeroSync({
+                  tenant_id: tenantId,
+                  operation: 'invoice_sync',
+                  record_type: 'invoice',
+                  record_id: originalRecord.id,
+                  success: false,
+                  details: `Invoice sync failed: ${errorMessages}`,
+                  response_data: {
+                    validationErrors: validationErrors,
+                    invoice: invoice
+                  },
+                  request_data: {
+                    invoice: originalRecord.staging_metadata
+                  }
+                })
+              }
+            }
           }
 
-          // Extract validation errors
-          const validationErrors = xeroInvoice.ValidationErrors || []
-          const errorMessages = validationErrors.map((e: any) => e.Message).join('; ') || 'Unknown validation error'
+          // Also check for element-level ValidationErrors
+          if (element.ValidationErrors && Array.isArray(element.ValidationErrors)) {
+            const errorMessages = element.ValidationErrors.map((e: any) => e.Message).join('; ')
+            console.error(`❌ Element-level validation error:`, errorMessages)
 
-          console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
-
-          // Mark invoice as failed
-          await this.markItemAsFailed(
-            originalRecord.id,
-            `Xero validation error: ${errorMessages}`
-          )
-
-          // Log failure
-          await logXeroSync({
-            tenant_id: tenantId,
-            operation: 'invoice_sync',
-            record_type: 'invoice',
-            record_id: originalRecord.id,
-            success: false,
-            details: `Invoice sync failed: ${errorMessages}`,
-            response_data: {
-              validationErrors: validationErrors,
-              invoice: xeroInvoice
-            },
-            request_data: {
-              invoice: xeroInvoicesToSync[i]?.xeroInvoice
+            // Mark all invoices in this batch as failed
+            for (const item of xeroInvoicesToSync) {
+              await this.markItemAsFailed(
+                item.invoiceRecord.id,
+                `Xero batch error: ${errorMessages}`
+              )
             }
-          })
+          }
         }
       } else {
         // Generic error - mark all invoices in this batch as failed
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        console.error('❌ Batch sync error (no individual error details):', errorMessage)
+        const errorMessage = error?.message || error?.response?.statusText || 'Unknown error'
+        console.error('❌ Batch sync error (no Elements array):', errorMessage)
 
         for (const item of xeroInvoicesToSync) {
           await this.markItemAsFailed(

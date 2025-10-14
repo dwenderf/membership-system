@@ -199,11 +199,12 @@ export async function GET(request: NextRequest) {
     const { data: failedInvoices, error: failedInvoicesError } = await supabase
       .from('xero_invoices')
       .select(`
-        id, 
-        tenant_id, 
-        sync_status, 
-        sync_error, 
-        last_synced_at, 
+        id,
+        tenant_id,
+        sync_status,
+        sync_error,
+        last_synced_at,
+        created_at,
         staging_metadata,
         payment_id,
         payments (
@@ -249,11 +250,13 @@ export async function GET(request: NextRequest) {
     const { data: failedPayments, error: failedPaymentsError } = await supabase
       .from('xero_payments')
       .select(`
-        id, 
-        tenant_id, 
-        sync_status, 
-        sync_error, 
+        id,
+        tenant_id,
+        sync_status,
+        sync_error,
         last_synced_at,
+        created_at,
+        staging_metadata,
         xero_invoice_id,
         xero_invoices (
           payment_id,

@@ -772,7 +772,7 @@ export default function RegistrationPurchase({
                                 if (categoryWaitlistEntry) {
                                   return `On waitlist`
                                 } else {
-                                  return 'Full - No spots remaining'
+                                  return 'Full - Waitlist only'
                                 }
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
@@ -862,7 +862,7 @@ export default function RegistrationPurchase({
                                 if (categoryWaitlistEntry) {
                                   return `On waitlist`
                                 } else {
-                                  return 'Full - No spots remaining'
+                                  return 'Full - Waitlist only'
                                 }
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
@@ -1180,36 +1180,76 @@ export default function RegistrationPurchase({
               showModal={false}
               registrationName={registration.name}
               alternatePrice={registration.alternate_price}
-              buttonText="Save Payment Method & Register as Alternate"
+              buttonText={isAlternateSelected ? "Save Payment Method & Register as Alternate" : "Save Payment Method & Join Waitlist"}
               onSuccess={async () => {
                 // Close setup form
                 setShowSetupIntentForm(false)
-                // Now try the alternate registration again
-                try {
-                  const response = await fetch('/api/user-alternate-registrations', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      registration_id: registration.id,
-                      discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
-                    }),
-                  })
-                  if (!response.ok) {
-                    const errorData = await response.json()
-                    throw new Error(errorData.error || 'Failed to register as alternate')
+
+                // Determine which API to call based on what the user was trying to do
+                if (isAlternateSelected) {
+                  // User was trying to register as alternate
+                  try {
+                    const response = await fetch('/api/user-alternate-registrations', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        registration_id: registration.id,
+                        discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
+                      }),
+                    })
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to register as alternate')
+                    }
+                    showSuccess(
+                      'Alternate Registration Complete!',
+                      'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
+                    )
+                    // Refresh the page to show updated status
+                    setTimeout(() => window.location.reload(), 2000)
+                  } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                    setError(errorMessage)
+                    showError('Alternate Registration Error', errorMessage)
                   }
-                  showSuccess(
-                    'Alternate Registration Complete!',
-                    'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
-                  )
-                  // Refresh the page to show updated status
-                  setTimeout(() => window.location.reload(), 2000)
-                } catch (err) {
-                  const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-                  setError(errorMessage)
-                  showError('Alternate Registration Error', errorMessage)
+                } else if (isCategoryAtCapacity) {
+                  // User was trying to join waitlist
+                  try {
+                    const response = await fetch('/api/join-waitlist', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        registrationId: registration.id,
+                        categoryId: selectedCategoryId,
+                        discountCodeId: discountValidation?.discountCodeId || null,
+                      }),
+                    })
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to join waitlist')
+                    }
+                    const result = await response.json()
+                    // Update local state to reflect new waitlist entry
+                    setUserWaitlistEntries(prev => ({
+                      ...prev,
+                      [selectedCategoryId]: {
+                        position: result.position,
+                        id: result.waitlistId
+                      }
+                    }))
+                    showSuccess(
+                      'Waitlist Joined!',
+                      `You've been added to the waitlist. We'll notify you if a spot opens up.`
+                    )
+                  } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                    setError(errorMessage)
+                    showError('Waitlist Error', errorMessage)
+                  }
                 }
               }}
             />

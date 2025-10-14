@@ -158,10 +158,13 @@ export async function POST(
         }, { status: 500 })
       }
 
-      // Mark waitlist entry as removed
+      // Mark waitlist entry as removed and record who selected them
       const { error: updateError } = await adminSupabase
         .from('waitlists')
-        .update({ removed_at: new Date().toISOString() })
+        .update({
+          removed_at: new Date().toISOString(),
+          selected_by_admin_id: authUser.id
+        })
         .eq('id', waitlistId)
 
       if (updateError) {

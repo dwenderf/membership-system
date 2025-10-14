@@ -526,6 +526,9 @@ export default function RegistrationReportsPage() {
                                       </th>
                                     ))}
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Payment Status
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                       Discount Code
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -559,6 +562,17 @@ export default function RegistrationReportsPage() {
                                             <div className="text-xs text-gray-500">{formatDateTime(waitlist.joined_at).time}</div>
                                           )}
                                         </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {waitlist.hasValidPaymentMethod ? (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                            Ready
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                            Setup Required
+                                          </span>
+                                        )}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         {waitlist.discount_code ? (

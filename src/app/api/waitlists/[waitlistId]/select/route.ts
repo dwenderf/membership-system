@@ -53,7 +53,8 @@ export async function POST(
         registrations!inner (
           id,
           name,
-          seasons (
+          season_id,
+          seasons:season_id (
             name,
             start_date,
             end_date

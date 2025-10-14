@@ -195,6 +195,7 @@ export async function POST(
           categoryName: categoryName,
           seasonName: season ? `${season.name} (${new Date(season.start_date).toLocaleDateString()} - ${new Date(season.end_date).toLocaleDateString()})` : 'Unknown Season',
           amountCharged: chargeResult.amountCharged,
+          paymentIntentId: chargeResult.paymentIntentId,
           discountApplied: discountApplied
         })
       } catch (emailError) {

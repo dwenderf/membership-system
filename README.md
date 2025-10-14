@@ -404,9 +404,10 @@ The Hockey Association Team
 - `registrationName` - Name of event/team
 - `categoryName` - Registration category
 - `seasonName` - Season name and dates
-- `amountCharged` - Amount charged (formatted as currency, e.g., "$50.00")
+- `amount` - Amount charged (formatted as number, e.g., "50.00")
+- `purchaseDate` - Date of charge (formatted as localized date string)
+- `paymentIntentId` - Stripe payment intent ID (or "N/A" for free charges)
 - `discountApplied` - Optional discount details (e.g., "CODE25: -$25.00")
-- `paymentDate` - Date of charge
 - `dashboardUrl` - Link to user dashboard
 
 **Template Example:**
@@ -420,8 +421,9 @@ REGISTRATION CONFIRMATION:
 - Event/Team: [registrationName]
 - Category: [categoryName]
 - Season: [seasonName]
-- Amount Charged: [amountCharged]
-- Payment Date: [paymentDate]
+- Amount Charged: $[amount]
+- Payment Date: [purchaseDate]
+- Payment Intent ID: [paymentIntentId]
 [if discountApplied]
 - Discount Applied: [discountApplied]
 [endif]

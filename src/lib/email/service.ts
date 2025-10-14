@@ -320,6 +320,7 @@ class EmailService {
     categoryName: string
     seasonName: string
     amountCharged: number
+    paymentIntentId?: string
     discountApplied?: string
   }) {
     return this.sendEmail({
@@ -334,9 +335,10 @@ class EmailService {
         registrationName: options.registrationName,
         categoryName: options.categoryName,
         seasonName: options.seasonName,
-        amountCharged: `$${(options.amountCharged / 100).toFixed(2)}`,
+        amount: (options.amountCharged / 100).toFixed(2), // Loops expects 'amount' not 'amountCharged'
+        purchaseDate: new Date().toLocaleDateString(), // Loops expects 'purchaseDate' not 'paymentDate'
+        paymentIntentId: options.paymentIntentId || 'N/A',
         discountApplied: options.discountApplied || '',
-        paymentDate: new Date().toLocaleDateString(),
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
       }
     })

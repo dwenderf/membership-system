@@ -12,6 +12,7 @@ export interface WaitlistChargeResult {
   paymentId: string
   amountCharged: number
   success: boolean
+  paymentIntentId?: string
 }
 
 export class WaitlistPaymentService {
@@ -253,7 +254,8 @@ export class WaitlistPaymentService {
       return {
         paymentId: paymentRecord.id,
         amountCharged: finalAmount,
-        success: paymentIntent.status === 'succeeded'
+        success: paymentIntent.status === 'succeeded',
+        paymentIntentId: paymentIntent.id
       }
     } catch (error) {
       logger.logPaymentProcessing(
@@ -423,7 +425,8 @@ export class WaitlistPaymentService {
       return {
         paymentId: paymentRecord.id,
         amountCharged: 0,
-        success: true
+        success: true,
+        paymentIntentId: undefined // No Stripe payment for free charges
       }
     } catch (error) {
       logger.logPaymentProcessing(

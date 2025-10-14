@@ -424,7 +424,7 @@ export default function RegistrationPurchase({
         setIsLoading(false)
         return
       }
-      
+
       try {
         const response = await fetch('/api/join-waitlist', {
           method: 'POST',
@@ -434,16 +434,25 @@ export default function RegistrationPurchase({
           body: JSON.stringify({
             registrationId: registration.id,
             categoryId: selectedCategoryId,
+            discountCodeId: discountValidation?.discountCodeId || null,
           }),
         })
 
         if (!response.ok) {
           const errorData = await response.json()
+
+          // Check if payment method setup is required
+          if (errorData.requiresSetupIntent) {
+            setShowSetupIntentForm(true)
+            setIsLoading(false)
+            return
+          }
+
           throw new Error(errorData.error || 'Failed to join waitlist')
         }
 
         const result = await response.json()
-        
+
         // Update local state to reflect new waitlist entry
         setUserWaitlistEntries(prev => ({
           ...prev,
@@ -452,13 +461,13 @@ export default function RegistrationPurchase({
             id: result.waitlistId
           }
         }))
-        
+
         // Show success message
         showSuccess(
-          'Waitlist Joined!', 
+          'Waitlist Joined!',
           `You've been added to the waitlist. We'll notify you if a spot opens up.`
         )
-        
+
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An error occurred'
         setError(errorMessage)

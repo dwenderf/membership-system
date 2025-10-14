@@ -732,13 +732,18 @@ export default function RegistrationPurchase({
                       <div className="text-sm">
                         <div className={`font-medium ${
                           isUnavailableDueToExistingRegistration ? 'text-blue-900' :
-                          selectedCategoryId === category.id ? 'text-blue-900' : 
+                          selectedCategoryId === category.id ? 'text-blue-900' :
                           hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
                           {isUnavailableDueToExistingRegistration && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               Registered
+                            </span>
+                          )}
+                          {!isUnavailableDueToExistingRegistration && userWaitlistEntries[category.id] && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Waitlist
                             </span>
                           )}
                         </div>
@@ -767,13 +772,9 @@ export default function RegistrationPurchase({
                             {(() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              
+
                               if (remaining <= 0) {
-                                if (categoryWaitlistEntry) {
-                                  return `On waitlist`
-                                } else {
-                                  return 'Full - Waitlist only'
-                                }
+                                return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
                               } else {
@@ -835,6 +836,11 @@ export default function RegistrationPurchase({
                             : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
+                          {userWaitlistEntries[category.id] && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Waitlist
+                            </span>
+                          )}
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
@@ -857,13 +863,9 @@ export default function RegistrationPurchase({
                             {(() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              
+
                               if (remaining <= 0) {
-                                if (categoryWaitlistEntry) {
-                                  return `On waitlist`
-                                } else {
-                                  return 'Full - Waitlist only'
-                                }
+                                return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
                               } else {
@@ -1032,7 +1034,7 @@ export default function RegistrationPurchase({
             isUserOnWaitlist ? 'text-blue-700' : 'text-red-700'
           }`}>
             {isUserOnWaitlist ? (
-              `You're currently #${userWaitlistEntry?.position} in line for this category. We'll notify you if a spot becomes available.`
+              `We'll notify you if a spot becomes available.`
             ) : (
               `This category is currently at capacity (${selectedCategory.current_count} spots filled). You can join the waitlist and we'll notify you if a spot becomes available.`
             )}
@@ -1150,7 +1152,7 @@ export default function RegistrationPurchase({
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
-         (isCategoryAtCapacity && isUserOnWaitlist) ? `On Waitlist - Position #${userWaitlistEntry?.position}` :
+         (isCategoryAtCapacity && isUserOnWaitlist) ? 'On Waitlist' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
       </button>

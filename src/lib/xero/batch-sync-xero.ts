@@ -863,6 +863,16 @@ export class XeroBatchSyncManager {
     } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
+      // Debug: log error structure
+      console.log('🔍 Error structure:', {
+        hasResponse: !!error?.response,
+        hasResponseBody: !!error?.response?.body,
+        hasBody: !!error?.body,
+        responseBodyKeys: error?.response?.body ? Object.keys(error.response.body) : [],
+        bodyKeys: error?.body ? Object.keys(error.body) : [],
+        hasElements: !!error?.response?.body?.Elements || !!error?.body?.Elements
+      })
+
       // Check if error has response body with Elements (individual invoice errors from Xero)
       const errorBody = error?.response?.body || error?.body
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {

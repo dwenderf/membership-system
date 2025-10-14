@@ -377,8 +377,7 @@ export class XeroBatchSyncManager {
             console.log(`❌ Failed to sync ${xeroCreditNotesToSync.length} credit notes`)
           }
         }
-        }
-        
+
         results.invoices.failed += xeroInvoicesFailed.length
 
         const invoiceDuration = Date.now() - invoiceStartTime

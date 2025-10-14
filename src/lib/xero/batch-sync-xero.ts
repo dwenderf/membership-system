@@ -860,15 +860,64 @@ export class XeroBatchSyncManager {
 
     console.log('✅ Xero invoice(s) created:', response.body.invoices?.length || 0)
     return true
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error syncing Xero invoices:', error)
 
-      // Mark all invoices in this batch as failed
-      for (const item of xeroInvoicesToSync) {
-        await this.markItemAsFailed(
-          item.invoiceRecord.id,
-          `Batch sync error: ${error instanceof Error ? error.message : 'Unknown error'}`
-        )
+      // Check if error has response body with Elements (individual invoice errors from Xero)
+      const errorBody = error?.response?.body || error?.body
+      if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
+        console.log('📋 Processing individual invoice errors from Xero response')
+
+        // Process each invoice in the error response
+        for (let i = 0; i < errorBody.Elements.length; i++) {
+          const xeroInvoice = errorBody.Elements[i]
+          const originalRecord = xeroInvoicesToSync[i]?.invoiceRecord
+
+          if (!originalRecord) {
+            console.error(`❌ No original record found for error response index ${i}`)
+            continue
+          }
+
+          // Extract validation errors
+          const validationErrors = xeroInvoice.ValidationErrors || []
+          const errorMessages = validationErrors.map((e: any) => e.Message).join('; ') || 'Unknown validation error'
+
+          console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
+
+          // Mark invoice as failed
+          await this.markItemAsFailed(
+            originalRecord.id,
+            `Xero validation error: ${errorMessages}`
+          )
+
+          // Log failure
+          await logXeroSync({
+            tenant_id: tenantId,
+            operation: 'invoice_sync',
+            record_type: 'invoice',
+            record_id: originalRecord.id,
+            success: false,
+            details: `Invoice sync failed: ${errorMessages}`,
+            response_data: {
+              validationErrors: validationErrors,
+              invoice: xeroInvoice
+            },
+            request_data: {
+              invoice: xeroInvoicesToSync[i]?.xeroInvoice
+            }
+          })
+        }
+      } else {
+        // Generic error - mark all invoices in this batch as failed
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error('❌ Batch sync error (no individual error details):', errorMessage)
+
+        for (const item of xeroInvoicesToSync) {
+          await this.markItemAsFailed(
+            item.invoiceRecord.id,
+            `Batch sync error: ${errorMessage}`
+          )
+        }
       }
 
       return false

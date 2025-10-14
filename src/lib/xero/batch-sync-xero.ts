@@ -776,6 +776,37 @@ export class XeroBatchSyncManager {
         continue
       }
 
+      // Check if invoice has validation errors
+      if (xeroInvoice.hasErrors || (xeroInvoice.validationErrors && xeroInvoice.validationErrors.length > 0)) {
+        const errorMessages = xeroInvoice.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
+        console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
+
+        // Mark invoice as failed
+        await this.markItemAsFailed(
+          originalRecord.id,
+          `Xero validation error: ${errorMessages}`
+        )
+
+        // Log failure
+        await logXeroSync({
+          tenant_id: tenantId,
+          operation: 'invoice_sync',
+          record_type: 'invoice',
+          record_id: originalRecord.id,
+          success: false,
+          details: `Invoice sync failed: ${errorMessages}`,
+          response_data: {
+            validationErrors: xeroInvoice.validationErrors,
+            invoice: xeroInvoice
+          },
+          request_data: {
+            invoice: xeroInvoicesToSync[i].xeroInvoice
+          }
+        })
+
+        continue
+      }
+
       // Mark invoice as synced in database
       await this.markItemAsSynced(
         originalRecord.id,
@@ -831,6 +862,15 @@ export class XeroBatchSyncManager {
     return true
     } catch (error) {
       console.error('❌ Error syncing Xero invoices:', error)
+
+      // Mark all invoices in this batch as failed
+      for (const item of xeroInvoicesToSync) {
+        await this.markItemAsFailed(
+          item.invoiceRecord.id,
+          `Batch sync error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      }
+
       return false
     }
   }

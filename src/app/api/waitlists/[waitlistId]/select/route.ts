@@ -142,8 +142,8 @@ export async function POST(
         throw new Error('Payment failed')
       }
 
-      // Create user registration record
-      const { data: userRegistration, error: registrationError } = await supabase
+      // Create user registration record using admin client to bypass RLS
+      const { data: userRegistration, error: registrationError } = await adminSupabase
         .from('user_registrations')
         .insert({
           user_id: waitlistEntry.user_id,

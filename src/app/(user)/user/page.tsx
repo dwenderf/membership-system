@@ -267,7 +267,7 @@ export default async function UserDashboardPage() {
               {(userRegistrations && userRegistrations.length > 0) || (userAlternateRegistrations && userAlternateRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
                 <div className="mt-4 space-y-3">
                   {/* Show active registrations */}
-                  {userRegistrations?.slice(0, 3).map((registration) => {
+                  {userRegistrations?.map((registration) => {
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === registration.registration?.id)
                     return (
                       <div key={`reg-${registration.id}`} className="flex justify-between items-start">

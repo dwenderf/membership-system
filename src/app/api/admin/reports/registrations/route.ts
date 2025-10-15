@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         .from('waitlists')
         .select(`
           *,
-          users!inner (
+          users!waitlists_user_id_fkey (
             id,
             email,
             first_name,

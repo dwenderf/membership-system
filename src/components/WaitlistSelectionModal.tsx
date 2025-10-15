@@ -31,17 +31,52 @@ export default function WaitlistSelectionModal({
   onCancel
 }: WaitlistSelectionModalProps) {
   const [isProcessing, setIsProcessing] = useState(false)
+  const [overridePrice, setOverridePrice] = useState(false)
+  const [customPrice, setCustomPrice] = useState((waitlistEntry.base_price / 100).toFixed(2))
+  const [priceError, setPriceError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
 
+  const maxPrice = waitlistEntry.base_price / 100
+
+  const handlePriceChange = (value: string) => {
+    setCustomPrice(value)
+
+    // Validate price
+    const numValue = parseFloat(value)
+    if (isNaN(numValue)) {
+      setPriceError('Please enter a valid number')
+    } else if (numValue < 0) {
+      setPriceError('Price cannot be negative')
+    } else if (numValue > maxPrice) {
+      setPriceError(`Price cannot exceed $${maxPrice.toFixed(2)}`)
+    } else {
+      setPriceError(null)
+    }
+  }
+
   const handleConfirmSelection = async () => {
+    // Validate custom price if override is enabled
+    if (overridePrice) {
+      const numValue = parseFloat(customPrice)
+      if (isNaN(numValue) || numValue < 0 || numValue > maxPrice) {
+        showError('Invalid Price', 'Please enter a valid price')
+        return
+      }
+    }
+
     setIsProcessing(true)
 
     try {
+      const body = overridePrice ? {
+        overridePrice: Math.round(parseFloat(customPrice) * 100) // Convert to cents
+      } : {}
+
       const response = await fetch(`/api/waitlists/${waitlistEntry.id}/select`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(body)
       })
 
       const data = await response.json()
@@ -121,6 +156,45 @@ export default function WaitlistSelectionModal({
                 <span>Total to Charge:</span>
                 <span className="text-green-600">${(waitlistEntry.final_amount / 100).toFixed(2)}</span>
               </div>
+            </div>
+
+            {/* Price Override Option */}
+            <div className="mt-3 space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={overridePrice}
+                  onChange={(e) => setOverridePrice(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="ml-2 text-sm text-gray-700">
+                  Override price (e.g., mid-season join)
+                </span>
+              </label>
+
+              {overridePrice && (
+                <div className="ml-6 space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={maxPrice}
+                      value={customPrice}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      className={`flex-1 rounded-md border ${priceError ? 'border-red-300' : 'border-gray-300'} px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      placeholder="Enter custom price"
+                    />
+                  </div>
+                  {priceError && (
+                    <p className="text-xs text-red-600 ml-1">{priceError}</p>
+                  )}
+                  <p className="text-xs text-gray-500 ml-1">
+                    Must be between $0.00 and ${maxPrice.toFixed(2)}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

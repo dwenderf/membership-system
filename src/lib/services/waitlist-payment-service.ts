@@ -24,7 +24,8 @@ export class WaitlistPaymentService {
     registrationId: string,
     categoryId: string,
     categoryName: string,
-    discountCodeId?: string
+    discountCodeId?: string,
+    overridePrice?: number
   ): Promise<WaitlistChargeResult> {
     try {
       const supabase = await createClient()
@@ -75,12 +76,33 @@ export class WaitlistPaymentService {
         throw new Error('Registration category does not have pricing configured')
       }
 
-      // Calculate charge amount
-      const { finalAmount, discountAmount, discountCode } = await this.calculateChargeAmount(
-        categoryId,
-        discountCodeId,
-        userId
-      )
+      // Validate override price if provided
+      if (overridePrice !== undefined) {
+        if (overridePrice < 0 || overridePrice > category.price) {
+          throw new Error(`Override price must be between 0 and ${category.price}`)
+        }
+      }
+
+      // Use override price if provided, otherwise calculate normally
+      let finalAmount: number
+      let discountAmount: number
+      let discountCode: any = null
+
+      if (overridePrice !== undefined) {
+        // Override price: use provided price, ignore discount codes
+        finalAmount = overridePrice
+        discountAmount = category.price - overridePrice
+      } else {
+        // Normal flow: calculate with discount codes
+        const calculated = await this.calculateChargeAmount(
+          categoryId,
+          discountCodeId,
+          userId
+        )
+        finalAmount = calculated.finalAmount
+        discountAmount = calculated.discountAmount
+        discountCode = calculated.discountCode
+      }
 
       // Create staging record for Xero
       const stagingData: StagingPaymentData = {

@@ -21,6 +21,10 @@ export async function POST(
 
     const waitlistId = params.waitlistId
 
+    // Parse request body for optional price override
+    const body = await request.json().catch(() => ({}))
+    const overridePrice = body.overridePrice as number | undefined
+
     // Check if user is admin
     const { data: userProfile } = await supabase
       .from('users')
@@ -42,7 +46,7 @@ export async function POST(
         registration_category_id,
         discount_code_id,
         removed_at,
-        users!inner (
+        users!waitlists_user_id_fkey (
           id,
           first_name,
           last_name,
@@ -93,6 +97,15 @@ export async function POST(
 
     const categoryName = masterCategory?.name || category?.custom_name || 'Unknown Category'
 
+    // Validate override price if provided
+    if (overridePrice !== undefined) {
+      if (overridePrice < 0 || overridePrice > category.price) {
+        return NextResponse.json({
+          error: `Override price must be between $0.00 and $${(category.price / 100).toFixed(2)}`
+        }, { status: 400 })
+      }
+    }
+
     // Validate payment method
     if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
       return NextResponse.json({
@@ -121,7 +134,8 @@ export async function POST(
         waitlistEntry.registration_id,
         waitlistEntry.registration_category_id,
         categoryName,
-        waitlistEntry.discount_code_id || undefined
+        waitlistEntry.discount_code_id || undefined,
+        overridePrice
       )
 
       if (!chargeResult.success) {

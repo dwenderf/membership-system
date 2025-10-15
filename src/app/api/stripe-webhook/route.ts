@@ -1178,9 +1178,81 @@ export async function POST(request: NextRequest) {
       }
 
       case 'payment_intent.succeeded': {
-        // Check if this is an alternate payment
         const paymentIntent = event.data.object as Stripe.PaymentIntent
 
+        // Check if this is a waitlist selection payment
+        if (paymentIntent.metadata?.purpose === 'waitlist_selection') {
+          console.log('🔄 Processing waitlist selection payment:', {
+            paymentIntentId: paymentIntent.id,
+            userId: paymentIntent.metadata.userId,
+            registrationId: paymentIntent.metadata.registrationId
+          })
+
+          try {
+            // Update payment record status
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString()
+              })
+              .eq('stripe_payment_intent_id', paymentIntent.id)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              console.error('❌ Failed to update waitlist payment record:', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            console.log('✅ Successfully updated waitlist payment record')
+
+            // Note: user_registrations record is already created as 'paid' by the waitlist selection API
+            // No need to update it here - just verify it exists
+            const { data: existingRegistration } = await supabase
+              .from('user_registrations')
+              .select('id')
+              .eq('user_id', paymentIntent.metadata.userId)
+              .eq('registration_id', paymentIntent.metadata.registrationId)
+              .eq('payment_id', updatedPayment.id)
+              .single()
+
+            if (!existingRegistration) {
+              console.warn('⚠️ Waitlist registration record not found - may have been created after webhook')
+            } else {
+              console.log('✅ Verified waitlist registration record exists')
+            }
+
+            // Process through payment completion processor for Xero updates and emails
+            try {
+              console.log('🔄 Triggering payment completion processor for waitlist selection...')
+              const completionEvent = {
+                event_type: 'user_registrations' as const,
+                record_id: existingRegistration?.id || null,
+                user_id: paymentIntent.metadata.userId,
+                payment_id: updatedPayment.id,
+                amount: paymentIntent.amount,
+                trigger_source: 'stripe_webhook_waitlist',
+                timestamp: new Date().toISOString(),
+                metadata: {
+                  payment_intent_id: paymentIntent.id
+                }
+              }
+
+              await paymentProcessor.processPaymentCompletion(completionEvent)
+              console.log('✅ Successfully processed waitlist selection payment completion')
+            } catch (processorError) {
+              console.error('❌ Payment completion processor failed for waitlist selection:', processorError)
+              // Don't throw - payment succeeded, this is just post-processing
+            }
+          } catch (error) {
+            console.error('❌ Error processing waitlist payment_intent.succeeded:', error)
+            throw error
+          }
+
+          return NextResponse.json({ received: true })
+        }
+
+        // Check if this is an alternate payment
         if (paymentIntent.metadata?.purpose === 'alternate_selection') {
           console.log('🔄 Processing alternate selection payment:', {
             paymentIntentId: paymentIntent.id,

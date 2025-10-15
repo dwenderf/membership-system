@@ -424,7 +424,7 @@ export default function RegistrationPurchase({
         setIsLoading(false)
         return
       }
-      
+
       try {
         const response = await fetch('/api/join-waitlist', {
           method: 'POST',
@@ -434,16 +434,25 @@ export default function RegistrationPurchase({
           body: JSON.stringify({
             registrationId: registration.id,
             categoryId: selectedCategoryId,
+            discountCodeId: discountValidation?.discountCodeId || null,
           }),
         })
 
         if (!response.ok) {
           const errorData = await response.json()
+
+          // Check if payment method setup is required
+          if (errorData.requiresSetupIntent) {
+            setShowSetupIntentForm(true)
+            setIsLoading(false)
+            return
+          }
+
           throw new Error(errorData.error || 'Failed to join waitlist')
         }
 
         const result = await response.json()
-        
+
         // Update local state to reflect new waitlist entry
         setUserWaitlistEntries(prev => ({
           ...prev,
@@ -452,13 +461,13 @@ export default function RegistrationPurchase({
             id: result.waitlistId
           }
         }))
-        
+
         // Show success message
         showSuccess(
-          'Waitlist Joined!', 
+          'Waitlist Joined!',
           `You've been added to the waitlist. We'll notify you if a spot opens up.`
         )
-        
+
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An error occurred'
         setError(errorMessage)
@@ -700,8 +709,8 @@ export default function RegistrationPurchase({
                 <label
                   key={category.id}
                   className={`relative flex rounded-lg border p-3 focus:outline-none ${
-                    isUnavailableDueToExistingRegistration
-                      ? 'border-blue-400 bg-blue-50 cursor-default'
+                    isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id]
+                      ? 'border-gray-300 bg-gray-50 opacity-60 cursor-default'
                       : selectedCategoryId === category.id
                       ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50 cursor-pointer'
                       : hasRequiredMembership
@@ -713,23 +722,28 @@ export default function RegistrationPurchase({
                     type="radio"
                     name="category"
                     value={category.id}
-                    checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration}
-                    onChange={(e) => !isUnavailableDueToExistingRegistration && setSelectedCategoryId(e.target.value)}
-                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration}
+                    checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
+                    onChange={(e) => !(isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id]) && setSelectedCategoryId(e.target.value)}
+                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
                     className="sr-only"
                   />
                   <div className="flex w-full justify-between">
                     <div className="flex items-center">
                       <div className="text-sm">
                         <div className={`font-medium ${
-                          isUnavailableDueToExistingRegistration ? 'text-blue-900' :
-                          selectedCategoryId === category.id ? 'text-blue-900' : 
+                          isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id] ? 'text-gray-700' :
+                          selectedCategoryId === category.id ? 'text-blue-900' :
                           hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
                           {isUnavailableDueToExistingRegistration && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               Registered
+                            </span>
+                          )}
+                          {!isUnavailableDueToExistingRegistration && userWaitlistEntries[category.id] && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Waitlist
                             </span>
                           )}
                         </div>
@@ -758,13 +772,14 @@ export default function RegistrationPurchase({
                             {(() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              
+
+                              // Don't show capacity text if user is on waitlist
+                              if (categoryWaitlistEntry) {
+                                return null
+                              }
+
                               if (remaining <= 0) {
-                                if (categoryWaitlistEntry) {
-                                  return `On waitlist`
-                                } else {
-                                  return 'Full - No spots remaining'
-                                }
+                                return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
                               } else {
@@ -776,7 +791,7 @@ export default function RegistrationPurchase({
                       </div>
                     </div>
                     <div className={`text-sm font-medium ${
-                      isUnavailableDueToExistingRegistration ? 'text-blue-900' :
+                      isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id] ? 'text-gray-700' :
                       selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                     }`}>
                       ${(categoryPrice / 100).toFixed(2)}
@@ -799,20 +814,25 @@ export default function RegistrationPurchase({
                 activeMemberships.some(um => um.membership?.id === category.required_membership_id)
               const categoryPrice = category.price ?? 0
               
+              const isOnWaitlist = !!userWaitlistEntries[category.id]
+
               return (
-                <label key={category.id} className="cursor-pointer">
+                <label key={category.id} className={isOnWaitlist ? 'cursor-default' : 'cursor-pointer'}>
                   <input
                     type="radio"
                     name="registrationCategory"
                     value={category.id}
-                    checked={selectedCategoryId === category.id}
-                    onChange={() => setSelectedCategoryId(category.id)}
+                    checked={selectedCategoryId === category.id || isOnWaitlist}
+                    onChange={() => !isOnWaitlist && setSelectedCategoryId(category.id)}
+                    disabled={isOnWaitlist}
                     className="sr-only"
                   />
                   <div className={`border rounded-lg p-3 transition-colors ${
-                    selectedCategoryId === category.id
-                      ? hasRequiredMembership 
-                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50' 
+                    isOnWaitlist
+                      ? 'border-gray-300 bg-gray-50 opacity-60'
+                      : selectedCategoryId === category.id
+                      ? hasRequiredMembership
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
                         : 'border-yellow-500 bg-yellow-50'
                       : hasRequiredMembership
                       ? 'border-gray-300 hover:border-gray-400'
@@ -821,11 +841,17 @@ export default function RegistrationPurchase({
                     <div className="flex justify-between">
                       <div>
                         <div className={`font-medium text-sm ${
+                          isOnWaitlist ? 'text-gray-700' :
                           selectedCategoryId === category.id
                             ? hasRequiredMembership ? 'text-blue-900' : 'text-yellow-800'
                             : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
+                          {userWaitlistEntries[category.id] && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Waitlist
+                            </span>
+                          )}
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
@@ -848,13 +874,14 @@ export default function RegistrationPurchase({
                             {(() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              
+
+                              // Don't show capacity text if user is on waitlist
+                              if (categoryWaitlistEntry) {
+                                return null
+                              }
+
                               if (remaining <= 0) {
-                                if (categoryWaitlistEntry) {
-                                  return `On waitlist`
-                                } else {
-                                  return 'Full - No spots remaining'
-                                }
+                                return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
                               } else {
@@ -865,6 +892,7 @@ export default function RegistrationPurchase({
                         )}
                       </div>
                       <div className={`text-sm font-medium ${
+                        isOnWaitlist ? 'text-gray-700' :
                         selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                       }`}>
                         ${(categoryPrice / 100).toFixed(2)}
@@ -1023,7 +1051,7 @@ export default function RegistrationPurchase({
             isUserOnWaitlist ? 'text-blue-700' : 'text-red-700'
           }`}>
             {isUserOnWaitlist ? (
-              `You're currently #${userWaitlistEntry?.position} in line for this category. We'll notify you if a spot becomes available.`
+              `We'll notify you if a spot becomes available.`
             ) : (
               `This category is currently at capacity (${selectedCategory.current_count} spots filled). You can join the waitlist and we'll notify you if a spot becomes available.`
             )}
@@ -1032,7 +1060,7 @@ export default function RegistrationPurchase({
       )}
 
       {/* Discount Code Section */}
-      {selectedCategory && isTimingAvailable && !isCategoryAtCapacity && (
+      {selectedCategory && isTimingAvailable && !isUserOnWaitlist && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
           <div className="flex items-start">
             <svg className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -1141,7 +1169,7 @@ export default function RegistrationPurchase({
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
-         (isCategoryAtCapacity && isUserOnWaitlist) ? `On Waitlist - Position #${userWaitlistEntry?.position}` :
+         (isCategoryAtCapacity && isUserOnWaitlist) ? 'On Waitlist' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
       </button>
@@ -1171,36 +1199,78 @@ export default function RegistrationPurchase({
               showModal={false}
               registrationName={registration.name}
               alternatePrice={registration.alternate_price}
-              buttonText="Save Payment Method & Register as Alternate"
+              buttonText={isAlternateSelected ? "Save Payment Method & Register as Alternate" : "Save Payment Method & Join Waitlist"}
               onSuccess={async () => {
                 // Close setup form
                 setShowSetupIntentForm(false)
-                // Now try the alternate registration again
-                try {
-                  const response = await fetch('/api/user-alternate-registrations', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      registration_id: registration.id,
-                      discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
-                    }),
-                  })
-                  if (!response.ok) {
-                    const errorData = await response.json()
-                    throw new Error(errorData.error || 'Failed to register as alternate')
+
+                // Determine which API to call based on what the user was trying to do
+                if (isAlternateSelected) {
+                  // User was trying to register as alternate
+                  try {
+                    const response = await fetch('/api/user-alternate-registrations', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        registration_id: registration.id,
+                        discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
+                      }),
+                    })
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to register as alternate')
+                    }
+                    showSuccess(
+                      'Alternate Registration Complete!',
+                      'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
+                    )
+                    // Refresh the page to show updated status
+                    setTimeout(() => window.location.reload(), 2000)
+                  } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                    setError(errorMessage)
+                    showError('Alternate Registration Error', errorMessage)
                   }
-                  showSuccess(
-                    'Alternate Registration Complete!',
-                    'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
-                  )
-                  // Refresh the page to show updated status
-                  setTimeout(() => window.location.reload(), 2000)
-                } catch (err) {
-                  const errorMessage = err instanceof Error ? err.message : 'An error occurred'
-                  setError(errorMessage)
-                  showError('Alternate Registration Error', errorMessage)
+                } else if (isCategoryAtCapacity) {
+                  // User was trying to join waitlist
+                  try {
+                    const response = await fetch('/api/join-waitlist', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        registrationId: registration.id,
+                        categoryId: selectedCategoryId,
+                        discountCodeId: discountValidation?.discountCodeId || null,
+                      }),
+                    })
+                    if (!response.ok) {
+                      const errorData = await response.json()
+                      throw new Error(errorData.error || 'Failed to join waitlist')
+                    }
+                    const result = await response.json()
+                    // Update local state to reflect new waitlist entry
+                    if (selectedCategoryId) {
+                      setUserWaitlistEntries(prev => ({
+                        ...prev,
+                        [selectedCategoryId]: {
+                          position: result.position,
+                          id: result.waitlistId
+                        }
+                      }))
+                    }
+                    showSuccess(
+                      'Waitlist Joined!',
+                      `You've been added to the waitlist. We'll notify you if a spot opens up.`
+                    )
+                  } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+                    setError(errorMessage)
+                    showError('Waitlist Error', errorMessage)
+                  }
                 }
               }}
             />

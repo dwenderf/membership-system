@@ -45,22 +45,11 @@ export default async function UserMembershipsPage() {
               const validUntil = new Date(consolidatedMembership.validUntil)
               const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
               const isExpiringSoon = daysUntilExpiration <= 90
-              
+
               return (
-                <div key={consolidatedMembership.membershipId} className={`bg-white overflow-hidden shadow rounded-lg border-l-4 ${
-                  isExpiringSoon ? 'border-yellow-400' : 'border-green-400'
-                }`}>
+                <div key={consolidatedMembership.membershipId} className="bg-white overflow-hidden shadow rounded-lg border-l-4 border-green-400">
                   <div className="p-5">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          isExpiringSoon ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                        }`}>
-                          {isExpiringSoon ? 'Expiring Soon' : 'Active'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4">
+                    <div className="mt-2">
                       <h3 className="text-lg leading-6 font-medium text-gray-900">
                         {consolidatedMembership.membership?.name}
                       </h3>
@@ -70,17 +59,17 @@ export default async function UserMembershipsPage() {
                         </p>
                       )}
                       <div className="mt-4">
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between items-center text-sm">
                           <span className="text-gray-500">Valid Until:</span>
-                          <span className="text-gray-900">
-                            {validUntil.toLocaleDateString()}
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-gray-900">
+                              {validUntil.toLocaleDateString()}
+                            </span>
+                            {isExpiringSoon && (
+                              <span>⚠️ Expires Soon</span>
+                            )}
                           </span>
                         </div>
-                        {isExpiringSoon && (
-                          <div className="text-yellow-600 font-medium text-sm">
-                            ⚠️ Expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>

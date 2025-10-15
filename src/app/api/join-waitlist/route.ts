@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
+import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
 
 
 // Force import server config
@@ -10,7 +11,8 @@ import * as Sentry from '@sentry/nextjs'
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+    const adminSupabase = createAdminClient()
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -18,14 +20,52 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId } = body
-    
+    const { registrationId, categoryId, discountCodeId } = body
+
     // Validate required fields
     if (!registrationId || !categoryId) {
       return NextResponse.json(
         { error: 'Missing required fields: registrationId, categoryId' },
         { status: 400 }
       )
+    }
+
+    // Check if user has a saved payment method (required for waitlist)
+    const paymentMethodId = await getUserSavedPaymentMethodId(user.id, adminSupabase)
+    if (!paymentMethodId) {
+      return NextResponse.json({
+        error: 'You need to set up a payment method before joining the waitlist',
+        requiresSetupIntent: true
+      }, { status: 400 })
+    }
+
+    // Validate discount code if provided
+    let validatedDiscountCodeId = null
+    if (discountCodeId) {
+      const { data: discountCode, error: discountError } = await supabase
+        .from('discount_codes')
+        .select('id, code, is_active, valid_from, valid_until')
+        .eq('id', discountCodeId)
+        .single()
+
+      if (discountError || !discountCode) {
+        return NextResponse.json({ error: 'Invalid discount code' }, { status: 400 })
+      }
+
+      if (!discountCode.is_active) {
+        return NextResponse.json({ error: 'Discount code is not active' }, { status: 400 })
+      }
+
+      // Check date validity
+      const now = new Date()
+      if (discountCode.valid_from && new Date(discountCode.valid_from) > now) {
+        return NextResponse.json({ error: 'Discount code is not yet valid' }, { status: 400 })
+      }
+      if (discountCode.valid_until && new Date(discountCode.valid_until) < now) {
+        return NextResponse.json({ error: 'Discount code has expired' }, { status: 400 })
+      }
+
+      validatedDiscountCodeId = discountCodeId
     }
 
     // Get category details to verify it exists and is at capacity
@@ -125,6 +165,7 @@ export async function POST(request: NextRequest) {
         registration_id: registrationId,
         registration_category_id: categoryId,
         position: nextPosition,
+        discount_code_id: validatedDiscountCodeId
       })
       .select()
       .single()
@@ -147,7 +188,11 @@ export async function POST(request: NextRequest) {
       .from('registrations')
       .select(`
         name,
-        seasons!inner (name)
+        seasons:season_id (
+          name,
+          start_date,
+          end_date
+        )
       `)
       .eq('id', registrationId)
       .single()
@@ -174,13 +219,18 @@ export async function POST(request: NextRequest) {
 
       // Send waitlist notification email
       try {
+        const season = registration.seasons
+        const seasonName = season
+          ? `${season.name} (${new Date(season.start_date).toLocaleDateString()} - ${new Date(season.end_date).toLocaleDateString()})`
+          : 'Unknown Season'
+
         await emailService.sendWaitlistAddedNotification({
           userId: user.id,
           email: userData.email,
           userName: `${userData.first_name} ${userData.last_name}`,
           registrationName: registration.name,
           categoryName: categoryDisplayName,
-          seasonName: registration.seasons?.[0]?.name || 'Unknown Season',
+          seasonName: seasonName,
           position: nextPosition
         })
       } catch (emailError) {

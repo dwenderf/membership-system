@@ -60,6 +60,7 @@ interface FailedItem {
   sync_status: string
   sync_error: string | null
   last_synced_at: string
+  created_at: string
   staging_metadata?: any
   payment_id?: string | null
   payments?: {
@@ -102,6 +103,110 @@ interface SyncStats {
   ignored_invoices?: FailedItem[]
   ignored_payments?: FailedItem[]
   ignored_count?: number
+}
+
+// Component to display individual failed items with expand/collapse state
+function FailedItemCard({
+  item,
+  selectedFailedItems,
+  handleFailedItemToggle,
+  isXeroConnected
+}: {
+  item: FailedItem & { item_type: 'invoice' | 'payment' }
+  selectedFailedItems: Set<string>
+  handleFailedItemToggle: (key: string) => void
+  isXeroConnected: boolean
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const isInvoice = item.item_type === 'invoice'
+  const user = isInvoice ? item.payments?.users : item.xero_invoices?.payments?.users
+  const itemKey = isInvoice ? `inv_${item.id}` : `pay_${item.id}`
+  const isSelected = selectedFailedItems.has(itemKey)
+
+  // Use Xero contact naming convention: "First Last - MemberID"
+  const userDisplayName = user?.first_name && user?.last_name
+    ? user.member_id
+      ? `${user.first_name} ${user.last_name} - ${user.member_id}`
+      : `${user.first_name} ${user.last_name}`
+    : 'Unknown User'
+
+  const isIgnored = item.sync_status === 'ignore'
+  const bgColor = isIgnored ? 'bg-gray-50' : 'bg-red-50'
+  const borderColor = isIgnored ? 'border-gray-200' : 'border-red-200'
+  const statusColor = isIgnored ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+  const timeText = isIgnored ? 'Ignored' : 'Failed'
+
+  return (
+    <div key={`failed-${item.item_type}-${item.id}`} className={`p-3 ${bgColor} rounded-lg border ${borderColor}`}>
+      <div className="flex items-start">
+        <div className="flex items-center mr-3 mt-1">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => handleFailedItemToggle(itemKey)}
+            disabled={!isXeroConnected || isIgnored}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColor}`}>
+                {isInvoice ? 'Invoice' : 'Payment'}
+              </span>
+              <span className="ml-2 text-sm font-medium text-gray-900">
+                {userDisplayName}
+              </span>
+              <span className="ml-2 text-xs text-gray-500 font-mono">
+                ID: {item.id}
+              </span>
+              {isIgnored && (
+                <span className="ml-2 text-xs text-gray-500">
+                  (Ignored)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <time className="text-xs text-gray-500">
+                {timeText}: {new Date(item.last_synced_at).toLocaleString()}
+              </time>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {isExpanded ? '▼ Hide Details' : '▶ Show Details'}
+              </button>
+            </div>
+          </div>
+          <div className="mt-1 text-xs text-gray-500">
+            <strong>Created:</strong> {new Date(item.created_at).toLocaleString()}
+          </div>
+          <div className="mt-1 text-sm text-gray-600">
+            <span><strong>Status:</strong> {item.sync_status}</span>
+            {item.sync_error && !isIgnored && (
+              <div className="mt-1 text-xs text-red-600 bg-red-100 p-2 rounded">
+                <strong>Error:</strong> {item.sync_error}
+              </div>
+            )}
+            {isIgnored && (
+              <div className="mt-1 text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                <strong>Status:</strong> This item has been marked as ignored and will not be retried
+              </div>
+            )}
+          </div>
+          {isExpanded && item.staging_metadata && (
+            <div className="mt-2 text-xs">
+              <div className="font-medium text-gray-700 mb-1">Staging Metadata:</div>
+              <pre className="bg-white p-2 rounded border border-gray-300 overflow-x-auto">
+                {JSON.stringify(item.staging_metadata, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function AccountingIntegrationPage() {
@@ -848,77 +953,17 @@ export default function AccountingIntegrationPage() {
               {syncStats.failed_count > 0 ? (
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Failed Items Details</h3>
-                  
+
                   {/* Combined Failed Items (sorted by time) */}
-                  {syncStats.failed_items_sorted.map((item) => {
-                    const isInvoice = item.item_type === 'invoice'
-                    const user = isInvoice ? item.payments?.users : item.xero_invoices?.payments?.users
-                    const itemKey = isInvoice ? `inv_${item.id}` : `pay_${item.id}`
-                    const isSelected = selectedFailedItems.has(itemKey)
-                    
-                    // Use Xero contact naming convention: "First Last - MemberID"
-                    const userDisplayName = user?.first_name && user?.last_name 
-                      ? user.member_id 
-                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
-                        : `${user.first_name} ${user.last_name}`
-                      : 'Unknown User'
-                    
-                    const isIgnored = item.sync_status === 'ignore'
-                    const bgColor = isIgnored ? 'bg-gray-50' : 'bg-red-50'
-                    const borderColor = isIgnored ? 'border-gray-200' : 'border-red-200'
-                    const statusColor = isIgnored ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
-                    const timeText = isIgnored ? 'Ignored' : 'Failed'
-                    
-                    return (
-                      <div key={`failed-${item.item_type}-${item.id}`} className={`flex items-start p-3 ${bgColor} rounded-lg border ${borderColor}`}>
-                        <div className="flex items-center mr-3 mt-1">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleFailedItemToggle(itemKey)}
-                            disabled={!isXeroConnected || isIgnored}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColor}`}>
-                                {isInvoice ? 'Invoice' : 'Payment'}
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-gray-900">
-                                {userDisplayName}
-                              </span>
-                              <span className="ml-2 text-xs text-gray-500 font-mono">
-                                ID: {item.id}
-                              </span>
-                              {isIgnored && (
-                                <span className="ml-2 text-xs text-gray-500">
-                                  (Ignored)
-                                </span>
-                              )}
-                            </div>
-                            <time className="text-xs text-gray-500">
-                              {timeText}: {new Date(item.last_synced_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <div className="mt-1 text-sm text-gray-600">
-                            <span><strong>Status:</strong> {item.sync_status}</span>
-                            {item.sync_error && !isIgnored && (
-                              <div className="mt-1 text-xs text-red-600 bg-red-100 p-2 rounded">
-                                <strong>Error:</strong> {item.sync_error}
-                              </div>
-                            )}
-                            {isIgnored && (
-                              <div className="mt-1 text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                                <strong>Status:</strong> This item has been marked as ignored and will not be retried
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {syncStats.failed_items_sorted.map((item) => (
+                    <FailedItemCard
+                      key={`failed-${item.item_type}-${item.id}`}
+                      item={item}
+                      selectedFailedItems={selectedFailedItems}
+                      handleFailedItemToggle={handleFailedItemToggle}
+                      isXeroConnected={isXeroConnected}
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-4">

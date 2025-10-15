@@ -12,7 +12,8 @@ interface RegistrationData {
   season_name: string
   registration_type: string
   user_id: string
-  full_name: string
+  first_name: string
+  last_name: string
   email: string
   category_name: string
   category_id: string
@@ -59,7 +60,7 @@ export default function RegistrationDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortField, setSortField] = useState<keyof RegistrationData>('full_name')
+  const [sortField, setSortField] = useState<keyof RegistrationData>('first_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [waitlistSortField, setWaitlistSortField] = useState<keyof WaitlistData>('joined_at')
   const [waitlistSortDirection, setWaitlistSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -129,7 +130,7 @@ export default function RegistrationDetailPage() {
   }
 
   const filteredRegistrations = registrationData.filter(registration => {
-    const fullName = registration.full_name?.toLowerCase() || ''
+    const fullName = `${registration.first_name} ${registration.last_name}`.toLowerCase()
     const email = registration.email?.toLowerCase() || ''
     const category = registration.category_name?.toLowerCase() || ''
     const search = searchTerm.toLowerCase()
@@ -465,7 +466,7 @@ export default function RegistrationDetailPage() {
                             <thead className="bg-gray-50">
                               <tr>
                                 {[
-                                  { key: 'full_name', label: 'Participant' },
+                                  { key: 'first_name', label: 'Participant' },
                                   { key: 'email', label: 'Email' },
                                   { key: 'is_lgbtq', label: 'LGBTQ+' },
                                   { key: 'is_goalie', label: 'Goalie' },
@@ -495,7 +496,7 @@ export default function RegistrationDetailPage() {
                               {sortedCategoryRegistrations.map((registration, index) => (
                                 <tr key={index} className="hover:bg-gray-50">
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {registration.full_name}
+                                    {registration.first_name} {registration.last_name}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {registration.email}

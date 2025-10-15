@@ -149,7 +149,7 @@ export async function POST(
           user_id: waitlistEntry.user_id,
           registration_id: waitlistEntry.registration_id,
           registration_category_id: waitlistEntry.registration_category_id,
-          registration_fee: category.price,
+          registration_fee: overridePrice !== undefined ? overridePrice : category.price,
           amount_paid: chargeResult.amountCharged,
           payment_status: 'paid',
           payment_id: chargeResult.paymentId,

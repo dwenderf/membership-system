@@ -83,17 +83,40 @@ export class WaitlistPaymentService {
         }
       }
 
-      // Use override price if provided, otherwise calculate normally
+      // Calculate effective base price and discount
+      let effectiveBasePrice: number
       let finalAmount: number
       let discountAmount: number
       let discountCode: any = null
 
       if (overridePrice !== undefined) {
-        // Override price: use provided price, ignore discount codes
-        finalAmount = overridePrice
-        discountAmount = category.price - overridePrice
+        // Override price: use override as new base, then apply discount
+        effectiveBasePrice = overridePrice
+
+        // Calculate discount on the new base price
+        if (discountCodeId) {
+          const calculated = await this.calculateChargeAmount(
+            categoryId,
+            discountCodeId,
+            userId
+          )
+          discountCode = calculated.discountCode
+
+          if (discountCode) {
+            // Apply the same discount percentage to the new base price
+            discountAmount = Math.round((effectiveBasePrice * discountCode.percentage) / 100)
+            finalAmount = effectiveBasePrice - discountAmount
+          } else {
+            discountAmount = 0
+            finalAmount = effectiveBasePrice
+          }
+        } else {
+          discountAmount = 0
+          finalAmount = effectiveBasePrice
+        }
       } else {
-        // Normal flow: calculate with discount codes
+        // Normal flow: use category price as base and calculate with discount codes
+        effectiveBasePrice = category.price
         const calculated = await this.calculateChargeAmount(
           categoryId,
           discountCodeId,
@@ -107,14 +130,14 @@ export class WaitlistPaymentService {
       // Create staging record for Xero
       const stagingData: StagingPaymentData = {
         user_id: userId,
-        total_amount: centsToCents(category.price),
+        total_amount: centsToCents(effectiveBasePrice),
         discount_amount: centsToCents(discountAmount),
         final_amount: centsToCents(finalAmount),
         payment_items: [
           {
             item_type: 'registration' as const,
             item_id: registrationId,
-            item_amount: centsToCents(category.price),
+            item_amount: centsToCents(effectiveBasePrice),
             description: `Waitlist: ${registration.name} - ${categoryName}`,
             accounting_code: category.accounting_code
           }

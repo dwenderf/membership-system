@@ -59,14 +59,24 @@ export default function WaitlistSelectionModal({
     if (overridePrice && !priceError) {
       const numValue = parseFloat(customPrice)
       if (!isNaN(numValue) && numValue >= 0 && numValue <= maxPrice) {
-        // Valid override: show new pricing
-        const overrideAmountCents = Math.round(numValue * 100)
-        const adjustmentAmount = waitlistEntry.base_price - overrideAmountCents
+        // Valid override: adjust base price, then apply discount
+        const newBasePriceCents = Math.round(numValue * 100)
+
+        // Calculate discount on the new base price
+        let discountAmountCents = 0
+        if (waitlistEntry.discount_code && waitlistEntry.discount_percentage) {
+          discountAmountCents = Math.round((newBasePriceCents * waitlistEntry.discount_percentage) / 100)
+        }
+
+        const finalAmountCents = newBasePriceCents - discountAmountCents
+
         return {
-          basePrice: waitlistEntry.base_price,
-          discountAmount: adjustmentAmount,
-          discountLabel: 'Price Adjustment',
-          finalAmount: overrideAmountCents
+          basePrice: newBasePriceCents,
+          discountAmount: discountAmountCents,
+          discountLabel: waitlistEntry.discount_code
+            ? `Discount (${waitlistEntry.discount_code} - ${waitlistEntry.discount_percentage}%)`
+            : null,
+          finalAmount: finalAmountCents
         }
       }
     }

@@ -212,6 +212,7 @@ export class WaitlistPaymentService {
         return await this.handleFreeWaitlistCharge(
           userId,
           registrationId,
+          categoryId,
           categoryName,
           stagingRecord,
           discountCodeId
@@ -409,6 +410,7 @@ export class WaitlistPaymentService {
   private static async handleFreeWaitlistCharge(
     userId: string,
     registrationId: string,
+    categoryId: string,
     categoryName: string,
     stagingRecord: any,
     discountCodeId?: string
@@ -444,11 +446,11 @@ export class WaitlistPaymentService {
 
       // Record discount usage if applicable
       if (discountCodeId) {
-        // Get the base price to record the discount amount
+        // Get the base price to record the discount amount using the passed categoryId
         const { data: category } = await supabase
           .from('registration_categories')
           .select('price')
-          .eq('id', stagingRecord.staging_metadata?.categoryId)
+          .eq('id', categoryId)
           .single()
 
         const discountAmount = category?.price || 0

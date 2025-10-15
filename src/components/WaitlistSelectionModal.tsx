@@ -54,6 +54,36 @@ export default function WaitlistSelectionModal({
     }
   }
 
+  // Calculate display values based on override state
+  const getDisplayPricing = () => {
+    if (overridePrice && !priceError) {
+      const numValue = parseFloat(customPrice)
+      if (!isNaN(numValue) && numValue >= 0 && numValue <= maxPrice) {
+        // Valid override: show new pricing
+        const overrideAmountCents = Math.round(numValue * 100)
+        const adjustmentAmount = waitlistEntry.base_price - overrideAmountCents
+        return {
+          basePrice: waitlistEntry.base_price,
+          discountAmount: adjustmentAmount,
+          discountLabel: 'Price Adjustment',
+          finalAmount: overrideAmountCents
+        }
+      }
+    }
+
+    // Default: show original pricing
+    return {
+      basePrice: waitlistEntry.base_price,
+      discountAmount: waitlistEntry.discount_amount,
+      discountLabel: waitlistEntry.discount_code
+        ? `Discount (${waitlistEntry.discount_code} - ${waitlistEntry.discount_percentage}%)`
+        : null,
+      finalAmount: waitlistEntry.final_amount
+    }
+  }
+
+  const displayPricing = getDisplayPricing()
+
   const handleConfirmSelection = async () => {
     // Validate custom price if override is enabled
     if (overridePrice) {
@@ -142,19 +172,19 @@ export default function WaitlistSelectionModal({
             <div className="bg-gray-50 rounded-md p-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Base Price:</span>
-                <span className="font-medium">${(waitlistEntry.base_price / 100).toFixed(2)}</span>
+                <span className="font-medium">${(displayPricing.basePrice / 100).toFixed(2)}</span>
               </div>
 
-              {waitlistEntry.discount_amount > 0 && waitlistEntry.discount_code && (
+              {displayPricing.discountAmount > 0 && displayPricing.discountLabel && (
                 <div className="flex justify-between text-sm text-purple-700">
-                  <span>Discount ({waitlistEntry.discount_code} - {waitlistEntry.discount_percentage}%):</span>
-                  <span className="font-medium">-${(waitlistEntry.discount_amount / 100).toFixed(2)}</span>
+                  <span>{displayPricing.discountLabel}:</span>
+                  <span className="font-medium">-${(displayPricing.discountAmount / 100).toFixed(2)}</span>
                 </div>
               )}
 
               <div className="border-t pt-2 flex justify-between text-base font-bold">
                 <span>Total to Charge:</span>
-                <span className="text-green-600">${(waitlistEntry.final_amount / 100).toFixed(2)}</span>
+                <span className="text-green-600">${(displayPricing.finalAmount / 100).toFixed(2)}</span>
               </div>
             </div>
 

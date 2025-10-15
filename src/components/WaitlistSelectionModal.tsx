@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import { dollarsToCents } from '@/types/currency'
 
 interface WaitlistEntry {
   id: string
@@ -108,7 +109,7 @@ export default function WaitlistSelectionModal({
 
     try {
       const body = overridePrice ? {
-        overridePrice: Math.round(parseFloat(customPrice) * 100) // Convert to cents
+        overridePrice: dollarsToCents(parseFloat(customPrice))
       } : {}
 
       const response = await fetch(`/api/waitlists/${waitlistEntry.id}/select`, {

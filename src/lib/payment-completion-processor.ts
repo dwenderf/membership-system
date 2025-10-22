@@ -398,7 +398,7 @@ export class PaymentCompletionProcessor {
         const { error: paymentUpdateError } = await this.supabase
           .from('xero_payments')
           .update(paymentUpdateData)
-          .eq('xero_staging_record_id', existingRecords.id)
+          .eq('xero_invoice_id', existingRecords.id)
 
         if (paymentUpdateError) {
           this.logger.logPaymentProcessing('update-xero-staging-records', '⚠️ Warning: Error updating payment staging record', { error: paymentUpdateError }, 'warn')

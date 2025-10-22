@@ -446,7 +446,7 @@ export type Database = {
           discount_amount: number
           net_amount: number
           stripe_fee_amount: number
-          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore'
+          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore' | 'abandoned'
           last_synced_at: string | null
           sync_error: string | null
           staged_at: string | null
@@ -466,7 +466,7 @@ export type Database = {
           discount_amount?: number
           net_amount: number
           stripe_fee_amount?: number
-          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore'
+          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore' | 'abandoned'
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null
@@ -522,7 +522,7 @@ export type Database = {
           amount_paid: number
           stripe_fee_amount: number
           reference: string | null
-          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore'
+          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore' | 'abandoned'
           last_synced_at: string | null
           sync_error: string | null
           staged_at: string | null
@@ -540,7 +540,7 @@ export type Database = {
           amount_paid: number
           stripe_fee_amount?: number
           reference?: string | null
-          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore'
+          sync_status: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore' | 'abandoned'
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null

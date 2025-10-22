@@ -471,7 +471,10 @@ async function handleFreeRegistration({
         payment_id: paymentRecord.id, // Now we have the payment_id
         amount: 0,
         trigger_source: 'free_registration',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        metadata: {
+          xero_staging_record_id: freeStagingRecord?.id
+        }
       })
     } catch (error) {
       // Email staging failures are non-critical - don't fail the transaction
@@ -1296,6 +1299,7 @@ export async function POST(request: NextRequest) {
         discountCategoryId: validatedDiscountCode?.category?.id || '',
         discountCategoryName: validatedDiscountCode?.category?.name || '',
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
+        xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
       },
       description: getDescription(),
     }

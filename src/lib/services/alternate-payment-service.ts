@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
+import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -177,6 +178,7 @@ export class AlternatePaymentService {
           gameDescription: gameDescription,
           userName: `${user.first_name} ${user.last_name}`,
           purpose: 'alternate_selection',
+          xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
           ...(discountCodeId && { discountCodeId })
         },
         description: `Alternate Selection: ${registration.name} - ${gameDescription}`
@@ -398,6 +400,37 @@ export class AlternatePaymentService {
 
         const discountAmount = registration?.alternate_price || 0
         await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
+      }
+
+      // Trigger post-payment processing (emails, Xero sync)
+      try {
+        const paymentProcessor = new PaymentCompletionProcessor()
+        await paymentProcessor.processPaymentCompletion({
+          event_type: 'alternate_selections',
+          record_id: registrationId,
+          user_id: userId,
+          payment_id: paymentRecord.id,
+          amount: 0,
+          trigger_source: 'free_alternate',
+          timestamp: new Date().toISOString(),
+          metadata: {
+            xero_staging_record_id: stagingRecord.id
+          }
+        })
+      } catch (error) {
+        // Log error but don't fail the payment - emails/Xero can be handled manually if needed
+        logger.logPaymentProcessing(
+          'free-alternate-post-payment-processing-failed',
+          'Failed to process post-payment actions for free alternate charge',
+          {
+            userId,
+            registrationId,
+            gameDescription,
+            paymentId: paymentRecord.id,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          'error'
+        )
       }
 
       logger.logPaymentProcessing(

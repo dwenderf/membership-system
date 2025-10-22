@@ -215,7 +215,15 @@ export async function POST(request: NextRequest) {
 
     // Create new registration if reservation update failed or no reservation ID
     if (!userRegistration && (registrationError || !reservationId)) {
-      console.log('Creating new registration record (fallback)')
+      console.log('🔍 Creating user_registrations record (CONFIRM-REGISTRATION-PAYMENT fallback path)', {
+        userId: user.id,
+        registrationId,
+        categoryId,
+        reservationId,
+        hadError: !!registrationError,
+        paymentStatus: 'paid',
+        endpoint: 'confirm-registration-payment'
+      })
       const registrationData = {
         user_id: user.id,
         registration_id: registrationId,

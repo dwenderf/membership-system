@@ -83,6 +83,13 @@ async function handleFreeRegistration({
       .single()
 
     // Create user registration record (free registration - mark as paid immediately)
+    console.log('🔍 Creating user_registrations record (FREE registration path)', {
+      userId: user.id,
+      registrationId,
+      categoryId,
+      isFree: true,
+      paymentStatus: 'paid'
+    })
     const { data: reservationData, error: reservationError } = await adminSupabase
       .from('user_registrations')
       .insert({
@@ -1007,25 +1014,32 @@ export async function POST(request: NextRequest) {
     }
 
     // STEP 2: Reserve spot immediately (race condition protection)
-    
+
     if (selectedCategory.max_capacity) {
-      
+
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
-      
+
       if (currentCount >= selectedCategory.max_capacity) {
         capturePaymentError(new Error('Registration full'), paymentContext, 'warning')
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: 'This category is at capacity',
-          shouldShowWaitlist: true 
+          shouldShowWaitlist: true
         }, { status: 400 })
       }
 
       // Create new reservation only if we don't already have one from updating existing record
       if (!reservationId) {
+        console.log('🔍 Creating user_registrations record (with max_capacity check)', {
+          userId: user.id,
+          registrationId,
+          categoryId,
+          hasMaxCapacity: !!selectedCategory.max_capacity
+        })
+
         // Create processing reservation (5 minute expiration)
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
-        
+
         const { data: reservation, error: reservationError } = await supabase
           .from('user_registrations')
           .insert({
@@ -1102,8 +1116,8 @@ export async function POST(request: NextRequest) {
         logger.logPaymentProcessing(
           'using-existing-reservation',
           'Using existing updated record as reservation',
-          { 
-            userId: user.id, 
+          {
+            userId: user.id,
             registrationId,
             categoryId,
             reservationId

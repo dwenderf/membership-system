@@ -1013,10 +1013,8 @@ export async function POST(request: NextRequest) {
       // Continue anyway - the insert will handle duplicates
     }
 
-    // STEP 2: Reserve spot immediately (race condition protection)
-
+    // STEP 2: Check capacity FIRST if applicable (before creating record)
     if (selectedCategory.max_capacity) {
-
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
 
@@ -1027,40 +1025,42 @@ export async function POST(request: NextRequest) {
           shouldShowWaitlist: true
         }, { status: 400 })
       }
+    }
 
-      // Create new reservation only if we don't already have one from updating existing record
-      if (!reservationId) {
-        console.log('🔍 Creating user_registrations record (with max_capacity check)', {
-          userId: user.id,
-          registrationId,
-          categoryId,
-          hasMaxCapacity: !!selectedCategory.max_capacity
+    // STEP 3: Create reservation record (for ALL categories, not just those with max_capacity)
+    // This ensures the webhook can find and update the record when payment succeeds
+    if (!reservationId) {
+      console.log('🔍 Creating user_registrations record (payment intent creation)', {
+        userId: user.id,
+        registrationId,
+        categoryId,
+        hasMaxCapacity: !!selectedCategory.max_capacity
+      })
+
+      // Create processing reservation (5 minute expiration)
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
+
+      const { data: reservation, error: reservationError } = await supabase
+        .from('user_registrations')
+        .insert({
+          user_id: user.id,
+          registration_id: registrationId,
+          registration_category_id: categoryId,
+          payment_status: 'awaiting_payment',
+          reservation_expires_at: expiresAt.toISOString(),
+          registration_fee: amount,
+          amount_paid: finalAmount,
+          presale_code_used: presaleCode || null,
         })
+        .select()
+        .single()
 
-        // Create processing reservation (5 minute expiration)
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
-
-        const { data: reservation, error: reservationError } = await supabase
-          .from('user_registrations')
-          .insert({
-            user_id: user.id,
-            registration_id: registrationId,
-            registration_category_id: categoryId,
-            payment_status: 'awaiting_payment',
-            reservation_expires_at: expiresAt.toISOString(),
-            registration_fee: amount,
-            amount_paid: finalAmount,
-            presale_code_used: presaleCode || null,
-          })
-          .select()
-          .single()
-
-        if (reservationError) {
+      if (reservationError) {
         logger.logPaymentProcessing(
           'reservation-creation-error',
           'Reservation creation error',
-          { 
-            userId: user.id, 
+          {
+            userId: user.id,
             registrationId,
             categoryId,
             error: reservationError.message,
@@ -1068,7 +1068,7 @@ export async function POST(request: NextRequest) {
           },
           'error'
         )
-        
+
         // Check if this is a duplicate registration error
         if (reservationError.code === '23505') { // Unique constraint violation
           // Check what type of existing registration exists
@@ -1078,53 +1078,54 @@ export async function POST(request: NextRequest) {
             .eq('user_id', user.id)
             .eq('registration_id', registrationId)
             .single()
-          
+
           logger.logPaymentProcessing(
             'existing-registration-found',
             'Existing registration found during reservation creation',
-            { 
-              userId: user.id, 
+            {
+              userId: user.id,
               registrationId,
               categoryId,
               existingPaymentStatus: existingReg?.payment_status
             },
             'info'
           )
-          
-          return NextResponse.json({ 
-            error: existingReg?.payment_status === 'paid' 
+
+          return NextResponse.json({
+            error: existingReg?.payment_status === 'paid'
               ? 'You are already registered for this event'
               : 'Registration conflict - please try again'
           }, { status: 400 })
         }
-        
-        // Could be a race condition - check capacity again
-        const recheckedCount = await getSingleCategoryRegistrationCount(categoryId)
-        if (recheckedCount >= selectedCategory.max_capacity) {
-          return NextResponse.json({ 
-            error: 'This category just became full',
-            shouldShowWaitlist: true 
-          }, { status: 400 })
+
+        // Could be a race condition - check capacity again if applicable
+        if (selectedCategory.max_capacity) {
+          const recheckedCount = await getSingleCategoryRegistrationCount(categoryId)
+          if (recheckedCount >= selectedCategory.max_capacity) {
+            return NextResponse.json({
+              error: 'This category just became full',
+              shouldShowWaitlist: true
+            }, { status: 400 })
+          }
         }
-        
+
         capturePaymentError(reservationError, paymentContext, 'error')
         return NextResponse.json({ error: 'Failed to reserve spot' }, { status: 500 })
-        } else {
-          reservationId = reservation.id
-        }
       } else {
-        logger.logPaymentProcessing(
-          'using-existing-reservation',
-          'Using existing updated record as reservation',
-          {
-            userId: user.id,
-            registrationId,
-            categoryId,
-            reservationId
-          },
-          'info'
-        )
+        reservationId = reservation.id
       }
+    } else {
+      logger.logPaymentProcessing(
+        'using-existing-reservation',
+        'Using existing updated record as reservation',
+        {
+          userId: user.id,
+          registrationId,
+          categoryId,
+          reservationId
+        },
+        'info'
+      )
     }
 
     // Fetch user details for customer info
@@ -1532,7 +1533,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
-      reservationExpiresAt: reservationId ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : undefined,
+      reservationExpiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Always show 5-minute timer for all registrations
       originalAmount: amount,
       discountAmount: discountAmount,
       finalAmount: finalAmount,

@@ -369,7 +369,7 @@ export class PaymentCompletionProcessor {
         const { data: existingPaymentRecord } = await this.supabase
           .from('xero_payments')
           .select('staging_metadata')
-          .eq('xero_staging_record_id', existingRecords.id)
+          .eq('xero_invoice_id', existingRecords.id)
           .eq('staging_metadata->>payment_id', event.payment_id)
           .eq('sync_status', 'staged')
           .single()

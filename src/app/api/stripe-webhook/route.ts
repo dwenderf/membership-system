@@ -1418,6 +1418,27 @@ export async function POST(request: NextRequest) {
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
 
+        // Release registration reservation if this was a registration payment
+        if (registrationId && userId) {
+          console.log('🔓 Releasing registration reservation after payment failure:', {
+            userId,
+            registrationId,
+            paymentIntentId: paymentIntent.id
+          })
+
+          await supabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'failed',
+              reservation_expires_at: null // Release the reservation immediately
+            })
+            .eq('user_id', userId)
+            .eq('registration_id', registrationId)
+            .eq('payment_status', 'awaiting_payment') // Only update if still awaiting payment
+
+          console.log('✅ Registration reservation released')
+        }
+
         // Clean up draft invoice if it exists
         try {
           const invoiceNumber = paymentIntent.metadata.invoiceNumber

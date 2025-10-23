@@ -332,7 +332,10 @@ async function handleFreeMembership({
         payment_id: paymentRecord.id, // Now we have the payment_id
         amount: 0,
         trigger_source: 'free_membership',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        metadata: {
+          xero_staging_record_id: freeStagingRecord?.id
+        }
       })
     } catch (error) {
       // Email staging failures are non-critical - don't fail the transaction
@@ -705,6 +708,7 @@ export async function POST(request: NextRequest) {
         ...(paymentOption === 'donation' && donationAmount && { donationAmount: donationAmount.toString() }),
         ...(expectedValidFrom && { expectedValidFrom }),
         ...(expectedValidUntil && { expectedValidUntil }),
+        xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
       },
       description: getDescription(),
     }

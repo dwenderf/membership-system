@@ -272,7 +272,8 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
       timestamp: new Date().toISOString(),
       metadata: {
         payment_intent_id: paymentIntent.id,
-        charge_id: chargeId || undefined
+        charge_id: chargeId || undefined,
+        xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
       }
     })
     console.log('✅ Payment completion processor returned successfully:', processorResult)
@@ -470,7 +471,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       timestamp: new Date().toISOString(),
       metadata: {
         payment_intent_id: paymentIntent.id,
-        charge_id: chargeId || undefined
+        charge_id: chargeId || undefined,
+        xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
       }
     })
     console.log('✅ Registration payment completion processor returned successfully:', processorResult)
@@ -1234,7 +1236,8 @@ export async function POST(request: NextRequest) {
                 trigger_source: 'stripe_webhook_waitlist',
                 timestamp: new Date().toISOString(),
                 metadata: {
-                  payment_intent_id: paymentIntent.id
+                  payment_intent_id: paymentIntent.id,
+                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }
 
@@ -1317,10 +1320,11 @@ export async function POST(request: NextRequest) {
                 trigger_source: 'stripe_webhook_alternate',
                 timestamp: new Date().toISOString(),
                 metadata: {
-                  payment_intent_id: paymentIntent.id
+                  payment_intent_id: paymentIntent.id,
+                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }
-              
+
               await paymentProcessor.processPaymentCompletion(completionEvent)
               console.log('✅ Successfully processed alternate selection payment completion')
             } catch (processorError) {
@@ -1413,6 +1417,27 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString()
           })
           .eq('stripe_payment_intent_id', paymentIntent.id)
+
+        // Release registration reservation if this was a registration payment
+        if (registrationId && userId) {
+          console.log('🔓 Releasing registration reservation after payment failure:', {
+            userId,
+            registrationId,
+            paymentIntentId: paymentIntent.id
+          })
+
+          await supabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'failed',
+              reservation_expires_at: null // Release the reservation immediately
+            })
+            .eq('user_id', userId)
+            .eq('registration_id', registrationId)
+            .eq('payment_status', 'awaiting_payment') // Only update if still awaiting payment
+
+          console.log('✅ Registration reservation released')
+        }
 
         // Clean up draft invoice if it exists
         try {

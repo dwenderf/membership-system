@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
+import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -235,6 +236,7 @@ export class WaitlistPaymentService {
           categoryName: categoryName,
           userName: `${user.first_name} ${user.last_name}`,
           purpose: 'waitlist_selection',
+          xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
           ...(discountCodeId && { discountCodeId })
         },
         description: `Waitlist Selection: ${registration.name} - ${categoryName}`
@@ -455,6 +457,37 @@ export class WaitlistPaymentService {
 
         const discountAmount = category?.price || 0
         await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
+      }
+
+      // Trigger post-payment processing (emails, Xero sync)
+      try {
+        const paymentProcessor = new PaymentCompletionProcessor()
+        await paymentProcessor.processPaymentCompletion({
+          event_type: 'user_registrations',
+          record_id: registrationId,
+          user_id: userId,
+          payment_id: paymentRecord.id,
+          amount: 0,
+          trigger_source: 'free_waitlist',
+          timestamp: new Date().toISOString(),
+          metadata: {
+            xero_staging_record_id: stagingRecord.id
+          }
+        })
+      } catch (error) {
+        // Log error but don't fail the payment - emails/Xero can be handled manually if needed
+        logger.logPaymentProcessing(
+          'free-waitlist-post-payment-processing-failed',
+          'Failed to process post-payment actions for free waitlist charge',
+          {
+            userId,
+            registrationId,
+            categoryName,
+            paymentId: paymentRecord.id,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          'error'
+        )
       }
 
       logger.logPaymentProcessing(

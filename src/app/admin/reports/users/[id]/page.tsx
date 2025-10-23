@@ -4,6 +4,7 @@ import Link from 'next/link'
 import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
+import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
 
 interface PageProps {
@@ -330,8 +331,8 @@ export default async function UserDetailPage({ params }: PageProps) {
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Member Since</dt>
                       <dd className="mt-1 text-sm text-gray-900">
-                        {user.created_at 
-                          ? new Date(user.created_at).toLocaleDateString()
+                        {user.created_at
+                          ? formatDate(user.created_at)
                           : 'Unknown'
                         }
                       </dd>
@@ -358,10 +359,10 @@ export default async function UserDetailPage({ params }: PageProps) {
                               {membership.membership_name}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Expires: {new Date(membership.latest_expiration).toLocaleDateString()}
+                              Expires: {formatDate(membership.latest_expiration)}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Member since: {new Date(membership.member_since).toLocaleDateString()}
+                              Member since: {formatDate(membership.member_since)}
                             </div>
                           </div>
                           <div className="text-right">
@@ -405,7 +406,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                               {registration.registration_categories?.name || 'No category'}
                             </div>
                             <div className="text-xs text-gray-400 mt-1">
-                              Registered {registration.registered_at ? new Date(registration.registered_at).toLocaleDateString() : 'Unknown date'}
+                              Registered {registration.registered_at ? formatDate(registration.registered_at) : 'Unknown date'}
                             </div>
                           </div>
                           <div className="text-right">
@@ -441,7 +442,7 @@ export default async function UserDetailPage({ params }: PageProps) {
                               {invoice.invoice_type === 'ACCRECCREDIT' ? 'Credit Note' : 'Invoice'} {invoice.number.replace(/^#/, '')}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {new Date(invoice.date).toLocaleDateString()} at {new Date(invoice.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatDateTime(invoice.date)}
                             </div>
                             <div className="flex items-center space-x-2 mt-1">
                               {invoice.invoice_type === 'ACCRECCREDIT' ? (
@@ -577,8 +578,8 @@ export default async function UserDetailPage({ params }: PageProps) {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-500">Member Since</span>
                       <span className="text-sm text-gray-900">
-                        {user.created_at 
-                          ? new Date(user.created_at).toLocaleDateString()
+                        {user.created_at
+                          ? formatDate(user.created_at)
                           : 'Unknown'
                         }
                       </span>

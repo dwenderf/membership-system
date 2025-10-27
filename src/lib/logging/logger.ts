@@ -1,31 +1,33 @@
 /**
  * Centralized Logging Service
- * 
+ *
  * Provides structured logging with console output, file persistence,
  * integration with the admin log viewer, and automatic Sentry error reporting.
- * 
+ *
  * FEATURES:
  * - Automatic Sentry reporting for all 'error' level logs
  * - Manual Sentry reporting for critical warnings
  * - Category-based filtering for different types of operations
  * - Rich context and metadata support
  * - Production-only Sentry integration (development safe)
- * 
+ *
  * USAGE EXAMPLES:
- * 
+ *
  * // Basic error logging (automatically reported to Sentry)
  * logger.error('payment-processing', 'stripe-webhook', 'Payment failed', { paymentId: 'pi_123' })
- * 
+ *
  * // Critical warning (manually reported to Sentry)
  * logger.reportWarningToSentry('xero-sync', 'invoice-creation', 'Xero API rate limit approaching')
- * 
+ *
  * // Manual Sentry reporting for any level
  * logger.reportToSentryManual('info', 'system', 'maintenance', 'Database backup completed')
- * 
+ *
  * // Category-based logging methods
  * logger.logPaymentProcessing('webhook-received', 'Stripe webhook processed', { amount: 5000 })
  * logger.logXeroSync('contact-sync', 'Contact synced to Xero', { contactId: 'xero_123' })
  */
+
+import { formatTime } from '@/lib/date-utils'
 
 // Only import fs on server side
 let fs: any = null
@@ -296,7 +298,7 @@ export class Logger {
 
     const emoji = emojis[entry.level]
     const categoryEmoji = categoryEmojis[entry.category]
-    const timestamp = new Date(entry.timestamp).toLocaleTimeString()
+    const timestamp = formatTime(entry.timestamp)
     
     // Build colored output
     const levelColor = levelColors[entry.level]

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
+import { formatDate } from '@/lib/date-utils'
 
 interface Game {
   id: string
@@ -104,14 +105,6 @@ export default function RegistrationGamesPage() {
 
   const formatCurrency = (cents: number) => {
     return `$${(cents / 100).toFixed(2)}`
-  }
-
-  // const formatDateTime = (dateString: string) => {
-  //   return new Date(dateString).toLocaleString()
-  // }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
   }
 
   const isPastGame = (gameDate: string) => {

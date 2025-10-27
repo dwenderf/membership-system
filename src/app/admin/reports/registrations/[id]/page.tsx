@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 
 interface RegistrationData {
   registration_id: string
@@ -124,8 +125,8 @@ export default function RegistrationDetailPage() {
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
     return {
-      date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      date: formatDateUtil(date),
+      time: formatTimeUtil(date)
     }
   }
 

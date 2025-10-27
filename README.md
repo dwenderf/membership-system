@@ -143,6 +143,11 @@ XERO_CLIENT_ID=your_xero_client_id_here
 XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
 XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+
+# Timezone Configuration
+# IANA timezone identifier for date/time display throughout the application
+# Examples: America/New_York, America/Los_Angeles, Europe/London, UTC
+NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 ```
 
 ### 3. Database Setup

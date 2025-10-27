@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SEASON_TYPES, calculateSeasonDates, generateSeasonName, getSeasonTypeByKey } from '@/lib/season-types'
 import Link from 'next/link'
+import { formatDate } from '@/lib/date-utils'
 
 export default function NewSeasonPage() {
   const router = useRouter()
@@ -156,7 +157,7 @@ export default function NewSeasonPage() {
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
                       <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
                         {isEndDateInPast && (
-                          <li>This season would end in the past ({endDate.toLocaleDateString()})</li>
+                          <li>This season would end in the past ({formatDate(endDate)})</li>
                         )}
                         {seasonExists && (
                           <li>A {seasonType?.name?.toLowerCase()} season for {formData.start_year} already exists</li>
@@ -182,11 +183,11 @@ export default function NewSeasonPage() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Start Date</dt>
-                      <dd className="text-sm text-gray-900">{startDate.toLocaleDateString()}</dd>
+                      <dd className="text-sm text-gray-900">{formatDate(startDate)}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">End Date</dt>
-                      <dd className="text-sm text-gray-900">{endDate.toLocaleDateString()}</dd>
+                      <dd className="text-sm text-gray-900">{formatDate(endDate)}</dd>
                     </div>
                   </dl>
                 ) : (

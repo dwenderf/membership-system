@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { convertToNYTimezone } from '@/lib/date-utils'
+import { convertToNYTimezone, formatDate, formatTime } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 
 interface GameCreationFormProps {
@@ -30,16 +30,7 @@ export default function GameCreationForm({
     const date = new Date(dateValue)
     
     // Format for display in Eastern Time with full details
-    const formatted = date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long', 
-      day: 'numeric'
-    }) + ' at ' + date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
+    const formatted = formatDate(date) + ' at ' + formatTime(date)
     
     // Add timezone indicator (EDT/EST based on date)
     const isDST = date.getMonth() >= 2 && date.getMonth() <= 10 // Rough DST check

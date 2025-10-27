@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
+import { formatDate } from '@/lib/date-utils'
 
 interface XeroToken {
   tenant_id: string
@@ -181,7 +182,7 @@ function XeroIntegrationContent() {
                   </div>
                 </div>
                 <div className="text-xs text-green-600">
-                  Connected {currentToken?.created_at && new Date(currentToken.created_at).toLocaleDateString()}
+                  Connected {currentToken?.created_at && formatDate(currentToken.created_at)}
                 </div>
               </div>
 

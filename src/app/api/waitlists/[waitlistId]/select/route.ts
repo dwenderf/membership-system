@@ -1,4 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { formatDate } from '@/lib/date-utils'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
 import { logger } from '@/lib/logging/logger'
@@ -218,7 +220,7 @@ export async function POST(
           userName: `${user.first_name} ${user.last_name}`,
           registrationName: registration.name,
           categoryName: categoryName,
-          seasonName: season ? `${season.name} (${new Date(season.start_date).toLocaleDateString()} - ${new Date(season.end_date).toLocaleDateString()})` : 'Unknown Season',
+          seasonName: season ? `${season.name} (${formatDate(new Date(season.start_date))} - ${formatDate(new Date(season.end_date))})` : 'Unknown Season',
           amountCharged: chargeResult.amountCharged,
           paymentIntentId: chargeResult.paymentIntentId,
           discountApplied: discountApplied

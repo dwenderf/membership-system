@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { formatDate } from '@/lib/date-utils'
 import { createClient } from '@/lib/supabase/client'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
@@ -192,7 +191,7 @@ export default function AccountPage() {
               <dt className="text-sm font-medium text-gray-500">Member Since</dt>
               <dd className="mt-1 text-sm text-gray-900">
                 {userProfile?.created_at 
-                  ? formatDate(new Date(userProfile.created_at))
+                  ? new Date(userProfile.created_at).toLocaleDateString()
                   : 'Unknown'
                 }
               </dd>

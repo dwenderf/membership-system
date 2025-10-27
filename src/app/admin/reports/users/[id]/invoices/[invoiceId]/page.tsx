@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
+import { formatDate } from '@/lib/date-utils'
 
 interface PageProps {
   params: {
@@ -193,7 +194,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Payment Date</dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {new Date(invoice.date).toLocaleDateString()}
+                    {formatDate(new Date(invoice.date))}
                   </dd>
                 </div>
                 <div>
@@ -288,7 +289,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                         <div>
                           <dt className="text-sm font-medium text-gray-500">Refund Date</dt>
                           <dd className="mt-1 text-sm text-gray-900">
-                            {new Date(refund.created_at).toLocaleDateString()}
+                            {formatDate(new Date(refund.created_at))}
                           </dd>
                         </div>
                         {refund.credit_note?.invoice_number && (

@@ -1,4 +1,6 @@
 import { LoopsClient } from 'loops'
+import { formatDate } from '@/lib/date-utils'
+
 import { createAdminClient } from '@/lib/supabase/server'
 import { getWelcomeMessage } from '@/lib/organization'
 
@@ -165,7 +167,7 @@ class EmailService {
         validFrom: options.validFrom,
         validUntil: options.validUntil,
         paymentIntentId: options.paymentIntentId,
-        purchaseDate: new Date().toLocaleDateString(),
+        purchaseDate: formatDate(new Date()),
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
@@ -238,7 +240,7 @@ class EmailService {
       triggeredBy: 'user_action',
       data: {
         userName: options.userName,
-        deletedAt: new Date(options.deletedAt).toLocaleDateString(),
+        deletedAt: formatDate(new Date(options.deletedAt)),
         supportEmail: options.supportEmail || 'support@hockeyassociation.org',
         loginUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/login`
       }
@@ -272,7 +274,7 @@ class EmailService {
         categoryName: options.categoryName,
         seasonName: options.seasonName,
         amount: (options.amount / 100).toFixed(2),
-        registrationDate: new Date().toLocaleDateString(),
+        registrationDate: formatDate(new Date()),
         paymentIntentId: options.paymentIntentId,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
@@ -303,7 +305,7 @@ class EmailService {
         registrationName: options.registrationName,
         categoryName: options.categoryName,
         seasonName: options.seasonName,
-        waitlistDate: new Date().toLocaleDateString(),
+        waitlistDate: formatDate(new Date()),
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
@@ -336,7 +338,7 @@ class EmailService {
         categoryName: options.categoryName,
         seasonName: options.seasonName,
         amount: (options.amountCharged / 100).toFixed(2), // Loops expects 'amount' not 'amountCharged'
-        purchaseDate: new Date().toLocaleDateString(), // Loops expects 'purchaseDate' not 'paymentDate'
+        purchaseDate: formatDate(new Date()), // Loops expects 'purchaseDate' not 'paymentDate'
         paymentIntentId: options.paymentIntentId || 'N/A',
         discountApplied: options.discountApplied || '',
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
@@ -372,7 +374,7 @@ class EmailService {
         reason: options.reason || 'Refund processed by administrator',
         paymentDate: options.paymentDate,
         invoiceNumber: options.invoiceNumber || 'N/A',
-        refundDate: options.refundDate || new Date().toLocaleDateString(),
+        refundDate: options.refundDate || formatDate(new Date()),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }

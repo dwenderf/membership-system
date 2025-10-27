@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { formatDate } from '@/lib/date-utils'
+
 import Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
@@ -907,9 +909,9 @@ async function sendRefundNotificationEmail(refundId: string, userId: string, pay
       refundAmount: refund.amount,
       originalAmount: payment.final_amount,
       reason: refund.reason,
-      paymentDate: new Date(payment.completed_at || payment.created_at).toLocaleDateString(),
+      paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
       invoiceNumber: invoiceNumber,
-      refundDate: new Date(refund.created_at).toLocaleDateString()
+      refundDate: formatDate(new Date(refund.created_at))
     })
 
     console.log(`✅ Sent refund notification email to ${user.email} for refund ${refundId}`)

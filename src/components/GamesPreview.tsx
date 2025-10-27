@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatDate as formatDateUtil } from '@/lib/date-utils'
+
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import GameCreationForm from '@/components/GameCreationForm'
@@ -55,7 +57,7 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
+    return formatDateUtil(new Date(dateString))
   }
 
   const isPastGame = (gameDate: string | null) => {

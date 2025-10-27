@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
+import { formatDateString, formatDate } from '@/lib/date-utils'
 import ClientTimestamp from '@/components/ClientTimestamp'
 import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
@@ -256,7 +256,7 @@ export default async function RegistrationDetailPage({
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Created</dt>
                     <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(registration.created_at).toLocaleDateString()}
+                      {formatDate(new Date(registration.created_at))}
                     </dd>
                   </div>
                 </dl>

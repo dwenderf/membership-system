@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
+import { formatDate as formatDateUtil } from '@/lib/date-utils'
 
 interface MembershipType {
   id: string
@@ -204,7 +205,7 @@ export default function MembershipReportsPage() {
 
   const formatDate = (dateString: string) => {
     if (dateString === 'N/A') return 'N/A'
-    return new Date(dateString).toLocaleDateString()
+    return formatDateUtil(new Date(dateString))
   }
 
   const getExpirationStatus = (days: number) => {

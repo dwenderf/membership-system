@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useParams } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
+import { formatDate } from '@/lib/date-utils'
 
 interface Category {
   id: string
@@ -90,7 +91,6 @@ export default function EditRegistrationCategoryPage() {
         <AdminHeader
           title="Edit Registration Category"
           description="Loading..."
-          backLink="/admin/registration-categories"
         />
         <div className="bg-white shadow rounded-lg p-6">
           <div className="animate-pulse">
@@ -110,7 +110,6 @@ export default function EditRegistrationCategoryPage() {
         <AdminHeader
           title="Edit Registration Category"
           description="Category not found"
-          backLink="/admin/registration-categories"
         />
         <div className="bg-white shadow rounded-lg p-6">
           <div className="text-center py-8">
@@ -132,7 +131,6 @@ export default function EditRegistrationCategoryPage() {
       <AdminHeader
         title="Edit Registration Category"
         description={`Update the ${category.name} category template`}
-        backLink="/admin/registration-categories"
       />
 
       <div className="bg-white shadow rounded-lg">
@@ -199,7 +197,7 @@ export default function EditRegistrationCategoryPage() {
                 </h3>
                 <div className="mt-2 text-sm text-gray-600 space-y-1">
                   <p><strong>Type:</strong> {category.category_type === 'system' ? 'System Category' : 'Custom Category'}</p>
-                  <p><strong>Created:</strong> {new Date(category.created_at).toLocaleDateString()}</p>
+                  <p><strong>Created:</strong> {formatDate(new Date(category.created_at))}</p>
                 </div>
               </div>
             </div>

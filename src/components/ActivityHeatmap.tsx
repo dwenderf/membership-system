@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 // Note: CSS styles are handled inline below to avoid import conflicts
 
 interface Game {
@@ -121,11 +123,7 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     }
 
     const date = new Date(value.date)
-    const formattedDate = date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    })
+    const formattedDate = formatDate(date)
 
     const gamesSummary = value.games.map(game => 
       `${game.game_description || 'Untitled Game'} (${game.selected_count || 0} selected)`

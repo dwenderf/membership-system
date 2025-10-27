@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SystemCategoriesDndList, { Category } from '@/components/SystemCategoriesDndList'
+import { formatDate } from '@/lib/date-utils'
 
 export default async function RegistrationCategoriesPage() {
   const supabase = await createClient()
@@ -82,7 +83,7 @@ export default async function RegistrationCategoriesPage() {
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-500 max-w-xs truncate">{category.description || 'No description'}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(category.created_at).toLocaleDateString()}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(new Date(category.created_at))}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <Link href={`/admin/registration-categories/${category.id}/edit`} className="text-blue-600 hover:text-blue-900">Edit</Link>
                             </td>
@@ -123,7 +124,7 @@ export default async function RegistrationCategoriesPage() {
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-500 max-w-xs truncate">{category.description || 'No description'}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(category.created_at).toLocaleDateString()}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(new Date(category.created_at))}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <Link href={`/admin/registration-categories/${category.id}/edit`} className="text-blue-600 hover:text-blue-900">Edit</Link>
                             </td>

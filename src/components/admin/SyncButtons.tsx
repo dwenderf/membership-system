@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import { formatTime } from '@/lib/date-utils'
 
 interface SyncCounts {
   pendingEmails: number
@@ -104,10 +105,10 @@ export default function SyncButtons() {
     try {
       const response = await fetch('/api/admin/sync-emails', { method: 'POST' })
       if (response.ok) {
-        setLastSync(prev => ({ 
-          ...prev, 
+        setLastSync(prev => ({
+          ...prev,
           emails: {
-            time: new Date().toLocaleTimeString(),
+            time: formatTime(new Date()),
             processed: 0,
             failed: 0
           }
@@ -131,10 +132,10 @@ export default function SyncButtons() {
         const data = await response.json()
         const { total_synced, total_failed } = data.results
         
-        setLastSync(prev => ({ 
-          ...prev, 
+        setLastSync(prev => ({
+          ...prev,
           accounting: {
-            time: new Date().toLocaleTimeString(),
+            time: formatTime(new Date()),
             processed: total_synced,
             failed: total_failed
           }

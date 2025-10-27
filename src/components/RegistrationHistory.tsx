@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDate, formatTime } from '@/lib/date-utils'
+
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
 // Helper function to safely parse date strings without timezone conversion
@@ -11,7 +13,7 @@ function formatDateString(dateString: string): string {
   const [year, month, day] = dateString.split('-').map(Number)
   const date = new Date(year, month - 1, day) // month is 0-indexed
   
-  return date.toLocaleDateString()
+  return formatDate(date)
 }
 
 interface UserRegistration {
@@ -87,7 +89,7 @@ export default function RegistrationHistory({ userRegistrations }: RegistrationH
                             {userRegistration.registration?.name}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Registered: {registrationDate.toLocaleDateString()} at {registrationDate.toLocaleTimeString()}
+                            Registered: {formatDate(registrationDate)} at {formatTime(registrationDate)}
                           </p>
                         </div>
                         <div className="ml-3 flex-shrink-0">

@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 
 interface Game {
   id: string
@@ -45,7 +47,7 @@ interface WeekData {
 }
 
 interface RegistrationWeeklyData {
-  registration: Registration
+  registration: RegistrationWithGames
   weeks: WeekData[]
 }
 
@@ -168,11 +170,6 @@ export default function AllRegistrationsActivityGrid({
   const getTooltip = (registration: Registration, week: WeekData) => {
     const startDate = new Date(week.weekStart)
     const endDate = new Date(week.weekEnd)
-    
-    const formatDate = (date: Date) => date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    })
 
     if (week.games.length === 0) {
       return `${registration.name}

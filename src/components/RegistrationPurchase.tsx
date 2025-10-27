@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
@@ -25,7 +27,7 @@ function formatDateString(dateString: string): string {
   const [year, month, day] = dateString.split('-').map(Number)
   const date = new Date(year, month - 1, day) // month is 0-indexed
   
-  return date.toLocaleDateString()
+  return formatDate(date)
 }
 
 interface RegistrationCategory {

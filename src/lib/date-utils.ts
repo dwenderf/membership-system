@@ -36,7 +36,7 @@ export function formatTime(
 ): string {
   const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
   return dateObj.toLocaleTimeString('en-US', {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
     timeZone: APP_TIMEZONE,
     ...options

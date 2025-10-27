@@ -10,6 +10,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthenticatedXeroClient, getActiveTenant } from './client'
 import { logger } from '@/lib/logging/logger'
+import { Account } from 'xero-node'
 
 export interface SyncResult {
   success: boolean
@@ -57,6 +58,24 @@ export async function syncXeroAccounts(tenantId?: string): Promise<SyncResult> {
     // Get authenticated Xero client
     const xeroClient = await getAuthenticatedXeroClient(tenantId)
 
+    if (!xeroClient) {
+      logger.logXeroSync(
+        'sync-failed',
+        'Failed to get authenticated Xero client',
+        { tenantId },
+        'error'
+      )
+      return {
+        success: false,
+        error: 'Failed to authenticate with Xero',
+        totalAccounts: 0,
+        added: 0,
+        updated: 0,
+        removed: 0,
+        lastSyncedAt: new Date().toISOString()
+      }
+    }
+
     // Fetch chart of accounts from Xero
     const accountsResponse = await xeroClient.accountingApi.getAccounts(tenantId)
     const xeroAccounts = accountsResponse.body.accounts || []
@@ -69,7 +88,7 @@ export async function syncXeroAccounts(tenantId?: string): Promise<SyncResult> {
 
     // Filter to only ACTIVE accounts
     const activeAccounts = xeroAccounts.filter(account =>
-      account.status === 'ACTIVE' && account.code && account.name
+      account.status === Account.StatusEnum.ACTIVE && account.code && account.name
     )
 
     logger.logXeroSync(

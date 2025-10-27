@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 export default function NewMembershipPage() {
   const router = useRouter()
@@ -382,21 +383,14 @@ export default function NewMembershipPage() {
               )}
 
               {/* Accounting Code */}
-              <div>
-                <label htmlFor="accounting_code" className="block text-sm font-medium text-gray-700">
-                  Accounting Code
-                </label>
-                <input
-                  type="text"
-                  id="accounting_code"
-                  value={formData.accounting_code}
-                  onChange={(e) => setFormData(prev => ({ ...prev, accounting_code: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Enter Accounting Code (required)"
-                  required
-                />
-
-              </div>
+              <AccountingCodeInput
+                value={formData.accounting_code}
+                onChange={(value) => setFormData(prev => ({ ...prev, accounting_code: value }))}
+                label="Accounting Code"
+                required
+                placeholder="Search for accounting code..."
+                accountType="REVENUE"
+              />
 
               {/* Membership Preview */}
               {formData.name && (

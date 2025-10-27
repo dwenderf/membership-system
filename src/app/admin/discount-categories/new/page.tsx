@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 export default function NewDiscountCategoryPage() {
   const router = useRouter()
@@ -160,23 +161,14 @@ export default function NewDiscountCategoryPage() {
               </div>
 
               {/* Accounting Code */}
-              <div>
-                <label htmlFor="accounting_code" className="block text-sm font-medium text-gray-700">
-                  Accounting Code
-                </label>
-                <input
-                  type="text"
-                  id="accounting_code"
-                  value={formData.accounting_code}
-                  onChange={(e) => setFormData(prev => ({ ...prev, accounting_code: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., DISCOUNT-SCHOLAR, DISCOUNT-BOARD"
-                  required
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Unique code for Xero accounting integration (will be converted to uppercase)
-                </p>
-              </div>
+              <AccountingCodeInput
+                value={formData.accounting_code}
+                onChange={(value) => setFormData(prev => ({ ...prev, accounting_code: value }))}
+                label="Accounting Code"
+                required
+                placeholder="Search for accounting code..."
+                accountType="EXPENSE"
+              />
 
               {/* Description */}
               <div>

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
+import XeroAccountsSection from '@/components/admin/XeroAccountsSection'
+import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 interface SystemAccountingCode {
   id: string // UUID
@@ -460,53 +462,31 @@ export default function AccountingCodesPage() {
             These codes are required to connect to Xero.
           </p>
           
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Donation Received Default
-              </label>
-              <input
-                type="text"
-                value={codes.donation_received_default}
-                onChange={(e) => handleInputChange('donation_received_default', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="Enter Accounting Code (required)"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Used for donation line items in Xero invoices
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Donation Given Default (Financial Assistance)
-              </label>
-              <input
-                type="text"
-                value={codes.donation_given_default}
-                onChange={(e) => handleInputChange('donation_given_default', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="Enter Accounting Code (required)"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Used for financial assistance/discount line items in Xero invoices
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Stripe Bank Account
-              </label>
-              <input
-                type="text"
-                value={codes.stripe_bank_account}
-                onChange={(e) => handleInputChange('stripe_bank_account', e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="Enter Accounting Code (required)"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Xero bank account where Stripe deposits payments (used when recording payments)
-              </p>
-            </div>
-            
+          <div className="grid grid-cols-1 gap-6">
+            <AccountingCodeInput
+              value={codes.donation_received_default}
+              onChange={(value) => handleInputChange('donation_received_default', value)}
+              label="Donation Received Default"
+              required
+              placeholder="Search for accounting code..."
+              accountType="REVENUE"
+            />
+            <AccountingCodeInput
+              value={codes.donation_given_default}
+              onChange={(value) => handleInputChange('donation_given_default', value)}
+              label="Donation Given Default (Financial Assistance)"
+              required
+              placeholder="Search for accounting code..."
+              accountType="EXPENSE"
+            />
+            <AccountingCodeInput
+              value={codes.stripe_bank_account}
+              onChange={(value) => handleInputChange('stripe_bank_account', value)}
+              label="Stripe Bank Account"
+              required
+              placeholder="Search for accounting code..."
+              accountType="BANK"
+            />
           </div>
           
           {/* Save Button for Default Codes */}
@@ -537,23 +517,17 @@ export default function AccountingCodesPage() {
               <div className="text-gray-500">No discount categories found</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-6">
               {discountCategories.map((category) => (
-                <div key={category.id}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {category.name}
-                    {category.description && (
-                      <span className="text-gray-500 font-normal"> - {category.description}</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={categoryInputs[category.id] || ''}
-                    onChange={(e) => handleCategoryInputChange(category.id, e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    placeholder={category.accounting_code || 'Enter Accounting Code (required)'}
-                  />
-                </div>
+                <AccountingCodeInput
+                  key={category.id}
+                  value={categoryInputs[category.id] || ''}
+                  onChange={(value) => handleCategoryInputChange(category.id, value)}
+                  label={`${category.name}${category.description ? ` - ${category.description}` : ''}`}
+                  required
+                  placeholder="Search for accounting code..."
+                  accountType="EXPENSE"
+                />
               ))}
             </div>
           )}
@@ -578,7 +552,7 @@ export default function AccountingCodesPage() {
           <p className="text-sm text-gray-600 mb-4">
             Account codes for individual membership types. Changes update the membership immediately.
           </p>
-          
+
           {loading ? (
             <div className="text-center py-4">
               <div className="text-gray-500">Loading memberships...</div>
@@ -588,27 +562,21 @@ export default function AccountingCodesPage() {
               <div className="text-gray-500">No memberships found</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-6">
               {memberships.map((membership) => (
-                <div key={membership.id}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {membership.name}
-                    {membership.description && (
-                      <span className="text-gray-500 font-normal"> - {membership.description}</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={membershipInputs[membership.id] || ''}
-                    onChange={(e) => handleMembershipInputChange(membership.id, e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    placeholder={membership.accounting_code || 'Enter Accounting Code (required)'}
-                  />
-                </div>
+                <AccountingCodeInput
+                  key={membership.id}
+                  value={membershipInputs[membership.id] || ''}
+                  onChange={(value) => handleMembershipInputChange(membership.id, value)}
+                  label={`${membership.name}${membership.description ? ` - ${membership.description}` : ''}`}
+                  required
+                  placeholder="Search for accounting code..."
+                  accountType="REVENUE"
+                />
               ))}
             </div>
           )}
-          
+
           {/* Save Button */}
           {memberships.length > 0 && (
             <div className="mt-4 flex justify-end">
@@ -623,6 +591,8 @@ export default function AccountingCodesPage() {
           )}
         </div>
 
+        {/* Xero Chart of Accounts Section */}
+        <XeroAccountsSection />
 
         {/* Return to Admin Link */}
         <div className="mt-6">

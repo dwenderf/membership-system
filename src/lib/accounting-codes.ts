@@ -203,3 +203,59 @@ export async function getRegistrationAccountingCodes(
 export function withFallback(accountingCode: string | null, fallback: string): string {
   return accountingCode || fallback
 }
+
+/**
+ * Get frequently used accounting codes across the system
+ * Returns codes with their usage count, sorted by frequency (most used first)
+ * Used for intelligent autocomplete sorting
+ */
+export async function getFrequentlyUsedAccountingCodes(): Promise<Array<{
+  code: string
+  count: number
+}>> {
+  try {
+    // Fetch all accounting codes from different tables
+    const [
+      { data: memberships },
+      { data: regCategories },
+      { data: discountCategories },
+      { data: systemCodes }
+    ] = await Promise.all([
+      supabase.from('memberships').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('registration_categories').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('discount_categories').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('system_accounting_codes').select('accounting_code').not('accounting_code', 'is', null)
+    ])
+
+    // Combine all codes
+    const allCodes: string[] = [
+      ...(memberships || []).map(m => m.accounting_code),
+      ...(regCategories || []).map(r => r.accounting_code),
+      ...(discountCategories || []).map(d => d.accounting_code),
+      ...(systemCodes || []).map(s => s.accounting_code)
+    ]
+
+    // Count occurrences
+    const codeCountMap = new Map<string, number>()
+    allCodes.forEach(code => {
+      codeCountMap.set(code, (codeCountMap.get(code) || 0) + 1)
+    })
+
+    // Convert to array and sort by count
+    const result = Array.from(codeCountMap.entries())
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count) // Sort descending by count
+      .slice(0, 10) // Return top 10 most used
+
+    return result
+
+  } catch (error) {
+    logger.logPaymentProcessing(
+      'frequently-used-codes-error',
+      'Error fetching frequently used accounting codes',
+      { error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
+    return []
+  }
+}

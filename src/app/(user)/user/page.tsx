@@ -6,6 +6,7 @@ import { getOrganizationName } from '@/lib/organization'
 import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
 import { formatAmount } from '@/lib/format-utils'
 import DiscountUsage from '@/components/DiscountUsage'
+import { formatDate } from '@/lib/date-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -228,7 +229,7 @@ export default async function UserDashboardPage() {
                         <strong>{consolidatedMembership.membership?.name}</strong>
                         <br />
                         <span className="inline-flex items-center gap-2">
-                          <span>Valid until: {validUntil.toLocaleDateString()}</span>
+                          <span>Valid until: {formatDate(validUntil)}</span>
                           {isExpiringSoon && (
                             <span>⚠️ Expires Soon</span>
                           )}

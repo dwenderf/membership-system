@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 import {
   DndContext,
   closestCenter,
@@ -79,7 +81,7 @@ export default function SystemCategoriesDndList({ categories }: SystemCategories
         <div className="flex-1">
           <div className="font-medium text-gray-900">{cat.name}</div>
           <div className="text-sm text-gray-500">{cat.description || 'No description'}</div>
-          <div className="text-xs text-gray-400">Created: {new Date(cat.created_at).toLocaleDateString()}</div>
+          <div className="text-xs text-gray-400">Created: {formatDate(new Date(cat.created_at))}</div>
         </div>
         <Link href={`/admin/registration-categories/${cat.id}/edit`} className="ml-4 text-blue-600 hover:text-blue-900 text-sm font-medium">Edit</Link>
       </div>

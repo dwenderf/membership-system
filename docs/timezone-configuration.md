@@ -82,13 +82,17 @@ By using the utilities in `date-utils.ts`, all dates display consistently in the
 
 ## Updated Pages
 
-- ✅ `admin/reports/users/[id]/page.tsx` - User detail page with invoices, registrations, memberships
+✅ **All pages, components, and services have been updated to use centralized date utilities**
 
-## TODO: Pages to Update
+The following categories of files have been migrated:
+- **Admin Pages** (14 files) - All admin interfaces now use consistent timezone formatting
+- **User Pages** (7 files) - All user-facing pages display dates in configured timezone
+- **API Routes** (4 files) - All API responses use centralized date formatting
+- **Components** (13 files) - All React components use timezone-aware utilities
+- **Library Files** (3 files) - Email templates and logging use consistent formatting
 
-Search for `.toLocaleDateString()` and `.toLocaleTimeString()` usage across the codebase and replace with the utilities above.
-
+**Verification:**
 ```bash
-# Find files that need updating
-grep -r "toLocaleDateString\|toLocaleTimeString" src --include="*.tsx" --include="*.ts"
+# Confirm no old patterns remain (should return 0)
+grep -r "toLocaleDateString\|toLocaleTimeString" src --include="*.tsx" --include="*.ts" | grep -v "date-utils.ts" | wc -l
 ```

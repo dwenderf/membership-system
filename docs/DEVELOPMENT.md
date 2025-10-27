@@ -7,6 +7,7 @@ This document outlines development standards and best practices for the Hockey A
 - [Logging Standards](#logging-standards)
 - [Database Access Patterns](#database-access-patterns)
 - [Code Organization](#code-organization)
+  - [Date and Time Formatting](#date-and-time-formatting)
 - [Error Handling](#error-handling)
 - [Security Guidelines](#security-guidelines)
 - [Git Practices](#git-practices)
@@ -275,6 +276,43 @@ import { PaymentForm } from './PaymentForm'
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRY_ATTEMPTS`)
 - **Types/Interfaces**: PascalCase (`PaymentData`, `UserProfile`)
 
+### Date and Time Formatting
+
+**⚠️ CRITICAL: Never use `.toLocaleDateString()` or `.toLocaleTimeString()` directly**
+
+Always use the centralized date utilities from `@/lib/date-utils` to ensure consistent timezone display across the entire application.
+
+```typescript
+// ✅ GOOD: Centralized timezone-aware utilities
+import { formatDate, formatTime, formatDateTime } from '@/lib/date-utils'
+
+// Display date only
+const displayDate = formatDate(invoice.created_at)  // "10/23/2025"
+
+// Display time only
+const displayTime = formatTime(invoice.created_at)  // "2:11 PM"
+
+// Display both date and time
+const displayDateTime = formatDateTime(invoice.created_at)  // "10/23/2025 at 2:11 PM"
+
+// ❌ WRONG: Direct browser/server timezone formatting
+const badDate = new Date(invoice.created_at).toLocaleDateString()  // Uses server/browser timezone
+const badTime = new Date(invoice.created_at).toLocaleTimeString()  // Inconsistent across environments
+```
+
+**Why this matters:**
+- **Server components** render in server timezone (often UTC on Vercel), not user timezone
+- **Client components** render in user's browser timezone, creating inconsistency
+- **Centralized utilities** ensure all users see times in the configured app timezone (defaults to `America/New_York`)
+- **Consistent experience** for all users regardless of location or server location
+
+**Configuration:**
+The app timezone is configured via the `NEXT_PUBLIC_APP_TIMEZONE` environment variable. See [docs/timezone-configuration.md](./timezone-configuration.md) for details.
+
+**Special cases:**
+- For date-only fields (like `YYYY-MM-DD` strings), use `formatDateString()` to avoid timezone conversion issues
+- For NY-specific formatting in emails, use `toNYDateString()` helper function
+
 ## ⚠️ Error Handling
 
 ### Structured Error Responses
@@ -497,5 +535,5 @@ Document API endpoints with:
 
 ---
 
-*Last updated: July 13, 2025*  
+*Last updated: October 23, 2025*
 *This document should be updated as new patterns and practices are established.*

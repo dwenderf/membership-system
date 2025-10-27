@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate, formatTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
@@ -13,7 +12,7 @@ function formatDateString(dateString: string): string {
   const [year, month, day] = dateString.split('-').map(Number)
   const date = new Date(year, month - 1, day) // month is 0-indexed
   
-  return formatDate(date)
+  return date.toLocaleDateString()
 }
 
 
@@ -26,7 +25,7 @@ function getTimingMessage(registration: any): string {
   if (registration.presale_start_at) {
     const presaleStart = new Date(registration.presale_start_at)
     if (now < presaleStart) {
-      return `Pre-sale starts ${formatDate(presaleStart)} at ${formatTime(presaleStart)}`
+      return `Pre-sale starts ${presaleStart.toLocaleDateString()} at ${presaleStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     }
   }
   
@@ -34,7 +33,7 @@ function getTimingMessage(registration: any): string {
   if (registration.regular_start_at) {
     const regularStart = new Date(registration.regular_start_at)
     if (now < regularStart) {
-      return `Registration opens ${formatDate(regularStart)} at ${formatTime(regularStart)}`
+      return `Registration opens ${regularStart.toLocaleDateString()} at ${regularStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     }
   }
   
@@ -215,7 +214,7 @@ export default async function BrowseRegistrationsPage() {
                     {consolidatedMembership.membership?.name}
                   </span>
                   <span className="text-yellow-700 ml-2">
-                    expires {formatDate(validUntil)} ({daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''} remaining)
+                    expires {validUntil.toLocaleDateString()} ({daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''} remaining)
                   </span>
                 </div>
               )

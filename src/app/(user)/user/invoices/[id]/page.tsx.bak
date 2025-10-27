@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate } from '@/lib/date-utils'
 import { formatAmount } from '@/lib/format-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -175,7 +174,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 Invoice #{invoice.number || 'Pending'}
               </h1>
               <p className="text-gray-600 mt-1">
-                {formatDate(new Date(invoice.date))}
+                {new Date(invoice.date).toLocaleDateString()}
               </p>
             </div>
             <div className="text-right">
@@ -217,7 +216,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Due Date</h3>
                 <p className="text-lg font-medium text-gray-900">
-                  {invoice.dueDate ? formatDate(new Date(invoice.dueDate)) : 'Not set'}
+                  {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'Not set'}
                 </p>
               </div>
             )}
@@ -318,7 +317,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       Payment #{payment.paymentID.slice(-8)}
                     </div>
                     <div className="text-sm text-gray-500">
-                      {payment.date ? formatDate(new Date(payment.date)) : 'Date not available'}
+                      {payment.date ? new Date(payment.date).toLocaleDateString() : 'Date not available'}
                     </div>
                     {payment.reference && (
                       <div className="text-xs text-gray-400">

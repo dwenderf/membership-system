@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
+import { formatDateString, formatDate } from '@/lib/date-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -107,7 +107,7 @@ export default async function SeasonsPage() {
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-gray-400">
-                          Created {new Date(season.created_at).toLocaleDateString()}
+                          Created {formatDate(new Date(season.created_at))}
                         </span>
                       </div>
                     </div>

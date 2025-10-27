@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { formatDate } from '@/lib/date-utils'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 // Removed old direct Xero API call - using staging workflow instead
@@ -198,9 +200,9 @@ export async function POST(request: NextRequest) {
               refundAmount: amount,
               originalAmount: payment.final_amount,
               reason: reason,
-              paymentDate: new Date(payment.completed_at || payment.created_at).toLocaleDateString(),
+              paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
               invoiceNumber: `PAY-${payment.id.slice(0, 8)}`,
-              refundDate: new Date().toLocaleDateString()
+              refundDate: formatDate(new Date())
             })
           }
         } catch (error) {

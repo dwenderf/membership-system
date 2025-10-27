@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatDate as formatDateUtil } from '@/lib/date-utils'
+
 
 interface Alternate {
   id: string
@@ -163,7 +165,7 @@ export default function AlternateSelectionInterface({
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
+    return formatDateUtil(new Date(dateString))
   }
 
   if (loading) {

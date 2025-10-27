@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate } from '@/lib/date-utils'
 import { formatAmount, getInvoiceDueDate, isInvoiceOverdue, getDaysUntilDue } from '@/lib/format-utils'
 import { getOrganizationName } from '@/lib/organization'
 import { redirect } from 'next/navigation'
@@ -375,14 +374,14 @@ export default async function UserInvoicesPage() {
                               </span>
                             </div>
                             <div className="text-sm text-gray-500">
-                              {formatDate(new Date(invoice.date))}
+                              {new Date(invoice.date).toLocaleDateString()}
                               {invoice.total > 0 && isPaid && invoice.latestPaymentDate ? (
                                 <span className="ml-2">
-                                  • Paid: {formatDate(new Date(invoice.latestPaymentDate))}
+                                  • Paid: {new Date(invoice.latestPaymentDate).toLocaleDateString()}
                                 </span>
                               ) : invoice.total > 0 && invoice.dueDate && (
                                 <span className="ml-2">
-                                  • Due: {formatDate(new Date(invoice.dueDate))}
+                                  • Due: {new Date(invoice.dueDate).toLocaleDateString()}
                                   {daysUntilDue !== null && (
                                     <span className={`ml-1 ${
                                       isOverdue ? 'text-red-600' : 'text-gray-600'

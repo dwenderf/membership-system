@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import PaymentMethodNotice from './PaymentMethodNotice'
-import PaymentConfirmationScreen from './PaymentConfirmationScreen'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
@@ -595,11 +596,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">{isExtension ? 'Extends from:' : 'Valid from:'}:</span>
-              <span className="text-gray-900">{startDate.toLocaleDateString()}</span>
+              <span className="text-gray-900">{formatDate(startDate)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Valid until:</span>
-              <span className="text-gray-900">{endDate.toLocaleDateString()}</span>
+              <span className="text-gray-900">{formatDate(endDate)}</span>
             </div>
             {savings > 0 && membership.allow_monthly && (
               <div className="flex justify-between text-green-600">

@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatDate } from '@/lib/date-utils'
+
 
 interface Game {
   id: string
@@ -125,17 +127,12 @@ export default function WeeklyActivityGrid({ games, registration, onWeekClick }:
   const getTooltip = (week: WeekData) => {
     const startDate = new Date(week.weekStart)
     const endDate = new Date(week.weekEnd)
-    
-    const formatDate = (date: Date) => date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    })
 
     if (week.games.length === 0) {
       return `Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): No games`
     }
 
-    const gamesList = week.games.map(game => 
+    const gamesList = week.games.map(game =>
       `${game.game_description} (${game.selected_count || 0} selected)`
     ).join(', ')
 

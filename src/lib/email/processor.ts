@@ -15,7 +15,7 @@
 import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
-import { toNYDateString } from '@/lib/date-utils'
+import { formatDate, formatTime, toNYDateString } from '@/lib/date-utils'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -496,20 +496,10 @@ export class EmailProcessor {
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
       
       // Format date and time in Eastern Time (the timezone for NYCGHA events)
-      const formattedDate = gameDate.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        timeZone: 'America/New_York'
-      })
+      const formattedDate = formatDate(gameDate)
       
       // For time, we want to show what time it actually is in New York, regardless of how it was stored
-      const formattedTime = gameDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        timeZone: 'America/New_York'
-      })
+      const formattedTime = formatTime(gameDate)
       
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({

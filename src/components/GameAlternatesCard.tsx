@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatDate, formatTime } from '@/lib/date-utils'
+
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import { useToast } from '@/contexts/ToastContext'
 
@@ -180,15 +182,7 @@ export default function GameAlternatesCard({
   const formatGameDateTime = (dateStr: string | null) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric'
-    }) + ' at ' + date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
+    return formatDate(date) + ' at ' + formatTime(date)
   }
 
   return (

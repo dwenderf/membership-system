@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import { formatDate, formatTime } from '@/lib/date-utils'
 
 interface XeroConnection {
   tenant_id: string
@@ -173,7 +174,7 @@ export default function XeroIntegrationPage() {
                       </span>
                     </p>
                     <p className="text-sm text-gray-600">
-                      Expires: {new Date(connection.expires_at).toLocaleDateString()}
+                      Expires: {formatDate(new Date(connection.expires_at))}
                     </p>
                   </div>
                   <button
@@ -267,7 +268,7 @@ export default function XeroIntegrationPage() {
                       {op.status}
                     </span>
                     <span className="text-gray-500">
-                      {new Date(op.created_at).toLocaleTimeString()}
+                      {formatTime(new Date(op.created_at))}
                     </span>
                   </div>
                 ))}

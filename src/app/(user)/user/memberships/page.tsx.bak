@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate } from '@/lib/date-utils'
 import PurchaseHistory from '@/components/PurchaseHistory'
 import Link from 'next/link'
 import { consolidateUserMemberships } from '@/lib/membership-status'
@@ -64,7 +63,7 @@ export default async function UserMembershipsPage() {
                           <span className="text-gray-500">Valid Until:</span>
                           <span className="inline-flex items-center gap-2">
                             <span className="text-gray-900">
-                              {formatDate(validUntil)}
+                              {validUntil.toLocaleDateString()}
                             </span>
                             {isExpiringSoon && (
                               <span>⚠️ Expires Soon</span>

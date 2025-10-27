@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDate, formatTime } from '@/lib/date-utils'
+
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
 interface UserMembership {
@@ -71,7 +73,7 @@ export default function PurchaseHistory({ userMemberships }: PurchaseHistoryProp
                             {userMembership.membership?.name}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Purchased: {purchaseDate.toLocaleDateString()} at {purchaseDate.toLocaleTimeString()}
+                            Purchased: {formatDate(purchaseDate)} at {formatTime(purchaseDate)}
                           </p>
                         </div>
                         <div className="ml-3 flex-shrink-0">
@@ -103,13 +105,13 @@ export default function PurchaseHistory({ userMemberships }: PurchaseHistoryProp
                       <div>
                         <span className="text-gray-500">Valid From:</span>
                         <span className="ml-1 text-gray-900">
-                          {new Date(userMembership.valid_from).toLocaleDateString()}
+                          {formatDate(new Date(userMembership.valid_from))}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Valid Until:</span>
                         <span className="ml-1 text-gray-900">
-                          {new Date(userMembership.valid_until).toLocaleDateString()}
+                          {formatDate(new Date(userMembership.valid_until))}
                         </span>
                       </div>
                     </div>

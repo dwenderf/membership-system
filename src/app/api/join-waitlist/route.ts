@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { formatDate } from '@/lib/date-utils'
+
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
@@ -219,9 +221,9 @@ export async function POST(request: NextRequest) {
 
       // Send waitlist notification email
       try {
-        const season = registration.seasons
+        const season = registration.seasons as any  // Supabase types this as array but it's a single object
         const seasonName = season
-          ? `${season.name} (${new Date(season.start_date).toLocaleDateString()} - ${new Date(season.end_date).toLocaleDateString()})`
+          ? `${season.name} (${formatDate(new Date(season.start_date))} - ${formatDate(new Date(season.end_date))})`
           : 'Unknown Season'
 
         await emailService.sendWaitlistAddedNotification({

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { formatDate } from '@/lib/date-utils'
 
 interface User {
   id: string
@@ -245,8 +246,8 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.created_at 
-                        ? new Date(user.created_at).toLocaleDateString()
+                      {user.created_at
+                        ? formatDate(new Date(user.created_at))
                         : 'Unknown'
                       }
                     </td>

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import CategoryFilter from './CategoryFilter'
+import { formatDate } from '@/lib/date-utils'
 
 interface PageProps {
   searchParams: Promise<{ category?: string }>
@@ -171,13 +172,13 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
                               {code.valid_from && (
                                 <>
                                   <span className="mx-2">•</span>
-                                  <span>Valid from: {new Date(code.valid_from).toLocaleDateString()}</span>
+                                  <span>Valid from: {formatDate(new Date(code.valid_from))}</span>
                                 </>
                               )}
                               {code.valid_until && (
                                 <>
                                   <span className="mx-2">•</span>
-                                  <span>Until: {new Date(code.valid_until).toLocaleDateString()}</span>
+                                  <span>Until: {formatDate(new Date(code.valid_until))}</span>
                                 </>
                               )}
                             </div>

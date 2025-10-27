@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
+import { formatDateTime } from '@/lib/date-utils'
 
 interface ReportData {
   dateRange: {
@@ -163,13 +164,7 @@ export default function ReportsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return formatDateTime(new Date(dateString))
   }
 
   const toggleRegistrationExpansion = (registrationId: string) => {

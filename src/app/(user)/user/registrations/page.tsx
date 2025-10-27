@@ -5,16 +5,17 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
+import { formatDate } from '@/lib/date-utils'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
   if (!dateString) return 'N/A'
-  
+
   // Parse the date components manually to avoid timezone issues
   const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day) // month is 0-indexed
-  
-  return date.toLocaleDateString()
+  const date = new Date(year, month -1, day) // month is 0-indexed
+
+  return formatDate(date)
 }
 
 export default async function UserRegistrationsPage() {
@@ -226,7 +227,7 @@ export default async function UserRegistrationsPage() {
                           ${(userRegistration.amount_paid / 100).toFixed(2)}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Registered: {new Date(userRegistration.registered_at).toLocaleDateString()}
+                          Registered: {formatDate(new Date(userRegistration.registered_at))}
                         </p>
                       </div>
                     </div>
@@ -306,7 +307,7 @@ export default async function UserRegistrationsPage() {
                             {formatAmount(alternateReg.registration?.alternate_price || 0)} per game
                           </p>
                           <p className="text-sm text-gray-500">
-                            Registered: {new Date(alternateReg.created_at).toLocaleDateString()}
+                            Registered: {formatDate(new Date(alternateReg.created_at))}
                           </p>
                           {alternateReg.discount_code && (
                             <p className="text-xs text-green-600">
@@ -338,11 +339,11 @@ export default async function UserRegistrationsPage() {
                                     </p>
                                     {selection.alternate_registration?.game_date && (
                                       <p className="text-sm text-blue-700 mt-1">
-                                        Game Date: {new Date(selection.alternate_registration.game_date).toLocaleDateString()}
+                                        Game Date: {formatDate(new Date(selection.alternate_registration.game_date))}
                                       </p>
                                     )}
                                     <p className="text-xs text-blue-600 mt-1">
-                                      Selected: {new Date(selection.selected_at).toLocaleDateString()}
+                                      Selected: {formatDate(new Date(selection.selected_at))}
                                     </p>
                                   </div>
                                   <div className="text-right ml-4">
@@ -351,7 +352,7 @@ export default async function UserRegistrationsPage() {
                                     </p>
                                     {selection.payment && (
                                       <p className="text-xs text-blue-700">
-                                        Paid: {new Date(selection.payment.created_at).toLocaleDateString()}
+                                        Paid: {formatDate(new Date(selection.payment.created_at))}
                                       </p>
                                     )}
                                   </div>
@@ -421,7 +422,7 @@ export default async function UserRegistrationsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">
-                          Joined: {new Date(waitlistEntry.joined_at).toLocaleDateString()}
+                          Joined: {formatDate(new Date(waitlistEntry.joined_at))}
                         </p>
                       </div>
                     </div>
@@ -470,7 +471,7 @@ export default async function UserRegistrationsPage() {
                           ${(userRegistration.amount_paid / 100).toFixed(2)}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Registered: {new Date(userRegistration.registered_at).toLocaleDateString()}
+                          Registered: {formatDate(new Date(userRegistration.registered_at))}
                         </p>
                       </div>
                     </div>
@@ -505,7 +506,7 @@ export default async function UserRegistrationsPage() {
                           On Waitlist
                         </p>
                         <p className="text-sm text-gray-500">
-                          Joined: {new Date(waitlistEntry.joined_at).toLocaleDateString()}
+                          Joined: {formatDate(new Date(waitlistEntry.joined_at))}
                         </p>
                       </div>
                     </div>

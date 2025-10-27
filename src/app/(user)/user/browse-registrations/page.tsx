@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
-import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
+import { getRegistrationStatus } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import Link from 'next/link'
 

@@ -203,3 +203,93 @@ export async function getRegistrationAccountingCodes(
 export function withFallback(accountingCode: string | null, fallback: string): string {
   return accountingCode || fallback
 }
+
+/**
+ * Get frequently used accounting codes across the system
+ * Returns codes with their usage count, grouped by account type
+ * Returns top 3 most used codes per type for context-aware suggestions
+ * Used for intelligent autocomplete sorting
+ */
+export async function getFrequentlyUsedAccountingCodes(): Promise<Array<{
+  code: string
+  count: number
+  type: string
+}>> {
+  try {
+    // Fetch all accounting codes from different tables
+    const [
+      { data: memberships },
+      { data: regCategories },
+      { data: discountCategories },
+      { data: systemCodes }
+    ] = await Promise.all([
+      supabase.from('memberships').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('registration_categories').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('discount_categories').select('accounting_code').not('accounting_code', 'is', null),
+      supabase.from('system_accounting_codes').select('accounting_code').not('accounting_code', 'is', null)
+    ])
+
+    // Combine all codes
+    const allCodes: string[] = [
+      ...(memberships || []).map(m => m.accounting_code),
+      ...(regCategories || []).map(r => r.accounting_code),
+      ...(discountCategories || []).map(d => d.accounting_code),
+      ...(systemCodes || []).map(s => s.accounting_code)
+    ]
+
+    // Count occurrences
+    const codeCountMap = new Map<string, number>()
+    allCodes.forEach(code => {
+      codeCountMap.set(code, (codeCountMap.get(code) || 0) + 1)
+    })
+
+    // Fetch account types from xero_accounts
+    const { data: xeroAccounts } = await supabase
+      .from('xero_accounts')
+      .select('code, type')
+      .in('code', Array.from(codeCountMap.keys()))
+
+    // Map codes to their types
+    // Note: This assumes single-tenant usage. In a multi-tenant scenario where the same
+    // accounting code exists across different tenants, this Map would only store the last
+    // type encountered. For multi-tenant support, tenant filtering would be required.
+    const codeTypeMap = new Map<string, string>()
+    xeroAccounts?.forEach(account => {
+      codeTypeMap.set(account.code, account.type)
+    })
+
+    // Group by type and get counts
+    const typeGroups = new Map<string, Array<{ code: string; count: number }>>()
+
+    codeCountMap.forEach((count, code) => {
+      const type = codeTypeMap.get(code)
+      if (type) {
+        if (!typeGroups.has(type)) {
+          typeGroups.set(type, [])
+        }
+        typeGroups.get(type)!.push({ code, count })
+      }
+    })
+
+    // Get top 3 from each type
+    const result: Array<{ code: string; count: number; type: string }> = []
+    typeGroups.forEach((codes, type) => {
+      const topCodes = codes
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3) // Top 3 per type
+        .map(item => ({ ...item, type }))
+      result.push(...topCodes)
+    })
+
+    return result
+
+  } catch (error) {
+    logger.logPaymentProcessing(
+      'frequently-used-codes-error',
+      'Error fetching frequently used accounting codes',
+      { error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
+    return []
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
-import { formatTime } from '@/lib/date-utils'
+import { formatTime, formatDateTime } from '@/lib/date-utils'
 
 interface SyncCounts {
   pendingEmails: number
@@ -20,11 +20,12 @@ export default function SyncButtons() {
     pendingCreditNotes: 0,
     pendingPayments: 0
   })
-  const [loading, setLoading] = useState({ emails: false, accounting: false })
+  const [loading, setLoading] = useState({ emails: false, accounting: false, accountingCodes: false })
   const [loadingCounts, setLoadingCounts] = useState(true)
-  const [lastSync, setLastSync] = useState<{ 
-    emails?: { time: string; processed: number; failed: number }; 
-    accounting?: { time: string; processed: number; failed: number } 
+  const [lastSync, setLastSync] = useState<{
+    emails?: { time: string; processed: number; failed: number };
+    accounting?: { time: string; processed: number; failed: number };
+    accountingCodes?: { time: string; totalAccounts: number }
   }>({})
   
   const { showError, showSuccess } = useToast()
@@ -37,11 +38,12 @@ export default function SyncButtons() {
   const fetchCounts = async () => {
     setLoadingCounts(true)
     try {
-      const [emailResponse, accountingResponse, emailSyncResponse, xeroSyncResponse] = await Promise.all([
+      const [emailResponse, accountingResponse, emailSyncResponse, xeroSyncResponse, accountsResponse] = await Promise.all([
         fetch('/api/admin/sync-emails'),
         fetch('/api/xero/status?timeWindow=24h'),
         fetch('/api/admin/system-events?type=email_sync&limit=1'),
-        fetch('/api/admin/system-events?type=xero_sync&limit=1')
+        fetch('/api/admin/system-events?type=xero_sync&limit=1'),
+        fetch('/api/xero/accounts')
       ])
 
       if (emailResponse.ok) {
@@ -68,10 +70,10 @@ export default function SyncButtons() {
         const emailSyncData = await emailSyncResponse.json()
         if (emailSyncData.events && emailSyncData.events.length > 0) {
           const lastEvent = emailSyncData.events[0]
-          setLastSync(prev => ({ 
-            ...prev, 
+          setLastSync(prev => ({
+            ...prev,
             emails: {
-              time: new Date(lastEvent.completed_at).toLocaleString(),
+              time: formatDateTime(lastEvent.completed_at),
               processed: lastEvent.records_processed || 0,
               failed: lastEvent.records_failed || 0
             }
@@ -83,12 +85,25 @@ export default function SyncButtons() {
         const xeroSyncData = await xeroSyncResponse.json()
         if (xeroSyncData.events && xeroSyncData.events.length > 0) {
           const lastEvent = xeroSyncData.events[0]
-          setLastSync(prev => ({ 
-            ...prev, 
+          setLastSync(prev => ({
+            ...prev,
             accounting: {
-              time: new Date(lastEvent.completed_at).toLocaleString(),
+              time: formatDateTime(lastEvent.completed_at),
               processed: lastEvent.records_processed || 0,
               failed: lastEvent.records_failed || 0
+            }
+          }))
+        }
+      }
+
+      if (accountsResponse.ok) {
+        const accountsData = await accountsResponse.json()
+        if (accountsData.lastSyncedAt) {
+          setLastSync(prev => ({
+            ...prev,
+            accountingCodes: {
+              time: formatDateTime(accountsData.lastSyncedAt),
+              totalAccounts: accountsData.totalCount || 0
             }
           }))
         }
@@ -131,7 +146,7 @@ export default function SyncButtons() {
       if (response.ok) {
         const data = await response.json()
         const { total_synced, total_failed } = data.results
-        
+
         setLastSync(prev => ({
           ...prev,
           accounting: {
@@ -140,7 +155,7 @@ export default function SyncButtons() {
             failed: total_failed
           }
         }))
-        
+
         if (total_failed === 0) {
           showSuccess(`Manual sync completed successfully: ${total_synced} items synced`)
         } else if (total_synced === 0) {
@@ -148,7 +163,7 @@ export default function SyncButtons() {
         } else {
           showError(`Manual sync partially completed: ${total_synced} synced, ${total_failed} failed`)
         }
-        
+
         await fetchCounts() // Refresh counts
       } else {
         const errorData = await response.json()
@@ -161,11 +176,40 @@ export default function SyncButtons() {
     }
   }
 
+  const handleAccountingCodesSync = async () => {
+    setLoading(prev => ({ ...prev, accountingCodes: true }))
+    try {
+      const response = await fetch('/api/admin/sync-xero-accounts', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json()
+
+        setLastSync(prev => ({
+          ...prev,
+          accountingCodes: {
+            time: formatTime(new Date()),
+            totalAccounts: data.totalAccounts || 0
+          }
+        }))
+
+        showSuccess(`Accounting codes synced successfully: ${data.totalAccounts} accounts`)
+
+        await fetchCounts() // Refresh counts
+      } else {
+        const errorData = await response.json()
+        showError(errorData.error || 'Failed to sync accounting codes')
+      }
+    } catch (error) {
+      showError('Failed to sync accounting codes')
+    } finally {
+      setLoading(prev => ({ ...prev, accountingCodes: false }))
+    }
+  }
+
   const totalPendingEmails = counts.pendingEmails
   const totalPendingAccounting = counts.pendingInvoices + counts.pendingCreditNotes + counts.pendingPayments
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {/* Email Sync Button */}
       <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
         <button
@@ -222,7 +266,7 @@ export default function SyncButtons() {
           className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="text-gray-900 font-medium flex items-center justify-between">
-            <span>📊 Sync Accounting</span>
+            <span>📊 Sync Invoices and Payments</span>
             {loading.accounting && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
             )}
@@ -257,6 +301,43 @@ export default function SyncButtons() {
               {lastSync.accounting.failed > 0 && (
                 <span className="text-red-600"> • {lastSync.accounting.failed} failed</span>
               )}
+            </div>
+          )}
+        </button>
+      </div>
+
+      {/* Accounting Codes Sync Button */}
+      <div className="relative block w-full border-2 border-gray-300 border-dashed rounded-lg p-6 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <button
+          onClick={handleAccountingCodesSync}
+          disabled={loading.accountingCodes || loadingCounts}
+          className="w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div className="text-gray-900 font-medium flex items-center justify-between">
+            <span>📊 Sync Accounting Codes</span>
+            {loading.accountingCodes && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            )}
+          </div>
+          <div className="mt-1 text-sm text-gray-500">
+            {loadingCounts ? (
+              <span className="text-blue-600 font-medium flex items-center">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                Checking status...
+              </span>
+            ) : lastSync.accountingCodes ? (
+              <span className="text-green-600 font-medium">
+                ✅ {lastSync.accountingCodes.totalAccounts} accounts synced
+              </span>
+            ) : (
+              <span className="text-gray-400 font-medium">
+                Never synced
+              </span>
+            )}
+          </div>
+          {lastSync.accountingCodes && (
+            <div className="mt-1 text-xs text-blue-600">
+              Last synced: {lastSync.accountingCodes.time}
             </div>
           )}
         </button>

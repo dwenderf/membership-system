@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import SyncStatus from './SyncStatus'
 
@@ -32,7 +32,6 @@ interface XeroAccountsData {
 export default function XeroAccountsSection() {
   const [isOpen, setIsOpen] = useState(false)
   const [accounts, setAccounts] = useState<XeroAccount[]>([])
-  const [filteredAccounts, setFilteredAccounts] = useState<XeroAccount[]>([])
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -52,12 +51,39 @@ export default function XeroAccountsSection() {
     if (isOpen && accounts.length === 0) {
       fetchAccounts()
     }
-  }, [isOpen])
+  }, [isOpen, accounts.length])
 
-  // Apply filters whenever search, type, or inUse filter changes
+  // Memoized filtered accounts - only recalculate when dependencies change
+  const filteredAccounts = useMemo(() => {
+    let filtered = accounts
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        account =>
+          account.code.toLowerCase().includes(lowerSearch) ||
+          account.name.toLowerCase().includes(lowerSearch)
+      )
+    }
+
+    // Type filter
+    if (typeFilter) {
+      filtered = filtered.filter(account => account.type === typeFilter)
+    }
+
+    // In Use filter
+    if (inUseFilter) {
+      filtered = filtered.filter(account => account.inUse)
+    }
+
+    return filtered
+  }, [accounts, searchTerm, typeFilter, inUseFilter])
+
+  // Reset to first page when filters change
   useEffect(() => {
-    applyFilters()
-  }, [searchTerm, typeFilter, inUseFilter, accounts])
+    setCurrentPage(1)
+  }, [searchTerm, typeFilter, inUseFilter])
 
   const fetchAccounts = async () => {
     setLoading(true)
@@ -67,7 +93,6 @@ export default function XeroAccountsSection() {
       if (response.ok) {
         const data: XeroAccountsData = await response.json()
         setAccounts(data.accounts)
-        setFilteredAccounts(data.accounts)
         setLastSyncedAt(data.lastSyncedAt)
         setTotalCount(data.totalCount)
       } else {
@@ -101,33 +126,6 @@ export default function XeroAccountsSection() {
     } finally {
       setSyncing(false)
     }
-  }
-
-  const applyFilters = () => {
-    let filtered = accounts
-
-    // Search filter
-    if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.toLowerCase()
-      filtered = filtered.filter(
-        account =>
-          account.code.toLowerCase().includes(lowerSearch) ||
-          account.name.toLowerCase().includes(lowerSearch)
-      )
-    }
-
-    // Type filter
-    if (typeFilter) {
-      filtered = filtered.filter(account => account.type === typeFilter)
-    }
-
-    // In Use filter
-    if (inUseFilter) {
-      filtered = filtered.filter(account => account.inUse)
-    }
-
-    setFilteredAccounts(filtered)
-    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Get unique account types for filter dropdown

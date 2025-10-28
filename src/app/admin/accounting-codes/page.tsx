@@ -469,7 +469,7 @@ export default function AccountingCodesPage() {
               label="Donation Received Default"
               required
               placeholder="Search for accounting code..."
-              accountType="REVENUE"
+              suggestedAccountType="REVENUE"
             />
             <AccountingCodeInput
               value={codes.donation_given_default}
@@ -477,7 +477,7 @@ export default function AccountingCodesPage() {
               label="Donation Given Default (Financial Assistance)"
               required
               placeholder="Search for accounting code..."
-              accountType="EXPENSE"
+              suggestedAccountType="EXPENSE"
             />
             <AccountingCodeInput
               value={codes.stripe_bank_account}
@@ -485,7 +485,7 @@ export default function AccountingCodesPage() {
               label="Stripe Bank Account"
               required
               placeholder="Search for accounting code..."
-              accountType="BANK"
+              suggestedAccountType="BANK"
             />
           </div>
           
@@ -526,7 +526,7 @@ export default function AccountingCodesPage() {
                   label={`${category.name}${category.description ? ` - ${category.description}` : ''}`}
                   required
                   placeholder="Search for accounting code..."
-                  accountType="EXPENSE"
+                  suggestedAccountType="EXPENSE"
                 />
               ))}
             </div>
@@ -571,7 +571,7 @@ export default function AccountingCodesPage() {
                   label={`${membership.name}${membership.description ? ` - ${membership.description}` : ''}`}
                   required
                   placeholder="Search for accounting code..."
-                  accountType="REVENUE"
+                  suggestedAccountType="REVENUE"
                 />
               ))}
             </div>

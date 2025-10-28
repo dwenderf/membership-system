@@ -18,7 +18,7 @@ interface AccountingCodeInputProps {
   error?: string
   placeholder?: string
   className?: string
-  accountType?: string // Optional filter by account type
+  suggestedAccountType?: string // Suggested account type (shows warning if different, but allows all types)
 }
 
 /**
@@ -28,9 +28,10 @@ interface AccountingCodeInputProps {
  * - Real-time validation against Xero chart of accounts
  * - Autocomplete dropdown with intelligent sorting (frequently used first)
  * - Keyboard navigation support
- * - Type filtering (optional)
+ * - Suggested type filtering (shows suggested type first, all others when searching)
  * - Search by code or name
  * - Visual indicators for codes already in use
+ * - Warning for mismatched account types (but still allows selection)
  * - ARIA accessibility
  */
 export default function AccountingCodeInput({
@@ -41,15 +42,17 @@ export default function AccountingCodeInput({
   error,
   placeholder = 'Search by code or name...',
   className = '',
-  accountType
+  suggestedAccountType
 }: AccountingCodeInputProps) {
   const [accounts, setAccounts] = useState<XeroAccount[]>([])
   const [filteredAccounts, setFilteredAccounts] = useState<XeroAccount[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [typeWarning, setTypeWarning] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [frequentlyUsed, setFrequentlyUsed] = useState<string[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
 
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -58,7 +61,7 @@ export default function AccountingCodeInput({
   // Fetch accounts on mount
   useEffect(() => {
     fetchAccounts()
-  }, [accountType])
+  }, [])
 
   // Validate on value change
   useEffect(() => {
@@ -98,15 +101,20 @@ export default function AccountingCodeInput({
   const fetchAccounts = async () => {
     setIsLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (accountType) params.append('type', accountType)
-
-      const response = await fetch(`/api/xero/accounts?${params.toString()}`)
+      // Fetch ALL accounts (no type filtering)
+      const response = await fetch('/api/xero/accounts')
       if (response.ok) {
         const data = await response.json()
         setAccounts(data.accounts || [])
         setFrequentlyUsed(data.frequentlyUsed || [])
-        setFilteredAccounts(data.accounts || [])
+        // Initial display shows suggested type first if specified
+        if (suggestedAccountType) {
+          const suggested = (data.accounts || []).filter((a: XeroAccount) => a.type === suggestedAccountType)
+          const others = (data.accounts || []).filter((a: XeroAccount) => a.type !== suggestedAccountType)
+          setFilteredAccounts([...suggested, ...others])
+        } else {
+          setFilteredAccounts(data.accounts || [])
+        }
       }
     } catch (error) {
       console.error('Failed to fetch accounts:', error)
@@ -118,6 +126,7 @@ export default function AccountingCodeInput({
   const validateAccountCode = async (code: string) => {
     if (!code) {
       setValidationError(null)
+      setTypeWarning(null)
       return
     }
 
@@ -127,8 +136,19 @@ export default function AccountingCodeInput({
         const data = await response.json()
         if (!data.valid) {
           setValidationError(data.error || 'Invalid accounting code')
+          setTypeWarning(null)
         } else {
           setValidationError(null)
+
+          // Check if account type matches suggested type
+          if (suggestedAccountType && data.account && data.account.type !== suggestedAccountType) {
+            const typeLabel = suggestedAccountType === 'REVENUE' ? 'revenue' :
+                             suggestedAccountType === 'EXPENSE' ? 'expense' :
+                             suggestedAccountType === 'BANK' ? 'bank' : suggestedAccountType.toLowerCase()
+            setTypeWarning(`This is a ${data.account.type} account. ${typeLabel.toUpperCase()} is typically used for this field.`)
+          } else {
+            setTypeWarning(null)
+          }
         }
       }
     } catch (error) {
@@ -144,10 +164,18 @@ export default function AccountingCodeInput({
         clearTimeout(timeoutId)
         timeoutId = setTimeout(() => {
           if (!searchTerm.trim()) {
-            setFilteredAccounts(accounts)
+            // When empty, show suggested type first if specified
+            if (suggestedAccountType) {
+              const suggested = accounts.filter(a => a.type === suggestedAccountType)
+              const others = accounts.filter(a => a.type !== suggestedAccountType)
+              setFilteredAccounts([...suggested, ...others])
+            } else {
+              setFilteredAccounts(accounts)
+            }
             return
           }
 
+          // When searching, search ALL accounts regardless of type
           const lowerSearch = searchTerm.toLowerCase()
           const filtered = accounts.filter(
             account =>
@@ -159,11 +187,12 @@ export default function AccountingCodeInput({
         }, 150)
       }
     })(),
-    [accounts]
+    [accounts, suggestedAccountType]
   )
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
+    setSearchTerm(newValue)
     onChange(newValue)
     debouncedSearch(newValue)
     setIsOpen(true)
@@ -171,13 +200,32 @@ export default function AccountingCodeInput({
 
   const handleInputFocus = () => {
     setIsOpen(true)
-    setFilteredAccounts(accounts)
+    // Show suggested type first if specified
+    if (suggestedAccountType && !searchTerm.trim()) {
+      const suggested = accounts.filter(a => a.type === suggestedAccountType)
+      const others = accounts.filter(a => a.type !== suggestedAccountType)
+      setFilteredAccounts([...suggested, ...others])
+    } else {
+      setFilteredAccounts(accounts)
+    }
   }
 
   const handleSelectAccount = (account: XeroAccount) => {
     onChange(account.code)
     setIsOpen(false)
     setValidationError(null)
+    setSearchTerm('')
+
+    // Check for type mismatch warning
+    if (suggestedAccountType && account.type !== suggestedAccountType) {
+      const typeLabel = suggestedAccountType === 'REVENUE' ? 'revenue' :
+                       suggestedAccountType === 'EXPENSE' ? 'expense' :
+                       suggestedAccountType === 'BANK' ? 'bank' : suggestedAccountType.toLowerCase()
+      setTypeWarning(`This is a ${account.type} account. ${typeLabel.toUpperCase()} is typically used for this field.`)
+    } else {
+      setTypeWarning(null)
+    }
+
     inputRef.current?.blur()
   }
 
@@ -338,8 +386,18 @@ export default function AccountingCodeInput({
         </p>
       )}
 
+      {/* Type mismatch warning */}
+      {!displayError && typeWarning && (
+        <p className="mt-2 text-sm text-yellow-600 flex items-start">
+          <svg className="w-4 h-4 mr-1 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {typeWarning}
+        </p>
+      )}
+
       {/* Help text */}
-      {!displayError && (
+      {!displayError && !typeWarning && (
         <p className="mt-1 text-xs text-gray-500">
           Start typing to search for an accounting code
         </p>

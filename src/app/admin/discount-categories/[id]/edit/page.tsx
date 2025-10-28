@@ -219,7 +219,7 @@ export default function EditDiscountCategoryPage() {
                 label="Accounting Code"
                 required
                 placeholder="Search for accounting code..."
-                accountType="EXPENSE"
+                suggestedAccountType="EXPENSE"
               />
 
               {/* Spending Limit */}

@@ -555,7 +555,7 @@ export default function NewRegistrationCategoryPage() {
                 label="Accounting Code"
                 required
                 placeholder="Search for accounting code..."
-                accountType="REVENUE"
+                suggestedAccountType="REVENUE"
               />
 
               {/* Sort Order */}

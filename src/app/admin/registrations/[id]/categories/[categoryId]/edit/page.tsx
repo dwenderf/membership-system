@@ -383,7 +383,7 @@ export default function EditRegistrationCategoryPage() {
                 label="Accounting Code"
                 required
                 placeholder="Search for accounting code..."
-                accountType="REVENUE"
+                suggestedAccountType="REVENUE"
               />
 
 

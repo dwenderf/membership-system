@@ -167,7 +167,7 @@ export default function NewDiscountCategoryPage() {
                 label="Accounting Code"
                 required
                 placeholder="Search for accounting code..."
-                accountType="EXPENSE"
+                suggestedAccountType="EXPENSE"
               />
 
               {/* Description */}

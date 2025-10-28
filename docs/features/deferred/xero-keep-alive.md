@@ -1,5 +1,13 @@
 # Xero Keep-Alive System
 
+**Status**: ⏸️ Deferred
+
+This feature was originally planned to prevent Xero OAuth tokens from expiring by making regular API calls to refresh the tokens automatically. After implementation and testing, it was determined that this approach is not needed as Xero tokens are automatically refreshed during normal system operation when needed.
+
+---
+
+## Original Proposal
+
 This system prevents Xero OAuth tokens from expiring by making regular API calls to refresh the tokens automatically.
 
 ## How it works

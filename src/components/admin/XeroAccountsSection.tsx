@@ -52,7 +52,7 @@ export default function XeroAccountsSection() {
     if (isOpen && accounts.length === 0) {
       fetchAccounts()
     }
-  }, [isOpen])
+  }, [isOpen, accounts.length])
 
   // Apply filters whenever search, type, or inUse filter changes
   useEffect(() => {

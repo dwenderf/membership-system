@@ -57,6 +57,7 @@ export default function AccountingCodeInput({
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch accounts on mount
   useEffect(() => {
@@ -158,35 +159,37 @@ export default function AccountingCodeInput({
 
   // Debounced search function
   const debouncedSearch = useCallback(
-    (() => {
-      let timeoutId: NodeJS.Timeout
-      return (searchTerm: string) => {
-        clearTimeout(timeoutId)
-        timeoutId = setTimeout(() => {
-          if (!searchTerm.trim()) {
-            // When empty, show suggested type first if specified
-            if (suggestedAccountType) {
-              const suggested = accounts.filter(a => a.type === suggestedAccountType)
-              const others = accounts.filter(a => a.type !== suggestedAccountType)
-              setFilteredAccounts([...suggested, ...others])
-            } else {
-              setFilteredAccounts(accounts)
-            }
-            return
-          }
-
-          // When searching, search ALL accounts regardless of type
-          const lowerSearch = searchTerm.toLowerCase()
-          const filtered = accounts.filter(
-            account =>
-              account.code.toLowerCase().includes(lowerSearch) ||
-              account.name.toLowerCase().includes(lowerSearch)
-          )
-          setFilteredAccounts(filtered)
-          setHighlightedIndex(0)
-        }, 150)
+    (searchTerm: string) => {
+      // Clear previous timeout
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
       }
-    })(),
+
+      // Set new timeout
+      debounceTimeoutRef.current = setTimeout(() => {
+        if (!searchTerm.trim()) {
+          // When empty, show suggested type first if specified
+          if (suggestedAccountType) {
+            const suggested = accounts.filter(a => a.type === suggestedAccountType)
+            const others = accounts.filter(a => a.type !== suggestedAccountType)
+            setFilteredAccounts([...suggested, ...others])
+          } else {
+            setFilteredAccounts(accounts)
+          }
+          return
+        }
+
+        // When searching, search ALL accounts regardless of type
+        const lowerSearch = searchTerm.toLowerCase()
+        const filtered = accounts.filter(
+          account =>
+            account.code.toLowerCase().includes(lowerSearch) ||
+            account.name.toLowerCase().includes(lowerSearch)
+        )
+        setFilteredAccounts(filtered)
+        setHighlightedIndex(0)
+      }, 150)
+    },
     [accounts, suggestedAccountType]
   )
 

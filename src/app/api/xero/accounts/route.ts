@@ -65,25 +65,29 @@ export async function GET(request: NextRequest) {
     // Get codes currently in use in the system
     let inUseCodesSet = new Set<string>()
     if (inUse || !search) { // Always calculate for marking in dropdown
-      const { data: memberships } = await supabase
-        .from('memberships')
-        .select('accounting_code')
-        .not('accounting_code', 'is', null)
-
-      const { data: regCategories } = await supabase
-        .from('registration_categories')
-        .select('accounting_code')
-        .not('accounting_code', 'is', null)
-
-      const { data: discountCategories } = await supabase
-        .from('discount_categories')
-        .select('accounting_code')
-        .not('accounting_code', 'is', null)
-
-      const { data: systemCodes } = await supabase
-        .from('system_accounting_codes')
-        .select('accounting_code')
-        .not('accounting_code', 'is', null)
+      const [
+        { data: memberships },
+        { data: regCategories },
+        { data: discountCategories },
+        { data: systemCodes }
+      ] = await Promise.all([
+        supabase
+          .from('memberships')
+          .select('accounting_code')
+          .not('accounting_code', 'is', null),
+        supabase
+          .from('registration_categories')
+          .select('accounting_code')
+          .not('accounting_code', 'is', null),
+        supabase
+          .from('discount_categories')
+          .select('accounting_code')
+          .not('accounting_code', 'is', null),
+        supabase
+          .from('system_accounting_codes')
+          .select('accounting_code')
+          .not('accounting_code', 'is', null)
+      ])
 
       inUseCodesSet = new Set([
         ...(memberships || []).map(m => m.accounting_code),

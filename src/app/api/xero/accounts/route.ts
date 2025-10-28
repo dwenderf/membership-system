@@ -30,9 +30,10 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Get frequently used codes
+    // Get frequently used codes (top 3 per type)
     const frequentlyUsed = await getFrequentlyUsedAccountingCodes()
-    const frequentCodes = new Set(frequentlyUsed.map(item => item.code))
+    // Create a map of code -> type for frequently used codes
+    const frequentCodesMap = new Map(frequentlyUsed.map(item => [item.code, item.type]))
 
     // Build query
     let query = supabase
@@ -105,8 +106,8 @@ export async function GET(request: NextRequest) {
 
     // Sort: frequently used first (by usage count), then by code
     const sortedAccounts = filteredAccounts.sort((a, b) => {
-      const aFrequent = frequentCodes.has(a.code)
-      const bFrequent = frequentCodes.has(b.code)
+      const aFrequent = frequentCodesMap.has(a.code)
+      const bFrequent = frequentCodesMap.has(b.code)
 
       if (aFrequent && !bFrequent) return -1
       if (!aFrequent && bFrequent) return 1
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       accounts: sortedAccounts,
-      frequentlyUsed: Array.from(frequentCodes),
+      frequentlyUsedByType: Object.fromEntries(frequentCodesMap), // Map of code -> type
       lastSyncedAt: syncInfo?.lastSyncedAt || null,
       totalCount: sortedAccounts.length
     })

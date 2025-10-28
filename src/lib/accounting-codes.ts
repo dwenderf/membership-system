@@ -206,12 +206,14 @@ export function withFallback(accountingCode: string | null, fallback: string): s
 
 /**
  * Get frequently used accounting codes across the system
- * Returns codes with their usage count, sorted by frequency (most used first)
+ * Returns codes with their usage count, grouped by account type
+ * Returns top 3 most used codes per type for context-aware suggestions
  * Used for intelligent autocomplete sorting
  */
 export async function getFrequentlyUsedAccountingCodes(): Promise<Array<{
   code: string
   count: number
+  type: string
 }>> {
   try {
     // Fetch all accounting codes from different tables
@@ -241,11 +243,40 @@ export async function getFrequentlyUsedAccountingCodes(): Promise<Array<{
       codeCountMap.set(code, (codeCountMap.get(code) || 0) + 1)
     })
 
-    // Convert to array and sort by count
-    const result = Array.from(codeCountMap.entries())
-      .map(([code, count]) => ({ code, count }))
-      .sort((a, b) => b.count - a.count) // Sort descending by count
-      .slice(0, 10) // Return top 10 most used
+    // Fetch account types from xero_accounts
+    const { data: xeroAccounts } = await supabase
+      .from('xero_accounts')
+      .select('code, type')
+      .in('code', Array.from(codeCountMap.keys()))
+
+    // Map codes to their types
+    const codeTypeMap = new Map<string, string>()
+    xeroAccounts?.forEach(account => {
+      codeTypeMap.set(account.code, account.type)
+    })
+
+    // Group by type and get counts
+    const typeGroups = new Map<string, Array<{ code: string; count: number }>>()
+
+    codeCountMap.forEach((count, code) => {
+      const type = codeTypeMap.get(code)
+      if (type) {
+        if (!typeGroups.has(type)) {
+          typeGroups.set(type, [])
+        }
+        typeGroups.get(type)!.push({ code, count })
+      }
+    })
+
+    // Get top 3 from each type
+    const result: Array<{ code: string; count: number; type: string }> = []
+    typeGroups.forEach((codes, type) => {
+      const topCodes = codes
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3) // Top 3 per type
+        .map(item => ({ ...item, type }))
+      result.push(...topCodes)
+    })
 
     return result
 

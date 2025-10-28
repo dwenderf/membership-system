@@ -51,7 +51,7 @@ export default function AccountingCodeInput({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [typeWarning, setTypeWarning] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const [frequentlyUsed, setFrequentlyUsed] = useState<string[]>([])
+  const [frequentlyUsedByType, setFrequentlyUsedByType] = useState<Record<string, string>>({}) // Map of code -> type
   const [searchTerm, setSearchTerm] = useState('')
 
   const inputRef = useRef<HTMLInputElement>(null)
@@ -106,7 +106,7 @@ export default function AccountingCodeInput({
       if (response.ok) {
         const data = await response.json()
         setAccounts(data.accounts || [])
-        setFrequentlyUsed(data.frequentlyUsed || [])
+        setFrequentlyUsedByType(data.frequentlyUsedByType || {})
         // Initial display shows suggested type first if specified
         if (suggestedAccountType) {
           const suggested = (data.accounts || []).filter((a: XeroAccount) => a.type === suggestedAccountType)
@@ -317,7 +317,8 @@ export default function AccountingCodeInput({
           >
             <ul ref={listRef}>
               {filteredAccounts.map((account, index) => {
-                const isFrequent = frequentlyUsed.includes(account.code)
+                // Show "Frequently Used" badge only if this code is in top 3 for its type
+                const isFrequentForType = frequentlyUsedByType[account.code] === account.type
                 const isHighlighted = index === highlightedIndex
 
                 return (
@@ -338,12 +339,12 @@ export default function AccountingCodeInput({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{account.code}</span>
-                          {isFrequent && (
+                          {isFrequentForType && (
                             <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
                               Frequently Used
                             </span>
                           )}
-                          {account.inUse && (
+                          {!isFrequentForType && account.inUse && (
                             <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
                               In Use
                             </span>

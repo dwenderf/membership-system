@@ -250,6 +250,9 @@ export async function getFrequentlyUsedAccountingCodes(): Promise<Array<{
       .in('code', Array.from(codeCountMap.keys()))
 
     // Map codes to their types
+    // Note: This assumes single-tenant usage. In a multi-tenant scenario where the same
+    // accounting code exists across different tenants, this Map would only store the last
+    // type encountered. For multi-tenant support, tenant filtering would be required.
     const codeTypeMap = new Map<string, string>()
     xeroAccounts?.forEach(account => {
       codeTypeMap.set(account.code, account.type)

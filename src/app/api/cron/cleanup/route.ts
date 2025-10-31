@@ -17,28 +17,70 @@ export async function GET(request: NextRequest) {
     const results = {
       stagingRecordsCleaned: 0,
       logEntriesCleaned: 0,
+      pendingAbandoned: 0,
+      invoicesAbandoned: 0,
+      paymentsAbandoned: 0,
       errors: [] as string[]
     }
 
-    // Clean up old staging records (older than 30 days)
+    // Mark old pending items as abandoned (older than 24 hours)
+    // These are likely abandoned carts or failed payment attempts
+    try {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+      // Mark old pending invoices as abandoned
+      const { data: oldPendingInvoices, error: invoiceError } = await supabase
+        .from('xero_invoices')
+        .update({ sync_status: 'abandoned' })
+        .eq('sync_status', 'pending')
+        .lt('staged_at', oneDayAgo)
+        .select('id')
+
+      if (invoiceError) {
+        results.errors.push(`Pending invoices abandonment error: ${invoiceError.message}`)
+      } else if (oldPendingInvoices) {
+        results.invoicesAbandoned = oldPendingInvoices.length
+      }
+
+      // Mark old pending payments as abandoned
+      const { data: oldPendingPayments, error: paymentError } = await supabase
+        .from('xero_payments')
+        .update({ sync_status: 'abandoned' })
+        .eq('sync_status', 'pending')
+        .lt('staged_at', oneDayAgo)
+        .select('id')
+
+      if (paymentError) {
+        results.errors.push(`Pending payments abandonment error: ${paymentError.message}`)
+      } else if (oldPendingPayments) {
+        results.paymentsAbandoned = oldPendingPayments.length
+      }
+
+      results.pendingAbandoned = results.invoicesAbandoned + results.paymentsAbandoned
+    } catch (error) {
+      results.errors.push(`Pending abandonment error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    // Delete old synced records (older than 30 days)
+    // These have been successfully synced to Xero, so safe to delete for space
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      
+
       const { data: oldStagingRecords, error: stagingError } = await supabase
         .from('xero_invoices')
         .select('id')
         .lt('created_at', thirtyDaysAgo)
-        .in('sync_status', ['synced', 'failed'])
+        .eq('sync_status', 'synced')
 
       if (stagingError) {
         results.errors.push(`Staging records cleanup error: ${stagingError.message}`)
       } else if (oldStagingRecords && oldStagingRecords.length > 0) {
-        // Delete old staging records
+        // Delete old synced records (data is in Xero already)
         const { error: deleteError } = await supabase
           .from('xero_invoices')
           .delete()
           .lt('created_at', thirtyDaysAgo)
-          .in('sync_status', ['synced', 'failed'])
+          .eq('sync_status', 'synced')
 
         if (deleteError) {
           results.errors.push(`Staging records deletion error: ${deleteError.message}`)
@@ -79,12 +121,17 @@ export async function GET(request: NextRequest) {
     }
 
     const totalCleaned = results.stagingRecordsCleaned + results.logEntriesCleaned
+    const totalAbandoned = results.pendingAbandoned
     const hasErrors = results.errors.length > 0
 
     logger.logBatchProcessing('cron-cleanup-results', 'Scheduled cleanup completed', {
       stagingRecordsCleaned: results.stagingRecordsCleaned,
       logEntriesCleaned: results.logEntriesCleaned,
+      pendingAbandoned: results.pendingAbandoned,
+      invoicesAbandoned: results.invoicesAbandoned,
+      paymentsAbandoned: results.paymentsAbandoned,
       totalCleaned,
+      totalAbandoned,
       errorCount: results.errors.length
     }, hasErrors ? 'warn' : 'info')
 
@@ -94,7 +141,11 @@ export async function GET(request: NextRequest) {
       results: {
         stagingRecordsCleaned: results.stagingRecordsCleaned,
         logEntriesCleaned: results.logEntriesCleaned,
+        pendingAbandoned: results.pendingAbandoned,
+        invoicesAbandoned: results.invoicesAbandoned,
+        paymentsAbandoned: results.paymentsAbandoned,
         totalCleaned,
+        totalAbandoned,
         errors: results.errors
       }
     })

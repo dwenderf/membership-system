@@ -471,6 +471,8 @@ export class XeroBatchSyncManager {
       await Sentry.captureException(error, {
         tags: { component: 'xero-batch-sync', feature: 'intelligent-batching' }
       })
+      // Mark as failed so the API route knows something went wrong
+      results.connectionStatus = 'failed'
       return results
     }
   }

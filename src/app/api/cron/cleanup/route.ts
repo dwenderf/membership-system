@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     
     const results = {
-      stagingRecordsCleaned: 0,
       logEntriesCleaned: 0,
       pendingAbandoned: 0,
       invoicesAbandoned: 0,
@@ -61,37 +60,6 @@ export async function GET(request: NextRequest) {
       results.errors.push(`Pending abandonment error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
 
-    // Delete old synced records (older than 30 days)
-    // These have been successfully synced to Xero, so safe to delete for space
-    try {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-      const { data: oldStagingRecords, error: stagingError } = await supabase
-        .from('xero_invoices')
-        .select('id')
-        .lt('created_at', thirtyDaysAgo)
-        .eq('sync_status', 'synced')
-
-      if (stagingError) {
-        results.errors.push(`Staging records cleanup error: ${stagingError.message}`)
-      } else if (oldStagingRecords && oldStagingRecords.length > 0) {
-        // Delete old synced records (data is in Xero already)
-        const { error: deleteError } = await supabase
-          .from('xero_invoices')
-          .delete()
-          .lt('created_at', thirtyDaysAgo)
-          .eq('sync_status', 'synced')
-
-        if (deleteError) {
-          results.errors.push(`Staging records deletion error: ${deleteError.message}`)
-        } else {
-          results.stagingRecordsCleaned = oldStagingRecords.length
-        }
-      }
-    } catch (error) {
-      results.errors.push(`Staging cleanup error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-
     // Clean up old log entries (older than 90 days)
     try {
       const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
@@ -120,12 +88,11 @@ export async function GET(request: NextRequest) {
       results.errors.push(`Log cleanup error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
 
-    const totalCleaned = results.stagingRecordsCleaned + results.logEntriesCleaned
+    const totalCleaned = results.logEntriesCleaned
     const totalAbandoned = results.pendingAbandoned
     const hasErrors = results.errors.length > 0
 
     logger.logBatchProcessing('cron-cleanup-results', 'Scheduled cleanup completed', {
-      stagingRecordsCleaned: results.stagingRecordsCleaned,
       logEntriesCleaned: results.logEntriesCleaned,
       pendingAbandoned: results.pendingAbandoned,
       invoicesAbandoned: results.invoicesAbandoned,
@@ -139,7 +106,6 @@ export async function GET(request: NextRequest) {
       success: true,
       message: 'Cleanup completed successfully',
       results: {
-        stagingRecordsCleaned: results.stagingRecordsCleaned,
         logEntriesCleaned: results.logEntriesCleaned,
         pendingAbandoned: results.pendingAbandoned,
         invoicesAbandoned: results.invoicesAbandoned,

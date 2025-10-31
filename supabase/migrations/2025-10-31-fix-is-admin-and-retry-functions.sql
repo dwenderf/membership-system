@@ -7,10 +7,11 @@
 -- but the actual admin flag is stored in public.users.is_admin column.
 -- This caused all admin policies to fail, blocking admins from viewing other users' data.
 --
--- Issue 2: Functions have typo in column name (last_retry_at instead of last_synced_at)
--- The 2025-10-28-fix-function-search-paths.sql migration accidentally used
--- last_retry_at instead of last_synced_at. The last_synced_at column exists
--- and is updated by the sync code. This typo broke Xero sync completely.
+-- Issue 2: Functions reference non-existent last_retry_at column
+-- The 2025-10-28-fix-function-search-paths.sql migration added a WHERE clause
+-- checking last_retry_at which doesn't exist. Since the cron runs every 5 minutes
+-- with batching, there's no need for retry throttling. Simply process all 'pending'
+-- items. Old/stale items can be marked 'abandoned' via daily cleanup job.
 
 -- Fix 1: Update is_admin_user to check the correct column
 CREATE OR REPLACE FUNCTION public.is_admin_user()
@@ -31,7 +32,7 @@ $function$;
 COMMENT ON FUNCTION is_admin_user() IS
 'Checks if the current user has admin privileges by checking public.users.is_admin column. Fixed to check correct location.';
 
--- Fix 2: Correct last_retry_at typo to last_synced_at in get_pending_xero_invoices_with_lock
+-- Fix 2: Remove broken last_retry_at filter from get_pending_xero_invoices_with_lock
 CREATE OR REPLACE FUNCTION get_pending_xero_invoices_with_lock(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
   id UUID,
@@ -96,7 +97,6 @@ BEGIN
     ) as line_items
   FROM xero_invoices xi
   WHERE xi.sync_status = 'pending'
-    AND (xi.last_synced_at IS NULL OR xi.last_synced_at < NOW() - INTERVAL '5 minutes')
   ORDER BY xi.staged_at ASC
   LIMIT limit_count
   FOR UPDATE SKIP LOCKED;
@@ -104,9 +104,9 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_pending_xero_invoices_with_lock(INTEGER) IS
-'Returns pending Xero invoices with row-level locking. Fixed typo: last_retry_at -> last_synced_at.';
+'Returns pending Xero invoices with row-level locking. Processes all pending items - cron schedule prevents API hammering.';
 
--- Fix 3: Correct last_retry_at typo to last_synced_at in get_pending_xero_payments_with_lock
+-- Fix 3: Remove broken last_retry_at filter from get_pending_xero_payments_with_lock
 CREATE OR REPLACE FUNCTION get_pending_xero_payments_with_lock(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
   id UUID,
@@ -151,7 +151,6 @@ BEGIN
     xp.updated_at
   FROM xero_payments xp
   WHERE xp.sync_status = 'pending'
-    AND (xp.last_synced_at IS NULL OR xp.last_synced_at < NOW() - INTERVAL '5 minutes')
   ORDER BY xp.staged_at ASC
   LIMIT limit_count
   FOR UPDATE SKIP LOCKED;
@@ -159,4 +158,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION get_pending_xero_payments_with_lock(INTEGER) IS
-'Returns pending Xero payments with row-level locking. Fixed typo: last_retry_at -> last_synced_at.';
+'Returns pending Xero payments with row-level locking. Processes all pending items - cron schedule prevents API hammering.';

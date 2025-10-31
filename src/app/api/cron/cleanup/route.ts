@@ -15,39 +15,51 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     
     const results = {
-      stagingRecordsCleaned: 0,
       logEntriesCleaned: 0,
+      pendingAbandoned: 0,
+      invoicesAbandoned: 0,
+      paymentsAbandoned: 0,
       errors: [] as string[]
     }
 
-    // Clean up old staging records (older than 30 days)
+    // Mark old pending items as abandoned (older than 24 hours)
+    // These are likely abandoned carts or failed payment attempts
     try {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      
-      const { data: oldStagingRecords, error: stagingError } = await supabase
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+      // Mark old pending invoices as abandoned
+      // Check staged_at first, but fall back to created_at if staged_at is NULL
+      const { data: oldPendingInvoices, error: invoiceError } = await supabase
         .from('xero_invoices')
+        .update({ sync_status: 'abandoned' })
+        .eq('sync_status', 'pending')
+        .or(`staged_at.lt.${oneDayAgo},and(staged_at.is.null,created_at.lt.${oneDayAgo})`)
         .select('id')
-        .lt('created_at', thirtyDaysAgo)
-        .in('sync_status', ['synced', 'failed'])
 
-      if (stagingError) {
-        results.errors.push(`Staging records cleanup error: ${stagingError.message}`)
-      } else if (oldStagingRecords && oldStagingRecords.length > 0) {
-        // Delete old staging records
-        const { error: deleteError } = await supabase
-          .from('xero_invoices')
-          .delete()
-          .lt('created_at', thirtyDaysAgo)
-          .in('sync_status', ['synced', 'failed'])
-
-        if (deleteError) {
-          results.errors.push(`Staging records deletion error: ${deleteError.message}`)
-        } else {
-          results.stagingRecordsCleaned = oldStagingRecords.length
-        }
+      if (invoiceError) {
+        results.errors.push(`Pending invoices abandonment error: ${invoiceError.message}`)
+      } else if (oldPendingInvoices) {
+        results.invoicesAbandoned = oldPendingInvoices.length
       }
+
+      // Mark old pending payments as abandoned
+      // Check staged_at first, but fall back to created_at if staged_at is NULL
+      const { data: oldPendingPayments, error: paymentError } = await supabase
+        .from('xero_payments')
+        .update({ sync_status: 'abandoned' })
+        .eq('sync_status', 'pending')
+        .or(`staged_at.lt.${oneDayAgo},and(staged_at.is.null,created_at.lt.${oneDayAgo})`)
+        .select('id')
+
+      if (paymentError) {
+        results.errors.push(`Pending payments abandonment error: ${paymentError.message}`)
+      } else if (oldPendingPayments) {
+        results.paymentsAbandoned = oldPendingPayments.length
+      }
+
+      results.pendingAbandoned = results.invoicesAbandoned + results.paymentsAbandoned
     } catch (error) {
-      results.errors.push(`Staging cleanup error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      results.errors.push(`Pending abandonment error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
 
     // Clean up old log entries (older than 90 days)
@@ -78,13 +90,17 @@ export async function GET(request: NextRequest) {
       results.errors.push(`Log cleanup error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
 
-    const totalCleaned = results.stagingRecordsCleaned + results.logEntriesCleaned
+    const totalCleaned = results.logEntriesCleaned
+    const totalAbandoned = results.pendingAbandoned
     const hasErrors = results.errors.length > 0
 
     logger.logBatchProcessing('cron-cleanup-results', 'Scheduled cleanup completed', {
-      stagingRecordsCleaned: results.stagingRecordsCleaned,
       logEntriesCleaned: results.logEntriesCleaned,
+      pendingAbandoned: results.pendingAbandoned,
+      invoicesAbandoned: results.invoicesAbandoned,
+      paymentsAbandoned: results.paymentsAbandoned,
       totalCleaned,
+      totalAbandoned,
       errorCount: results.errors.length
     }, hasErrors ? 'warn' : 'info')
 
@@ -92,9 +108,12 @@ export async function GET(request: NextRequest) {
       success: true,
       message: 'Cleanup completed successfully',
       results: {
-        stagingRecordsCleaned: results.stagingRecordsCleaned,
         logEntriesCleaned: results.logEntriesCleaned,
+        pendingAbandoned: results.pendingAbandoned,
+        invoicesAbandoned: results.invoicesAbandoned,
+        paymentsAbandoned: results.paymentsAbandoned,
         totalCleaned,
+        totalAbandoned,
         errors: results.errors
       }
     })

@@ -28,11 +28,12 @@ export async function GET(request: NextRequest) {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
       // Mark old pending invoices as abandoned
+      // Check staged_at first, but fall back to created_at if staged_at is NULL
       const { data: oldPendingInvoices, error: invoiceError } = await supabase
         .from('xero_invoices')
         .update({ sync_status: 'abandoned' })
         .eq('sync_status', 'pending')
-        .lt('staged_at', oneDayAgo)
+        .or(`staged_at.lt.${oneDayAgo},and(staged_at.is.null,created_at.lt.${oneDayAgo})`)
         .select('id')
 
       if (invoiceError) {
@@ -42,11 +43,12 @@ export async function GET(request: NextRequest) {
       }
 
       // Mark old pending payments as abandoned
+      // Check staged_at first, but fall back to created_at if staged_at is NULL
       const { data: oldPendingPayments, error: paymentError } = await supabase
         .from('xero_payments')
         .update({ sync_status: 'abandoned' })
         .eq('sync_status', 'pending')
-        .lt('staged_at', oneDayAgo)
+        .or(`staged_at.lt.${oneDayAgo},and(staged_at.is.null,created_at.lt.${oneDayAgo})`)
         .select('id')
 
       if (paymentError) {

@@ -91,7 +91,7 @@ BEGIN
         'account_code', li.account_code,
         'tax_type', li.tax_type,
         'line_amount', li.line_amount
-      ))
+      ))::jsonb
       FROM xero_invoice_line_items li
       WHERE li.xero_invoice_id = xi.id
     ) as line_items

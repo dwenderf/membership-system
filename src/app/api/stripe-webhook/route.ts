@@ -1340,6 +1340,123 @@ export async function POST(request: NextRequest) {
           break
         }
 
+        // Check if this is a payment plan installment payment
+        if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
+          console.log('🔄 Processing payment plan installment payment:', {
+            paymentIntentId: paymentIntent.id,
+            paymentPlanId: paymentIntent.metadata.paymentPlanId,
+            transactionId: paymentIntent.metadata.transactionId,
+            installmentNumber: paymentIntent.metadata.installmentNumber
+          })
+
+          try {
+            // Update payment record status - already handled by PaymentPlanService
+            // This webhook primarily serves as confirmation
+            console.log('✅ Payment plan installment payment completed via webhook confirmation')
+          } catch (error) {
+            console.error('❌ Error processing payment plan installment webhook:', error)
+            // Don't throw - the payment processing is already handled by the service
+          }
+          break
+        }
+
+        // Check if this is a payment plan first payment
+        if (paymentIntent.metadata?.isPaymentPlan === 'true') {
+          console.log('🔄 Processing payment plan first payment:', {
+            paymentIntentId: paymentIntent.id,
+            userId: paymentIntent.metadata.userId,
+            registrationId: paymentIntent.metadata.registrationId,
+            totalAmount: paymentIntent.metadata.paymentPlanTotalAmount,
+            installmentAmount: paymentIntent.metadata.paymentPlanInstallmentAmount
+          })
+
+          try {
+            const { PaymentPlanService } = await import('@/lib/services/payment-plan-service')
+            const { savePaymentMethodFromIntent } = await import('@/lib/services/payment-method-service')
+
+            // Update payment record status
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString()
+              })
+              .eq('stripe_payment_intent_id', paymentIntent.id)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              console.error('❌ Failed to update payment plan payment record:', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            console.log('✅ Successfully updated payment plan payment record')
+
+            // Save payment method to user profile (required for future charges)
+            await savePaymentMethodFromIntent(paymentIntent, paymentIntent.metadata.userId, supabase)
+
+            // Get user_registration record
+            const { data: userRegistration, error: regError } = await supabase
+              .from('user_registrations')
+              .select('id')
+              .eq('user_id', paymentIntent.metadata.userId)
+              .eq('registration_id', paymentIntent.metadata.registrationId)
+              .eq('payment_id', updatedPayment.id)
+              .single()
+
+            if (regError || !userRegistration) {
+              console.error('❌ Failed to find user registration record:', regError)
+              throw regError || new Error('User registration not found')
+            }
+
+            // Create payment plan
+            const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
+            const result = await PaymentPlanService.createPaymentPlan({
+              userRegistrationId: userRegistration.id,
+              userId: paymentIntent.metadata.userId,
+              totalAmount: totalAmount,
+              xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
+              firstPaymentId: updatedPayment.id
+            })
+
+            if (!result.success) {
+              console.error('❌ Failed to create payment plan:', result.error)
+              throw new Error(`Failed to create payment plan: ${result.error}`)
+            }
+
+            console.log('✅ Successfully created payment plan:', result.paymentPlanId)
+
+            // Process through payment completion processor for Xero updates and emails
+            try {
+              console.log('🔄 Triggering payment completion processor for payment plan registration...')
+              const completionEvent = {
+                event_type: 'user_registrations' as const,
+                record_id: userRegistration.id,
+                user_id: paymentIntent.metadata.userId,
+                payment_id: updatedPayment.id,
+                amount: paymentIntent.amount,
+                trigger_source: 'stripe_webhook_payment_plan',
+                timestamp: new Date().toISOString(),
+                metadata: {
+                  payment_intent_id: paymentIntent.id,
+                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined,
+                  is_payment_plan: true,
+                  payment_plan_id: result.paymentPlanId
+                }
+              }
+
+              await paymentProcessor.processPaymentCompletion(completionEvent)
+              console.log('✅ Successfully processed payment plan registration completion')
+            } catch (processorError) {
+              console.error('❌ Payment completion processor failed for payment plan:', processorError)
+              // Don't throw - payment succeeded, this is just post-processing
+            }
+          } catch (error) {
+            console.error('❌ Error processing payment plan payment_intent.succeeded:', error)
+            throw error
+          }
+          break
+        }
+
         // Fall through to existing payment_intent.succeeded handling for regular payments
         const userId = paymentIntent.metadata.userId
         const membershipId = paymentIntent.metadata.membershipId

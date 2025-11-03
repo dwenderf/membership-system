@@ -455,7 +455,9 @@ class EmailService {
         amount_paid: `$${(options.amountPaid / 100).toFixed(2)}`,
         remaining_balance: `$${(options.remainingBalance / 100).toFixed(2)}`,
         has_next_payment: !!options.nextPaymentDate && !options.isFinalPayment,
-        next_payment_date: options.nextPaymentDate ? formatDate(new Date(options.nextPaymentDate)) : '',
+        next_payment_date: (options.nextPaymentDate && !options.isFinalPayment)
+          ? formatDate(new Date(options.nextPaymentDate))
+          : 'No more payments due',
         is_final_payment: options.isFinalPayment,
         dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }

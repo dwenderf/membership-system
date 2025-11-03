@@ -16,6 +16,10 @@ export const EMAIL_EVENTS = {
   REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
   ACCOUNT_DELETED: 'account.deleted',
+  PAYMENT_PLAN_PRE_NOTIFICATION: 'payment_plan.pre_notification',
+  PAYMENT_PLAN_PAYMENT_PROCESSED: 'payment_plan.payment_processed',
+  PAYMENT_PLAN_PAYMENT_FAILED: 'payment_plan.payment_failed',
+  PAYMENT_PLAN_COMPLETED: 'payment_plan.completed',
 } as const
 
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]
@@ -377,6 +381,155 @@ class EmailService {
         refundDate: options.refundDate || formatDate(new Date()),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+      }
+    })
+  }
+
+  /**
+   * Send payment plan pre-notification email (3 days before charge)
+   */
+  async sendPaymentPlanPreNotification(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    installmentNumber: number
+    totalInstallments: number
+    installmentAmount: number
+    nextPaymentDate: string
+    amountPaid: number
+    remainingBalance: number
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.PAYMENT_PLAN_PRE_NOTIFICATION,
+      subject: `Upcoming Payment Plan Installment - ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID,
+      data: {
+        user_name: options.userName,
+        registration_name: options.registrationName,
+        installment_number: options.installmentNumber,
+        total_installments: options.totalInstallments,
+        installment_amount: `$${(options.installmentAmount / 100).toFixed(2)}`,
+        next_payment_date: formatDate(new Date(options.nextPaymentDate)),
+        amount_paid: `$${(options.amountPaid / 100).toFixed(2)}`,
+        remaining_balance: `$${(options.remainingBalance / 100).toFixed(2)}`,
+        account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+      }
+    })
+  }
+
+  /**
+   * Send payment plan payment processed email
+   */
+  async sendPaymentPlanPaymentProcessed(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    installmentNumber: number
+    totalInstallments: number
+    installmentAmount: number
+    paymentDate: string
+    amountPaid: number
+    remainingBalance: number
+    nextPaymentDate?: string
+    isFinalPayment: boolean
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_PROCESSED,
+      subject: `Payment Plan Installment Processed - ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID,
+      data: {
+        user_name: options.userName,
+        registration_name: options.registrationName,
+        installment_number: options.installmentNumber,
+        total_installments: options.totalInstallments,
+        installment_amount: `$${(options.installmentAmount / 100).toFixed(2)}`,
+        payment_date: formatDate(new Date(options.paymentDate)),
+        amount_paid: `$${(options.amountPaid / 100).toFixed(2)}`,
+        remaining_balance: `$${(options.remainingBalance / 100).toFixed(2)}`,
+        has_next_payment: !!options.nextPaymentDate && !options.isFinalPayment,
+        next_payment_date: options.nextPaymentDate ? formatDate(new Date(options.nextPaymentDate)) : '',
+        is_final_payment: options.isFinalPayment,
+        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+      }
+    })
+  }
+
+  /**
+   * Send payment plan payment failed email
+   */
+  async sendPaymentPlanPaymentFailed(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    installmentNumber: number
+    totalInstallments: number
+    installmentAmount: number
+    scheduledDate: string
+    failureReason: string
+    remainingRetries: number
+    amountPaid: number
+    remainingBalance: number
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_FAILED,
+      subject: `Action Required: Payment Plan Installment Failed - ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID,
+      data: {
+        user_name: options.userName,
+        registration_name: options.registrationName,
+        installment_number: options.installmentNumber,
+        total_installments: options.totalInstallments,
+        installment_amount: `$${(options.installmentAmount / 100).toFixed(2)}`,
+        scheduled_date: formatDate(new Date(options.scheduledDate)),
+        failure_reason: options.failureReason,
+        remaining_retries: options.remainingRetries,
+        amount_paid: `$${(options.amountPaid / 100).toFixed(2)}`,
+        remaining_balance: `$${(options.remainingBalance / 100).toFixed(2)}`,
+        account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+      }
+    })
+  }
+
+  /**
+   * Send payment plan completed email
+   */
+  async sendPaymentPlanCompleted(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    totalAmount: number
+    totalInstallments: number
+    planStartDate: string
+    completionDate: string
+  }) {
+    return this.sendEmail({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.PAYMENT_PLAN_COMPLETED,
+      subject: `Payment Plan Complete! 🎉 - ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID,
+      data: {
+        user_name: options.userName,
+        registration_name: options.registrationName,
+        total_amount: `$${(options.totalAmount / 100).toFixed(2)}`,
+        total_installments: options.totalInstallments,
+        plan_start_date: formatDate(new Date(options.planStartDate)),
+        completion_date: formatDate(new Date(options.completionDate)),
+        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
   }

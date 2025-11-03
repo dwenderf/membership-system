@@ -126,3 +126,97 @@ COMMENT ON COLUMN users.payment_plan_enabled IS 'Admin-controlled flag to enable
 COMMENT ON COLUMN payment_plans.first_payment_immediate IS 'Always true - first payment is processed immediately during registration';
 COMMENT ON COLUMN payment_plan_transactions.attempt_count IS 'Number of payment attempts made (0 = not yet attempted, 1 = initial attempt, 2+ = retries)';
 COMMENT ON COLUMN payment_plan_transactions.max_attempts IS 'Maximum number of total attempts (initial + retries) before giving up';
+
+-- =============================================
+-- 6. ENABLE ROW LEVEL SECURITY (RLS)
+-- =============================================
+
+-- Enable RLS on payment plan tables
+ALTER TABLE payment_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_plan_transactions ENABLE ROW LEVEL SECURITY;
+
+-- =============================================
+-- PAYMENT_PLANS RLS POLICIES
+-- =============================================
+
+-- Allow users to view their own payment plans
+CREATE POLICY "Users can view own payment plans"
+  ON payment_plans
+  FOR SELECT
+  USING (
+    auth.uid() = user_id
+  );
+
+-- Allow admins to view all payment plans
+CREATE POLICY "Admins can view all payment plans"
+  ON payment_plans
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid()
+      AND users.is_admin = true
+    )
+  );
+
+-- Only service role can insert payment plans (done via backend API)
+-- No INSERT policy needed - will use service role key
+
+-- Only service role can update payment plans (done via backend API)
+-- No UPDATE policy needed - will use service role key
+
+-- Only service role can delete payment plans (done via backend API)
+-- No DELETE policy needed - will use service role key
+
+-- =============================================
+-- PAYMENT_PLAN_TRANSACTIONS RLS POLICIES
+-- =============================================
+
+-- Allow users to view transactions for their own payment plans
+CREATE POLICY "Users can view own payment plan transactions"
+  ON payment_plan_transactions
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM payment_plans
+      WHERE payment_plans.id = payment_plan_transactions.payment_plan_id
+      AND payment_plans.user_id = auth.uid()
+    )
+  );
+
+-- Allow admins to view all payment plan transactions
+CREATE POLICY "Admins can view all payment plan transactions"
+  ON payment_plan_transactions
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid()
+      AND users.is_admin = true
+    )
+  );
+
+-- Only service role can insert transactions (done via backend API)
+-- No INSERT policy needed - will use service role key
+
+-- Only service role can update transactions (done via backend API)
+-- No UPDATE policy needed - will use service role key
+
+-- Only service role can delete transactions (done via backend API)
+-- No DELETE policy needed - will use service role key
+
+-- =============================================
+-- RLS POLICY COMMENTS
+-- =============================================
+
+COMMENT ON POLICY "Users can view own payment plans" ON payment_plans IS
+  'Allows authenticated users to view their own payment plans';
+
+COMMENT ON POLICY "Admins can view all payment plans" ON payment_plans IS
+  'Allows admin users to view all payment plans for reporting and support';
+
+COMMENT ON POLICY "Users can view own payment plan transactions" ON payment_plan_transactions IS
+  'Allows authenticated users to view transactions for their own payment plans';
+
+COMMENT ON POLICY "Admins can view all payment plan transactions" ON payment_plan_transactions IS
+  'Allows admin users to view all payment plan transactions for reporting and support';

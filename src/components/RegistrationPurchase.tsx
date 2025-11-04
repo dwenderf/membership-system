@@ -1251,6 +1251,7 @@ export default function RegistrationPurchase({
             userEmail={userEmail}
             onSavePaymentChange={setShouldSavePaymentMethod}
             showForAlternate={false}
+            paymentPlanEnabled={paymentPlanEnabled}
           />
         </div>
       )}

@@ -12,8 +12,7 @@ jest.mock('@/lib/supabase/server')
 const createMockQueryChain = () => ({
   select: jest.fn().mockReturnThis(),
   eq: jest.fn().mockReturnThis(),
-  single: jest.fn(),
-  maybeSingle: jest.fn()
+  single: jest.fn()
 })
 
 const mockSupabase = {
@@ -50,23 +49,17 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      // First call to from('users'): get user eligibility flag
+      // Single call to from('users'): get both eligibility flag and payment method
       const usersChain = createMockQueryChain()
       usersChain.single.mockResolvedValue({
-        data: { payment_plan_enabled: true },
+        data: {
+          payment_plan_enabled: true,
+          stripe_payment_method_id: 'pm_123456789'
+        },
         error: null
       })
 
-      // Second call to from('user_payment_methods'): check for saved payment method
-      const paymentMethodsChain = createMockQueryChain()
-      paymentMethodsChain.maybeSingle.mockResolvedValue({
-        data: { id: 'payment-method-id' },
-        error: null
-      })
-
-      mockSupabase.from
-        .mockReturnValueOnce(usersChain)
-        .mockReturnValueOnce(paymentMethodsChain)
+      mockSupabase.from.mockReturnValueOnce(usersChain)
 
       const response = await GET()
       const data = await response.json()
@@ -87,19 +80,14 @@ describe('/api/user/payment-plan-eligibility', () => {
 
       const usersChain = createMockQueryChain()
       usersChain.single.mockResolvedValue({
-        data: { payment_plan_enabled: false },
+        data: {
+          payment_plan_enabled: false,
+          stripe_payment_method_id: 'pm_123456789'
+        },
         error: null
       })
 
-      const paymentMethodsChain = createMockQueryChain()
-      paymentMethodsChain.maybeSingle.mockResolvedValue({
-        data: { id: 'payment-method-id' },
-        error: null
-      })
-
-      mockSupabase.from
-        .mockReturnValueOnce(usersChain)
-        .mockReturnValueOnce(paymentMethodsChain)
+      mockSupabase.from.mockReturnValueOnce(usersChain)
 
       const response = await GET()
       const data = await response.json()
@@ -120,19 +108,14 @@ describe('/api/user/payment-plan-eligibility', () => {
 
       const usersChain = createMockQueryChain()
       usersChain.single.mockResolvedValue({
-        data: { payment_plan_enabled: true },
+        data: {
+          payment_plan_enabled: true,
+          stripe_payment_method_id: null
+        },
         error: null
       })
 
-      const paymentMethodsChain = createMockQueryChain()
-      paymentMethodsChain.maybeSingle.mockResolvedValue({
-        data: null,
-        error: null
-      })
-
-      mockSupabase.from
-        .mockReturnValueOnce(usersChain)
-        .mockReturnValueOnce(paymentMethodsChain)
+      mockSupabase.from.mockReturnValueOnce(usersChain)
 
       const response = await GET()
       const data = await response.json()
@@ -153,19 +136,14 @@ describe('/api/user/payment-plan-eligibility', () => {
 
       const usersChain = createMockQueryChain()
       usersChain.single.mockResolvedValue({
-        data: { payment_plan_enabled: false },
+        data: {
+          payment_plan_enabled: false,
+          stripe_payment_method_id: null
+        },
         error: null
       })
 
-      const paymentMethodsChain = createMockQueryChain()
-      paymentMethodsChain.maybeSingle.mockResolvedValue({
-        data: null,
-        error: null
-      })
-
-      mockSupabase.from
-        .mockReturnValueOnce(usersChain)
-        .mockReturnValueOnce(paymentMethodsChain)
+      mockSupabase.from.mockReturnValueOnce(usersChain)
 
       const response = await GET()
       const data = await response.json()
@@ -197,35 +175,6 @@ describe('/api/user/payment-plan-eligibility', () => {
 
       expect(response.status).toBe(500)
       expect(data.error).toBe('Failed to fetch user data')
-    })
-
-    it('should handle payment method query errors', async () => {
-      mockSupabase.auth.getUser.mockResolvedValue({
-        data: { user: { id: 'user-id' } },
-        error: null
-      })
-
-      const usersChain = createMockQueryChain()
-      usersChain.single.mockResolvedValue({
-        data: { payment_plan_enabled: true },
-        error: null
-      })
-
-      const paymentMethodsChain = createMockQueryChain()
-      paymentMethodsChain.maybeSingle.mockResolvedValue({
-        data: null,
-        error: { message: 'Payment method query error' }
-      })
-
-      mockSupabase.from
-        .mockReturnValueOnce(usersChain)
-        .mockReturnValueOnce(paymentMethodsChain)
-
-      const response = await GET()
-      const data = await response.json()
-
-      expect(response.status).toBe(500)
-      expect(data.error).toBe('Failed to fetch payment method data')
     })
   })
 })

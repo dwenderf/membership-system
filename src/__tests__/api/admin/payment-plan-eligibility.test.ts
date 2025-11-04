@@ -9,16 +9,25 @@ import { createClient } from '@/lib/supabase/server'
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
 
+// Mock logger
+jest.mock('@/lib/logging/logger', () => ({
+  logger: {
+    logAdminAction: jest.fn()
+  }
+}))
+
+const createMockQueryChain = () => ({
+  select: jest.fn().mockReturnThis(),
+  update: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  single: jest.fn()
+})
+
 const mockSupabase = {
   auth: {
     getUser: jest.fn()
   },
-  from: jest.fn(() => ({
-    select: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn()
-  }))
+  from: jest.fn()
 }
 
 describe('/api/admin/users/[id]/payment-plan-eligibility', () => {

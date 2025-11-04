@@ -17,15 +17,17 @@ jest.mock('@/lib/services/payment-plan-service', () => ({
   }
 }))
 
+const createMockQueryChain = () => ({
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  single: jest.fn()
+})
+
 const mockSupabase = {
   auth: {
     getUser: jest.fn()
   },
-  from: jest.fn(() => ({
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn()
-  }))
+  from: jest.fn()
 }
 
 describe('/api/user/payment-plans/early-payoff', () => {
@@ -75,10 +77,13 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.single.mockResolvedValue({
         data: null,
         error: { message: 'Not found' }
       })
+
+      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
@@ -98,7 +103,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
       })
 
       // Payment plan exists but status is 'completed'
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.single.mockResolvedValue({
         data: {
           id: 'plan-id',
           user_id: 'user-id',
@@ -106,6 +112,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
@@ -124,7 +132,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.single.mockResolvedValue({
         data: {
           id: 'plan-id',
           user_id: 'user-id',
@@ -134,6 +143,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockResolvedValueOnce({
         success: true
@@ -160,7 +171,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.single.mockResolvedValue({
         data: {
           id: 'plan-id',
           user_id: 'user-id',
@@ -168,6 +180,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockResolvedValueOnce({
         success: false,
@@ -191,7 +205,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.single.mockResolvedValue({
         data: {
           id: 'plan-id',
           user_id: 'user-id',
@@ -199,6 +214,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
         },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockRejectedValueOnce(
         new Error('Unexpected error')

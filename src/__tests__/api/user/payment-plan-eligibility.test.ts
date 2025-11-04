@@ -9,16 +9,18 @@ import { createClient } from '@/lib/supabase/server'
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
 
+const createMockQueryChain = () => ({
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  single: jest.fn(),
+  maybeSingle: jest.fn()
+})
+
 const mockSupabase = {
   auth: {
     getUser: jest.fn()
   },
-  from: jest.fn(() => ({
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    single: jest.fn(),
-    maybeSingle: jest.fn()
-  }))
+  from: jest.fn()
 }
 
 describe('/api/user/payment-plan-eligibility', () => {
@@ -48,17 +50,23 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      // First call: get user eligibility flag
-      mockSupabase.from().single.mockResolvedValueOnce({
+      // First call to from('users'): get user eligibility flag
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: { payment_plan_enabled: true },
         error: null
       })
 
-      // Second call: check for saved payment method
-      mockSupabase.from().maybeSingle.mockResolvedValueOnce({
+      // Second call to from('user_payment_methods'): check for saved payment method
+      const paymentMethodsChain = createMockQueryChain()
+      paymentMethodsChain.maybeSingle.mockResolvedValue({
         data: { id: 'payment-method-id' },
         error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(usersChain)
+        .mockReturnValueOnce(paymentMethodsChain)
 
       const response = await GET()
       const data = await response.json()
@@ -77,15 +85,21 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: { payment_plan_enabled: false },
         error: null
       })
 
-      mockSupabase.from().maybeSingle.mockResolvedValueOnce({
+      const paymentMethodsChain = createMockQueryChain()
+      paymentMethodsChain.maybeSingle.mockResolvedValue({
         data: { id: 'payment-method-id' },
         error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(usersChain)
+        .mockReturnValueOnce(paymentMethodsChain)
 
       const response = await GET()
       const data = await response.json()
@@ -104,15 +118,21 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: { payment_plan_enabled: true },
         error: null
       })
 
-      mockSupabase.from().maybeSingle.mockResolvedValueOnce({
+      const paymentMethodsChain = createMockQueryChain()
+      paymentMethodsChain.maybeSingle.mockResolvedValue({
         data: null,
         error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(usersChain)
+        .mockReturnValueOnce(paymentMethodsChain)
 
       const response = await GET()
       const data = await response.json()
@@ -131,15 +151,21 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: { payment_plan_enabled: false },
         error: null
       })
 
-      mockSupabase.from().maybeSingle.mockResolvedValueOnce({
+      const paymentMethodsChain = createMockQueryChain()
+      paymentMethodsChain.maybeSingle.mockResolvedValue({
         data: null,
         error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(usersChain)
+        .mockReturnValueOnce(paymentMethodsChain)
 
       const response = await GET()
       const data = await response.json()
@@ -158,10 +184,13 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: null,
         error: { message: 'Database error' }
       })
+
+      mockSupabase.from.mockReturnValueOnce(usersChain)
 
       const response = await GET()
       const data = await response.json()
@@ -176,15 +205,21 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const usersChain = createMockQueryChain()
+      usersChain.single.mockResolvedValue({
         data: { payment_plan_enabled: true },
         error: null
       })
 
-      mockSupabase.from().maybeSingle.mockResolvedValueOnce({
+      const paymentMethodsChain = createMockQueryChain()
+      paymentMethodsChain.maybeSingle.mockResolvedValue({
         data: null,
         error: { message: 'Payment method query error' }
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(usersChain)
+        .mockReturnValueOnce(paymentMethodsChain)
 
       const response = await GET()
       const data = await response.json()

@@ -105,6 +105,7 @@ export default function RegistrationPurchase({
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
   const [usePaymentPlan, setUsePaymentPlan] = useState(false)
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
+  const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method and payment plan eligibility
@@ -117,23 +118,25 @@ export default function RegistrationPurchase({
           const data = await response.json()
           const hasPaymentMethod = !!data.paymentMethod
           setUserHasSavedPaymentMethod(hasPaymentMethod)
-
-          // Check payment plan eligibility only if has payment method
-          if (hasPaymentMethod) {
-            const eligibilityResponse = await fetch('/api/user/payment-plan-eligibility')
-            if (eligibilityResponse.ok) {
-              const eligibilityData = await eligibilityResponse.json()
-              setPaymentPlanEligible(eligibilityData.eligible || false)
-            }
-          }
         } else {
           setUserHasSavedPaymentMethod(false)
+        }
+
+        // Always check payment plan eligibility to show appropriate messaging
+        const eligibilityResponse = await fetch('/api/user/payment-plan-eligibility')
+        if (eligibilityResponse.ok) {
+          const eligibilityData = await eligibilityResponse.json()
+          setPaymentPlanEligible(eligibilityData.eligible || false)
+          setPaymentPlanEnabled(eligibilityData.paymentPlanEnabled || false)
+        } else {
           setPaymentPlanEligible(false)
+          setPaymentPlanEnabled(false)
         }
       } catch (error) {
         console.error('Error checking payment status:', error)
         setUserHasSavedPaymentMethod(false)
         setPaymentPlanEligible(false)
+        setPaymentPlanEnabled(false)
       }
     }
 

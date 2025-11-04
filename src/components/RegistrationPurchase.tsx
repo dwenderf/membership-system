@@ -1176,7 +1176,7 @@ export default function RegistrationPurchase({
                     value="full"
                     checked={!usePaymentPlan}
                     onChange={() => setUsePaymentPlan(false)}
-                    className="opacity-0 w-0 h-0 absolute"
+                    className="appearance-none w-0 h-0 m-0 p-0"
                   />
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Pay in Full</div>
@@ -1198,7 +1198,7 @@ export default function RegistrationPurchase({
                     value="plan"
                     checked={usePaymentPlan}
                     onChange={() => setUsePaymentPlan(true)}
-                    className="opacity-0 w-0 h-0 absolute"
+                    className="appearance-none w-0 h-0 m-0 p-0"
                   />
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">4-Month Payment Plan</div>

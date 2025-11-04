@@ -18,7 +18,7 @@ export async function GET() {
     // Get user's payment plan eligibility status and payment method
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('payment_plan_enabled')
+      .select('payment_plan_enabled, stripe_payment_method_id')
       .eq('id', authUser.id)
       .single()
 
@@ -30,31 +30,16 @@ export async function GET() {
       )
     }
 
-    // Check if user has a saved payment method
-    const { data: paymentMethod, error: paymentMethodError } = await supabase
-      .from('user_payment_methods')
-      .select('id')
-      .eq('user_id', authUser.id)
-      .eq('is_default', true)
-      .maybeSingle()
-
-    if (paymentMethodError) {
-      console.error('Error fetching payment method:', paymentMethodError)
-      return NextResponse.json(
-        { error: 'Failed to fetch payment method data' },
-        { status: 500 }
-      )
-    }
-
     // User is eligible if:
     // 1. payment_plan_enabled is true
     // 2. They have a saved payment method
-    const eligible = (user.payment_plan_enabled === true) && (!!paymentMethod)
+    const hasSavedPaymentMethod = !!user.stripe_payment_method_id
+    const eligible = (user.payment_plan_enabled === true) && hasSavedPaymentMethod
 
     return NextResponse.json({
       eligible,
       paymentPlanEnabled: user.payment_plan_enabled || false,
-      hasSavedPaymentMethod: !!paymentMethod
+      hasSavedPaymentMethod
     })
   } catch (error) {
     console.error('Unexpected error checking payment plan eligibility:', error)

@@ -35,7 +35,6 @@ describe('/api/user/payment-plan-eligibility', () => {
         error: null
       })
 
-      const request = new Request('http://localhost:3000/api/user/payment-plan-eligibility')
       const response = await GET()
       const data = await response.json()
 

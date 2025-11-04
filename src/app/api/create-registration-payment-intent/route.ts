@@ -541,7 +541,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode, discountCode, savePaymentMethod, usePaymentPlan } = body
+    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan } = body
 
     // Validate payment plan eligibility if requested
     if (usePaymentPlan) {

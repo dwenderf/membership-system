@@ -541,8 +541,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode, discountCode, savePaymentMethod } = body
-    
+    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan } = body
+
+    // Validate payment plan eligibility if requested
+    if (usePaymentPlan) {
+      const { PaymentPlanService } = await import('@/lib/services/payment-plan-service')
+      const canUsePaymentPlan = await PaymentPlanService.canUserCreatePaymentPlan(user.id)
+
+      if (!canUsePaymentPlan) {
+        return NextResponse.json({
+          error: 'You are not eligible for payment plans or do not have a saved payment method'
+        }, { status: 400 })
+      }
+    }
+
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
       userId: user.id,
@@ -1291,13 +1303,18 @@ export async function POST(request: NextRequest) {
       'info'
     )
 
+    // Calculate payment amounts for payment plan if applicable
+    const isPaymentPlan = usePaymentPlan === true
+    const firstInstallmentAmount = isPaymentPlan ? Math.round(finalAmount / 4) : finalAmount // 25% for payment plan
+    const chargeAmount = firstInstallmentAmount // Amount to charge now
+
     // Create payment intent
     const paymentIntentParams: any = {
-      amount: centsToCents(finalAmount), // Ensure integer cents for Stripe
+      amount: centsToCents(chargeAmount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
       payment_method_types: ['card'],
-      ...(savePaymentMethod && { setup_future_usage: 'off_session' }),
+      setup_future_usage: 'off_session', // Always save payment method for payment plans (required for future charges)
       metadata: {
         userId: user.id,
         registrationId: registrationId,
@@ -1315,8 +1332,14 @@ export async function POST(request: NextRequest) {
         discountCategoryName: validatedDiscountCode?.category?.name || '',
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
         xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
+        // Payment plan metadata
+        isPaymentPlan: isPaymentPlan ? 'true' : 'false',
+        paymentPlanTotalAmount: isPaymentPlan ? finalAmount.toString() : '',
+        paymentPlanInstallmentAmount: isPaymentPlan ? firstInstallmentAmount.toString() : '',
       },
-      description: getDescription(),
+      description: isPaymentPlan
+        ? `Payment Plan (1/4) - ${getDescription()}`
+        : getDescription(),
     }
 
     // Add customer parameter if user has a Stripe customer ID (required for saved payment methods)
@@ -1412,7 +1435,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         total_amount: centsToCents(amount),
         discount_amount: centsToCents(discountAmount),
-        final_amount: centsToCents(finalAmount),
+        final_amount: centsToCents(chargeAmount), // For payment plans, this is just the first installment
         stripe_payment_intent_id: paymentIntent.id,
         status: 'pending',
         payment_method: 'stripe',
@@ -1538,6 +1561,10 @@ export async function POST(request: NextRequest) {
       discountAmount: discountAmount,
       finalAmount: finalAmount,
       discountCode: validatedDiscountCode,
+      // Payment plan info
+      isPaymentPlan: isPaymentPlan,
+      firstInstallmentAmount: isPaymentPlan ? firstInstallmentAmount : undefined,
+      totalInstallments: isPaymentPlan ? 4 : undefined,
     })
     
   } catch (error) {

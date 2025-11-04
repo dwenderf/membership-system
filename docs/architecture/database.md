@@ -579,6 +579,176 @@ return { success: true, membership_id }
 - New features can be enabled incrementally via feature flags
 - No breaking changes to current payment flows
 
+### 16. Payment Plans for Registrations
+
+**Pattern Used:** Installment payment tracking with automated processing and retry logic
+
+**Design Decision:** Four-installment payment system (25% each) with monthly intervals, admin-controlled user eligibility, and automated off-session payment processing.
+
+```sql
+-- User eligibility flag
+users (
+  payment_plan_enabled: BOOLEAN DEFAULT FALSE  -- Admin-controlled eligibility
+)
+
+-- Payment plan tracking
+payment_plans (
+  id: UUID PRIMARY KEY
+  user_registration_id: UUID REFERENCES user_registrations(id) ON DELETE CASCADE
+  user_id: UUID REFERENCES users(id) ON DELETE CASCADE
+  total_amount: INTEGER NOT NULL                -- Total registration amount in cents
+  paid_amount: INTEGER DEFAULT 0                -- Amount paid so far in cents
+  installment_amount: INTEGER NOT NULL          -- Amount per installment (25% of total)
+  installments_count: INTEGER DEFAULT 4         -- Total number of installments
+  installments_paid: INTEGER DEFAULT 0          -- Number of installments completed
+  next_payment_date: DATE NOT NULL              -- Date of next scheduled payment
+  first_payment_immediate: BOOLEAN DEFAULT true -- First payment always immediate
+  status: TEXT CHECK (status IN ('active', 'completed', 'cancelled'))
+  xero_invoice_id: UUID REFERENCES xero_invoices(id)  -- Single invoice for full amount
+  created_at: TIMESTAMP WITH TIME ZONE
+  updated_at: TIMESTAMP WITH TIME ZONE
+
+  CONSTRAINT unique_payment_plan_per_registration UNIQUE(user_registration_id)
+)
+
+-- Individual installment transactions
+payment_plan_transactions (
+  id: UUID PRIMARY KEY
+  payment_plan_id: UUID REFERENCES payment_plans(id) ON DELETE CASCADE
+  payment_id: UUID REFERENCES payments(id) ON DELETE SET NULL
+  amount: INTEGER NOT NULL                      -- Amount for this installment in cents
+  installment_number: INTEGER NOT NULL          -- Which installment (1-4)
+  scheduled_date: DATE NOT NULL                 -- Original scheduled date
+  processed_date: TIMESTAMP WITH TIME ZONE      -- When payment was successfully processed
+  status: TEXT CHECK (status IN ('pending', 'processing', 'completed', 'failed'))
+  failure_reason: TEXT                          -- Reason for payment failure
+  stripe_payment_intent_id: TEXT UNIQUE         -- Stripe payment intent for this transaction
+
+  -- Retry tracking fields
+  last_attempt_at: TIMESTAMP WITH TIME ZONE     -- When the last payment attempt was made
+  attempt_count: INTEGER DEFAULT 0              -- Number of payment attempts made
+  max_attempts: INTEGER DEFAULT 3               -- Maximum retry attempts
+
+  created_at: TIMESTAMP WITH TIME ZONE
+  updated_at: TIMESTAMP WITH TIME ZONE
+
+  CONSTRAINT unique_installment_per_plan UNIQUE(payment_plan_id, installment_number)
+)
+```
+
+**Why This Pattern:**
+- **User Accessibility:** Enables installment payments for expensive registrations
+- **Admin Control:** Payment plan eligibility managed per-user by administrators
+- **Automated Processing:** Off-session Stripe payments with automatic retry logic
+- **Single Xero Invoice:** One invoice for full amount, partial payments tracked separately
+- **Registration Protection:** Registration remains valid even if future payments fail
+- **Early Payoff:** Users can pay remaining balance early with no penalty
+
+**Business Rules:**
+```sql
+-- Payment plan eligibility requirements:
+-- 1. User must have payment_plan_enabled = true (admin controlled)
+-- 2. User must have saved payment method (for off-session charges)
+-- 3. Registration must be eligible for payment plans
+
+-- Installment schedule:
+-- - Payment 1: Immediate (during registration checkout)
+-- - Payment 2: 30 days after Payment 1
+-- - Payment 3: 30 days after Payment 2
+-- - Payment 4: 30 days after Payment 3
+
+-- Retry logic for failed payments:
+-- - Attempt 1: Initial scheduled payment
+-- - Attempt 2: 24 hours after Attempt 1
+-- - Attempt 3: 24 hours after Attempt 2
+-- - After 3 failed attempts: Mark as failed, notify user
+```
+
+**Xero Integration:**
+```sql
+-- Single invoice created for full registration amount
+-- Payments recorded as partial payments against the invoice
+-- Example for $100 registration with payment plan:
+--   Invoice: $100 (AUTHORISED)
+--   Payment 1: $25 (immediate)
+--   Payment 2: $25 (30 days)
+--   Payment 3: $25 (60 days)
+--   Payment 4: $25 (90 days)
+```
+
+**Performance Optimizations:**
+```sql
+-- Index for eligible users query
+CREATE INDEX idx_users_payment_plan_enabled ON users(payment_plan_enabled)
+  WHERE payment_plan_enabled = true;
+
+-- Index for cron job processing (active plans with scheduled payments)
+CREATE INDEX idx_payment_plans_next_payment_date ON payment_plans(next_payment_date)
+  WHERE status = 'active';
+
+-- Index for pending/failed transactions needing retry
+CREATE INDEX idx_payment_plan_transactions_scheduled_date
+  ON payment_plan_transactions(scheduled_date, last_attempt_at, attempt_count)
+  WHERE status IN ('pending', 'failed');
+```
+
+**Row Level Security:**
+```sql
+-- Users can view their own payment plans
+CREATE POLICY "Users can view own payment plans"
+  ON payment_plans FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Admins can view all payment plans
+CREATE POLICY "Admins can view all payment plans"
+  ON payment_plans FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+-- Similar policies for payment_plan_transactions
+-- INSERT/UPDATE/DELETE operations use service role (backend APIs only)
+```
+
+**Email Notifications:**
+- **Pre-notification:** Sent 3 days before scheduled payment
+- **Payment Processed:** Sent after successful installment payment
+- **Payment Failed:** Sent when automatic payment fails (with retry information)
+- **Plan Completed:** Sent when final payment completes
+
+**Account Deletion Protection:**
+```typescript
+// Users cannot delete account with outstanding payment plan balance
+const activePaymentPlans = await getActivePaymentPlans(userId)
+const totalOutstanding = calculateOutstandingBalance(activePaymentPlans)
+
+if (totalOutstanding > 0) {
+  throw new Error('Cannot delete account with outstanding payment plan balance')
+}
+```
+
+**Alternative Considered:** External payment plan service (Stripe Billing)
+**Trade-off:** Lost fine-grained control and integration, gained simplicity in custom implementation
+
+**When to Use Payment Plans:**
+- ✅ High-value registrations where affordability is a barrier
+- ✅ User has established relationship (saved payment method)
+- ✅ Admin has approved user for payment plan eligibility
+- ✅ Organization wants to offer flexible payment options
+
+### Migration History
+
+**2025-11-03:** Payment Plans System (`2025-11-03-add-payment-plans.sql`)
+- Added `payment_plan_enabled` flag to users table
+- Created `payment_plans` table for installment tracking
+- Created `payment_plan_transactions` table for individual payments
+- Added optimized indexes for cron job processing
+- Implemented RLS policies for user/admin access control
+- Enabled automated processing with retry logic
+
 ## Future Considerations
 
 ### Scalability

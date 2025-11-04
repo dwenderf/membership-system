@@ -106,6 +106,7 @@ export default function RegistrationPurchase({
   const [usePaymentPlan, setUsePaymentPlan] = useState(false)
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
+  const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method and payment plan eligibility
@@ -245,6 +246,9 @@ export default function RegistrationPurchase({
   const originalAmount = selectedCategory?.price ?? 0
   const discountAmount = discountValidation?.isValid ? discountValidation.discountAmount : 0
   const finalAmount = originalAmount - discountAmount
+
+  // Calculate the amount to charge: first installment for payment plan, or full amount
+  const amountToCharge = usePaymentPlan && firstInstallmentAmount ? firstInstallmentAmount : finalAmount
   
   // Check registration timing status
   const registrationStatus = getRegistrationStatus(registration as any)
@@ -522,7 +526,7 @@ export default function RegistrationPurchase({
       }
 
       const responseData = await response.json()
-      
+
       // Handle free registration (no payment needed)
       if (responseData.isFree) {
         setShowPaymentForm(false)
@@ -535,11 +539,12 @@ export default function RegistrationPurchase({
         setTimeout(() => window.location.reload(), 2000)
         return
       }
-      
-      const { clientSecret, paymentIntentId: intentId, reservationExpiresAt: expiresAt } = responseData
+
+      const { clientSecret, paymentIntentId: intentId, reservationExpiresAt: expiresAt, firstInstallmentAmount: installment } = responseData
       setClientSecret(clientSecret)
       setPaymentIntentId(intentId)
       setReservationExpiresAt(expiresAt || null)
+      setFirstInstallmentAmount(installment || null)
       
       // Now check if user has saved payment method and show appropriate UI
       
@@ -1441,7 +1446,7 @@ export default function RegistrationPurchase({
                 <PaymentForm
                   registrationId={registration.id}
                   categoryId={selectedCategoryId!}
-                  amount={finalAmount}
+                  amount={amountToCharge}
                   userEmail={userEmail}
                   reservationExpiresAt={reservationExpiresAt || undefined}
                   onTimerExpired={handleTimerExpired}
@@ -1518,7 +1523,7 @@ export default function RegistrationPurchase({
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               <SavedPaymentConfirmation
                 userEmail={userEmail}
-                amount={finalAmount}
+                amount={amountToCharge}
                 clientSecret={clientSecret}
                 paymentMethodId={savedPaymentMethodId || ''}
                 originalAmount={originalAmount}

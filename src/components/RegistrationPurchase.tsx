@@ -1176,9 +1176,9 @@ export default function RegistrationPurchase({
                     value="full"
                     checked={!usePaymentPlan}
                     onChange={() => setUsePaymentPlan(false)}
-                    className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    className="sr-only"
                   />
-                  <div className="ml-3 flex-1">
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Pay in Full</div>
                     <div className="text-sm text-gray-600">
                       Pay ${(finalAmount / 100).toFixed(2)} today
@@ -1198,9 +1198,9 @@ export default function RegistrationPurchase({
                     value="plan"
                     checked={usePaymentPlan}
                     onChange={() => setUsePaymentPlan(true)}
-                    className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    className="sr-only"
                   />
-                  <div className="ml-3 flex-1">
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">4-Month Payment Plan</div>
                     <div className="text-sm text-gray-600 mb-2">
                       Pay in 4 equal monthly installments

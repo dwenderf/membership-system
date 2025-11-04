@@ -6,6 +6,7 @@ import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
+import PaymentPlanSection from './PaymentPlanSection'
 
 interface PageProps {
   params: {
@@ -551,10 +552,17 @@ export default async function UserDetailPage({ params }: PageProps) {
               </div>
 
               {/* Account Actions */}
-              <AdminToggleSection 
+              <AdminToggleSection
                 userId={user.id}
                 isAdmin={user.is_admin}
                 isViewingOwnProfile={isViewingOwnProfile}
+                userName={`${user.first_name} ${user.last_name}`}
+              />
+
+              {/* Payment Plans */}
+              <PaymentPlanSection
+                userId={user.id}
+                initialPaymentPlanEnabled={user.payment_plan_enabled || false}
                 userName={`${user.first_name} ${user.last_name}`}
               />
 

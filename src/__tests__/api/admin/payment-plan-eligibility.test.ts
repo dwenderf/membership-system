@@ -4,7 +4,7 @@
  */
 
 import { GET, PUT } from '@/app/api/admin/users/[id]/payment-plan-eligibility/route'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
@@ -30,10 +30,15 @@ const mockSupabase = {
   from: jest.fn()
 }
 
+const mockAdminSupabase = {
+  from: jest.fn()
+}
+
 describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(createAdminClient as jest.Mock).mockReturnValue(mockAdminSupabase)
   })
 
   describe('GET - Fetch payment plan eligibility', () => {
@@ -57,10 +62,13 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValue({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: false },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility')
       const response = await GET(request, { params: { id: 'test-id' } })
@@ -77,23 +85,32 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
       })
 
       // First call: check admin status
-      mockSupabase.from().single
-        .mockResolvedValueOnce({
-          data: { is_admin: true },
-          error: null
-        })
-        // Second call: get target user eligibility
-        .mockResolvedValueOnce({
-          data: { payment_plan_enabled: true },
-          error: null
-        })
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
+        data: { is_admin: true },
+        error: null
+      })
+
+      // Second call: get target user eligibility
+      const userChain = createMockQueryChain()
+      userChain.single.mockResolvedValue({
+        data: { payment_plan_enabled: true },
+        error: null
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(adminCheckChain)
+        .mockReturnValueOnce(userChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility')
       const response = await GET(request, { params: { id: 'target-user-id' } })
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data).toEqual({ enabled: true })
+      expect(data).toEqual({
+        userId: 'target-user-id',
+        paymentPlanEnabled: true
+      })
     })
 
     it('should handle user not found', async () => {
@@ -102,15 +119,21 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single
-        .mockResolvedValueOnce({
-          data: { is_admin: true },
-          error: null
-        })
-        .mockResolvedValueOnce({
-          data: null,
-          error: { message: 'User not found' }
-        })
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
+        data: { is_admin: true },
+        error: null
+      })
+
+      const userChain = createMockQueryChain()
+      userChain.single.mockResolvedValue({
+        data: null,
+        error: { message: 'User not found' }
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(adminCheckChain)
+        .mockReturnValueOnce(userChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/invalid-id/payment-plan-eligibility')
       const response = await GET(request, { params: { id: 'invalid-id' } })
@@ -145,10 +168,13 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValue({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: false },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
@@ -167,10 +193,13 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValue({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
@@ -189,15 +218,28 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single
-        .mockResolvedValueOnce({
-          data: { is_admin: true },
-          error: null
-        })
-        .mockResolvedValueOnce({
-          data: { id: 'target-user-id', payment_plan_enabled: true },
-          error: null
-        })
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
+        data: { is_admin: true },
+        error: null
+      })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
+
+      // Mock the admin client update
+      const updateChain = createMockQueryChain()
+      updateChain.single.mockResolvedValue({
+        data: {
+          id: 'target-user-id',
+          email: 'user@example.com',
+          first_name: 'Test',
+          last_name: 'User',
+          payment_plan_enabled: true
+        },
+        error: null
+      })
+
+      mockAdminSupabase.from.mockReturnValueOnce(updateChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility', {
         method: 'PUT',
@@ -209,7 +251,13 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
       expect(response.status).toBe(200)
       expect(data).toEqual({
         success: true,
-        enabled: true
+        user: {
+          id: 'target-user-id',
+          email: 'user@example.com',
+          first_name: 'Test',
+          last_name: 'User',
+          payment_plan_enabled: true
+        }
       })
     })
 
@@ -219,15 +267,21 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      mockSupabase.from().single
-        .mockResolvedValueOnce({
-          data: { is_admin: true },
-          error: null
-        })
-        .mockResolvedValueOnce({
-          data: null,
-          error: { message: 'Update failed' }
-        })
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
+        data: { is_admin: true },
+        error: null
+      })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
+
+      const updateChain = createMockQueryChain()
+      updateChain.single.mockResolvedValue({
+        data: null,
+        error: { message: 'Update failed' }
+      })
+
+      mockAdminSupabase.from.mockReturnValueOnce(updateChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
@@ -237,7 +291,7 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
       const data = await response.json()
 
       expect(response.status).toBe(500)
-      expect(data.error).toBe('Failed to update payment plan eligibility')
+      expect(data.error).toBe('Failed to update eligibility')
     })
   })
 })

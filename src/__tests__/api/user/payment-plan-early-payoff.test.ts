@@ -102,15 +102,11 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      // Payment plan exists but status is 'completed'
+      // Payment plan query with .eq('status', 'active') won't find a completed plan
       const paymentPlansChain = createMockQueryChain()
       paymentPlansChain.single.mockResolvedValue({
-        data: {
-          id: 'plan-id',
-          user_id: 'user-id',
-          status: 'completed'
-        },
-        error: null
+        data: null,
+        error: { message: 'No rows found', code: 'PGRST116' }
       })
 
       mockSupabase.from.mockReturnValueOnce(paymentPlansChain)

@@ -9,16 +9,18 @@ import { createClient } from '@/lib/supabase/server'
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
 
+const createMockQueryChain = () => ({
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  order: jest.fn().mockReturnThis(),
+  single: jest.fn()
+})
+
 const mockSupabase = {
   auth: {
     getUser: jest.fn()
   },
-  from: jest.fn(() => ({
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    single: jest.fn()
-  }))
+  from: jest.fn()
 }
 
 describe('/api/admin/users/[id]/payment-plans', () => {
@@ -48,10 +50,13 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValue({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: false },
         error: null
       })
+
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plans')
       const response = await GET(request, { params: { id: 'test-id' } })
@@ -96,30 +101,32 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
 
       // First call: check admin status
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
 
       // Second call: get payment plans (returns array, not single)
-      const mockFrom = mockSupabase.from as jest.Mock
-      mockFrom.mockReturnValueOnce({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockResolvedValue({
-          data: mockPaymentPlans,
-          error: null
-        })
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.order = jest.fn().mockResolvedValue({
+        data: mockPaymentPlans,
+        error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(adminCheckChain)
+        .mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data.paymentPlans).toHaveLength(1)
-      expect(data.paymentPlans[0].id).toBe('plan-1')
-      expect(data.paymentPlans[0].status).toBe('active')
+      expect(data.userId).toBe('target-user-id')
+      expect(data.plans).toHaveLength(1)
+      expect(data.plans[0].id).toBe('plan-1')
+      expect(data.plans[0].status).toBe('active')
     })
 
     it('should return empty array when user has no payment plans', async () => {
@@ -128,27 +135,29 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
 
-      const mockFrom = mockSupabase.from as jest.Mock
-      mockFrom.mockReturnValueOnce({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockResolvedValue({
-          data: [],
-          error: null
-        })
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.order = jest.fn().mockResolvedValue({
+        data: [],
+        error: null
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(adminCheckChain)
+        .mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data.paymentPlans).toEqual([])
+      expect(data.userId).toBe('target-user-id')
+      expect(data.plans).toEqual([])
     })
 
     it('should handle database errors gracefully', async () => {
@@ -157,20 +166,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      mockSupabase.from().single.mockResolvedValueOnce({
+      const adminCheckChain = createMockQueryChain()
+      adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
 
-      const mockFrom = mockSupabase.from as jest.Mock
-      mockFrom.mockReturnValueOnce({
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockResolvedValue({
-          data: null,
-          error: { message: 'Database error' }
-        })
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.order = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Database error' }
       })
+
+      mockSupabase.from
+        .mockReturnValueOnce(adminCheckChain)
+        .mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })

@@ -1193,12 +1193,17 @@ export async function POST(request: NextRequest) {
           })
 
           try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
             // Update payment record status
             const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
-                completed_at: new Date().toISOString()
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
               .select()
@@ -1208,7 +1213,7 @@ export async function POST(request: NextRequest) {
               console.error('❌ Failed to update waitlist payment record:', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log('✅ Successfully updated waitlist payment record')
+            console.log(`✅ Successfully updated waitlist payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
 
             // Note: user_registrations record is already created as 'paid' by the waitlist selection API
             // No need to update it here - just verify it exists
@@ -1239,6 +1244,7 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId || undefined,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }
@@ -1267,22 +1273,27 @@ export async function POST(request: NextRequest) {
           })
 
           try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
             // Update payment record status and get the payment record
             const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
-                completed_at: new Date().toISOString()
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
               .select()
               .single()
-              
+
             if (paymentUpdateError || !updatedPayment) {
               console.error('❌ Failed to update alternate payment record:', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log('✅ Successfully updated alternate payment record')
+            console.log(`✅ Successfully updated alternate payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
 
             // Ensure alternate_selections record exists (fallback for failed initial creation)
             const gameId = paymentIntent.metadata.gameId
@@ -1323,6 +1334,7 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId || undefined,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }

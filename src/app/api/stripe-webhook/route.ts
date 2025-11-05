@@ -13,6 +13,60 @@ import { emailService } from '@/lib/email/service'
 
 // Force import server config
 
+/**
+ * STRIPE WEBHOOK HANDLER - CRITICAL PAYMENT PROCESSING
+ *
+ * This webhook processes Stripe events and is critical for payment completion flow.
+ *
+ * IMPORTANT: When adding new payment_intent.succeeded handlers, you MUST follow this pattern:
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────────┐
+ * │ REQUIRED STEPS FOR ALL payment_intent.succeeded HANDLERS                        │
+ * ├─────────────────────────────────────────────────────────────────────────────────┤
+ * │ 1. ✅ Get Stripe charge ID and fees                                             │
+ * │    const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+ * │                                                                                  │
+ * │ 2. ✅ Update payment record with ALL required fields                            │
+ * │    await supabase.from('payments').update({                                     │
+ * │      status: 'completed',                                                       │
+ * │      completed_at: new Date().toISOString(),                                    │
+ * │      stripe_fee_amount: stripeFeeAmount,  // ⚠️ REQUIRED for accounting        │
+ * │      stripe_charge_id: chargeId           // ⚠️ REQUIRED for Xero reconciliation│
+ * │    })                                                                            │
+ * │                                                                                  │
+ * │ 3. ✅ Pass charge_id to payment completion processor                            │
+ * │    await paymentProcessor.processPaymentCompletion({                            │
+ * │      ...otherFields,                                                            │
+ * │      metadata: {                                                                │
+ * │        payment_intent_id: paymentIntent.id,                                     │
+ * │        charge_id: chargeId || undefined,  // ⚠️ REQUIRED for Xero sync         │
+ * │        xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId      │
+ * │      }                                                                           │
+ * │    })                                                                            │
+ * └─────────────────────────────────────────────────────────────────────────────────┘
+ *
+ * WHY THIS IS CRITICAL:
+ *
+ * - stripe_charge_id is used as the "Payment Reference" in Xero
+ * - Without it, Xero payments use invoice number for BOTH Reference and Payment Reference
+ * - This makes bank reconciliation extremely difficult in Xero
+ * - Missing these fields causes accounting discrepancies
+ *
+ * REFERENCE IMPLEMENTATIONS:
+ * - See handleMembershipPayment() for regular membership pattern (lines ~97-293)
+ * - See handleRegistrationPayment() for regular registration pattern (lines ~296-492)
+ * - See alternate payment handler for off-session payment pattern (lines ~1261-1340)
+ * - See waitlist payment handler for another off-session payment pattern (lines ~1188-1258)
+ *
+ * XERO PAYMENT FLOW:
+ * 1. Webhook captures stripe_charge_id
+ * 2. Payment completion processor updates xero_payments.staging_metadata
+ * 3. Batch sync reads charge_id from staging_metadata
+ * 4. Xero payment created with Reference: INV-XXX, Payment Reference: ch_XXXXX
+ * 5. Bank reconciliation in Xero matches on Payment Reference (Stripe charge ID)
+ *
+ * ⚠️ FAILURE TO FOLLOW THIS PATTERN WILL BREAK XERO RECONCILIATION ⚠️
+ */
 
 // Helper function to get actual Stripe fees and charge ID from charge
 async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {

@@ -73,7 +73,7 @@ WHERE installment_number IS NOT NULL;
 CREATE OR REPLACE VIEW payment_plan_summary AS
 SELECT
   xi.id as invoice_id,
-  xi.contact_id,
+  (xi.staging_metadata->>'user_id')::uuid as contact_id,
   xi.payment_id as first_payment_id,
   COUNT(*) FILTER (WHERE xp.payment_type = 'installment') as total_installments,
   SUM(xp.amount_paid) FILTER (WHERE xp.sync_status IN ('synced','pending','processing')) as paid_amount,
@@ -100,7 +100,7 @@ SELECT
 FROM xero_invoices xi
 JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
 WHERE xi.is_payment_plan = true
-GROUP BY xi.id, xi.contact_id, xi.payment_id;
+GROUP BY xi.id, xi.staging_metadata, xi.payment_id;
 
 -- 6. Drop old payment plan tables
 -- Skipping data migration since this is development environment

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
-import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
+import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from '@/lib/services/payment-plan-config'
 
 /**
  * Cron Job: Daily Payment Plan Processing
@@ -103,12 +103,12 @@ export async function GET(request: NextRequest) {
 
         // Has attempts but under max attempts
         if (payment.attempt_count < MAX_PAYMENT_ATTEMPTS) {
-          // Check if 24 hours have passed since last attempt
+          // Check if retry interval has passed since last attempt
           if (payment.last_attempt_at) {
             const lastAttempt = new Date(payment.last_attempt_at)
             const now = new Date()
             const hoursSinceLastAttempt = (now.getTime() - lastAttempt.getTime()) / (1000 * 60 * 60)
-            return hoursSinceLastAttempt >= 24
+            return hoursSinceLastAttempt >= RETRY_INTERVAL_HOURS
           }
           // If no last_attempt_at, allow processing
           return true

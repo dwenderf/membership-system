@@ -2,6 +2,7 @@ import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -82,7 +83,7 @@ export class PaymentPlanService {
       const adminSupabase = createAdminClient()
 
       // Calculate installment details
-      const installmentAmount = Math.round(data.totalAmount / 4) // 25% per installment
+      const installmentAmount = Math.round(data.totalAmount / PAYMENT_PLAN_INSTALLMENTS)
       const firstPaymentDate = new Date()
 
       logger.logPaymentProcessing(
@@ -104,11 +105,11 @@ export class PaymentPlanService {
         .update({ is_payment_plan: true })
         .eq('id', data.xeroInvoiceId)
 
-      // Create 4 xero_payment records, all as 'staged' initially
+      // Create xero_payment records, all as 'staged' initially
       const xeroPayments = []
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= PAYMENT_PLAN_INSTALLMENTS; i++) {
         const scheduledDate = new Date(firstPaymentDate)
-        scheduledDate.setDate(scheduledDate.getDate() + (30 * (i - 1)))
+        scheduledDate.setDate(scheduledDate.getDate() + (INSTALLMENT_INTERVAL_DAYS * (i - 1)))
 
         xeroPayments.push({
           xero_invoice_id: data.xeroInvoiceId,

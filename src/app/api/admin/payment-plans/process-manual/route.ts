@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
-import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
+import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from '@/lib/services/payment-plan-config'
 
 /**
  * Manual Testing Endpoint for Payment Plans
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
                 const lastAttempt = new Date(tx.last_attempt_at)
                 const now = new Date()
                 const hoursSinceLastAttempt = (now.getTime() - lastAttempt.getTime()) / (1000 * 60 * 60)
-                return hoursSinceLastAttempt >= 24
+                return hoursSinceLastAttempt >= RETRY_INTERVAL_HOURS
               }
               return true
             }

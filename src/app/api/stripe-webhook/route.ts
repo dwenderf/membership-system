@@ -1465,6 +1465,75 @@ export async function POST(request: NextRequest) {
           break
         }
 
+        // Check if this is a payment plan early payoff
+        if (paymentIntent.metadata?.purpose === 'payment_plan_early_payoff') {
+          console.log('🔄 Processing payment plan early payoff:', {
+            paymentIntentId: paymentIntent.id,
+            xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
+            userId: paymentIntent.metadata.userId,
+            paymentId: paymentIntent.metadata.paymentId
+          })
+
+          try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
+            // Update payment record to completed
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
+              })
+              .eq('id', paymentIntent.metadata.paymentId)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              console.error('❌ Failed to update early payoff payment record:', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            console.log(`✅ Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+
+            // Find the staged xero_payment for this invoice
+            const { data: stagedPayment, error: stagedPaymentError } = await supabase
+              .from('xero_payments')
+              .select('*')
+              .eq('xero_invoice_id', paymentIntent.metadata.xeroStagingRecordId)
+              .eq('sync_status', 'staged')
+              .eq('payment_type', 'full')
+              .single()
+
+            if (stagedPaymentError || !stagedPayment) {
+              console.error('❌ Failed to find staged early payoff xero_payment:', stagedPaymentError)
+              throw stagedPaymentError || new Error('No staged payment found')
+            }
+
+            // Update staged xero_payment to pending (ready for sync)
+            await supabase
+              .from('xero_payments')
+              .update({
+                sync_status: 'pending',
+                staging_metadata: {
+                  ...stagedPayment.staging_metadata,
+                  payment_id: updatedPayment.id,
+                  stripe_payment_intent_id: paymentIntent.id,
+                  stripe_charge_id: chargeId,
+                  processed_at: new Date().toISOString()
+                }
+              })
+              .eq('id', stagedPayment.id)
+
+            console.log('✅ Early payoff payment processed successfully via webhook')
+          } catch (error) {
+            console.error('❌ Error processing early payoff webhook:', error)
+            throw error // Throw to retry webhook
+          }
+          break
+        }
+
         // Check if this is a payment plan first payment
         if (paymentIntent.metadata?.isPaymentPlan === 'true') {
           console.log('🔄 Processing payment plan first payment:', {

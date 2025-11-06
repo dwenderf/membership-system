@@ -465,7 +465,83 @@ export class PaymentPlanService {
         'info'
       )
 
-      // Create Stripe payment intent for remaining balance
+      // Step 1: Cancel all planned payments (mark as superseded)
+      const { error: cancelError } = await adminSupabase
+        .from('xero_payments')
+        .update({
+          sync_status: 'cancelled',
+          failure_reason: 'Superseded by early payoff payment'
+        })
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
+
+      if (cancelError) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-cancel-error',
+          'Failed to cancel planned payments',
+          { xeroInvoiceId, error: cancelError.message },
+          'error'
+        )
+        return { success: false, error: 'Failed to cancel planned payments' }
+      }
+
+      // Step 2: Create staged xero_payment for the payoff amount
+      const { data: stagedPayment, error: stagedPaymentError } = await adminSupabase
+        .from('xero_payments')
+        .insert({
+          xero_invoice_id: xeroInvoiceId,
+          tenant_id: plannedPayments[0].tenant_id,
+          xero_payment_id: crypto.randomUUID(), // Placeholder, replaced when synced
+          payment_method: 'stripe',
+          amount_paid: remainingBalance,
+          sync_status: 'staged',
+          payment_type: 'full', // Single payment for remaining balance
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            user_id: userId,
+            user_registration_id: plannedPayments[0].staging_metadata?.user_registration_id || '',
+            early_payoff: true,
+            original_plan_amount: remainingBalance,
+            cancelled_payments_count: plannedPayments.length
+          }
+        })
+        .select()
+        .single()
+
+      if (stagedPaymentError || !stagedPayment) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-staged-error',
+          'Failed to create staged payment',
+          { xeroInvoiceId, error: stagedPaymentError?.message },
+          'error'
+        )
+        return { success: false, error: 'Failed to create staged payment record' }
+      }
+
+      // Step 3: Create payment record BEFORE charging (webhook will update to completed)
+      const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
+        .from('payments')
+        .insert({
+          user_id: userId,
+          total_amount: centsToCents(remainingBalance),
+          final_amount: centsToCents(remainingBalance),
+          status: 'pending', // Webhook will update to completed
+          payment_method: 'stripe'
+        })
+        .select()
+        .single()
+
+      if (paymentRecordError || !paymentRecord) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-payment-error',
+          'Failed to create payment record',
+          { xeroInvoiceId, error: paymentRecordError?.message },
+          'error'
+        )
+        return { success: false, error: 'Failed to create payment record' }
+      }
+
+      // Step 4: Charge Stripe (webhook will handle completion)
       const paymentIntent = await stripe.paymentIntents.create({
         amount: centsToCents(remainingBalance),
         currency: 'usd',
@@ -476,69 +552,43 @@ export class PaymentPlanService {
         receipt_email: user.email,
         metadata: {
           userId: userId,
-          xeroInvoiceId: xeroInvoiceId,
+          xeroStagingRecordId: xeroInvoiceId, // Webhook uses this to find staged payment
           userRegistrationId: plannedPayments[0].staging_metadata?.user_registration_id || '',
-          purpose: 'payment_plan_early_payoff'
+          purpose: 'payment_plan_early_payoff',
+          paymentId: paymentRecord.id,
+          registrationName: registrationName,
+          seasonName: seasonName
         },
         description: `Early Payoff - ${registrationName} ${seasonName}`
       })
 
+      // Update payment record with stripe_payment_intent_id
+      await adminSupabase
+        .from('payments')
+        .update({ stripe_payment_intent_id: paymentIntent.id })
+        .eq('id', paymentRecord.id)
+
       if (paymentIntent.status !== 'succeeded') {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-charge-failed',
+          'Stripe charge failed for early payoff',
+          { xeroInvoiceId, paymentIntentId: paymentIntent.id, status: paymentIntent.status },
+          'error'
+        )
         return {
           success: false,
           error: `Payment failed: ${paymentIntent.status}`
         }
       }
 
-      // Create payment record
-      const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
-        .from('payments')
-        .insert({
-          user_id: userId,
-          total_amount: centsToCents(remainingBalance),
-          final_amount: centsToCents(remainingBalance),
-          stripe_payment_intent_id: paymentIntent.id,
-          status: 'completed',
-          payment_method: 'stripe',
-          completed_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-
-      if (paymentRecordError) {
-        return { success: false, error: 'Failed to create payment record' }
-      }
-
-      // Mark all planned payments as 'pending' (ready to sync to Xero)
-      // Get the first planned payment to preserve staging metadata
-      const { data: firstPlannedPayment } = await adminSupabase
-        .from('xero_payments')
-        .select('staging_metadata')
-        .eq('xero_invoice_id', xeroInvoiceId)
-        .eq('sync_status', 'planned')
-        .limit(1)
-        .single()
-
-      await adminSupabase
-        .from('xero_payments')
-        .update({
-          sync_status: 'pending',
-          staging_metadata: {
-            ...(firstPlannedPayment?.staging_metadata || {}),
-            payment_id: paymentRecord.id,
-            early_payoff: true,
-            processed_at: new Date().toISOString()
-          }
-        })
-        .eq('xero_invoice_id', xeroInvoiceId)
-        .eq('sync_status', 'planned')
-
+      // Webhook will handle the rest: update payment to completed, xero_payment to pending
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-success',
-        'Successfully processed early payoff',
+        'Successfully charged early payoff, webhook will complete processing',
         {
           xeroInvoiceId,
           paymentId: paymentRecord.id,
+          paymentIntentId: paymentIntent.id,
           amountPaid: remainingBalance
         },
         'info'

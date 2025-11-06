@@ -1576,19 +1576,21 @@ export async function POST(request: NextRequest) {
                 .order('installment_number')
 
               if (allPayments && allPayments.length > 0) {
-                // Update payment #1 to 'pending'
+                // Update payment #1 to 'pending' (only if still staged)
                 await supabase
                   .from('xero_payments')
                   .update({ sync_status: 'pending' })
                   .eq('id', allPayments[0].id)
+                  .eq('sync_status', 'staged')
 
-                // Update payments #2-4 to 'planned'
+                // Update payments #2-4 to 'planned' (only if still staged)
                 if (allPayments.length > 1) {
                   const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
                   await supabase
                     .from('xero_payments')
                     .update({ sync_status: 'planned' })
                     .in('id', plannedPaymentIds)
+                    .eq('sync_status', 'staged')
                 }
               }
             } else {
@@ -1620,7 +1622,7 @@ export async function POST(request: NextRequest) {
                 .eq('payment_type', 'installment')
                 .order('installment_number')
 
-              if (allPayments && allPayments.length >= 4) {
+              if (allPayments && allPayments.length === 4) {
                 // Update payment #1 to 'pending'
                 await supabase
                   .from('xero_payments')
@@ -1635,6 +1637,12 @@ export async function POST(request: NextRequest) {
                   .in('id', plannedPaymentIds)
 
                 console.log('✅ Updated xero_payments statuses: #1=pending, #2-4=planned')
+              } else {
+                console.error(`❌ Expected exactly 4 installment payments, but found ${allPayments?.length || 0}`, {
+                  xeroInvoiceId,
+                  paymentCount: allPayments?.length || 0,
+                  payments: allPayments
+                })
               }
             }
 

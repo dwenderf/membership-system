@@ -510,11 +510,21 @@ export class PaymentPlanService {
       }
 
       // Mark all planned payments as 'pending' (ready to sync to Xero)
+      // Get the first planned payment to preserve staging metadata
+      const { data: firstPlannedPayment } = await adminSupabase
+        .from('xero_payments')
+        .select('staging_metadata')
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
+        .limit(1)
+        .single()
+
       await adminSupabase
         .from('xero_payments')
         .update({
           sync_status: 'pending',
           staging_metadata: {
+            ...(firstPlannedPayment?.staging_metadata || {}),
             payment_id: paymentRecord.id,
             early_payoff: true,
             processed_at: new Date().toISOString()
@@ -663,7 +673,7 @@ export class PaymentPlanService {
           installmentsPaid: plan.installments_paid,
           nextPaymentDate: plan.next_payment_date,
           status: plan.status,
-          createdAt: plans[0]?.installments?.[0]?.staging_metadata?.payment_plan_created_at || new Date().toISOString()
+          createdAt: plan.installments?.[0]?.staging_metadata?.payment_plan_created_at || new Date().toISOString()
         }
       }))
 
@@ -689,15 +699,7 @@ export class PaymentPlanService {
     try {
       const supabase = await createClient()
 
-      // Check if user has any planned or staged installment payments
-      const { data: payments, error } = await supabase
-        .from('xero_payments')
-        .select('id')
-        .eq('payment_type', 'installment')
-        .in('sync_status', ['planned', 'staged'])
-        .limit(1)
-
-      // Need to join through xero_invoices to get contact_id (user_id)
+      // Get user's payment plan invoices
       const { data: invoices } = await supabase
         .from('xero_invoices')
         .select('id')

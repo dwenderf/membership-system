@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
             nextPaymentDate: plan.next_payment_date,
             finalPaymentDate: plan.final_payment_date,
             status: plan.status,
-            createdAt: plan.invoice?.payment_id ? null : null, // payment_plan_summary doesn't include created_at
+            createdAt: null, // payment_plan_summary doesn't include created_at
             installments: plan.installments
           }
         })

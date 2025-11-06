@@ -15,7 +15,6 @@ import { centsToCents, centsToDollars } from '../../types/currency'
 
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
-const DEFAULT_INVOICE_DUE_DAYS = 30 // Default due date for regular invoices
 
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]

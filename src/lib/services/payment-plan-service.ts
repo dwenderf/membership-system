@@ -627,10 +627,18 @@ export class PaymentPlanService {
     try {
       const supabase = await createClient()
 
-      // Query the payment_plan_summary view
+      // Query the payment_plan_summary view with registration data (single query to avoid N+1)
       const { data: plans, error } = await supabase
         .from('payment_plan_summary')
-        .select('*')
+        .select(`
+          *,
+          invoice:xero_invoices!invoice_id(
+            user_registrations!inner(
+              id,
+              registration:registrations(name)
+            )
+          )
+        `)
         .eq('contact_id', userId)
         .in('status', ['active', 'completed'])
         .order('final_payment_date', { ascending: true })
@@ -645,21 +653,12 @@ export class PaymentPlanService {
         return []
       }
 
-      // Get registration names
-      const enrichedPlans = await Promise.all((plans || []).map(async (plan: any) => {
-        const { data: invoice } = await supabase
-          .from('xero_invoices')
-          .select(`
-            user_registrations!inner(
-              id,
-              registration:registrations(name)
-            )
-          `)
-          .eq('id', plan.invoice_id)
-          .single()
-
-        const userReg = invoice?.user_registrations?.[0]
-        const installmentAmount = plan.total_amount / plan.total_installments
+      // Map plans with registration data (already fetched in single query)
+      const enrichedPlans = (plans || []).map((plan: any) => {
+        const userReg = plan.invoice?.user_registrations?.[0]
+        const installmentAmount = plan.total_installments > 0
+          ? plan.total_amount / plan.total_installments
+          : 0
 
         return {
           id: plan.invoice_id,
@@ -668,14 +667,14 @@ export class PaymentPlanService {
           totalAmount: plan.total_amount,
           paidAmount: plan.paid_amount,
           remainingBalance: plan.total_amount - plan.paid_amount,
-          installmentAmount: installmentAmount,
+          installmentAmount,
           installmentsCount: plan.total_installments,
           installmentsPaid: plan.installments_paid,
           nextPaymentDate: plan.next_payment_date,
           status: plan.status,
           createdAt: plan.installments?.[0]?.staging_metadata?.payment_plan_created_at || new Date().toISOString()
         }
-      }))
+      })
 
       return enrichedPlans
     } catch (error) {

@@ -669,7 +669,7 @@ export class XeroBatchSyncManager {
         },
         lineItems,
         date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
-        dueDate: dueDate,
+        dueDate,
         // Let Xero generate its own invoice number - don't set invoiceNumber here
         reference: '', // Keep reference empty - payment intent ID is not relevant for invoice creation
         status: Invoice.StatusEnum.AUTHORISED,

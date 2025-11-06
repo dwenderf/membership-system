@@ -105,15 +105,16 @@ JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
 WHERE xi.is_payment_plan = true
 GROUP BY xi.id, xi.staging_metadata, xi.payment_id;
 
--- Restrict access to admin users only via RLS on the view
+-- Restrict access via RLS on underlying tables (view uses security_invoker mode)
 ALTER VIEW payment_plan_summary SET (security_barrier = true);
 
 -- Revoke public access
 REVOKE ALL ON payment_plan_summary FROM PUBLIC;
 REVOKE ALL ON payment_plan_summary FROM anon;
-REVOKE ALL ON payment_plan_summary FROM authenticated;
 
--- Grant access only to service_role (used by admin APIs with createAdminClient)
+-- Grant access to authenticated users and service_role
+-- View uses security_invoker=true, so it relies on RLS of underlying xero_invoices/xero_payments tables
+GRANT SELECT ON payment_plan_summary TO authenticated;
 GRANT SELECT ON payment_plan_summary TO service_role;
 
 -- 6. Drop old payment plan tables

@@ -25,6 +25,28 @@ ALTER TABLE xero_invoices
 ADD COLUMN IF NOT EXISTS is_payment_plan BOOLEAN DEFAULT FALSE;
 
 -- 3. Update sync_status to include 'planned' status for future installments
+-- First, check if there are any invalid sync_status values and log them
+DO $$
+DECLARE
+  invalid_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO invalid_count
+  FROM xero_payments
+  WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+
+  IF invalid_count > 0 THEN
+    RAISE NOTICE 'Found % rows with invalid sync_status values', invalid_count;
+
+    -- Update any invalid values to 'failed' so we can add the constraint
+    UPDATE xero_payments
+    SET sync_status = 'failed'
+    WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+
+    RAISE NOTICE 'Updated invalid sync_status values to failed';
+  END IF;
+END $$;
+
+-- Now drop and recreate the constraint with 'planned' added
 ALTER TABLE xero_payments
 DROP CONSTRAINT IF EXISTS xero_payments_sync_status_check;
 
@@ -80,115 +102,12 @@ JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
 WHERE xi.is_payment_plan = true
 GROUP BY xi.id, xi.contact_id, xi.payment_id;
 
--- 6. Migrate existing payment_plan_transactions data to xero_payments
--- This preserves any existing payment plan data before dropping old tables
-DO $$
-DECLARE
-  transaction_record RECORD;
-  plan_record RECORD;
-  invoice_id UUID;
-  tenant_id_val TEXT;
-BEGIN
-  -- Only run if the old tables exist
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'payment_plan_transactions') THEN
-
-    -- Get the active tenant_id (assuming single tenant for now)
-    SELECT tenant_id INTO tenant_id_val
-    FROM xero_oauth_tokens
-    WHERE is_active = true
-    LIMIT 1;
-
-    IF tenant_id_val IS NULL THEN
-      RAISE NOTICE 'No active Xero tenant found - skipping data migration';
-      RETURN;
-    END IF;
-
-    -- Loop through all payment plan transactions
-    FOR transaction_record IN
-      SELECT ppt.*, pp.xero_invoice_id, pp.user_id
-      FROM payment_plan_transactions ppt
-      JOIN payment_plans pp ON ppt.payment_plan_id = pp.id
-      ORDER BY pp.id, ppt.installment_number
-    LOOP
-      -- Map transaction status to xero_payments sync_status
-      -- completed/processing → pending (ready to sync to Xero)
-      -- pending/failed → planned (not yet charged, internal scheduling)
-      INSERT INTO xero_payments (
-        xero_invoice_id,
-        tenant_id,
-        xero_payment_id, -- Will be generated, use placeholder
-        payment_method,
-        amount_paid,
-        reference,
-        sync_status,
-        payment_type,
-        installment_number,
-        planned_payment_date,
-        attempt_count,
-        max_attempts,
-        last_attempt_at,
-        failure_reason,
-        staged_at,
-        staging_metadata,
-        created_at,
-        updated_at
-      ) VALUES (
-        transaction_record.xero_invoice_id,
-        tenant_id_val,
-        gen_random_uuid(), -- Placeholder, will be replaced when synced
-        'stripe',
-        transaction_record.amount,
-        CASE
-          WHEN transaction_record.stripe_payment_intent_id IS NOT NULL
-          THEN 'PI:' || transaction_record.stripe_payment_intent_id
-          ELSE NULL
-        END,
-        CASE transaction_record.status
-          WHEN 'completed' THEN 'pending'::TEXT
-          WHEN 'processing' THEN 'pending'::TEXT
-          WHEN 'pending' THEN 'planned'::TEXT
-          WHEN 'failed' THEN 'planned'::TEXT
-          ELSE 'planned'::TEXT
-        END,
-        'installment',
-        transaction_record.installment_number,
-        transaction_record.scheduled_date,
-        transaction_record.attempt_count,
-        transaction_record.max_attempts,
-        transaction_record.last_attempt_at,
-        transaction_record.failure_reason,
-        NOW(),
-        jsonb_build_object(
-          'migrated_from_payment_plan_transactions', true,
-          'original_transaction_id', transaction_record.id,
-          'payment_plan_id', transaction_record.payment_plan_id,
-          'stripe_payment_intent_id', transaction_record.stripe_payment_intent_id
-        ),
-        transaction_record.created_at,
-        transaction_record.updated_at
-      )
-      ON CONFLICT DO NOTHING; -- Skip if already exists
-
-    END LOOP;
-
-    -- Mark migrated invoices as payment plans
-    UPDATE xero_invoices xi
-    SET is_payment_plan = true
-    WHERE EXISTS (
-      SELECT 1 FROM payment_plans pp
-      WHERE pp.xero_invoice_id = xi.id
-    );
-
-    RAISE NOTICE 'Successfully migrated payment plan data to xero_payments';
-  END IF;
-END $$;
-
--- 7. Drop old payment plan tables (after migration completes)
--- These are now redundant as all data is in xero_payments
+-- 6. Drop old payment plan tables
+-- Skipping data migration since this is development environment
 DROP TABLE IF EXISTS payment_plan_transactions CASCADE;
 DROP TABLE IF EXISTS payment_plans CASCADE;
 
--- 8. Add helpful comments
+-- 7. Add helpful comments
 COMMENT ON COLUMN xero_payments.payment_type IS 'Type of payment: full (single payment) or installment (part of payment plan)';
 COMMENT ON COLUMN xero_payments.installment_number IS 'Which installment this is (1-4) for payment plans, NULL for full payments';
 COMMENT ON COLUMN xero_payments.planned_payment_date IS 'When this installment is scheduled to be charged (for planned status only)';

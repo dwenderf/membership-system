@@ -1494,6 +1494,7 @@ export async function POST(request: NextRequest) {
               // Don't throw - registration is paid, this is just linking
             }
 
+
             // Create payment plan
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
             const result = await PaymentPlanService.createPaymentPlan({

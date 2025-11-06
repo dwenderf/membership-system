@@ -14,7 +14,11 @@
     },
     {
       "path": "/api/cron/sync-xero-accounts",
-      "schedule": "0 2 * * *"
+      "schedule": "3 2 * * *"
+    },
+    {
+      "path": "/api/cron/payment-plans",
+      "schedule": "6 2 * * *"
     }
   ]
 }

@@ -751,17 +751,26 @@ export class PaymentPlanService {
       const supabase = await createClient()
 
       // Get user's payment plan invoices
-      const { data: invoices } = await supabase
+      // Note: contact_id doesn't exist as column, it's in staging_metadata
+      const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id')
-        .eq('contact_id', userId)
+        .select('id, staging_metadata')
         .eq('is_payment_plan', true)
 
-      if (!invoices || invoices.length === 0) {
+      if (!allInvoices || allInvoices.length === 0) {
         return false
       }
 
-      const invoiceIds = invoices.map(inv => inv.id)
+      // Filter to only this user's invoices
+      const userInvoices = allInvoices.filter(inv =>
+        inv.staging_metadata?.user_id === userId
+      )
+
+      if (userInvoices.length === 0) {
+        return false
+      }
+
+      const invoiceIds = userInvoices.map(inv => inv.id)
 
       const { data: outstandingPayments, error: paymentsError } = await supabase
         .from('xero_payments')
@@ -797,17 +806,26 @@ export class PaymentPlanService {
       const supabase = await createClient()
 
       // Get user's payment plan invoices
-      const { data: invoices } = await supabase
+      // Note: contact_id doesn't exist as column, it's in staging_metadata
+      const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id')
-        .eq('contact_id', userId)
+        .select('id, staging_metadata')
         .eq('is_payment_plan', true)
 
-      if (!invoices || invoices.length === 0) {
+      if (!allInvoices || allInvoices.length === 0) {
         return 0
       }
 
-      const invoiceIds = invoices.map(inv => inv.id)
+      // Filter to only this user's invoices
+      const userInvoices = allInvoices.filter(inv =>
+        inv.staging_metadata?.user_id === userId
+      )
+
+      if (userInvoices.length === 0) {
+        return 0
+      }
+
+      const invoiceIds = userInvoices.map(inv => inv.id)
 
       // Sum up all planned payments
       const { data: payments, error } = await supabase

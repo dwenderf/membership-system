@@ -4,10 +4,12 @@ import { logger } from '@/lib/logging/logger'
 
 /**
  * GET /api/admin/payment-plans
- * Get all payment plan eligible users and their payment plans
+ * Get all users and their payment plans
  *
  * Query parameters:
- * - filter: 'all' | 'eligible' | 'active' (default: 'all')
+ * - filter: 'all' | 'active' (default: 'all')
+ *   - 'all': Show all users
+ *   - 'active': Show only users with active payment plans (remaining balance > 0)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -34,16 +36,10 @@ export async function GET(request: NextRequest) {
     const filter = searchParams.get('filter') || 'all'
 
     // Build query for users
-    let usersQuery = supabase
+    const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, payment_plan_enabled, created_at')
-
-    // Apply filter
-    if (filter === 'eligible') {
-      usersQuery = usersQuery.eq('payment_plan_enabled', true)
-    }
-
-    const { data: users, error: usersError } = await usersQuery.order('email')
+      .select('id, email, first_name, last_name, created_at')
+      .order('email')
 
     if (usersError) {
       logger.logAdminAction(
@@ -55,20 +51,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
-    // Get all payment plans for these users
+    // Get all payment plans for these users using the payment_plan_summary view
     const userIds = users?.map(u => u.id) || []
 
     let plansData: any[] = []
     if (userIds.length > 0) {
       const { data: plans, error: plansError } = await supabase
-        .from('payment_plans')
+        .from('payment_plan_summary')
         .select(`
           *,
-          user_registration:user_registrations(
-            registration:registrations(name, season:seasons(name))
+          invoice:xero_invoices!invoice_id(
+            payment_id,
+            user_registrations!inner(
+              registration:registrations(name, season:seasons(name))
+            )
           )
         `)
-        .in('user_id', userIds)
+        .in('contact_id', userIds)
         .in('status', ['active', 'completed'])
 
       if (plansError) {
@@ -83,13 +82,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Organize plans by user
+    // Organize plans by user (contact_id is the user_id in payment_plan_summary)
     const plansByUser = new Map<string, any[]>()
     for (const plan of plansData) {
-      if (!plansByUser.has(plan.user_id)) {
-        plansByUser.set(plan.user_id, [])
+      if (!plansByUser.has(plan.contact_id)) {
+        plansByUser.set(plan.contact_id, [])
       }
-      plansByUser.get(plan.user_id)!.push(plan)
+      plansByUser.get(plan.contact_id)!.push(plan)
     }
 
     // Format response
@@ -110,17 +109,16 @@ export async function GET(request: NextRequest) {
       const nextPaymentDate = nextPaymentDates.length > 0 ? nextPaymentDates[0] : null
 
       // Find final payment date (latest among all active plans)
-      // Estimate based on remaining installments and 30-day intervals
       let finalPaymentDate = null
       if (activePlans.length > 0) {
-        const latestPlan = activePlans.reduce((latest, plan) => {
-          const planFinalDate = estimateFinalPaymentDate(plan)
+        const latestDate = activePlans.reduce((latest, plan) => {
+          const planFinalDate = plan.final_payment_date
           if (!latest || (planFinalDate && planFinalDate > latest)) {
             return planFinalDate
           }
           return latest
         }, null as string | null)
-        finalPaymentDate = latestPlan
+        finalPaymentDate = latestDate
       }
 
       return {
@@ -128,7 +126,6 @@ export async function GET(request: NextRequest) {
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
-        paymentPlanEnabled: user.payment_plan_enabled,
         activePlansCount: activePlans.length,
         totalPlansCount: userPlans.length,
         totalAmount,
@@ -136,20 +133,32 @@ export async function GET(request: NextRequest) {
         remainingBalance,
         nextPaymentDate,
         finalPaymentDate,
-        plans: userPlans.map(plan => ({
-          id: plan.id,
-          registrationName: plan.user_registration?.registration?.name || 'Unknown',
-          seasonName: plan.user_registration?.registration?.season?.name || '',
-          totalAmount: plan.total_amount,
-          paidAmount: plan.paid_amount,
-          remainingBalance: plan.total_amount - plan.paid_amount,
-          installmentAmount: plan.installment_amount,
-          installmentsCount: plan.installments_count,
-          installmentsPaid: plan.installments_paid,
-          nextPaymentDate: plan.next_payment_date,
-          status: plan.status,
-          createdAt: plan.created_at
-        }))
+        plans: userPlans.map(plan => {
+          // Calculate installment amount (total / number of installments)
+          const installmentAmount = plan.total_installments > 0
+            ? Math.round(plan.total_amount / plan.total_installments)
+            : plan.total_amount
+
+          // Get registration info from the nested invoice query
+          const registrationInfo = plan.invoice?.user_registrations?.[0]
+
+          return {
+            id: plan.invoice_id,
+            registrationName: registrationInfo?.registration?.name || 'Unknown',
+            seasonName: registrationInfo?.registration?.season?.name || '',
+            totalAmount: plan.total_amount,
+            paidAmount: plan.paid_amount,
+            remainingBalance: plan.total_amount - plan.paid_amount,
+            installmentAmount,
+            installmentsCount: plan.total_installments,
+            installmentsPaid: plan.installments_paid,
+            nextPaymentDate: plan.next_payment_date,
+            finalPaymentDate: plan.final_payment_date,
+            status: plan.status,
+            createdAt: plan.invoice?.payment_id ? null : null, // payment_plan_summary doesn't include created_at
+            installments: plan.installments
+          }
+        })
       }
     })
 
@@ -179,24 +188,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Estimate final payment date for a payment plan
- */
-function estimateFinalPaymentDate(plan: any): string | null {
-  if (!plan.next_payment_date) {
-    return null
-  }
-
-  const remainingInstallments = plan.installments_count - plan.installments_paid
-  if (remainingInstallments <= 0) {
-    return null
-  }
-
-  // Calculate date based on next payment date + (remaining installments - 1) * 30 days
-  const nextDate = new Date(plan.next_payment_date)
-  const daysToAdd = (remainingInstallments - 1) * 30
-  const finalDate = new Date(nextDate)
-  finalDate.setDate(finalDate.getDate() + daysToAdd)
-
-  return finalDate.toISOString().split('T')[0]
-}

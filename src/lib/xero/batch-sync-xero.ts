@@ -621,38 +621,39 @@ export class XeroBatchSyncManager {
       // For payment plans: Due date = final payment date (to prevent "overdue" status before plan completes)
       // For regular invoices: Due date = 30 days from creation
       let dueDate: string
-      const stagingMetadata = invoiceRecord.staging_metadata as any
 
-      if (stagingMetadata?.is_payment_plan && stagingMetadata?.payment_plan_id) {
-        console.log(`📅 Processing payment plan invoice: ${stagingMetadata.payment_plan_id}`)
+      // Check if this invoice is a payment plan by checking the is_payment_plan flag
+      if (invoiceRecord.is_payment_plan) {
+        console.log(`📅 Processing payment plan invoice: ${invoiceRecord.id}`)
 
-        // Fetch the actual scheduled date of the final installment from payment_plan_transactions
+        // Fetch the actual scheduled date of the final installment from xero_payments
         // This is the source of truth and works regardless of installment interval length
-        const { data: finalTransaction, error: transactionError } = await this.supabase
-          .from('payment_plan_transactions')
-          .select('scheduled_date, installment_number')
-          .eq('payment_plan_id', stagingMetadata.payment_plan_id)
+        const { data: finalPayment, error: paymentError } = await this.supabase
+          .from('xero_payments')
+          .select('planned_payment_date, installment_number')
+          .eq('xero_invoice_id', invoiceRecord.id)
+          .eq('payment_type', 'installment')
           .order('installment_number', { ascending: false })
           .limit(1)
           .single()
 
-        if (transactionError) {
-          // Database error querying payment plan transactions
-          console.error(`❌ Error fetching final payment date for payment plan ${stagingMetadata.payment_plan_id}:`, transactionError)
+        if (paymentError) {
+          // Database error querying xero_payments
+          console.error(`❌ Error fetching final payment date for payment plan invoice ${invoiceRecord.id}:`, paymentError)
           console.warn('⚠️ Falling back to default 30-day due date due to database error')
           dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
-        } else if (!finalTransaction) {
-          // No transactions found (data integrity issue)
-          console.error(`❌ No transactions found for payment plan ${stagingMetadata.payment_plan_id}`)
+        } else if (!finalPayment) {
+          // No payments found (data integrity issue)
+          console.error(`❌ No installment payments found for payment plan invoice ${invoiceRecord.id}`)
           console.warn('⚠️ Falling back to default 30-day due date - manual review required')
           dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
         } else {
           // Use the actual scheduled date of the final installment
-          dueDate = finalTransaction.scheduled_date
+          dueDate = finalPayment.planned_payment_date
 
           console.log(`📅 Payment plan invoice - due date set to final scheduled payment:`, {
-            payment_plan_id: stagingMetadata.payment_plan_id,
-            final_installment_number: finalTransaction.installment_number,
+            invoice_id: invoiceRecord.id,
+            final_installment_number: finalPayment.installment_number,
             final_scheduled_date: dueDate
           })
         }

@@ -613,6 +613,37 @@ export class XeroBatchSyncManager {
 
       console.log('📋 Line items prepared:', lineItems.length, 'items')
 
+      // Calculate invoice due date
+      // For payment plans: Due date = final payment date (from payment_plans table)
+      // For regular invoices: Due date = 30 days from creation
+      let dueDate: string
+      const stagingMetadata = invoiceRecord.staging_metadata as any
+
+      if (stagingMetadata?.is_payment_plan && stagingMetadata?.payment_plan_id) {
+        // Fetch payment plan to get the final payment date
+        const { data: paymentPlan } = await this.supabase
+          .from('payment_plans')
+          .select('next_payment_date, installments_paid, installments_count')
+          .eq('id', stagingMetadata.payment_plan_id)
+          .single()
+
+        if (paymentPlan) {
+          // Calculate final payment date: next_payment_date + (remaining installments * 30 days)
+          const remainingInstallments = paymentPlan.installments_count - paymentPlan.installments_paid
+          const nextPaymentDate = new Date(paymentPlan.next_payment_date)
+          const finalPaymentDate = new Date(nextPaymentDate.getTime() + (remainingInstallments - 1) * 30 * 24 * 60 * 60 * 1000)
+          dueDate = finalPaymentDate.toISOString().split('T')[0]
+          console.log(`📅 Payment plan invoice - due date set to final payment date: ${dueDate}`)
+        } else {
+          // Fallback if payment plan not found (shouldn't happen)
+          console.warn(`⚠️ Payment plan ${stagingMetadata.payment_plan_id} not found, using default 30-day due date`)
+          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        }
+      } else {
+        // Regular invoice: 30 days from creation
+        dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      }
+
       // Create invoice object
       const invoice: Invoice = {
         type: Invoice.TypeEnum.ACCREC,
@@ -621,7 +652,7 @@ export class XeroBatchSyncManager {
         },
         lineItems,
         date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
-        dueDate: new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from creation
+        dueDate: dueDate,
         // Let Xero generate its own invoice number - don't set invoiceNumber here
         reference: '', // Keep reference empty - payment intent ID is not relevant for invoice creation
         status: Invoice.StatusEnum.AUTHORISED,

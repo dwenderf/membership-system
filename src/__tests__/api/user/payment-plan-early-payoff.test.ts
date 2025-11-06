@@ -109,8 +109,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
       invoiceChain.single.mockResolvedValue({
         data: {
           id: 'invoice-id',
-          contact_id: 'user-id',
-          is_payment_plan: true
+          is_payment_plan: true,
+          staging_metadata: { user_id: 'user-id' }
         },
         error: null
       })
@@ -148,8 +148,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
       invoiceChain.single.mockResolvedValue({
         data: {
           id: 'invoice-id',
-          contact_id: 'user-id',
-          is_payment_plan: true
+          is_payment_plan: true,
+          staging_metadata: { user_id: 'user-id' }
         },
         error: null
       })
@@ -195,8 +195,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
       invoiceChain.single.mockResolvedValue({
         data: {
           id: 'invoice-id',
-          contact_id: 'user-id',
-          is_payment_plan: true
+          is_payment_plan: true,
+          staging_metadata: { user_id: 'user-id' }
         },
         error: null
       })
@@ -239,8 +239,8 @@ describe('/api/user/payment-plans/early-payoff', () => {
       invoiceChain.single.mockResolvedValue({
         data: {
           id: 'invoice-id',
-          contact_id: 'user-id',
-          is_payment_plan: true
+          is_payment_plan: true,
+          staging_metadata: { user_id: 'user-id' }
         },
         error: null
       })

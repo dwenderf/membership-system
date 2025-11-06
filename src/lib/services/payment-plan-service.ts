@@ -72,8 +72,8 @@ export class PaymentPlanService {
 
   /**
    * Create a payment plan for a registration
-   * Creates 4 xero_payments records in 'staged' status
-   * First payment should already be 'pending' (set by webhook later)
+   * Creates 4 xero_payments records, all initially as 'staged'
+   * Webhook later promotes payment #1 to 'pending' and #2-4 to 'planned'
    */
   static async createPaymentPlan(
     data: PaymentPlanCreationData

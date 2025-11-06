@@ -20,7 +20,8 @@ jest.mock('@/lib/services/payment-plan-service', () => ({
 const createMockQueryChain = () => ({
   select: jest.fn().mockReturnThis(),
   eq: jest.fn().mockReturnThis(),
-  single: jest.fn()
+  single: jest.fn(),
+  limit: jest.fn().mockReturnThis()
 })
 
 const mockSupabase = {
@@ -77,17 +78,18 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.single.mockResolvedValue({
+      // Mock xero_invoices query - invoice not found
+      const invoiceChain = createMockQueryChain()
+      invoiceChain.single.mockResolvedValue({
         data: null,
         error: { message: 'Not found' }
       })
 
-      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
+      mockSupabase.from.mockReturnValueOnce(invoiceChain)
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
-        body: JSON.stringify({ planId: 'plan-id' })
+        body: JSON.stringify({ planId: 'invoice-id' })
       })
       const response = await POST(request)
       const data = await response.json()
@@ -96,30 +98,43 @@ describe('/api/user/payment-plans/early-payoff', () => {
       expect(data.error).toBe('Payment plan not found or does not belong to you')
     })
 
-    it('should not allow payoff of non-active payment plans', async () => {
+    it('should not allow payoff of payment plans with no planned payments', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-id' } },
         error: null
       })
 
-      // Payment plan query with .eq('status', 'active') won't find a completed plan
-      const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.single.mockResolvedValue({
-        data: null,
-        error: { message: 'No rows found', code: 'PGRST116' }
+      // Mock xero_invoices query - invoice exists
+      const invoiceChain = createMockQueryChain()
+      invoiceChain.single.mockResolvedValue({
+        data: {
+          id: 'invoice-id',
+          contact_id: 'user-id',
+          is_payment_plan: true
+        },
+        error: null
       })
 
-      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
+      // Mock xero_payments query - no planned payments (all completed)
+      const paymentsChain = createMockQueryChain()
+      paymentsChain.limit.mockResolvedValue({
+        data: [],
+        error: null
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(invoiceChain)
+        .mockReturnValueOnce(paymentsChain)
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
-        body: JSON.stringify({ planId: 'plan-id' })
+        body: JSON.stringify({ planId: 'invoice-id' })
       })
       const response = await POST(request)
       const data = await response.json()
 
-      expect(response.status).toBe(404)
-      expect(data.error).toBe('Payment plan not found or does not belong to you')
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('No remaining payments to pay off')
     })
 
     it('should successfully process early payoff', async () => {
@@ -128,19 +143,27 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.single.mockResolvedValue({
+      // Mock xero_invoices query - invoice exists
+      const invoiceChain = createMockQueryChain()
+      invoiceChain.single.mockResolvedValue({
         data: {
-          id: 'plan-id',
-          user_id: 'user-id',
-          status: 'active',
-          total_amount: 10000,
-          paid_amount: 5000
+          id: 'invoice-id',
+          contact_id: 'user-id',
+          is_payment_plan: true
         },
         error: null
       })
 
-      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
+      // Mock xero_payments query - has planned payments
+      const paymentsChain = createMockQueryChain()
+      paymentsChain.limit.mockResolvedValue({
+        data: [{ id: 'payment-1' }],
+        error: null
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(invoiceChain)
+        .mockReturnValueOnce(paymentsChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockResolvedValueOnce({
         success: true
@@ -148,7 +171,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
-        body: JSON.stringify({ planId: 'plan-id' })
+        body: JSON.stringify({ planId: 'invoice-id' })
       })
       const response = await POST(request)
       const data = await response.json()
@@ -158,7 +181,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
         success: true,
         message: 'Payment plan paid in full successfully'
       })
-      expect(PaymentPlanService.processEarlyPayoff).toHaveBeenCalledWith('plan-id')
+      expect(PaymentPlanService.processEarlyPayoff).toHaveBeenCalledWith('invoice-id')
     })
 
     it('should handle payment processing failures', async () => {
@@ -167,17 +190,27 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.single.mockResolvedValue({
+      // Mock xero_invoices query
+      const invoiceChain = createMockQueryChain()
+      invoiceChain.single.mockResolvedValue({
         data: {
-          id: 'plan-id',
-          user_id: 'user-id',
-          status: 'active'
+          id: 'invoice-id',
+          contact_id: 'user-id',
+          is_payment_plan: true
         },
         error: null
       })
 
-      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
+      // Mock xero_payments query
+      const paymentsChain = createMockQueryChain()
+      paymentsChain.limit.mockResolvedValue({
+        data: [{ id: 'payment-1' }],
+        error: null
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(invoiceChain)
+        .mockReturnValueOnce(paymentsChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockResolvedValueOnce({
         success: false,
@@ -186,7 +219,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
-        body: JSON.stringify({ planId: 'plan-id' })
+        body: JSON.stringify({ planId: 'invoice-id' })
       })
       const response = await POST(request)
       const data = await response.json()
@@ -201,17 +234,27 @@ describe('/api/user/payment-plans/early-payoff', () => {
         error: null
       })
 
-      const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.single.mockResolvedValue({
+      // Mock xero_invoices query
+      const invoiceChain = createMockQueryChain()
+      invoiceChain.single.mockResolvedValue({
         data: {
-          id: 'plan-id',
-          user_id: 'user-id',
-          status: 'active'
+          id: 'invoice-id',
+          contact_id: 'user-id',
+          is_payment_plan: true
         },
         error: null
       })
 
-      mockSupabase.from.mockReturnValueOnce(paymentPlansChain)
+      // Mock xero_payments query
+      const paymentsChain = createMockQueryChain()
+      paymentsChain.limit.mockResolvedValue({
+        data: [{ id: 'payment-1' }],
+        error: null
+      })
+
+      mockSupabase.from
+        .mockReturnValueOnce(invoiceChain)
+        .mockReturnValueOnce(paymentsChain)
 
       ;(PaymentPlanService.processEarlyPayoff as jest.Mock).mockRejectedValueOnce(
         new Error('Unexpected error')
@@ -219,7 +262,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
 
       const request = new Request('http://localhost:3000/api/user/payment-plans/early-payoff', {
         method: 'POST',
-        body: JSON.stringify({ planId: 'plan-id' })
+        body: JSON.stringify({ planId: 'invoice-id' })
       })
       const response = await POST(request)
       const data = await response.json()

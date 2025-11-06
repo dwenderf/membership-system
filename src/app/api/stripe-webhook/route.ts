@@ -13,6 +13,60 @@ import { emailService } from '@/lib/email/service'
 
 // Force import server config
 
+/**
+ * STRIPE WEBHOOK HANDLER - CRITICAL PAYMENT PROCESSING
+ *
+ * This webhook processes Stripe events and is critical for payment completion flow.
+ *
+ * IMPORTANT: When adding new payment_intent.succeeded handlers, you MUST follow this pattern:
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────────┐
+ * │ REQUIRED STEPS FOR ALL payment_intent.succeeded HANDLERS                        │
+ * ├─────────────────────────────────────────────────────────────────────────────────┤
+ * │ 1. ✅ Get Stripe charge ID and fees                                             │
+ * │    const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+ * │                                                                                  │
+ * │ 2. ✅ Update payment record with ALL required fields                            │
+ * │    await supabase.from('payments').update({                                     │
+ * │      status: 'completed',                                                       │
+ * │      completed_at: new Date().toISOString(),                                    │
+ * │      stripe_fee_amount: stripeFeeAmount,  // ⚠️ REQUIRED for accounting        │
+ * │      stripe_charge_id: chargeId           // ⚠️ REQUIRED for Xero reconciliation│
+ * │    })                                                                            │
+ * │                                                                                  │
+ * │ 3. ✅ Pass charge_id to payment completion processor                            │
+ * │    await paymentProcessor.processPaymentCompletion({                            │
+ * │      ...otherFields,                                                            │
+ * │      metadata: {                                                                │
+ * │        payment_intent_id: paymentIntent.id,                                     │
+ * │        charge_id: chargeId || undefined,  // ⚠️ REQUIRED for Xero sync         │
+ * │        xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId      │
+ * │      }                                                                           │
+ * │    })                                                                            │
+ * └─────────────────────────────────────────────────────────────────────────────────┘
+ *
+ * WHY THIS IS CRITICAL:
+ *
+ * - stripe_charge_id is used as the "Payment Reference" in Xero
+ * - Without it, Xero payments use invoice number for BOTH Reference and Payment Reference
+ * - This makes bank reconciliation extremely difficult in Xero
+ * - Missing these fields causes accounting discrepancies
+ *
+ * REFERENCE IMPLEMENTATIONS:
+ * - See handleMembershipPayment() for regular membership pattern (lines ~97-293)
+ * - See handleRegistrationPayment() for regular registration pattern (lines ~296-492)
+ * - See alternate payment handler for off-session payment pattern (lines ~1261-1340)
+ * - See waitlist payment handler for another off-session payment pattern (lines ~1188-1258)
+ *
+ * XERO PAYMENT FLOW:
+ * 1. Webhook captures stripe_charge_id
+ * 2. Payment completion processor updates xero_payments.staging_metadata
+ * 3. Batch sync reads charge_id from staging_metadata
+ * 4. Xero payment created with Reference: INV-XXX, Payment Reference: ch_XXXXX
+ * 5. Bank reconciliation in Xero matches on Payment Reference (Stripe charge ID)
+ *
+ * ⚠️ FAILURE TO FOLLOW THIS PATTERN WILL BREAK XERO RECONCILIATION ⚠️
+ */
 
 // Helper function to get actual Stripe fees and charge ID from charge
 async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {
@@ -1193,12 +1247,17 @@ export async function POST(request: NextRequest) {
           })
 
           try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
             // Update payment record status
             const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
-                completed_at: new Date().toISOString()
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
               .select()
@@ -1208,7 +1267,7 @@ export async function POST(request: NextRequest) {
               console.error('❌ Failed to update waitlist payment record:', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log('✅ Successfully updated waitlist payment record')
+            console.log(`✅ Successfully updated waitlist payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
 
             // Note: user_registrations record is already created as 'paid' by the waitlist selection API
             // No need to update it here - just verify it exists
@@ -1239,6 +1298,7 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId || undefined,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }
@@ -1267,22 +1327,27 @@ export async function POST(request: NextRequest) {
           })
 
           try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
             // Update payment record status and get the payment record
             const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
-                completed_at: new Date().toISOString()
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
               .select()
               .single()
-              
+
             if (paymentUpdateError || !updatedPayment) {
               console.error('❌ Failed to update alternate payment record:', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log('✅ Successfully updated alternate payment record')
+            console.log(`✅ Successfully updated alternate payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
 
             // Ensure alternate_selections record exists (fallback for failed initial creation)
             const gameId = paymentIntent.metadata.gameId
@@ -1323,6 +1388,7 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId || undefined,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
                 }
               }
@@ -1335,6 +1401,144 @@ export async function POST(request: NextRequest) {
             }
           } catch (error) {
             console.error('❌ Error processing alternate payment_intent.succeeded:', error)
+            throw error
+          }
+          break
+        }
+
+        // Check if this is a payment plan installment payment
+        if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
+          console.log('🔄 Processing payment plan installment payment:', {
+            paymentIntentId: paymentIntent.id,
+            paymentPlanId: paymentIntent.metadata.paymentPlanId,
+            transactionId: paymentIntent.metadata.transactionId,
+            installmentNumber: paymentIntent.metadata.installmentNumber
+          })
+
+          try {
+            // Update payment record status - already handled by PaymentPlanService
+            // This webhook primarily serves as confirmation
+            console.log('✅ Payment plan installment payment completed via webhook confirmation')
+          } catch (error) {
+            console.error('❌ Error processing payment plan installment webhook:', error)
+            // Don't throw - the payment processing is already handled by the service
+          }
+          break
+        }
+
+        // Check if this is a payment plan first payment
+        if (paymentIntent.metadata?.isPaymentPlan === 'true') {
+          console.log('🔄 Processing payment plan first payment:', {
+            paymentIntentId: paymentIntent.id,
+            userId: paymentIntent.metadata.userId,
+            registrationId: paymentIntent.metadata.registrationId,
+            totalAmount: paymentIntent.metadata.paymentPlanTotalAmount,
+            installmentAmount: paymentIntent.metadata.paymentPlanInstallmentAmount
+          })
+
+          try {
+            const { PaymentPlanService } = await import('@/lib/services/payment-plan-service')
+            const { savePaymentMethodFromIntent } = await import('@/lib/services/payment-method-service')
+
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
+            // Update payment record status
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
+              })
+              .eq('stripe_payment_intent_id', paymentIntent.id)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              console.error('❌ Failed to update payment plan payment record:', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            console.log(`✅ Successfully updated payment plan payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+
+            // Save payment method to user profile (required for future charges)
+            await savePaymentMethodFromIntent(paymentIntent, paymentIntent.metadata.userId, supabase)
+
+            // Update user_registration to paid status and set registered_at timestamp
+            const { data: userRegistration, error: regError } = await supabase
+              .from('user_registrations')
+              .update({
+                payment_status: 'paid',
+                registered_at: new Date().toISOString(),
+              })
+              .eq('user_id', paymentIntent.metadata.userId)
+              .eq('registration_id', paymentIntent.metadata.registrationId)
+              .in('payment_status', ['awaiting_payment', 'processing'])
+              .select()
+              .single()
+
+            if (regError || !userRegistration) {
+              console.error('❌ Failed to find user registration record:', regError)
+              throw regError || new Error('User registration not found')
+            }
+
+            // Link user_registration to payment record
+            const { error: registrationUpdateError } = await supabase
+              .from('user_registrations')
+              .update({ payment_id: updatedPayment.id })
+              .eq('id', userRegistration.id)
+
+            if (registrationUpdateError) {
+              console.error('❌ Failed to link registration to payment:', registrationUpdateError)
+              // Don't throw - registration is paid, this is just linking
+            }
+
+            // Create payment plan
+            const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
+            const result = await PaymentPlanService.createPaymentPlan({
+              userRegistrationId: userRegistration.id,
+              userId: paymentIntent.metadata.userId,
+              totalAmount: totalAmount,
+              xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
+              firstPaymentId: updatedPayment.id
+            })
+
+            if (!result.success) {
+              console.error('❌ Failed to create payment plan:', result.error)
+              throw new Error(`Failed to create payment plan: ${result.error}`)
+            }
+
+            console.log('✅ Successfully created payment plan:', result.paymentPlanId)
+
+            // Process through payment completion processor for Xero updates and emails
+            try {
+              console.log('🔄 Triggering payment completion processor for payment plan registration...')
+              const completionEvent = {
+                event_type: 'user_registrations' as const,
+                record_id: userRegistration.id,
+                user_id: paymentIntent.metadata.userId,
+                payment_id: updatedPayment.id,
+                amount: paymentIntent.amount,
+                trigger_source: 'stripe_webhook_payment_plan',
+                timestamp: new Date().toISOString(),
+                metadata: {
+                  payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId || undefined,
+                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined,
+                  is_payment_plan: true,
+                  payment_plan_id: result.paymentPlanId
+                }
+              }
+
+              await paymentProcessor.processPaymentCompletion(completionEvent)
+              console.log('✅ Successfully processed payment plan registration completion')
+            } catch (processorError) {
+              console.error('❌ Payment completion processor failed for payment plan:', processorError)
+              // Don't throw - payment succeeded, this is just post-processing
+            }
+          } catch (error) {
+            console.error('❌ Error processing payment plan payment_intent.succeeded:', error)
             throw error
           }
           break

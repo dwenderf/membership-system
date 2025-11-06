@@ -24,7 +24,7 @@ ALTER COLUMN payment_type SET NOT NULL;
 ALTER TABLE xero_invoices
 ADD COLUMN IF NOT EXISTS is_payment_plan BOOLEAN DEFAULT FALSE;
 
--- 3. Update sync_status to include 'planned' status for future installments
+-- 3. Update sync_status to include 'planned' for future installments and 'cancelled' for early payoff
 -- First, check if there are any invalid sync_status values and log them
 DO $$
 DECLARE
@@ -46,16 +46,16 @@ BEGIN
   END IF;
 END $$;
 
--- Now drop and recreate the constraint with 'planned' added
+-- Now drop and recreate the constraint with 'planned' and 'cancelled' added
 ALTER TABLE xero_payments
 DROP CONSTRAINT IF EXISTS xero_payments_sync_status_check;
 
 ALTER TABLE xero_payments
 ADD CONSTRAINT xero_payments_sync_status_check
-CHECK (sync_status IN ('pending', 'staged', 'planned', 'processing', 'synced', 'failed', 'ignore'));
+CHECK (sync_status IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore'));
 
 -- Update comment
-COMMENT ON COLUMN xero_payments.sync_status IS 'pending=ready for sync, staged=created but not ready, planned=future installment (internal only), processing=currently being synced, synced=successfully synced, failed=sync failed, ignore=skip retry (manual intervention required)';
+COMMENT ON COLUMN xero_payments.sync_status IS 'pending=ready for sync, staged=created but not ready, planned=future installment (internal only), cancelled=payment cancelled (early payoff superseded), processing=currently being synced, synced=successfully synced, failed=sync failed, ignore=skip retry (manual intervention required)';
 
 -- 4. Create indexes for efficient payment plan queries
 CREATE INDEX IF NOT EXISTS idx_xero_payments_planned_ready

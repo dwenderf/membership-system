@@ -111,12 +111,17 @@ export class PaymentPlanService {
         const scheduledDate = new Date(firstPaymentDate)
         scheduledDate.setDate(scheduledDate.getDate() + (INSTALLMENT_INTERVAL_DAYS * (i - 1)))
 
+        // For the last installment, absorb any rounding remainder to ensure exact total
+        const paymentAmount = i === PAYMENT_PLAN_INSTALLMENTS
+          ? data.totalAmount - (installmentAmount * (PAYMENT_PLAN_INSTALLMENTS - 1))
+          : installmentAmount
+
         xeroPayments.push({
           xero_invoice_id: data.xeroInvoiceId,
           tenant_id: data.tenantId,
           xero_payment_id: crypto.randomUUID(), // Placeholder, will be replaced when synced to Xero
           payment_method: 'stripe',
-          amount_paid: installmentAmount,
+          amount_paid: paymentAmount,
           sync_status: 'staged', // All start as staged
           payment_type: 'installment',
           installment_number: i,

@@ -149,8 +149,9 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 /**
  * Update payment plan installment statuses
- * Sets payment #1 to 'pending' and payments #2-4 to 'planned'
+ * Sets first installment to 'pending' and remaining to 'planned'
  * Only updates payments that are still in 'staged' status (idempotent)
+ * Flexible - works with any number of installments
  */
 async function updatePaymentPlanStatuses(supabase: any, xeroInvoiceId: string): Promise<void> {
   const { data: allPayments } = await supabase
@@ -160,30 +161,34 @@ async function updatePaymentPlanStatuses(supabase: any, xeroInvoiceId: string): 
     .eq('payment_type', 'installment')
     .order('installment_number')
 
-  if (allPayments && allPayments.length === 4) {
-    // Update payment #1 to 'pending' (only if still staged)
-    await supabase
-      .from('xero_payments')
-      .update({ sync_status: 'pending' })
-      .eq('id', allPayments[0].id)
-      .eq('sync_status', 'staged')
+  if (!allPayments || allPayments.length === 0) {
+    console.error(`❌ No installment payments found for payment plan`, {
+      xeroInvoiceId
+    })
+    return
+  }
 
-    // Update payments #2-4 to 'planned' (only if still staged)
+  // Update first payment to 'pending' (only if still staged)
+  await supabase
+    .from('xero_payments')
+    .update({ sync_status: 'pending' })
+    .eq('id', allPayments[0].id)
+    .eq('sync_status', 'staged')
+
+  // Update remaining payments to 'planned' (only if still staged)
+  if (allPayments.length > 1) {
     const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
     await supabase
       .from('xero_payments')
       .update({ sync_status: 'planned' })
       .in('id', plannedPaymentIds)
       .eq('sync_status', 'staged')
-
-    console.log('✅ Updated xero_payments statuses: #1=pending, #2-4=planned')
-  } else {
-    console.error(`❌ Expected exactly 4 installment payments, but found ${allPayments?.length || 0}`, {
-      xeroInvoiceId,
-      paymentCount: allPayments?.length || 0,
-      payments: allPayments
-    })
   }
+
+  console.log(`✅ Updated xero_payments statuses: #1=pending, #${allPayments.length > 1 ? `2-${allPayments.length}` : '1 only'}=planned`, {
+    xeroInvoiceId,
+    installmentCount: allPayments.length
+  })
 }
 
 // Handle membership payment processing

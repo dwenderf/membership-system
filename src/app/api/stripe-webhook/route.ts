@@ -1651,7 +1651,7 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
-                  charge_id: chargeId || undefined,
+                  charge_id: chargeId,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined,
                   is_payment_plan: true,
                   payment_plan_id: paymentPlanId

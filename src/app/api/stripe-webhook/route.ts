@@ -1517,7 +1517,7 @@ export async function POST(request: NextRequest) {
               .update({
                 sync_status: 'pending',
                 staging_metadata: {
-                  ...stagedPayment.staging_metadata,
+                  ...(stagedPayment.staging_metadata || {}),
                   payment_id: updatedPayment.id,
                   stripe_payment_intent_id: paymentIntent.id,
                   stripe_charge_id: chargeId,

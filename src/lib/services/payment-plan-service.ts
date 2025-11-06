@@ -276,7 +276,7 @@ export class PaymentPlanService {
         .from('xero_payments')
         .update({
           staging_metadata: {
-            ...xeroPayment.staging_metadata,
+            ...(xeroPayment.staging_metadata || {}),
             stripe_payment_intent_id: paymentIntent.id
           }
         })
@@ -318,7 +318,7 @@ export class PaymentPlanService {
           .update({
             sync_status: 'pending',
             staging_metadata: {
-              ...xeroPayment.staging_metadata,
+              ...(xeroPayment.staging_metadata || {}),
               payment_id: paymentRecord.id,
               processed_at: new Date().toISOString()
             }

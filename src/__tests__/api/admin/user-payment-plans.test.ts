@@ -4,10 +4,15 @@
  */
 
 import { GET } from '@/app/api/admin/users/[id]/payment-plans/route'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
+jest.mock('@/lib/logging/logger', () => ({
+  logger: {
+    logAdminAction: jest.fn()
+  }
+}))
 
 const createMockQueryChain = () => ({
   select: jest.fn().mockReturnThis(),
@@ -23,10 +28,15 @@ const mockSupabase = {
   from: jest.fn()
 }
 
+const mockAdminSupabase = {
+  from: jest.fn()
+}
+
 describe('/api/admin/users/[id]/payment-plans', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(createAdminClient as jest.Mock).mockReturnValue(mockAdminSupabase)
   })
 
   describe('GET - Fetch user payment plans', () => {
@@ -100,23 +110,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      // First call: check admin status
+      // First call: check admin status (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      // Second call: get payment plans from payment_plan_summary view
+      // Second call: get payment plans from payment_plan_summary view (uses admin client)
       const paymentPlansChain = createMockQueryChain()
       paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: mockPaymentPlans,
         error: null
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
@@ -136,21 +144,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
+      // Admin check (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
+      // Payment plans query (uses admin client)
       const paymentPlansChain = createMockQueryChain()
       paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: [],
         error: null
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
@@ -167,21 +175,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
+      // Admin check (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
+      // Payment plans query with error (uses admin client)
       const paymentPlansChain = createMockQueryChain()
       paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: null,
         error: { message: 'Database error' }
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })

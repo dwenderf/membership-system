@@ -1493,8 +1493,6 @@ export async function POST(request: NextRequest) {
               console.error('❌ Failed to link registration to payment:', registrationUpdateError)
               // Don't throw - registration is paid, this is just linking
             }
-
-
             // Create payment plan
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
             const result = await PaymentPlanService.createPaymentPlan({

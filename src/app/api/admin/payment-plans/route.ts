@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
 /**
@@ -31,12 +31,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // Use admin client for querying payment plans (view restricted to service_role)
+    const adminSupabase = createAdminClient()
+
     // Get filter from query params
     const searchParams = request.nextUrl.searchParams
     const filter = searchParams.get('filter') || 'all'
 
     // Build query for users
-    const { data: users, error: usersError } = await supabase
+    const { data: users, error: usersError } = await adminSupabase
       .from('users')
       .select('id, email, first_name, last_name, created_at')
       .order('email')
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     let plansData: any[] = []
     if (userIds.length > 0) {
-      const { data: plans, error: plansError } = await supabase
+      const { data: plans, error: plansError } = await adminSupabase
         .from('payment_plan_summary')
         .select(`
           *,

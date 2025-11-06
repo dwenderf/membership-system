@@ -621,14 +621,15 @@ export class PaymentPlanService {
 
   /**
    * Get active payment plans for a user
-   * Uses the payment_plan_summary view
+   * Uses the payment_plan_summary view (requires admin access)
    */
   static async getUserPaymentPlans(userId: string): Promise<PaymentPlanSummary[]> {
     try {
-      const supabase = await createClient()
+      // Use admin client since payment_plan_summary is restricted to service_role
+      const adminSupabase = createAdminClient()
 
       // Query the payment_plan_summary view with registration data (single query to avoid N+1)
-      const { data: plans, error } = await supabase
+      const { data: plans, error } = await adminSupabase
         .from('payment_plan_summary')
         .select(`
           *,

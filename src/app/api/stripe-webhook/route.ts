@@ -1516,7 +1516,8 @@ export async function POST(request: NextRequest) {
             }
 
             // Link user_registration to payment record (if not already linked)
-            if (!userRegistration.payment_id || userRegistration.payment_id !== updatedPayment.id) {
+            if (!userRegistration.payment_id) {
+              // Normal case: payment_id not yet set, link it now
               const { error: registrationUpdateError } = await supabase
                 .from('user_registrations')
                 .update({ payment_id: updatedPayment.id })
@@ -1528,6 +1529,19 @@ export async function POST(request: NextRequest) {
               } else {
                 console.log('✅ Linked registration to payment:', updatedPayment.id)
               }
+            } else if (userRegistration.payment_id !== updatedPayment.id) {
+              // Unexpected case: registration already linked to a different payment
+              // This indicates a potential data integrity issue
+              console.error('⚠️ Registration already linked to different payment:', {
+                registrationId: userRegistration.id,
+                existingPaymentId: userRegistration.payment_id,
+                currentPaymentId: updatedPayment.id,
+                paymentIntentId: paymentIntent.id
+              })
+              console.log('⚠️ Skipping payment_id update to preserve existing link - manual review may be needed')
+            } else {
+              // Already linked to correct payment (idempotent webhook delivery)
+              console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
             }
 
 

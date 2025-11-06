@@ -13,6 +13,10 @@ import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
 import { centsToCents, centsToDollars } from '../../types/currency'
 
+// Constants for date calculations
+const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+const DEFAULT_INVOICE_DUE_DAYS = 30 // Default due date for regular invoices
+
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
 }
@@ -614,34 +618,61 @@ export class XeroBatchSyncManager {
       console.log('📋 Line items prepared:', lineItems.length, 'items')
 
       // Calculate invoice due date
-      // For payment plans: Due date = final payment date (from payment_plans table)
+      // For payment plans: Due date = final payment date (to prevent "overdue" status before plan completes)
       // For regular invoices: Due date = 30 days from creation
       let dueDate: string
       const stagingMetadata = invoiceRecord.staging_metadata as any
 
       if (stagingMetadata?.is_payment_plan && stagingMetadata?.payment_plan_id) {
+        console.log(`📅 Processing payment plan invoice: ${stagingMetadata.payment_plan_id}`)
+
         // Fetch payment plan to get the final payment date
-        const { data: paymentPlan } = await this.supabase
+        const { data: paymentPlan, error: paymentPlanError } = await this.supabase
           .from('payment_plans')
           .select('next_payment_date, installments_paid, installments_count')
           .eq('id', stagingMetadata.payment_plan_id)
           .single()
 
-        if (paymentPlan) {
-          // Calculate final payment date: next_payment_date + (remaining installments * 30 days)
+        if (paymentPlanError) {
+          // Database error querying payment plan
+          console.error(`❌ Error fetching payment plan ${stagingMetadata.payment_plan_id}:`, paymentPlanError)
+          console.warn('⚠️ Falling back to default 30-day due date due to database error')
+          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+        } else if (!paymentPlan) {
+          // Payment plan not found (data integrity issue)
+          console.error(`❌ Payment plan ${stagingMetadata.payment_plan_id} not found in database`)
+          console.warn('⚠️ Falling back to default 30-day due date - manual review required')
+          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+        } else {
+          // Calculate final payment date
+          // Logic: next_payment_date is the NEXT unpaid installment
+          // We need to add time for all remaining installments AFTER next_payment_date
+          //
+          // Example: 4 installments total, 1 paid, 3 remaining
+          //   - installments_paid = 1 (installment #1 completed)
+          //   - next_payment_date = Day 30 (installment #2)
+          //   - remaining after next = 2 (installments #3 and #4)
+          //   - final date = Day 30 + (2 * 30 days) = Day 90 (installment #4)
           const remainingInstallments = paymentPlan.installments_count - paymentPlan.installments_paid
           const nextPaymentDate = new Date(paymentPlan.next_payment_date)
-          const finalPaymentDate = new Date(nextPaymentDate.getTime() + (remainingInstallments - 1) * 30 * 24 * 60 * 60 * 1000)
+
+          // Remaining installments AFTER next_payment_date
+          const installmentsAfterNext = remainingInstallments - 1
+          const finalPaymentDate = new Date(nextPaymentDate.getTime() + (installmentsAfterNext * DAYS_30_IN_MS))
           dueDate = finalPaymentDate.toISOString().split('T')[0]
-          console.log(`📅 Payment plan invoice - due date set to final payment date: ${dueDate}`)
-        } else {
-          // Fallback if payment plan not found (shouldn't happen)
-          console.warn(`⚠️ Payment plan ${stagingMetadata.payment_plan_id} not found, using default 30-day due date`)
-          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+          console.log(`📅 Payment plan invoice - calculated due date:`, {
+            installments_paid: paymentPlan.installments_paid,
+            installments_count: paymentPlan.installments_count,
+            remaining_installments: remainingInstallments,
+            next_payment_date: paymentPlan.next_payment_date,
+            installments_after_next: installmentsAfterNext,
+            final_payment_date: dueDate
+          })
         }
       } else {
         // Regular invoice: 30 days from creation
-        dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
       }
 
       // Create invoice object

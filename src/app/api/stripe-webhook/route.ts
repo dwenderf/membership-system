@@ -1547,26 +1547,59 @@ export async function POST(request: NextRequest) {
 
             // Create payment plan (with idempotency - may already exist if webhook retried)
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
+            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
 
-            // Check if payment plan already exists (idempotent webhook delivery)
-            const { data: existingPlan } = await supabase
-              .from('payment_plans')
-              .select('id')
-              .eq('user_registration_id', userRegistration.id)
+            // Get xero_invoice to check if plan exists and get tenant_id
+            const { data: xeroInvoice, error: invoiceError } = await supabase
+              .from('xero_invoices')
+              .select('id, tenant_id, is_payment_plan')
+              .eq('id', xeroInvoiceId)
               .single()
 
-            let paymentPlanId: string
+            if (invoiceError || !xeroInvoice) {
+              console.error('❌ Failed to find xero_invoice:', invoiceError)
+              throw new Error('Xero invoice not found')
+            }
 
-            if (existingPlan) {
-              console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', existingPlan.id)
-              paymentPlanId = existingPlan.id
+            let paymentPlanId: string = xeroInvoice.id
+
+            // Check if payment plan already exists (idempotent webhook delivery)
+            if (xeroInvoice.is_payment_plan) {
+              console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', paymentPlanId)
+
+              // Update payment #1 to 'pending' and #2-4 to 'planned' (in case webhook is retried)
+              const { data: allPayments } = await supabase
+                .from('xero_payments')
+                .select('id, installment_number')
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('payment_type', 'installment')
+                .order('installment_number')
+
+              if (allPayments && allPayments.length > 0) {
+                // Update payment #1 to 'pending'
+                await supabase
+                  .from('xero_payments')
+                  .update({ sync_status: 'pending' })
+                  .eq('id', allPayments[0].id)
+
+                // Update payments #2-4 to 'planned'
+                if (allPayments.length > 1) {
+                  const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
+                  await supabase
+                    .from('xero_payments')
+                    .update({ sync_status: 'planned' })
+                    .in('id', plannedPaymentIds)
+                }
+              }
             } else {
+              // Create new payment plan (4 xero_payments records)
               const result = await PaymentPlanService.createPaymentPlan({
                 userRegistrationId: userRegistration.id,
                 userId: paymentIntent.metadata.userId,
                 totalAmount: totalAmount,
-                xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
-                firstPaymentId: updatedPayment.id
+                xeroInvoiceId: xeroInvoiceId,
+                firstPaymentId: updatedPayment.id,
+                tenantId: xeroInvoice.tenant_id
               })
 
               if (!result.success) {
@@ -1575,7 +1608,34 @@ export async function POST(request: NextRequest) {
               }
 
               paymentPlanId = result.paymentPlanId!
-              console.log('✅ Successfully created payment plan:', paymentPlanId)
+              console.log('✅ Successfully created payment plan xero_payments:', paymentPlanId)
+
+              // Now update the xero_payments statuses:
+              // Payment #1 → 'pending' (ready to sync to Xero)
+              // Payments #2-4 → 'planned' (wait for scheduled date)
+              const { data: allPayments } = await supabase
+                .from('xero_payments')
+                .select('id, installment_number')
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('payment_type', 'installment')
+                .order('installment_number')
+
+              if (allPayments && allPayments.length >= 4) {
+                // Update payment #1 to 'pending'
+                await supabase
+                  .from('xero_payments')
+                  .update({ sync_status: 'pending' })
+                  .eq('id', allPayments[0].id)
+
+                // Update payments #2-4 to 'planned'
+                const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
+                await supabase
+                  .from('xero_payments')
+                  .update({ sync_status: 'planned' })
+                  .in('id', plannedPaymentIds)
+
+                console.log('✅ Updated xero_payments statuses: #1=pending, #2-4=planned')
+              }
             }
 
             // Process through payment completion processor for Xero updates and emails

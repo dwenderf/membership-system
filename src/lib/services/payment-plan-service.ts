@@ -120,7 +120,6 @@ export class PaymentPlanService {
           installment_number: i,
           planned_payment_date: scheduledDate.toISOString().split('T')[0],
           attempt_count: 0,
-          max_attempts: 3,
           staged_at: new Date().toISOString(),
           staging_metadata: {
             user_id: data.userId,

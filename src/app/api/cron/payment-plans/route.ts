@@ -4,6 +4,9 @@ import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
 
+// Maximum number of charge attempts for failed payments
+const MAX_PAYMENT_ATTEMPTS = 3
+
 /**
  * Cron Job: Daily Payment Plan Processing
  * Runs daily at 2:06 AM (staggered after cleanup and xero-sync)
@@ -100,8 +103,8 @@ export async function GET(request: NextRequest) {
           return true
         }
 
-        // Has attempts but under max_attempts
-        if (payment.attempt_count < payment.max_attempts) {
+        // Has attempts but under max attempts
+        if (payment.attempt_count < MAX_PAYMENT_ATTEMPTS) {
           // Check if 24 hours have passed since last attempt
           if (payment.last_attempt_at) {
             const lastAttempt = new Date(payment.last_attempt_at)
@@ -240,7 +243,7 @@ export async function GET(request: NextRequest) {
           if (user) {
             const userName = `${user.first_name} ${user.last_name}`
             const registrationName = userReg.registration?.name || 'Registration'
-            const remainingRetries = payment.max_attempts - (payment.attempt_count + 1)
+            const remainingRetries = MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1)
 
             // Get payment plan summary for balances
             const { data: planSummary } = await adminSupabase

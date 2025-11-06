@@ -4,6 +4,9 @@ import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
 
+// Maximum number of charge attempts for failed payments
+const MAX_PAYMENT_ATTEMPTS = 3
+
 /**
  * Manual Testing Endpoint for Payment Plans
  *
@@ -211,7 +214,7 @@ export async function POST(request: NextRequest) {
             if (tx.status === 'pending' && tx.attempt_count === 0) {
               return true
             }
-            if (tx.status === 'failed' && tx.attempt_count < tx.max_attempts) {
+            if (tx.status === 'failed' && tx.attempt_count < MAX_PAYMENT_ATTEMPTS) {
               if (tx.last_attempt_at) {
                 const lastAttempt = new Date(tx.last_attempt_at)
                 const now = new Date()
@@ -310,7 +313,7 @@ export async function POST(request: NextRequest) {
           if (user) {
             const userName = `${user.first_name} ${user.last_name}`
             const registrationName = transaction.payment_plan.user_registration?.registration?.name || 'Registration'
-            const remainingRetries = transaction.max_attempts - (transaction.attempt_count + 1)
+            const remainingRetries = MAX_PAYMENT_ATTEMPTS - (transaction.attempt_count + 1)
 
             await emailService.sendPaymentPlanPaymentFailed({
               userId: transaction.payment_plan.user_id,

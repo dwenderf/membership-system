@@ -8,7 +8,6 @@ ADD COLUMN IF NOT EXISTS payment_type TEXT CHECK (payment_type IN ('full', 'inst
 ADD COLUMN IF NOT EXISTS installment_number INTEGER,
 ADD COLUMN IF NOT EXISTS planned_payment_date DATE,
 ADD COLUMN IF NOT EXISTS attempt_count INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS max_attempts INTEGER DEFAULT 3,
 ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMP WITH TIME ZONE,
 ADD COLUMN IF NOT EXISTS failure_reason TEXT;
 
@@ -193,8 +192,7 @@ DROP TABLE IF EXISTS payment_plans CASCADE;
 COMMENT ON COLUMN xero_payments.payment_type IS 'Type of payment: full (single payment) or installment (part of payment plan)';
 COMMENT ON COLUMN xero_payments.installment_number IS 'Which installment this is (1-4) for payment plans, NULL for full payments';
 COMMENT ON COLUMN xero_payments.planned_payment_date IS 'When this installment is scheduled to be charged (for planned status only)';
-COMMENT ON COLUMN xero_payments.attempt_count IS 'Number of charge attempts made for this installment';
-COMMENT ON COLUMN xero_payments.max_attempts IS 'Maximum retry attempts before marking as failed';
+COMMENT ON COLUMN xero_payments.attempt_count IS 'Number of charge attempts made for this installment (max 3 attempts)';
 COMMENT ON COLUMN xero_payments.last_attempt_at IS 'Timestamp of last charge attempt';
 COMMENT ON COLUMN xero_payments.failure_reason IS 'Reason payment charge failed (for troubleshooting)';
 COMMENT ON COLUMN xero_invoices.is_payment_plan IS 'Whether this invoice is for a payment plan (multiple installments)';

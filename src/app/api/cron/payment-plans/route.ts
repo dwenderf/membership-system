@@ -3,9 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
-
-// Maximum number of charge attempts for failed payments
-const MAX_PAYMENT_ATTEMPTS = 3
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
  * Cron Job: Daily Payment Plan Processing

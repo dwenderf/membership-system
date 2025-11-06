@@ -189,11 +189,7 @@ END $$;
 DROP TABLE IF EXISTS payment_plan_transactions CASCADE;
 DROP TABLE IF EXISTS payment_plans CASCADE;
 
--- 8. Remove payment_plan_enabled column from users (no longer needed)
--- Users can create payment plans if they have a saved payment method
-ALTER TABLE users DROP COLUMN IF EXISTS payment_plan_enabled;
-
--- 9. Add helpful comments
+-- 8. Add helpful comments
 COMMENT ON COLUMN xero_payments.payment_type IS 'Type of payment: full (single payment) or installment (part of payment plan)';
 COMMENT ON COLUMN xero_payments.installment_number IS 'Which installment this is (1-4) for payment plans, NULL for full payments';
 COMMENT ON COLUMN xero_payments.planned_payment_date IS 'When this installment is scheduled to be charged (for planned status only)';

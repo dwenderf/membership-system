@@ -70,7 +70,10 @@ ON xero_payments(xero_invoice_id, installment_number)
 WHERE installment_number IS NOT NULL;
 
 -- 5. Create view for payment plan summary (replaces direct queries to payment_plans table)
-CREATE OR REPLACE VIEW payment_plan_summary AS
+-- Using SECURITY INVOKER so it respects the caller's permissions
+CREATE OR REPLACE VIEW payment_plan_summary
+WITH (security_invoker = true)
+AS
 SELECT
   xi.id as invoice_id,
   (xi.staging_metadata->>'user_id')::uuid as contact_id,
@@ -101,6 +104,17 @@ FROM xero_invoices xi
 JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
 WHERE xi.is_payment_plan = true
 GROUP BY xi.id, xi.staging_metadata, xi.payment_id;
+
+-- Restrict access to admin users only via RLS on the view
+ALTER VIEW payment_plan_summary SET (security_barrier = true);
+
+-- Revoke public access
+REVOKE ALL ON payment_plan_summary FROM PUBLIC;
+REVOKE ALL ON payment_plan_summary FROM anon;
+REVOKE ALL ON payment_plan_summary FROM authenticated;
+
+-- Grant access only to service_role (used by admin APIs with createAdminClient)
+GRANT SELECT ON payment_plan_summary TO service_role;
 
 -- 6. Drop old payment plan tables
 -- Skipping data migration since this is development environment

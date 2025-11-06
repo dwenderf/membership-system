@@ -13,10 +13,11 @@ export interface PaymentPlanCreationData {
   totalAmount: number // in cents
   xeroInvoiceId: string
   firstPaymentId: string // Payment ID for the first installment (already processed)
+  tenantId: string // Xero tenant ID
 }
 
 export interface PaymentPlanSummary {
-  id: string
+  id: string // Invoice ID
   userRegistrationId: string
   registrationName: string
   totalAmount: number
@@ -33,6 +34,7 @@ export interface PaymentPlanSummary {
 export class PaymentPlanService {
   /**
    * Check if a user is eligible to create payment plans
+   * Users just need a saved payment method - no separate flag needed
    */
   static async canUserCreatePaymentPlan(userId: string): Promise<boolean> {
     try {
@@ -40,7 +42,7 @@ export class PaymentPlanService {
 
       const { data: user, error } = await supabase
         .from('users')
-        .select('payment_plan_enabled, stripe_payment_method_id, setup_intent_status')
+        .select('stripe_payment_method_id, setup_intent_status')
         .eq('id', userId)
         .single()
 
@@ -48,9 +50,8 @@ export class PaymentPlanService {
         return false
       }
 
-      // User must be enabled for payment plans AND have a valid saved payment method
+      // User must have a valid saved payment method
       return (
-        user.payment_plan_enabled === true &&
         !!user.stripe_payment_method_id &&
         user.setup_intent_status === 'succeeded'
       )
@@ -70,7 +71,8 @@ export class PaymentPlanService {
 
   /**
    * Create a payment plan for a registration
-   * First payment is already processed - this creates the plan and schedules remaining payments
+   * Creates 4 xero_payments records in 'staged' status
+   * First payment should already be 'pending' (set by webhook later)
    */
   static async createPaymentPlan(
     data: PaymentPlanCreationData
@@ -82,122 +84,76 @@ export class PaymentPlanService {
       const installmentAmount = Math.round(data.totalAmount / 4) // 25% per installment
       const firstPaymentDate = new Date()
 
-      // Calculate next payment date (30 days from first payment)
-      const nextPaymentDate = new Date(firstPaymentDate)
-      nextPaymentDate.setDate(nextPaymentDate.getDate() + 30)
-
       logger.logPaymentProcessing(
         'payment-plan-creation-start',
-        'Creating payment plan',
+        'Creating payment plan xero_payments records',
         {
           userId: data.userId,
           userRegistrationId: data.userRegistrationId,
+          xeroInvoiceId: data.xeroInvoiceId,
           totalAmount: data.totalAmount,
-          installmentAmount,
-          nextPaymentDate: nextPaymentDate.toISOString().split('T')[0]
+          installmentAmount
         },
         'info'
       )
 
-      // Create payment plan record
-      const { data: paymentPlan, error: planError } = await adminSupabase
-        .from('payment_plans')
-        .insert({
-          user_registration_id: data.userRegistrationId,
-          user_id: data.userId,
-          total_amount: data.totalAmount,
-          paid_amount: installmentAmount, // First installment already paid
-          installment_amount: installmentAmount,
-          installments_count: 4,
-          installments_paid: 1, // First installment completed
-          next_payment_date: nextPaymentDate.toISOString().split('T')[0],
-          first_payment_immediate: true,
-          status: 'active',
-          xero_invoice_id: data.xeroInvoiceId
-        })
-        .select()
-        .single()
+      // Mark invoice as payment plan
+      await adminSupabase
+        .from('xero_invoices')
+        .update({ is_payment_plan: true })
+        .eq('id', data.xeroInvoiceId)
 
-      if (planError) {
+      // Create 4 xero_payment records, all as 'staged' initially
+      const xeroPayments = []
+      for (let i = 1; i <= 4; i++) {
+        const scheduledDate = new Date(firstPaymentDate)
+        scheduledDate.setDate(scheduledDate.getDate() + (30 * (i - 1)))
+
+        xeroPayments.push({
+          xero_invoice_id: data.xeroInvoiceId,
+          tenant_id: data.tenantId,
+          xero_payment_id: crypto.randomUUID(), // Placeholder, will be replaced when synced to Xero
+          payment_method: 'stripe',
+          amount_paid: installmentAmount,
+          sync_status: 'staged', // All start as staged
+          payment_type: 'installment',
+          installment_number: i,
+          planned_payment_date: scheduledDate.toISOString().split('T')[0],
+          attempt_count: 0,
+          max_attempts: 3,
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            user_id: data.userId,
+            user_registration_id: data.userRegistrationId,
+            payment_plan_created_at: new Date().toISOString(),
+            ...(i === 1 && { first_payment_id: data.firstPaymentId })
+          }
+        })
+      }
+
+      const { error: insertError } = await adminSupabase
+        .from('xero_payments')
+        .insert(xeroPayments)
+
+      if (insertError) {
         logger.logPaymentProcessing(
           'payment-plan-creation-error',
-          'Failed to create payment plan record',
+          'Failed to create xero_payments records',
           {
             userId: data.userId,
-            error: planError.message
+            xeroInvoiceId: data.xeroInvoiceId,
+            error: insertError.message
           },
           'error'
         )
         return { success: false, error: 'Failed to create payment plan' }
       }
 
-      // Create transaction record for first installment (already completed)
-      const { error: firstTxError } = await adminSupabase
-        .from('payment_plan_transactions')
-        .insert({
-          payment_plan_id: paymentPlan.id,
-          payment_id: data.firstPaymentId,
-          amount: installmentAmount,
-          installment_number: 1,
-          scheduled_date: firstPaymentDate.toISOString().split('T')[0],
-          processed_date: firstPaymentDate.toISOString(),
-          status: 'completed',
-          attempt_count: 1
-        })
-
-      if (firstTxError) {
-        logger.logPaymentProcessing(
-          'payment-plan-first-transaction-error',
-          'Failed to create first transaction record',
-          {
-            paymentPlanId: paymentPlan.id,
-            error: firstTxError.message
-          },
-          'warn'
-        )
-        // Don't fail the whole operation - the plan is created
-      }
-
-      // Create transaction records for remaining 3 installments
-      const remainingTransactions = []
-      for (let i = 2; i <= 4; i++) {
-        const scheduledDate = new Date(firstPaymentDate)
-        scheduledDate.setDate(scheduledDate.getDate() + (30 * (i - 1)))
-
-        remainingTransactions.push({
-          payment_plan_id: paymentPlan.id,
-          payment_id: null,
-          amount: installmentAmount,
-          installment_number: i,
-          scheduled_date: scheduledDate.toISOString().split('T')[0],
-          processed_date: null,
-          status: 'pending',
-          attempt_count: 0
-        })
-      }
-
-      const { error: txError } = await adminSupabase
-        .from('payment_plan_transactions')
-        .insert(remainingTransactions)
-
-      if (txError) {
-        logger.logPaymentProcessing(
-          'payment-plan-transactions-error',
-          'Failed to create scheduled transaction records',
-          {
-            paymentPlanId: paymentPlan.id,
-            error: txError.message
-          },
-          'error'
-        )
-        return { success: false, error: 'Failed to schedule future payments' }
-      }
-
       logger.logPaymentProcessing(
         'payment-plan-creation-success',
-        'Successfully created payment plan with scheduled transactions',
+        'Successfully created payment plan xero_payments records',
         {
-          paymentPlanId: paymentPlan.id,
+          xeroInvoiceId: data.xeroInvoiceId,
           userId: data.userId,
           userRegistrationId: data.userRegistrationId,
           totalInstallments: 4,
@@ -206,7 +162,8 @@ export class PaymentPlanService {
         'info'
       )
 
-      return { success: true, paymentPlanId: paymentPlan.id }
+      // Return the invoice ID as the "payment plan ID"
+      return { success: true, paymentPlanId: data.xeroInvoiceId }
     } catch (error) {
       logger.logPaymentProcessing(
         'payment-plan-creation-exception',
@@ -222,40 +179,44 @@ export class PaymentPlanService {
   }
 
   /**
-   * Process a single payment plan transaction
+   * Process a single payment plan installment
+   * Called by cron job for payments with status='planned' and planned_payment_date <= today
    */
   static async processPaymentPlanTransaction(
-    transactionId: string
+    xeroPaymentId: string
   ): Promise<{ success: boolean; paymentId?: string; error?: string }> {
     try {
       const adminSupabase = createAdminClient()
 
-      // Get transaction details
-      const { data: transaction, error: txError } = await adminSupabase
-        .from('payment_plan_transactions')
+      // Get the xero_payment record with invoice and registration details
+      const { data: xeroPayment, error: paymentError } = await adminSupabase
+        .from('xero_payments')
         .select(`
           *,
-          payment_plan:payment_plans(
-            *,
-            user_registration:user_registrations(
+          xero_invoice:xero_invoices(
+            id,
+            contact_id,
+            user_registrations!inner(
+              user_id,
               registration:registrations(name, season:seasons(name))
             )
           )
         `)
-        .eq('id', transactionId)
+        .eq('id', xeroPaymentId)
         .single()
 
-      if (txError || !transaction) {
-        return { success: false, error: 'Transaction not found' }
+      if (paymentError || !xeroPayment) {
+        return { success: false, error: 'Payment record not found' }
       }
 
-      const paymentPlan = transaction.payment_plan as any
+      const invoice = xeroPayment.xero_invoice as any
+      const userReg = invoice.user_registrations[0]
 
       // Get user's payment method
       const { data: user, error: userError } = await adminSupabase
         .from('users')
-        .select('stripe_payment_method_id, stripe_customer_id, email, first_name, last_name')
-        .eq('id', paymentPlan.user_id)
+        .select('id, stripe_payment_method_id, stripe_customer_id, email, first_name, last_name')
+        .eq('id', userReg.user_id)
         .single()
 
       if (userError || !user) {
@@ -266,34 +227,34 @@ export class PaymentPlanService {
         return { success: false, error: 'No saved payment method' }
       }
 
-      // Update transaction status to processing
+      // Update status to processing
       await adminSupabase
-        .from('payment_plan_transactions')
+        .from('xero_payments')
         .update({
-          status: 'processing',
+          sync_status: 'processing',
           last_attempt_at: new Date().toISOString(),
-          attempt_count: transaction.attempt_count + 1
+          attempt_count: xeroPayment.attempt_count + 1
         })
-        .eq('id', transactionId)
+        .eq('id', xeroPaymentId)
 
       logger.logPaymentProcessing(
-        'payment-plan-transaction-processing',
+        'payment-plan-installment-processing',
         'Processing payment plan installment',
         {
-          transactionId,
-          installmentNumber: transaction.installment_number,
-          amount: transaction.amount,
-          attemptCount: transaction.attempt_count + 1
+          xeroPaymentId,
+          installmentNumber: xeroPayment.installment_number,
+          amount: xeroPayment.amount_paid,
+          attemptCount: xeroPayment.attempt_count + 1
         },
         'info'
       )
 
       // Create Stripe payment intent
-      const registrationName = paymentPlan.user_registration?.registration?.name || 'Registration'
-      const seasonName = paymentPlan.user_registration?.registration?.season?.name || ''
+      const registrationName = userReg.registration?.name || 'Registration'
+      const seasonName = userReg.registration?.season?.name || ''
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: centsToCents(transaction.amount),
+        amount: centsToCents(xeroPayment.amount_paid),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,
         customer: user.stripe_customer_id,
@@ -301,31 +262,36 @@ export class PaymentPlanService {
         off_session: true,
         receipt_email: user.email,
         metadata: {
-          userId: paymentPlan.user_id,
-          paymentPlanId: paymentPlan.id,
-          transactionId: transaction.id,
-          installmentNumber: transaction.installment_number.toString(),
-          userRegistrationId: paymentPlan.user_registration_id,
+          userId: user.id,
+          xeroInvoiceId: xeroPayment.xero_invoice_id,
+          xeroPaymentId: xeroPaymentId,
+          installmentNumber: xeroPayment.installment_number.toString(),
+          userRegistrationId: xeroPayment.staging_metadata?.user_registration_id || '',
           purpose: 'payment_plan_installment'
         },
-        description: `Payment Plan Installment ${transaction.installment_number}/4 - ${registrationName} ${seasonName}`
+        description: `Payment Plan Installment ${xeroPayment.installment_number}/4 - ${registrationName} ${seasonName}`
       })
 
-      // Update transaction with payment intent ID
+      // Update with payment intent ID
       await adminSupabase
-        .from('payment_plan_transactions')
-        .update({ stripe_payment_intent_id: paymentIntent.id })
-        .eq('id', transactionId)
+        .from('xero_payments')
+        .update({
+          staging_metadata: {
+            ...xeroPayment.staging_metadata,
+            stripe_payment_intent_id: paymentIntent.id
+          }
+        })
+        .eq('id', xeroPaymentId)
 
       // Check if payment succeeded
       if (paymentIntent.status === 'succeeded') {
-        // Create payment record
-        const { data: paymentRecord, error: paymentError } = await adminSupabase
+        // Create payment record in payments table
+        const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
           .from('payments')
           .insert({
-            user_id: paymentPlan.user_id,
-            total_amount: centsToCents(transaction.amount),
-            final_amount: centsToCents(transaction.amount),
+            user_id: user.id,
+            total_amount: centsToCents(xeroPayment.amount_paid),
+            final_amount: centsToCents(xeroPayment.amount_paid),
             stripe_payment_intent_id: paymentIntent.id,
             status: 'completed',
             payment_method: 'stripe',
@@ -334,60 +300,39 @@ export class PaymentPlanService {
           .select()
           .single()
 
-        if (paymentError) {
+        if (paymentRecordError) {
           logger.logPaymentProcessing(
             'payment-plan-payment-record-error',
             'Failed to create payment record',
             {
-              transactionId,
-              error: paymentError.message
+              xeroPaymentId,
+              error: paymentRecordError.message
             },
             'error'
           )
           return { success: false, error: 'Failed to create payment record' }
         }
 
-        // Update transaction as completed
+        // Update xero_payment to 'pending' (ready to sync to Xero)
         await adminSupabase
-          .from('payment_plan_transactions')
+          .from('xero_payments')
           .update({
-            payment_id: paymentRecord.id,
-            status: 'completed',
-            processed_date: new Date().toISOString()
+            sync_status: 'pending',
+            staging_metadata: {
+              ...xeroPayment.staging_metadata,
+              payment_id: paymentRecord.id,
+              processed_at: new Date().toISOString()
+            }
           })
-          .eq('id', transactionId)
-
-        // Update payment plan
-        const newPaidAmount = paymentPlan.paid_amount + transaction.amount
-        const newInstallmentsPaid = paymentPlan.installments_paid + 1
-        const isComplete = newInstallmentsPaid >= 4
-
-        // Calculate next payment date (30 days from now) if not complete
-        let nextPaymentDate = null
-        if (!isComplete) {
-          const next = new Date()
-          next.setDate(next.getDate() + 30)
-          nextPaymentDate = next.toISOString().split('T')[0]
-        }
-
-        await adminSupabase
-          .from('payment_plans')
-          .update({
-            paid_amount: newPaidAmount,
-            installments_paid: newInstallmentsPaid,
-            status: isComplete ? 'completed' : 'active',
-            next_payment_date: nextPaymentDate
-          })
-          .eq('id', paymentPlan.id)
+          .eq('id', xeroPaymentId)
 
         logger.logPaymentProcessing(
-          'payment-plan-transaction-success',
+          'payment-plan-installment-success',
           'Successfully processed payment plan installment',
           {
-            transactionId,
+            xeroPaymentId,
             paymentId: paymentRecord.id,
-            installmentNumber: transaction.installment_number,
-            isComplete
+            installmentNumber: xeroPayment.installment_number
           },
           'info'
         )
@@ -398,21 +343,21 @@ export class PaymentPlanService {
         const failureReason = `Payment status: ${paymentIntent.status}`
 
         await adminSupabase
-          .from('payment_plan_transactions')
+          .from('xero_payments')
           .update({
-            status: 'failed',
+            sync_status: 'planned', // Back to planned for retry
             failure_reason: failureReason
           })
-          .eq('id', transactionId)
+          .eq('id', xeroPaymentId)
 
         logger.logPaymentProcessing(
-          'payment-plan-transaction-failed',
+          'payment-plan-installment-failed',
           'Payment plan installment failed',
           {
-            transactionId,
-            installmentNumber: transaction.installment_number,
+            xeroPaymentId,
+            installmentNumber: xeroPayment.installment_number,
             status: paymentIntent.status,
-            attemptCount: transaction.attempt_count + 1
+            attemptCount: xeroPayment.attempt_count + 1
           },
           'warn'
         )
@@ -422,22 +367,22 @@ export class PaymentPlanService {
     } catch (error) {
       const adminSupabase = createAdminClient()
 
-      // Update transaction as failed
+      // Mark as planned for retry
       const failureReason = error instanceof Error ? error.message : 'Unknown error'
 
       await adminSupabase
-        .from('payment_plan_transactions')
+        .from('xero_payments')
         .update({
-          status: 'failed',
+          sync_status: 'planned',
           failure_reason: failureReason
         })
-        .eq('id', transactionId)
+        .eq('id', xeroPaymentId)
 
       logger.logPaymentProcessing(
-        'payment-plan-transaction-exception',
-        'Exception processing payment plan transaction',
+        'payment-plan-installment-exception',
+        'Exception processing payment plan installment',
         {
-          transactionId,
+          xeroPaymentId,
           error: failureReason
         },
         'error'
@@ -449,44 +394,42 @@ export class PaymentPlanService {
 
   /**
    * Process early payoff for a payment plan
+   * Charges remaining balance and marks all planned installments as completed
    */
   static async processEarlyPayoff(
-    paymentPlanId: string
+    xeroInvoiceId: string
   ): Promise<{ success: boolean; paymentId?: string; totalPaid?: number; error?: string }> {
     try {
       const adminSupabase = createAdminClient()
 
-      // Get payment plan details
-      const { data: paymentPlan, error: planError } = await adminSupabase
-        .from('payment_plans')
-        .select(`
-          *,
-          user_registration:user_registrations(
-            registration:registrations(name, season:seasons(name))
-          )
-        `)
-        .eq('id', paymentPlanId)
-        .single()
+      // Get all planned payments for this invoice
+      const { data: plannedPayments, error: paymentsError } = await adminSupabase
+        .from('xero_payments')
+        .select('*')
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
+        .order('installment_number')
 
-      if (planError || !paymentPlan) {
-        return { success: false, error: 'Payment plan not found' }
+      if (paymentsError) {
+        return { success: false, error: 'Error fetching planned payments' }
       }
 
-      if (paymentPlan.status !== 'active') {
-        return { success: false, error: 'Payment plan is not active' }
+      if (!plannedPayments || plannedPayments.length === 0) {
+        return { success: false, error: 'No planned payments found' }
       }
 
-      const remainingBalance = paymentPlan.total_amount - paymentPlan.paid_amount
+      const remainingBalance = plannedPayments.reduce((sum, p) => sum + p.amount_paid, 0)
 
-      if (remainingBalance <= 0) {
-        return { success: false, error: 'No remaining balance' }
+      // Get user info from first planned payment
+      const userId = plannedPayments[0].staging_metadata?.user_id
+      if (!userId) {
+        return { success: false, error: 'User ID not found in payment metadata' }
       }
 
-      // Get user's payment method
       const { data: user, error: userError } = await adminSupabase
         .from('users')
         .select('stripe_payment_method_id, stripe_customer_id, email, first_name, last_name')
-        .eq('id', paymentPlan.user_id)
+        .eq('id', userId)
         .single()
 
       if (userError || !user) {
@@ -497,20 +440,33 @@ export class PaymentPlanService {
         return { success: false, error: 'No saved payment method' }
       }
 
+      // Get registration name for description
+      const { data: invoice } = await adminSupabase
+        .from('xero_invoices')
+        .select(`
+          user_registrations!inner(
+            registration:registrations(name, season:seasons(name))
+          )
+        `)
+        .eq('id', xeroInvoiceId)
+        .single()
+
+      const userReg = invoice?.user_registrations?.[0]
+      const registrationName = userReg?.registration?.name || 'Registration'
+      const seasonName = userReg?.registration?.season?.name || ''
+
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-start',
         'Processing early payoff for payment plan',
         {
-          paymentPlanId,
-          remainingBalance
+          xeroInvoiceId,
+          remainingBalance,
+          plannedPaymentsCount: plannedPayments.length
         },
         'info'
       )
 
       // Create Stripe payment intent for remaining balance
-      const registrationName = paymentPlan.user_registration?.registration?.name || 'Registration'
-      const seasonName = paymentPlan.user_registration?.registration?.season?.name || ''
-
       const paymentIntent = await stripe.paymentIntents.create({
         amount: centsToCents(remainingBalance),
         currency: 'usd',
@@ -520,9 +476,9 @@ export class PaymentPlanService {
         off_session: true,
         receipt_email: user.email,
         metadata: {
-          userId: paymentPlan.user_id,
-          paymentPlanId: paymentPlan.id,
-          userRegistrationId: paymentPlan.user_registration_id,
+          userId: userId,
+          xeroInvoiceId: xeroInvoiceId,
+          userRegistrationId: plannedPayments[0].staging_metadata?.user_registration_id || '',
           purpose: 'payment_plan_early_payoff'
         },
         description: `Early Payoff - ${registrationName} ${seasonName}`
@@ -536,10 +492,10 @@ export class PaymentPlanService {
       }
 
       // Create payment record
-      const { data: paymentRecord, error: paymentError } = await adminSupabase
+      const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
         .from('payments')
         .insert({
-          user_id: paymentPlan.user_id,
+          user_id: userId,
           total_amount: centsToCents(remainingBalance),
           final_amount: centsToCents(remainingBalance),
           stripe_payment_intent_id: paymentIntent.id,
@@ -550,47 +506,29 @@ export class PaymentPlanService {
         .select()
         .single()
 
-      if (paymentError) {
+      if (paymentRecordError) {
         return { success: false, error: 'Failed to create payment record' }
       }
 
-      // Get all pending transactions
-      const { data: pendingTransactions } = await adminSupabase
-        .from('payment_plan_transactions')
-        .select('id, installment_number, amount')
-        .eq('payment_plan_id', paymentPlanId)
-        .in('status', ['pending', 'failed'])
-        .order('installment_number')
-
-      // Mark all pending/failed transactions as completed
-      if (pendingTransactions && pendingTransactions.length > 0) {
-        await adminSupabase
-          .from('payment_plan_transactions')
-          .update({
-            payment_id: paymentRecord.id,
-            status: 'completed',
-            processed_date: new Date().toISOString()
-          })
-          .eq('payment_plan_id', paymentPlanId)
-          .in('status', ['pending', 'failed'])
-      }
-
-      // Update payment plan to completed
+      // Mark all planned payments as 'pending' (ready to sync to Xero)
       await adminSupabase
-        .from('payment_plans')
+        .from('xero_payments')
         .update({
-          paid_amount: paymentPlan.total_amount,
-          installments_paid: 4,
-          status: 'completed',
-          next_payment_date: null
+          sync_status: 'pending',
+          staging_metadata: {
+            payment_id: paymentRecord.id,
+            early_payoff: true,
+            processed_at: new Date().toISOString()
+          }
         })
-        .eq('id', paymentPlanId)
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
 
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-success',
         'Successfully processed early payoff',
         {
-          paymentPlanId,
+          xeroInvoiceId,
           paymentId: paymentRecord.id,
           amountPaid: remainingBalance
         },
@@ -607,7 +545,7 @@ export class PaymentPlanService {
         'payment-plan-early-payoff-exception',
         'Exception processing early payoff',
         {
-          paymentPlanId,
+          xeroInvoiceId,
           error: error instanceof Error ? error.message : String(error)
         },
         'error'
@@ -621,42 +559,34 @@ export class PaymentPlanService {
 
   /**
    * Cancel a payment plan
+   * Marks all planned payments as failed
    */
   static async cancelPaymentPlan(
-    paymentPlanId: string,
+    xeroInvoiceId: string,
     reason: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const adminSupabase = createAdminClient()
 
-      // Update payment plan status
+      // Mark all planned payments as failed
       const { error: updateError } = await adminSupabase
-        .from('payment_plans')
+        .from('xero_payments')
         .update({
-          status: 'cancelled',
-          next_payment_date: null
+          sync_status: 'failed',
+          failure_reason: `Payment plan cancelled: ${reason}`
         })
-        .eq('id', paymentPlanId)
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
 
       if (updateError) {
         return { success: false, error: updateError.message }
       }
 
-      // Cancel all pending transactions
-      await adminSupabase
-        .from('payment_plan_transactions')
-        .update({
-          status: 'failed',
-          failure_reason: `Payment plan cancelled: ${reason}`
-        })
-        .eq('payment_plan_id', paymentPlanId)
-        .eq('status', 'pending')
-
       logger.logPaymentProcessing(
         'payment-plan-cancelled',
         'Payment plan cancelled',
         {
-          paymentPlanId,
+          xeroInvoiceId,
           reason
         },
         'info'
@@ -668,7 +598,7 @@ export class PaymentPlanService {
         'payment-plan-cancellation-exception',
         'Exception cancelling payment plan',
         {
-          paymentPlanId,
+          xeroInvoiceId,
           error: error instanceof Error ? error.message : String(error)
         },
         'error'
@@ -682,22 +612,19 @@ export class PaymentPlanService {
 
   /**
    * Get active payment plans for a user
+   * Uses the payment_plan_summary view
    */
   static async getUserPaymentPlans(userId: string): Promise<PaymentPlanSummary[]> {
     try {
       const supabase = await createClient()
 
+      // Query the payment_plan_summary view
       const { data: plans, error } = await supabase
-        .from('payment_plans')
-        .select(`
-          *,
-          user_registration:user_registrations(
-            registration:registrations(name)
-          )
-        `)
-        .eq('user_id', userId)
+        .from('payment_plan_summary')
+        .select('*')
+        .eq('contact_id', userId)
         .in('status', ['active', 'completed'])
-        .order('created_at', { ascending: false })
+        .order('final_payment_date', { ascending: true })
 
       if (error) {
         logger.logPaymentProcessing(
@@ -709,20 +636,39 @@ export class PaymentPlanService {
         return []
       }
 
-      return (plans || []).map((plan: any) => ({
-        id: plan.id,
-        userRegistrationId: plan.user_registration_id,
-        registrationName: plan.user_registration?.registration?.name || 'Unknown',
-        totalAmount: plan.total_amount,
-        paidAmount: plan.paid_amount,
-        remainingBalance: plan.total_amount - plan.paid_amount,
-        installmentAmount: plan.installment_amount,
-        installmentsCount: plan.installments_count,
-        installmentsPaid: plan.installments_paid,
-        nextPaymentDate: plan.next_payment_date,
-        status: plan.status,
-        createdAt: plan.created_at
+      // Get registration names
+      const enrichedPlans = await Promise.all((plans || []).map(async (plan: any) => {
+        const { data: invoice } = await supabase
+          .from('xero_invoices')
+          .select(`
+            user_registrations!inner(
+              id,
+              registration:registrations(name)
+            )
+          `)
+          .eq('id', plan.invoice_id)
+          .single()
+
+        const userReg = invoice?.user_registrations?.[0]
+        const installmentAmount = plan.total_amount / plan.total_installments
+
+        return {
+          id: plan.invoice_id,
+          userRegistrationId: userReg?.id || '',
+          registrationName: userReg?.registration?.name || 'Unknown',
+          totalAmount: plan.total_amount,
+          paidAmount: plan.paid_amount,
+          remainingBalance: plan.total_amount - plan.paid_amount,
+          installmentAmount: installmentAmount,
+          installmentsCount: plan.total_installments,
+          installmentsPaid: plan.installments_paid,
+          nextPaymentDate: plan.next_payment_date,
+          status: plan.status,
+          createdAt: plans[0]?.installments?.[0]?.staging_metadata?.payment_plan_created_at || new Date().toISOString()
+        }
       }))
+
+      return enrichedPlans
     } catch (error) {
       logger.logPaymentProcessing(
         'get-user-payment-plans-exception',
@@ -744,18 +690,39 @@ export class PaymentPlanService {
     try {
       const supabase = await createClient()
 
-      const { data: plans, error } = await supabase
-        .from('payment_plans')
-        .select('total_amount, paid_amount')
-        .eq('user_id', userId)
-        .eq('status', 'active')
+      // Check if user has any planned or staged installment payments
+      const { data: payments, error } = await supabase
+        .from('xero_payments')
+        .select('id')
+        .eq('payment_type', 'installment')
+        .in('sync_status', ['planned', 'staged'])
+        .limit(1)
 
-      if (error || !plans || plans.length === 0) {
+      // Need to join through xero_invoices to get contact_id (user_id)
+      const { data: invoices } = await supabase
+        .from('xero_invoices')
+        .select('id')
+        .eq('contact_id', userId)
+        .eq('is_payment_plan', true)
+
+      if (!invoices || invoices.length === 0) {
         return false
       }
 
-      // Check if any plan has outstanding balance
-      return plans.some(plan => plan.paid_amount < plan.total_amount)
+      const invoiceIds = invoices.map(inv => inv.id)
+
+      const { data: outstandingPayments, error: paymentsError } = await supabase
+        .from('xero_payments')
+        .select('id')
+        .in('xero_invoice_id', invoiceIds)
+        .in('sync_status', ['planned', 'staged'])
+        .limit(1)
+
+      if (paymentsError) {
+        return false
+      }
+
+      return outstandingPayments && outstandingPayments.length > 0
     } catch (error) {
       logger.logPaymentProcessing(
         'check-outstanding-balance-exception',
@@ -777,19 +744,31 @@ export class PaymentPlanService {
     try {
       const supabase = await createClient()
 
-      const { data: plans, error } = await supabase
-        .from('payment_plans')
-        .select('total_amount, paid_amount')
-        .eq('user_id', userId)
-        .eq('status', 'active')
+      // Get user's payment plan invoices
+      const { data: invoices } = await supabase
+        .from('xero_invoices')
+        .select('id')
+        .eq('contact_id', userId)
+        .eq('is_payment_plan', true)
 
-      if (error || !plans) {
+      if (!invoices || invoices.length === 0) {
         return 0
       }
 
-      return plans.reduce((total, plan) => {
-        return total + (plan.total_amount - plan.paid_amount)
-      }, 0)
+      const invoiceIds = invoices.map(inv => inv.id)
+
+      // Sum up all planned payments
+      const { data: payments, error } = await supabase
+        .from('xero_payments')
+        .select('amount_paid')
+        .in('xero_invoice_id', invoiceIds)
+        .in('sync_status', ['planned', 'staged'])
+
+      if (error || !payments) {
+        return 0
+      }
+
+      return payments.reduce((total, payment) => total + payment.amount_paid, 0)
     } catch (error) {
       logger.logPaymentProcessing(
         'get-total-outstanding-balance-exception',

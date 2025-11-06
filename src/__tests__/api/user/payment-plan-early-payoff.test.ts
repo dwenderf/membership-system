@@ -134,7 +134,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
       const data = await response.json()
 
       expect(response.status).toBe(400)
-      expect(data.error).toBe('No remaining payments to pay off')
+      expect(data.error).toBe('Payment plan is already completed')
     })
 
     it('should successfully process early payoff', async () => {

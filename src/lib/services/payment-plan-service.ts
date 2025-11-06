@@ -34,7 +34,7 @@ export interface PaymentPlanSummary {
 export class PaymentPlanService {
   /**
    * Check if a user is eligible to create payment plans
-   * Users just need a saved payment method - no separate flag needed
+   * Requires both admin approval (payment_plan_enabled) and saved payment method
    */
   static async canUserCreatePaymentPlan(userId: string): Promise<boolean> {
     try {
@@ -42,7 +42,7 @@ export class PaymentPlanService {
 
       const { data: user, error } = await supabase
         .from('users')
-        .select('stripe_payment_method_id, setup_intent_status')
+        .select('stripe_payment_method_id, setup_intent_status, payment_plan_enabled')
         .eq('id', userId)
         .single()
 
@@ -50,8 +50,9 @@ export class PaymentPlanService {
         return false
       }
 
-      // User must have a valid saved payment method
+      // User must be admin-approved AND have a valid saved payment method
       return (
+        user.payment_plan_enabled === true &&
         !!user.stripe_payment_method_id &&
         user.setup_intent_status === 'succeeded'
       )

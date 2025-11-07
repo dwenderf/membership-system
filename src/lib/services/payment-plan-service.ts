@@ -119,7 +119,7 @@ export class PaymentPlanService {
         xeroPayments.push({
           xero_invoice_id: data.xeroInvoiceId,
           tenant_id: data.tenantId,
-          xero_payment_id: crypto.randomUUID(), // Placeholder, will be replaced when synced to Xero
+          xero_payment_id: '00000000-0000-0000-0000-000000000000', // Sentinel value, replaced when synced to Xero
           payment_method: 'stripe',
           amount_paid: paymentAmount,
           sync_status: 'staged', // All start as staged
@@ -498,7 +498,7 @@ export class PaymentPlanService {
         .insert({
           xero_invoice_id: xeroInvoiceId,
           tenant_id: plannedPayments[0].tenant_id,
-          xero_payment_id: crypto.randomUUID(), // Placeholder, replaced when synced
+          xero_payment_id: '00000000-0000-0000-0000-000000000000', // Sentinel value, replaced when synced
           payment_method: 'stripe',
           amount_paid: remainingBalance,
           sync_status: 'staged',

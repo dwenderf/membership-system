@@ -1279,7 +1279,7 @@ export async function POST(request: NextRequest) {
 
     const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, {
       isFree: false,
-      isPaymentPlan: isPaymentPlan // Skip payment record creation for payment plans - webhook will create installment records
+      isPaymentPlan: isPaymentPlan // Create 4 staged installment records - webhook updates to pending/planned
     })
     if (!stagingRecord) {
       logger.logPaymentProcessing(

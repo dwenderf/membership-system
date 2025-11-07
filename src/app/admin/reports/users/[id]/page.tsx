@@ -12,9 +12,12 @@ interface PageProps {
   params: {
     id: string
   }
+  searchParams: {
+    from?: string
+  }
 }
 
-export default async function UserDetailPage({ params }: PageProps) {
+export default async function UserDetailPage({ params, searchParams }: PageProps) {
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
   const logger = Logger.getInstance()
@@ -190,11 +193,11 @@ export default async function UserDetailPage({ params }: PageProps) {
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <Link 
-                  href="/admin/reports/users"
+                <Link
+                  href={searchParams.from === 'payment-plans' ? '/admin/reports/payment-plans' : '/admin/reports/users'}
                   className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
                 >
-                  ← Back to Users
+                  ← {searchParams.from === 'payment-plans' ? 'Back to Payment Plans' : 'Back to Users'}
                 </Link>
                 <h1 className="text-3xl font-bold text-gray-900">
                   {user.first_name} {user.last_name}

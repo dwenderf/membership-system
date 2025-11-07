@@ -381,6 +381,7 @@ export class XeroStagingManager {
             tenant_id: tenantId, // Can be null during staging
             xero_payment_id: null, // Will be populated when synced to Xero
             payment_method: 'stripe',
+            payment_type: 'full', // Regular payment (not installment)
             bank_account_code: stripeBankAccountCode,
             amount_paid: data.final_amount,
             stripe_fee_amount: 0, // Will be calculated when payment is completed

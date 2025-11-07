@@ -153,7 +153,10 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
  * Only updates payments that are still in 'staged' status (idempotent)
  * Flexible - works with any number of installments
  */
-async function updatePaymentPlanStatuses(supabase: any, xeroInvoiceId: string): Promise<void> {
+async function updatePaymentPlanStatuses(
+  supabase: ReturnType<typeof createAdminClient>,
+  xeroInvoiceId: string
+): Promise<void> {
   const { data: allPayments } = await supabase
     .from('xero_payments')
     .select('id, installment_number')

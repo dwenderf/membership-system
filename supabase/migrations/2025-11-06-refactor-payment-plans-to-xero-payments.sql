@@ -2,7 +2,12 @@
 -- Consolidates payment plan logic into xero_payments table instead of separate tables
 -- This makes payment plans consistent with regular payments and simplifies architecture
 
--- 1. Add payment plan columns to xero_payments
+-- 1. Drop UNIQUE constraint that prevents multiple payments per invoice
+-- Payment plans need multiple xero_payments records per invoice (one per installment)
+ALTER TABLE xero_payments
+DROP CONSTRAINT IF EXISTS xero_payments_xero_invoice_id_tenant_id_key;
+
+-- 2. Add payment plan columns to xero_payments
 ALTER TABLE xero_payments
 ADD COLUMN IF NOT EXISTS payment_type TEXT CHECK (payment_type IN ('full', 'installment')),
 ADD COLUMN IF NOT EXISTS installment_number INTEGER,
@@ -20,11 +25,11 @@ WHERE payment_type IS NULL;
 ALTER TABLE xero_payments
 ALTER COLUMN payment_type SET NOT NULL;
 
--- 2. Add is_payment_plan flag to xero_invoices
+-- 3. Add is_payment_plan flag to xero_invoices
 ALTER TABLE xero_invoices
 ADD COLUMN IF NOT EXISTS is_payment_plan BOOLEAN DEFAULT FALSE;
 
--- 3. Update sync_status to include 'planned' for future installments and 'cancelled' for early payoff
+-- 4. Update sync_status to include 'planned' for future installments and 'cancelled' for early payoff
 -- First, check if there are any invalid sync_status values and log them
 DO $$
 DECLARE
@@ -57,7 +62,7 @@ CHECK (sync_status IN ('pending', 'staged', 'planned', 'cancelled', 'processing'
 -- Update comment
 COMMENT ON COLUMN xero_payments.sync_status IS 'pending=ready for sync, staged=created but not ready, planned=future installment (internal only), cancelled=payment cancelled (early payoff superseded), processing=currently being synced, synced=successfully synced, failed=sync failed, ignore=skip retry (manual intervention required)';
 
--- 4. Create indexes for efficient payment plan queries
+-- 5. Create indexes for efficient payment plan queries
 CREATE INDEX IF NOT EXISTS idx_xero_payments_planned_ready
 ON xero_payments(sync_status, planned_payment_date)
 WHERE sync_status = 'planned' AND planned_payment_date IS NOT NULL;
@@ -69,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_xero_payments_invoice_installment
 ON xero_payments(xero_invoice_id, installment_number)
 WHERE installment_number IS NOT NULL;
 
--- 5. Create view for payment plan summary (replaces direct queries to payment_plans table)
+-- 6. Create view for payment plan summary (replaces direct queries to payment_plans table)
 -- Using SECURITY INVOKER so it respects the caller's permissions
 CREATE OR REPLACE VIEW payment_plan_summary
 WITH (security_invoker = true)
@@ -117,7 +122,7 @@ REVOKE ALL ON payment_plan_summary FROM authenticated;
 -- View uses security_invoker=true, so it still respects RLS on underlying tables
 GRANT SELECT ON payment_plan_summary TO service_role;
 
--- 6. Drop old payment plan tables
+-- 7. Drop old payment plan tables
 -- Skipping data migration since this is development environment
 DROP TABLE IF EXISTS payment_plan_transactions CASCADE;
 DROP TABLE IF EXISTS payment_plans CASCADE;

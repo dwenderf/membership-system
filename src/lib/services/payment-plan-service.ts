@@ -100,10 +100,20 @@ export class PaymentPlanService {
       )
 
       // Mark invoice as payment plan
-      await adminSupabase
+      const { error: updateError } = await adminSupabase
         .from('xero_invoices')
         .update({ is_payment_plan: true })
         .eq('id', data.xeroInvoiceId)
+
+      if (updateError) {
+        logger.logPaymentProcessing(
+          'create-payment-plan-invoice-update-error',
+          'Failed to mark invoice as payment plan',
+          { xeroInvoiceId: data.xeroInvoiceId, error: updateError.message },
+          'error'
+        )
+        return { success: false, error: 'Failed to update invoice' }
+      }
 
       // Create xero_payment records, all as 'staged' initially
       const xeroPayments = []

@@ -16,6 +16,15 @@ import { centsToCents, centsToDollars } from '../../types/currency'
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
 
+/**
+ * Calculate default due date (30 days from creation date)
+ * @param createdAt - ISO timestamp string of invoice creation
+ * @returns Due date in YYYY-MM-DD format
+ */
+function calculateDefaultDueDate(createdAt: string): string {
+  return new Date(new Date(createdAt).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+}
+
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
 }
@@ -640,12 +649,12 @@ export class XeroBatchSyncManager {
           // Database error querying xero_payments
           console.error(`❌ Error fetching final payment date for payment plan invoice ${invoiceRecord.id}:`, paymentError)
           console.warn('⚠️ Falling back to default 30-day due date due to database error')
-          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+          dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
         } else if (!finalPayment) {
           // No payments found (data integrity issue)
           console.error(`❌ No installment payments found for payment plan invoice ${invoiceRecord.id}`)
           console.warn('⚠️ Falling back to default 30-day due date - manual review required')
-          dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+          dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
         } else {
           // Use the actual scheduled date of the final installment
           dueDate = finalPayment.planned_payment_date
@@ -658,7 +667,7 @@ export class XeroBatchSyncManager {
         }
       } else {
         // Regular invoice: 30 days from creation
-        dueDate = new Date(new Date(invoiceRecord.created_at).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+        dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
       }
 
       // Create invoice object

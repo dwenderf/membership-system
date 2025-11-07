@@ -188,7 +188,7 @@ async function updatePaymentPlanStatuses(
       .eq('sync_status', 'staged')
   }
 
-  console.log(`✅ Updated xero_payments statuses: #1=pending, #${allPayments.length > 1 ? `2-${allPayments.length}` : '1 only'}=planned`, {
+  console.log(`✅ Updated xero_payments statuses: #1=pending${allPayments.length > 1 ? `, #2-${allPayments.length}=planned` : ' (single payment)'}`, {
     xeroInvoiceId,
     installmentCount: allPayments.length
   })

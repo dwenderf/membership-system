@@ -472,6 +472,24 @@ export class PaymentPlanService {
         'info'
       )
 
+      /**
+       * Early Payoff Flow (Multi-Step Process)
+       *
+       * Note: We don't use a database transaction here because:
+       * 1. Supabase client doesn't natively support transactions across multiple operations
+       * 2. Database operations are extremely reliable - failures are rare
+       * 3. If failures occur, they indicate system-wide issues requiring admin intervention anyway
+       * 4. Critical error logs provide clear recovery instructions for admins
+       *
+       * Steps:
+       * 1. Cancel planned payments (set sync_status='cancelled')
+       * 2. Create staged payment for full balance
+       * 3. Create payment record
+       * 4. Charge Stripe (webhook completes the flow)
+       *
+       * Each step has defensive error handling with critical logging for admin recovery.
+       */
+
       // Step 1: Cancel all planned payments (mark as superseded)
       const { error: cancelError } = await adminSupabase
         .from('xero_payments')
@@ -518,8 +536,15 @@ export class PaymentPlanService {
       if (stagedPaymentError || !stagedPayment) {
         logger.logPaymentProcessing(
           'payment-plan-early-payoff-staged-error',
-          'Failed to create staged payment',
-          { xeroInvoiceId, error: stagedPaymentError?.message },
+          'CRITICAL: Planned payments cancelled but replacement payment failed to create - ADMIN INTERVENTION REQUIRED',
+          {
+            xeroInvoiceId,
+            userId,
+            remainingBalance,
+            cancelledPaymentsCount: plannedPayments.length,
+            error: stagedPaymentError?.message,
+            recovery: 'Admin must manually restore cancelled payments to planned status or create replacement payment'
+          },
           'error'
         )
         return { success: false, error: 'Failed to create staged payment record' }
@@ -541,8 +566,15 @@ export class PaymentPlanService {
       if (paymentRecordError || !paymentRecord) {
         logger.logPaymentProcessing(
           'payment-plan-early-payoff-payment-error',
-          'Failed to create payment record',
-          { xeroInvoiceId, error: paymentRecordError?.message },
+          'CRITICAL: Staged payment created but payment record failed - ADMIN INTERVENTION REQUIRED',
+          {
+            xeroInvoiceId,
+            userId,
+            stagedPaymentId: stagedPayment.id,
+            remainingBalance,
+            error: paymentRecordError?.message,
+            recovery: 'Admin must manually create payment record or delete staged payment and restore cancelled payments'
+          },
           'error'
         )
         return { success: false, error: 'Failed to create payment record' }

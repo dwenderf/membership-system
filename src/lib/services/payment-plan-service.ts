@@ -468,8 +468,10 @@ export class PaymentPlanService {
         .single()
 
       const userReg = invoice?.user_registrations?.[0]
-      const registrationName = userReg?.registration?.name || 'Registration'
-      const seasonName = userReg?.registration?.season?.name || ''
+      const registration = Array.isArray(userReg?.registration) ? userReg?.registration[0] : userReg?.registration
+      const registrationName = registration?.name || 'Registration'
+      const season = Array.isArray(registration?.season) ? registration?.season[0] : registration?.season
+      const seasonName = season?.name || ''
 
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-start',

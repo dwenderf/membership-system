@@ -1274,7 +1274,13 @@ export async function POST(request: NextRequest) {
       stripe_payment_intent_id: undefined // Will be updated after Stripe intent creation
     }
 
-    const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: false })
+    // Calculate payment amounts for payment plan if applicable
+    const isPaymentPlan = usePaymentPlan === true
+
+    const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, {
+      isFree: false,
+      isPaymentPlan: isPaymentPlan // Skip payment record creation for payment plans - webhook will create installment records
+    })
     if (!stagingRecord) {
       logger.logPaymentProcessing(
         'staging-creation-failed',
@@ -1304,7 +1310,6 @@ export async function POST(request: NextRequest) {
     )
 
     // Calculate payment amounts for payment plan if applicable
-    const isPaymentPlan = usePaymentPlan === true
     const firstInstallmentAmount = isPaymentPlan ? Math.round(finalAmount / 4) : finalAmount // 25% for payment plan
     const chargeAmount = firstInstallmentAmount // Amount to charge now
 

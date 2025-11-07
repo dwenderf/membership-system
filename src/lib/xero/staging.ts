@@ -172,7 +172,7 @@ export class XeroStagingManager {
    * Create staging records immediately with provided invoice data
    * (for immediate staging at purchase time)
    */
-  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<any | null> {
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean, isPaymentPlan?: boolean }): Promise<any | null> {
     try {
       logger.logXeroSync(
         'staging-immediate-start',
@@ -288,9 +288,9 @@ export class XeroStagingManager {
    * Create staging records for invoice and payment
    */
   private async createInvoiceStaging(
-    data: StagingPaymentData, 
+    data: StagingPaymentData,
     tenantId: string | null,
-    options?: { isFree?: boolean }
+    options?: { isFree?: boolean, isPaymentPlan?: boolean }
   ): Promise<any | null> {
     try {
       // Let Xero generate its own invoice number - don't set one here
@@ -372,7 +372,8 @@ export class XeroStagingManager {
       }
 
       // Create payment staging record if this is a paid purchase
-      if (data.final_amount > 0) {
+      // Skip payment record creation for payment plans - the webhook will create installment records
+      if (data.final_amount > 0 && !options?.isPaymentPlan) {
         const stripeBankAccountCode = await this.getStripeBankAccountCode()
         const { error: paymentError } = await this.supabase
           .from('xero_payments')
@@ -399,7 +400,7 @@ export class XeroStagingManager {
           logger.logXeroSync(
             'staging-payment-create-error',
             'Failed to create payment staging',
-            { 
+            {
               tenantId,
               amount: data.final_amount,
               error: paymentError.message

@@ -173,6 +173,24 @@ export async function GET(request: NextRequest) {
     const usersWithBalance = result.filter(u => u.remainingBalance > 0).length
     const totalOutstandingBalance = result.reduce((sum, u) => sum + u.remainingBalance, 0)
 
+    // Debug logging
+    logger.logAdminAction(
+      'payment-plans-summary-debug',
+      'Payment plans summary calculation',
+      {
+        totalUsers: result.length,
+        totalEligibleUsers,
+        usersWithActivePlans,
+        usersWithBalance,
+        sampleUsers: result.slice(0, 3).map(u => ({
+          id: u.userId,
+          paymentPlanEnabled: u.paymentPlanEnabled,
+          activePlansCount: u.activePlansCount
+        }))
+      },
+      'info'
+    )
+
     // Apply filters if requested
     let filteredResult = result
     if (filter === 'active') {

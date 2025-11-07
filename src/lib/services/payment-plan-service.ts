@@ -29,7 +29,7 @@ export interface PaymentPlanSummary {
   installmentsPaid: number
   nextPaymentDate: string | null
   status: string
-  createdAt: string
+  createdAt: string | null // From xero_invoices.created_at (should always exist, but nullable for safety)
 }
 
 export class PaymentPlanService {
@@ -691,6 +691,7 @@ export class PaymentPlanService {
         .select(`
           *,
           invoice:xero_invoices!invoice_id(
+            created_at,
             user_registrations!inner(
               id,
               registration:registrations(name)
@@ -730,7 +731,7 @@ export class PaymentPlanService {
           installmentsPaid: plan.installments_paid,
           nextPaymentDate: plan.next_payment_date,
           status: plan.status,
-          createdAt: plan.installments?.[0]?.staging_metadata?.payment_plan_created_at || new Date().toISOString()
+          createdAt: plan.invoice?.created_at || null
         }
       })
 

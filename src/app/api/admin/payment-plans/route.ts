@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Build query for users
     const { data: users, error: usersError } = await adminSupabase
       .from('users')
-      .select('id, email, first_name, last_name, created_at')
+      .select('id, email, first_name, last_name, created_at, payment_plan_enabled')
       .order('email')
 
     if (usersError) {
@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
+        paymentPlanEnabled: user.payment_plan_enabled || false,
         activePlansCount: activePlans.length,
         totalPlansCount: userPlans.length,
         totalAmount,
@@ -165,10 +166,12 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Apply active balance filter if requested
+    // Apply filters if requested
     let filteredResult = result
     if (filter === 'active') {
       filteredResult = result.filter(u => u.remainingBalance > 0)
+    } else if (filter === 'eligible') {
+      filteredResult = result.filter(u => u.paymentPlanEnabled)
     }
 
     return NextResponse.json({

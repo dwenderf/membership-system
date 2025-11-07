@@ -66,6 +66,8 @@ type PaymentCompletionEvent = {
     failure_reason?: string
     failed?: boolean
     xero_staging_record_id?: string
+    is_payment_plan?: boolean
+    payment_plan_id?: string
   }
 }
 

@@ -10,7 +10,7 @@
 import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
 import { Cents, centsToCents, negativeCents, centsToDollars } from '../../types/currency'
-import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './services/payment-plan-config'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../services/payment-plan-config'
 
 /**
  * Data structure for staging Xero invoice and payment records

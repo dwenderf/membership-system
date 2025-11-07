@@ -38,10 +38,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const filter = searchParams.get('filter') || 'all'
 
-    // Build query for users
+    // Build query for users (exclude deleted users)
     const { data: users, error: usersError } = await adminSupabase
       .from('users')
       .select('id, email, first_name, last_name, created_at, payment_plan_enabled')
+      .is('deleted_at', null)
       .order('email')
 
     if (usersError) {

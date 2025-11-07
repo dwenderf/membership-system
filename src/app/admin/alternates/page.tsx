@@ -4,6 +4,21 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import AlternatesManager from '@/components/AlternatesManager'
 
+interface Registration {
+  id: string
+  name: string
+  type: string
+  allow_alternates: boolean
+  alternate_price: number | null
+  alternate_accounting_code: string | null
+  is_active: boolean
+  seasons: {
+    id: string
+    name: string
+    end_date: string
+  } | null
+}
+
 export default async function AlternatesPage() {
   // Check access permissions
   const access = await checkAlternatesAccess()
@@ -44,11 +59,17 @@ export default async function AlternatesPage() {
     notFound()
   }
 
+  // Transform the data to match the expected type (seasons array -> single object)
+  const transformedRegistrations: Registration[] = (registrations || []).map(reg => ({
+    ...reg,
+    seasons: Array.isArray(reg.seasons) && reg.seasons.length > 0 ? reg.seasons[0] : null
+  }))
+
   // Filter out expired registrations (where season has ended)
-  const activeRegistrations = registrations?.filter(reg => {
+  const activeRegistrations = transformedRegistrations.filter(reg => {
     if (!reg.seasons?.end_date) return true // No end date = always active
     return new Date(reg.seasons.end_date) >= new Date()
-  }) || []
+  })
 
   return (
     <div className="min-h-screen bg-gray-50">

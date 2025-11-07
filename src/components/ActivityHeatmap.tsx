@@ -141,6 +141,45 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
   }
 
   // Don't render if we have no valid data
-  // ...existing code...
-  // TODO: Render your custom heatmap component here
+  if (!heatmapData || heatmapData.length === 0) {
+    return (
+      <div className="text-gray-500 text-sm">
+        No activity data available for this registration.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-gray-600">
+        Activity Heatmap for {registration.name}
+      </div>
+      <div className="grid grid-cols-12 gap-2">
+        {heatmapData.map((value, index) => {
+          const intensity = value.count > 0 ? Math.min(Math.ceil(value.count / 5), 4) : 0
+          const bgColors = [
+            'bg-gray-100',
+            'bg-green-200',
+            'bg-green-400',
+            'bg-green-600',
+            'bg-green-800'
+          ]
+
+          return (
+            <div
+              key={`${value.date}-${index}`}
+              className={`h-8 rounded ${bgColors[intensity]} cursor-pointer hover:opacity-80 transition-opacity`}
+              onClick={() => handleClick(value)}
+              {...getTooltipDataAttrs(value)}
+              title={getTooltipDataAttrs(value)['data-tip']}
+            />
+          )
+        })}
+      </div>
+      <div className="flex justify-between text-xs text-gray-500">
+        <span>{formatDate(startDate)}</span>
+        <span>{formatDate(endDate)}</span>
+      </div>
+    </div>
+  )
 }

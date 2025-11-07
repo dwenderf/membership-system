@@ -16,6 +16,13 @@ interface User {
   tags?: string[]
 }
 
+interface NavigationItem {
+  name: string
+  href: string
+  current: boolean
+  badge?: string
+}
+
 interface UserNavigationProps {
   user: User | null
   useToggle?: boolean
@@ -39,7 +46,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
     }
   }, [user?.id, user?.is_admin])
 
-  const baseNavigation = [
+  const baseNavigation: NavigationItem[] = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },

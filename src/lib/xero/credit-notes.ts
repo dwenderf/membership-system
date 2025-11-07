@@ -1,4 +1,5 @@
 import { CreditNote, LineItem, CurrencyCode, Contact, LineAmountTypes } from 'xero-node'
+import type { CreditNote as XeroCreditNoteType } from 'xero-node'
 import { getAuthenticatedXeroClient, getActiveTenant } from './client'
 import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
@@ -38,16 +39,22 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
       amount: data.refund_amount
     })
 
+    // Get active tenant
+    const activeTenant = await getActiveTenant()
+    if (!activeTenant) {
+      throw new Error('No active Xero tenant found')
+    }
+
     // Get authenticated Xero client
-    const xeroResult = await getAuthenticatedXeroClient()
-    if (!xeroResult.success || !xeroResult.client) {
+    const xero = await getAuthenticatedXeroClient(activeTenant.tenant_id)
+    if (!xero) {
       throw new Error('Failed to authenticate with Xero')
     }
 
-    const { client: xero, tenantId } = xeroResult
+    const tenantId = activeTenant.tenant_id
 
     // Get or create Xero contact for the user
-    const contactResult = await getOrCreateXeroContact(data.user_id)
+    const contactResult = await getOrCreateXeroContact(data.user_id, tenantId)
     if (!contactResult.success || !contactResult.xeroContactId) {
       throw new Error('Failed to get Xero contact for user')
     }
@@ -64,13 +71,13 @@ export async function createXeroCreditNote(data: RefundCreditNoteData): Promise<
 
     // Create credit note object
     const creditNote: CreditNote = {
-      type: 'ACCRECCREDIT', // Accounts Receivable Credit Note
+      type: CreditNote.TypeEnum.ACCRECCREDIT, // Accounts Receivable Credit Note
       contact: {
         contactID: contactResult.xeroContactId
       },
       lineItems: lineItems,
       date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-      status: 'AUTHORISED',
+      status: CreditNote.StatusEnum.AUTHORISED,
       currencyCode: CurrencyCode.USD,
       reference: `Refund for Payment ${data.payment_id.slice(0, 8)}`,
       lineAmountTypes: LineAmountTypes.Exclusive

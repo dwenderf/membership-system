@@ -73,8 +73,9 @@ export async function POST(request: NextRequest) {
       captureAccountDeletionWarning('Account deletion email failed to send', {
         ...deletionContext,
         step: 'email_send',
-        emailSent: false
-      }, emailError)
+        emailSent: false,
+        error: emailError
+      })
       // Continue with deletion even if email fails
     }
 
@@ -136,9 +137,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Account deletion error:', error)
-    
+
     // Capture critical error with all available context
-    captureCriticalAccountDeletionError(error, {
+    captureCriticalAccountDeletionError(error instanceof Error ? error : new Error(String(error)), {
       ...deletionContext,
       step: 'unknown'
     })

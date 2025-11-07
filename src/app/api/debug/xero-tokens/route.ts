@@ -1,6 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 
+interface TokenStatusResult {
+  status: string
+  tenant_name: any
+  tenant_id: any
+  expires_at: any
+  current_time: string
+  minutes_until_expiry: number
+  is_expired: boolean
+  days_since_auth: number
+  created_at: any
+  updated_at: any
+  access_token_prefix: string
+  refresh_token_prefix: string
+  message?: string
+  action?: string
+  warning?: string
+  recommended_action?: string
+  critical?: string
+  required_action?: string
+}
+
 export async function GET() {
   try {
     const supabase = createAdminClient()
@@ -34,7 +55,7 @@ export async function GET() {
     const createdAt = new Date(token.created_at)
     const daysSinceAuth = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24))
     
-    const result = {
+    const result: TokenStatusResult = {
       status: isExpired ? 'expired' : (minutesUntilExpiry < 60 ? 'expiring_soon' : 'valid'),
       tenant_name: token.tenant_name,
       tenant_id: token.tenant_id,

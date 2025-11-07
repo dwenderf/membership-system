@@ -23,6 +23,18 @@ const mockLogger = {
   logSystem: jest.fn()
 }
 
+// Helper to create a complete mock builder
+function createMockBuilder(overrides: any = {}) {
+  return {
+    select: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn(),
+    order: jest.fn().mockReturnThis(),
+    ...overrides
+  }
+}
+
 // Mock the imports
 require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
 require('@/lib/logging/logger').logger = mockLogger
@@ -63,16 +75,16 @@ describe('/api/alternate-registrations', () => {
       })
 
       // Mock user profile lookup (non-admin)
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      mockSupabase.from.mockReturnValueOnce(createMockBuilder({
+        select: jest.fn(() => createMockBuilder({
+          eq: jest.fn(() => createMockBuilder({
             single: jest.fn(() => Promise.resolve({
               data: { is_admin: false },
               error: null
             }))
           }))
         }))
-      })
+      }))
 
       const request = new NextRequest('http://localhost/api/alternate-registrations?registration_id=reg-123')
       const response = await GET(request)
@@ -88,16 +100,16 @@ describe('/api/alternate-registrations', () => {
       })
 
       // Mock admin user lookup
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      mockSupabase.from.mockReturnValueOnce(createMockBuilder({
+        select: jest.fn(() => createMockBuilder({
+          eq: jest.fn(() => createMockBuilder({
             single: jest.fn(() => Promise.resolve({
               data: { is_admin: true },
               error: null
             }))
           }))
         }))
-      })
+      }))
 
       // Mock registration lookup
       mockSupabase.from.mockReturnValueOnce({
@@ -116,7 +128,7 @@ describe('/api/alternate-registrations', () => {
             }))
           }))
         }))
-      })
+      } as any)
 
       // Mock games lookup
       mockSupabase.from.mockReturnValueOnce({
@@ -138,7 +150,7 @@ describe('/api/alternate-registrations', () => {
             }))
           }))
         }))
-      })
+      } as any)
 
       const request = new NextRequest('http://localhost/api/alternate-registrations?registration_id=reg-123')
       const response = await GET(request)
@@ -194,16 +206,16 @@ describe('/api/alternate-registrations', () => {
       })
 
       // Mock user profile lookup (non-admin)
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      mockSupabase.from.mockReturnValueOnce(createMockBuilder({
+        select: jest.fn(() => createMockBuilder({
+          eq: jest.fn(() => createMockBuilder({
             single: jest.fn(() => Promise.resolve({
               data: { is_admin: false },
               error: null
             }))
           }))
         }))
-      })
+      }))
 
       const request = new NextRequest('http://localhost/api/alternate-registrations', {
         method: 'POST',
@@ -225,16 +237,16 @@ describe('/api/alternate-registrations', () => {
       })
 
       // Mock admin user lookup
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      mockSupabase.from.mockReturnValueOnce(createMockBuilder({
+        select: jest.fn(() => createMockBuilder({
+          eq: jest.fn(() => createMockBuilder({
             single: jest.fn(() => Promise.resolve({
               data: { is_admin: true },
               error: null
             }))
           }))
         }))
-      })
+      }))
 
       // Mock registration lookup
       mockSupabase.from.mockReturnValueOnce({
@@ -252,7 +264,7 @@ describe('/api/alternate-registrations', () => {
             }))
           }))
         }))
-      })
+      } as any)
 
       // Mock game creation
       mockSupabase.from.mockReturnValueOnce({
@@ -271,7 +283,7 @@ describe('/api/alternate-registrations', () => {
             }))
           }))
         }))
-      })
+      } as any)
 
       const request = new NextRequest('http://localhost/api/alternate-registrations', {
         method: 'POST',
@@ -295,16 +307,16 @@ describe('/api/alternate-registrations', () => {
       })
 
       // Mock admin user lookup
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
+      mockSupabase.from.mockReturnValueOnce(createMockBuilder({
+        select: jest.fn(() => createMockBuilder({
+          eq: jest.fn(() => createMockBuilder({
             single: jest.fn(() => Promise.resolve({
               data: { is_admin: true },
               error: null
             }))
           }))
         }))
-      })
+      }))
 
       // Mock registration lookup (alternates not allowed)
       mockSupabase.from.mockReturnValueOnce({
@@ -322,7 +334,7 @@ describe('/api/alternate-registrations', () => {
             }))
           }))
         }))
-      })
+      } as any)
 
       const request = new NextRequest('http://localhost/api/alternate-registrations', {
         method: 'POST',

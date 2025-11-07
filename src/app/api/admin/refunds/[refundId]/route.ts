@@ -51,39 +51,17 @@ export async function PUT(
     }
 
     if (action === 'sync_xero') {
-      // Manually trigger staging for this refund's credit note
-      try {
-        const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
-          params.refundId,
-          refund.payment_id,
-          centsToCents(refund.amount)
-        )
-        
-        if (stagingSuccess) {
-          logger.logSystem('refund-xero-staging-manual', 'Manual credit note staging completed', {
-            refundId: params.refundId,
-            triggeredBy: authUser.id
-          })
+      // TODO: Re-implement manual Xero sync for refunds
+      // The createCreditNoteStaging method has been replaced with createRefundStaging
+      // which requires additional refund type information
+      logger.logSystem('refund-xero-staging-manual-disabled', 'Manual Xero sync not available', {
+        refundId: params.refundId,
+        triggeredBy: authUser.id
+      })
 
-          return NextResponse.json({
-            success: true,
-            message: 'Credit note staging completed successfully. It will be synced to Xero during the next batch sync.'
-          })
-        } else {
-          throw new Error('Failed to create staging record')
-        }
-
-      } catch (stagingError) {
-        logger.logSystem('refund-xero-staging-manual-error', 'Manual credit note staging failed', {
-          refundId: params.refundId,
-          triggeredBy: authUser.id,
-          error: stagingError instanceof Error ? stagingError.message : 'Unknown error'
-        })
-
-        return NextResponse.json({
-          error: 'Failed to stage credit note: ' + (stagingError instanceof Error ? stagingError.message : 'Unknown error')
-        }, { status: 500 })
-      }
+      return NextResponse.json({
+        error: 'Manual Xero sync for refunds is currently not available. Please use the automated batch sync.'
+      }, { status: 501 })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

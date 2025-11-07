@@ -1,6 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthenticatedXeroClient, getActiveTenant } from '@/lib/xero/client'
+import { Contact } from 'xero-node'
+
+interface ContactInfo {
+  name: string | undefined
+  contactID: string | undefined
+  status: string | Contact.ContactStatusEnum
+  email: string | undefined
+  firstName: string | undefined
+  lastName: string | undefined
+  isArchived: boolean
+}
+
+interface ContactSearchResult {
+  found: boolean
+  contact?: ContactInfo
+  count?: number
+  contacts?: ContactInfo[]
+  error?: string
+}
+
+interface AnalysisResult {
+  total: number
+  active: number
+  archived: number
+  exactMatch?: {
+    found: boolean
+    contactID?: string | undefined
+    status?: string | Contact.ContactStatusEnum
+    isArchived?: boolean
+  }
+}
+
+interface DebugResults {
+  email: string | null
+  memberId: string | null
+  contactId: string | null
+  tenant: string
+  nameSearch: ContactSearchResult | null
+  emailSearch: ContactSearchResult | null
+  contactIdSearch: ContactSearchResult | null
+  analysis: AnalysisResult | null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +80,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to authenticate with Xero' }, { status: 500 })
     }
 
-    const results = {
+    const results: DebugResults = {
       email,
       memberId,
       contactId,
@@ -78,7 +120,7 @@ export async function GET(request: NextRequest) {
               email: contact.emailAddress,
               firstName: contact.firstName,
               lastName: contact.lastName,
-              isArchived: contact.contactStatus === 'ARCHIVED'
+              isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
             }
           }
         } else {
@@ -86,8 +128,9 @@ export async function GET(request: NextRequest) {
           results.contactIdSearch = { found: false }
         }
       } catch (contactError) {
-        console.log(`❌ Contact ID search failed:`, contactError.message)
-        results.contactIdSearch = { found: false, error: contactError.message }
+        const errorMessage = contactError instanceof Error ? contactError.message : String(contactError)
+        console.log(`❌ Contact ID search failed:`, errorMessage)
+        results.contactIdSearch = { found: false, error: errorMessage }
       }
     }
 
@@ -118,7 +161,7 @@ export async function GET(request: NextRequest) {
               email: contact.emailAddress,
               firstName: contact.firstName,
               lastName: contact.lastName,
-              isArchived: contact.contactStatus === 'ARCHIVED'
+              isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
             }))
           }
           
@@ -130,7 +173,7 @@ export async function GET(request: NextRequest) {
             console.log(`     First Name: ${contact.firstName || 'None'}`)
             console.log(`     Last Name: ${contact.lastName || 'None'}`)
             
-            if (contact.contactStatus === 'ARCHIVED') {
+            if (contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
               console.log(`     ⚠️  ARCHIVED - Would be renamed to "${contact.name} - Archived"`)
             }
             console.log('')
@@ -140,8 +183,9 @@ export async function GET(request: NextRequest) {
           results.nameSearch = { found: false, count: 0, contacts: [] }
         }
       } catch (nameSearchError) {
-        console.log(`❌ Name search failed:`, nameSearchError.message)
-        results.nameSearch = { found: false, error: nameSearchError.message }
+        const errorMessage = nameSearchError instanceof Error ? nameSearchError.message : String(nameSearchError)
+        console.log(`❌ Name search failed:`, errorMessage)
+        results.nameSearch = { found: false, error: errorMessage }
       }
     }
 
@@ -169,7 +213,7 @@ export async function GET(request: NextRequest) {
               email: contact.emailAddress,
               firstName: contact.firstName,
               lastName: contact.lastName,
-              isArchived: contact.contactStatus === 'ARCHIVED'
+              isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
             }))
           }
           
@@ -184,8 +228,8 @@ export async function GET(request: NextRequest) {
           })
 
           // Analyze the results
-          const archivedContacts = emailSearchResponse.body.contacts.filter(c => c.contactStatus === 'ARCHIVED')
-          const activeContacts = emailSearchResponse.body.contacts.filter(c => c.contactStatus !== 'ARCHIVED')
+          const archivedContacts = emailSearchResponse.body.contacts.filter(c => c.contactStatus === Contact.ContactStatusEnum.ARCHIVED)
+          const activeContacts = emailSearchResponse.body.contacts.filter(c => c.contactStatus !== Contact.ContactStatusEnum.ARCHIVED)
           
           results.analysis = {
             total: emailSearchResponse.body.contacts.length,
@@ -207,14 +251,14 @@ export async function GET(request: NextRequest) {
             if (exactMatch) {
               console.log(`🎯 Exact name match found: "${exactMatch.name}" (${exactMatch.contactID})`)
               console.log(`   Status: ${exactMatch.contactStatus || 'ACTIVE'}`)
-              if (exactMatch.contactStatus === 'ARCHIVED') {
+              if (exactMatch.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
                 console.log('   ⚠️  WARNING: This contact is archived!')
               }
               results.analysis.exactMatch = {
                 found: true,
                 contactID: exactMatch.contactID,
                 status: exactMatch.contactStatus || 'ACTIVE',
-                isArchived: exactMatch.contactStatus === 'ARCHIVED'
+                isArchived: exactMatch.contactStatus === Contact.ContactStatusEnum.ARCHIVED
               }
             } else {
               console.log(`❌ No exact name match found for: "${expectedName}"`)
@@ -227,8 +271,9 @@ export async function GET(request: NextRequest) {
           results.analysis = { total: 0, active: 0, archived: 0 }
         }
       } catch (emailSearchError) {
-        console.log(`❌ Email search failed:`, emailSearchError.message)
-        results.emailSearch = { found: false, error: emailSearchError.message }
+        const errorMessage = emailSearchError instanceof Error ? emailSearchError.message : String(emailSearchError)
+        console.log(`❌ Email search failed:`, errorMessage)
+        results.emailSearch = { found: false, error: errorMessage }
       }
     }
 

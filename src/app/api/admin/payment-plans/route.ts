@@ -167,6 +167,12 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Calculate summary metrics from all users (before filtering)
+    const totalEligibleUsers = result.filter(u => u.paymentPlanEnabled).length
+    const usersWithActivePlans = result.filter(u => u.activePlansCount > 0).length
+    const usersWithBalance = result.filter(u => u.remainingBalance > 0).length
+    const totalOutstandingBalance = result.reduce((sum, u) => sum + u.remainingBalance, 0)
+
     // Apply filters if requested
     let filteredResult = result
     if (filter === 'active') {
@@ -178,10 +184,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       users: filteredResult,
       summary: {
-        totalUsers: filteredResult.length,
-        usersWithActivePlans: filteredResult.filter(u => u.activePlansCount > 0).length,
-        usersWithBalance: filteredResult.filter(u => u.remainingBalance > 0).length,
-        totalOutstandingBalance: filteredResult.reduce((sum, u) => sum + u.remainingBalance, 0)
+        totalUsers: totalEligibleUsers,
+        usersWithActivePlans,
+        usersWithBalance,
+        totalOutstandingBalance
       }
     })
   } catch (error) {

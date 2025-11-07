@@ -3,6 +3,8 @@
 ## Overview
 Implement a payment plan system for registrations that allows admins to enable users for installment payments, with automated payment processing and notifications.
 
+**Architecture**: Payment plans are implemented using the existing `xero_payments` table with `payment_type` = 'installment', eliminating the need for separate payment plan tables and simplifying the data model.
+
 ## Business Requirements
 
 ### Admin Control
@@ -23,7 +25,7 @@ Implement a payment plan system for registrations that allows admins to enable u
 - Automatic processing via daily cron job
 - Email notifications before and after each payment
 
-## Database Schema Changes
+## Database Schema
 
 ### 1. Add Payment Plan Flag to Users Table
 ```sql
@@ -31,74 +33,97 @@ ALTER TABLE users ADD COLUMN payment_plan_enabled BOOLEAN DEFAULT FALSE;
 CREATE INDEX idx_users_payment_plan_enabled ON users(payment_plan_enabled) WHERE payment_plan_enabled = true;
 ```
 
-### 2. Create Payment Plans Table
+### 2. Extend xero_payments Table for Payment Plans
+Payment plans use the existing `xero_payments` table with additional columns:
+
 ```sql
-CREATE TABLE payment_plans (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_registration_id UUID NOT NULL REFERENCES user_registrations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    total_amount INTEGER NOT NULL, -- in cents
-    paid_amount INTEGER DEFAULT 0, -- in cents
-    installment_amount INTEGER NOT NULL, -- 25% of total (in cents)
-    installments_count INTEGER DEFAULT 4,
-    installments_paid INTEGER DEFAULT 0,
-    next_payment_date DATE NOT NULL,
-    first_payment_immediate BOOLEAN DEFAULT false,
-    status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'cancelled')),
-    xero_invoice_id UUID REFERENCES xero_invoices(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Add payment plan columns to xero_payments
+ALTER TABLE xero_payments
+ADD COLUMN payment_type TEXT CHECK (payment_type IN ('full', 'installment')),
+ADD COLUMN installment_number INTEGER,
+ADD COLUMN planned_payment_date DATE,
+ADD COLUMN attempt_count INTEGER DEFAULT 0,
+ADD COLUMN last_attempt_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN failure_reason TEXT;
 
--- Indexes
-CREATE INDEX idx_payment_plans_user_id ON payment_plans(user_id);
-CREATE INDEX idx_payment_plans_user_registration_id ON payment_plans(user_registration_id);
-CREATE INDEX idx_payment_plans_status ON payment_plans(status);
-CREATE INDEX idx_payment_plans_next_payment_date ON payment_plans(next_payment_date) WHERE status = 'active';
+-- Drop old UNIQUE constraint that prevented multiple payments per invoice
+ALTER TABLE xero_payments
+DROP CONSTRAINT IF EXISTS xero_payments_xero_invoice_id_tenant_id_key;
 
--- Ensure one payment plan per registration
-ALTER TABLE payment_plans ADD CONSTRAINT unique_payment_plan_per_registration UNIQUE(user_registration_id);
+-- Update sync_status to include payment plan statuses
+ALTER TABLE xero_payments
+DROP CONSTRAINT IF EXISTS xero_payments_sync_status_check;
+
+ALTER TABLE xero_payments
+ADD CONSTRAINT xero_payments_sync_status_check
+CHECK (sync_status IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore'));
+
+-- Indexes for efficient payment plan queries
+CREATE INDEX idx_xero_payments_planned_ready
+ON xero_payments(sync_status, planned_payment_date)
+WHERE sync_status = 'planned' AND planned_payment_date IS NOT NULL;
+
+CREATE INDEX idx_xero_payments_payment_type ON xero_payments(payment_type);
+
+CREATE INDEX idx_xero_payments_invoice_installment
+ON xero_payments(xero_invoice_id, installment_number)
+WHERE installment_number IS NOT NULL;
 ```
 
-### 3. Create Payment Plan Transactions Table
+### 3. Add Payment Plan Flag to xero_invoices
 ```sql
-CREATE TABLE payment_plan_transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    payment_plan_id UUID NOT NULL REFERENCES payment_plans(id) ON DELETE CASCADE,
-    payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
-    amount INTEGER NOT NULL, -- in cents
-    installment_number INTEGER NOT NULL,
-    scheduled_date DATE NOT NULL,
-    processed_date TIMESTAMP WITH TIME ZONE,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-    failure_reason TEXT,
-    stripe_payment_intent_id TEXT UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Indexes
-CREATE INDEX idx_payment_plan_transactions_payment_plan_id ON payment_plan_transactions(payment_plan_id);
-CREATE INDEX idx_payment_plan_transactions_status ON payment_plan_transactions(status);
-CREATE INDEX idx_payment_plan_transactions_scheduled_date ON payment_plan_transactions(scheduled_date) WHERE status = 'pending';
-CREATE INDEX idx_payment_plan_transactions_stripe_payment_intent_id ON payment_plan_transactions(stripe_payment_intent_id);
-
--- Ensure installment numbers are unique per payment plan
-ALTER TABLE payment_plan_transactions ADD CONSTRAINT unique_installment_per_plan UNIQUE(payment_plan_id, installment_number);
+ALTER TABLE xero_invoices
+ADD COLUMN is_payment_plan BOOLEAN DEFAULT FALSE;
 ```
 
-### 4. Add Updated At Triggers
+### 4. Create payment_plan_summary View
 ```sql
-CREATE TRIGGER update_payment_plans_updated_at 
-    BEFORE UPDATE ON payment_plans 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+CREATE OR REPLACE VIEW payment_plan_summary
+WITH (security_invoker = true)
+AS
+SELECT
+  xi.id as invoice_id,
+  (xi.staging_metadata->>'user_id')::uuid as contact_id,
+  xi.payment_id as first_payment_id,
+  COUNT(*) FILTER (WHERE xp.payment_type = 'installment') as total_installments,
+  SUM(xp.amount_paid) FILTER (WHERE xp.sync_status IN ('synced','pending','processing')) as paid_amount,
+  SUM(xp.amount_paid) as total_amount,
+  MAX(xp.planned_payment_date) as final_payment_date,
+  MIN(xp.planned_payment_date) FILTER (WHERE xp.sync_status = 'planned') as next_payment_date,
+  COUNT(*) FILTER (WHERE xp.sync_status IN ('synced','pending','processing') AND xp.payment_type = 'installment') as installments_paid,
+  CASE
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'planned') = 0 THEN 'completed'
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'failed') > 0 THEN 'failed'
+    ELSE 'active'
+  END as status,
+  json_agg(
+    json_build_object(
+      'id', xp.id,
+      'installment_number', xp.installment_number,
+      'amount', xp.amount_paid,
+      'planned_payment_date', xp.planned_payment_date,
+      'sync_status', xp.sync_status,
+      'attempt_count', xp.attempt_count,
+      'failure_reason', xp.failure_reason
+    ) ORDER BY xp.installment_number
+  ) as installments
+FROM xero_invoices xi
+JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
+WHERE xi.is_payment_plan = true
+GROUP BY xi.id, xi.staging_metadata, xi.payment_id;
 
-CREATE TRIGGER update_payment_plan_transactions_updated_at 
-    BEFORE UPDATE ON payment_plan_transactions 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+-- Restrict access to service_role only
+GRANT SELECT ON payment_plan_summary TO service_role;
 ```
+
+### Payment Status Flow
+- `staged` → Initial state when payment plan is created
+- `pending` → First payment ready to process
+- `planned` → Future payments waiting for their scheduled date
+- `processing` → Currently being charged
+- `synced` → Successfully synced to Xero
+- `cancelled` → Superseded by early payoff
+- `failed` → Payment failed after max attempts
 
 ## Frontend Changes
 
@@ -142,61 +167,78 @@ CREATE TRIGGER update_payment_plan_transactions_updated_at
 ```typescript
 class PaymentPlanService {
   // Create payment plan during registration
-  createPaymentPlan(registrationId: string, userId: string, totalAmount: number, firstPaymentImmediate: boolean)
-  
-  // Process scheduled payments (called by cron)
-  processScheduledPayments()
-  
-  // Handle individual payment processing
-  processPaymentPlanPayment(transactionId: string)
-  
-  // Calculate next payment date
-  calculateNextPaymentDate(paymentPlan: PaymentPlan): Date
-  
+  // Creates multiple xero_payments records with payment_type='installment'
+  static async createPaymentPlan(data: PaymentPlanCreationData): Promise<{success: boolean, error?: string}>
+
+  // Process individual payment from xero_payments table
+  // Called by cron job for each pending/failed payment
+  static async processPaymentPlanPayment(xeroPaymentId: string): Promise<{success: boolean, error?: string}>
+
   // Check if user can create new payment plan
-  canUserCreatePaymentPlan(userId: string): boolean
-  
-  // Handle early payoff
-  processEarlyPayoff(paymentPlanId: string, paymentMethodId: string)
-  
-  // Cancel payment plan
-  cancelPaymentPlan(paymentPlanId: string, reason: string)
+  // Requires payment_plan_enabled flag AND valid saved payment method
+  static async canUserCreatePaymentPlan(userId: string): Promise<boolean>
+
+  // Handle early payoff - cancels planned payments and creates single full payment
+  // Uses webhook-based flow for reliability
+  static async processEarlyPayoff(xeroInvoiceId: string, userId: string): Promise<{success: boolean, error?: string}>
+
+  // Get all payment plans for a user using payment_plan_summary view
+  static async getUserPaymentPlans(userId: string): Promise<PaymentPlanSummary[]>
+
+  // Check if user has outstanding payment plan balance
+  static async hasOutstandingBalance(userId: string): Promise<boolean>
+
+  // Get total outstanding balance across all payment plans
+  static async getTotalOutstandingBalance(userId: string): Promise<number>
 }
 ```
 
-### 2. Registration Payment Intent Updates
-- Modify `/api/create-registration-payment-intent` to handle payment plan creation
-- Create payment plan record when payment plan option is selected
-- Handle first payment processing (immediate or scheduled)
-- Stage Xero invoice for full amount with payment plan indicator
+### 2. Payment Plan Configuration (`src/lib/services/payment-plan-config.ts`)
+Centralized constants for all payment plan behavior:
+```typescript
+export const PAYMENT_PLAN_INSTALLMENTS = 4          // Number of payments
+export const INSTALLMENT_INTERVAL_DAYS = 30         // Days between payments
+export const MAX_PAYMENT_ATTEMPTS = 3               // Max retry attempts
+export const RETRY_INTERVAL_HOURS = 24              // Hours between retries
+```
 
-### 3. Stripe Integration Updates
-- Extend `/api/stripe-webhook` to handle payment plan transactions
-- Use saved payment methods for recurring charges via `stripe.paymentIntents.create()`
-- Link payment plan transaction IDs to Stripe payment intents in metadata
-- Handle payment failures with proper error handling and notifications
+### 3. Registration Payment Intent Updates
+- Modified `/api/create-registration-payment-intent` to handle payment plan creation
+- Creates multiple `xero_payments` records (all with `sync_status='staged'`)
+- First payment record has `first_payment_id` in metadata linking to actual payment
+- All installments created upfront with scheduled dates
 
-### 4. Xero Integration Updates
-- Modify invoice staging to handle payment plan invoices
-- Mark initial invoice as "payment_plan" type in line items or description
-- Record partial payments against the original invoice as they come in
-- Update invoice status tracking for partial vs. full payment
+### 4. Stripe Webhook Updates (`/api/stripe-webhook/route.ts`)
+Extended to handle payment plan payment intents:
+- After first payment completes: Updates installments from 'staged' to 'pending'/'planned'
+- Helper function `updatePaymentPlanStatuses()` manages status transitions
+- Early payoff webhook handler processes cancellation and single full payment
+- All webhook handlers are idempotent (safe to retry)
 
-### 5. Payment Method Service Updates
-- Add validation to prevent payment method removal with outstanding balance
-- Extend `getUserSavedPaymentMethodId()` to validate payment method status
-- Add `hasOutstandingPaymentPlanBalance(userId: string): boolean`
+### 5. Xero Integration
+- Invoice created with full amount and `is_payment_plan=true` flag
+- Each installment payment creates separate `xero_payments` record
+- Payments tracked individually with proper installment_number
+- Synced to Xero as partial payments against the original invoice
+- Uses sentinel UUID (`00000000-0000-0000-0000-000000000000`) as placeholder until synced
 
-### 6. Cron Job Implementation (`src/app/api/cron/payment-plans/route.ts`)
+### 6. Payment Method Service Updates
+- Validation prevents payment method removal if `hasOutstandingBalance()` returns true
+- Checks across all `xero_payments` with payment_type='installment' and status='planned'
+- Returns total outstanding balance from all active payment plans
+
+### 7. Cron Job Implementation (`src/app/api/cron/payment-plans/route.ts`)
 ```typescript
 // Daily cron job to process due payments
 export async function GET(request: NextRequest) {
-  // Verify cron authorization
-  // Find all pending transactions due today or overdue
-  // Process each payment using saved payment methods
-  // Handle failures and send notifications
-  // Update payment plan status and next payment dates
-  // Send pre-notifications for payments due in 3 days
+  // Verify cron authorization header
+  // Query xero_payments where:
+  //   - sync_status = 'planned' AND planned_payment_date <= today
+  //   - OR sync_status = 'failed' AND retry is due (based on RETRY_INTERVAL_HOURS)
+  // Process each payment using PaymentPlanService.processPaymentPlanPayment()
+  // Increment attempt_count, respect MAX_PAYMENT_ATTEMPTS limit
+  // Update sync_status to 'processing' → 'pending' (on success) or 'failed' (on failure)
+  // Return summary of processed payments
 }
 ```
 
@@ -292,6 +334,31 @@ interface PaymentPlanEmailData {
 - Handle refunds for payment plan payments
 - Adjust remaining balance and schedule accordingly
 - Update Xero records with credit notes
+
+## Architecture Improvements (2025-11 Refactor)
+
+The payment plan system was refactored from separate `payment_plans` and `payment_plan_transactions` tables to use the existing `xero_payments` table architecture. This provides several key benefits:
+
+### Benefits
+1. **Simplified Data Model**: Single source of truth for all payments (regular and installment)
+2. **Consistent Payment Processing**: Same infrastructure handles both payment types
+3. **Better Xero Integration**: Natural mapping to Xero's invoice + multiple payments model
+4. **Reduced Code Duplication**: Shared payment processing logic and sync mechanisms
+5. **Improved Query Performance**: Views aggregate data efficiently without complex joins across multiple tables
+
+### Key Technical Decisions
+1. **Dropped UNIQUE Constraint**: Removed `UNIQUE(xero_invoice_id, tenant_id)` to allow multiple payments per invoice
+2. **Sentinel UUID**: Use `00000000-0000-0000-0000-000000000000` as placeholder for `xero_payment_id` until synced
+3. **Status Flow**: Extended `sync_status` enum with 'staged', 'planned', and 'cancelled' states
+4. **Webhook-Based Early Payoff**: Changed from synchronous to webhook-based flow for reliability
+5. **Rounding Fix**: Last installment absorbs remainder to ensure exact total match (prevents penny discrepancies)
+6. **Centralized Config**: All constants (installments, intervals, retry logic) in `payment-plan-config.ts`
+
+### Migration from Old Architecture
+- **Old Tables**: `payment_plans` and `payment_plan_transactions` (now dropped)
+- **New Architecture**: `xero_payments` with `payment_type='installment'`
+- **View**: `payment_plan_summary` aggregates payment plan data for queries
+- **No Data Migration**: Development environment, fresh implementation
 
 ## Success Metrics
 - Number of users enabled for payment plans

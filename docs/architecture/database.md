@@ -579,11 +579,11 @@ return { success: true, membership_id }
 - New features can be enabled incrementally via feature flags
 - No breaking changes to current payment flows
 
-### 16. Payment Plans for Registrations
+### 16. Payment Plans for Registrations (2025-11 Refactor)
 
-**Pattern Used:** Installment payment tracking with automated processing and retry logic
+**Pattern Used:** Consolidated into `xero_payments` table using `payment_type='installment'`
 
-**Design Decision:** Four-installment payment system (25% each) with monthly intervals, admin-controlled user eligibility, and automated off-session payment processing.
+**Design Decision:** Four-installment payment system (25% each) with monthly intervals, admin-controlled user eligibility, and automated off-session payment processing. Refactored from separate tables to use existing payment infrastructure.
 
 ```sql
 -- User eligibility flag
@@ -591,58 +591,60 @@ users (
   payment_plan_enabled: BOOLEAN DEFAULT FALSE  -- Admin-controlled eligibility
 )
 
--- Payment plan tracking
-payment_plans (
-  id: UUID PRIMARY KEY
-  user_registration_id: UUID REFERENCES user_registrations(id) ON DELETE CASCADE
-  user_id: UUID REFERENCES users(id) ON DELETE CASCADE
-  total_amount: INTEGER NOT NULL                -- Total registration amount in cents
-  paid_amount: INTEGER DEFAULT 0                -- Amount paid so far in cents
-  installment_amount: INTEGER NOT NULL          -- Amount per installment (25% of total)
-  installments_count: INTEGER DEFAULT 4         -- Total number of installments
-  installments_paid: INTEGER DEFAULT 0          -- Number of installments completed
-  next_payment_date: DATE NOT NULL              -- Date of next scheduled payment
-  first_payment_immediate: BOOLEAN DEFAULT true -- First payment always immediate
-  status: TEXT CHECK (status IN ('active', 'completed', 'cancelled'))
-  xero_invoice_id: UUID REFERENCES xero_invoices(id)  -- Single invoice for full amount
-  created_at: TIMESTAMP WITH TIME ZONE
-  updated_at: TIMESTAMP WITH TIME ZONE
-
-  CONSTRAINT unique_payment_plan_per_registration UNIQUE(user_registration_id)
+-- Invoice flagging for payment plans
+xero_invoices (
+  is_payment_plan: BOOLEAN DEFAULT FALSE       -- Marks invoice as part of payment plan
+  -- ... existing fields
 )
 
--- Individual installment transactions
-payment_plan_transactions (
-  id: UUID PRIMARY KEY
-  payment_plan_id: UUID REFERENCES payment_plans(id) ON DELETE CASCADE
-  payment_id: UUID REFERENCES payments(id) ON DELETE SET NULL
-  amount: INTEGER NOT NULL                      -- Amount for this installment in cents
-  installment_number: INTEGER NOT NULL          -- Which installment (1-4)
-  scheduled_date: DATE NOT NULL                 -- Original scheduled date
-  processed_date: TIMESTAMP WITH TIME ZONE      -- When payment was successfully processed
-  status: TEXT CHECK (status IN ('pending', 'processing', 'completed', 'failed'))
-  failure_reason: TEXT                          -- Reason for payment failure
-  stripe_payment_intent_id: TEXT UNIQUE         -- Stripe payment intent for this transaction
+-- Unified payment tracking (used for both regular and installment payments)
+xero_payments (
+  -- Existing fields
+  xero_invoice_id: UUID REFERENCES xero_invoices(id)
+  amount_paid: INTEGER NOT NULL                -- Amount in cents
+  sync_status: TEXT CHECK (sync_status IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore'))
 
-  -- Retry tracking fields
-  last_attempt_at: TIMESTAMP WITH TIME ZONE     -- When the last payment attempt was made
-  attempt_count: INTEGER DEFAULT 0              -- Number of payment attempts made
-  max_attempts: INTEGER DEFAULT 3               -- Maximum retry attempts
+  -- Payment plan specific fields
+  payment_type: TEXT CHECK (payment_type IN ('full', 'installment'))
+  installment_number: INTEGER                  -- Which installment (1-4)
+  planned_payment_date: DATE                   -- Scheduled payment date
+  attempt_count: INTEGER DEFAULT 0             -- Number of payment attempts
+  last_attempt_at: TIMESTAMP WITH TIME ZONE    -- Last retry attempt
+  failure_reason: TEXT                         -- Failure details
 
-  created_at: TIMESTAMP WITH TIME ZONE
-  updated_at: TIMESTAMP WITH TIME ZONE
-
-  CONSTRAINT unique_installment_per_plan UNIQUE(payment_plan_id, installment_number)
+  -- NO UNIQUE(xero_invoice_id, tenant_id) constraint - allows multiple payments per invoice
 )
+
+-- Aggregated view for payment plan queries
+CREATE OR REPLACE VIEW payment_plan_summary AS
+SELECT
+  xi.id as invoice_id,
+  (xi.staging_metadata->>'user_id')::uuid as contact_id,
+  COUNT(*) FILTER (WHERE xp.payment_type = 'installment') as total_installments,
+  SUM(xp.amount_paid) FILTER (WHERE xp.sync_status IN ('synced','pending','processing')) as paid_amount,
+  SUM(xp.amount_paid) as total_amount,
+  COUNT(*) FILTER (WHERE xp.sync_status IN ('synced','pending','processing') AND xp.payment_type = 'installment') as installments_paid,
+  CASE
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'planned') = 0 THEN 'completed'
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'failed') > 0 THEN 'failed'
+    ELSE 'active'
+  END as status
+FROM xero_invoices xi
+JOIN xero_payments xp ON xp.xero_invoice_id = xi.id
+WHERE xi.is_payment_plan = true
+GROUP BY xi.id, xi.staging_metadata;
 ```
 
-**Why This Pattern:**
+**Why This Pattern (Consolidated Architecture):**
+- **Simplified Data Model:** Single source of truth for all payments (regular and installment)
+- **Consistent Processing:** Same infrastructure handles both payment types
+- **Better Xero Integration:** Natural mapping to Xero's invoice + multiple payments model
+- **Reduced Code Duplication:** Shared payment processing and sync mechanisms
 - **User Accessibility:** Enables installment payments for expensive registrations
 - **Admin Control:** Payment plan eligibility managed per-user by administrators
 - **Automated Processing:** Off-session Stripe payments with automatic retry logic
-- **Single Xero Invoice:** One invoice for full amount, partial payments tracked separately
 - **Registration Protection:** Registration remains valid even if future payments fail
-- **Early Payoff:** Users can pay remaining balance early with no penalty
+- **Early Payoff:** Webhook-based flow for reliable early payoff processing
 
 **Business Rules:**
 ```sql
@@ -657,11 +659,21 @@ payment_plan_transactions (
 -- - Payment 3: 30 days after Payment 2
 -- - Payment 4: 30 days after Payment 3
 
+-- Payment status flow:
+-- - staged → Initial state when payment plan created (all installments)
+-- - pending → First payment ready to process (after first payment completes)
+-- - planned → Future payments waiting for scheduled date
+-- - processing → Currently being charged
+-- - synced → Successfully synced to Xero
+-- - cancelled → Superseded by early payoff
+-- - failed → Payment failed after max attempts
+
 -- Retry logic for failed payments:
 -- - Attempt 1: Initial scheduled payment
 -- - Attempt 2: 24 hours after Attempt 1
 -- - Attempt 3: 24 hours after Attempt 2
 -- - After 3 failed attempts: Mark as failed, notify user
+-- - Max attempts and retry interval configurable via payment-plan-config.ts
 ```
 
 **Xero Integration:**
@@ -682,35 +694,28 @@ payment_plan_transactions (
 CREATE INDEX idx_users_payment_plan_enabled ON users(payment_plan_enabled)
   WHERE payment_plan_enabled = true;
 
--- Index for cron job processing (active plans with scheduled payments)
-CREATE INDEX idx_payment_plans_next_payment_date ON payment_plans(next_payment_date)
-  WHERE status = 'active';
+-- Index for cron job processing (planned payments due for processing)
+CREATE INDEX idx_xero_payments_planned_ready
+  ON xero_payments(sync_status, planned_payment_date)
+  WHERE sync_status = 'planned' AND planned_payment_date IS NOT NULL;
 
--- Index for pending/failed transactions needing retry
-CREATE INDEX idx_payment_plan_transactions_scheduled_date
-  ON payment_plan_transactions(scheduled_date, last_attempt_at, attempt_count)
-  WHERE status IN ('pending', 'failed');
+-- Index for payment type queries
+CREATE INDEX idx_xero_payments_payment_type ON xero_payments(payment_type);
+
+-- Index for installment lookups
+CREATE INDEX idx_xero_payments_invoice_installment
+  ON xero_payments(xero_invoice_id, installment_number)
+  WHERE installment_number IS NOT NULL;
 ```
 
 **Row Level Security:**
 ```sql
--- Users can view their own payment plans
-CREATE POLICY "Users can view own payment plans"
-  ON payment_plans FOR SELECT
-  USING (auth.uid() = user_id);
+-- payment_plan_summary view restricted to service_role only
+GRANT SELECT ON payment_plan_summary TO service_role;
 
--- Admins can view all payment plans
-CREATE POLICY "Admins can view all payment plans"
-  ON payment_plans FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM users
-      WHERE users.id = auth.uid() AND users.is_admin = true
-    )
-  );
-
--- Similar policies for payment_plan_transactions
--- INSERT/UPDATE/DELETE operations use service role (backend APIs only)
+-- Admin endpoints use createAdminClient() to query the view
+-- No direct user access to raw xero_payments for payment plans
+-- User-facing APIs filter and format data through service layer
 ```
 
 **Email Notifications:**
@@ -730,8 +735,11 @@ if (totalOutstanding > 0) {
 }
 ```
 
-**Alternative Considered:** External payment plan service (Stripe Billing)
-**Trade-off:** Lost fine-grained control and integration, gained simplicity in custom implementation
+**Alternative Considered (Architecture):**
+1. Separate `payment_plans` and `payment_plan_transactions` tables (original implementation)
+2. External payment plan service (Stripe Billing)
+
+**Trade-off:** Lost separate tracking tables, gained unified payment architecture and simpler data model
 
 **When to Use Payment Plans:**
 - ✅ High-value registrations where affordability is a barrier
@@ -741,13 +749,19 @@ if (totalOutstanding > 0) {
 
 ### Migration History
 
-**2025-11-03:** Payment Plans System (`2025-11-03-add-payment-plans.sql`)
-- Added `payment_plan_enabled` flag to users table
-- Created `payment_plans` table for installment tracking
-- Created `payment_plan_transactions` table for individual payments
-- Added optimized indexes for cron job processing
-- Implemented RLS policies for user/admin access control
-- Enabled automated processing with retry logic
+**2025-11-06:** Payment Plans Refactor (`2025-11-06-refactor-payment-plans-to-xero-payments.sql`)
+- **Architecture Change:** Consolidated payment plans into `xero_payments` table
+- Dropped `UNIQUE(xero_invoice_id, tenant_id)` constraint to allow multiple payments per invoice
+- Added `payment_type`, `installment_number`, `planned_payment_date` columns to `xero_payments`
+- Extended `sync_status` enum with 'staged', 'planned', 'cancelled' states
+- Created `payment_plan_summary` view for aggregated payment plan queries
+- Dropped legacy `payment_plans` and `payment_plan_transactions` tables
+- Improved: Single source of truth for all payments, better Xero integration
+
+**2025-11-03:** Initial Payment Plans System (superseded by 2025-11-06 refactor)
+- Added `payment_plan_enabled` flag to users table (retained in refactor)
+- Created separate `payment_plans` and `payment_plan_transactions` tables (now dropped)
+- Initial implementation later refactored for better integration
 
 ## Future Considerations
 

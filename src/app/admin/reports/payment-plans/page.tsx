@@ -30,7 +30,7 @@ export default async function PaymentPlansReportPage() {
     cache: 'no-store'
   })
 
-  let initialData = { users: [], summary: { totalUsers: 0, usersWithActivePlans: 0, usersWithBalance: 0, totalOutstandingBalance: 0 } }
+  let initialData = { users: [], summary: { totalEligibleUsers: 0, usersWithActivePlans: 0, usersWithBalance: 0, totalOutstandingBalance: 0 } }
   if (response.ok) {
     initialData = await response.json()
   }
@@ -42,9 +42,9 @@ export default async function PaymentPlansReportPage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-5">
-            <div className="text-sm font-medium text-gray-500">Total Users</div>
+            <div className="text-sm font-medium text-gray-500">Total Eligible Users</div>
             <div className="mt-1 text-3xl font-semibold text-gray-900">
-              {initialData.summary.totalUsers}
+              {initialData.summary.totalEligibleUsers}
             </div>
           </div>
 

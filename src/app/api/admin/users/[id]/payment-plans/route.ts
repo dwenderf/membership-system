@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
 /**
@@ -29,17 +29,22 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get all payment plans for the user
-    const { data: plans, error } = await supabase
-      .from('payment_plans')
+    // Use admin client for querying payment plans (view restricted to service_role)
+    const adminSupabase = createAdminClient()
+
+    // Get all payment plans for the user using payment_plan_summary view
+    const { data: plans, error } = await adminSupabase
+      .from('payment_plan_summary')
       .select(`
         *,
-        user_registration:user_registrations(
-          registration:registrations(name, season:seasons(name))
+        invoice:xero_invoices!invoice_id(
+          payment_id,
+          user_registrations!inner(
+            registration:registrations(name, season:seasons(name))
+          )
         )
       `)
-      .eq('user_id', params.id)
-      .order('created_at', { ascending: false })
+      .eq('contact_id', params.id)
 
     if (error) {
       logger.logAdminAction(
@@ -55,21 +60,32 @@ export async function GET(
     }
 
     // Format the response
-    const formattedPlans = (plans || []).map((plan: any) => ({
-      id: plan.id,
-      registrationName: plan.user_registration?.registration?.name || 'Unknown',
-      seasonName: plan.user_registration?.registration?.season?.name || '',
-      totalAmount: plan.total_amount,
-      paidAmount: plan.paid_amount,
-      remainingBalance: plan.total_amount - plan.paid_amount,
-      installmentAmount: plan.installment_amount,
-      installmentsCount: plan.installments_count,
-      installmentsPaid: plan.installments_paid,
-      nextPaymentDate: plan.next_payment_date,
-      status: plan.status,
-      createdAt: plan.created_at,
-      updatedAt: plan.updated_at
-    }))
+    const formattedPlans = (plans || []).map((plan: any) => {
+      // Calculate installment amount (total / number of installments)
+      const installmentAmount = plan.total_installments > 0
+        ? Math.round(plan.total_amount / plan.total_installments)
+        : plan.total_amount
+
+      // Get registration info from the nested invoice query
+      const registrationInfo = plan.invoice?.user_registrations?.[0]
+
+      return {
+        id: plan.invoice_id,
+        registrationName: registrationInfo?.registration?.name || 'Unknown',
+        seasonName: registrationInfo?.registration?.season?.name || '',
+        totalAmount: plan.total_amount,
+        paidAmount: plan.paid_amount,
+        remainingBalance: plan.total_amount - plan.paid_amount,
+        installmentAmount,
+        installmentsCount: plan.total_installments,
+        installmentsPaid: plan.installments_paid,
+        nextPaymentDate: plan.next_payment_date,
+        finalPaymentDate: plan.final_payment_date,
+        status: plan.status,
+        createdAt: null, // payment_plan_summary doesn't include created_at
+        updatedAt: null
+      }
+    })
 
     return NextResponse.json({
       userId: params.id,

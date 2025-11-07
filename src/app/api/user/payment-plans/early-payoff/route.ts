@@ -27,18 +27,43 @@ export async function POST(request: Request) {
     }
 
     // Verify the payment plan belongs to the user
-    const { data: paymentPlan, error: planError } = await supabase
-      .from('payment_plans')
-      .select('*')
+    // planId is now the xero_invoice_id
+    // Note: contact_id is stored in staging_metadata->>'user_id', not as a column
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('xero_invoices')
+      .select('id, is_payment_plan, staging_metadata')
       .eq('id', planId)
-      .eq('user_id', authUser.id)
-      .eq('status', 'active')
+      .eq('is_payment_plan', true)
       .single()
 
-    if (planError || !paymentPlan) {
+    if (invoiceError || !invoice) {
       return NextResponse.json(
         { error: 'Payment plan not found or does not belong to you' },
         { status: 404 }
+      )
+    }
+
+    // Verify invoice belongs to authenticated user
+    const invoiceUserId = invoice.staging_metadata?.user_id
+    if (invoiceUserId !== authUser.id) {
+      return NextResponse.json(
+        { error: 'Payment plan not found or does not belong to you' },
+        { status: 404 }
+      )
+    }
+
+    // Check if there are any planned payments left
+    const { data: plannedPayments } = await supabase
+      .from('xero_payments')
+      .select('id')
+      .eq('xero_invoice_id', planId)
+      .eq('sync_status', 'planned')
+      .limit(1)
+
+    if (!plannedPayments || plannedPayments.length === 0) {
+      return NextResponse.json(
+        { error: 'Payment plan is already completed' },
+        { status: 400 }
       )
     }
 

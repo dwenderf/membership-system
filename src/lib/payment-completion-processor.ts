@@ -66,6 +66,8 @@ type PaymentCompletionEvent = {
     failure_reason?: string
     failed?: boolean
     xero_staging_record_id?: string
+    is_payment_plan?: boolean
+    payment_plan_id?: string
   }
 }
 
@@ -323,11 +325,15 @@ export class PaymentCompletionProcessor {
     try {
       await this.initialize()
       
-      // Update staging metadata to include payment intent ID if available
+      // Update staging metadata to include payment intent ID and payment plan info if available
       const updatedStagingMetadata = {
         ...existingRecords.staging_metadata,
         ...(event.metadata?.payment_intent_id && {
           stripe_payment_intent_id: event.metadata.payment_intent_id
+        }),
+        ...(event.metadata?.is_payment_plan && {
+          is_payment_plan: true,
+          payment_plan_id: event.metadata?.payment_plan_id
         }),
         updated_at: new Date().toISOString()
       }

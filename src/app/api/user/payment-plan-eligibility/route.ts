@@ -31,7 +31,7 @@ export async function GET() {
     }
 
     // User is eligible if:
-    // 1. payment_plan_enabled is true
+    // 1. payment_plan_enabled is true (admin-controlled eligibility)
     // 2. They have a saved payment method
     const hasSavedPaymentMethod = !!user.stripe_payment_method_id
     const eligible = (user.payment_plan_enabled === true) && hasSavedPaymentMethod

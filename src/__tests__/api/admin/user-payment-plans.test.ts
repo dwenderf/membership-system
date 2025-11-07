@@ -4,10 +4,15 @@
  */
 
 import { GET } from '@/app/api/admin/users/[id]/payment-plans/route'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
+jest.mock('@/lib/logging/logger', () => ({
+  logger: {
+    logAdminAction: jest.fn()
+  }
+}))
 
 const createMockQueryChain = () => ({
   select: jest.fn().mockReturnThis(),
@@ -23,10 +28,15 @@ const mockSupabase = {
   from: jest.fn()
 }
 
+const mockAdminSupabase = {
+  from: jest.fn()
+}
+
 describe('/api/admin/users/[id]/payment-plans', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(createAdminClient as jest.Mock).mockReturnValue(mockAdminSupabase)
   })
 
   describe('GET - Fetch user payment plans', () => {
@@ -67,30 +77,30 @@ describe('/api/admin/users/[id]/payment-plans', () => {
     })
 
     it('should return user payment plans with related data', async () => {
+      // Mock data from payment_plan_summary view with nested invoice data
       const mockPaymentPlans = [
         {
-          id: 'plan-1',
-          total_amount: 10000,
+          invoice_id: 'invoice-1',
+          contact_id: 'target-user-id',
+          total_installments: 4,
           paid_amount: 5000,
-          installment_amount: 2500,
-          installments_count: 4,
+          total_amount: 10000,
           installments_paid: 2,
           next_payment_date: '2025-12-01',
+          final_payment_date: '2026-02-01',
           status: 'active',
-          created_at: '2025-11-01T00:00:00Z',
-          user_registrations: {
-            registration_categories: {
-              custom_name: null,
-              categories: {
-                name: 'Player'
+          invoice: {
+            payment_id: 'payment-1',
+            user_registrations: [
+              {
+                registration: {
+                  name: 'Fall League',
+                  season: {
+                    name: 'Fall 2025'
+                  }
+                }
               }
-            },
-            registrations: {
-              name: 'Fall League',
-              season: {
-                name: 'Fall 2025'
-              }
-            }
+            ]
           }
         }
       ]
@@ -100,23 +110,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      // First call: check admin status
+      // First call: check admin status (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      // Second call: get payment plans (returns array, not single)
+      // Second call: get payment plans from payment_plan_summary view (uses admin client)
       const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.order = jest.fn().mockResolvedValue({
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: mockPaymentPlans,
         error: null
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
@@ -125,8 +133,9 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       expect(response.status).toBe(200)
       expect(data.userId).toBe('target-user-id')
       expect(data.plans).toHaveLength(1)
-      expect(data.plans[0].id).toBe('plan-1')
+      expect(data.plans[0].id).toBe('invoice-1')
       expect(data.plans[0].status).toBe('active')
+      expect(data.plans[0].registrationName).toBe('Fall League')
     })
 
     it('should return empty array when user has no payment plans', async () => {
@@ -135,21 +144,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
+      // Admin check (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
+      // Payment plans query (uses admin client)
       const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.order = jest.fn().mockResolvedValue({
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: [],
         error: null
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })
@@ -166,21 +175,21 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
+      // Admin check (uses regular client)
       const adminCheckChain = createMockQueryChain()
       adminCheckChain.single.mockResolvedValue({
         data: { is_admin: true },
         error: null
       })
+      mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
+      // Payment plans query with error (uses admin client)
       const paymentPlansChain = createMockQueryChain()
-      paymentPlansChain.order = jest.fn().mockResolvedValue({
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
         data: null,
         error: { message: 'Database error' }
       })
-
-      mockSupabase.from
-        .mockReturnValueOnce(adminCheckChain)
-        .mockReturnValueOnce(paymentPlansChain)
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: { id: 'target-user-id' } })

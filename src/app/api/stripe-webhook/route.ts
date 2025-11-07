@@ -147,6 +147,53 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+/**
+ * Update payment plan installment statuses
+ * Sets first installment to 'pending' and remaining to 'planned'
+ * Only updates payments that are still in 'staged' status (idempotent)
+ * Flexible - works with any number of installments
+ */
+async function updatePaymentPlanStatuses(
+  supabase: ReturnType<typeof createAdminClient>,
+  xeroInvoiceId: string
+): Promise<void> {
+  const { data: allPayments } = await supabase
+    .from('xero_payments')
+    .select('id, installment_number')
+    .eq('xero_invoice_id', xeroInvoiceId)
+    .eq('payment_type', 'installment')
+    .order('installment_number')
+
+  if (!allPayments || allPayments.length === 0) {
+    console.error(`❌ No installment payments found for payment plan`, {
+      xeroInvoiceId
+    })
+    return
+  }
+
+  // Update first payment to 'pending' (only if still staged)
+  await supabase
+    .from('xero_payments')
+    .update({ sync_status: 'pending' })
+    .eq('id', allPayments[0].id)
+    .eq('sync_status', 'staged')
+
+  // Update remaining payments to 'planned' (only if still staged)
+  if (allPayments.length > 1) {
+    const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
+    await supabase
+      .from('xero_payments')
+      .update({ sync_status: 'planned' })
+      .in('id', plannedPaymentIds)
+      .eq('sync_status', 'staged')
+  }
+
+  console.log(`✅ Updated xero_payments statuses: #1=pending${allPayments.length > 1 ? `, #2-${allPayments.length}=planned` : ' (single payment)'}`, {
+    xeroInvoiceId,
+    installmentCount: allPayments.length
+  })
+}
+
 // Handle membership payment processing
 async function handleMembershipPayment(supabase: any, adminSupabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, membershipId: string, durationMonths: number) {
   // Check if user membership already exists (avoid duplicates)
@@ -1426,6 +1473,75 @@ export async function POST(request: NextRequest) {
           break
         }
 
+        // Check if this is a payment plan early payoff
+        if (paymentIntent.metadata?.purpose === 'payment_plan_early_payoff') {
+          console.log('🔄 Processing payment plan early payoff:', {
+            paymentIntentId: paymentIntent.id,
+            xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
+            userId: paymentIntent.metadata.userId,
+            paymentId: paymentIntent.metadata.paymentId
+          })
+
+          try {
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
+            // Update payment record to completed
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
+              })
+              .eq('id', paymentIntent.metadata.paymentId)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              console.error('❌ Failed to update early payoff payment record:', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            console.log(`✅ Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+
+            // Find the staged xero_payment for this invoice
+            const { data: stagedPayment, error: stagedPaymentError } = await supabase
+              .from('xero_payments')
+              .select('*')
+              .eq('xero_invoice_id', paymentIntent.metadata.xeroStagingRecordId)
+              .eq('sync_status', 'staged')
+              .eq('payment_type', 'full')
+              .single()
+
+            if (stagedPaymentError || !stagedPayment) {
+              console.error('❌ Failed to find staged early payoff xero_payment:', stagedPaymentError)
+              throw stagedPaymentError || new Error('No staged payment found')
+            }
+
+            // Update staged xero_payment to pending (ready for sync)
+            await supabase
+              .from('xero_payments')
+              .update({
+                sync_status: 'pending',
+                staging_metadata: {
+                  ...(stagedPayment.staging_metadata || {}),
+                  payment_id: updatedPayment.id,
+                  stripe_payment_intent_id: paymentIntent.id,
+                  stripe_charge_id: chargeId,
+                  processed_at: new Date().toISOString()
+                }
+              })
+              .eq('id', stagedPayment.id)
+
+            console.log('✅ Early payoff payment processed successfully via webhook')
+          } catch (error) {
+            console.error('❌ Error processing early payoff webhook:', error)
+            throw error // Throw to retry webhook
+          }
+          break
+        }
+
         // Check if this is a payment plan first payment
         if (paymentIntent.metadata?.isPaymentPlan === 'true') {
           console.log('🔄 Processing payment plan first payment:', {
@@ -1440,12 +1556,17 @@ export async function POST(request: NextRequest) {
             const { PaymentPlanService } = await import('@/lib/services/payment-plan-service')
             const { savePaymentMethodFromIntent } = await import('@/lib/services/payment-method-service')
 
+            // Get actual Stripe fees and charge ID from the charge
+            const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
+
             // Update payment record status
             const { data: updatedPayment, error: paymentUpdateError } = await supabase
               .from('payments')
               .update({
                 status: 'completed',
-                completed_at: new Date().toISOString()
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
               })
               .eq('stripe_payment_intent_id', paymentIntent.id)
               .select()
@@ -1455,41 +1576,139 @@ export async function POST(request: NextRequest) {
               console.error('❌ Failed to update payment plan payment record:', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log('✅ Successfully updated payment plan payment record')
+            console.log(`✅ Successfully updated payment plan payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
 
             // Save payment method to user profile (required for future charges)
             await savePaymentMethodFromIntent(paymentIntent, paymentIntent.metadata.userId, supabase)
 
-            // Get user_registration record
-            const { data: userRegistration, error: regError } = await supabase
+            // Handle idempotent webhook delivery - check if registration already paid
+            let userRegistration: any
+
+            // First, check if registration already exists and is paid (idempotency)
+            const { data: existingPaidRegistration } = await supabase
               .from('user_registrations')
-              .select('id')
+              .select('*')
               .eq('user_id', paymentIntent.metadata.userId)
               .eq('registration_id', paymentIntent.metadata.registrationId)
-              .eq('payment_id', updatedPayment.id)
+              .eq('payment_status', 'paid')
               .single()
 
-            if (regError || !userRegistration) {
-              console.error('❌ Failed to find user registration record:', regError)
-              throw regError || new Error('User registration not found')
+            if (existingPaidRegistration) {
+              console.log('✅ Payment plan registration already paid (idempotent webhook), using existing record:', existingPaidRegistration.id)
+              userRegistration = existingPaidRegistration
+            } else {
+              // Update user_registration to paid status and set registered_at timestamp
+              const { data: updatedRegistration, error: regError } = await supabase
+                .from('user_registrations')
+                .update({
+                  payment_status: 'paid',
+                  registered_at: new Date().toISOString(),
+                })
+                .eq('user_id', paymentIntent.metadata.userId)
+                .eq('registration_id', paymentIntent.metadata.registrationId)
+                .in('payment_status', ['awaiting_payment', 'processing'])
+                .select()
+                .single()
+
+              if (regError || !updatedRegistration) {
+                console.error('❌ Failed to find user registration record:', regError)
+                console.error('Registration update failed for:', {
+                  userId: paymentIntent.metadata.userId,
+                  registrationId: paymentIntent.metadata.registrationId
+                })
+
+                // Try to find any registration record for debugging
+                const { data: allRegistrations } = await supabase
+                  .from('user_registrations')
+                  .select('*')
+                  .eq('user_id', paymentIntent.metadata.userId)
+                  .eq('registration_id', paymentIntent.metadata.registrationId)
+
+                console.error('All registration records found:', allRegistrations)
+                throw regError || new Error('User registration not found')
+              }
+
+              userRegistration = updatedRegistration
             }
 
-            // Create payment plan
+            // Link user_registration to payment record (if not already linked)
+            if (!userRegistration.payment_id) {
+              // Normal case: payment_id not yet set, link it now
+              const { error: registrationUpdateError } = await supabase
+                .from('user_registrations')
+                .update({ payment_id: updatedPayment.id })
+                .eq('id', userRegistration.id)
+
+              if (registrationUpdateError) {
+                console.error('❌ Failed to link registration to payment:', registrationUpdateError)
+                // Don't throw - registration is paid, this is just linking
+              } else {
+                console.log('✅ Linked registration to payment:', updatedPayment.id)
+              }
+            } else if (userRegistration.payment_id !== updatedPayment.id) {
+              // Unexpected case: registration already linked to a different payment
+              // This indicates a potential data integrity issue
+              console.error('⚠️ Registration already linked to different payment:', {
+                registrationId: userRegistration.id,
+                existingPaymentId: userRegistration.payment_id,
+                currentPaymentId: updatedPayment.id,
+                paymentIntentId: paymentIntent.id
+              })
+              console.log('⚠️ Skipping payment_id update to preserve existing link - manual review may be needed')
+            } else {
+              // Already linked to correct payment (idempotent webhook delivery)
+              console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
+            }
+
+
+            // Create payment plan (with idempotency - may already exist if webhook retried)
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
-            const result = await PaymentPlanService.createPaymentPlan({
-              userRegistrationId: userRegistration.id,
-              userId: paymentIntent.metadata.userId,
-              totalAmount: totalAmount,
-              xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
-              firstPaymentId: updatedPayment.id
-            })
+            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
 
-            if (!result.success) {
-              console.error('❌ Failed to create payment plan:', result.error)
-              throw new Error(`Failed to create payment plan: ${result.error}`)
+            // Get xero_invoice to check if plan exists and get tenant_id
+            const { data: xeroInvoice, error: invoiceError } = await supabase
+              .from('xero_invoices')
+              .select('id, tenant_id, is_payment_plan')
+              .eq('id', xeroInvoiceId)
+              .single()
+
+            if (invoiceError || !xeroInvoice) {
+              console.error('❌ Failed to find xero_invoice:', invoiceError)
+              throw new Error('Xero invoice not found')
             }
 
-            console.log('✅ Successfully created payment plan:', result.paymentPlanId)
+            let paymentPlanId: string = xeroInvoice.id
+
+            // Check if payment plan already exists (idempotent webhook delivery)
+            if (xeroInvoice.is_payment_plan) {
+              console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', paymentPlanId)
+
+              // Update payment #1 to 'pending' and #2-4 to 'planned' (in case webhook is retried)
+              await updatePaymentPlanStatuses(supabase, xeroInvoiceId)
+            } else {
+              // Create new payment plan (4 xero_payments records)
+              const result = await PaymentPlanService.createPaymentPlan({
+                userRegistrationId: userRegistration.id,
+                userId: paymentIntent.metadata.userId,
+                totalAmount: totalAmount,
+                xeroInvoiceId: xeroInvoiceId,
+                firstPaymentId: updatedPayment.id,
+                tenantId: xeroInvoice.tenant_id
+              })
+
+              if (!result.success) {
+                console.error('❌ Failed to create payment plan:', result.error)
+                throw new Error(`Failed to create payment plan: ${result.error}`)
+              }
+
+              paymentPlanId = result.paymentPlanId!
+              console.log('✅ Successfully created payment plan xero_payments:', paymentPlanId)
+
+              // Now update the xero_payments statuses:
+              // Payment #1 → 'pending' (ready to sync to Xero)
+              // Payments #2-4 → 'planned' (wait for scheduled date)
+              await updatePaymentPlanStatuses(supabase, xeroInvoiceId)
+            }
 
             // Process through payment completion processor for Xero updates and emails
             try {
@@ -1504,9 +1723,10 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,
+                  charge_id: chargeId ?? undefined,
                   xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined,
                   is_payment_plan: true,
-                  payment_plan_id: result.paymentPlanId
+                  payment_plan_id: paymentPlanId
                 }
               }
 

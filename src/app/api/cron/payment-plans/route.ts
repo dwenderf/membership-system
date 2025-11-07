@@ -3,13 +3,14 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { emailService } from '@/lib/email/service'
+import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from '@/lib/services/payment-plan-config'
 
 /**
  * Cron Job: Daily Payment Plan Processing
  * Runs daily at 2:06 AM (staggered after cleanup and xero-sync)
  *
  * Responsibilities:
- * 1. Process due payments (scheduled for today or overdue)
+ * 1. Process due payments (xero_payments with status='planned' and planned_payment_date <= today)
  * 2. Retry failed payments (if 24+ hours since last attempt and under max attempts)
  * 3. Send pre-notifications (3 days before scheduled payment)
  * 4. Send completion emails when payment plans finish
@@ -59,52 +60,55 @@ export async function GET(request: NextRequest) {
       errors: [] as string[]
     }
 
-    // 1. Find transactions due for processing
-    // Include: pending transactions due today or earlier, or failed transactions eligible for retry
-    const { data: dueTransactions, error: dueError } = await adminSupabase
-      .from('payment_plan_transactions')
+    // 1. Find xero_payments due for processing
+    // Status='planned' with planned_payment_date <= today
+    const { data: duePayments, error: dueError } = await adminSupabase
+      .from('xero_payments')
       .select(`
         *,
-        payment_plan:payment_plans(
-          *,
-          user_registration:user_registrations(
+        xero_invoice:xero_invoices(
+          id,
+          contact_id,
+          user_registrations!inner(
+            user_id,
             registration:registrations(name, season:seasons(name))
           )
         )
       `)
-      .in('status', ['pending', 'failed'])
-      .lte('scheduled_date', today)
+      .eq('payment_type', 'installment')
+      .eq('sync_status', 'planned')
+      .lte('planned_payment_date', today)
 
     if (dueError) {
       logger.logBatchProcessing(
         'cron-payment-plans-query-error',
-        'Error querying due transactions',
+        'Error querying due payments',
         { error: dueError.message },
         'error'
       )
       results.errors.push(`Query error: ${dueError.message}`)
-    } else if (dueTransactions && dueTransactions.length > 0) {
+    } else if (duePayments && duePayments.length > 0) {
       logger.logBatchProcessing(
         'cron-payment-plans-due-found',
-        `Found ${dueTransactions.length} transactions due for processing`,
-        { count: dueTransactions.length }
+        `Found ${duePayments.length} payments due for processing`,
+        { count: duePayments.length }
       )
 
-      // Filter transactions based on retry eligibility
-      const processableTransactions = dueTransactions.filter(tx => {
-        // Pending transactions are always processable
-        if (tx.status === 'pending' && tx.attempt_count === 0) {
+      // Filter payments based on retry eligibility
+      const processablePayments = duePayments.filter(payment => {
+        // Never attempted (first time)
+        if (payment.attempt_count === 0) {
           return true
         }
 
-        // Failed transactions must meet retry criteria
-        if (tx.status === 'failed' && tx.attempt_count < tx.max_attempts) {
-          // Check if 24 hours have passed since last attempt
-          if (tx.last_attempt_at) {
-            const lastAttempt = new Date(tx.last_attempt_at)
+        // Has attempts but under max attempts
+        if (payment.attempt_count < MAX_PAYMENT_ATTEMPTS) {
+          // Check if retry interval has passed since last attempt
+          if (payment.last_attempt_at) {
+            const lastAttempt = new Date(payment.last_attempt_at)
             const now = new Date()
             const hoursSinceLastAttempt = (now.getTime() - lastAttempt.getTime()) / (1000 * 60 * 60)
-            return hoursSinceLastAttempt >= 24
+            return hoursSinceLastAttempt >= RETRY_INTERVAL_HOURS
           }
           // If no last_attempt_at, allow processing
           return true
@@ -115,90 +119,87 @@ export async function GET(request: NextRequest) {
 
       logger.logBatchProcessing(
         'cron-payment-plans-processable',
-        `${processableTransactions.length} transactions are eligible for processing`,
+        `${processablePayments.length} payments are eligible for processing`,
         {
-          total: dueTransactions.length,
-          processable: processableTransactions.length,
-          skipped: dueTransactions.length - processableTransactions.length
+          total: duePayments.length,
+          processable: processablePayments.length,
+          skipped: duePayments.length - processablePayments.length
         }
       )
 
-      // Process each eligible transaction
-      for (const transaction of processableTransactions) {
-        const isRetry = transaction.attempt_count > 0
+      // Process each eligible payment
+      for (const payment of processablePayments) {
+        const isRetry = payment.attempt_count > 0
+        const invoice = payment.xero_invoice as any
+        const userReg = invoice.user_registrations[0]
 
         if (isRetry) {
           results.retriesAttempted++
         }
 
         logger.logBatchProcessing(
-          'cron-payment-plans-processing-transaction',
-          `Processing ${isRetry ? 'retry' : 'initial'} transaction`,
+          'cron-payment-plans-processing-payment',
+          `Processing ${isRetry ? 'retry' : 'initial'} payment`,
           {
-            transactionId: transaction.id,
-            installmentNumber: transaction.installment_number,
-            attemptCount: transaction.attempt_count,
+            xeroPaymentId: payment.id,
+            installmentNumber: payment.installment_number,
+            attemptCount: payment.attempt_count,
             isRetry
           }
         )
 
-        const result = await PaymentPlanService.processPaymentPlanTransaction(transaction.id)
+        const result = await PaymentPlanService.processPaymentPlanTransaction(payment.id)
 
         if (result.success) {
           results.paymentsProcessed++
 
-          // Get updated payment plan and user info for email
-          const { data: updatedPlan } = await adminSupabase
-            .from('payment_plans')
-            .select(`
-              *,
-              user_registration:user_registrations(
-                registration:registrations(name, season:seasons(name))
-              )
-            `)
-            .eq('id', transaction.payment_plan.id)
+          // Get updated payment plan summary
+          const { data: planSummary } = await adminSupabase
+            .from('payment_plan_summary')
+            .select('*')
+            .eq('invoice_id', invoice.id)
             .single()
 
-          if (updatedPlan) {
+          if (planSummary) {
             // Get user details
             const { data: user } = await adminSupabase
               .from('users')
               .select('email, first_name, last_name')
-              .eq('id', updatedPlan.user_id)
+              .eq('id', userReg.user_id)
               .single()
 
             if (user) {
               const userName = `${user.first_name} ${user.last_name}`
-              const registrationName = updatedPlan.user_registration?.registration?.name || 'Registration'
-              const isFinalPayment = updatedPlan.status === 'completed'
+              const registrationName = userReg.registration?.name || 'Registration'
+              const isFinalPayment = planSummary.status === 'completed'
 
               // Send payment processed email
               try {
                 await emailService.sendPaymentPlanPaymentProcessed({
-                  userId: updatedPlan.user_id,
+                  userId: userReg.user_id,
                   email: user.email,
                   userName,
                   registrationName,
-                  installmentNumber: transaction.installment_number,
-                  totalInstallments: updatedPlan.installments_count,
-                  installmentAmount: transaction.amount,
+                  installmentNumber: payment.installment_number,
+                  totalInstallments: planSummary.total_installments,
+                  installmentAmount: payment.amount_paid,
                   paymentDate: new Date().toISOString(),
-                  amountPaid: updatedPlan.paid_amount,
-                  remainingBalance: updatedPlan.total_amount - updatedPlan.paid_amount,
-                  nextPaymentDate: updatedPlan.next_payment_date,
+                  amountPaid: planSummary.paid_amount,
+                  remainingBalance: planSummary.total_amount - planSummary.paid_amount,
+                  nextPaymentDate: planSummary.next_payment_date,
                   isFinalPayment
                 })
 
                 // Send completion email if this was the final payment
                 if (isFinalPayment) {
                   await emailService.sendPaymentPlanCompleted({
-                    userId: updatedPlan.user_id,
+                    userId: userReg.user_id,
                     email: user.email,
                     userName,
                     registrationName,
-                    totalAmount: updatedPlan.total_amount,
-                    totalInstallments: updatedPlan.installments_count,
-                    planStartDate: updatedPlan.created_at,
+                    totalAmount: planSummary.total_amount,
+                    totalInstallments: planSummary.total_installments,
+                    planStartDate: payment.staging_metadata?.payment_plan_created_at || payment.created_at,
                     completionDate: new Date().toISOString()
                   })
                   results.completionEmailsSent++
@@ -208,7 +209,7 @@ export async function GET(request: NextRequest) {
                   'cron-payment-plans-email-error',
                   'Failed to send payment processed email',
                   {
-                    transactionId: transaction.id,
+                    xeroPaymentId: payment.id,
                     error: emailError instanceof Error ? emailError.message : String(emailError)
                   },
                   'warn'
@@ -219,11 +220,11 @@ export async function GET(request: NextRequest) {
           }
 
           logger.logBatchProcessing(
-            'cron-payment-plans-transaction-success',
-            `Successfully processed transaction`,
+            'cron-payment-plans-payment-success',
+            `Successfully processed payment`,
             {
-              transactionId: transaction.id,
-              installmentNumber: transaction.installment_number,
+              xeroPaymentId: payment.id,
+              installmentNumber: payment.installment_number,
               paymentId: result.paymentId
             }
           )
@@ -234,36 +235,43 @@ export async function GET(request: NextRequest) {
           const { data: user } = await adminSupabase
             .from('users')
             .select('email, first_name, last_name')
-            .eq('id', transaction.payment_plan.user_id)
+            .eq('id', userReg.user_id)
             .single()
 
           if (user) {
             const userName = `${user.first_name} ${user.last_name}`
-            const registrationName = transaction.payment_plan.user_registration?.registration?.name || 'Registration'
-            const remainingRetries = transaction.max_attempts - (transaction.attempt_count + 1)
+            const registrationName = userReg.registration?.name || 'Registration'
+            const remainingRetries = MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1)
+
+            // Get payment plan summary for balances
+            const { data: planSummary } = await adminSupabase
+              .from('payment_plan_summary')
+              .select('*')
+              .eq('invoice_id', invoice.id)
+              .single()
 
             // Send failure email
             try {
               await emailService.sendPaymentPlanPaymentFailed({
-                userId: transaction.payment_plan.user_id,
+                userId: userReg.user_id,
                 email: user.email,
                 userName,
                 registrationName,
-                installmentNumber: transaction.installment_number,
-                totalInstallments: transaction.payment_plan.installments_count,
-                installmentAmount: transaction.amount,
-                scheduledDate: transaction.scheduled_date,
+                installmentNumber: payment.installment_number,
+                totalInstallments: planSummary?.total_installments || 4,
+                installmentAmount: payment.amount_paid,
+                scheduledDate: payment.planned_payment_date,
                 failureReason: result.error || 'Payment declined',
                 remainingRetries,
-                amountPaid: transaction.payment_plan.paid_amount,
-                remainingBalance: transaction.payment_plan.total_amount - transaction.payment_plan.paid_amount
+                amountPaid: planSummary?.paid_amount || 0,
+                remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
               })
             } catch (emailError) {
               logger.logBatchProcessing(
                 'cron-payment-plans-failure-email-error',
                 'Failed to send payment failure email',
                 {
-                  transactionId: transaction.id,
+                  xeroPaymentId: payment.id,
                   error: emailError instanceof Error ? emailError.message : String(emailError)
                 },
                 'warn'
@@ -272,76 +280,89 @@ export async function GET(request: NextRequest) {
           }
 
           logger.logBatchProcessing(
-            'cron-payment-plans-transaction-failed',
-            `Transaction processing failed`,
+            'cron-payment-plans-payment-failed',
+            `Payment processing failed`,
             {
-              transactionId: transaction.id,
-              installmentNumber: transaction.installment_number,
-              attemptCount: transaction.attempt_count + 1,
+              xeroPaymentId: payment.id,
+              installmentNumber: payment.installment_number,
+              attemptCount: payment.attempt_count + 1,
               error: result.error
             },
             'warn'
           )
 
-          results.errors.push(`Transaction ${transaction.id}: ${result.error}`)
+          results.errors.push(`Payment ${payment.id}: ${result.error}`)
         }
       }
     }
 
     // 2. Send pre-notifications for payments due in 3 days
-    const { data: upcomingTransactions, error: upcomingError } = await adminSupabase
-      .from('payment_plan_transactions')
+    const { data: upcomingPayments, error: upcomingError } = await adminSupabase
+      .from('xero_payments')
       .select(`
         *,
-        payment_plan:payment_plans(
-          *,
-          user_registration:user_registrations(
+        xero_invoice:xero_invoices(
+          id,
+          contact_id,
+          user_registrations!inner(
+            user_id,
             registration:registrations(name, season:seasons(name))
           )
         )
       `)
-      .eq('status', 'pending')
-      .eq('scheduled_date', preNotificationDate)
+      .eq('payment_type', 'installment')
+      .eq('sync_status', 'planned')
+      .eq('planned_payment_date', preNotificationDate)
 
     if (upcomingError) {
       logger.logBatchProcessing(
         'cron-payment-plans-upcoming-query-error',
-        'Error querying upcoming transactions',
+        'Error querying upcoming payments',
         { error: upcomingError.message },
         'error'
       )
       results.errors.push(`Upcoming query error: ${upcomingError.message}`)
-    } else if (upcomingTransactions && upcomingTransactions.length > 0) {
+    } else if (upcomingPayments && upcomingPayments.length > 0) {
       logger.logBatchProcessing(
         'cron-payment-plans-upcoming-found',
-        `Found ${upcomingTransactions.length} upcoming payments for pre-notification`,
-        { count: upcomingTransactions.length }
+        `Found ${upcomingPayments.length} upcoming payments for pre-notification`,
+        { count: upcomingPayments.length }
       )
 
-      for (const transaction of upcomingTransactions) {
+      for (const payment of upcomingPayments) {
+        const invoice = payment.xero_invoice as any
+        const userReg = invoice.user_registrations[0]
+
         // Get user details
         const { data: user } = await adminSupabase
           .from('users')
           .select('email, first_name, last_name')
-          .eq('id', transaction.payment_plan.user_id)
+          .eq('id', userReg.user_id)
           .single()
 
         if (user) {
           const userName = `${user.first_name} ${user.last_name}`
-          const registrationName = transaction.payment_plan.user_registration?.registration?.name || 'Registration'
+          const registrationName = userReg.registration?.name || 'Registration'
+
+          // Get payment plan summary for balances
+          const { data: planSummary } = await adminSupabase
+            .from('payment_plan_summary')
+            .select('*')
+            .eq('invoice_id', invoice.id)
+            .single()
 
           try {
             await emailService.sendPaymentPlanPreNotification({
-              userId: transaction.payment_plan.user_id,
+              userId: userReg.user_id,
               email: user.email,
               userName,
               registrationName,
-              installmentNumber: transaction.installment_number,
-              totalInstallments: transaction.payment_plan.installments_count,
-              installmentAmount: transaction.amount,
-              nextPaymentDate: transaction.scheduled_date,
-              amountPaid: transaction.payment_plan.paid_amount,
-              remainingBalance: transaction.payment_plan.total_amount - transaction.payment_plan.paid_amount
+              installmentNumber: payment.installment_number,
+              totalInstallments: planSummary?.total_installments || 4,
+              installmentAmount: payment.amount_paid,
+              nextPaymentDate: payment.planned_payment_date,
+              amountPaid: planSummary?.paid_amount || 0,
+              remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
             })
 
             results.preNotificationsSent++
@@ -350,9 +371,9 @@ export async function GET(request: NextRequest) {
               'cron-payment-plans-pre-notification-sent',
               'Sent pre-notification email',
               {
-                transactionId: transaction.id,
-                installmentNumber: transaction.installment_number,
-                scheduledDate: transaction.scheduled_date
+                xeroPaymentId: payment.id,
+                installmentNumber: payment.installment_number,
+                scheduledDate: payment.planned_payment_date
               }
             )
           } catch (emailError) {
@@ -360,7 +381,7 @@ export async function GET(request: NextRequest) {
               'cron-payment-plans-pre-notification-error',
               'Failed to send pre-notification email',
               {
-                transactionId: transaction.id,
+                xeroPaymentId: payment.id,
                 error: emailError instanceof Error ? emailError.message : String(emailError)
               },
               'warn'

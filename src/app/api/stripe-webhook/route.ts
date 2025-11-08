@@ -1631,19 +1631,22 @@ export async function POST(request: NextRequest) {
               userRegistration = updatedRegistration
             }
 
-            // Link user_registration to payment record (if not already linked)
+            // Link user_registration to payment record and xero_invoice (if not already linked)
             if (!userRegistration.payment_id) {
               // Normal case: payment_id not yet set, link it now
               const { error: registrationUpdateError } = await supabase
                 .from('user_registrations')
-                .update({ payment_id: updatedPayment.id })
+                .update({
+                  payment_id: updatedPayment.id,
+                  xero_invoice_id: xeroInvoiceId // Link to xero_invoice for payment plan queries
+                })
                 .eq('id', userRegistration.id)
 
               if (registrationUpdateError) {
                 console.error('❌ Failed to link registration to payment:', registrationUpdateError)
                 // Don't throw - registration is paid, this is just linking
               } else {
-                console.log('✅ Linked registration to payment:', updatedPayment.id)
+                console.log('✅ Linked registration to payment and xero_invoice:', updatedPayment.id, xeroInvoiceId)
               }
             } else if (userRegistration.payment_id !== updatedPayment.id) {
               // Unexpected case: registration already linked to a different payment
@@ -1657,6 +1660,19 @@ export async function POST(request: NextRequest) {
               console.log('⚠️ Skipping payment_id update to preserve existing link - manual review may be needed')
             } else {
               // Already linked to correct payment (idempotent webhook delivery)
+              // But make sure xero_invoice_id is also set
+              if (!userRegistration.xero_invoice_id) {
+                const { error: invoiceLinkError } = await supabase
+                  .from('user_registrations')
+                  .update({ xero_invoice_id: xeroInvoiceId })
+                  .eq('id', userRegistration.id)
+
+                if (invoiceLinkError) {
+                  console.error('❌ Failed to link registration to xero_invoice:', invoiceLinkError)
+                } else {
+                  console.log('✅ Linked registration to xero_invoice:', xeroInvoiceId)
+                }
+              }
               console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
             }
 

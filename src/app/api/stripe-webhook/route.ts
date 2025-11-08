@@ -1683,6 +1683,35 @@ export async function POST(request: NextRequest) {
             if (xeroInvoice.is_payment_plan) {
               console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', paymentPlanId)
 
+              // Update payment #1's metadata with payment details
+              const { data: firstPayment } = await supabase
+                .from('xero_payments')
+                .select('id, staging_metadata')
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('payment_type', 'installment')
+                .eq('installment_number', 1)
+                .single()
+
+              if (firstPayment) {
+                const updatedMetadata = {
+                  ...firstPayment.staging_metadata,
+                  payment_id: updatedPayment.id,
+                  stripe_payment_intent_id: paymentIntent.id,
+                  stripe_charge_id: chargeId,
+                  updated_at: new Date().toISOString()
+                }
+
+                await supabase
+                  .from('xero_payments')
+                  .update({
+                    staging_metadata: updatedMetadata,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', firstPayment.id)
+
+                console.log('✅ Updated payment #1 metadata with payment details')
+              }
+
               // Update payment #1 to 'pending' and #2-4 to 'planned' (in case webhook is retried)
               await updatePaymentPlanStatuses(supabase, xeroInvoiceId)
             } else {

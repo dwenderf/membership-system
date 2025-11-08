@@ -33,17 +33,10 @@ export async function GET(
     const adminSupabase = createAdminClient()
 
     // Get all payment plans for the user using payment_plan_summary view
+    // View includes registration data directly (registration_name, season_name)
     const { data: plans, error } = await adminSupabase
       .from('payment_plan_summary')
-      .select(`
-        *,
-        invoice:xero_invoices!invoice_id(
-          payment_id,
-          user_registrations!inner(
-            registration:registrations(name, season:seasons(name))
-          )
-        )
-      `)
+      .select('*')
       .eq('contact_id', params.id)
 
     if (error) {
@@ -66,13 +59,10 @@ export async function GET(
         ? Math.round(plan.total_amount / plan.total_installments)
         : plan.total_amount
 
-      // Get registration info from the nested invoice query
-      const registrationInfo = plan.invoice?.user_registrations?.[0]
-
       return {
         id: plan.invoice_id,
-        registrationName: registrationInfo?.registration?.name || 'Unknown',
-        seasonName: registrationInfo?.registration?.season?.name || '',
+        registrationName: plan.registration_name || 'Unknown',
+        seasonName: plan.season_name || '',
         totalAmount: plan.total_amount,
         paidAmount: plan.paid_amount,
         remainingBalance: plan.total_amount - plan.paid_amount,

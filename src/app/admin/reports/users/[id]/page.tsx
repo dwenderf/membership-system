@@ -130,7 +130,9 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
 
     // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
-    const originalInvoice = payment.xero_invoices?.find((invoice: any) => invoice.invoice_type === 'ACCREC')
+    // Prefer synced invoices over staged ones (in case of duplicates from retries)
+    const accrecs = payment.xero_invoices?.filter((invoice: any) => invoice.invoice_type === 'ACCREC') || []
+    const originalInvoice = accrecs.find((inv: any) => inv.invoice_number) || accrecs[0]
 
     // For payment plans, use the full invoice amount; otherwise use the payment amount
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount

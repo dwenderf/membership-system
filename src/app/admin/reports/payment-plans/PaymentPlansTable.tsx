@@ -217,7 +217,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     <tr key={`${user.userId}-details`}>
                       <td colSpan={8} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-3">
-                          {user.plans.filter(p => p.status === 'active').map((plan) => (
+                          {user.plans.filter(p => p.status === 'active' || p.status === 'failed').map((plan) => (
                             <div key={plan.id} className="bg-white rounded border border-gray-200 p-4">
                               <div className="flex justify-between items-start mb-2">
                                 <div>
@@ -228,7 +228,13 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                                     <p className="text-xs text-gray-500">{plan.seasonName}</p>
                                   )}
                                 </div>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  plan.status === 'failed'
+                                    ? 'bg-red-100 text-red-800'
+                                    : plan.status === 'completed'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}>
                                   {plan.status}
                                 </span>
                               </div>

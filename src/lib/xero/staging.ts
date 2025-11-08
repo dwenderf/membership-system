@@ -395,7 +395,7 @@ export class XeroStagingManager {
             xeroPayments.push({
               xero_invoice_id: invoiceStaging.id,
               tenant_id: tenantId, // Can be null during staging
-              xero_payment_id: '00000000-0000-0000-0000-000000000000', // Sentinel value, replaced when synced to Xero
+              xero_payment_id: null, // Will be populated when synced to Xero
               payment_method: 'stripe',
               payment_type: 'installment',
               installment_number: i,

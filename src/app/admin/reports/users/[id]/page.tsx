@@ -126,7 +126,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     .order('created_at', { ascending: false })
 
   // Fetch payment plan statuses for payment plan invoices
-  const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean }>()
+  const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean, amountPaid: number }>()
 
   for (const payment of userPayments || []) {
     const originalInvoice = payment.xero_invoices?.find((inv: any) =>
@@ -134,15 +134,19 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     )
 
     if (originalInvoice) {
-      // Check if all installments are completed
+      // Check if all installments are completed and calculate amount paid
       const { data: installments } = await adminSupabase
         .from('xero_payments')
-        .select('sync_status, payment_type')
+        .select('sync_status, payment_type, amount_paid')
         .eq('xero_invoice_id', originalInvoice.id)
         .eq('payment_type', 'installment')
 
       const isFullyPaid = installments?.every(inst => inst.sync_status === 'synced') ?? false
-      paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid })
+      const amountPaid = installments
+        ?.filter(inst => inst.sync_status === 'synced')
+        .reduce((sum, inst) => sum + inst.amount_paid, 0) ?? 0
+
+      paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid, amountPaid })
     }
   }
 
@@ -205,7 +209,8 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       lineItems: originalInvoice?.xero_invoice_line_items || [],
       invoice_type: 'ACCREC',
       isPaymentPlan: paymentPlanStatus?.isPaymentPlan ?? false,
-      isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false
+      isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false,
+      paymentPlanAmountPaid: paymentPlanStatus?.amountPaid ?? 0
     }
   }) || []
 
@@ -557,6 +562,11 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
                               {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
                                 <div className="text-xs text-gray-400">
                                   {formatAmount(invoice.originalAmount)} original
+                                </div>
+                              )}
+                              {invoice.isPaymentPlan && !invoice.isPaymentPlanFullyPaid && (
+                                <div className="text-xs text-gray-400">
+                                  {formatAmount(invoice.paymentPlanAmountPaid)} paid
                                 </div>
                               )}
                             </div>

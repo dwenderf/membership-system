@@ -58,8 +58,8 @@ BEGIN
       jsonb_agg(
         jsonb_build_object(
           'id', xil.id,
-          'item_type', xil.item_type,
-          'discount_code_id', xil.discount_code_id,
+          'line_item_type', xil.line_item_type,
+          'item_id', xil.item_id,
           'description', xil.description,
           'quantity', xil.quantity,
           'unit_amount', xil.unit_amount,

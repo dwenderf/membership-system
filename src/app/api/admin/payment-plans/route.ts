@@ -91,7 +91,14 @@ export async function GET(request: NextRequest) {
     // Format response
     const result = (users || []).map(user => {
       const userPlans = plansByUser.get(user.id) || []
+
+      // activePlans: Plans that require attention (active or failed status)
+      // Used for date calculations since these plans have scheduled/upcoming payments
       const activePlans = userPlans.filter(p => p.status === 'active' || p.status === 'failed')
+
+      // plansWithBalance: Plans with outstanding balance (regardless of status)
+      // Used for amount calculations to show accurate remaining balances
+      // Note: A 'completed' plan might still have a balance if manually adjusted
       const plansWithBalance = userPlans.filter(p => (p.total_amount - p.paid_amount) > 0)
 
       const totalAmount = plansWithBalance.reduce((sum, p) => sum + p.total_amount, 0)

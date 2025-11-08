@@ -1632,6 +1632,7 @@ export async function POST(request: NextRequest) {
             }
 
             // Get xero_invoice_id from payment intent metadata
+            // This value is used for both registration linking and payment plan creation
             const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
 
             // Link user_registration to payment record and xero_invoice (if not already linked)

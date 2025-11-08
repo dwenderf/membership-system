@@ -63,8 +63,14 @@ export default async function PaymentPlansReportPage() {
     const userPlans = plansByUser.get(user.id) || []
     const activePlans = userPlans.filter(p => p.status === 'active' || p.status === 'failed')
 
-    const totalAmount = activePlans.reduce((sum, p) => sum + p.total_amount, 0)
-    const paidAmount = activePlans.reduce((sum, p) => sum + p.paid_amount, 0)
+    // Calculate both amounts in a single pass for better performance
+    const { totalAmount, paidAmount } = activePlans.reduce(
+      (acc, p) => ({
+        totalAmount: acc.totalAmount + p.total_amount,
+        paidAmount: acc.paidAmount + p.paid_amount
+      }),
+      { totalAmount: 0, paidAmount: 0 }
+    )
 
     return {
       userId: user.id,

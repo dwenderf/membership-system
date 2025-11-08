@@ -60,17 +60,10 @@ export async function GET(request: NextRequest) {
 
     let plansData: any[] = []
     if (userIds.length > 0) {
+      // Fetch payment plans from view (views don't support foreign key relationships)
       const { data: plans, error: plansError } = await adminSupabase
         .from('payment_plan_summary')
-        .select(`
-          *,
-          invoice:xero_invoices!invoice_id(
-            payment_id,
-            user_registrations!inner(
-              registration:registrations(name, season:seasons(name))
-            )
-          )
-        `)
+        .select('*')
         .in('contact_id', userIds)
         .in('status', ['active', 'completed'])
 
@@ -81,8 +74,36 @@ export async function GET(request: NextRequest) {
           { error: plansError.message },
           'error'
         )
-      } else {
-        plansData = plans || []
+      } else if (plans && plans.length > 0) {
+        // Fetch invoice and registration data separately
+        const invoiceIds = plans.map(p => p.invoice_id).filter(Boolean)
+
+        if (invoiceIds.length > 0) {
+          const { data: invoices } = await adminSupabase
+            .from('xero_invoices')
+            .select(`
+              id,
+              payment_id,
+              user_registrations!inner(
+                registration:registrations(name, season:seasons(name))
+              )
+            `)
+            .in('id', invoiceIds)
+
+          // Create a map of invoice data by invoice_id
+          const invoiceMap = new Map()
+          invoices?.forEach(inv => {
+            invoiceMap.set(inv.id, inv)
+          })
+
+          // Merge invoice data into plans
+          plansData = plans.map(plan => ({
+            ...plan,
+            invoice: invoiceMap.get(plan.invoice_id) || null
+          }))
+        } else {
+          plansData = plans
+        }
       }
     }
 

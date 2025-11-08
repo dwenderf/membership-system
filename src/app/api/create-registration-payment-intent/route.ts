@@ -1274,9 +1274,10 @@ export async function POST(request: NextRequest) {
       stripe_payment_intent_id: undefined // Will be updated after Stripe intent creation
     }
 
-    // Calculate payment amounts for payment plan if applicable
+    // Check if this is a payment plan registration
     const isPaymentPlan = usePaymentPlan === true
 
+    // Create staging records (payment plan creates 4 installment records)
     const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, {
       isFree: false,
       isPaymentPlan: isPaymentPlan // Create 4 staged installment records - webhook updates to pending/planned

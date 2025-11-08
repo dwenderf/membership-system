@@ -129,10 +129,22 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
 
-    // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
-    // Prefer synced invoices over staged ones (in case of duplicates from retries)
-    const accrecs = payment.xero_invoices?.filter((invoice: any) => invoice.invoice_type === 'ACCREC') || []
-    const originalInvoice = accrecs.find((inv: any) => inv.invoice_number) || accrecs[0]
+    // Filter to only get synced invoices (ACCREC with invoice numbers)
+    // Exclude staged invoices without invoice numbers and credit notes (ACCRECCREDIT)
+    const syncedInvoices = payment.xero_invoices?.filter((invoice: any) =>
+      invoice.invoice_type === 'ACCREC' && invoice.invoice_number
+    ) || []
+
+    const originalInvoice = syncedInvoices[0]
+
+    // Log potential data integrity issue if no synced invoice found
+    if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
+      console.warn('No synced ACCREC invoice found for payment:', {
+        paymentId: payment.id,
+        invoicesCount: payment.xero_invoices.length,
+        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type)
+      })
+    }
 
     // For payment plans, use the full invoice amount; otherwise use the payment amount
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount

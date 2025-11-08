@@ -1631,6 +1631,9 @@ export async function POST(request: NextRequest) {
               userRegistration = updatedRegistration
             }
 
+            // Get xero_invoice_id from payment intent metadata
+            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
+
             // Link user_registration to payment record and xero_invoice (if not already linked)
             if (!userRegistration.payment_id) {
               // Normal case: payment_id not yet set, link it now
@@ -1679,7 +1682,6 @@ export async function POST(request: NextRequest) {
 
             // Create payment plan (with idempotency - may already exist if webhook retried)
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
-            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
 
             // Get xero_invoice to check if plan exists and get tenant_id
             const { data: xeroInvoice, error: invoiceError } = await supabase
@@ -1717,7 +1719,7 @@ export async function POST(request: NextRequest) {
                   updated_at: new Date().toISOString()
                 }
 
-                await supabase
+                const { error: metadataUpdateError } = await supabase
                   .from('xero_payments')
                   .update({
                     staging_metadata: updatedMetadata,
@@ -1725,7 +1727,12 @@ export async function POST(request: NextRequest) {
                   })
                   .eq('id', firstPayment.id)
 
-                console.log('✅ Updated payment #1 metadata with payment details')
+                if (metadataUpdateError) {
+                  console.error('❌ Failed to update payment #1 metadata:', metadataUpdateError)
+                  // Don't throw - payment is successful, this is just metadata
+                } else {
+                  console.log('✅ Updated payment #1 metadata with payment details')
+                }
               }
 
               // Update payment #1 to 'pending' and #2-4 to 'planned' (in case webhook is retried)

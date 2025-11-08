@@ -1,7 +1,11 @@
 -- Add is_payment_plan field to get_pending_xero_invoices_with_lock RPC function
 -- This allows the sync code to detect payment plans and set correct due dates
 
-CREATE OR REPLACE FUNCTION get_pending_xero_invoices_with_lock(limit_count INTEGER DEFAULT 50)
+-- Drop the old function first (required when changing return type)
+DROP FUNCTION IF EXISTS get_pending_xero_invoices_with_lock(integer);
+
+-- Create the function with the updated return type
+CREATE FUNCTION get_pending_xero_invoices_with_lock(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
   id UUID,
   payment_id UUID,

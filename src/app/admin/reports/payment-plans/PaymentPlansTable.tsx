@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
+import { filterActivePlans } from '@/lib/payment-plan-utils'
 
 interface PaymentPlan {
   id: string
@@ -217,7 +218,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     <tr key={`${user.userId}-details`}>
                       <td colSpan={8} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-3">
-                          {user.plans.filter(p => p.status === 'active' || p.status === 'failed').map((plan) => (
+                          {filterActivePlans(user.plans).map((plan) => (
                             <div key={plan.id} className="bg-white rounded border border-gray-200 p-4">
                               <div className="flex justify-between items-start mb-2">
                                 <div>

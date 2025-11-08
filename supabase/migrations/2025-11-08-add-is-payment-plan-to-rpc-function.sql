@@ -76,8 +76,7 @@ BEGIN
   WHERE xi.sync_status = 'pending'
   GROUP BY xi.id
   ORDER BY xi.created_at ASC
-  LIMIT limit_count
-  FOR UPDATE OF xi SKIP LOCKED;
+  LIMIT limit_count;
 END;
 $$;
 

@@ -1764,7 +1764,7 @@ export async function POST(request: NextRequest) {
                 user_id: paymentIntent.metadata.userId,
                 payment_id: updatedPayment.id,
                 amount: paymentIntent.amount,
-                trigger_source: 'stripe_webhook_payment_plan',
+                trigger_source: 'stripe_webhook_registration', // Use standard registration trigger for emails
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,

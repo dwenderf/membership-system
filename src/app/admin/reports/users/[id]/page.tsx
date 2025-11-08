@@ -129,22 +129,31 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
 
-    // Filter to only get synced invoices (ACCREC with invoice numbers)
-    // Exclude staged invoices without invoice numbers and credit notes (ACCRECCREDIT)
-    const syncedInvoices = payment.xero_invoices?.filter((invoice: any) =>
-      invoice.invoice_type === 'ACCREC' && invoice.invoice_number
+    // Filter to get synced or pending ACCREC invoices (exclude staged and credit notes)
+    // Pending invoices are awaiting Xero sync (payment successful, just not synced yet)
+    const validInvoices = payment.xero_invoices?.filter((invoice: any) =>
+      invoice.invoice_type === 'ACCREC' &&
+      (invoice.sync_status === 'synced' || invoice.sync_status === 'pending')
     ) || []
 
-    const originalInvoice = syncedInvoices[0]
+    // Prefer synced invoices with invoice numbers, then pending invoices
+    const originalInvoice = validInvoices.find((inv: any) => inv.invoice_number && inv.sync_status === 'synced')
+      || validInvoices.find((inv: any) => inv.sync_status === 'pending')
+      || validInvoices[0]
 
-    // Log potential data integrity issue if no synced invoice found
+    // Log potential data integrity issue if no valid invoice found
     if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
-      console.warn('No synced ACCREC invoice found for payment:', {
+      console.warn('No synced or pending ACCREC invoice found for payment:', {
         paymentId: payment.id,
         invoicesCount: payment.xero_invoices.length,
-        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type)
+        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type),
+        syncStatuses: payment.xero_invoices.map((inv: any) => inv.sync_status)
       })
     }
+
+    // Determine invoice number display (show "Pending Sync" for pending invoices)
+    const invoiceNumber = originalInvoice?.invoice_number
+      || (originalInvoice?.sync_status === 'pending' ? 'Pending Sync' : `PAY-${payment.id.slice(0, 8)}`)
 
     // For payment plans, use the full invoice amount; otherwise use the payment amount
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
@@ -155,7 +164,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     return {
       id: payment.id,
       paymentId: payment.id,
-      number: originalInvoice?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+      number: invoiceNumber,
       date: payment.completed_at || payment.created_at,
       originalAmount: invoiceAmount,
       totalRefunded: totalRefunded,

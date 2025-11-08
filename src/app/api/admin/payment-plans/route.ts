@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { filterActivePlans } from '@/lib/payment-plan-utils'
 
 /**
  * GET /api/admin/payment-plans
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
 
       // activePlans: Plans that require attention (active or failed status)
       // Used for date calculations since these plans have scheduled/upcoming payments
-      const activePlans = userPlans.filter(p => p.status === 'active' || p.status === 'failed')
+      const activePlans = filterActivePlans(userPlans)
 
       // plansWithBalance: Plans with outstanding balance (regardless of status)
       // Used for amount calculations to show accurate remaining balances

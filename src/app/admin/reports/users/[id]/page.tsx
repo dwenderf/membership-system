@@ -88,6 +88,8 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
         net_amount,
         created_at,
         invoice_type,
+        sync_status,
+        is_payment_plan,
         xero_invoice_line_items (
           id,
           description,
@@ -122,6 +124,31 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     .eq('sync_status', 'synced')
     .not('invoice_number', 'is', null)
     .order('created_at', { ascending: false })
+
+  // Fetch payment plan statuses for payment plan invoices
+  const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean, amountPaid: number }>()
+
+  for (const payment of userPayments || []) {
+    const originalInvoice = payment.xero_invoices?.find((inv: any) =>
+      inv.invoice_type === 'ACCREC' && inv.is_payment_plan
+    )
+
+    if (originalInvoice) {
+      // Check if all installments are completed and calculate amount paid
+      const { data: installments } = await adminSupabase
+        .from('xero_payments')
+        .select('sync_status, payment_type, amount_paid')
+        .eq('xero_invoice_id', originalInvoice.id)
+        .eq('payment_type', 'installment')
+
+      const isFullyPaid = installments?.every(inst => inst.sync_status === 'synced') ?? false
+      const amountPaid = installments
+        ?.filter(inst => inst.sync_status === 'synced')
+        .reduce((sum, inst) => sum + inst.amount_paid, 0) ?? 0
+
+      paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid, amountPaid })
+    }
+  }
 
   // Transform payments into invoice-like objects for display
   invoices = userPayments?.map(payment => {
@@ -162,6 +189,9 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < invoiceAmount
     const isFullyRefunded = invoiceAmount > 0 && totalRefunded >= invoiceAmount
 
+    // Get payment plan status
+    const paymentPlanStatus = paymentPlanStatuses.get(payment.id)
+
     return {
       id: payment.id,
       paymentId: payment.id,
@@ -177,7 +207,10 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       xeroInvoiceId: originalInvoice?.id,
       canRefund: payment.status === 'completed' && netAmount > 0,
       lineItems: originalInvoice?.xero_invoice_line_items || [],
-      invoice_type: 'ACCREC'
+      invoice_type: 'ACCREC',
+      isPaymentPlan: paymentPlanStatus?.isPaymentPlan ?? false,
+      isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false,
+      paymentPlanAmountPaid: paymentPlanStatus?.amountPaid ?? 0
     }
   }) || []
 
@@ -482,9 +515,19 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
                                 </span>
                               ) : (
                                 <>
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Paid
-                                  </span>
+                                  {invoice.isPaymentPlan ? (
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      invoice.isPaymentPlanFullyPaid
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {invoice.isPaymentPlanFullyPaid ? 'Paid' : 'Payment Plan'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      Paid
+                                    </span>
+                                  )}
                                   {invoice.isPartiallyRefunded && (
                                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                       Partially Refunded
@@ -519,6 +562,11 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
                               {(invoice.isPartiallyRefunded || invoice.isFullyRefunded) && (
                                 <div className="text-xs text-gray-400">
                                   {formatAmount(invoice.originalAmount)} original
+                                </div>
+                              )}
+                              {invoice.isPaymentPlan && !invoice.isPaymentPlanFullyPaid && (
+                                <div className="text-xs text-gray-400">
+                                  {formatAmount(invoice.paymentPlanAmountPaid)} paid
                                 </div>
                               )}
                             </div>

@@ -60,13 +60,14 @@ ALTER COLUMN payment_type SET NOT NULL;
 
 -- Update sync_status to include 'planned' for future installments and 'cancelled' for early payoff
 -- First, check if there are any invalid sync_status values and fix them
+-- NOTE: Include 'planned' and 'cancelled' in the validation list to avoid marking them as failed
 DO $$
 DECLARE
   invalid_count INTEGER;
 BEGIN
   SELECT COUNT(*) INTO invalid_count
   FROM xero_payments
-  WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+  WHERE sync_status NOT IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore');
 
   IF invalid_count > 0 THEN
     RAISE NOTICE 'Found % rows with invalid sync_status values', invalid_count;
@@ -74,7 +75,7 @@ BEGIN
     -- Update any invalid values to 'failed' so we can add the constraint
     UPDATE xero_payments
     SET sync_status = 'failed'
-    WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+    WHERE sync_status NOT IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore');
 
     RAISE NOTICE 'Updated invalid sync_status values to failed';
   END IF;
@@ -148,7 +149,21 @@ SELECT
   END as status,
   -- Registration information (from user_registrations via xero_invoice_id)
   ur.registration_id,
-  r.name as registration_name,
+  -- Use registration name if available, otherwise fall back to line item description
+  -- Line item descriptions for registrations typically contain "Registration: <name>"
+  COALESCE(
+    r.name,
+    -- Extract registration name from first line item description
+    -- Remove "Registration: " prefix if present, otherwise use full description
+    NULLIF(
+      regexp_replace(
+        (SELECT description FROM xero_invoice_line_items WHERE xero_invoice_id = xi.id ORDER BY id LIMIT 1),
+        '^Registration:\s*',
+        ''
+      ),
+      ''
+    )
+  ) as registration_name,
   s.name as season_name,
   -- Installment details
   json_agg(
@@ -181,7 +196,7 @@ REVOKE ALL ON payment_plan_summary FROM authenticated;
 -- Grant access only to service_role (used by admin APIs and cron jobs)
 GRANT SELECT ON payment_plan_summary TO service_role;
 
-COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
+COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link, with fallback to invoice line item description for orphaned invoices. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
 
 -- =============================================
 -- 6. RPC FUNCTION UPDATES

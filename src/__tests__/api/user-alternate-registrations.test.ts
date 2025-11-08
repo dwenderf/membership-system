@@ -46,6 +46,7 @@ const mockLogger = {
 
 // Mock the modules
 require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
+require('@/lib/supabase/server').createAdminClient = jest.fn(() => mockSupabase)
 require('@/lib/services/setup-intent-service').setupIntentService = mockSetupIntentService
 require('@/lib/logging/logger').logger = mockLogger
 
@@ -60,7 +61,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123' })
       })
 
       const response = await POST(request)
@@ -70,7 +71,7 @@ describe('/api/user-alternate-registrations', () => {
       expect(data.error).toBe('Unauthorized')
     })
 
-    it('should require registrationId', async () => {
+    it('should require registration_id', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-123' } }
       })
@@ -92,18 +93,6 @@ describe('/api/user-alternate-registrations', () => {
         data: { user: { id: 'user-123' } }
       })
 
-      // Mock user lookup
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({
-              data: { id: 'user-123', first_name: 'John', last_name: 'Doe' },
-              error: null
-            }))
-          }))
-        }))
-      })
-
       // Mock registration lookup - alternates not allowed
       mockSupabase.from.mockReturnValueOnce({
         select: jest.fn(() => ({
@@ -118,7 +107,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123' })
       })
 
       const response = await POST(request)
@@ -131,18 +120,6 @@ describe('/api/user-alternate-registrations', () => {
     it('should prevent duplicate alternate registration', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-123' } }
-      })
-
-      // Mock user lookup
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({
-              data: { id: 'user-123', first_name: 'John', last_name: 'Doe' },
-              error: null
-            }))
-          }))
-        }))
       })
 
       // Mock registration lookup - alternates allowed
@@ -158,22 +135,6 @@ describe('/api/user-alternate-registrations', () => {
                 alternate_accounting_code: 'ALT001'
               },
               error: null
-            }))
-          }))
-        }))
-      })
-
-      // Mock existing regular registration check - none found
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                single: jest.fn(() => Promise.resolve({
-                  data: null,
-                  error: null
-                }))
-              }))
             }))
           }))
         }))
@@ -195,7 +156,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123' })
       })
 
       const response = await POST(request)
@@ -208,24 +169,6 @@ describe('/api/user-alternate-registrations', () => {
     it('should successfully register as alternate with valid payment method', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-123' } }
-      })
-
-      // Mock user lookup with valid payment method
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({
-              data: {
-                id: 'user-123',
-                first_name: 'John',
-                last_name: 'Doe',
-                stripe_payment_method_id: 'pm_123',
-                setup_intent_status: 'succeeded'
-              },
-              error: null
-            }))
-          }))
-        }))
       })
 
       // Mock registration lookup
@@ -246,24 +189,28 @@ describe('/api/user-alternate-registrations', () => {
         }))
       })
 
-      // Mock existing registration checks - none found
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                single: jest.fn(() => Promise.resolve({ data: null, error: null }))
-              }))
-            }))
-          }))
-        }))
-      })
-
+      // Mock existing alternate check - none found
       mockSupabase.from.mockReturnValueOnce({
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             eq: jest.fn(() => ({
               single: jest.fn(() => Promise.resolve({ data: null, error: null }))
+            }))
+          }))
+        }))
+      })
+
+      // Mock user profile lookup with payment method (via admin client)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            single: jest.fn(() => Promise.resolve({
+              data: {
+                id: 'user-123',
+                stripe_payment_method_id: 'pm_123',
+                setup_intent_status: 'succeeded'
+              },
+              error: null
             }))
           }))
         }))
@@ -288,7 +235,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123' })
       })
 
       const response = await POST(request)
@@ -296,7 +243,7 @@ describe('/api/user-alternate-registrations', () => {
 
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(data.alternateRegistration.registrationId).toBe('reg-123')
+      expect(data.alternateRegistration.registration_id).toBe('reg-123')
       expect(data.setupIntent).toBeUndefined() // No setup intent needed
     })
   })
@@ -326,8 +273,10 @@ describe('/api/user-alternate-registrations', () => {
               data: [
                 {
                   id: 'alt-reg-123',
-                  registered_at: new Date().toISOString(),
-                  registrations: {
+                  user_id: 'user-123',
+                  registration_id: 'reg-123',
+                  created_at: new Date().toISOString(),
+                  registration: {
                     id: 'reg-123',
                     name: 'Test Registration',
                     alternate_price: 5000
@@ -340,28 +289,14 @@ describe('/api/user-alternate-registrations', () => {
         }))
       })
 
-      // Mock user payment method status
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({
-              data: {
-                stripe_payment_method_id: 'pm_123',
-                setup_intent_status: 'succeeded'
-              },
-              error: null
-            }))
-          }))
-        }))
-      })
-
       const request = new NextRequest('http://localhost/api/user-alternate-registrations')
       const response = await GET(request)
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data.alternateRegistrations).toHaveLength(1)
-      expect(data.paymentMethodStatus.hasValidPaymentMethod).toBe(true)
+      expect(Array.isArray(data)).toBe(true)
+      expect(data).toHaveLength(1)
+      expect(data[0].registration.name).toBe('Test Registration')
     })
   })
 })

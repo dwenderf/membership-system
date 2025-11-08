@@ -8,6 +8,7 @@ import DeleteAccountSection from '@/components/DeleteAccountSection'
 import dynamic from 'next/dynamic'
 
 const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
+const UserPaymentPlansSection = dynamic(() => import('@/components/UserPaymentPlansSection'), { ssr: false })
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -203,6 +204,9 @@ export default function AccountPage() {
 
       {/* Payment Methods */}
       <PaymentMethodsSection />
+
+      {/* Payment Plans */}
+      <UserPaymentPlansSection />
 
       {/* Account Actions */}
       <div className="bg-white shadow rounded-lg">

@@ -7,14 +7,16 @@ interface PaymentMethodNoticeProps {
   userEmail: string
   onSavePaymentChange?: (shouldSave: boolean) => void
   showForAlternate?: boolean // Different messaging for alternate registrations
+  paymentPlanEnabled?: boolean // Whether user is enabled for payment plans
 }
 
 // PaymentMethodInfo is now imported from utils
 
-export default function PaymentMethodNotice({ 
-  userEmail, 
-  onSavePaymentChange, 
-  showForAlternate = false 
+export default function PaymentMethodNotice({
+  userEmail,
+  onSavePaymentChange,
+  showForAlternate = false,
+  paymentPlanEnabled = false
 }: PaymentMethodNoticeProps) {
   const [paymentInfo, setPaymentInfo] = useState<PaymentMethodInfo | null>(null)
   const [shouldSavePayment, setShouldSavePayment] = useState(false)
@@ -95,7 +97,22 @@ export default function PaymentMethodNotice({
 
   // User doesn't have a saved payment method
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+    <div className={`border rounded-lg p-4 ${paymentPlanEnabled ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+      {paymentPlanEnabled && (
+        <div className="mb-3 p-3 bg-white border border-blue-300 rounded-md">
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-blue-900">Payment Plans Available!</div>
+              <div className="text-sm text-blue-700 mt-1">
+                You're eligible for 4-month payment plans. Save a payment method below to unlock this option.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-start space-x-3">
         <input
           type="checkbox"
@@ -106,10 +123,14 @@ export default function PaymentMethodNotice({
         />
         <div className="flex-1">
           <label htmlFor="save-payment-method" className="text-sm font-medium text-gray-900 cursor-pointer">
-            Save payment information for future purchases
+            Save payment information for future purchases{paymentPlanEnabled ? ' (Required for payment plans)' : ''}
           </label>
           <div className="mt-1 text-sm text-gray-600">
-            This will save your payment method securely with Stripe for faster checkout on future registrations and memberships.
+            {paymentPlanEnabled ? (
+              'Saving your payment method enables 4-month payment plans and faster checkout on future purchases.'
+            ) : (
+              'This will save your payment method securely with Stripe for faster checkout on future registrations and memberships.'
+            )}
           </div>
           {shouldSavePayment && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">

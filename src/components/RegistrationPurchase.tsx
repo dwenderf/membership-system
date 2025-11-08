@@ -103,12 +103,17 @@ export default function RegistrationPurchase({
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
   const [shouldSavePaymentMethod, setShouldSavePaymentMethod] = useState(false)
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
+  const [usePaymentPlan, setUsePaymentPlan] = useState(false)
+  const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
+  const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
+  const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
   const { showSuccess, showError } = useToast()
 
-  // Check if user has saved payment method
+  // Check if user has saved payment method and payment plan eligibility
   useEffect(() => {
-    const checkSavedPaymentMethod = async () => {
+    const checkPaymentStatus = async () => {
       try {
+        // Check saved payment method
         const response = await fetch('/api/user-payment-method')
         if (response.ok) {
           const data = await response.json()
@@ -117,13 +122,26 @@ export default function RegistrationPurchase({
         } else {
           setUserHasSavedPaymentMethod(false)
         }
+
+        // Always check payment plan eligibility to show appropriate messaging
+        const eligibilityResponse = await fetch('/api/user/payment-plan-eligibility')
+        if (eligibilityResponse.ok) {
+          const eligibilityData = await eligibilityResponse.json()
+          setPaymentPlanEligible(eligibilityData.eligible || false)
+          setPaymentPlanEnabled(eligibilityData.paymentPlanEnabled || false)
+        } else {
+          setPaymentPlanEligible(false)
+          setPaymentPlanEnabled(false)
+        }
       } catch (error) {
-        console.error('Error checking saved payment method:', error)
+        console.error('Error checking payment status:', error)
         setUserHasSavedPaymentMethod(false)
+        setPaymentPlanEligible(false)
+        setPaymentPlanEnabled(false)
       }
     }
-    
-    checkSavedPaymentMethod()
+
+    checkPaymentStatus()
   }, [])
 
   // Cleanup function to remove processing reservation
@@ -228,6 +246,9 @@ export default function RegistrationPurchase({
   const originalAmount = selectedCategory?.price ?? 0
   const discountAmount = discountValidation?.isValid ? discountValidation.discountAmount : 0
   const finalAmount = originalAmount - discountAmount
+
+  // Calculate the amount to charge: first installment for payment plan, or full amount
+  const amountToCharge = usePaymentPlan && firstInstallmentAmount ? firstInstallmentAmount : finalAmount
   
   // Check registration timing status
   const registrationStatus = getRegistrationStatus(registration as any)
@@ -495,6 +516,7 @@ export default function RegistrationPurchase({
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
           savePaymentMethod: shouldSavePaymentMethod,
+          usePaymentPlan: usePaymentPlan,
         }),
       })
 
@@ -504,7 +526,7 @@ export default function RegistrationPurchase({
       }
 
       const responseData = await response.json()
-      
+
       // Handle free registration (no payment needed)
       if (responseData.isFree) {
         setShowPaymentForm(false)
@@ -517,11 +539,12 @@ export default function RegistrationPurchase({
         setTimeout(() => window.location.reload(), 2000)
         return
       }
-      
-      const { clientSecret, paymentIntentId: intentId, reservationExpiresAt: expiresAt } = responseData
+
+      const { clientSecret, paymentIntentId: intentId, reservationExpiresAt: expiresAt, firstInstallmentAmount: installment } = responseData
       setClientSecret(clientSecret)
       setPaymentIntentId(intentId)
       setReservationExpiresAt(expiresAt || null)
+      setFirstInstallmentAmount(installment || null)
       
       // Now check if user has saved payment method and show appropriate UI
       
@@ -628,7 +651,7 @@ export default function RegistrationPurchase({
   const handleUseDifferentMethod = async () => {
     setShowConfirmationScreen(false)
     setIsLoading(true)
-    
+
     // Continue with regular payment flow (bypass saved method check)
     try {
       const response = await fetch('/api/create-registration-payment-intent', {
@@ -643,6 +666,7 @@ export default function RegistrationPurchase({
           presaleCode: hasValidPresaleCode ? presaleCode.trim() : null,
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
           savePaymentMethod: shouldSavePaymentMethod,
+          usePaymentPlan: usePaymentPlan,
         }),
       })
 
@@ -1134,6 +1158,97 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Payment Plan Option - Only show for eligible users with saved payment method */}
+      {selectedCategory && !isAlternateSelected && finalAmount > 0 && isTimingAvailable && !isCategoryAtCapacity && paymentPlanEligible && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-start mb-3">
+            <svg className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+              <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-blue-900 mb-2">Payment Options</div>
+              <div className="space-y-2">
+                {/* Pay in Full Option */}
+                <label className={`flex items-start p-3 rounded-lg border cursor-pointer transition-colors ${
+                  !usePaymentPlan
+                    ? 'border-blue-600 bg-white ring-2 ring-blue-600'
+                    : 'border-blue-200 bg-white hover:border-blue-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="paymentOption"
+                    value="full"
+                    checked={!usePaymentPlan}
+                    onChange={() => setUsePaymentPlan(false)}
+                    className="appearance-none w-0 h-0 m-0 p-0"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">Pay in Full</div>
+                    <div className="text-sm text-gray-600">
+                      Pay ${(finalAmount / 100).toFixed(2)} today
+                    </div>
+                  </div>
+                </label>
+
+                {/* Payment Plan Option */}
+                <label className={`flex items-start p-3 rounded-lg border cursor-pointer transition-colors ${
+                  usePaymentPlan
+                    ? 'border-blue-600 bg-white ring-2 ring-blue-600'
+                    : 'border-blue-200 bg-white hover:border-blue-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="paymentOption"
+                    value="plan"
+                    checked={usePaymentPlan}
+                    onChange={() => setUsePaymentPlan(true)}
+                    className="appearance-none w-0 h-0 m-0 p-0"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">4-Month Payment Plan</div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      Pay in 4 equal monthly installments
+                    </div>
+                    {usePaymentPlan && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs space-y-1">
+                        <div className="font-medium text-gray-700 mb-1">Payment Schedule:</div>
+                        <div className="flex justify-between text-gray-600">
+                          <span>Today (Payment 1 of 4):</span>
+                          <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                          <span>In 30 days (Payment 2 of 4):</span>
+                          <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                          <span>In 60 days (Payment 3 of 4):</span>
+                          <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                          <span>In 90 days (Payment 4 of 4):</span>
+                          <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="border-t border-gray-200 mt-2 pt-1 flex justify-between font-medium">
+                          <span className="text-gray-700">Total:</span>
+                          <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+              <div className="mt-2 text-xs text-blue-700">
+                <svg className="inline w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Payment plan uses your saved payment method for automatic monthly charges
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Method Notice - Only show for non-alternate categories that require payment and user doesn't have saved method */}
       {selectedCategory && !isAlternateSelected && originalAmount > 0 && isTimingAvailable && !isCategoryAtCapacity && userHasSavedPaymentMethod === false && (
         <div className="mb-4">
@@ -1141,6 +1256,7 @@ export default function RegistrationPurchase({
             userEmail={userEmail}
             onSavePaymentChange={setShouldSavePaymentMethod}
             showForAlternate={false}
+            paymentPlanEnabled={paymentPlanEnabled}
           />
         </div>
       )}
@@ -1330,7 +1446,7 @@ export default function RegistrationPurchase({
                 <PaymentForm
                   registrationId={registration.id}
                   categoryId={selectedCategoryId!}
-                  amount={finalAmount}
+                  amount={amountToCharge}
                   userEmail={userEmail}
                   reservationExpiresAt={reservationExpiresAt || undefined}
                   onTimerExpired={handleTimerExpired}
@@ -1407,7 +1523,7 @@ export default function RegistrationPurchase({
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               <SavedPaymentConfirmation
                 userEmail={userEmail}
-                amount={finalAmount}
+                amount={amountToCharge}
                 clientSecret={clientSecret}
                 paymentMethodId={savedPaymentMethodId || ''}
                 originalAmount={originalAmount}

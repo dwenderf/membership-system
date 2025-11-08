@@ -41,6 +41,36 @@ cd scripts/admin
 node apply-rls-fix.js
 ```
 
+## 🗄️ SQL Utility Scripts
+
+SQL scripts for database diagnostics and maintenance. These scripts are located in the root `scripts/` directory.
+
+### Payment Plan Scripts
+
+#### `check-orphaned-payment-plans.sql`
+Identifies and diagnoses payment plan invoices that have no linked user_registration record.
+
+**What it does:**
+- Finds all payment plan invoices without a user_registration link
+- Shows user details, invoice amounts, and payment status
+- Checks if registration IDs from staging_metadata exist in the database
+- Provides diagnostic information to determine if registrations are missing or just unlinked
+
+**Usage:**
+```bash
+# Using psql
+psql $DATABASE_URL -f scripts/check-orphaned-payment-plans.sql
+
+# Using Supabase CLI
+npx supabase db execute --db-url "$DATABASE_URL" < scripts/check-orphaned-payment-plans.sql
+```
+
+**Output includes:**
+- Orphaned invoice details (ID, invoice number, user info)
+- Missing registration ID and name from staging_metadata
+- Number of installments and amount paid
+- Status indicating if registration exists but is unlinked vs completely missing
+
 ## 🔧 Script Development Guidelines
 
 ### File Naming Convention

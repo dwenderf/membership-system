@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     let plansData: any[] = []
     if (userIds.length > 0) {
-      // Fetch payment plans from view (views don't support foreign key relationships)
+      // Fetch payment plans from view (includes registration data)
       const { data: plans, error: plansError } = await adminSupabase
         .from('payment_plan_summary')
         .select('*')
@@ -74,36 +74,8 @@ export async function GET(request: NextRequest) {
           { error: plansError.message },
           'error'
         )
-      } else if (plans && plans.length > 0) {
-        // Fetch invoice and registration data separately
-        const invoiceIds = plans.map(p => p.invoice_id).filter(Boolean)
-
-        if (invoiceIds.length > 0) {
-          const { data: invoices } = await adminSupabase
-            .from('xero_invoices')
-            .select(`
-              id,
-              payment_id,
-              user_registrations!inner(
-                registration:registrations(name, season:seasons(name))
-              )
-            `)
-            .in('id', invoiceIds)
-
-          // Create a map of invoice data by invoice_id
-          const invoiceMap = new Map()
-          invoices?.forEach(inv => {
-            invoiceMap.set(inv.id, inv)
-          })
-
-          // Merge invoice data into plans
-          plansData = plans.map(plan => ({
-            ...plan,
-            invoice: invoiceMap.get(plan.invoice_id) || null
-          }))
-        } else {
-          plansData = plans
-        }
+      } else {
+        plansData = plans || []
       }
     }
 
@@ -165,13 +137,10 @@ export async function GET(request: NextRequest) {
             ? Math.round(plan.total_amount / plan.total_installments)
             : plan.total_amount
 
-          // Get registration info from the nested invoice query
-          const registrationInfo = plan.invoice?.user_registrations?.[0]
-
           return {
             id: plan.invoice_id,
-            registrationName: registrationInfo?.registration?.name || 'Unknown',
-            seasonName: registrationInfo?.registration?.season?.name || '',
+            registrationName: plan.registration_name || 'Unknown',
+            seasonName: plan.season_name || '',
             totalAmount: plan.total_amount,
             paidAmount: plan.paid_amount,
             remainingBalance: plan.total_amount - plan.paid_amount,

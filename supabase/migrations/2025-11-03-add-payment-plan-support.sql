@@ -17,7 +17,16 @@ WHERE payment_plan_enabled = true;
 COMMENT ON COLUMN users.payment_plan_enabled IS 'Admin-controlled flag to enable payment plan option for this user';
 
 -- =============================================
--- 2. XERO_PAYMENTS TABLE UPDATES
+-- 2. USER_REGISTRATIONS DATA INTEGRITY
+-- =============================================
+
+-- Add unique constraint to enforce one-to-one relationship between user_registrations and xero_invoices
+-- This prevents data integrity issues in payment_plan_summary view aggregations
+ALTER TABLE user_registrations
+ADD CONSTRAINT user_registrations_xero_invoice_id_key UNIQUE (xero_invoice_id);
+
+-- =============================================
+-- 3. XERO_PAYMENTS TABLE UPDATES
 -- =============================================
 
 -- Drop UNIQUE constraint that prevents multiple payments per invoice
@@ -95,7 +104,7 @@ COMMENT ON COLUMN xero_payments.failure_reason IS 'Reason payment charge failed 
 COMMENT ON COLUMN xero_payments.sync_status IS 'pending=ready for sync, staged=created but not ready, planned=future installment (internal only), cancelled=payment cancelled (early payoff superseded), processing=currently being synced, synced=successfully synced, failed=sync failed, ignore=skip retry (manual intervention required)';
 
 -- =============================================
--- 3. XERO_INVOICES TABLE UPDATES
+-- 4. XERO_INVOICES TABLE UPDATES
 -- =============================================
 
 -- Add is_payment_plan flag to xero_invoices
@@ -105,7 +114,7 @@ ADD COLUMN IF NOT EXISTS is_payment_plan BOOLEAN DEFAULT FALSE;
 COMMENT ON COLUMN xero_invoices.is_payment_plan IS 'Whether this invoice is for a payment plan (multiple installments)';
 
 -- =============================================
--- 4. PAYMENT_PLAN_SUMMARY VIEW
+-- 5. PAYMENT_PLAN_SUMMARY VIEW
 -- =============================================
 
 -- Create view for payment plan summary
@@ -169,7 +178,7 @@ GRANT SELECT ON payment_plan_summary TO service_role;
 COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
 
 -- =============================================
--- 5. RPC FUNCTION UPDATES
+-- 6. RPC FUNCTION UPDATES
 -- =============================================
 
 -- Update get_pending_xero_invoices_with_lock to include is_payment_plan field

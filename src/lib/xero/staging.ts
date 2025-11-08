@@ -10,6 +10,8 @@
 import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
 import { Cents, centsToCents, negativeCents, centsToDollars } from '../../types/currency'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../services/payment-plan-config'
+import { toDateString } from '../date-utils'
 
 /**
  * Data structure for staging Xero invoice and payment records
@@ -172,7 +174,7 @@ export class XeroStagingManager {
    * Create staging records immediately with provided invoice data
    * (for immediate staging at purchase time)
    */
-  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean }): Promise<any | null> {
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean, isPaymentPlan?: boolean }): Promise<any | null> {
     try {
       logger.logXeroSync(
         'staging-immediate-start',
@@ -288,9 +290,9 @@ export class XeroStagingManager {
    * Create staging records for invoice and payment
    */
   private async createInvoiceStaging(
-    data: StagingPaymentData, 
+    data: StagingPaymentData,
     tenantId: string | null,
-    options?: { isFree?: boolean }
+    options?: { isFree?: boolean, isPaymentPlan?: boolean }
   ): Promise<any | null> {
     try {
       // Let Xero generate its own invoice number - don't set one here
@@ -305,6 +307,7 @@ export class XeroStagingManager {
           invoice_number: null, // Let Xero generate the invoice number
           invoice_type: 'ACCREC',
           invoice_status: options?.isFree ? 'AUTHORISED' : 'DRAFT',
+          is_payment_plan: options?.isPaymentPlan || false, // Flag for payment plan invoices
           total_amount: data.total_amount,
           discount_amount: data.discount_amount,
           net_amount: data.final_amount,
@@ -371,41 +374,104 @@ export class XeroStagingManager {
         }
       }
 
-      // Create payment staging record if this is a paid purchase
+      // Create payment staging record(s) if this is a paid purchase
       if (data.final_amount > 0) {
         const stripeBankAccountCode = await this.getStripeBankAccountCode()
-        const { error: paymentError } = await this.supabase
-          .from('xero_payments')
-          .insert({
-            xero_invoice_id: invoiceStaging.id,
-            tenant_id: tenantId, // Can be null during staging
-            xero_payment_id: null, // Will be populated when synced to Xero
-            payment_method: 'stripe',
-            bank_account_code: stripeBankAccountCode,
-            amount_paid: data.final_amount,
-            stripe_fee_amount: 0, // Will be calculated when payment is completed
-            reference: '', // Will be set to invoice number during sync
-            sync_status: 'staged',
-            staged_at: new Date().toISOString(),
-            staging_metadata: {
-              payment_id: data.payment_id || null,
-              stripe_payment_intent_id: data.stripe_payment_intent_id,
-              created_at: new Date().toISOString()
-            }
-          })
 
-        if (paymentError) {
-          logger.logXeroSync(
-            'staging-payment-create-error',
-            'Failed to create payment staging',
-            { 
-              tenantId,
-              amount: data.final_amount,
-              error: paymentError.message
-            },
-            'error'
-          )
-          return null
+        if (options?.isPaymentPlan) {
+          // Payment plan: Create 4 staged installment payment records
+          const installmentAmount = Math.round(data.final_amount / PAYMENT_PLAN_INSTALLMENTS)
+          const firstPaymentDate = new Date()
+
+          const xeroPayments = []
+          for (let i = 1; i <= PAYMENT_PLAN_INSTALLMENTS; i++) {
+            const scheduledDate = new Date(firstPaymentDate)
+            scheduledDate.setDate(scheduledDate.getDate() + (INSTALLMENT_INTERVAL_DAYS * (i - 1)))
+
+            // For the last installment, absorb any rounding remainder to ensure exact total
+            const paymentAmount = i === PAYMENT_PLAN_INSTALLMENTS
+              ? data.final_amount - (installmentAmount * (PAYMENT_PLAN_INSTALLMENTS - 1))
+              : installmentAmount
+
+            xeroPayments.push({
+              xero_invoice_id: invoiceStaging.id,
+              tenant_id: tenantId, // Can be null during staging
+              xero_payment_id: null, // Will be populated when synced to Xero
+              payment_method: 'stripe',
+              payment_type: 'installment',
+              installment_number: i,
+              bank_account_code: stripeBankAccountCode,
+              amount_paid: paymentAmount,
+              planned_payment_date: toDateString(scheduledDate),
+              stripe_fee_amount: 0, // Will be calculated when payment is completed
+              reference: '', // Will be set to invoice number during sync
+              sync_status: 'staged', // All installments start as staged
+              staged_at: new Date().toISOString(),
+              attempt_count: 0,
+              staging_metadata: {
+                payment_id: data.payment_id || null,
+                stripe_payment_intent_id: data.stripe_payment_intent_id,
+                user_id: data.user_id,
+                payment_plan_created_at: new Date().toISOString(),
+                created_at: new Date().toISOString()
+              }
+            })
+          }
+
+          const { error: paymentError } = await this.supabase
+            .from('xero_payments')
+            .insert(xeroPayments)
+
+          if (paymentError) {
+            logger.logXeroSync(
+              'staging-payment-plan-create-error',
+              'Failed to create payment plan staging records',
+              {
+                tenantId,
+                totalAmount: data.final_amount,
+                installments: PAYMENT_PLAN_INSTALLMENTS,
+                error: paymentError.message
+              },
+              'error'
+            )
+            return null
+          }
+        } else {
+          // Regular payment: Create single payment record
+          const { error: paymentError } = await this.supabase
+            .from('xero_payments')
+            .insert({
+              xero_invoice_id: invoiceStaging.id,
+              tenant_id: tenantId, // Can be null during staging
+              xero_payment_id: null, // Will be populated when synced to Xero
+              payment_method: 'stripe',
+              payment_type: 'full', // Regular payment (not installment)
+              bank_account_code: stripeBankAccountCode,
+              amount_paid: data.final_amount,
+              stripe_fee_amount: 0, // Will be calculated when payment is completed
+              reference: '', // Will be set to invoice number during sync
+              sync_status: 'staged',
+              staged_at: new Date().toISOString(),
+              staging_metadata: {
+                payment_id: data.payment_id || null,
+                stripe_payment_intent_id: data.stripe_payment_intent_id,
+                created_at: new Date().toISOString()
+              }
+            })
+
+          if (paymentError) {
+            logger.logXeroSync(
+              'staging-payment-create-error',
+              'Failed to create payment staging',
+              {
+                tenantId,
+                amount: data.final_amount,
+                error: paymentError.message
+              },
+              'error'
+            )
+            return null
+          }
         }
       }
 

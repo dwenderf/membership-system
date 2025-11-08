@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
+import { toDateString } from '@/lib/date-utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -129,13 +130,13 @@ export class PaymentPlanService {
         xeroPayments.push({
           xero_invoice_id: data.xeroInvoiceId,
           tenant_id: data.tenantId,
-          xero_payment_id: '00000000-0000-0000-0000-000000000000', // Sentinel value, replaced when synced to Xero
+          xero_payment_id: null, // Will be populated when synced to Xero
           payment_method: 'stripe',
           amount_paid: paymentAmount,
           sync_status: 'staged', // All start as staged
           payment_type: 'installment',
           installment_number: i,
-          planned_payment_date: scheduledDate.toISOString().split('T')[0],
+          planned_payment_date: toDateString(scheduledDate),
           attempt_count: 0,
           staged_at: new Date().toISOString(),
           staging_metadata: {
@@ -528,7 +529,7 @@ export class PaymentPlanService {
         .insert({
           xero_invoice_id: xeroInvoiceId,
           tenant_id: plannedPayments[0].tenant_id,
-          xero_payment_id: '00000000-0000-0000-0000-000000000000', // Sentinel value, replaced when synced
+          xero_payment_id: null, // Will be populated when synced to Xero
           payment_method: 'stripe',
           amount_paid: remainingBalance,
           sync_status: 'staged',
@@ -729,19 +730,11 @@ export class PaymentPlanService {
       // Use admin client since payment_plan_summary is restricted to service_role
       const adminSupabase = createAdminClient()
 
-      // Query the payment_plan_summary view with registration data (single query to avoid N+1)
+      // Query the payment_plan_summary view
+      // View includes registration data directly (registration_name, registration_id)
       const { data: plans, error } = await adminSupabase
         .from('payment_plan_summary')
-        .select(`
-          *,
-          invoice:xero_invoices!invoice_id(
-            created_at,
-            user_registrations!inner(
-              id,
-              registration:registrations(name)
-            )
-          )
-        `)
+        .select('*')
         .eq('contact_id', userId)
         .in('status', ['active', 'completed'])
         .order('final_payment_date', { ascending: true })
@@ -756,17 +749,16 @@ export class PaymentPlanService {
         return []
       }
 
-      // Map plans with registration data (already fetched in single query)
+      // Map plans with registration data (from view)
       const enrichedPlans = (plans || []).map((plan: any) => {
-        const userReg = plan.invoice?.user_registrations?.[0]
         const installmentAmount = plan.total_installments > 0
           ? plan.total_amount / plan.total_installments
           : 0
 
         return {
           id: plan.invoice_id,
-          userRegistrationId: userReg?.id || '',
-          registrationName: userReg?.registration?.name || 'Unknown',
+          userRegistrationId: plan.registration_id || '',
+          registrationName: plan.registration_name || 'Unknown',
           totalAmount: plan.total_amount,
           paidAmount: plan.paid_amount,
           remainingBalance: plan.total_amount - plan.paid_amount,
@@ -775,7 +767,7 @@ export class PaymentPlanService {
           installmentsPaid: plan.installments_paid,
           nextPaymentDate: plan.next_payment_date,
           status: plan.status,
-          createdAt: plan.invoice?.created_at || null
+          createdAt: null // payment_plan_summary doesn't include created_at
         }
       })
 

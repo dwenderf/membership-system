@@ -360,7 +360,8 @@ export class PaymentCompletionProcessor {
       }
 
       // Also update the corresponding payment record if it exists
-      if (event.payment_id && options.success) {
+      // Skip for payment plans - the webhook handles payment plan status updates via updatePaymentPlanStatuses()
+      if (event.payment_id && options.success && !event.metadata?.is_payment_plan) {
         // Get the latest bank account code from system accounting codes
         const { data: systemCode } = await this.supabase
           .from('system_accounting_codes')

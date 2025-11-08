@@ -1631,19 +1631,26 @@ export async function POST(request: NextRequest) {
               userRegistration = updatedRegistration
             }
 
-            // Link user_registration to payment record (if not already linked)
+            // Get xero_invoice_id from payment intent metadata
+            // This value is used for both registration linking and payment plan creation
+            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
+
+            // Link user_registration to payment record and xero_invoice (if not already linked)
             if (!userRegistration.payment_id) {
               // Normal case: payment_id not yet set, link it now
               const { error: registrationUpdateError } = await supabase
                 .from('user_registrations')
-                .update({ payment_id: updatedPayment.id })
+                .update({
+                  payment_id: updatedPayment.id,
+                  xero_invoice_id: xeroInvoiceId // Link to xero_invoice for payment plan queries
+                })
                 .eq('id', userRegistration.id)
 
               if (registrationUpdateError) {
                 console.error('❌ Failed to link registration to payment:', registrationUpdateError)
                 // Don't throw - registration is paid, this is just linking
               } else {
-                console.log('✅ Linked registration to payment:', updatedPayment.id)
+                console.log('✅ Linked registration to payment and xero_invoice:', updatedPayment.id, xeroInvoiceId)
               }
             } else if (userRegistration.payment_id !== updatedPayment.id) {
               // Unexpected case: registration already linked to a different payment
@@ -1657,13 +1664,25 @@ export async function POST(request: NextRequest) {
               console.log('⚠️ Skipping payment_id update to preserve existing link - manual review may be needed')
             } else {
               // Already linked to correct payment (idempotent webhook delivery)
+              // But make sure xero_invoice_id is also set
+              if (!userRegistration.xero_invoice_id) {
+                const { error: invoiceLinkError } = await supabase
+                  .from('user_registrations')
+                  .update({ xero_invoice_id: xeroInvoiceId })
+                  .eq('id', userRegistration.id)
+
+                if (invoiceLinkError) {
+                  console.error('❌ Failed to link registration to xero_invoice:', invoiceLinkError)
+                } else {
+                  console.log('✅ Linked registration to xero_invoice:', xeroInvoiceId)
+                }
+              }
               console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
             }
 
 
             // Create payment plan (with idempotency - may already exist if webhook retried)
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')
-            const xeroInvoiceId = paymentIntent.metadata.xeroStagingRecordId
 
             // Get xero_invoice to check if plan exists and get tenant_id
             const { data: xeroInvoice, error: invoiceError } = await supabase
@@ -1682,6 +1701,40 @@ export async function POST(request: NextRequest) {
             // Check if payment plan already exists (idempotent webhook delivery)
             if (xeroInvoice.is_payment_plan) {
               console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', paymentPlanId)
+
+              // Update payment #1's metadata with payment details
+              const { data: firstPayment } = await supabase
+                .from('xero_payments')
+                .select('id, staging_metadata')
+                .eq('xero_invoice_id', xeroInvoiceId)
+                .eq('payment_type', 'installment')
+                .eq('installment_number', 1)
+                .single()
+
+              if (firstPayment) {
+                const updatedMetadata = {
+                  ...firstPayment.staging_metadata,
+                  payment_id: updatedPayment.id,
+                  stripe_payment_intent_id: paymentIntent.id,
+                  stripe_charge_id: chargeId,
+                  updated_at: new Date().toISOString()
+                }
+
+                const { error: metadataUpdateError } = await supabase
+                  .from('xero_payments')
+                  .update({
+                    staging_metadata: updatedMetadata,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', firstPayment.id)
+
+                if (metadataUpdateError) {
+                  console.error('❌ Failed to update payment #1 metadata:', metadataUpdateError)
+                  // Don't throw - payment is successful, this is just metadata
+                } else {
+                  console.log('✅ Updated payment #1 metadata with payment details')
+                }
+              }
 
               // Update payment #1 to 'pending' and #2-4 to 'planned' (in case webhook is retried)
               await updatePaymentPlanStatuses(supabase, xeroInvoiceId)
@@ -1719,7 +1772,7 @@ export async function POST(request: NextRequest) {
                 user_id: paymentIntent.metadata.userId,
                 payment_id: updatedPayment.id,
                 amount: paymentIntent.amount,
-                trigger_source: 'stripe_webhook_payment_plan',
+                trigger_source: 'stripe_webhook_registration', // Use standard registration trigger for emails
                 timestamp: new Date().toISOString(),
                 metadata: {
                   payment_intent_id: paymentIntent.id,

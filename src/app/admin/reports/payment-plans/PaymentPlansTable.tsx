@@ -204,7 +204,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <Link
-                        href={`/admin/reports/users/${user.userId}`}
+                        href={`/admin/reports/users/${user.userId}?from=payment-plans`}
                         className="text-blue-600 hover:text-blue-900"
                       >
                         View Details

@@ -34,6 +34,19 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
   RETURN QUERY
+  WITH locked_invoices AS (
+    -- First, lock the invoice rows to prevent race conditions
+    SELECT id, payment_id, tenant_id, xero_invoice_id, invoice_number,
+           invoice_type, invoice_status, total_amount, discount_amount,
+           net_amount, stripe_fee_amount, sync_status, last_synced_at,
+           sync_error, staged_at, staging_metadata, created_at, updated_at,
+           is_payment_plan
+    FROM xero_invoices
+    WHERE sync_status = 'pending'
+    ORDER BY created_at ASC
+    LIMIT limit_count
+    FOR UPDATE SKIP LOCKED
+  )
   SELECT
     xi.id,
     xi.payment_id,
@@ -71,12 +84,15 @@ BEGIN
       ) FILTER (WHERE xil.id IS NOT NULL),
       '[]'::jsonb
     ) AS line_items
-  FROM xero_invoices xi
+  FROM locked_invoices xi
   LEFT JOIN xero_invoice_line_items xil ON xi.id = xil.xero_invoice_id
-  WHERE xi.sync_status = 'pending'
-  GROUP BY xi.id
-  ORDER BY xi.created_at ASC
-  LIMIT limit_count;
+  GROUP BY xi.id, xi.payment_id, xi.tenant_id, xi.xero_invoice_id,
+           xi.invoice_number, xi.invoice_type, xi.invoice_status,
+           xi.total_amount, xi.discount_amount, xi.net_amount,
+           xi.stripe_fee_amount, xi.sync_status, xi.last_synced_at,
+           xi.sync_error, xi.staged_at, xi.staging_metadata,
+           xi.created_at, xi.updated_at, xi.is_payment_plan
+  ORDER BY xi.created_at ASC;
 END;
 $$;
 

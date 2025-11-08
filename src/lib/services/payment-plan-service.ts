@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
+import { toDateString } from '@/lib/date-utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -135,7 +136,7 @@ export class PaymentPlanService {
           sync_status: 'staged', // All start as staged
           payment_type: 'installment',
           installment_number: i,
-          planned_payment_date: scheduledDate.toISOString().split('T')[0],
+          planned_payment_date: toDateString(scheduledDate),
           attempt_count: 0,
           staged_at: new Date().toISOString(),
           staging_metadata: {

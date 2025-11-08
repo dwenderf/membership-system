@@ -11,6 +11,7 @@ import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
 import { Cents, centsToCents, negativeCents, centsToDollars } from '../../types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../services/payment-plan-config'
+import { toDateString } from '../date-utils'
 
 /**
  * Data structure for staging Xero invoice and payment records
@@ -401,7 +402,7 @@ export class XeroStagingManager {
               installment_number: i,
               bank_account_code: stripeBankAccountCode,
               amount_paid: paymentAmount,
-              planned_payment_date: scheduledDate.toISOString().split('T')[0],
+              planned_payment_date: toDateString(scheduledDate),
               stripe_fee_amount: 0, // Will be calculated when payment is completed
               reference: '', // Will be set to invoice number during sync
               sync_status: 'staged', // All installments start as staged

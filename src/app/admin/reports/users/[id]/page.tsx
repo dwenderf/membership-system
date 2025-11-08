@@ -143,12 +143,13 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
 
     // Log potential data integrity issue if no valid invoice found
     if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
-      console.warn('No synced or pending ACCREC invoice found for payment:', {
+      const logger = Logger.getInstance();
+      logger.logAdminAction('No synced or pending ACCREC invoice found for payment', {
         paymentId: payment.id,
         invoicesCount: payment.xero_invoices.length,
         invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type),
         syncStatuses: payment.xero_invoices.map((inv: any) => inv.sync_status)
-      })
+      });
     }
 
     // Determine invoice number display (show "Pending Sync" for pending invoices)

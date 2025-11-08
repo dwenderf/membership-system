@@ -149,7 +149,21 @@ SELECT
   END as status,
   -- Registration information (from user_registrations via xero_invoice_id)
   ur.registration_id,
-  r.name as registration_name,
+  -- Use registration name if available, otherwise fall back to line item description
+  -- Line item descriptions for registrations typically contain "Registration: <name>"
+  COALESCE(
+    r.name,
+    -- Extract registration name from first line item description
+    -- Remove "Registration: " prefix if present, otherwise use full description
+    NULLIF(
+      regexp_replace(
+        (SELECT description FROM xero_invoice_line_items WHERE xero_invoice_id = xi.id ORDER BY id LIMIT 1),
+        '^Registration:\s*',
+        ''
+      ),
+      ''
+    )
+  ) as registration_name,
   s.name as season_name,
   -- Installment details
   json_agg(
@@ -182,7 +196,7 @@ REVOKE ALL ON payment_plan_summary FROM authenticated;
 -- Grant access only to service_role (used by admin APIs and cron jobs)
 GRANT SELECT ON payment_plan_summary TO service_role;
 
-COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
+COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link, with fallback to invoice line item description for orphaned invoices. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
 
 -- =============================================
 -- 6. RPC FUNCTION UPDATES

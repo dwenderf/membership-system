@@ -6,6 +6,7 @@ import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
+import DiscountUsage from '@/components/DiscountUsage'
 
 interface PageProps {
   params: {
@@ -521,6 +522,11 @@ export default async function UserDetailPage({ params }: PageProps) {
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
+              {/* Discount Usage */}
+              <div className="mb-6">
+                <DiscountUsage userId={params.id} />
+              </div>
+
               {/* Quick Stats */}
               <div className="bg-white shadow rounded-lg mb-6">
                 <div className="px-6 py-4 border-b border-gray-200">

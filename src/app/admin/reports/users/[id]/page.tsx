@@ -128,19 +128,22 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     // Calculate refund information
     const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
-    const netAmount = payment.final_amount - totalRefunded
-    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
-    const isFullyRefunded = payment.final_amount > 0 && totalRefunded >= payment.final_amount
-    
+
     // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
     const originalInvoice = payment.xero_invoices?.find((invoice: any) => invoice.invoice_type === 'ACCREC')
-    
+
+    // For payment plans, use the full invoice amount; otherwise use the payment amount
+    const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
+    const netAmount = invoiceAmount - totalRefunded
+    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < invoiceAmount
+    const isFullyRefunded = invoiceAmount > 0 && totalRefunded >= invoiceAmount
+
     return {
       id: payment.id,
       paymentId: payment.id,
       number: originalInvoice?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
       date: payment.completed_at || payment.created_at,
-      originalAmount: payment.final_amount,
+      originalAmount: invoiceAmount,
       totalRefunded: totalRefunded,
       netAmount: netAmount,
       status: payment.status,

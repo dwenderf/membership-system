@@ -44,7 +44,7 @@ export default async function PaymentPlansReportPage() {
       .from('payment_plan_summary')
       .select('*')
       .in('contact_id', userIds)
-      .in('status', ['active', 'completed'])
+      .in('status', ['active', 'completed', 'failed'])
 
     plansData = plans || []
   }
@@ -61,7 +61,7 @@ export default async function PaymentPlansReportPage() {
   // Calculate summary metrics
   const result = (users || []).map(user => {
     const userPlans = plansByUser.get(user.id) || []
-    const activePlans = userPlans.filter(p => p.status === 'active')
+    const activePlans = userPlans.filter(p => p.status === 'active' || p.status === 'failed')
 
     const totalAmount = activePlans.reduce((sum, p) => sum + p.total_amount, 0)
     const paidAmount = activePlans.reduce((sum, p) => sum + p.paid_amount, 0)

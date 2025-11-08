@@ -20,10 +20,16 @@ COMMENT ON COLUMN users.payment_plan_enabled IS 'Admin-controlled flag to enable
 -- 2. USER_REGISTRATIONS DATA INTEGRITY
 -- =============================================
 
--- Add unique constraint to enforce one-to-one relationship between user_registrations and xero_invoices
--- This prevents data integrity issues in payment_plan_summary view aggregations
+-- Remove constraint if it exists (from earlier version of migration)
 ALTER TABLE user_registrations
-ADD CONSTRAINT user_registrations_xero_invoice_id_key UNIQUE (xero_invoice_id);
+DROP CONSTRAINT IF EXISTS user_registrations_xero_invoice_id_key;
+
+-- Add unique index to enforce one-to-one relationship between user_registrations and xero_invoices
+-- Uses partial index to allow multiple NULL values while enforcing uniqueness on non-NULL values
+-- This prevents data integrity issues in payment_plan_summary view aggregations
+CREATE UNIQUE INDEX IF NOT EXISTS user_registrations_xero_invoice_id_key
+  ON user_registrations(xero_invoice_id)
+  WHERE xero_invoice_id IS NOT NULL;
 
 -- =============================================
 -- 3. XERO_PAYMENTS TABLE UPDATES

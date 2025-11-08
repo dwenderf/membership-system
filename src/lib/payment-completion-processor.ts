@@ -361,7 +361,6 @@ export class PaymentCompletionProcessor {
 
       // Also update the corresponding payment record if it exists
       // Skip for payment plans - the webhook handles payment plan status updates via updatePaymentPlanStatuses()
-      this.logger.logPaymentProcessing('update-xero-staging-records', `🔍 Checking payment plan status: is_payment_plan=${event.metadata?.is_payment_plan}, will skip=${!!event.metadata?.is_payment_plan}`)
       if (event.payment_id && options.success && !event.metadata?.is_payment_plan) {
         // Get the latest bank account code from system accounting codes
         const { data: systemCode } = await this.supabase

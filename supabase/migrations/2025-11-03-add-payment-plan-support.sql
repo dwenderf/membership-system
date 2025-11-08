@@ -136,9 +136,9 @@ SELECT
   MIN(xp.planned_payment_date) FILTER (WHERE xp.sync_status = 'planned') as next_payment_date,
   COUNT(*) FILTER (WHERE xp.sync_status IN ('synced','pending','processing') AND xp.payment_type = 'installment') as installments_paid,
   CASE
-    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'planned') = 0 THEN 'completed'
     WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'failed') > 0 THEN 'failed'
-    ELSE 'active'
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status IN ('planned', 'staged')) > 0 THEN 'active'
+    ELSE 'completed'
   END as status,
   -- Registration information (from user_registrations via xero_invoice_id)
   ur.registration_id,

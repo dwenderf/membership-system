@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         .from('payment_plan_summary')
         .select('*')
         .in('contact_id', userIds)
-        .in('status', ['active', 'completed'])
+        .in('status', ['active', 'completed', 'failed'])
 
       if (plansError) {
         logger.logAdminAction(
@@ -91,13 +91,14 @@ export async function GET(request: NextRequest) {
     // Format response
     const result = (users || []).map(user => {
       const userPlans = plansByUser.get(user.id) || []
-      const activePlans = userPlans.filter(p => p.status === 'active')
+      const activePlans = userPlans.filter(p => p.status === 'active' || p.status === 'failed')
+      const plansWithBalance = userPlans.filter(p => (p.total_amount - p.paid_amount) > 0)
 
-      const totalAmount = activePlans.reduce((sum, p) => sum + p.total_amount, 0)
-      const paidAmount = activePlans.reduce((sum, p) => sum + p.paid_amount, 0)
+      const totalAmount = plansWithBalance.reduce((sum, p) => sum + p.total_amount, 0)
+      const paidAmount = plansWithBalance.reduce((sum, p) => sum + p.paid_amount, 0)
       const remainingBalance = totalAmount - paidAmount
 
-      // Find next payment date (earliest among all active plans)
+      // Find next payment date (earliest among all active/failed plans)
       const nextPaymentDates = activePlans
         .map(p => p.next_payment_date)
         .filter(d => d !== null)
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
 
       const nextPaymentDate = nextPaymentDates.length > 0 ? nextPaymentDates[0] : null
 
-      // Find final payment date (latest among all active plans)
+      // Find final payment date (latest among all active/failed plans)
       let finalPaymentDate = null
       if (activePlans.length > 0) {
         const latestDate = activePlans.reduce((latest, plan) => {

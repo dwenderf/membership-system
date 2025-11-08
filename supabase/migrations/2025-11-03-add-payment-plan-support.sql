@@ -60,13 +60,14 @@ ALTER COLUMN payment_type SET NOT NULL;
 
 -- Update sync_status to include 'planned' for future installments and 'cancelled' for early payoff
 -- First, check if there are any invalid sync_status values and fix them
+-- NOTE: Include 'planned' and 'cancelled' in the validation list to avoid marking them as failed
 DO $$
 DECLARE
   invalid_count INTEGER;
 BEGIN
   SELECT COUNT(*) INTO invalid_count
   FROM xero_payments
-  WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+  WHERE sync_status NOT IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore');
 
   IF invalid_count > 0 THEN
     RAISE NOTICE 'Found % rows with invalid sync_status values', invalid_count;
@@ -74,7 +75,7 @@ BEGIN
     -- Update any invalid values to 'failed' so we can add the constraint
     UPDATE xero_payments
     SET sync_status = 'failed'
-    WHERE sync_status NOT IN ('pending', 'staged', 'processing', 'synced', 'failed', 'ignore');
+    WHERE sync_status NOT IN ('pending', 'staged', 'planned', 'cancelled', 'processing', 'synced', 'failed', 'ignore');
 
     RAISE NOTICE 'Updated invalid sync_status values to failed';
   END IF;

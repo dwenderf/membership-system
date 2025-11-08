@@ -42,15 +42,7 @@ export default async function PaymentPlansReportPage() {
   if (userIds.length > 0) {
     const { data: plans } = await adminSupabase
       .from('payment_plan_summary')
-      .select(`
-        *,
-        invoice:xero_invoices!invoice_id(
-          payment_id,
-          user_registrations!inner(
-            registration:registrations(name, season:seasons(name))
-          )
-        )
-      `)
+      .select('*')
       .in('contact_id', userIds)
       .in('status', ['active', 'completed'])
 

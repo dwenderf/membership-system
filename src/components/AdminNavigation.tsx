@@ -76,8 +76,9 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
         { name: 'Financial Reports', href: '/admin/reports/financial' },
         { name: 'Membership Reports', href: '/admin/reports/memberships' },
         { name: 'Registration Reports', href: '/admin/reports/registrations' },
-        { name: 'User Reports', href: '/admin/reports/users' },
-        { name: 'Payment Plans', href: '/admin/reports/payment-plans' }
+        { name: 'Discount Usage', href: '/admin/reports/discount-usage' },
+        { name: 'Payment Plans', href: '/admin/reports/payment-plans' },
+        { name: 'User Reports', href: '/admin/reports/users' }
       ]
     }
   ]

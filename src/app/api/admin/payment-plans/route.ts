@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { filterActivePlans } from '@/lib/payment-plan-utils'
 
 /**
  * GET /api/admin/payment-plans
@@ -38,10 +39,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const filter = searchParams.get('filter') || 'all'
 
-    // Build query for users
+    // Build query for users (exclude deleted users)
     const { data: users, error: usersError } = await adminSupabase
       .from('users')
-      .select('id, email, first_name, last_name, created_at')
+      .select('id, email, first_name, last_name, created_at, payment_plan_enabled')
+      .is('deleted_at', null)
       .order('email')
 
     if (usersError) {
@@ -59,19 +61,12 @@ export async function GET(request: NextRequest) {
 
     let plansData: any[] = []
     if (userIds.length > 0) {
+      // Fetch payment plans from view (includes registration data)
       const { data: plans, error: plansError } = await adminSupabase
         .from('payment_plan_summary')
-        .select(`
-          *,
-          invoice:xero_invoices!invoice_id(
-            payment_id,
-            user_registrations!inner(
-              registration:registrations(name, season:seasons(name))
-            )
-          )
-        `)
+        .select('*')
         .in('contact_id', userIds)
-        .in('status', ['active', 'completed'])
+        .in('status', ['active', 'completed', 'failed'])
 
       if (plansError) {
         logger.logAdminAction(
@@ -97,13 +92,21 @@ export async function GET(request: NextRequest) {
     // Format response
     const result = (users || []).map(user => {
       const userPlans = plansByUser.get(user.id) || []
-      const activePlans = userPlans.filter(p => p.status === 'active')
 
-      const totalAmount = activePlans.reduce((sum, p) => sum + p.total_amount, 0)
-      const paidAmount = activePlans.reduce((sum, p) => sum + p.paid_amount, 0)
+      // activePlans: Plans that require attention (active or failed status)
+      // Used for date calculations since these plans have scheduled/upcoming payments
+      const activePlans = filterActivePlans(userPlans)
+
+      // plansWithBalance: Plans with outstanding balance (regardless of status)
+      // Used for amount calculations to show accurate remaining balances
+      // Note: A 'completed' plan might still have a balance if manually adjusted
+      const plansWithBalance = userPlans.filter(p => (p.total_amount - p.paid_amount) > 0)
+
+      const totalAmount = plansWithBalance.reduce((sum, p) => sum + p.total_amount, 0)
+      const paidAmount = plansWithBalance.reduce((sum, p) => sum + p.paid_amount, 0)
       const remainingBalance = totalAmount - paidAmount
 
-      // Find next payment date (earliest among all active plans)
+      // Find next payment date (earliest among all active/failed plans)
       const nextPaymentDates = activePlans
         .map(p => p.next_payment_date)
         .filter(d => d !== null)
@@ -111,7 +114,7 @@ export async function GET(request: NextRequest) {
 
       const nextPaymentDate = nextPaymentDates.length > 0 ? nextPaymentDates[0] : null
 
-      // Find final payment date (latest among all active plans)
+      // Find final payment date (latest among all active/failed plans)
       let finalPaymentDate = null
       if (activePlans.length > 0) {
         const latestDate = activePlans.reduce((latest, plan) => {
@@ -129,6 +132,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
+        paymentPlanEnabled: user.payment_plan_enabled || false,
         activePlansCount: activePlans.length,
         totalPlansCount: userPlans.length,
         totalAmount,
@@ -142,13 +146,10 @@ export async function GET(request: NextRequest) {
             ? Math.round(plan.total_amount / plan.total_installments)
             : plan.total_amount
 
-          // Get registration info from the nested invoice query
-          const registrationInfo = plan.invoice?.user_registrations?.[0]
-
           return {
             id: plan.invoice_id,
-            registrationName: registrationInfo?.registration?.name || 'Unknown',
-            seasonName: registrationInfo?.registration?.season?.name || '',
+            registrationName: plan.registration_name || 'Unknown',
+            seasonName: plan.season_name || '',
             totalAmount: plan.total_amount,
             paidAmount: plan.paid_amount,
             remainingBalance: plan.total_amount - plan.paid_amount,
@@ -165,19 +166,45 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Apply active balance filter if requested
+    // Calculate summary metrics from all users (before filtering)
+    const totalEligibleUsers = result.filter(u => u.paymentPlanEnabled).length
+    const usersWithActivePlans = result.filter(u => u.activePlansCount > 0).length
+    const usersWithBalance = result.filter(u => u.remainingBalance > 0).length
+    const totalOutstandingBalance = result.reduce((sum, u) => sum + u.remainingBalance, 0)
+
+    // Debug logging
+    logger.logAdminAction(
+      'payment-plans-summary-debug',
+      'Payment plans summary calculation',
+      {
+        totalUsers: result.length,
+        totalEligibleUsers,
+        usersWithActivePlans,
+        usersWithBalance,
+        sampleUsers: result.slice(0, 3).map(u => ({
+          id: u.userId,
+          paymentPlanEnabled: u.paymentPlanEnabled,
+          activePlansCount: u.activePlansCount
+        }))
+      },
+      'info'
+    )
+
+    // Apply filters if requested
     let filteredResult = result
     if (filter === 'active') {
       filteredResult = result.filter(u => u.remainingBalance > 0)
+    } else if (filter === 'eligible') {
+      filteredResult = result.filter(u => u.paymentPlanEnabled)
     }
 
     return NextResponse.json({
       users: filteredResult,
       summary: {
-        totalUsers: filteredResult.length,
-        usersWithActivePlans: filteredResult.filter(u => u.activePlansCount > 0).length,
-        usersWithBalance: filteredResult.filter(u => u.remainingBalance > 0).length,
-        totalOutstandingBalance: filteredResult.reduce((sum, u) => sum + u.remainingBalance, 0)
+        totalEligibleUsers,
+        usersWithActivePlans,
+        usersWithBalance,
+        totalOutstandingBalance
       }
     })
   } catch (error) {

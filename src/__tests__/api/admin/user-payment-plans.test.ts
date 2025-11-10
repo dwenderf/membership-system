@@ -77,7 +77,7 @@ describe('/api/admin/users/[id]/payment-plans', () => {
     })
 
     it('should return user payment plans with related data', async () => {
-      // Mock data from payment_plan_summary view with nested invoice data
+      // Mock data from payment_plan_summary view (includes registration data directly)
       const mockPaymentPlans = [
         {
           invoice_id: 'invoice-1',
@@ -89,19 +89,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
           next_payment_date: '2025-12-01',
           final_payment_date: '2026-02-01',
           status: 'active',
-          invoice: {
-            payment_id: 'payment-1',
-            user_registrations: [
-              {
-                registration: {
-                  name: 'Fall League',
-                  season: {
-                    name: 'Fall 2025'
-                  }
-                }
-              }
-            ]
-          }
+          registration_name: 'Fall League',
+          season_name: 'Fall 2025'
         }
       ]
 
@@ -136,6 +125,7 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       expect(data.plans[0].id).toBe('invoice-1')
       expect(data.plans[0].status).toBe('active')
       expect(data.plans[0].registrationName).toBe('Fall League')
+      expect(data.plans[0].seasonName).toBe('Fall 2025')
     })
 
     it('should return empty array when user has no payment plans', async () => {

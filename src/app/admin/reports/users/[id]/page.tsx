@@ -6,15 +6,19 @@ import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
+import DiscountUsage from '@/components/DiscountUsage'
 import PaymentPlanSection from './PaymentPlanSection'
 
 interface PageProps {
   params: {
     id: string
   }
+  searchParams: {
+    from?: string
+  }
 }
 
-export default async function UserDetailPage({ params }: PageProps) {
+export default async function UserDetailPage({ params, searchParams }: PageProps) {
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
   const logger = Logger.getInstance()
@@ -85,6 +89,8 @@ export default async function UserDetailPage({ params }: PageProps) {
         net_amount,
         created_at,
         invoice_type,
+        sync_status,
+        is_payment_plan,
         xero_invoice_line_items (
           id,
           description,
@@ -120,24 +126,79 @@ export default async function UserDetailPage({ params }: PageProps) {
     .not('invoice_number', 'is', null)
     .order('created_at', { ascending: false })
 
+  // Fetch payment plan statuses for payment plan invoices
+  const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean, amountPaid: number }>()
+
+  for (const payment of userPayments || []) {
+    const originalInvoice = payment.xero_invoices?.find((inv: any) =>
+      inv.invoice_type === 'ACCREC' && inv.is_payment_plan
+    )
+
+    if (originalInvoice) {
+      // Check if all installments are completed and calculate amount paid
+      const { data: installments } = await adminSupabase
+        .from('xero_payments')
+        .select('sync_status, payment_type, amount_paid')
+        .eq('xero_invoice_id', originalInvoice.id)
+        .eq('payment_type', 'installment')
+
+      const isFullyPaid = installments?.every(inst => inst.sync_status === 'synced') ?? false
+      const amountPaid = installments
+        ?.filter(inst => inst.sync_status === 'synced')
+        .reduce((sum, inst) => sum + inst.amount_paid, 0) ?? 0
+
+      paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid, amountPaid })
+    }
+  }
+
   // Transform payments into invoice-like objects for display
   invoices = userPayments?.map(payment => {
     // Calculate refund information
     const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
     const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
-    const netAmount = payment.final_amount - totalRefunded
-    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < payment.final_amount
-    const isFullyRefunded = payment.final_amount > 0 && totalRefunded >= payment.final_amount
-    
-    // Filter to only get the original invoice (ACCREC), not credit notes (ACCRECCREDIT)
-    const originalInvoice = payment.xero_invoices?.find((invoice: any) => invoice.invoice_type === 'ACCREC')
-    
+
+    // Filter to get synced or pending ACCREC invoices (exclude staged and credit notes)
+    // Pending invoices are awaiting Xero sync (payment successful, just not synced yet)
+    const validInvoices = payment.xero_invoices?.filter((invoice: any) =>
+      invoice.invoice_type === 'ACCREC' &&
+      (invoice.sync_status === 'synced' || invoice.sync_status === 'pending')
+    ) || []
+
+    // Prefer synced invoices with invoice numbers, then pending invoices
+    const originalInvoice = validInvoices.find((inv: any) => inv.invoice_number && inv.sync_status === 'synced')
+      || validInvoices.find((inv: any) => inv.sync_status === 'pending')
+      || validInvoices[0]
+
+    // Log potential data integrity issue if no valid invoice found
+    if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
+      const logger = Logger.getInstance();
+      logger.logAdminAction('No synced or pending ACCREC invoice found for payment', {
+        paymentId: payment.id,
+        invoicesCount: payment.xero_invoices.length,
+        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type),
+        syncStatuses: payment.xero_invoices.map((inv: any) => inv.sync_status)
+      });
+    }
+
+    // Determine invoice number display (show "Pending Sync" for pending invoices)
+    const invoiceNumber = originalInvoice?.invoice_number
+      || (originalInvoice?.sync_status === 'pending' ? 'Pending Sync' : `PAY-${payment.id.slice(0, 8)}`)
+
+    // For payment plans, use the full invoice amount; otherwise use the payment amount
+    const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
+    const netAmount = invoiceAmount - totalRefunded
+    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < invoiceAmount
+    const isFullyRefunded = invoiceAmount > 0 && totalRefunded >= invoiceAmount
+
+    // Get payment plan status
+    const paymentPlanStatus = paymentPlanStatuses.get(payment.id)
+
     return {
       id: payment.id,
       paymentId: payment.id,
-      number: originalInvoice?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+      number: invoiceNumber,
       date: payment.completed_at || payment.created_at,
-      originalAmount: payment.final_amount,
+      originalAmount: invoiceAmount,
       totalRefunded: totalRefunded,
       netAmount: netAmount,
       status: payment.status,
@@ -147,7 +208,10 @@ export default async function UserDetailPage({ params }: PageProps) {
       xeroInvoiceId: originalInvoice?.id,
       canRefund: payment.status === 'completed' && netAmount > 0,
       lineItems: originalInvoice?.xero_invoice_line_items || [],
-      invoice_type: 'ACCREC'
+      invoice_type: 'ACCREC',
+      isPaymentPlan: paymentPlanStatus?.isPaymentPlan ?? false,
+      isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false,
+      paymentPlanAmountPaid: paymentPlanStatus?.amountPaid ?? 0
     }
   }) || []
 
@@ -190,11 +254,11 @@ export default async function UserDetailPage({ params }: PageProps) {
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <Link 
-                  href="/admin/reports/users"
+                <Link
+                  href={searchParams.from === 'payment-plans' ? '/admin/reports/payment-plans' : '/admin/reports/users'}
                   className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
                 >
-                  ← Back to Users
+                  ← {searchParams.from === 'payment-plans' ? 'Back to Payment Plans' : 'Back to Users'}
                 </Link>
                 <h1 className="text-3xl font-bold text-gray-900">
                   {user.first_name} {user.last_name}
@@ -452,9 +516,19 @@ export default async function UserDetailPage({ params }: PageProps) {
                                 </span>
                               ) : (
                                 <>
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Paid
-                                  </span>
+                                  {invoice.isPaymentPlan ? (
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      invoice.isPaymentPlanFullyPaid
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {invoice.isPaymentPlanFullyPaid ? 'Paid' : 'Payment Plan'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      Paid
+                                    </span>
+                                  )}
                                   {invoice.isPartiallyRefunded && (
                                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                       Partially Refunded
@@ -491,6 +565,11 @@ export default async function UserDetailPage({ params }: PageProps) {
                                   {formatAmount(invoice.originalAmount)} original
                                 </div>
                               )}
+                              {invoice.isPaymentPlan && !invoice.isPaymentPlanFullyPaid && (
+                                <div className="text-xs text-gray-400">
+                                  {formatAmount(invoice.paymentPlanAmountPaid)} paid
+                                </div>
+                              )}
                             </div>
                             <Link
                               href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
@@ -522,6 +601,11 @@ export default async function UserDetailPage({ params }: PageProps) {
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
+              {/* Discount Usage */}
+              <div className="mb-6">
+                <DiscountUsage userId={params.id} />
+              </div>
+
               {/* Quick Stats */}
               <div className="bg-white shadow rounded-lg mb-6">
                 <div className="px-6 py-4 border-b border-gray-200">

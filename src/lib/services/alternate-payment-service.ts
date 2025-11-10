@@ -496,30 +496,21 @@ export class AlternatePaymentService {
         throw new Error('Failed to get discount or registration details')
       }
 
-      // Check if usage already exists to prevent duplicates
-      const { data: existingUsage } = await supabase
+      // Record discount usage for this alternate purchase
+      // No duplicate check - each alternate purchase is unique even for same registration
+      const { error: insertError } = await supabase
         .from('discount_usage')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('discount_code_id', discountCodeId)
-        .eq('registration_id', registrationId)
-        .single()
+        .insert({
+          user_id: userId,
+          discount_code_id: discountCodeId,
+          discount_category_id: discountResult.data.discount_category_id,
+          season_id: registrationResult.data.season_id,
+          amount_saved: amountSaved,
+          registration_id: registrationId
+        })
 
-      if (!existingUsage) {
-        const { error: insertError } = await supabase
-          .from('discount_usage')
-          .insert({
-            user_id: userId,
-            discount_code_id: discountCodeId,
-            discount_category_id: discountResult.data.discount_category_id,
-            season_id: registrationResult.data.season_id,
-            amount_saved: amountSaved,
-            registration_id: registrationId
-          })
-
-        if (insertError) {
-          throw new Error(`Failed to record discount usage: ${insertError.message}`)
-        }
+      if (insertError) {
+        throw new Error(`Failed to record discount usage: ${insertError.message}`)
       }
     } catch (error) {
       logger.logPaymentProcessing(

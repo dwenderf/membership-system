@@ -70,6 +70,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch registration data' }, { status: 500 })
       }
 
+      // Get registration to access season_id
+      const { data: registrationInfo } = await adminSupabase
+        .from('registrations')
+        .select('season_id')
+        .eq('id', registrationId)
+        .single()
+
       // Get waitlist details for this registration
       const { data: waitlistData, error: waitlistError } = await adminSupabase
         .from('waitlists')
@@ -96,7 +103,12 @@ export async function GET(request: NextRequest) {
           discount_codes (
             id,
             code,
-            percentage
+            percentage,
+            category:discount_categories (
+              id,
+              name,
+              max_discount_per_user_per_season
+            )
           )
         `)
         .eq('registration_id', registrationId)
@@ -106,6 +118,25 @@ export async function GET(request: NextRequest) {
       if (waitlistError) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist data', { error: waitlistError, registrationId }, 'error')
       }
+
+      // Get discount usage for waitlist users to check seasonal limits
+      const waitlistUserIds = waitlistData?.map(w => {
+        const user = Array.isArray(w.users) ? w.users[0] : w.users
+        return user?.id
+      }).filter(Boolean) || []
+
+      const { data: discountUsageData } = await adminSupabase
+        .from('discount_usage')
+        .select('user_id, discount_category_id, amount_saved')
+        .in('user_id', waitlistUserIds)
+
+      // Group usage by user and category
+      const usageByUserAndCategory = new Map()
+      discountUsageData?.forEach(usage => {
+        const key = `${usage.user_id}-${usage.discount_category_id}`
+        const current = usageByUserAndCategory.get(key) || 0
+        usageByUserAndCategory.set(key, current + usage.amount_saved)
+      })
 
       // Process the data to flatten the structure for the frontend
       const processedData = registrationData?.map(item => {
@@ -144,9 +175,34 @@ export async function GET(request: NextRequest) {
         const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
         const discountCode = Array.isArray(item.discount_codes) ? item.discount_codes[0] : item.discount_codes
 
-        // Calculate pricing
+        // Calculate pricing with seasonal cap enforcement
         const basePrice = registrationCategory?.price || 0
-        const discountAmount = discountCode ? Math.round((basePrice * discountCode.percentage) / 100) : 0
+        let discountAmount = 0
+
+        if (discountCode) {
+          // Calculate requested discount amount
+          let requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
+
+          // Check and apply seasonal cap
+          const discountCategory = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
+          if (discountCategory && discountCategory.max_discount_per_user_per_season) {
+            const usageKey = `${user?.id}-${discountCategory.id}`
+            const currentUsage = usageByUserAndCategory.get(usageKey) || 0
+            const limit = discountCategory.max_discount_per_user_per_season
+            const remainingAmount = Math.max(0, limit - currentUsage)
+
+            // Apply cap - use remaining amount if would exceed
+            if (currentUsage + requestedDiscountAmount > limit) {
+              discountAmount = remainingAmount
+            } else {
+              discountAmount = requestedDiscountAmount
+            }
+          } else {
+            // No seasonal cap - use full discount
+            discountAmount = requestedDiscountAmount
+          }
+        }
+
         const finalAmount = Math.max(0, basePrice - discountAmount)
 
         // Check payment method status

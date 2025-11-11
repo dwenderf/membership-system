@@ -279,7 +279,8 @@ BEGIN
           'unit_amount', xil.unit_amount,
           'account_code', xil.account_code,
           'tax_type', xil.tax_type,
-          'line_amount', xil.line_amount
+          'line_amount', xil.line_amount,
+          'discount_code_id', xil.discount_code_id
         )
         ORDER BY xil.created_at
       ) FILTER (WHERE xil.id IS NOT NULL),

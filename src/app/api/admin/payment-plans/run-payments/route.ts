@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { processDuePayments } from '@/lib/services/payment-plan-processor'
+import { processDuePayments, sendPreNotifications } from '@/lib/services/payment-plan-processor'
 
 /**
  * Manual Payment Processing Endpoint (Simplified for Testing)
@@ -43,10 +43,17 @@ export async function POST(request: NextRequest) {
     )
 
     const today = new Date().toISOString().split('T')[0]
+    const threeDaysFromNow = new Date()
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3)
+    const preNotificationDate = threeDaysFromNow.toISOString().split('T')[0]
 
     // Process due payments using shared processor
     // This ensures manual runs and cron job use identical logic
     const results = await processDuePayments(today)
+
+    // Send pre-notifications for payments due in 3 days (same as cron job)
+    const preNotificationsSent = await sendPreNotifications(preNotificationDate)
+    results.preNotificationsSent = preNotificationsSent
 
     const hasErrors = results.errors.length > 0
 
@@ -58,6 +65,8 @@ export async function POST(request: NextRequest) {
         paymentsProcessed: results.paymentsProcessed,
         paymentsFailed: results.paymentsFailed,
         retriesAttempted: results.retriesAttempted,
+        completionEmailsSent: results.completionEmailsSent,
+        preNotificationsSent: results.preNotificationsSent,
         errorCount: results.errors.length
       },
       hasErrors ? 'warn' : 'info'

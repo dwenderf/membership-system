@@ -198,6 +198,11 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     Completion emails sent: <span className="font-medium">{processingResult.results.completionEmailsSent}</span>
                   </div>
                 )}
+                {processingResult.results.preNotificationsSent > 0 && (
+                  <div className="text-blue-700">
+                    Pre-notification emails sent: <span className="font-medium">{processingResult.results.preNotificationsSent}</span>
+                  </div>
+                )}
                 {processingResult.results.errors && processingResult.results.errors.length > 0 && (
                   <div className="mt-2 text-red-700">
                     <div className="font-medium">Errors:</div>

@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       paymentsFailed: 0,
       retriesAttempted: 0,
       paymentsFound: 0,
+      completionEmailsSent: 0,
       errors: [] as string[]
     }
 
@@ -150,6 +151,72 @@ export async function POST(request: NextRequest) {
         if (result.success) {
           results.paymentsProcessed++
 
+          // Get updated payment plan summary
+          const { data: planSummary } = await adminSupabase
+            .from('payment_plan_summary')
+            .select('*')
+            .eq('invoice_id', invoice.id)
+            .single()
+
+          if (planSummary) {
+            // Get user details
+            const { data: user } = await adminSupabase
+              .from('users')
+              .select('email, first_name, last_name')
+              .eq('id', userReg.user_id)
+              .single()
+
+            if (user) {
+              const userName = `${user.first_name} ${user.last_name}`
+              const registrationName = userReg.registration?.name || 'Registration'
+              const isFinalPayment = planSummary.status === 'completed'
+
+              // Send payment processed email
+              try {
+                await emailService.sendPaymentPlanPaymentProcessed({
+                  userId: userReg.user_id,
+                  email: user.email,
+                  userName,
+                  registrationName,
+                  installmentNumber: payment.installment_number,
+                  totalInstallments: planSummary.total_installments,
+                  installmentAmount: payment.amount_paid,
+                  paymentDate: new Date().toISOString(),
+                  amountPaid: planSummary.paid_amount,
+                  remainingBalance: planSummary.total_amount - planSummary.paid_amount,
+                  nextPaymentDate: planSummary.next_payment_date,
+                  isFinalPayment
+                })
+
+                // Send completion email if this was the final payment
+                if (isFinalPayment) {
+                  await emailService.sendPaymentPlanCompleted({
+                    userId: userReg.user_id,
+                    email: user.email,
+                    userName,
+                    registrationName,
+                    totalAmount: planSummary.total_amount,
+                    totalInstallments: planSummary.total_installments,
+                    planStartDate: payment.staging_metadata?.payment_plan_created_at || payment.created_at,
+                    completionDate: new Date().toISOString()
+                  })
+                  results.completionEmailsSent++
+                }
+              } catch (emailError) {
+                logger.logBatchProcessing(
+                  'manual-run-payments-email-error',
+                  'Failed to send payment processed email',
+                  {
+                    xeroPaymentId: payment.id,
+                    error: emailError instanceof Error ? emailError.message : String(emailError)
+                  },
+                  'warn'
+                )
+                // Don't add to errors - email failures are non-critical
+              }
+            }
+          }
+
           logger.logBatchProcessing(
             'manual-run-payments-payment-success',
             `Successfully processed payment`,
@@ -161,6 +228,54 @@ export async function POST(request: NextRequest) {
           )
         } else {
           results.paymentsFailed++
+
+          // Get user details for failure email
+          const { data: user } = await adminSupabase
+            .from('users')
+            .select('email, first_name, last_name')
+            .eq('id', userReg.user_id)
+            .single()
+
+          if (user) {
+            const userName = `${user.first_name} ${user.last_name}`
+            const registrationName = userReg.registration?.name || 'Registration'
+            const remainingRetries = MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1)
+
+            // Get payment plan summary for balances
+            const { data: planSummary } = await adminSupabase
+              .from('payment_plan_summary')
+              .select('*')
+              .eq('invoice_id', invoice.id)
+              .single()
+
+            // Send failure email
+            try {
+              await emailService.sendPaymentPlanPaymentFailed({
+                userId: userReg.user_id,
+                email: user.email,
+                userName,
+                registrationName,
+                installmentNumber: payment.installment_number,
+                totalInstallments: planSummary?.total_installments || 4,
+                installmentAmount: payment.amount_paid,
+                scheduledDate: payment.planned_payment_date,
+                failureReason: result.error || 'Payment declined',
+                remainingRetries,
+                amountPaid: planSummary?.paid_amount || 0,
+                remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+              })
+            } catch (emailError) {
+              logger.logBatchProcessing(
+                'manual-run-payments-failure-email-error',
+                'Failed to send payment failure email',
+                {
+                  xeroPaymentId: payment.id,
+                  error: emailError instanceof Error ? emailError.message : String(emailError)
+                },
+                'warn'
+              )
+            }
+          }
 
           logger.logBatchProcessing(
             'manual-run-payments-payment-failed',

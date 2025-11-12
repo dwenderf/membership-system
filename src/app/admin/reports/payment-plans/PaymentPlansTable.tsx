@@ -193,6 +193,11 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     Retries attempted: <span className="font-medium">{processingResult.results.retriesAttempted}</span>
                   </div>
                 )}
+                {processingResult.results.completionEmailsSent > 0 && (
+                  <div className="text-purple-700">
+                    Completion emails sent: <span className="font-medium">{processingResult.results.completionEmailsSent}</span>
+                  </div>
+                )}
                 {processingResult.results.errors && processingResult.results.errors.length > 0 && (
                   <div className="mt-2 text-red-700">
                     <div className="font-medium">Errors:</div>

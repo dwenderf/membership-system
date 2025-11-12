@@ -196,7 +196,8 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 remaining_balance: `$${((planSummary.total_amount - planSummary.paid_amount) / 100).toFixed(2)}`,
                 next_payment_date: planSummary.next_payment_date ? formatDate(new Date(planSummary.next_payment_date)) : null,
                 is_final_payment: isFinalPayment,
-                account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+                account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`,
+                dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
               },
               triggered_by: 'automated',
               related_entity_type: 'payments',

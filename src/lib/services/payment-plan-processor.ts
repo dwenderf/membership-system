@@ -183,6 +183,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
               email_address: user.email,
               event_type: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_PROCESSED,
               subject: `Payment Plan Payment ${isFinalPayment ? 'Complete' : 'Processed'}`,
+              template_id: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID,
               email_data: {
                 userName,
                 registrationName,
@@ -208,6 +209,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 email_address: user.email,
                 event_type: EMAIL_EVENTS.PAYMENT_PLAN_COMPLETED,
                 subject: 'Payment Plan Completed!',
+                template_id: process.env.LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID,
                 email_data: {
                   userName,
                   registrationName,
@@ -276,6 +278,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
             email_address: user.email,
             event_type: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_FAILED,
             subject: 'Payment Plan Payment Failed',
+            template_id: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID,
             email_data: {
               userName,
               registrationName,
@@ -399,6 +402,7 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
           email_address: user.email,
           event_type: EMAIL_EVENTS.PAYMENT_PLAN_PRE_NOTIFICATION,
           subject: 'Upcoming Payment Plan Payment',
+          template_id: process.env.LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID,
           email_data: {
             userName,
             registrationName,

@@ -212,7 +212,6 @@ export class PaymentPlanService {
           *,
           xero_invoice:xero_invoices(
             id,
-            contact_id,
             user_registrations!inner(
               user_id,
               registration:registrations(name, season:seasons(name))

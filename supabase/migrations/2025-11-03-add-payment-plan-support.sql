@@ -205,8 +205,9 @@ COMMENT ON VIEW payment_plan_summary IS 'Aggregated view of payment plan status 
 -- Update get_pending_xero_invoices_with_lock to include is_payment_plan field
 -- This allows the sync code to detect payment plans and set correct due dates
 DROP FUNCTION IF EXISTS get_pending_xero_invoices_with_lock(integer);
+DROP FUNCTION IF EXISTS get_pending_xero_invoices_with_lock();
 
-CREATE FUNCTION get_pending_xero_invoices_with_lock(limit_count INTEGER DEFAULT 50)
+CREATE OR REPLACE FUNCTION get_pending_xero_invoices_with_lock(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
   id UUID,
   payment_id UUID,
@@ -237,14 +238,14 @@ BEGIN
   RETURN QUERY
   WITH locked_invoices AS (
     -- First, lock the invoice rows to prevent race conditions
-    SELECT id, payment_id, tenant_id, xero_invoice_id, invoice_number,
-           invoice_type, invoice_status, total_amount, discount_amount,
-           net_amount, stripe_fee_amount, sync_status, last_synced_at,
-           sync_error, staged_at, staging_metadata, created_at, updated_at,
-           is_payment_plan
-    FROM xero_invoices
-    WHERE sync_status = 'pending'
-    ORDER BY created_at ASC
+    SELECT xi.id, xi.payment_id, xi.tenant_id, xi.xero_invoice_id, xi.invoice_number,
+           xi.invoice_type, xi.invoice_status, xi.total_amount, xi.discount_amount,
+           xi.net_amount, xi.stripe_fee_amount, xi.sync_status, xi.last_synced_at,
+           xi.sync_error, xi.staged_at, xi.staging_metadata, xi.created_at, xi.updated_at,
+           xi.is_payment_plan
+    FROM xero_invoices xi
+    WHERE xi.sync_status = 'pending'
+    ORDER BY xi.created_at ASC
     LIMIT limit_count
     FOR UPDATE SKIP LOCKED
   )

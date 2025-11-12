@@ -292,7 +292,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
               failure_reason: result.error || 'Payment declined',
               remaining_retries: remainingRetries,
               amount_paid: `$${((planSummary?.paid_amount || 0) / 100).toFixed(2)}`,
-              remaining_balance: `$${(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0) / 100).toFixed(2)}`,
+              remaining_balance: `$${(((planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0)) / 100).toFixed(2)}`,
               account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
             },
             triggered_by: 'automated',

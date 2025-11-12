@@ -4,6 +4,7 @@ import { PaymentPlanService } from './payment-plan-service'
 import { emailStagingManager } from '@/lib/email/staging'
 import { EMAIL_EVENTS } from '@/lib/email/service'
 import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from './payment-plan-config'
+import { formatDate } from '@/lib/date-utils'
 
 /**
  * Shared Payment Plan Processing Logic
@@ -185,16 +186,17 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
               subject: `Payment Plan Payment ${isFinalPayment ? 'Complete' : 'Processed'}`,
               template_id: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID,
               email_data: {
-                userName,
-                registrationName,
-                installmentNumber: payment.installment_number,
-                totalInstallments: planSummary.total_installments,
-                installmentAmount: payment.amount_paid,
-                paymentDate: new Date().toISOString(),
-                amountPaid: planSummary.paid_amount,
-                remainingBalance: planSummary.total_amount - planSummary.paid_amount,
-                nextPaymentDate: planSummary.next_payment_date,
-                isFinalPayment
+                user_name: userName,
+                registration_name: registrationName,
+                installment_number: payment.installment_number,
+                total_installments: planSummary.total_installments,
+                installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+                payment_date: formatDate(new Date()),
+                amount_paid: `$${(planSummary.paid_amount / 100).toFixed(2)}`,
+                remaining_balance: `$${((planSummary.total_amount - planSummary.paid_amount) / 100).toFixed(2)}`,
+                next_payment_date: planSummary.next_payment_date ? formatDate(new Date(planSummary.next_payment_date)) : null,
+                is_final_payment: isFinalPayment,
+                account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
               },
               triggered_by: 'automated',
               related_entity_type: 'payments',
@@ -211,12 +213,13 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 subject: 'Payment Plan Completed!',
                 template_id: process.env.LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID,
                 email_data: {
-                  userName,
-                  registrationName,
-                  totalAmount: planSummary.total_amount,
-                  totalInstallments: planSummary.total_installments,
-                  planStartDate: payment.staging_metadata?.payment_plan_created_at || payment.created_at,
-                  completionDate: new Date().toISOString()
+                  user_name: userName,
+                  registration_name: registrationName,
+                  total_amount: `$${(planSummary.total_amount / 100).toFixed(2)}`,
+                  total_installments: planSummary.total_installments,
+                  plan_start_date: formatDate(new Date(payment.staging_metadata?.payment_plan_created_at || payment.created_at)),
+                  completion_date: formatDate(new Date()),
+                  dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
                 },
                 triggered_by: 'automated',
                 related_entity_type: 'payments',
@@ -280,16 +283,17 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
             subject: 'Payment Plan Payment Failed',
             template_id: process.env.LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID,
             email_data: {
-              userName,
-              registrationName,
-              installmentNumber: payment.installment_number,
-              totalInstallments: planSummary?.total_installments || 4,
-              installmentAmount: payment.amount_paid,
-              scheduledDate: payment.planned_payment_date,
-              failureReason: result.error || 'Payment declined',
-              remainingRetries,
-              amountPaid: planSummary?.paid_amount || 0,
-              remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+              user_name: userName,
+              registration_name: registrationName,
+              installment_number: payment.installment_number,
+              total_installments: planSummary?.total_installments || 4,
+              installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+              scheduled_date: formatDate(new Date(payment.planned_payment_date)),
+              failure_reason: result.error || 'Payment declined',
+              remaining_retries: remainingRetries,
+              amount_paid: `$${((planSummary?.paid_amount || 0) / 100).toFixed(2)}`,
+              remaining_balance: `$${(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0) / 100).toFixed(2)}`,
+              account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
             },
             triggered_by: 'automated',
             related_entity_type: 'payments',
@@ -404,14 +408,15 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
           subject: 'Upcoming Payment Plan Payment',
           template_id: process.env.LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID,
           email_data: {
-            userName,
-            registrationName,
-            installmentNumber: payment.installment_number,
-            totalInstallments: planSummary?.total_installments || 4,
-            installmentAmount: payment.amount_paid,
-            nextPaymentDate: payment.planned_payment_date,
-            amountPaid: planSummary?.paid_amount || 0,
-            remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+            user_name: userName,
+            registration_name: registrationName,
+            installment_number: payment.installment_number,
+            total_installments: planSummary?.total_installments || 4,
+            installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+            next_payment_date: formatDate(new Date(payment.planned_payment_date)),
+            amount_paid: `$${((planSummary?.paid_amount || 0) / 100).toFixed(2)}`,
+            remaining_balance: `$${((planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0) / 100).toFixed(2)}`,
+            account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
           },
           triggered_by: 'automated',
           related_entity_type: 'payments',

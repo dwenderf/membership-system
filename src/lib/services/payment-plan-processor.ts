@@ -1,7 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from './payment-plan-service'
-import { emailService } from '@/lib/email/service'
+import { emailStagingManager } from '@/lib/email/staging'
+import { EMAIL_EVENTS } from '@/lib/email/service'
 import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from './payment-plan-config'
 
 /**
@@ -175,41 +176,57 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
           const registrationName = userReg.registration?.name || 'Registration'
           const isFinalPayment = planSummary.status === 'completed'
 
-          // Send payment processed email
+          // Stage payment processed email
           try {
-            await emailService.sendPaymentPlanPaymentProcessed({
-              userId: userReg.user_id,
-              email: user.email,
-              userName,
-              registrationName,
-              installmentNumber: payment.installment_number,
-              totalInstallments: planSummary.total_installments,
-              installmentAmount: payment.amount_paid,
-              paymentDate: new Date().toISOString(),
-              amountPaid: planSummary.paid_amount,
-              remainingBalance: planSummary.total_amount - planSummary.paid_amount,
-              nextPaymentDate: planSummary.next_payment_date,
-              isFinalPayment
-            })
-
-            // Send completion email if this was the final payment
-            if (isFinalPayment) {
-              await emailService.sendPaymentPlanCompleted({
-                userId: userReg.user_id,
-                email: user.email,
+            await emailStagingManager.stageEmail({
+              user_id: userReg.user_id,
+              email_address: user.email,
+              event_type: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_PROCESSED,
+              subject: `Payment Plan Payment ${isFinalPayment ? 'Complete' : 'Processed'}`,
+              email_data: {
                 userName,
                 registrationName,
-                totalAmount: planSummary.total_amount,
+                installmentNumber: payment.installment_number,
                 totalInstallments: planSummary.total_installments,
-                planStartDate: payment.staging_metadata?.payment_plan_created_at || payment.created_at,
-                completionDate: new Date().toISOString()
+                installmentAmount: payment.amount_paid,
+                paymentDate: new Date().toISOString(),
+                amountPaid: planSummary.paid_amount,
+                remainingBalance: planSummary.total_amount - planSummary.paid_amount,
+                nextPaymentDate: planSummary.next_payment_date,
+                isFinalPayment
+              },
+              triggered_by: 'automated',
+              related_entity_type: 'payments',
+              related_entity_id: payment.id,
+              payment_id: payment.id
+            })
+
+            // Stage completion email if this was the final payment
+            if (isFinalPayment) {
+              await emailStagingManager.stageEmail({
+                user_id: userReg.user_id,
+                email_address: user.email,
+                event_type: EMAIL_EVENTS.PAYMENT_PLAN_COMPLETED,
+                subject: 'Payment Plan Completed!',
+                email_data: {
+                  userName,
+                  registrationName,
+                  totalAmount: planSummary.total_amount,
+                  totalInstallments: planSummary.total_installments,
+                  planStartDate: payment.staging_metadata?.payment_plan_created_at || payment.created_at,
+                  completionDate: new Date().toISOString()
+                },
+                triggered_by: 'automated',
+                related_entity_type: 'payments',
+                related_entity_id: payment.id,
+                payment_id: payment.id
               })
               results.completionEmailsSent++
             }
           } catch (emailError) {
             logger.logBatchProcessing(
               'payment-processor-email-error',
-              'Failed to send payment processed email',
+              'Failed to stage payment processed email',
               {
                 xeroPaymentId: payment.id,
                 error: emailError instanceof Error ? emailError.message : String(emailError)
@@ -252,26 +269,34 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
           .eq('invoice_id', invoice.id)
           .single()
 
-        // Send failure email
+        // Stage failure email
         try {
-          await emailService.sendPaymentPlanPaymentFailed({
-            userId: userReg.user_id,
-            email: user.email,
-            userName,
-            registrationName,
-            installmentNumber: payment.installment_number,
-            totalInstallments: planSummary?.total_installments || 4,
-            installmentAmount: payment.amount_paid,
-            scheduledDate: payment.planned_payment_date,
-            failureReason: result.error || 'Payment declined',
-            remainingRetries,
-            amountPaid: planSummary?.paid_amount || 0,
-            remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+          await emailStagingManager.stageEmail({
+            user_id: userReg.user_id,
+            email_address: user.email,
+            event_type: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_FAILED,
+            subject: 'Payment Plan Payment Failed',
+            email_data: {
+              userName,
+              registrationName,
+              installmentNumber: payment.installment_number,
+              totalInstallments: planSummary?.total_installments || 4,
+              installmentAmount: payment.amount_paid,
+              scheduledDate: payment.planned_payment_date,
+              failureReason: result.error || 'Payment declined',
+              remainingRetries,
+              amountPaid: planSummary?.paid_amount || 0,
+              remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+            },
+            triggered_by: 'automated',
+            related_entity_type: 'payments',
+            related_entity_id: payment.id,
+            payment_id: payment.id
           })
         } catch (emailError) {
           logger.logBatchProcessing(
             'payment-processor-failure-email-error',
-            'Failed to send payment failure email',
+            'Failed to stage payment failure email',
             {
               xeroPaymentId: payment.id,
               error: emailError instanceof Error ? emailError.message : String(emailError)
@@ -369,24 +394,32 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
         .single()
 
       try {
-        await emailService.sendPaymentPlanPreNotification({
-          userId: userReg.user_id,
-          email: user.email,
-          userName,
-          registrationName,
-          installmentNumber: payment.installment_number,
-          totalInstallments: planSummary?.total_installments || 4,
-          installmentAmount: payment.amount_paid,
-          nextPaymentDate: payment.planned_payment_date,
-          amountPaid: planSummary?.paid_amount || 0,
-          remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+        await emailStagingManager.stageEmail({
+          user_id: userReg.user_id,
+          email_address: user.email,
+          event_type: EMAIL_EVENTS.PAYMENT_PLAN_PRE_NOTIFICATION,
+          subject: 'Upcoming Payment Plan Payment',
+          email_data: {
+            userName,
+            registrationName,
+            installmentNumber: payment.installment_number,
+            totalInstallments: planSummary?.total_installments || 4,
+            installmentAmount: payment.amount_paid,
+            nextPaymentDate: payment.planned_payment_date,
+            amountPaid: planSummary?.paid_amount || 0,
+            remainingBalance: planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+          },
+          triggered_by: 'automated',
+          related_entity_type: 'payments',
+          related_entity_id: payment.id,
+          payment_id: payment.id
         })
 
         notificationsSent++
 
         logger.logBatchProcessing(
-          'payment-processor-pre-notification-sent',
-          'Sent pre-notification email',
+          'payment-processor-pre-notification-staged',
+          'Staged pre-notification email',
           {
             xeroPaymentId: payment.id,
             installmentNumber: payment.installment_number,
@@ -396,7 +429,7 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
       } catch (emailError) {
         logger.logBatchProcessing(
           'payment-processor-pre-notification-error',
-          'Failed to send pre-notification email',
+          'Failed to stage pre-notification email',
           {
             xeroPaymentId: payment.id,
             error: emailError instanceof Error ? emailError.message : String(emailError)

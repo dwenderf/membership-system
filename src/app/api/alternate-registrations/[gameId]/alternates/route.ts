@@ -146,24 +146,38 @@ export async function GET(
 
       if (discountCode && registration) {
         const basePrice = registration.alternate_price || 0
-        
-        // Calculate discount amount (discount codes are always percentage-based)
-        discountAmount = Math.round((basePrice * discountCode.percentage) / 100)
 
-        // Check usage limits
+        // Calculate discount amount (discount codes are always percentage-based)
+        let requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
+
+        // Check usage limits and apply seasonal cap
         category = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
         if (category && category.max_discount_per_user_per_season) {
           const usageKey = `${user?.id}-${category.id}`
           const currentUsage = usageByUserAndCategory.get(usageKey) || 0
           const limit = category.max_discount_per_user_per_season
-          
-          isOverLimit = (currentUsage + discountAmount) > limit
+          const remainingAmount = Math.max(0, limit - currentUsage)
+
+          isOverLimit = (currentUsage + requestedDiscountAmount) > limit
+
+          // Apply seasonal cap - use remaining amount if would exceed
+          if (isOverLimit) {
+            discountAmount = remainingAmount
+          } else {
+            discountAmount = requestedDiscountAmount
+          }
+
           usageStatus = {
             currentUsage,
             limit,
             wouldExceed: isOverLimit,
-            remainingAmount: Math.max(0, limit - currentUsage)
+            remainingAmount,
+            requestedAmount: requestedDiscountAmount,
+            appliedAmount: discountAmount
           }
+        } else {
+          // No seasonal cap - use full discount
+          discountAmount = requestedDiscountAmount
         }
       }
 

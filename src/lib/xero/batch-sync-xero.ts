@@ -13,6 +13,18 @@ import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
 import { centsToCents, centsToDollars } from '../../types/currency'
 
+// Constants for date calculations
+const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+
+/**
+ * Calculate default due date (30 days from creation date)
+ * @param createdAt - ISO timestamp string of invoice creation
+ * @returns Due date in YYYY-MM-DD format
+ */
+function calculateDefaultDueDate(createdAt: string): string {
+  return new Date(new Date(createdAt).getTime() + DAYS_30_IN_MS).toISOString().split('T')[0]
+}
+
 type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & {
   line_items: Database['public']['Tables']['xero_invoice_line_items']['Row'][]
 }
@@ -613,6 +625,51 @@ export class XeroBatchSyncManager {
 
       console.log('📋 Line items prepared:', lineItems.length, 'items')
 
+      // Calculate invoice due date
+      // For payment plans: Due date = final payment date (to prevent "overdue" status before plan completes)
+      // For regular invoices: Due date = 30 days from creation
+      let dueDate: string
+
+      // Check if this invoice is a payment plan by checking the is_payment_plan flag
+      if (invoiceRecord.is_payment_plan) {
+        console.log(`📅 Processing payment plan invoice: ${invoiceRecord.id}`)
+
+        // Fetch the actual scheduled date of the final installment from xero_payments
+        // This is the source of truth and works regardless of installment interval length
+        const { data: finalPayment, error: paymentError } = await this.supabase
+          .from('xero_payments')
+          .select('planned_payment_date, installment_number')
+          .eq('xero_invoice_id', invoiceRecord.id)
+          .eq('payment_type', 'installment')
+          .order('installment_number', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (paymentError) {
+          // Database error querying xero_payments
+          console.error(`❌ Error fetching final payment date for payment plan invoice ${invoiceRecord.id}:`, paymentError)
+          console.warn('⚠️ Falling back to default 30-day due date due to database error')
+          dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
+        } else if (!finalPayment) {
+          // No payments found (data integrity issue)
+          console.error(`❌ No installment payments found for payment plan invoice ${invoiceRecord.id}`)
+          console.warn('⚠️ Falling back to default 30-day due date - manual review required')
+          dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
+        } else {
+          // Use the actual scheduled date of the final installment
+          dueDate = finalPayment.planned_payment_date
+
+          console.log(`📅 Payment plan invoice - due date set to final scheduled payment:`, {
+            invoice_id: invoiceRecord.id,
+            final_installment_number: finalPayment.installment_number,
+            final_scheduled_date: dueDate
+          })
+        }
+      } else {
+        // Regular invoice: 30 days from creation
+        dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
+      }
+
       // Create invoice object
       const invoice: Invoice = {
         type: Invoice.TypeEnum.ACCREC,
@@ -621,7 +678,7 @@ export class XeroBatchSyncManager {
         },
         lineItems,
         date: new Date(invoiceRecord.created_at).toISOString().split('T')[0], // YYYY-MM-DD format
-        dueDate: new Date(new Date(invoiceRecord.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from creation
+        dueDate,
         // Let Xero generate its own invoice number - don't set invoiceNumber here
         reference: '', // Keep reference empty - payment intent ID is not relevant for invoice creation
         status: Invoice.StatusEnum.AUTHORISED,

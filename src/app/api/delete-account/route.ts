@@ -51,6 +51,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Account already deleted' }, { status: 400 })
     }
 
+    // Check for active payment plans with outstanding balance
+    const { data: activePaymentPlans, error: paymentPlansError } = await supabase
+      .from('payment_plans')
+      .select('id, total_amount, paid_amount')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+
+    if (paymentPlansError) {
+      console.error('Error checking payment plans:', paymentPlansError)
+      captureAccountDeletionWarning('Failed to check payment plans during deletion', {
+        ...deletionContext,
+        step: 'payment_plan_check'
+      }, paymentPlansError)
+      // Continue with deletion despite error
+    } else if (activePaymentPlans && activePaymentPlans.length > 0) {
+      // Calculate total outstanding balance
+      const totalOutstanding = activePaymentPlans.reduce((sum, plan) => {
+        return sum + (plan.total_amount - plan.paid_amount)
+      }, 0)
+
+      if (totalOutstanding > 0) {
+        return NextResponse.json({
+          error: `Cannot delete account with outstanding payment plan balance. You have ${activePaymentPlans.length} active payment plan(s) with a total outstanding balance of $${(totalOutstanding / 100).toFixed(2)}. Please pay off your payment plans before deleting your account, or contact support for assistance.`,
+          hasActivePaymentPlans: true,
+          outstandingBalance: totalOutstanding
+        }, { status: 400 })
+      }
+    }
+
     // Store original email and name for confirmation email (before anonymization)
     const originalEmail = userProfile.email
     const originalFirstName = userProfile.first_name

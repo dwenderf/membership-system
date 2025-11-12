@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate } from '@/lib/date-utils'
+import { formatDateString } from '@/lib/date-utils'
 import { filterActivePlans } from '@/lib/payment-plan-utils'
 
 interface PaymentPlan {
@@ -303,7 +303,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.nextPaymentDate ? formatDate(new Date(user.nextPaymentDate)) : '—'}
+                      {user.nextPaymentDate ? formatDateString(user.nextPaymentDate) : '—'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <Link
@@ -362,7 +362,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                               {plan.nextPaymentDate && (
                                 <div className="mt-2 pt-2 border-t border-gray-100 text-xs">
                                   <span className="text-gray-500">Next Payment:</span>
-                                  <span className="ml-1 font-medium">{formatDate(new Date(plan.nextPaymentDate))}</span>
+                                  <span className="ml-1 font-medium">{formatDateString(plan.nextPaymentDate)}</span>
                                 </div>
                               )}
                             </div>

@@ -58,7 +58,6 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
       *,
       xero_invoice:xero_invoices(
         id,
-        contact_id,
         user_registrations!inner(
           user_id,
           registration:registrations(name, season:seasons(name))
@@ -317,7 +316,6 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
       *,
       xero_invoice:xero_invoices(
         id,
-        contact_id,
         user_registrations!inner(
           user_id,
           registration:registrations(name, season:seasons(name))

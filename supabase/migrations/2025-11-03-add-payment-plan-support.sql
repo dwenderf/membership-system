@@ -40,6 +40,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_registrations_xero_invoice_id_key
 ALTER TABLE xero_payments
 DROP CONSTRAINT IF EXISTS xero_payments_xero_invoice_id_tenant_id_key;
 
+-- Drop unique index that prevents multiple payments per invoice+tenant combination
+-- This index is incompatible with payment plans (multiple installments per invoice)
+-- Note: This is an index, not a constraint, so we use DROP INDEX
+DROP INDEX IF EXISTS xero_payments_invoice_tenant_unique;
+
+-- Add constraint on xero_payment_id to prevent duplicate Xero payment records
+-- This is the correct constraint - preventing duplicate syncs based on Xero's payment ID
+-- Uses partial index to allow NULL values (for pending payments not yet synced)
+CREATE UNIQUE INDEX IF NOT EXISTS xero_payments_xero_payment_id_unique
+  ON xero_payments(xero_payment_id)
+  WHERE xero_payment_id IS NOT NULL;
+
 -- Add payment plan columns to xero_payments
 ALTER TABLE xero_payments
 ADD COLUMN IF NOT EXISTS payment_type TEXT CHECK (payment_type IN ('full', 'installment')),

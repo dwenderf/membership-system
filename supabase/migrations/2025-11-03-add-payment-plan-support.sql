@@ -40,10 +40,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_registrations_xero_invoice_id_key
 ALTER TABLE xero_payments
 DROP CONSTRAINT IF EXISTS xero_payments_xero_invoice_id_tenant_id_key;
 
--- Drop additional constraint that prevents multiple payments per invoice+tenant combination
--- This constraint is incompatible with payment plans (multiple installments per invoice)
-ALTER TABLE xero_payments
-DROP CONSTRAINT IF EXISTS xero_payments_invoice_tenant_unique;
+-- Drop unique index that prevents multiple payments per invoice+tenant combination
+-- This index is incompatible with payment plans (multiple installments per invoice)
+-- Note: This is an index, not a constraint, so we use DROP INDEX
+DROP INDEX IF EXISTS xero_payments_invoice_tenant_unique;
 
 -- Add constraint on xero_payment_id to prevent duplicate Xero payment records
 -- This is the correct constraint - preventing duplicate syncs based on Xero's payment ID

@@ -88,12 +88,12 @@ Create a file with all sensitive strings to replace:
 
 ```bash
 cat > ../sensitive-data.txt << 'EOF'
-PEyEe28QDL3yq6SH
-david.wender@nycgha.org
-914bfa44-231e-4f59-8a26-9e360ded6326
-4575b64d-8f63-44ea-a20c-3b9c30d83e98
-vdicairano91@gmail.com
-avabroccoli@gmail.com
+***EXAMPLE_PASSWORD***
+user@example.com
+00000000-0000-0000-0000-000000000000
+11111111-1111-1111-1111-111111111111
+user1@example.com
+user2@example.com
 EOF
 ```
 
@@ -122,10 +122,10 @@ git gc --prune=now --aggressive
 
 ```bash
 # Search for the old password - should return nothing
-git log --all --source --full-history -S 'PEyEe28QDL3yq6SH'
+git log --all --source --full-history -S 'YOUR_OLD_PASSWORD_HERE'
 
 # Search for email addresses - should return nothing
-git log --all --source --full-history -S 'david.wender@nycgha.org'
+git log --all --source --full-history -S 'user@example.com'
 ```
 
 #### 7. Force Push to GitHub
@@ -197,8 +197,8 @@ git push --force
 - Any temporary SQL scripts with hardcoded UUIDs (already deleted)
 
 ### Strings to Replace:
-- Database password: `PEyEe28QDL3yq6SH` → `***REMOVED***`
-- User emails: `david.wender@nycgha.org`, `vdicairano91@gmail.com`, etc.
+- Database password: `***EXAMPLE_PASSWORD***` → `***REMOVED***`
+- User emails: `user@example.com`, `user1@example.com`, etc.
 - Specific user UUIDs from debugging sessions
 
 ## Post-Cleanup Verification
@@ -206,8 +206,8 @@ git push --force
 1. **Check GitHub**: Browse repository history on GitHub to verify sensitive data is gone
 2. **Search locally**:
    ```bash
-   git log --all -S 'PEyEe28QDL3yq6SH'  # Should return nothing
-   git log --all -S 'david.wender'       # Should return nothing
+   git log --all -S 'YOUR_OLD_PASSWORD_HERE'  # Should return nothing
+   git log --all -S 'user@example'             # Should return nothing
    ```
 3. **Test production**: Verify application still works (it will - we're only cleaning history)
 

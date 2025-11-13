@@ -319,55 +319,77 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                   {expandedRows.has(user.userId) && user.plans.length > 0 && (
                     <tr key={`${user.userId}-details`}>
                       <td colSpan={8} className="px-6 py-4 bg-gray-50">
-                        <div className="space-y-3">
-                          {filterActivePlans(user.plans).map((plan) => (
-                            <div key={plan.id} className="bg-white rounded border border-gray-200 p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h4 className="text-sm font-medium text-gray-900">
+                        <table className="min-w-full divide-y divide-gray-200 bg-white rounded border border-gray-200">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Registration
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Progress
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Total Amount
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Paid
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Remaining
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Next Payment
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {filterActivePlans(user.plans).map((plan) => (
+                              <tr key={plan.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                  <div className="text-sm font-medium text-gray-900">
                                     {plan.registrationName}
-                                  </h4>
+                                  </div>
                                   {plan.seasonName && (
-                                    <p className="text-xs text-gray-500">{plan.seasonName}</p>
+                                    <div className="text-xs text-gray-500">{plan.seasonName}</div>
                                   )}
-                                </div>
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                  plan.status === 'failed'
-                                    ? 'bg-red-100 text-red-800'
-                                    : plan.status === 'completed'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                  {plan.status}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-4 gap-4 text-xs">
-                                <div>
-                                  <span className="text-gray-500">Total:</span>
-                                  <span className="ml-1 font-medium">{formatAmount(plan.totalAmount)}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Paid:</span>
-                                  <span className="ml-1 font-medium text-green-600">{formatAmount(plan.paidAmount)}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Remaining:</span>
-                                  <span className="ml-1 font-medium text-orange-600">{formatAmount(plan.remainingBalance)}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Progress:</span>
-                                  <span className="ml-1 font-medium">{plan.installmentsPaid}/{plan.installmentsCount}</span>
-                                </div>
-                              </div>
-                              {plan.nextPaymentDate && (
-                                <div className="mt-2 pt-2 border-t border-gray-100 text-xs">
-                                  <span className="text-gray-500">Next Payment:</span>
-                                  <span className="ml-1 font-medium">{formatDateString(plan.nextPaymentDate)}</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                  {plan.status === 'completed' ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                      Paid
+                                    </span>
+                                  ) : plan.status === 'failed' ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                      Failed
+                                    </span>
+                                  ) : (
+                                    <span className="font-medium text-gray-700">
+                                      {plan.installmentsPaid}/{plan.installmentsCount}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                  {formatAmount(plan.totalAmount)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600">
+                                  {formatAmount(plan.paidAmount)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                  {plan.remainingBalance > 0 ? (
+                                    <span className="font-medium text-orange-600">
+                                      {formatAmount(plan.remainingBalance)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                  {plan.nextPaymentDate ? formatDateString(plan.nextPaymentDate) : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </td>
                     </tr>
                   )}

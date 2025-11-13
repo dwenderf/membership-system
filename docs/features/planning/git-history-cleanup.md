@@ -9,7 +9,7 @@ During development and debugging, several files containing Personally Identifiab
 1. **Exposed Database Password**
    - File: `scripts/admin/apply-rls-fix-direct.js`
    - Commit: `1e1ed2e`
-   - Contains: Direct PostgreSQL connection string with database password `PEyEe28QDL3yq6SH`
+   - Contains: Direct PostgreSQL connection string with database password
    - Status: ✅ Password has been reset in Supabase, old password is now invalid
    - Risk: Low (password reset), but should be removed from history for security best practices
 

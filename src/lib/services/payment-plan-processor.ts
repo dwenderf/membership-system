@@ -5,6 +5,7 @@ import { emailStagingManager } from '@/lib/email/staging'
 import { EMAIL_EVENTS } from '@/lib/email/service'
 import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from './payment-plan-config'
 import { formatDate } from '@/lib/date-utils'
+import { formatAmount } from '@/lib/format-utils'
 
 /**
  * Shared Payment Plan Processing Logic
@@ -190,10 +191,10 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 registration_name: registrationName,
                 installment_number: payment.installment_number,
                 total_installments: planSummary.total_installments,
-                installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+                installment_amount: formatAmount(payment.amount_paid),
                 payment_date: formatDate(new Date()),
-                amount_paid: `$${(planSummary.paid_amount / 100).toFixed(2)}`,
-                remaining_balance: `$${((planSummary.total_amount - planSummary.paid_amount) / 100).toFixed(2)}`,
+                amount_paid: formatAmount(planSummary.paid_amount),
+                remaining_balance: formatAmount(planSummary.total_amount - planSummary.paid_amount),
                 next_payment_date: planSummary.next_payment_date ? formatDate(new Date(planSummary.next_payment_date)) : null,
                 is_final_payment: isFinalPayment,
                 account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`,
@@ -216,7 +217,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 email_data: {
                   user_name: userName,
                   registration_name: registrationName,
-                  total_amount: `$${(planSummary.total_amount / 100).toFixed(2)}`,
+                  total_amount: formatAmount(planSummary.total_amount),
                   total_installments: planSummary.total_installments,
                   plan_start_date: formatDate(new Date(payment.staging_metadata?.payment_plan_created_at || payment.created_at)),
                   completion_date: formatDate(new Date()),
@@ -288,12 +289,12 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
               registration_name: registrationName,
               installment_number: payment.installment_number,
               total_installments: planSummary?.total_installments || 4,
-              installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+              installment_amount: formatAmount(payment.amount_paid),
               scheduled_date: formatDate(new Date(payment.planned_payment_date)),
               failure_reason: result.error || 'Payment declined',
               remaining_retries: remainingRetries,
-              amount_paid: `$${((planSummary?.paid_amount || 0) / 100).toFixed(2)}`,
-              remaining_balance: `$${(((planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0)) / 100).toFixed(2)}`,
+              amount_paid: formatAmount(planSummary?.paid_amount || 0),
+              remaining_balance: formatAmount(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0),
               account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
             },
             triggered_by: 'automated',
@@ -413,10 +414,10 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
             registration_name: registrationName,
             installment_number: payment.installment_number,
             total_installments: planSummary?.total_installments || 4,
-            installment_amount: `$${(payment.amount_paid / 100).toFixed(2)}`,
+            installment_amount: formatAmount(payment.amount_paid),
             next_payment_date: formatDate(new Date(payment.planned_payment_date)),
-            amount_paid: `$${((planSummary?.paid_amount || 0) / 100).toFixed(2)}`,
-            remaining_balance: `$${((planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0) / 100).toFixed(2)}`,
+            amount_paid: formatAmount(planSummary?.paid_amount || 0),
+            remaining_balance: formatAmount(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0),
             account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
           },
           triggered_by: 'automated',

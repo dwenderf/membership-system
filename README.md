@@ -4,7 +4,8 @@ A comprehensive membership and registration system for adult hockey associations
 
 ## Git Merge Strategies
 
-- ✅ Feature branches → development: Squash merge ✅ Development → main: Regular merge
+- ✅ Feature branches → development: Squash merge
+- ✅ Development → main: Regular merge
 
 ## Features
 

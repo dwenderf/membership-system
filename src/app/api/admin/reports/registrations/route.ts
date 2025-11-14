@@ -70,13 +70,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch registration data' }, { status: 500 })
       }
 
-      // Get registration to access season_id
-      const { data: registrationInfo } = await adminSupabase
-        .from('registrations')
-        .select('season_id')
-        .eq('id', registrationId)
-        .single()
-
       // Get waitlist details for this registration
       const { data: waitlistData, error: waitlistError } = await adminSupabase
         .from('waitlists')

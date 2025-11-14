@@ -996,6 +996,7 @@ export class XeroStagingManager {
           tenant_id: null, // Will be populated during sync
           xero_payment_id: null, // Will be populated when synced to Xero
           payment_method: 'stripe',
+          payment_type: 'full', // Refunds are full payments (not installments)
           bank_account_code: stripeBankAccountCode,
           amount_paid: negativeCents(discountAmount), // Negative amount = money going OUT
           stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
@@ -1242,6 +1243,7 @@ export class XeroStagingManager {
           tenant_id: null, // Will be populated during sync
           xero_payment_id: null, // Will be populated when synced to Xero
           payment_method: 'stripe',
+          payment_type: 'full', // Refunds are full payments (not installments)
           bank_account_code: stripeBankAccountCode,
           amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
           stripe_fee_amount: 0, // Refunds don't have additional Stripe fees

@@ -131,6 +131,10 @@ LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
+LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
+LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID=your_payment_plan_payment_processed_template_id
+LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID=your_payment_plan_payment_failed_template_id
+LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -501,6 +505,174 @@ WHAT THIS MEANS:
 • Your existing team registrations are not affected
 
 If you didn't request this change or have questions, please contact our support team immediately.
+
+The Hockey Association Team
+```
+
+#### Payment Plan Pre-Notification Template (`LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `registrationName` - Name of registration
+- `seasonName` - Season name and dates
+- `categoryName` - Registration category
+- `nextPaymentDate` - Date of upcoming payment (formatted as localized date string)
+- `nextPaymentAmount` - Amount to be charged (formatted as "25.00")
+- `installmentNumber` - Which installment (2, 3, or 4)
+- `remainingBalance` - Total remaining balance (formatted as "75.00")
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+This is a friendly reminder that your next payment plan installment is coming up soon.
+
+UPCOMING PAYMENT:
+- Registration: [registrationName] ([seasonName])
+- Category: [categoryName]
+- Payment [installmentNumber] of 4
+- Amount: $[nextPaymentAmount]
+- Scheduled Date: [nextPaymentDate]
+
+PAYMENT PLAN STATUS:
+- Remaining Balance: $[remainingBalance]
+- Payment Method: Your saved payment method will be charged automatically
+
+WHAT YOU CAN DO:
+• View payment plan details: [dashboardUrl]
+• Pay remaining balance early (no penalty)
+• Update your payment method if needed
+
+Questions? Reply to this email anytime.
+
+The Hockey Association Team
+```
+
+#### Payment Plan Payment Processed Template (`LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `registrationName` - Name of registration
+- `seasonName` - Season name and dates
+- `categoryName` - Registration category
+- `paymentDate` - Date payment was processed (formatted as localized date string)
+- `paymentAmount` - Amount charged (formatted as "25.00")
+- `installmentNumber` - Which installment was paid (2, 3, or 4)
+- `totalPaid` - Total amount paid so far (formatted as "50.00")
+- `remainingBalance` - Remaining balance (formatted as "50.00")
+- `nextPaymentDate` - Next payment date OR "No more payments due"
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+Your payment plan installment has been successfully processed!
+
+PAYMENT DETAILS:
+- Registration: [registrationName] ([seasonName])
+- Category: [categoryName]
+- Payment [installmentNumber] of 4
+- Amount Charged: $[paymentAmount]
+- Payment Date: [paymentDate]
+
+PAYMENT PLAN STATUS:
+- Total Paid: $[totalPaid]
+- Remaining Balance: $[remainingBalance]
+- Next Payment: [nextPaymentDate]
+
+WHAT YOU CAN DO:
+• View payment plan details: [dashboardUrl]
+• Pay remaining balance early (no penalty)
+• View your registration status
+
+Thank you for your payment!
+
+The Hockey Association Team
+```
+
+#### Payment Plan Payment Failed Template (`LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `registrationName` - Name of registration
+- `seasonName` - Season name and dates
+- `categoryName` - Registration category
+- `failedAmount` - Amount that failed to charge (formatted as "25.00")
+- `installmentNumber` - Which installment failed (2, 3, or 4)
+- `attemptCount` - Current attempt number (e.g., 1, 2, 3)
+- `maxAttempts` - Maximum retry attempts (always 3)
+- `nextRetryDate` - When we'll retry (formatted as localized date string, or "No more retries")
+- `failureReason` - Reason for failure (e.g., "Insufficient funds", "Card declined")
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+We were unable to process your payment plan installment.
+
+PAYMENT ATTEMPT DETAILS:
+- Registration: [registrationName] ([seasonName])
+- Category: [categoryName]
+- Payment [installmentNumber] of 4
+- Amount: $[failedAmount]
+- Attempt: [attemptCount] of [maxAttempts]
+- Reason: [failureReason]
+
+WHAT HAPPENS NEXT:
+• We'll automatically retry: [nextRetryDate]
+• Your registration remains active regardless of payment status
+• You can update your payment method or pay manually
+
+WHAT YOU CAN DO:
+• Update payment method: [dashboardUrl]
+• Pay remaining balance now to avoid retry attempts
+• Contact us if you need payment arrangement assistance
+
+Questions? Reply to this email anytime.
+
+The Hockey Association Team
+```
+
+#### Payment Plan Completed Template (`LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `userName` - Customer's full name
+- `registrationName` - Name of registration
+- `seasonName` - Season name and dates
+- `categoryName` - Registration category
+- `totalAmount` - Total amount paid (formatted as "100.00")
+- `completionDate` - Date plan was completed (formatted as localized date string)
+- `dashboardUrl` - Link to user dashboard
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+Congratulations! Your payment plan has been completed successfully.
+
+PAYMENT PLAN SUMMARY:
+- Registration: [registrationName] ([seasonName])
+- Category: [categoryName]
+- Total Amount Paid: $[totalAmount]
+- Completion Date: [completionDate]
+
+YOUR REGISTRATION:
+• Fully paid and confirmed
+• No further payments due
+• View registration: [dashboardUrl]
+
+Thank you for completing your payment plan!
 
 The Hockey Association Team
 ```
@@ -1116,6 +1288,10 @@ LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
+LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
+LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID=your_payment_plan_payment_processed_template_id
+LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID=your_payment_plan_payment_failed_template_id
+LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system

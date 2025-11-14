@@ -79,23 +79,34 @@ export function toNYDateString(date?: Date | string): string {
  */
 export function convertToNYTimezone(dateTimeLocal: string): string {
   if (!dateTimeLocal) return ''
-  
+
   // Parse the datetime-local value (e.g., "2025-09-28T17:30")
   const [datePart, timePart] = dateTimeLocal.split('T')
   const [year, month, day] = datePart.split('-')
   const [hour, minute] = timePart.split(':')
-  
+
   // Create two date objects - one interpreted as local time, one as NY time
   const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute))
-  
+
   // Get what this same date/time would be in NY timezone
   const nyDate = new Date(localDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  
+
   // Calculate the difference between local and NY interpretations
   const offset = localDate.getTime() - nyDate.getTime()
-  
+
   // Apply the offset to treat the input as NY time
   const correctedDate = new Date(localDate.getTime() + offset)
-  
+
   return correctedDate.toISOString()
+}
+
+/**
+ * Extract date portion (YYYY-MM-DD) from a Date object or ISO string
+ * More explicit and safer than string splitting
+ * @param date - Date object or ISO string
+ * @returns Date string in YYYY-MM-DD format
+ */
+export function toDateString(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date
+  return dateObj.toISOString().substring(0, 10)
 }

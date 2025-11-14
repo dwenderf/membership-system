@@ -4,6 +4,8 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
+import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -52,7 +54,7 @@ export class AlternatePaymentService {
       // Get registration details for pricing
       const { data: registration, error: registrationError } = await supabase
         .from('registrations')
-        .select('name, alternate_price, alternate_accounting_code')
+        .select('name, alternate_price, alternate_accounting_code, season_id')
         .eq('id', registrationId)
         .single()
 
@@ -64,9 +66,11 @@ export class AlternatePaymentService {
         throw new Error('Registration does not have alternate pricing configured')
       }
 
-      // Calculate charge amount
+      // Calculate charge amount (use admin client to query target user's discount usage)
       const { finalAmount, discountAmount, discountCode } = await this.calculateChargeAmount(
+        adminSupabase,
         registrationId,
+        registration.season_id,
         discountCodeId,
         userId
       )
@@ -263,15 +267,16 @@ export class AlternatePaymentService {
 
   /**
    * Calculate the final charge amount after applying discounts
+   * Enforces both per-code usage limits and seasonal discount caps
    */
   static async calculateChargeAmount(
+    supabase: SupabaseClient,
     registrationId: string,
+    seasonId: string,
     discountCodeId?: string,
     userId?: string
   ): Promise<{ finalAmount: number; discountAmount: number; discountCode?: any }> {
     try {
-      const supabase = await createClient()
-
       // Get registration pricing
       const { data: registration, error: registrationError } = await supabase
         .from('registrations')
@@ -301,10 +306,10 @@ export class AlternatePaymentService {
         if (!discountError && discount) {
           discountCode = discount
 
-          // Calculate discount amount (all discounts are percentage-based)
-          discountAmount = Math.round((basePrice * discount.percentage) / 100)
+          // Calculate initial discount amount (all discounts are percentage-based)
+          let requestedDiscountAmount = Math.round((basePrice * discount.percentage) / 100)
 
-          // Check usage limits
+          // Check per-code usage limits
           if (discount.usage_limit && discount.usage_limit > 0) {
             const { data: usageCount } = await supabase
               .from('discount_usage')
@@ -315,15 +320,41 @@ export class AlternatePaymentService {
             const currentUsage = usageCount?.length || 0
 
             if (currentUsage >= discount.usage_limit) {
-              // User has exceeded limit - no discount
-              discountAmount = 0
-            } else {
-              // Calculate remaining discount amount if partially used
-              const remainingUses = discount.usage_limit - currentUsage
-              if (remainingUses <= 0) {
-                discountAmount = 0
-              }
+              // User has exceeded per-code limit - no discount
+              requestedDiscountAmount = 0
             }
+          }
+
+          // Enforce seasonal discount cap (only if discount is still applicable)
+          if (requestedDiscountAmount > 0) {
+            const limitResult = await checkSeasonalDiscountLimit(
+              supabase,
+              userId,
+              discountCodeId,
+              seasonId,
+              requestedDiscountAmount
+            )
+
+            discountAmount = limitResult.finalAmount
+
+            // Log if partial discount was applied
+            if (limitResult.isPartialDiscount) {
+              logger.logPaymentProcessing(
+                'alternate-partial-discount-applied',
+                'Applied partial discount due to seasonal limit',
+                {
+                  userId,
+                  registrationId,
+                  discountCodeId,
+                  requestedAmount: requestedDiscountAmount,
+                  appliedAmount: discountAmount,
+                  seasonalUsage: limitResult.seasonalUsage
+                },
+                'info'
+              )
+            }
+          } else {
+            discountAmount = requestedDiscountAmount
           }
         }
       }

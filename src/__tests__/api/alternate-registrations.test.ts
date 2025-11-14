@@ -74,7 +74,7 @@ describe('/api/alternate-registrations', () => {
         }))
       })
 
-      const request = new NextRequest('http://localhost/api/alternate-registrations?registration_id=reg-123')
+      const request = new NextRequest('http://localhost/api/alternate-registrations?registrationId=reg-123')
       const response = await GET(request)
       const data = await response.json()
 
@@ -140,13 +140,23 @@ describe('/api/alternate-registrations', () => {
         }))
       })
 
-      const request = new NextRequest('http://localhost/api/alternate-registrations?registration_id=reg-123')
+      // Mock user_alternate_registrations count lookup
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => Promise.resolve({
+            data: [],
+            error: null
+          }))
+        }))
+      })
+
+      const request = new NextRequest('http://localhost/api/alternate-registrations?registrationId=reg-123')
       const response = await GET(request)
       const data = await response.json()
 
       expect(response.status).toBe(200)
       expect(data.games).toHaveLength(1)
-      expect(data.games[0].gameDescription).toBe('Test Game')
+      expect(data.games[0].game_description).toBe('Test Game')
       expect(data.registration.name).toBe('Test Registration')
     })
   })
@@ -285,7 +295,7 @@ describe('/api/alternate-registrations', () => {
 
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(data.game.gameDescription).toBe('Test Game')
+      expect(data.game.game_description).toBe('Test Game')
       expect(data.message).toBe('Game created successfully')
     })
 

@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js')
-require(dotenv').config({ path:.env.local' })
+require('dotenv').config({ path: '.env.local' })
 
 async function debugXeroPayments() {
   const supabase = createClient(
@@ -7,10 +7,10 @@ async function debugXeroPayments() {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  console.log(🔍 Debugging Xero Payment Records...\n')
+  console.log('🔍 Debugging Xero Payment Records...\n')
 
   // Check pending invoices
-  console.log('📄 Pending Invoices:)
+  console.log('📄 Pending Invoices:')
   const { data: pendingInvoices, error: invoiceError } = await supabase
     .from('xero_invoices')
     .select(`
@@ -37,7 +37,8 @@ async function debugXeroPayments() {
         )
       )
     `)
-    .in('sync_status, [pending', 'staged])    .order('staged_at', { ascending: true })
+    .in('sync_status', ['pending', 'staged'])
+    .order('staged_at', { ascending: true })
 
   if (invoiceError) {
     console.error('❌ Error fetching pending invoices:', invoiceError)
@@ -55,7 +56,7 @@ async function debugXeroPayments() {
   }
 
   // Check pending payments
-  console.log('💰 Pending Payments:)
+  console.log('💰 Pending Payments:')
   const { data: pendingPayments, error: paymentError } = await supabase
     .from('xero_payments')
     .select(`
@@ -81,7 +82,8 @@ async function debugXeroPayments() {
         )
       )
     `)
-    .in('sync_status, [pending', 'staged])    .order('staged_at', { ascending: true })
+    .in('sync_status', ['pending', 'staged'])
+    .order('staged_at', { ascending: true })
 
   if (paymentError) {
     console.error('❌ Error fetching pending payments:', paymentError)
@@ -91,7 +93,7 @@ async function debugXeroPayments() {
       const invoice = Array.isArray(payment.xero_invoices) ? payment.xero_invoices[0] : payment.xero_invoices
       const userPayment = invoice?.payments ? (Array.isArray(invoice.payments) ? invoice.payments[0] : invoice.payments) : null
       console.log(`  - Payment ${payment.id}: $${payment.amount_paid/100} (${payment.sync_status})`)
-      console.log(`    Invoice: ${invoice ? invoice.invoice_number || 'No number'}`)
+      console.log(`    Invoice: ${invoice ? invoice.invoice_number || 'No number' : 'No invoice'}`)
       console.log(`    User: ${userPayment?.users ? `${userPayment.users.first_name} ${userPayment.users.last_name}` : 'Unknown'}`)
       console.log(`    Method: ${payment.payment_method}, Amount: $${payment.amount_paid/100}`)
       if (payment.sync_error) console.log(`    Error: ${payment.sync_error}`)
@@ -100,7 +102,7 @@ async function debugXeroPayments() {
   }
 
   // Check completed payments that might need syncing
-  console.log('✅ Completed Payments (potential candidates for syncing):)
+  console.log('✅ Completed Payments (potential candidates for syncing):')
   const { data: completedPayments, error: completedError } = await supabase
     .from('payments')
     .select(`
@@ -135,7 +137,7 @@ async function debugXeroPayments() {
   }
 
   // Check Xero connection status
-  console.log('🔗 Xero Connection Status:)
+  console.log('🔗 Xero Connection Status:')
   const { data: connections, error: connectionError } = await supabase
     .from('xero_oauth_tokens')
     .select('*')
@@ -156,6 +158,6 @@ async function debugXeroPayments() {
     })
   }
 
-  console.log(🔍 Debug complete!)
+  console.log('🔍 Debug complete!')
 }
 debugXeroPayments().catch(console.error) 

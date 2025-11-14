@@ -2,6 +2,11 @@
 
 A comprehensive membership and registration system for adult hockey associations, built with Next.js, Supabase, and Stripe.
 
+## Git Merge Strategies
+
+- ✅ Feature branches → development: Squash merge
+- ✅ Development → main: Regular merge
+
 ## Features
 
 - **User Management**: Passwordless authentication with magic links and Google OAuth

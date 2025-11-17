@@ -1,13 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { randomInt } from 'crypto'
-
-/**
- * Generate a cryptographically secure 6-digit verification code
- */
-function generateVerificationCode(): string {
-  return randomInt(0, 1000000).toString().padStart(6, '0')
-}
 
 /**
  * Validate email format
@@ -71,37 +63,6 @@ async function logEvent(
     metadata,
     ip_address: ip,
     user_agent: userAgent
-  })
-}
-
-/**
- * Send verification email to new address
- */
-async function sendVerificationEmail(
-  email: string,
-  firstName: string,
-  verificationCode: string
-): Promise<void> {
-  const { emailService } = await import('@/lib/email/service')
-
-  const templateId = process.env.LOOPS_EMAIL_CHANGE_VERIFICATION_TEMPLATE_ID
-
-  if (!templateId) {
-    console.warn('LOOPS_EMAIL_CHANGE_VERIFICATION_TEMPLATE_ID not configured')
-    return
-  }
-
-  await emailService.sendEmail({
-    userId: '', // Not applicable for new email
-    email,
-    eventType: 'email_change_verification' as any,
-    subject: 'Verify your new email address',
-    templateId,
-    data: {
-      firstName,
-      verificationCode,
-      organizationName: process.env.ORGANIZATION_NAME || 'Membership System'
-    }
   })
 }
 
@@ -212,23 +173,22 @@ export async function POST(request: NextRequest) {
         request
       )
 
-      // Return generic message for anti-enumeration
-      return NextResponse.json({
-        success: true,
-        message: 'If the email address is available, a verification code has been sent to it.'
-      })
+      return NextResponse.json(
+        { error: 'Too many email change requests. Please try again later.' },
+        { status: 429 }
+      )
     }
 
-    // Check if new email already exists (but don't reveal to user)
+    // Check if new email already exists (but don't reveal to user in response)
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('email', newEmail.toLowerCase())
       .single()
 
-    // If email exists, return success but don't actually send anything
+    // If email exists, log but still proceed with Supabase call
+    // Supabase will handle this gracefully
     if (existingUser) {
-      // Log this for monitoring
       await logEvent(
         supabase,
         user.id,
@@ -238,52 +198,33 @@ export async function POST(request: NextRequest) {
         { email_already_exists: true },
         request
       )
-
-      return NextResponse.json({
-        success: true,
-        message: 'If the email address is available, a verification code has been sent to it.'
-      })
     }
 
-    // Cancel any existing pending requests
-    await supabase
-      .from('email_change_requests')
-      .update({ status: 'cancelled' })
-      .eq('user_id', user.id)
-      .in('status', ['pending', 'verified'])
+    // Use Supabase's built-in email change functionality
+    const { error: updateError } = await supabase.auth.updateUser(
+      { email: newEmail },
+      {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/user/account/email-changed`
+      }
+    )
 
-    // Generate verification code
-    const verificationCode = generateVerificationCode()
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    if (updateError) {
+      console.error('Error requesting email change:', updateError)
 
-    // Store request in database
-    const { error: insertError } = await supabase
-      .from('email_change_requests')
-      .insert({
-        user_id: user.id,
-        old_email: user.email,
-        new_email: newEmail,
-        verification_code: verificationCode,
-        status: 'pending',
-        expires_at: expiresAt.toISOString(),
-        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
-        user_agent: request.headers.get('user-agent')
-      })
-
-    if (insertError) {
-      console.error('Error creating email change request:', insertError)
-      return NextResponse.json(
-        { error: 'Failed to create email change request' },
-        { status: 500 }
+      await logEvent(
+        supabase,
+        user.id,
+        user.email,
+        newEmail,
+        'request_failed',
+        { error: updateError.message },
+        request
       )
-    }
 
-    // Send verification email to new address
-    try {
-      await sendVerificationEmail(newEmail, user.first_name, verificationCode)
-    } catch (emailError) {
-      console.error('Error sending verification email:', emailError)
-      // Don't fail the request, just log
+      return NextResponse.json(
+        { error: updateError.message },
+        { status: 400 }
+      )
     }
 
     // Send security alert to old address
@@ -311,14 +252,13 @@ export async function POST(request: NextRequest) {
       user.email,
       newEmail,
       'verification_sent',
-      {},
+      { method: 'supabase_builtin' },
       request
     )
 
-    // Return generic success message (anti-enumeration)
     return NextResponse.json({
       success: true,
-      message: 'If the email address is available, a verification code has been sent to it.'
+      message: 'Verification email sent. Please check your new email address and click the confirmation link.'
     })
 
   } catch (error) {

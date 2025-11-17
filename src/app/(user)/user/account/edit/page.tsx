@@ -267,7 +267,7 @@ export default function EditProfilePage() {
               </button>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              You can update your email address. We'll send a verification code to confirm the change.
+              You can update your email address. We'll send a confirmation link to your new email to verify the change.
             </p>
           </div>
 

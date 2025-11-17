@@ -16,9 +16,8 @@ export default function EmailChangeModal({
   currentEmail,
   onSuccess
 }: EmailChangeModalProps) {
-  const [step, setStep] = useState<'request' | 'verify'>('request')
+  const [step, setStep] = useState<'request' | 'sent'>('request')
   const [newEmail, setNewEmail] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
@@ -61,11 +60,11 @@ export default function EmailChangeModal({
       const data = await response.json()
 
       if (response.ok) {
-        setStep('verify')
-        showSuccess('Verification code sent!', 'Check your email for the verification code.')
+        setStep('sent')
+        showSuccess('Verification email sent!', 'Check your new email address for the confirmation link.')
       } else {
-        setError(data.error || 'Failed to send verification code')
-        showError('Failed to send verification code', data.error)
+        setError(data.error || 'Failed to send verification email')
+        showError('Failed to send verification email', data.error)
       }
     } catch (error) {
       console.error('Error requesting email change:', error)
@@ -76,84 +75,11 @@ export default function EmailChangeModal({
     }
   }
 
-  const handleConfirmChange = async () => {
-    setError(null)
-
-    if (!verificationCode) {
-      setError('Please enter the verification code')
-      return
-    }
-
-    if (verificationCode.length !== 6) {
-      setError('Verification code must be 6 digits')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/user/email/confirm-change', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ verificationCode })
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        showSuccess('Email updated successfully!', 'Your email address has been changed.')
-        onSuccess()
-        handleClose()
-      } else {
-        setError(data.error || 'Invalid verification code')
-        showError('Verification failed', data.error)
-      }
-    } catch (error) {
-      console.error('Error confirming email change:', error)
-      setError('An unexpected error occurred')
-      showError('Error', 'An unexpected error occurred')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleResend = async () => {
-    setError(null)
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/user/email/request-change', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newEmail })
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        showSuccess('Code resent!', 'Check your email for the new verification code.')
-      } else {
-        showError('Failed to resend code', data.error)
-      }
-    } catch (error) {
-      console.error('Error resending code:', error)
-      showError('Error', 'Failed to resend verification code')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleClose = () => {
     setStep('request')
     setNewEmail('')
-    setVerificationCode('')
     setError(null)
     onClose()
-  }
-
-  const handleCodeInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6)
-    setVerificationCode(value)
   }
 
   return (
@@ -167,7 +93,7 @@ export default function EmailChangeModal({
               </svg>
             </div>
             <h3 className="ml-3 text-lg font-medium text-gray-900">
-              {step === 'request' ? 'Change Email Address' : 'Verify New Email'}
+              {step === 'request' ? 'Change Email Address' : 'Check Your Email'}
             </h3>
           </div>
           <button
@@ -237,59 +163,44 @@ export default function EmailChangeModal({
           </div>
         ) : (
           <div className="mb-6">
-            <p className="text-sm text-gray-700 mb-4">
-              Enter the 6-digit verification code sent to <strong>{newEmail}</strong>
-            </p>
-
-            <div className="mb-4">
-              <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700 mb-2">
-                Verification Code
-              </label>
-              <input
-                type="text"
-                id="verificationCode"
-                value={verificationCode}
-                onChange={handleCodeInput}
-                placeholder="000000"
-                maxLength={6}
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-center text-2xl tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                Code expires in 15 minutes
-              </p>
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-800">Verification email sent!</h3>
+                  <div className="mt-2 text-sm text-green-700">
+                    <p>We've sent a confirmation link to:</p>
+                    <p className="font-semibold mt-1">{newEmail}</p>
+                    <p className="mt-3">Click the link in the email to confirm your new email address. The link will redirect you back here once confirmed.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            )}
-
-            <button
-              onClick={handleConfirmChange}
-              disabled={isLoading || verificationCode.length !== 6}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed mb-3"
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
-                  Verifying...
-                </span>
-              ) : (
-                'Confirm Email Change'
-              )}
-            </button>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    We've also sent a security notification to your current email address ({currentEmail}) to let you know about this change request.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <button
-              onClick={handleResend}
-              disabled={isLoading}
-              className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium disabled:text-blue-400"
+              onClick={handleClose}
+              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Didn't receive code? Resend
+              Close
             </button>
           </div>
         )}

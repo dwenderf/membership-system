@@ -6,14 +6,12 @@ CREATE TABLE email_change_logs (
   new_email TEXT,
   event_type TEXT NOT NULL CHECK (event_type IN (
     'request_created',
+    'request_failed',
     'verification_sent',
-    'verification_failed',
-    'verification_succeeded',
     'email_updated',
+    'email_update_failed',
     'xero_sync_succeeded',
     'xero_sync_failed',
-    'request_expired',
-    'request_cancelled',
     'rate_limit_hit'
   )),
   metadata JSONB,

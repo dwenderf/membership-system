@@ -651,6 +651,68 @@ export async function syncContactOnNameChange(
   }
 }
 
+/**
+ * Sync email change to Xero contact
+ * Non-blocking: logs errors but doesn't throw
+ */
+export async function syncEmailChangeToXero(
+  userId: string,
+  oldEmail: string,
+  newEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`📧 Email change detected for user ${userId}: "${oldEmail}" → "${newEmail}"`)
+
+    const supabase = createAdminClient()
+
+    // Get full user data
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, email, first_name, last_name, phone, member_id')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !userData) {
+      return { success: false, error: 'User not found' }
+    }
+
+    // Get active Xero tenant
+    const { getActiveTenant } = await import('./client')
+    const activeTenant = await getActiveTenant()
+
+    if (!activeTenant) {
+      return { success: false, error: 'No active Xero tenant' }
+    }
+
+    console.log(`🔄 Forcing Xero contact sync due to email change`)
+
+    // Force sync to update the contact email in Xero
+    const syncResult = await syncUserToXeroContact(userId, activeTenant.tenantId, userData)
+
+    if (syncResult.success) {
+      console.log(`✅ Xero contact email updated successfully`)
+      return { success: true }
+    } else {
+      console.error(`❌ Xero contact email update failed: ${syncResult.error}`)
+      return { success: false, error: syncResult.error }
+    }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Error syncing email change to Xero:', errorMessage)
+
+    // Log error to Sentry but don't throw
+    if (typeof window === 'undefined') {
+      Sentry.captureException(error, {
+        tags: { context: 'xero_email_sync' },
+        extra: { userId, oldEmail, newEmail }
+      })
+    }
+
+    return { success: false, error: errorMessage }
+  }
+}
+
 // Debug function to find duplicate contacts by email
 export async function findDuplicateContactsByEmail(
   tenantId: string,

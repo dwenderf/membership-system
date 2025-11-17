@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import ReauthenticationModal from '@/components/ReauthenticationModal'
+import EmailChangeModal from '@/components/EmailChangeModal'
 
 export default function EditProfilePage() {
   const [user, setUser] = useState<any>(null)
@@ -21,7 +23,9 @@ export default function EditProfilePage() {
     email: '', // Track email for future contact sync needs
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  
+  const [showReauthModal, setShowReauthModal] = useState(false)
+  const [showEmailChangeModal, setShowEmailChangeModal] = useState(false)
+
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -179,6 +183,43 @@ export default function EditProfilePage() {
     router.push('/user/account')
   }
 
+  const handleChangeEmailClick = async () => {
+    // Check session freshness
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session) {
+      showError('Please log in to change your email')
+      return
+    }
+
+    // Check if session is fresh (< 5 minutes)
+    const sessionAge = Date.now() - new Date(session.created_at).getTime()
+    const FIVE_MINUTES = 5 * 60 * 1000
+
+    if (sessionAge > FIVE_MINUTES) {
+      // Require re-authentication
+      setShowReauthModal(true)
+    } else {
+      // Session is fresh, proceed to email change
+      setShowEmailChangeModal(true)
+    }
+  }
+
+  const handleReauthSuccess = () => {
+    setShowReauthModal(false)
+    setShowEmailChangeModal(true)
+  }
+
+  const handleEmailChangeSuccess = async () => {
+    // Refresh user data
+    const { data: { user: updatedUser } } = await supabase.auth.getUser()
+    if (updatedUser) {
+      setUser(updatedUser)
+    }
+    // Refresh the page to ensure all UI reflects new email
+    window.location.reload()
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -208,16 +249,25 @@ export default function EditProfilePage() {
         </div>
         
         <div className="px-6 py-4 space-y-6">
-          {/* Email Display (Read-only) */}
+          {/* Email Display with Change Button */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
             </label>
-            <div className="mt-1 p-3 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
-              {user?.email}
+            <div className="flex items-center justify-between">
+              <div className="flex-1 p-3 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
+                {user?.email}
+              </div>
+              <button
+                type="button"
+                onClick={handleChangeEmailClick}
+                className="ml-3 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Change Email
+              </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Email address cannot be changed. Contact support if you need to update your email.
+            <p className="mt-2 text-xs text-gray-500">
+              You can update your email address. We'll send a verification code to confirm the change.
             </p>
           </div>
 
@@ -365,6 +415,20 @@ export default function EditProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* Email Change Modals */}
+      <ReauthenticationModal
+        isOpen={showReauthModal}
+        onClose={() => setShowReauthModal(false)}
+        onSuccess={handleReauthSuccess}
+        userEmail={user?.email || ''}
+      />
+      <EmailChangeModal
+        isOpen={showEmailChangeModal}
+        onClose={() => setShowEmailChangeModal(false)}
+        currentEmail={user?.email || ''}
+        onSuccess={handleEmailChangeSuccess}
+      />
     </div>
   )
 } 

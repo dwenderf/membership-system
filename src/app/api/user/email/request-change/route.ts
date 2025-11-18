@@ -31,16 +31,6 @@ async function checkRateLimit(supabase: any, userId: string): Promise<boolean> {
 }
 
 /**
- * Check if session is fresh (< 5 minutes old)
- */
-function isSessionFresh(session: any): boolean {
-  if (!session?.created_at) return false
-  const sessionAge = Date.now() - new Date(session.created_at).getTime()
-  const FIVE_MINUTES = 5 * 60 * 1000
-  return sessionAge < FIVE_MINUTES
-}
-
-/**
  * Log email change event
  */
 async function logEvent(
@@ -110,16 +100,6 @@ export async function POST(request: NextRequest) {
     if (authError || !authUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    // Check session freshness
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session || !isSessionFresh(session)) {
-      return NextResponse.json(
-        { error: 'Please re-authenticate to continue' },
         { status: 401 }
       )
     }

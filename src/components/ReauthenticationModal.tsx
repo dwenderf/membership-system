@@ -90,7 +90,7 @@ export default function ReauthenticationModal({
 
         <div className="mb-6">
           <p className="text-sm text-gray-700 mb-4">
-            For your security, please verify your identity before changing your email address.
+            For security reasons, you must verify your identity before changing your email address.
           </p>
 
           {!linkSent ? (

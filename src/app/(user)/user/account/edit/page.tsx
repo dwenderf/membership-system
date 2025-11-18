@@ -184,25 +184,8 @@ export default function EditProfilePage() {
   }
 
   const handleChangeEmailClick = async () => {
-    // Check session freshness
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-      showError('Please log in to change your email')
-      return
-    }
-
-    // Check if session is fresh (< 5 minutes)
-    const sessionAge = Date.now() - new Date(session.created_at).getTime()
-    const FIVE_MINUTES = 5 * 60 * 1000
-
-    if (sessionAge > FIVE_MINUTES) {
-      // Require re-authentication
-      setShowReauthModal(true)
-    } else {
-      // Session is fresh, proceed to email change
-      setShowEmailChangeModal(true)
-    }
+    // Always require re-authentication for email changes (security best practice)
+    setShowReauthModal(true)
   }
 
   const handleReauthSuccess = () => {

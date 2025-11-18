@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION get_auth_audit_logs(
 RETURNS TABLE (
   id UUID,
   created_at TIMESTAMP WITH TIME ZONE,
-  ip_address VARCHAR(64),
+  ip_address TEXT,
   user_id UUID,
   email TEXT,
   action TEXT,
@@ -31,7 +31,7 @@ BEGIN
   SELECT
     aal.id,
     aal.created_at,
-    aal.ip_address,
+    aal.ip_address::TEXT,
     (aal.payload->>'user_id')::UUID as user_id,
     aal.payload->>'email' as email,
     aal.payload->>'action' as action,

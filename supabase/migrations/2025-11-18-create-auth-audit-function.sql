@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION get_auth_audit_logs(
 RETURNS TABLE (
   id UUID,
   created_at TIMESTAMP WITH TIME ZONE,
-  ip_address TEXT,
+  ip_address VARCHAR(64),
   user_id UUID,
   email TEXT,
   action TEXT,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type TabType = 'auth' | 'email'
@@ -33,7 +33,7 @@ interface EmailLog {
   }
 }
 
-export default function AdminSecurityPage() {
+function SecurityContent() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabType>(
     (searchParams.get('tab') as TabType) || 'auth'
@@ -304,5 +304,20 @@ export default function AdminSecurityPage() {
         </>
       )}
     </div>
+  )
+}
+
+export default function AdminSecurityPage() {
+  return (
+    <Suspense fallback={
+      <div className="px-4 py-6 sm:px-0">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Security & Audit Logs</h1>
+          <p className="mt-2 text-sm text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SecurityContent />
+    </Suspense>
   )
 }

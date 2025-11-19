@@ -10,6 +10,8 @@ RETURNS TABLE (
   ip_address TEXT,
   user_id UUID,
   email TEXT,
+  first_name TEXT,
+  last_name TEXT,
   action TEXT,
   payload JSON
 )
@@ -33,10 +35,13 @@ BEGIN
     aal.created_at,
     aal.ip_address::TEXT,
     (aal.payload->>'user_id')::UUID as user_id,
-    aal.payload->>'email' as email,
+    COALESCE(u.email, aal.payload->>'email') as email,
+    u.first_name,
+    u.last_name,
     aal.payload->>'action' as action,
     aal.payload
   FROM auth.audit_log_entries aal
+  LEFT JOIN users u ON u.id = (aal.payload->>'user_id')::UUID
   WHERE
     CASE
       WHEN target_user_id IS NOT NULL

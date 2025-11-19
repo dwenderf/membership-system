@@ -11,6 +11,8 @@ interface AuthLog {
   ip_address: string | null
   user_id: string
   email: string
+  first_name: string | null
+  last_name: string | null
   action: string
   payload: any
 }
@@ -101,7 +103,20 @@ function SecurityContent() {
   }
 
   return (
-    <div className="px-4 py-6 sm:px-0">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
+      {/* Breadcrumb */}
+      <nav className="mb-4">
+        <ol className="flex items-center space-x-2 text-sm">
+          <li>
+            <a href="/admin" className="text-blue-600 hover:text-blue-800">
+              Admin Dashboard
+            </a>
+          </li>
+          <li className="text-gray-400">/</li>
+          <li className="text-gray-600">Security Logs</li>
+        </ol>
+      </nav>
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Security & Audit Logs</h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -188,7 +203,7 @@ function SecurityContent() {
                             Timestamp
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Email
+                            User
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Action
@@ -204,8 +219,16 @@ function SecurityContent() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {formatDate(log.created_at)}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {log.email || 'N/A'}
+                            <td className="px-6 py-4 text-sm text-gray-900">
+                              {log.first_name && log.last_name ? (
+                                <>
+                                  {log.first_name} {log.last_name}
+                                  <br />
+                                  <span className="text-xs text-gray-500">{log.email || 'N/A'}</span>
+                                </>
+                              ) : (
+                                log.email || 'N/A'
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {log.action || 'N/A'}
@@ -310,7 +333,7 @@ function SecurityContent() {
 export default function AdminSecurityPage() {
   return (
     <Suspense fallback={
-      <div className="px-4 py-6 sm:px-0">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Security & Audit Logs</h1>
           <p className="mt-2 text-sm text-gray-600">Loading...</p>

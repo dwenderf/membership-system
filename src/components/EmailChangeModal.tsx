@@ -16,9 +16,11 @@ export default function EmailChangeModal({
   currentEmail,
   onSuccess
 }: EmailChangeModalProps) {
-  const [step, setStep] = useState<'request' | 'sent'>('request')
+  const [step, setStep] = useState<'request' | 'verify' | 'success'>('request')
   const [newEmail, setNewEmail] = useState('')
+  const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
 
@@ -29,7 +31,7 @@ export default function EmailChangeModal({
     return emailRegex.test(email)
   }
 
-  const handleRequestChange = async () => {
+  const handleSendCode = async () => {
     setError(null)
 
     // Validate email
@@ -51,7 +53,7 @@ export default function EmailChangeModal({
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/user/email/request-change', {
+      const response = await fetch('/api/user/email/send-verification-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newEmail })
@@ -60,14 +62,14 @@ export default function EmailChangeModal({
       const data = await response.json()
 
       if (response.ok) {
-        setStep('sent')
-        showSuccess('Verification email sent!', 'Check your new email address for the confirmation link.')
+        setStep('verify')
+        showSuccess('Verification code sent!', 'Check your new email address for the 6-digit code.')
       } else {
-        setError(data.error || 'Failed to send verification email')
-        showError('Failed to send verification email', data.error)
+        setError(data.error || 'Failed to send verification code')
+        showError('Failed to send verification code', data.error)
       }
     } catch (error) {
-      console.error('Error requesting email change:', error)
+      console.error('Error sending verification code:', error)
       setError('An unexpected error occurred')
       showError('Error', 'An unexpected error occurred')
     } finally {
@@ -75,11 +77,58 @@ export default function EmailChangeModal({
     }
   }
 
+  const handleVerifyCode = async () => {
+    if (!code || code.length !== 6) {
+      setError('Please enter the 6-digit code from your email')
+      return
+    }
+
+    setIsVerifying(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/user/email/verify-and-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newEmail, code })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setStep('success')
+        showSuccess('Email updated successfully!')
+        setTimeout(() => {
+          onSuccess()
+          handleClose()
+        }, 2000)
+      } else {
+        setError(data.error || 'Invalid verification code')
+        showError('Verification failed', data.error)
+      }
+    } catch (error) {
+      console.error('Error verifying code:', error)
+      setError('An unexpected error occurred')
+      showError('Error', 'An unexpected error occurred')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
   const handleClose = () => {
     setStep('request')
     setNewEmail('')
+    setCode('')
     setError(null)
     onClose()
+  }
+
+  const getTitle = () => {
+    switch (step) {
+      case 'request': return 'Change Email Address'
+      case 'verify': return 'Verify New Email'
+      case 'success': return 'Email Updated!'
+    }
   }
 
   return (
@@ -93,12 +142,12 @@ export default function EmailChangeModal({
               </svg>
             </div>
             <h3 className="ml-3 text-lg font-medium text-gray-900">
-              {step === 'request' ? 'Change Email Address' : 'Check Your Email'}
+              {getTitle()}
             </h3>
           </div>
           <button
             onClick={handleClose}
-            disabled={isLoading}
+            disabled={isLoading || isVerifying}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,7 +156,7 @@ export default function EmailChangeModal({
           </button>
         </div>
 
-        {step === 'request' ? (
+        {step === 'request' && (
           <div className="mb-6">
             <p className="text-sm text-gray-700 mb-4">
               Enter your new email address. We'll send a verification code to confirm the change.
@@ -143,8 +192,12 @@ export default function EmailChangeModal({
               </div>
             )}
 
+            <p className="text-xs text-gray-500 mb-4">
+              Note: You'll need to enter a 6-digit code sent to your new email address. Do not click any links in the email.
+            </p>
+
             <button
-              onClick={handleRequestChange}
+              onClick={handleSendCode}
               disabled={isLoading || !newEmail}
               className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
             >
@@ -161,7 +214,65 @@ export default function EmailChangeModal({
               )}
             </button>
           </div>
-        ) : (
+        )}
+
+        {step === 'verify' && (
+          <div className="mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+              <p className="text-sm text-blue-800">
+                We've sent a 6-digit code to <strong>{newEmail}</strong>. Enter it below to confirm your new email address.
+              </p>
+            </div>
+
+            <label htmlFor="verification-code" className="block text-sm font-medium text-gray-700 mb-2">
+              Verification Code
+            </label>
+            <input
+              id="verification-code"
+              type="text"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-center text-2xl tracking-widest mb-4"
+              disabled={isVerifying}
+            />
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleVerifyCode}
+              disabled={isVerifying || code.length !== 6}
+              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed mb-2"
+            >
+              {isVerifying ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Verifying...
+                </span>
+              ) : (
+                'Verify and Update Email'
+              )}
+            </button>
+
+            <button
+              onClick={handleSendCode}
+              disabled={isLoading}
+              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+            >
+              Resend Code
+            </button>
+          </div>
+        )}
+
+        {step === 'success' && (
           <div className="mb-6">
             <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
               <div className="flex">
@@ -171,37 +282,16 @@ export default function EmailChangeModal({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-green-800">Verification email sent!</h3>
+                  <h3 className="text-sm font-medium text-green-800">Email successfully updated!</h3>
                   <div className="mt-2 text-sm text-green-700">
-                    <p>We've sent a confirmation link to:</p>
+                    <p>Your email has been changed from:</p>
+                    <p className="font-medium mt-1">{currentEmail}</p>
+                    <p className="mt-1">to:</p>
                     <p className="font-semibold mt-1">{newEmail}</p>
-                    <p className="mt-3">Click the link in the email to confirm your new email address. The link will redirect you back here once confirmed.</p>
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
-                    We've also sent a security notification to your current email address ({currentEmail}) to let you know about this change request.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleClose}
-              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Close
-            </button>
           </div>
         )}
       </div>

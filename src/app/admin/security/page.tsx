@@ -53,7 +53,7 @@ function SecurityContent() {
 
   // Client-side search filter and record limit
   const [searchFilter, setSearchFilter] = useState('')
-  const [selectedLimit, setSelectedLimit] = useState('500')
+  const [selectedLimit, setSelectedLimit] = useState('250')
   const [offset] = useState(0)
 
   useEffect(() => {

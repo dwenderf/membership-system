@@ -17,13 +17,15 @@ export default function ReauthenticationModal({
   onSuccess,
   userEmail
 }: ReauthenticationModalProps) {
-  const [linkSent, setLinkSent] = useState(false)
+  const [codeSent, setCodeSent] = useState(false)
+  const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
   const { showSuccess, showError } = useToast()
 
   if (!isOpen) return null
 
-  const handleSendMagicLink = async () => {
+  const handleSendCode = async () => {
     setIsLoading(true)
 
     try {
@@ -31,38 +33,52 @@ export default function ReauthenticationModal({
       const { error } = await supabase.auth.signInWithOtp({
         email: userEmail,
         options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/user/account?reauthenticated=true`
+          shouldCreateUser: false
         }
       })
 
       if (error) {
-        showError('Failed to send verification link', error.message)
+        showError('Failed to send verification code', error.message)
       } else {
-        setLinkSent(true)
-        showSuccess('Verification link sent!', 'Check your email and click the link to continue.')
+        setCodeSent(true)
+        showSuccess('Verification code sent!', 'Check your email for the 6-digit code.')
       }
     } catch (error) {
-      console.error('Error sending magic link:', error)
-      showError('Failed to send verification link', 'Please try again.')
+      console.error('Error sending code:', error)
+      showError('Failed to send verification code', 'Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Check if user has reauthenticated
-  const checkReauthentication = () => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('reauthenticated') === 'true') {
-      // Remove the parameter from URL
-      window.history.replaceState({}, '', window.location.pathname)
-      onSuccess()
+  const handleVerifyCode = async () => {
+    if (!code || code.length !== 6) {
+      showError('Invalid code', 'Please enter the 6-digit code from your email.')
+      return
     }
-  }
 
-  // Check on mount and when window regains focus
-  if (typeof window !== 'undefined' && linkSent) {
-    window.addEventListener('focus', checkReauthentication)
+    setIsVerifying(true)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.verifyOtp({
+        email: userEmail,
+        token: code,
+        type: 'email'
+      })
+
+      if (error) {
+        showError('Invalid code', error.message)
+      } else {
+        showSuccess('Identity verified!')
+        onSuccess()
+      }
+    } catch (error) {
+      console.error('Error verifying code:', error)
+      showError('Failed to verify code', 'Please try again.')
+    } finally {
+      setIsVerifying(false)
+    }
   }
 
   return (
@@ -93,16 +109,19 @@ export default function ReauthenticationModal({
             For security reasons, you must verify your identity before changing your email address.
           </p>
 
-          {!linkSent ? (
+          {!codeSent ? (
             <>
               <p className="text-sm text-gray-600 mb-4">
-                We'll send a verification link to:
+                We'll send a 6-digit verification code to:
               </p>
               <div className="bg-gray-50 p-3 rounded-md mb-4">
                 <p className="text-sm font-medium text-gray-900">{userEmail}</p>
               </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Note: Do not click any links in the email. Simply enter the 6-digit code here.
+              </p>
               <button
-                onClick={handleSendMagicLink}
+                onClick={handleSendCode}
                 disabled={isLoading}
                 className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
               >
@@ -115,32 +134,56 @@ export default function ReauthenticationModal({
                     Sending...
                   </span>
                 ) : (
-                  `Send Verification Link`
+                  `Send Verification Code`
                 )}
               </button>
             </>
           ) : (
             <>
-              <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">Verification link sent!</h3>
-                    <p className="mt-2 text-sm text-green-700">
-                      Check your email and click the link. Once verified, you'll be able to continue with changing your email address.
-                    </p>
-                  </div>
-                </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                <p className="text-sm text-blue-800">
+                  We've sent a 6-digit code to <strong>{userEmail}</strong>. Enter it below to verify your identity.
+                </p>
               </div>
+
+              <label htmlFor="verification-code" className="block text-sm font-medium text-gray-700 mb-2">
+                Verification Code
+              </label>
+              <input
+                id="verification-code"
+                type="text"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-center text-2xl tracking-widest mb-4"
+                disabled={isVerifying}
+              />
+
               <button
-                onClick={onClose}
-                className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                onClick={handleVerifyCode}
+                disabled={isVerifying || code.length !== 6}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed mb-2"
               >
-                Close
+                {isVerifying ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying...
+                  </span>
+                ) : (
+                  'Verify Code'
+                )}
+              </button>
+
+              <button
+                onClick={handleSendCode}
+                disabled={isLoading}
+                className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+              >
+                Resend Code
               </button>
             </>
           )}

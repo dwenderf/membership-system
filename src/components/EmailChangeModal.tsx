@@ -226,44 +226,36 @@ export default function EmailChangeModal({
 
         {!isCheckingAuth && step === 'check_oauth' && hasGoogleOAuth && !hasEmailAuth && (
           <div className="mb-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">Email Authentication Required</h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p>You're currently signed in with Google only. To change your email, you need to establish email authentication first.</p>
-                    <p className="mt-3"><strong>What will happen:</strong></p>
-                    <ul className="list-disc list-inside mt-2 space-y-1">
-                      <li>We'll send a 6-digit code to <strong>{currentEmail}</strong></li>
-                      <li>You'll be logged out and redirected to the verification page</li>
-                      <li>Enter the code to log back in (this establishes email authentication)</li>
-                      <li>After logging in, return here to change your email</li>
+                  <h3 className="text-sm font-medium text-red-800">Email Changes Not Available</h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>You're currently signed in with Google only. Due to technical limitations with how authentication identities work, email changes are not available for Google-only accounts.</p>
+                    <p className="mt-3"><strong>Your options:</strong></p>
+                    <ul className="list-disc list-inside mt-2 space-y-1 ml-2">
+                      <li>Create a new account with your desired email address</li>
+                      <li>Contact support for assistance with account migration</li>
                     </ul>
+                    <p className="mt-3 text-xs">
+                      <strong>Why this limitation exists:</strong> Google OAuth and email authentication are separate identity systems. Your account was created through Google and doesn't have an email identity required for secure email changes.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex space-x-3">
-              <button
-                onClick={handleClose}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEstablishEmailAuth}
-                disabled={isLoading}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Sending...' : 'Send Code & Log Out'}
-              </button>
-            </div>
+            <button
+              onClick={handleClose}
+              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Close
+            </button>
           </div>
         )}
 

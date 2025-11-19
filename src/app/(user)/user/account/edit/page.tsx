@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import EmailChangeModal from '@/components/EmailChangeModal'
 
 export default function EditProfilePage() {
   const [user, setUser] = useState<any>(null)
@@ -21,7 +22,8 @@ export default function EditProfilePage() {
     email: '', // Track email for future contact sync needs
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  
+  const [showEmailChangeModal, setShowEmailChangeModal] = useState(false)
+
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -179,6 +181,43 @@ export default function EditProfilePage() {
     router.push('/user/account')
   }
 
+  const handleChangeEmailClick = async () => {
+    // Open email change modal (it will handle OAuth/email auth checks)
+    setShowEmailChangeModal(true)
+  }
+
+  const handleEmailChangeSuccess = async () => {
+    // Refresh user data from auth
+    const { data: { user: updatedUser } } = await supabase.auth.getUser()
+    if (updatedUser) {
+      setUser(updatedUser)
+    }
+
+    // Get updated profile data
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', updatedUser?.id)
+      .single()
+
+    if (userProfile) {
+      setFormData({
+        firstName: userProfile.first_name || '',
+        lastName: userProfile.last_name || '',
+        isGoalie: userProfile.is_goalie,
+        isLgbtq: userProfile.is_lgbtq,
+      })
+      setOriginalFormData({
+        firstName: userProfile.first_name || '',
+        lastName: userProfile.last_name || '',
+        email: userProfile.email || '',
+      })
+    }
+
+    // Refresh server components without full page reload
+    router.refresh()
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -208,16 +247,25 @@ export default function EditProfilePage() {
         </div>
         
         <div className="px-6 py-4 space-y-6">
-          {/* Email Display (Read-only) */}
+          {/* Email Display with Change Button */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
             </label>
-            <div className="mt-1 p-3 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
-              {user?.email}
+            <div className="flex items-center justify-between">
+              <div className="flex-1 p-3 bg-gray-50 border border-gray-300 rounded-md text-gray-900">
+                {user?.email}
+              </div>
+              <button
+                type="button"
+                onClick={handleChangeEmailClick}
+                className="ml-3 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Change Email
+              </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Email address cannot be changed. Contact support if you need to update your email.
+            <p className="mt-2 text-xs text-gray-500">
+              You can update your email address. We'll send a confirmation link to your new email to verify the change.
             </p>
           </div>
 
@@ -365,6 +413,14 @@ export default function EditProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* Email Change Modal */}
+      <EmailChangeModal
+        isOpen={showEmailChangeModal}
+        onClose={() => setShowEmailChangeModal(false)}
+        currentEmail={user?.email || ''}
+        onSuccess={handleEmailChangeSuccess}
+      />
     </div>
   )
 } 

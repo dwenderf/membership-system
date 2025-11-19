@@ -21,6 +21,8 @@ export default function EmailChangedPage() {
     if (hasRun.current) return
     hasRun.current = true
 
+    let redirectTimeout: NodeJS.Timeout | null = null
+
     const handleEmailChange = async () => {
       try {
         const supabase = createClient()
@@ -76,7 +78,7 @@ export default function EmailChangedPage() {
             showSuccess('Email updated successfully!', 'Your email address has been changed.')
 
             // Redirect to account edit page after 3 seconds
-            setTimeout(() => {
+            redirectTimeout = setTimeout(() => {
               router.push('/user/account/edit')
             }, 3000)
           } else {
@@ -99,6 +101,13 @@ export default function EmailChangedPage() {
     }
 
     handleEmailChange()
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout)
+      }
+    }
   }, [])
 
   // Error state

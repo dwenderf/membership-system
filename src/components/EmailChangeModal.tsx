@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 
 interface EmailChangeModalProps {

@@ -5,6 +5,12 @@ import { useSearchParams } from 'next/navigation'
 
 type TabType = 'auth' | 'email'
 
+const dateRanges = [
+  { label: '7 Days', value: '7d' },
+  { label: '30 Days', value: '30d' },
+  { label: '90 Days', value: '90d' }
+]
+
 interface AuthLog {
   id: string
   created_at: string
@@ -45,8 +51,9 @@ function SecurityContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Client-side search filter
+  // Client-side search filter and date range
   const [searchFilter, setSearchFilter] = useState('')
+  const [selectedRange, setSelectedRange] = useState('30d')
   const [limit] = useState(50)
   const [offset] = useState(0)
 
@@ -100,8 +107,21 @@ function SecurityContent() {
     return new Date(dateString).toLocaleString()
   }
 
+  // Helper function to check if a log is within the selected date range
+  const isWithinDateRange = (dateString: string) => {
+    const logDate = new Date(dateString)
+    const now = new Date()
+    const daysAgo = parseInt(selectedRange)
+    const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+    return logDate >= cutoffDate
+  }
+
   // Client-side filtering
   const filteredAuthLogs = authLogs.filter((log) => {
+    // Date range filter
+    if (!isWithinDateRange(log.created_at)) return false
+
+    // Search filter
     if (!searchFilter) return true
     const search = searchFilter.toLowerCase()
     return (
@@ -113,6 +133,10 @@ function SecurityContent() {
   })
 
   const filteredEmailLogs = emailLogs.filter((log) => {
+    // Date range filter
+    if (!isWithinDateRange(log.created_at)) return false
+
+    // Search filter
     if (!searchFilter) return true
     const search = searchFilter.toLowerCase()
     return (
@@ -127,11 +151,25 @@ function SecurityContent() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Security & Audit Logs</h1>
-        <p className="text-sm text-gray-600 mb-4">
-          Monitor authentication attempts and email change activity
-        </p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Security & Audit Logs</h1>
+      </div>
+
+      {/* Date Range Buttons */}
+      <div className="flex space-x-1 mb-6">
+        {dateRanges.map((range) => (
+          <button
+            key={range.value}
+            onClick={() => setSelectedRange(range.value)}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              selectedRange === range.value
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {range.label}
+          </button>
+        ))}
       </div>
 
       {/* Tabs */}

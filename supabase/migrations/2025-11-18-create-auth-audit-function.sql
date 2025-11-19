@@ -34,18 +34,18 @@ BEGIN
     aal.id,
     aal.created_at,
     aal.ip_address::TEXT,
-    (aal.payload->>'user_id')::UUID as user_id,
-    COALESCE(u.email, aal.payload->>'email') as email,
+    (aal.payload->>'actor_id')::UUID as user_id,
+    COALESCE(u.email, aal.payload->>'actor_username') as email,
     u.first_name,
     u.last_name,
     aal.payload->>'action' as action,
     aal.payload
   FROM auth.audit_log_entries aal
-  LEFT JOIN users u ON u.id = (aal.payload->>'user_id')::UUID
+  LEFT JOIN users u ON u.id = (aal.payload->>'actor_id')::UUID
   WHERE
     CASE
       WHEN target_user_id IS NOT NULL
-      THEN (aal.payload->>'user_id')::UUID = target_user_id
+      THEN (aal.payload->>'actor_id')::UUID = target_user_id
       ELSE true
     END
   ORDER BY aal.created_at DESC

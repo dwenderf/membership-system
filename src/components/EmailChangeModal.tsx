@@ -17,23 +17,20 @@ export default function EmailChangeModal({
   currentEmail,
   onSuccess
 }: EmailChangeModalProps) {
-  const [step, setStep] = useState<'check_oauth' | 'request' | 'confirmation'>('check_oauth')
+  const [step, setStep] = useState<'request' | 'confirmation'>('request')
   const [newEmail, setNewEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [hasGoogleOAuth, setHasGoogleOAuth] = useState(false)
-  const [hasEmailAuth, setHasEmailAuth] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
 
   useEffect(() => {
     if (isOpen) {
-      checkAuthMethods()
+      checkForGoogleOAuth()
     }
   }, [isOpen])
 
-  const checkAuthMethods = async () => {
-    setIsCheckingAuth(true)
+  const checkForGoogleOAuth = async () => {
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -41,67 +38,11 @@ export default function EmailChangeModal({
       if (user) {
         const { data: identitiesData } = await supabase.auth.getUserIdentities()
         const identities = identitiesData?.identities || []
-
         const googleIdentity = identities.find(id => id.provider === 'google')
-        const emailIdentity = identities.find(id => id.provider === 'email')
-
         setHasGoogleOAuth(!!googleIdentity)
-        setHasEmailAuth(!!emailIdentity)
-
-        // If they have OAuth but no email auth, they need to establish email auth first
-        // Otherwise, go directly to request (we'll handle OAuth unlinking automatically)
-        if (googleIdentity && !emailIdentity) {
-          setStep('check_oauth')
-        } else {
-          setStep('request')
-        }
       }
     } catch (error) {
       console.error('Error checking auth methods:', error)
-      showError('Error', 'Failed to check authentication methods')
-    } finally {
-      setIsCheckingAuth(false)
-    }
-  }
-
-  const handleEstablishEmailAuth = async () => {
-    setIsLoading(true)
-    try {
-      const supabase = createClient()
-
-      // Send OTP code (not magic link)
-      const { error } = await supabase.auth.signInWithOtp({
-        email: currentEmail,
-        options: {
-          shouldCreateUser: false
-        }
-      })
-
-      if (error) {
-        showError('Failed to send verification code', error.message)
-        setIsLoading(false)
-        return
-      }
-
-      // Store email and preference in sessionStorage for verify-otp page
-      sessionStorage.setItem('otp_email', currentEmail)
-      sessionStorage.setItem('auth_method_preference', 'otp')
-
-      // Log the user out
-      await supabase.auth.signOut()
-
-      // Show success message
-      showSuccess(
-        'Check your email!',
-        'We\'ve logged you out. Enter the 6-digit code on the next page.'
-      )
-
-      // Redirect to verify-otp page
-      window.location.href = '/auth/verify-otp'
-    } catch (error) {
-      console.error('Error sending verification code:', error)
-      showError('Error', 'Failed to send verification code')
-      setIsLoading(false)
     }
   }
 
@@ -134,25 +75,6 @@ export default function EmailChangeModal({
     setIsLoading(true)
 
     try {
-      // If user has Google OAuth, unlink it first to prevent email mismatch
-      if (hasGoogleOAuth) {
-        const supabase = createClient()
-        const { data: identitiesData } = await supabase.auth.getUserIdentities()
-        const identities = identitiesData?.identities || []
-        const googleIdentity = identities.find(id => id.provider === 'google')
-
-        if (googleIdentity) {
-          const { error: unlinkError } = await supabase.auth.unlinkIdentity(googleIdentity)
-          if (unlinkError) {
-            setError('Failed to unlink Google account')
-            showError('Failed to unlink Google', unlinkError.message)
-            setIsLoading(false)
-            return
-          }
-          setHasGoogleOAuth(false)
-        }
-      }
-
       const response = await fetch('/api/user/email/request-change', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,15 +100,15 @@ export default function EmailChangeModal({
   }
 
   const handleClose = () => {
-    setStep('check_oauth')
+    setStep('request')
     setNewEmail('')
     setError(null)
+    setHasGoogleOAuth(false)
     onClose()
   }
 
   const getTitle = () => {
     switch (step) {
-      case 'check_oauth': return 'Email Change Setup'
       case 'request': return 'Change Email Address'
       case 'confirmation': return 'Check Your Email'
     }
@@ -208,7 +130,7 @@ export default function EmailChangeModal({
           </div>
           <button
             onClick={handleClose}
-            disabled={isLoading || isCheckingAuth}
+            disabled={isLoading}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,49 +138,6 @@ export default function EmailChangeModal({
             </svg>
           </button>
         </div>
-
-        {isCheckingAuth && step === 'check_oauth' && (
-          <div className="mb-6 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="ml-3 text-sm text-gray-600">Checking authentication methods...</p>
-          </div>
-        )}
-
-        {!isCheckingAuth && step === 'check_oauth' && hasGoogleOAuth && !hasEmailAuth && (
-          <div className="mb-6">
-            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Email Changes Not Available</h3>
-                  <div className="mt-2 text-sm text-red-700">
-                    <p>You're currently signed in with Google only. Due to technical limitations with how authentication identities work, email changes are not available for Google-only accounts.</p>
-                    <p className="mt-3"><strong>Your options:</strong></p>
-                    <ul className="list-disc list-inside mt-2 space-y-1 ml-2">
-                      <li>Create a new account with your desired email address</li>
-                      <li>Contact support for assistance with account migration</li>
-                    </ul>
-                    <p className="mt-3 text-xs">
-                      <strong>Why this limitation exists:</strong> Google OAuth and email authentication are separate identity systems. Your account was created through Google and doesn't have an email identity required for secure email changes.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleClose}
-              className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              Close
-            </button>
-          </div>
-        )}
-
 
         {step === 'request' && (
           <div className="mb-6">
@@ -273,8 +152,8 @@ export default function EmailChangeModal({
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-yellow-800">Google Account Will Be Unlinked</h3>
                     <div className="mt-2 text-sm text-yellow-700">
-                      <p>To prevent security issues and confusion, your Google account will be automatically unlinked when you change your email.</p>
-                      <p className="mt-2">After changing your email, you'll only be able to sign in with your new email address (not Google). You can re-link Google later if desired.</p>
+                      <p>You're currently signed in with Google. After you verify your email change, your Google account will be automatically unlinked for security reasons.</p>
+                      <p className="mt-2">You'll only be able to sign in with your new email address. You can re-link Google to your new email later if desired.</p>
                     </div>
                   </div>
                 </div>

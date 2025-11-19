@@ -33,6 +33,23 @@ export default function EmailChangedPage() {
           return
         }
 
+        // Check for OAuth/email mismatch and unlink if necessary
+        const { data: identitiesData } = await supabase.auth.getUserIdentities()
+        const identities = identitiesData?.identities || []
+        const googleIdentity = identities.find(id => id.provider === 'google')
+
+        if (googleIdentity) {
+          // Google OAuth email won't match the new email, so unlink it for security
+          console.log('Google OAuth detected after email change, unlinking for security...')
+          const { error: unlinkError } = await supabase.auth.unlinkIdentity(googleIdentity)
+          if (unlinkError) {
+            console.error('Failed to unlink Google OAuth:', unlinkError)
+            // Don't fail the entire process, just log it
+          } else {
+            console.log('Google OAuth unlinked successfully')
+          }
+        }
+
         // Get user data from users table to get old email
         const { data: userData, error: userError } = await supabase
           .from('users')

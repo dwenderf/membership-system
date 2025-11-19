@@ -45,8 +45,8 @@ function SecurityContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Filters
-  const [userIdFilter, setUserIdFilter] = useState(searchParams.get('user') || '')
+  // Client-side search filter
+  const [searchFilter, setSearchFilter] = useState('')
   const [limit] = useState(50)
   const [offset] = useState(0)
 
@@ -61,7 +61,6 @@ function SecurityContent() {
             limit: limit.toString(),
             offset: offset.toString(),
           })
-          if (userIdFilter) params.append('user_id', userIdFilter)
 
           const response = await fetch(`/api/admin/security/auth-logs?${params}`)
           const data = await response.json()
@@ -76,7 +75,6 @@ function SecurityContent() {
             limit: limit.toString(),
             offset: offset.toString(),
           })
-          if (userIdFilter) params.append('user_id', userIdFilter)
 
           const response = await fetch(`/api/admin/security/email-logs?${params}`)
           const data = await response.json()
@@ -96,11 +94,36 @@ function SecurityContent() {
     }
 
     fetchLogs()
-  }, [activeTab, userIdFilter, limit, offset])
+  }, [activeTab, limit, offset])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
+
+  // Client-side filtering
+  const filteredAuthLogs = authLogs.filter((log) => {
+    if (!searchFilter) return true
+    const search = searchFilter.toLowerCase()
+    return (
+      log.email?.toLowerCase().includes(search) ||
+      log.first_name?.toLowerCase().includes(search) ||
+      log.last_name?.toLowerCase().includes(search) ||
+      `${log.first_name} ${log.last_name}`.toLowerCase().includes(search)
+    )
+  })
+
+  const filteredEmailLogs = emailLogs.filter((log) => {
+    if (!searchFilter) return true
+    const search = searchFilter.toLowerCase()
+    return (
+      log.users.email?.toLowerCase().includes(search) ||
+      log.users.first_name?.toLowerCase().includes(search) ||
+      log.users.last_name?.toLowerCase().includes(search) ||
+      `${log.users.first_name} ${log.users.last_name}`.toLowerCase().includes(search) ||
+      log.old_email?.toLowerCase().includes(search) ||
+      log.new_email?.toLowerCase().includes(search)
+    )
+  })
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -150,20 +173,28 @@ function SecurityContent() {
         </nav>
       </div>
 
-      {/* Filters */}
+      {/* Search */}
       <div className="mb-6 flex gap-4">
         <div>
-          <label htmlFor="userFilter" className="block text-sm font-medium text-gray-700 mb-1">
-            Filter by User ID
+          <label htmlFor="searchFilter" className="block text-sm font-medium text-gray-700 mb-1">
+            Search by Name or Email
           </label>
           <input
             type="text"
-            id="userFilter"
-            value={userIdFilter}
-            onChange={(e) => setUserIdFilter(e.target.value)}
-            placeholder="Enter user ID..."
-            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            id="searchFilter"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Search users..."
+            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-64"
           />
+          {searchFilter && (
+            <p className="mt-1 text-xs text-gray-500">
+              {activeTab === 'auth'
+                ? `Showing ${filteredAuthLogs.length} of ${authLogs.length} logs`
+                : `Showing ${filteredEmailLogs.length} of ${emailLogs.length} logs`
+              }
+            </p>
+          )}
         </div>
       </div>
 
@@ -190,9 +221,9 @@ function SecurityContent() {
                 </p>
               </div>
               <div className="border-t border-gray-200">
-                {authLogs.length === 0 ? (
+                {filteredAuthLogs.length === 0 ? (
                   <div className="px-4 py-8 text-center text-gray-500">
-                    No authentication logs found
+                    {searchFilter ? 'No logs match your search' : 'No authentication logs found'}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -214,7 +245,7 @@ function SecurityContent() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {authLogs.map((log) => (
+                        {filteredAuthLogs.map((log) => (
                           <tr key={log.id}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {formatDate(log.created_at)}
@@ -255,9 +286,9 @@ function SecurityContent() {
                 </p>
               </div>
               <div className="border-t border-gray-200">
-                {emailLogs.length === 0 ? (
+                {filteredEmailLogs.length === 0 ? (
                   <div className="px-4 py-8 text-center text-gray-500">
-                    No email change logs found
+                    {searchFilter ? 'No logs match your search' : 'No email change logs found'}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -282,7 +313,7 @@ function SecurityContent() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {emailLogs.map((log) => (
+                        {filteredEmailLogs.map((log) => (
                           <tr key={log.id}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {formatDate(log.created_at)}

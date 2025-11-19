@@ -68,6 +68,8 @@ export default function EmailChangeModal({
     setIsLoading(true)
     try {
       const supabase = createClient()
+
+      // Send magic link first
       const { error } = await supabase.auth.signInWithOtp({
         email: currentEmail,
         options: { shouldCreateUser: false }
@@ -75,17 +77,24 @@ export default function EmailChangeModal({
 
       if (error) {
         showError('Failed to send verification', error.message)
-      } else {
-        showSuccess(
-          'Check your email!',
-          'Click the link in your email, then return to this page to continue changing your email.'
-        )
-        onClose()
+        setIsLoading(false)
+        return
       }
+
+      // Log the user out
+      await supabase.auth.signOut()
+
+      // Show success message and redirect to login
+      showSuccess(
+        'Check your email!',
+        'We\'ve logged you out. Click the link in your email to log back in and establish email authentication.'
+      )
+
+      // Redirect to login page
+      window.location.href = '/auth/login'
     } catch (error) {
       console.error('Error sending magic link:', error)
       showError('Error', 'Failed to send verification email')
-    } finally {
       setIsLoading(false)
     }
   }
@@ -222,19 +231,33 @@ export default function EmailChangeModal({
                   <h3 className="text-sm font-medium text-yellow-800">Email Authentication Required</h3>
                   <div className="mt-2 text-sm text-yellow-700">
                     <p>You're currently signed in with Google only. To change your email, you need to establish email authentication first.</p>
-                    <p className="mt-2">We'll send a verification link to <strong>{currentEmail}</strong>. After clicking it, return here to proceed.</p>
+                    <p className="mt-3"><strong>What will happen:</strong></p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>We'll send a magic link to <strong>{currentEmail}</strong></li>
+                      <li>You'll be logged out immediately</li>
+                      <li>Click the link in your email to log back in</li>
+                      <li>After logging in, return here to change your email</li>
+                    </ul>
                   </div>
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={handleEstablishEmailAuth}
-              disabled={isLoading}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Sending...' : 'Send Verification Email'}
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleClose}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEstablishEmailAuth}
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Sending...' : 'Send Link & Log Out'}
+              </button>
+            </div>
           </div>
         )}
 

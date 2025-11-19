@@ -5,10 +5,10 @@ import { useSearchParams } from 'next/navigation'
 
 type TabType = 'auth' | 'email'
 
-const dateRanges = [
-  { label: '7 Days', value: '7d' },
-  { label: '30 Days', value: '30d' },
-  { label: '90 Days', value: '90d' }
+const recordLimits = [
+  { label: 'Last 250', value: '250' },
+  { label: 'Last 500', value: '500' },
+  { label: 'Last 1000', value: '1000' }
 ]
 
 interface AuthLog {
@@ -51,20 +51,10 @@ function SecurityContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Client-side search filter and date range
+  // Client-side search filter and record limit
   const [searchFilter, setSearchFilter] = useState('')
-  const [selectedRange, setSelectedRange] = useState('30d')
+  const [selectedLimit, setSelectedLimit] = useState('500')
   const [offset] = useState(0)
-
-  // Dynamic limit based on date range
-  const getLimit = () => {
-    switch (selectedRange) {
-      case '7d': return 200
-      case '30d': return 500
-      case '90d': return 1000
-      default: return 500
-    }
-  }
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -72,18 +62,12 @@ function SecurityContent() {
       setError(null)
 
       try {
-        // Calculate date range based on selected range
-        const now = new Date()
-        const daysAgo = parseInt(selectedRange)
-        const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
-        const limit = getLimit()
+        const limit = parseInt(selectedLimit)
 
         if (activeTab === 'auth') {
           const params = new URLSearchParams({
             limit: limit.toString(),
-            offset: offset.toString(),
-            start_date: startDate.toISOString(),
-            end_date: now.toISOString()
+            offset: offset.toString()
           })
 
           const response = await fetch(`/api/admin/security/auth-logs?${params}`)
@@ -97,9 +81,7 @@ function SecurityContent() {
         } else {
           const params = new URLSearchParams({
             limit: limit.toString(),
-            offset: offset.toString(),
-            start_date: startDate.toISOString(),
-            end_date: now.toISOString()
+            offset: offset.toString()
           })
 
           const response = await fetch(`/api/admin/security/email-logs?${params}`)
@@ -120,13 +102,13 @@ function SecurityContent() {
     }
 
     fetchLogs()
-  }, [activeTab, selectedRange, offset])
+  }, [activeTab, selectedLimit, offset])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
 
-  // Client-side search filtering only (date filtering is done server-side)
+  // Client-side search filtering only (record limiting is done server-side)
   const filteredAuthLogs = authLogs.filter((log) => {
     if (!searchFilter) return true
     const search = searchFilter.toLowerCase()
@@ -157,19 +139,19 @@ function SecurityContent() {
         <h1 className="text-2xl font-bold text-gray-900">Security & Audit Logs</h1>
       </div>
 
-      {/* Date Range Buttons */}
+      {/* Record Limit Buttons */}
       <div className="flex space-x-1 mb-6">
-        {dateRanges.map((range) => (
+        {recordLimits.map((limit) => (
           <button
-            key={range.value}
-            onClick={() => setSelectedRange(range.value)}
+            key={limit.value}
+            onClick={() => setSelectedLimit(limit.value)}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              selectedRange === range.value
+              selectedLimit === limit.value
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {range.label}
+            {limit.label}
           </button>
         ))}
       </div>

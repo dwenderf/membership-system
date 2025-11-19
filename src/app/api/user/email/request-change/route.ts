@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         user.id,
         user.email,
         newEmail,
-        'request_created',
+        'request_duplicate_email',
         { email_already_exists: true },
         request
       )

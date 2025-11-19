@@ -58,29 +58,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get total count for pagination (if no user filter)
-    let totalCount = null
-    if (!userId) {
-      const { count, error: countError } = await adminSupabase.rpc(
-        'get_auth_audit_logs',
-        {
-          target_user_id: null,
-          limit_count: 1000000, // Large number to get count
-          offset_count: 0
-        }
-      )
-
-      if (!countError && count) {
-        totalCount = count
-      }
-    }
-
     return NextResponse.json({
       logs: logs || [],
       pagination: {
         limit,
-        offset,
-        total: totalCount
+        offset
       }
     })
 

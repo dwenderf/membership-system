@@ -18,10 +18,10 @@ BEGIN
   RETURN QUERY
   SELECT
     au.id,
-    au.email AS account_email,
+    au.email::TEXT AS account_email,
     (au.raw_user_meta_data->>'email')::TEXT AS oauth_email,
-    u.first_name,
-    u.last_name,
+    u.first_name::TEXT,
+    u.last_name::TEXT,
     au.last_sign_in_at,
     ARRAY(
       SELECT jsonb_array_elements_text(au.raw_app_meta_data->'providers')

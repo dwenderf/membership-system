@@ -187,13 +187,35 @@ export default function EditProfilePage() {
   }
 
   const handleEmailChangeSuccess = async () => {
-    // Refresh user data
+    // Refresh user data from auth
     const { data: { user: updatedUser } } = await supabase.auth.getUser()
     if (updatedUser) {
       setUser(updatedUser)
     }
-    // Refresh the page to ensure all UI reflects new email
-    window.location.reload()
+
+    // Get updated profile data
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', updatedUser?.id)
+      .single()
+
+    if (userProfile) {
+      setFormData({
+        firstName: userProfile.first_name || '',
+        lastName: userProfile.last_name || '',
+        isGoalie: userProfile.is_goalie,
+        isLgbtq: userProfile.is_lgbtq,
+      })
+      setOriginalFormData({
+        firstName: userProfile.first_name || '',
+        lastName: userProfile.last_name || '',
+        email: userProfile.email || '',
+      })
+    }
+
+    // Refresh server components without full page reload
+    router.refresh()
   }
 
   if (loading) {

@@ -126,23 +126,10 @@ function SecurityContent() {
   })
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
-      {/* Breadcrumb */}
-      <nav className="mb-4">
-        <ol className="flex items-center space-x-2 text-sm">
-          <li>
-            <a href="/admin" className="text-blue-600 hover:text-blue-800">
-              Admin Dashboard
-            </a>
-          </li>
-          <li className="text-gray-400">/</li>
-          <li className="text-gray-600">Security Logs</li>
-        </ol>
-      </nav>
-
+    <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Security & Audit Logs</h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Security & Audit Logs</h1>
+        <p className="text-sm text-gray-600 mb-4">
           Monitor authentication attempts and email change activity
         </p>
       </div>
@@ -357,6 +344,16 @@ function SecurityContent() {
           )}
         </>
       )}
+
+      {/* Return to Admin Link */}
+      <div className="mt-6">
+        <a
+          href="/admin"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          ← Back to Admin Dashboard
+        </a>
+      </div>
     </div>
   )
 }
@@ -364,9 +361,9 @@ function SecurityContent() {
 export default function AdminSecurityPage() {
   return (
     <Suspense fallback={
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <div>
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Security & Audit Logs</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Security & Audit Logs</h1>
           <p className="mt-2 text-sm text-gray-600">Loading...</p>
         </div>
       </div>

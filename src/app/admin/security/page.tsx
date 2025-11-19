@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-type TabType = 'auth' | 'email'
+type TabType = 'auth' | 'email' | 'oauth'
 
 const recordLimits = [
   { label: 'Last 250', value: '250' },
@@ -41,6 +41,16 @@ interface EmailLog {
   }
 }
 
+interface OAuthMismatch {
+  id: string
+  account_email: string
+  oauth_email: string
+  first_name: string | null
+  last_name: string | null
+  last_sign_in_at: string
+  providers: string[]
+}
+
 function SecurityContent() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabType>(
@@ -48,6 +58,8 @@ function SecurityContent() {
   )
   const [authLogs, setAuthLogs] = useState<AuthLog[]>([])
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([])
+  const [oauthMismatches, setOauthMismatches] = useState<OAuthMismatch[]>([])
+  const [oauthCount, setOauthCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,7 +90,7 @@ function SecurityContent() {
           } else {
             setError(data.error || 'Failed to fetch auth logs')
           }
-        } else {
+        } else if (activeTab === 'email') {
           const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString()
@@ -91,6 +103,16 @@ function SecurityContent() {
             setEmailLogs(data.logs || [])
           } else {
             setError(data.error || 'Failed to fetch email logs')
+          }
+        } else if (activeTab === 'oauth') {
+          const response = await fetch('/api/admin/security/oauth-mismatches')
+          const data = await response.json()
+
+          if (response.ok) {
+            setOauthMismatches(data.mismatches || [])
+            setOauthCount(data.count || 0)
+          } else {
+            setError(data.error || 'Failed to fetch OAuth mismatches')
           }
         }
       } catch (err) {
@@ -133,28 +155,42 @@ function SecurityContent() {
     )
   })
 
+  const filteredOauthMismatches = oauthMismatches.filter((mismatch) => {
+    if (!searchFilter) return true
+    const search = searchFilter.toLowerCase()
+    return (
+      mismatch.account_email?.toLowerCase().includes(search) ||
+      mismatch.oauth_email?.toLowerCase().includes(search) ||
+      mismatch.first_name?.toLowerCase().includes(search) ||
+      mismatch.last_name?.toLowerCase().includes(search) ||
+      `${mismatch.first_name} ${mismatch.last_name}`.toLowerCase().includes(search)
+    )
+  })
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Security & Audit Logs</h1>
       </div>
 
-      {/* Record Limit Buttons */}
-      <div className="flex space-x-1 mb-6">
-        {recordLimits.map((limit) => (
-          <button
-            key={limit.value}
-            onClick={() => setSelectedLimit(limit.value)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              selectedLimit === limit.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {limit.label}
-          </button>
-        ))}
-      </div>
+      {/* Record Limit Buttons - only show for auth and email tabs */}
+      {activeTab !== 'oauth' && (
+        <div className="flex space-x-1 mb-6">
+          {recordLimits.map((limit) => (
+            <button
+              key={limit.value}
+              onClick={() => setSelectedLimit(limit.value)}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                selectedLimit === limit.value
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {limit.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -179,6 +215,21 @@ function SecurityContent() {
           >
             Email Change Logs
           </button>
+          <button
+            onClick={() => setActiveTab('oauth')}
+            className={`${
+              activeTab === 'oauth'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm inline-flex items-center gap-2`}
+          >
+            Email/OAuth Mismatches
+            {oauthCount > 0 && (
+              <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full">
+                {oauthCount}
+              </span>
+            )}
+          </button>
         </nav>
       </div>
 
@@ -200,7 +251,9 @@ function SecurityContent() {
             <p className="mt-1 text-xs text-gray-500">
               {activeTab === 'auth'
                 ? `Showing ${filteredAuthLogs.length} of ${authLogs.length} logs`
-                : `Showing ${filteredEmailLogs.length} of ${emailLogs.length} logs`
+                : activeTab === 'email'
+                ? `Showing ${filteredEmailLogs.length} of ${emailLogs.length} logs`
+                : `Showing ${filteredOauthMismatches.length} of ${oauthCount} mismatches`
               }
             </p>
           )}
@@ -354,6 +407,73 @@ function SecurityContent() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {log.ip_address || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Email/OAuth Mismatches
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Users where account email differs from Google OAuth email
+                </p>
+              </div>
+              <div className="border-t border-gray-200">
+                {filteredOauthMismatches.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-gray-500">
+                    {searchFilter ? 'No mismatches match your search' : 'No email/OAuth mismatches found'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            User
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Account Email
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Google OAuth Email
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Last Sign In
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Providers
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredOauthMismatches.map((mismatch) => (
+                          <tr key={mismatch.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {mismatch.first_name && mismatch.last_name ? (
+                                `${mismatch.first_name} ${mismatch.last_name}`
+                              ) : (
+                                'N/A'
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {mismatch.account_email}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {mismatch.oauth_email}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {mismatch.last_sign_in_at ? formatDate(mismatch.last_sign_in_at) : 'Never'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {mismatch.providers.join(', ')}
                             </td>
                           </tr>
                         ))}

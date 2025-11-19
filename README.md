@@ -140,6 +140,7 @@ LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notificati
 LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID=your_payment_plan_payment_processed_template_id
 LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID=your_payment_plan_payment_failed_template_id
 LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
+LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -681,6 +682,46 @@ Thank you for completing your payment plan!
 
 The Hockey Association Team
 ```
+
+#### Email Change Confirmed Template (`LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID`)
+
+**Data Variables:**
+
+- `firstName` - User's first name ("Admin" for admin notification emails)
+- `oldEmail` - Previous email address
+- `newEmail` - New email address
+- `googleAuthWarning` - Warning message if Google OAuth email differs from new email (empty string if no mismatch)
+- `supportEmail` - Support contact email
+- `organizationName` - Organization name
+
+**Recipients:**
+- User's old email address (confirmation of change)
+- User's new email address (confirmation of change)
+- SUPPORT_EMAIL (admin notification)
+
+**Template Example:**
+
+```text
+Hi [firstName],
+
+Your email address has been successfully updated.
+
+EMAIL CHANGE SUMMARY:
+- Previous Email: [oldEmail]
+- New Email: [newEmail]
+
+[googleAuthWarning]
+
+If you did not make this change, please contact us immediately at [supportEmail].
+
+Thank you,
+[organizationName]
+```
+
+**Note on `googleAuthWarning` variable:**
+This variable will be empty if the user doesn't have Google OAuth linked, or if their Google email matches the new email. When present, it contains:
+
+> IMPORTANT: Your Google account (google@example.com) is still linked to this account but uses a different email address. If you no longer want to sign in with Google, you can unlink it in your Account Settings under "Account Security".
 
 ### 4. Template Management Guidelines
 

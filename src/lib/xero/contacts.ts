@@ -687,7 +687,7 @@ export async function syncEmailChangeToXero(
     console.log(`🔄 Forcing Xero contact sync due to email change`)
 
     // Force sync to update the contact email in Xero
-    const syncResult = await syncUserToXeroContact(userId, activeTenant.tenantId, userData)
+    const syncResult = await syncUserToXeroContact(userId, activeTenant.tenant_id, userData)
 
     if (syncResult.success) {
       console.log(`✅ Xero contact email updated successfully`)

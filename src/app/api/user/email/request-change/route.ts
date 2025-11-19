@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 /**
  * Validate email format
@@ -101,6 +102,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      )
+    }
+
+    // Check for re-authentication verification
+    const cookieStore = await cookies()
+    const reauthCookie = cookieStore.get('reauth_verified')
+
+    if (!reauthCookie || reauthCookie.value !== authUser.id) {
+      return NextResponse.json(
+        { error: 'Re-authentication required. Please verify your identity first.' },
+        { status: 403 }
       )
     }
 

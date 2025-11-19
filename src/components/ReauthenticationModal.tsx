@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 
 interface ReauthenticationModalProps {
@@ -29,19 +28,18 @@ export default function ReauthenticationModal({
     setIsLoading(true)
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithOtp({
-        email: userEmail,
-        options: {
-          shouldCreateUser: false
-        }
+      const response = await fetch('/api/user/reauth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
       })
 
-      if (error) {
-        showError('Failed to send verification code', error.message)
-      } else {
+      const data = await response.json()
+
+      if (response.ok) {
         setCodeSent(true)
         showSuccess('Verification code sent!', 'Check your email for the 6-digit code.')
+      } else {
+        showError('Failed to send verification code', data.error || 'Please try again.')
       }
     } catch (error) {
       console.error('Error sending code:', error)
@@ -60,18 +58,19 @@ export default function ReauthenticationModal({
     setIsVerifying(true)
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.verifyOtp({
-        email: userEmail,
-        token: code,
-        type: 'email'
+      const response = await fetch('/api/user/reauth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
       })
 
-      if (error) {
-        showError('Invalid code', error.message)
-      } else {
+      const data = await response.json()
+
+      if (response.ok) {
         showSuccess('Identity verified!')
         onSuccess()
+      } else {
+        showError('Invalid code', data.error || 'Please try again.')
       }
     } catch (error) {
       console.error('Error verifying code:', error)

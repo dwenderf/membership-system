@@ -49,6 +49,7 @@ export default function EmailChangeModal({
         setHasEmailAuth(!!emailIdentity)
 
         // If they have OAuth but no email auth, they need to establish email auth first
+        // Otherwise, go directly to request (we'll handle OAuth unlinking automatically)
         if (googleIdentity && !emailIdentity) {
           setStep('check_oauth')
         } else {
@@ -89,37 +90,6 @@ export default function EmailChangeModal({
     }
   }
 
-  const handleUnlinkOAuth = async () => {
-    setIsLoading(true)
-    try {
-      const supabase = createClient()
-      const { data: identitiesData } = await supabase.auth.getUserIdentities()
-      const identities = identitiesData?.identities || []
-      const googleIdentity = identities.find(id => id.provider === 'google')
-
-      if (!googleIdentity) {
-        setStep('request')
-        setIsLoading(false)
-        return
-      }
-
-      const { error } = await supabase.auth.unlinkIdentity(googleIdentity)
-
-      if (error) {
-        showError('Failed to unlink Google', error.message)
-      } else {
-        showSuccess('Google unlinked!', 'You can now change your email.')
-        setHasGoogleOAuth(false)
-        setStep('request')
-      }
-    } catch (error) {
-      console.error('Error unlinking OAuth:', error)
-      showError('Error', 'Failed to unlink Google account')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   if (!isOpen) return null
 
   const validateEmail = (email: string): boolean => {
@@ -149,6 +119,25 @@ export default function EmailChangeModal({
     setIsLoading(true)
 
     try {
+      // If user has Google OAuth, unlink it first to prevent email mismatch
+      if (hasGoogleOAuth) {
+        const supabase = createClient()
+        const { data: identitiesData } = await supabase.auth.getUserIdentities()
+        const identities = identitiesData?.identities || []
+        const googleIdentity = identities.find(id => id.provider === 'google')
+
+        if (googleIdentity) {
+          const { error: unlinkError } = await supabase.auth.unlinkIdentity(googleIdentity)
+          if (unlinkError) {
+            setError('Failed to unlink Google account')
+            showError('Failed to unlink Google', unlinkError.message)
+            setIsLoading(false)
+            return
+          }
+          setHasGoogleOAuth(false)
+        }
+      }
+
       const response = await fetch('/api/user/email/request-change', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -249,37 +238,28 @@ export default function EmailChangeModal({
           </div>
         )}
 
-        {!isCheckingAuth && step === 'check_oauth' && hasGoogleOAuth && hasEmailAuth && (
-          <div className="mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">Google OAuth Detected</h3>
-                  <div className="mt-2 text-sm text-blue-700">
-                    <p>You're signed in with both Google and email. To change your email address, we need to unlink your Google account first.</p>
-                    <p className="mt-2">You can re-link Google later if desired.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleUnlinkOAuth}
-              disabled={isLoading}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Unlinking...' : 'Unlink Google and Continue'}
-            </button>
-          </div>
-        )}
 
         {step === 'request' && (
           <div className="mb-6">
+            {hasGoogleOAuth && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">Google Account Will Be Unlinked</h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>To prevent security issues and confusion, your Google account will be automatically unlinked when you change your email.</p>
+                      <p className="mt-2">After changing your email, you'll only be able to sign in with your new email address (not Google). You can re-link Google later if desired.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <p className="text-sm text-gray-700 mb-4">
               Enter your new email address. We'll send confirmation links to both your current and new email addresses to verify the change.
             </p>

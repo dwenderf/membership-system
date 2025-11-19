@@ -1,12 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-
-    // Verify user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // First verify the user is authenticated and is an admin using their session
+    const userSupabase = await createClient()
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json(
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is admin
-    const { data: adminCheck, error: adminError } = await supabase
+    const { data: adminCheck, error: adminError } = await userSupabase
       .from('users')
       .select('is_admin')
       .eq('id', user.id)
@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
 
-    // Call the database function to get auth audit logs
-    const { data: logs, error: logsError } = await supabase.rpc(
+    // Now use service role client to call the admin function
+    const adminSupabase = createAdminClient()
+    const { data: logs, error: logsError } = await adminSupabase.rpc(
       'get_auth_audit_logs',
       {
         target_user_id: userId || null,

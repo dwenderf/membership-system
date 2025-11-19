@@ -22,15 +22,8 @@ SET search_path = public
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  -- Verify caller is admin
-  IF NOT EXISTS (
-    SELECT 1 FROM users
-    WHERE users.id = auth.uid()
-    AND users.is_admin = true
-  ) THEN
-    RAISE EXCEPTION 'Unauthorized: Admin access required';
-  END IF;
-
+  -- Admin access is verified in the API layer
+  -- This function should only be called via service_role
   RETURN QUERY
   SELECT
     aal.id,
@@ -66,8 +59,9 @@ BEGIN
 END;
 $$;
 
--- Grant execute to authenticated users (function checks admin internally)
-GRANT EXECUTE ON FUNCTION get_auth_audit_logs TO authenticated;
+-- Grant execute permission to service_role only (for admin API use)
+-- Regular authenticated users cannot call this function directly
+GRANT EXECUTE ON FUNCTION get_auth_audit_logs TO service_role;
 
 COMMENT ON FUNCTION get_auth_audit_logs IS
-  'Admin-only function to query Supabase auth audit logs. Filters by user_id and date range if provided.';
+  'Admin-only function to query Supabase auth audit logs. Filters by user_id and date range if provided. Must be called via service_role.';

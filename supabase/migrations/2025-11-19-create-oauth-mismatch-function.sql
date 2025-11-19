@@ -39,6 +39,6 @@ BEGIN
 END;
 $$;
 
--- Grant execute permission to authenticated users
--- (The function itself checks for admin access in the API layer)
-GRANT EXECUTE ON FUNCTION get_oauth_email_mismatches() TO authenticated;
+-- Grant execute permission to service_role only (for admin API use)
+-- Regular authenticated users cannot call this function directly
+GRANT EXECUTE ON FUNCTION get_oauth_email_mismatches() TO service_role;

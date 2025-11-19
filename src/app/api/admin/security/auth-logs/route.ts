@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Get total count for pagination (if no user filter)
     let totalCount = null
     if (!userId) {
-      const { count, error: countError } = await supabase.rpc(
+      const { count, error: countError } = await adminSupabase.rpc(
         'get_auth_audit_logs',
         {
           target_user_id: null,

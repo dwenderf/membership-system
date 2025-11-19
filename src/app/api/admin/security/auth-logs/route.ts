@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       'get_auth_audit_logs',
       {
         target_user_id: userId || null,
-        limit_count: Math.min(limit, 100), // Max 100 per request
+        limit_count: Math.min(limit, 1000), // Max 1000 per request
         offset_count: offset,
         start_date: startDate || null,
         end_date: endDate || null

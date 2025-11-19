@@ -189,15 +189,19 @@ export default function EditProfilePage() {
   const handleEmailChangeSuccess = async () => {
     // Refresh user data from auth
     const { data: { user: updatedUser } } = await supabase.auth.getUser()
-    if (updatedUser) {
-      setUser(updatedUser)
+
+    if (!updatedUser) {
+      console.error('Failed to get updated user after email change')
+      return
     }
+
+    setUser(updatedUser)
 
     // Get updated profile data
     const { data: userProfile } = await supabase
       .from('users')
       .select('*')
-      .eq('id', updatedUser?.id)
+      .eq('id', updatedUser.id)
       .single()
 
     if (userProfile) {

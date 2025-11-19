@@ -34,7 +34,8 @@ async function sendConfirmationEmail(
   email: string,
   firstName: string,
   oldEmail: string,
-  newEmail: string
+  newEmail: string,
+  googleAuthWarning: string = ''
 ): Promise<void> {
   const { emailService } = await import('@/lib/email/service')
 
@@ -55,6 +56,7 @@ async function sendConfirmationEmail(
       firstName,
       oldEmail,
       newEmail,
+      googleAuthWarning,
       supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
       organizationName: process.env.ORGANIZATION_NAME || 'Membership System'
     }
@@ -190,13 +192,44 @@ export async function POST(request: NextRequest) {
       // Don't fail the request, Xero sync is non-blocking
     }
 
+    // Check for Google OAuth mismatch
+    let googleAuthWarning = ''
+    try {
+      const { data: identitiesData } = await supabase.auth.getUserIdentities()
+      const identities = identitiesData?.identities || []
+      const googleIdentity = identities.find((id: any) => id.provider === 'google')
+
+      if (googleIdentity && googleIdentity.identity_data?.email) {
+        const googleEmail = googleIdentity.identity_data.email
+
+        // Check if Google email differs from new email
+        if (googleEmail.toLowerCase() !== newEmail.toLowerCase()) {
+          googleAuthWarning = `IMPORTANT: Your Google account (${googleEmail}) is still linked to this account but uses a different email address. If you no longer want to sign in with Google, you can unlink it in your Account Settings under "Account Security".`
+        }
+      }
+    } catch (oauthError) {
+      console.error('Error checking OAuth status:', oauthError)
+      // Don't fail the request, just log
+    }
+
     // Send confirmation emails to both addresses
     try {
-      await sendConfirmationEmail(oldEmail, user.first_name, oldEmail, newEmail)
-      await sendConfirmationEmail(newEmail, user.first_name, oldEmail, newEmail)
+      await sendConfirmationEmail(oldEmail, user.first_name, oldEmail, newEmail, googleAuthWarning)
+      await sendConfirmationEmail(newEmail, user.first_name, oldEmail, newEmail, googleAuthWarning)
     } catch (emailError) {
       console.error('Error sending confirmation emails:', emailError)
       // Don't fail the request, just log
+    }
+
+    // Send notification to admins
+    const supportEmail = process.env.SUPPORT_EMAIL
+    if (supportEmail) {
+      try {
+        await sendConfirmationEmail(supportEmail, 'Admin', oldEmail, newEmail, googleAuthWarning)
+      } catch (adminEmailError) {
+        console.error('Error sending admin notification:', adminEmailError)
+        // Don't fail the request, just log
+      }
     }
 
     return NextResponse.json({

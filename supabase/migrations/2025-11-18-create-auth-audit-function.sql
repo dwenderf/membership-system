@@ -11,7 +11,7 @@ RETURNS TABLE (
   user_id UUID,
   email TEXT,
   action TEXT,
-  payload JSONB
+  payload JSON
 )
 SECURITY DEFINER
 SET search_path = public

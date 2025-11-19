@@ -109,9 +109,19 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies()
     const reauthCookie = cookieStore.get('reauth_verified')
 
-    if (!reauthCookie || reauthCookie.value !== authUser.id) {
+    if (!reauthCookie) {
       return NextResponse.json(
         { error: 'Re-authentication required. Please verify your identity first.' },
+        { status: 403 }
+      )
+    }
+
+    // Validate cookie format: userId:token
+    const [cookieUserId, token] = reauthCookie.value.split(':')
+
+    if (!cookieUserId || !token || cookieUserId !== authUser.id) {
+      return NextResponse.json(
+        { error: 'Invalid re-authentication. Please verify your identity again.' },
         { status: 403 }
       )
     }

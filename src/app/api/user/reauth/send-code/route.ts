@@ -1,6 +1,33 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { storeCode } from '@/lib/reauth-codes'
+import { createHash } from 'crypto'
+
+/**
+ * Hash a code using SHA-256
+ */
+function hashCode(code: string): string {
+  return createHash('sha256').update(code).digest('hex')
+}
+
+/**
+ * Check rate limit: max 3 codes per hour per user
+ */
+async function checkRateLimit(supabase: any, userId: string): Promise<boolean> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+
+  const { count, error } = await supabase
+    .from('reauth_verification_codes')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', oneHourAgo.toISOString())
+
+  if (error) {
+    console.error('Error checking rate limit:', error)
+    return false
+  }
+
+  return (count ?? 0) < 3
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,12 +42,51 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check rate limit
+    const withinLimit = await checkRateLimit(supabase, user.id)
+
+    if (!withinLimit) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait before requesting another code.' },
+        { status: 429 }
+      )
+    }
+
+    // Clean up any existing unused codes for this user
+    await supabase
+      .from('reauth_verification_codes')
+      .delete()
+      .eq('user_id', user.id)
+      .is('used_at', null)
+
     // Generate a 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString()
+    const codeHash = hashCode(code)
 
-    // Store code with 15-minute expiration
-    const expiresAt = Date.now() + 15 * 60 * 1000
-    storeCode(user.id, code, expiresAt)
+    // Get request metadata
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+    const userAgent = request.headers.get('user-agent')
+
+    // Store code in database with 15-minute expiration
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+
+    const { error: insertError } = await supabase
+      .from('reauth_verification_codes')
+      .insert({
+        user_id: user.id,
+        code_hash: codeHash,
+        expires_at: expiresAt.toISOString(),
+        ip_address: ip,
+        user_agent: userAgent
+      })
+
+    if (insertError) {
+      console.error('Error storing verification code:', insertError)
+      return NextResponse.json(
+        { error: 'Failed to generate verification code' },
+        { status: 500 }
+      )
+    }
 
     // Get user's first name for email
     const { data: userData } = await supabase

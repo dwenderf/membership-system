@@ -54,8 +54,17 @@ function SecurityContent() {
   // Client-side search filter and date range
   const [searchFilter, setSearchFilter] = useState('')
   const [selectedRange, setSelectedRange] = useState('30d')
-  const [limit] = useState(50)
   const [offset] = useState(0)
+
+  // Dynamic limit based on date range
+  const getLimit = () => {
+    switch (selectedRange) {
+      case '7d': return 200
+      case '30d': return 500
+      case '90d': return 1000
+      default: return 500
+    }
+  }
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -67,6 +76,7 @@ function SecurityContent() {
         const now = new Date()
         const daysAgo = parseInt(selectedRange)
         const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+        const limit = getLimit()
 
         if (activeTab === 'auth') {
           const params = new URLSearchParams({
@@ -110,7 +120,7 @@ function SecurityContent() {
     }
 
     fetchLogs()
-  }, [activeTab, selectedRange, limit, offset])
+  }, [activeTab, selectedRange, offset])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()

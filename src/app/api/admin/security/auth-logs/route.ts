@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('user_id')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const startDate = searchParams.get('start_date')
+    const endDate = searchParams.get('end_date')
 
     // Call the database function to get auth audit logs
     const { data: logs, error: logsError } = await supabase.rpc(
@@ -41,7 +43,9 @@ export async function GET(request: NextRequest) {
       {
         target_user_id: userId || null,
         limit_count: Math.min(limit, 100), // Max 100 per request
-        offset_count: offset
+        offset_count: offset,
+        start_date: startDate || null,
+        end_date: endDate || null
       }
     )
 

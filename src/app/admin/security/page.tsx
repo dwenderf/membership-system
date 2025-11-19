@@ -63,10 +63,17 @@ function SecurityContent() {
       setError(null)
 
       try {
+        // Calculate date range based on selected range
+        const now = new Date()
+        const daysAgo = parseInt(selectedRange)
+        const startDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+
         if (activeTab === 'auth') {
           const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString(),
+            start_date: startDate.toISOString(),
+            end_date: now.toISOString()
           })
 
           const response = await fetch(`/api/admin/security/auth-logs?${params}`)
@@ -81,6 +88,8 @@ function SecurityContent() {
           const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString(),
+            start_date: startDate.toISOString(),
+            end_date: now.toISOString()
           })
 
           const response = await fetch(`/api/admin/security/email-logs?${params}`)
@@ -101,27 +110,14 @@ function SecurityContent() {
     }
 
     fetchLogs()
-  }, [activeTab, limit, offset])
+  }, [activeTab, selectedRange, limit, offset])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
 
-  // Helper function to check if a log is within the selected date range
-  const isWithinDateRange = (dateString: string) => {
-    const logDate = new Date(dateString)
-    const now = new Date()
-    const daysAgo = parseInt(selectedRange)
-    const cutoffDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
-    return logDate >= cutoffDate
-  }
-
-  // Client-side filtering
+  // Client-side search filtering only (date filtering is done server-side)
   const filteredAuthLogs = authLogs.filter((log) => {
-    // Date range filter
-    if (!isWithinDateRange(log.created_at)) return false
-
-    // Search filter
     if (!searchFilter) return true
     const search = searchFilter.toLowerCase()
     return (
@@ -133,10 +129,6 @@ function SecurityContent() {
   })
 
   const filteredEmailLogs = emailLogs.filter((log) => {
-    // Date range filter
-    if (!isWithinDateRange(log.created_at)) return false
-
-    // Search filter
     if (!searchFilter) return true
     const search = searchFilter.toLowerCase()
     return (

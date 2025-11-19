@@ -2,7 +2,9 @@
 CREATE OR REPLACE FUNCTION get_auth_audit_logs(
   target_user_id UUID DEFAULT NULL,
   limit_count INT DEFAULT 50,
-  offset_count INT DEFAULT 0
+  offset_count INT DEFAULT 0,
+  start_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  end_date TIMESTAMP WITH TIME ZONE DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -48,6 +50,16 @@ BEGIN
       THEN (aal.payload->>'actor_id')::UUID = target_user_id
       ELSE true
     END
+    AND CASE
+      WHEN start_date IS NOT NULL
+      THEN aal.created_at >= start_date
+      ELSE true
+    END
+    AND CASE
+      WHEN end_date IS NOT NULL
+      THEN aal.created_at <= end_date
+      ELSE true
+    END
   ORDER BY aal.created_at DESC
   LIMIT limit_count
   OFFSET offset_count;
@@ -58,4 +70,4 @@ $$;
 GRANT EXECUTE ON FUNCTION get_auth_audit_logs TO authenticated;
 
 COMMENT ON FUNCTION get_auth_audit_logs IS
-  'Admin-only function to query Supabase auth audit logs. Filters by user_id if provided.';
+  'Admin-only function to query Supabase auth audit logs. Filters by user_id and date range if provided.';

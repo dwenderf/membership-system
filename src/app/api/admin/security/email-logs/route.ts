@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
     const eventType = searchParams.get('event_type')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const startDate = searchParams.get('start_date')
+    const endDate = searchParams.get('end_date')
 
     // Build query
     let query = supabase
@@ -66,6 +68,14 @@ export async function GET(request: NextRequest) {
 
     if (eventType) {
       query = query.eq('event_type', eventType)
+    }
+
+    if (startDate) {
+      query = query.gte('created_at', startDate)
+    }
+
+    if (endDate) {
+      query = query.lte('created_at', endDate)
     }
 
     const { data: logs, error: logsError, count } = await query

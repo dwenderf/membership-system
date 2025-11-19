@@ -20,31 +20,8 @@ export default function EmailChangeModal({
   const [step, setStep] = useState<'request' | 'confirmation'>('request')
   const [newEmail, setNewEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [hasGoogleOAuth, setHasGoogleOAuth] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
-
-  useEffect(() => {
-    if (isOpen) {
-      checkForGoogleOAuth()
-    }
-  }, [isOpen])
-
-  const checkForGoogleOAuth = async () => {
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (user) {
-        const { data: identitiesData } = await supabase.auth.getUserIdentities()
-        const identities = identitiesData?.identities || []
-        const googleIdentity = identities.find(id => id.provider === 'google')
-        setHasGoogleOAuth(!!googleIdentity)
-      }
-    } catch (error) {
-      console.error('Error checking auth methods:', error)
-    }
-  }
 
   if (!isOpen) return null
 
@@ -103,7 +80,6 @@ export default function EmailChangeModal({
     setStep('request')
     setNewEmail('')
     setError(null)
-    setHasGoogleOAuth(false)
     onClose()
   }
 
@@ -141,25 +117,6 @@ export default function EmailChangeModal({
 
         {step === 'request' && (
           <div className="mb-6">
-            {hasGoogleOAuth && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800">Google Account Will Be Unlinked</h3>
-                    <div className="mt-2 text-sm text-yellow-700">
-                      <p>You're currently signed in with Google. After you verify your email change, your Google account will be automatically unlinked for security reasons.</p>
-                      <p className="mt-2">You'll only be able to sign in with your new email address. You can re-link Google to your new email later if desired.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <p className="text-sm text-gray-700 mb-4">
               Enter your new email address. We'll send confirmation links to both your current and new email addresses to verify the change.
             </p>

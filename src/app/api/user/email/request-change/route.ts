@@ -56,39 +56,6 @@ async function logEvent(
   })
 }
 
-/**
- * Send security alert to old address
- */
-async function sendSecurityAlert(
-  email: string,
-  firstName: string,
-  oldEmail: string,
-  newEmail: string
-): Promise<void> {
-  const { emailService } = await import('@/lib/email/service')
-
-  const templateId = process.env.LOOPS_EMAIL_CHANGE_SECURITY_ALERT_TEMPLATE_ID
-
-  if (!templateId) {
-    console.warn('LOOPS_EMAIL_CHANGE_SECURITY_ALERT_TEMPLATE_ID not configured')
-    return
-  }
-
-  await emailService.sendEmail({
-    userId: '', // Will be set by caller
-    email,
-    eventType: 'email_change_security_alert' as any,
-    subject: 'Email change requested for your account',
-    templateId,
-    data: {
-      firstName,
-      oldEmail,
-      newEmail,
-      supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
-      organizationName: process.env.ORGANIZATION_NAME || 'Membership System'
-    }
-  })
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -205,14 +172,6 @@ export async function POST(request: NextRequest) {
         { error: updateError.message },
         { status: 400 }
       )
-    }
-
-    // Send security alert to old address
-    try {
-      await sendSecurityAlert(user.email, user.first_name, user.email, newEmail)
-    } catch (emailError) {
-      console.error('Error sending security alert:', emailError)
-      // Don't fail the request, just log
     }
 
     // Log event

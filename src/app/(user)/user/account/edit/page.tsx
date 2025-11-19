@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
-import ReauthenticationModal from '@/components/ReauthenticationModal'
 import EmailChangeModal from '@/components/EmailChangeModal'
 
 export default function EditProfilePage() {
@@ -23,7 +22,6 @@ export default function EditProfilePage() {
     email: '', // Track email for future contact sync needs
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [showReauthModal, setShowReauthModal] = useState(false)
   const [showEmailChangeModal, setShowEmailChangeModal] = useState(false)
 
   const router = useRouter()
@@ -184,12 +182,7 @@ export default function EditProfilePage() {
   }
 
   const handleChangeEmailClick = async () => {
-    // Always require re-authentication for email changes (security best practice)
-    setShowReauthModal(true)
-  }
-
-  const handleReauthSuccess = () => {
-    setShowReauthModal(false)
+    // Open email change modal (it will handle OAuth/email auth checks)
     setShowEmailChangeModal(true)
   }
 
@@ -399,13 +392,7 @@ export default function EditProfilePage() {
         </div>
       </form>
 
-      {/* Email Change Modals */}
-      <ReauthenticationModal
-        isOpen={showReauthModal}
-        onClose={() => setShowReauthModal(false)}
-        onSuccess={handleReauthSuccess}
-        userEmail={user?.email || ''}
-      />
+      {/* Email Change Modal */}
       <EmailChangeModal
         isOpen={showEmailChangeModal}
         onClose={() => setShowEmailChangeModal(false)}

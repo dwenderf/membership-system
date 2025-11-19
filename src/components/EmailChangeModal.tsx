@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 
 interface EmailChangeModalProps {
@@ -16,11 +17,108 @@ export default function EmailChangeModal({
   currentEmail,
   onSuccess
 }: EmailChangeModalProps) {
-  const [step, setStep] = useState<'request' | 'confirmation'>('request')
+  const [step, setStep] = useState<'check_oauth' | 'request' | 'confirmation'>('check_oauth')
   const [newEmail, setNewEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [hasGoogleOAuth, setHasGoogleOAuth] = useState(false)
+  const [hasEmailAuth, setHasEmailAuth] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
+
+  useEffect(() => {
+    if (isOpen) {
+      checkAuthMethods()
+    }
+  }, [isOpen])
+
+  const checkAuthMethods = async () => {
+    setIsCheckingAuth(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: identitiesData } = await supabase.auth.getUserIdentities()
+        const identities = identitiesData?.identities || []
+
+        const googleIdentity = identities.find(id => id.provider === 'google')
+        const emailIdentity = identities.find(id => id.provider === 'email')
+
+        setHasGoogleOAuth(!!googleIdentity)
+        setHasEmailAuth(!!emailIdentity)
+
+        // If they have OAuth but no email auth, they need to establish email auth first
+        if (googleIdentity && !emailIdentity) {
+          setStep('check_oauth')
+        } else {
+          setStep('request')
+        }
+      }
+    } catch (error) {
+      console.error('Error checking auth methods:', error)
+      showError('Error', 'Failed to check authentication methods')
+    } finally {
+      setIsCheckingAuth(false)
+    }
+  }
+
+  const handleEstablishEmailAuth = async () => {
+    setIsLoading(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOtp({
+        email: currentEmail,
+        options: { shouldCreateUser: false }
+      })
+
+      if (error) {
+        showError('Failed to send verification', error.message)
+      } else {
+        showSuccess(
+          'Check your email!',
+          'Click the link in your email, then return to this page to continue changing your email.'
+        )
+        onClose()
+      }
+    } catch (error) {
+      console.error('Error sending magic link:', error)
+      showError('Error', 'Failed to send verification email')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUnlinkOAuth = async () => {
+    setIsLoading(true)
+    try {
+      const supabase = createClient()
+      const { data: identitiesData } = await supabase.auth.getUserIdentities()
+      const identities = identitiesData?.identities || []
+      const googleIdentity = identities.find(id => id.provider === 'google')
+
+      if (!googleIdentity) {
+        setStep('request')
+        setIsLoading(false)
+        return
+      }
+
+      const { error } = await supabase.auth.unlinkIdentity(googleIdentity)
+
+      if (error) {
+        showError('Failed to unlink Google', error.message)
+      } else {
+        showSuccess('Google unlinked!', 'You can now change your email.')
+        setHasGoogleOAuth(false)
+        setStep('request')
+      }
+    } catch (error) {
+      console.error('Error unlinking OAuth:', error)
+      showError('Error', 'Failed to unlink Google account')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -61,7 +159,7 @@ export default function EmailChangeModal({
 
       if (response.ok) {
         setStep('confirmation')
-        showSuccess('Confirmation email sent!', 'Check your new email address for the confirmation link.')
+        showSuccess('Confirmation email sent!', 'Check both your current and new email addresses for confirmation links.')
       } else {
         setError(data.error || 'Failed to request email change')
         showError('Failed to request email change', data.error)
@@ -76,7 +174,7 @@ export default function EmailChangeModal({
   }
 
   const handleClose = () => {
-    setStep('request')
+    setStep('check_oauth')
     setNewEmail('')
     setError(null)
     onClose()
@@ -84,6 +182,7 @@ export default function EmailChangeModal({
 
   const getTitle = () => {
     switch (step) {
+      case 'check_oauth': return 'Email Change Setup'
       case 'request': return 'Change Email Address'
       case 'confirmation': return 'Check Your Email'
     }
@@ -105,7 +204,7 @@ export default function EmailChangeModal({
           </div>
           <button
             onClick={handleClose}
-            disabled={isLoading || isVerifying}
+            disabled={isLoading || isCheckingAuth}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,10 +213,75 @@ export default function EmailChangeModal({
           </button>
         </div>
 
+        {isCheckingAuth && step === 'check_oauth' && (
+          <div className="mb-6 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="ml-3 text-sm text-gray-600">Checking authentication methods...</p>
+          </div>
+        )}
+
+        {!isCheckingAuth && step === 'check_oauth' && hasGoogleOAuth && !hasEmailAuth && (
+          <div className="mb-6">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">Email Authentication Required</h3>
+                  <div className="mt-2 text-sm text-yellow-700">
+                    <p>You're currently signed in with Google only. To change your email, you need to establish email authentication first.</p>
+                    <p className="mt-2">We'll send a verification link to <strong>{currentEmail}</strong>. After clicking it, return here to proceed.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleEstablishEmailAuth}
+              disabled={isLoading}
+              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Sending...' : 'Send Verification Email'}
+            </button>
+          </div>
+        )}
+
+        {!isCheckingAuth && step === 'check_oauth' && hasGoogleOAuth && hasEmailAuth && (
+          <div className="mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">Google OAuth Detected</h3>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <p>You're signed in with both Google and email. To change your email address, we need to unlink your Google account first.</p>
+                    <p className="mt-2">You can re-link Google later if desired.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleUnlinkOAuth}
+              disabled={isLoading}
+              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Unlinking...' : 'Unlink Google and Continue'}
+            </button>
+          </div>
+        )}
+
         {step === 'request' && (
           <div className="mb-6">
             <p className="text-sm text-gray-700 mb-4">
-              Enter your new email address. We'll send a confirmation link to verify the change.
+              Enter your new email address. We'll send confirmation links to both your current and new email addresses to verify the change.
             </p>
 
             <div className="mb-4">
@@ -181,12 +345,15 @@ export default function EmailChangeModal({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">Confirmation email sent!</h3>
+                  <h3 className="text-sm font-medium text-blue-800">Confirmation emails sent!</h3>
                   <div className="mt-2 text-sm text-blue-700">
-                    <p>We've sent a confirmation link to:</p>
-                    <p className="font-semibold mt-1">{newEmail}</p>
+                    <p className="mb-2">We've sent confirmation links to:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li><strong>{currentEmail}</strong> (current email)</li>
+                      <li><strong>{newEmail}</strong> (new email)</li>
+                    </ul>
                     <p className="mt-3">
-                      Click the link in the email to complete your email change from <strong>{currentEmail}</strong> to <strong>{newEmail}</strong>.
+                      <strong>Important:</strong> You must click the confirmation links in <strong>both</strong> emails to complete the email change.
                     </p>
                   </div>
                 </div>
@@ -202,7 +369,7 @@ export default function EmailChangeModal({
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-yellow-700">
-                    <strong>Important:</strong> Check your spam folder if you don't see the email within a few minutes.
+                    Check your spam folders if you don't see the emails within a few minutes.
                   </p>
                 </div>
               </div>

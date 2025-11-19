@@ -18,8 +18,12 @@ export default function EmailChangedPage() {
 
   useEffect(() => {
     // Prevent running multiple times
-    if (hasRun.current) return
+    if (hasRun.current) {
+      console.log('DEBUG: useEffect blocked by hasRun.current')
+      return
+    }
     hasRun.current = true
+    console.log('DEBUG: useEffect running for the first time')
 
     let redirectTimeout: NodeJS.Timeout | null = null
 
@@ -49,9 +53,19 @@ export default function EmailChangedPage() {
           return
         }
 
+        // DEBUG: Log the current state
+        console.log('DEBUG email-changed page:', {
+          authUserEmail: authUser.email,
+          authUserNewEmail: authUser.new_email,
+          userDataEmail: userData.email,
+          emailVerifiedAt: authUser.email_confirmed_at,
+          userIdentities: authUser.identities?.length
+        })
+
         // Check if email change is still pending (first confirmation clicked)
         if (authUser.new_email) {
           // Email change is pending - only one confirmation clicked
+          console.log('DEBUG: Detected PENDING state - showing One More Step')
           setOldEmail(userData.email)
           setNewEmail(authUser.new_email)
           setState('pending')
@@ -60,6 +74,7 @@ export default function EmailChangedPage() {
 
         // Check if email change is complete (both confirmations clicked)
         if (authUser.email && authUser.email !== userData.email) {
+          console.log('DEBUG: Detected COMPLETE state - syncing to database')
           // Email change is complete! Sync to database and Xero
           setOldEmail(userData.email)
           setNewEmail(authUser.email)
@@ -88,6 +103,7 @@ export default function EmailChangedPage() {
           }
         } else {
           // Email already synced or no change detected
+          console.log('DEBUG: No email change detected - showing error')
           setError('No pending email change found.')
           setState('error')
         }

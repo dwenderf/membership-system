@@ -45,6 +45,7 @@ export default function AccountPage() {
       // Check for Google OAuth
       const googleIdentity = identities.find(id => id.provider === 'google')
       if (googleIdentity) {
+        console.log('Google Identity object:', JSON.stringify(googleIdentity, null, 2))
         setGoogleOAuth({
           email: googleIdentity.identity_data?.email || '',
           id: googleIdentity.id
@@ -71,6 +72,7 @@ export default function AccountPage() {
 
     setUnlinking(true)
     try {
+      console.log('Attempting to unlink with identity_id:', googleOAuth.id)
       const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
 
       if (error) {

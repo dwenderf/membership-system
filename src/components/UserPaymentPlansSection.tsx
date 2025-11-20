@@ -6,6 +6,11 @@ import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
 
+interface Installment {
+  planned_payment_date: string
+  amount: number
+}
+
 interface PaymentPlan {
   invoice_id: string
   contact_id: string
@@ -19,7 +24,7 @@ interface PaymentPlan {
   registration_id: string | null
   registration_name: string | null
   season_name: string | null
-  installments: any[]
+  installments: Installment[]
 }
 
 export default function UserPaymentPlansSection() {
@@ -177,7 +182,7 @@ export default function UserPaymentPlansSection() {
                       <span className="text-gray-600">Amount:</span>
                       <span className="font-medium">
                         {formatAmount(
-                          plan.installments.find((i: any) => i.planned_payment_date === plan.next_payment_date)?.amount || 0
+                          plan.installments.find((i) => i.planned_payment_date === plan.next_payment_date)?.amount || 0
                         )}
                       </span>
                     </div>
@@ -187,6 +192,7 @@ export default function UserPaymentPlansSection() {
                 {/* Pay Remaining Button */}
                 {remainingBalance > 0 && (
                   <button
+                    type="button"
                     onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
                     disabled={payingOff === plan.invoice_id}
                     className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${

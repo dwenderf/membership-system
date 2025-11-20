@@ -15,13 +15,17 @@ export default function AccountPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
-  
+  const [googleOAuth, setGoogleOAuth] = useState<{ email: string; id: string } | null>(null)
+  const [hasEmailAuth, setHasEmailAuth] = useState(false)
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
+
   const supabase = createClient()
 
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         return // Layout will handle redirect
       }
@@ -32,6 +36,23 @@ export default function AccountPage() {
         .eq('id', user.id)
         .single()
 
+      // Check OAuth and email auth status
+      const { data: identitiesData } = await supabase.auth.getUserIdentities()
+      const identities = identitiesData?.identities || []
+
+      // Check for Google OAuth
+      const googleIdentity = identities.find(id => id.provider === 'google')
+      if (googleIdentity) {
+        setGoogleOAuth({
+          email: googleIdentity.identity_data?.email || '',
+          id: googleIdentity.id
+        })
+      }
+
+      // Check for email auth (magic link/PIN capability)
+      const emailIdentity = identities.find(id => id.provider === 'email')
+      setHasEmailAuth(!!emailIdentity)
+
       setUser(user)
       setUserProfile(profile)
       setLoading(false)
@@ -39,6 +60,40 @@ export default function AccountPage() {
 
     getUser()
   }, [])
+
+  const handleUnlinkGoogle = async () => {
+    if (!googleOAuth) return
+
+    setUnlinking(true)
+    try {
+      const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
+
+      if (error) throw error
+
+      // Verify email authentication still exists after unlinking
+      const { data: identitiesData } = await supabase.auth.getUserIdentities()
+      const identities = identitiesData?.identities || []
+      const emailIdentity = identities.find(id => id.provider === 'email')
+
+      if (!emailIdentity) {
+        // This shouldn't happen if hasEmailAuth was true, but verify
+        alert('Account Lockout Prevented: Unable to unlink Google account because no email authentication method was found. Please contact support.')
+        setUnlinking(false)
+        setShowUnlinkConfirm(false)
+        return
+      }
+
+      // Success - update UI
+      setGoogleOAuth(null)
+      setShowUnlinkConfirm(false)
+      alert('Google account unlinked successfully. You can now only sign in using magic links sent to your email.')
+    } catch (error) {
+      console.error('Error unlinking Google account:', error)
+      alert('Failed to unlink Google account. Please try again or contact support.')
+    } finally {
+      setUnlinking(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -246,9 +301,29 @@ export default function AccountPage() {
             </h3>
             <div className="mt-2 text-sm text-blue-700">
               <p>
-                Your account is secured with passwordless authentication. 
+                Your account is secured with passwordless authentication.
                 You sign in using magic links or OAuth providers like Google.
               </p>
+
+              {/* Google OAuth Status */}
+              {googleOAuth && hasEmailAuth && (
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <p className="text-sm text-blue-700 mb-2">
+                    <strong>Connected Google Account:</strong> {googleOAuth.email}
+                  </p>
+                  <p className="text-sm text-blue-700">
+                    You can{' '}
+                    <button
+                      onClick={() => setShowUnlinkConfirm(true)}
+                      className="text-blue-600 hover:text-blue-800 underline font-medium"
+                    >
+                      unlink your Google account
+                    </button>
+                    {' '}if you prefer to sign in only with magic links sent to your email.
+                  </p>
+                </div>
+              )}
+
               <div className="mt-3 pt-3 border-t border-blue-200">
                 <p className="text-sm text-blue-700">
                   To delete your account and permanently remove all of your personal information,{' '}
@@ -265,6 +340,76 @@ export default function AccountPage() {
           </div>
         </div>
       </div>
+
+      {/* Unlink Google Confirmation Modal */}
+      {showUnlinkConfirm && googleOAuth && (
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowUnlinkConfirm(false)
+            }
+          }}
+        >
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="unlink-modal-title"
+            >
+              <div className="mt-3 text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100">
+                  <svg
+                    className="h-6 w-6 text-yellow-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    role="img"
+                    aria-label="Warning"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <h3
+                  className="text-lg leading-6 font-medium text-gray-900 mt-4"
+                  id="unlink-modal-title"
+                >
+                  Unlink Google Account
+                </h3>
+                <div className="mt-2 px-7 py-3">
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to unlink your Google account ({googleOAuth.email})?
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    After unlinking, you will only be able to sign in using magic links sent to your email address.
+                  </p>
+                </div>
+                <div className="items-center px-4 py-3">
+                  <button
+                    onClick={handleUnlinkGoogle}
+                    disabled={unlinking}
+                    className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {unlinking ? 'Unlinking...' : 'Yes, Unlink Google Account'}
+                  </button>
+                  <button
+                    onClick={() => setShowUnlinkConfirm(false)}
+                    disabled={unlinking}
+                    className="mt-3 px-4 py-2 bg-gray-100 text-gray-700 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -56,12 +56,13 @@ export default function AccountPage() {
         console.log('=== GOOGLE IDENTITY ===')
         console.log('Full object:', JSON.stringify(googleIdentity, null, 2))
         console.log('id field:', googleIdentity.id)
-        console.log('Type of id:', typeof googleIdentity.id)
+        console.log('identity_id field:', googleIdentity.identity_id)
+        console.log('Type of identity_id:', typeof googleIdentity.identity_id)
         console.log('=== END GOOGLE IDENTITY ===')
 
         setGoogleOAuth({
           email: googleIdentity.identity_data?.email || '',
-          id: googleIdentity.id
+          id: googleIdentity.identity_id  // Use identity_id (UUID), not id (provider ID)
         })
       }
 

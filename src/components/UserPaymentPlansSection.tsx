@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
+import ConfirmationDialog from './ConfirmationDialog'
 
 interface PaymentPlan {
   invoice_id: string
@@ -25,6 +26,8 @@ export default function UserPaymentPlansSection() {
   const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [payingOff, setPayingOff] = useState<string | null>(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; amount: number } | null>(null)
   const { showSuccess, showError } = useToast()
 
   useEffect(() => {
@@ -49,12 +52,16 @@ export default function UserPaymentPlansSection() {
     }
   }
 
-  const handlePayRemaining = async (planId: string, remainingAmount: number) => {
-    if (!confirm(`Are you sure you want to pay the remaining balance of ${formatAmount(remainingAmount)}? This will immediately charge your saved payment method.`)) {
-      return
-    }
+  const handlePayRemainingClick = (planId: string, remainingAmount: number) => {
+    setSelectedPlan({ id: planId, amount: remainingAmount })
+    setShowConfirmModal(true)
+  }
 
-    setPayingOff(planId)
+  const handleConfirmPayment = async () => {
+    if (!selectedPlan) return
+
+    setShowConfirmModal(false)
+    setPayingOff(selectedPlan.id)
 
     try {
       const response = await fetch('/api/user/payment-plans/early-payoff', {
@@ -62,7 +69,7 @@ export default function UserPaymentPlansSection() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId: selectedPlan.id }),
       })
 
       const data = await response.json()
@@ -79,6 +86,7 @@ export default function UserPaymentPlansSection() {
       showError('Payment Failed', 'An unexpected error occurred')
     } finally {
       setPayingOff(null)
+      setSelectedPlan(null)
     }
   }
 
@@ -179,7 +187,7 @@ export default function UserPaymentPlansSection() {
                 {/* Pay Remaining Button */}
                 {remainingBalance > 0 && (
                   <button
-                    onClick={() => handlePayRemaining(plan.invoice_id, remainingBalance)}
+                    onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
                     disabled={payingOff === plan.invoice_id}
                     className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       payingOff === plan.invoice_id
@@ -211,6 +219,28 @@ export default function UserPaymentPlansSection() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationDialog
+        isOpen={showConfirmModal}
+        title="Confirm Payment"
+        message={
+          <div className="space-y-3">
+            <p>
+              Are you sure you want to pay the remaining balance of{' '}
+              <strong className="text-lg">{selectedPlan ? formatAmount(selectedPlan.amount) : ''}</strong>?
+            </p>
+            <p className="text-sm text-gray-600">
+              This will immediately charge your saved payment method and complete your payment plan.
+            </p>
+          </div>
+        }
+        confirmText="Pay Now"
+        cancelText="Cancel"
+        onConfirm={handleConfirmPayment}
+        onCancel={() => setShowConfirmModal(false)}
+        variant="info"
+      />
     </div>
   )
 }

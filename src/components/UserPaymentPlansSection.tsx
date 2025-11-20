@@ -49,7 +49,7 @@ export default function UserPaymentPlansSection() {
       if (!user) return
 
       const { data, error } = await supabase
-        .from('payment_plans')
+        .from('payment_plan_summary')
         .select(`
           *,
           user_registrations (

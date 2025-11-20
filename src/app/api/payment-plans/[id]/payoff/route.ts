@@ -73,7 +73,7 @@ export async function POST(
     )
 
     // Process the early payoff
-    const result = await PaymentPlanService.processEarlyPayoff(paymentPlanId)
+    const result = await PaymentPlanService.processEarlyPayoff(paymentPlanId, user.id)
 
     if (!result.success) {
       logger.logPaymentProcessing(

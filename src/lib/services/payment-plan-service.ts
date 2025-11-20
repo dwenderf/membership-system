@@ -413,7 +413,8 @@ export class PaymentPlanService {
    * Charges remaining balance and marks all planned installments as completed
    */
   static async processEarlyPayoff(
-    xeroInvoiceId: string
+    xeroInvoiceId: string,
+    userId: string
   ): Promise<{ success: boolean; paymentId?: string; totalPaid?: number; error?: string }> {
     try {
       const adminSupabase = createAdminClient()
@@ -436,12 +437,7 @@ export class PaymentPlanService {
 
       const remainingBalance = plannedPayments.reduce((sum, p) => sum + p.amount_paid, 0)
 
-      // Get user info from first planned payment
-      const userId = plannedPayments[0].staging_metadata?.user_id
-      if (!userId) {
-        return { success: false, error: 'User ID not found in payment metadata' }
-      }
-
+      // Get user info
       const { data: user, error: userError } = await adminSupabase
         .from('users')
         .select('stripe_payment_method_id, stripe_customer_id, email, first_name, last_name')

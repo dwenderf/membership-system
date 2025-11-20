@@ -52,6 +52,7 @@ export default function AccountPage() {
       }
 
       // Check for email auth (magic link/PIN capability)
+      // Note: Supabase requires at least 2 identities to unlink one
       const emailIdentity = identities.find(id => id.provider === 'email')
       setHasEmailAuth(!!emailIdentity)
 
@@ -65,27 +66,33 @@ export default function AccountPage() {
 
   const handleUnlinkGoogle = async () => {
     // Pre-check: verify both conditions before attempting unlink
+    // Supabase requires at least 2 identities to unlink one
     if (!googleOAuth || !hasEmailAuth) return
 
     setUnlinking(true)
     try {
       const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
 
-      if (error) throw error
+      if (error) {
+        // Handle specific Supabase errors
+        if (error.message?.includes('manual_linking_disabled')) {
+          throw new Error('Identity unlinking is disabled in this project. Please contact support.')
+        }
+        if (error.message?.includes('requires at least 2')) {
+          throw new Error('You need at least 2 authentication methods to unlink one. Please set up email authentication first.')
+        }
+        throw error
+      }
 
-      // Verify email authentication still exists after unlinking
+      // Verify at least one authentication method still exists after unlinking
       const { data: identitiesData } = await supabase.auth.getUserIdentities()
       const identities = identitiesData?.identities || []
-      const emailIdentity = identities.find(id => id.provider === 'email')
 
-      if (!emailIdentity) {
-        // Update UI state to reflect that Google was unlinked
-        setGoogleOAuth(null)
-        setShowUnlinkConfirm(false)
-
-        // This shouldn't happen if hasEmailAuth was true, but verify
-        showError('Account Lockout Prevented', 'Unable to unlink Google account because no email authentication method was found. Please contact support.')
+      if (identities.length === 0) {
+        // This should never happen, but safeguard against account lockout
+        showError('Account Lockout Prevented', 'Unable to verify remaining authentication methods. Please contact support.')
         setUnlinking(false)
+        setShowUnlinkConfirm(false)
         return
       }
 
@@ -93,9 +100,10 @@ export default function AccountPage() {
       setGoogleOAuth(null)
       setShowUnlinkConfirm(false)
       showSuccess('Google Account Unlinked', 'You can now only sign in using magic links sent to your email.')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error unlinking Google account:', error)
-      showError('Failed to Unlink', 'Failed to unlink Google account. Please try again or contact support.')
+      const errorMessage = error?.message || 'Failed to unlink Google account. Please try again or contact support.'
+      showError('Failed to Unlink', errorMessage)
     } finally {
       setUnlinking(false)
     }
@@ -311,7 +319,7 @@ export default function AccountPage() {
                 You sign in using magic links or OAuth providers like Google.
               </p>
 
-              {/* Google OAuth Status */}
+              {/* Google OAuth Status - Can Unlink (has 2+ identities) */}
               {googleOAuth && hasEmailAuth && (
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <p className="text-sm text-blue-700 mb-2">
@@ -327,6 +335,18 @@ export default function AccountPage() {
                       unlink your Google account
                     </button>
                     {' '}if you prefer to sign in only with magic links sent to your email.
+                  </p>
+                </div>
+              )}
+
+              {/* Google OAuth Status - Cannot Unlink (only 1 identity) */}
+              {googleOAuth && !hasEmailAuth && (
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <p className="text-sm text-blue-700 mb-2">
+                    <strong>Connected Google Account:</strong> {googleOAuth.email}
+                  </p>
+                  <p className="text-sm text-blue-700">
+                    You currently sign in with Google only. To unlink your Google account, you must first set up email authentication by signing out and using the "Sign in with Email" option to create a magic link login.
                   </p>
                 </div>
               )}

@@ -33,7 +33,6 @@ export default function UserPaymentPlansSection() {
 
   const fetchPaymentPlans = async () => {
     try {
-      console.log('[UserPaymentPlansSection] VERSION: 2025-11-20-v3 - Using API route')
       const response = await fetch('/api/user/payment-plans')
 
       if (!response.ok) {
@@ -103,17 +102,10 @@ export default function UserPaymentPlansSection() {
   return (
     <div className="bg-white shadow rounded-lg mb-6">
       <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-medium text-gray-900">Payment Plans</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Active payment plans for your registrations
-            </p>
-          </div>
-          <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-mono">
-            v2025-11-20-v3 (API route)
-          </div>
-        </div>
+        <h2 className="text-lg font-medium text-gray-900">Payment Plans</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Active payment plans for your registrations
+        </p>
       </div>
       <div className="px-6 py-4">
         <div className="space-y-4">

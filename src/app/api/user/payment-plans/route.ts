@@ -11,7 +11,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     // Authenticate the user
-    const supabase = createClient()
+    const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -22,7 +22,7 @@ export async function GET() {
     }
 
     // Use admin client to query the restricted view
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
     const { data: paymentPlans, error } = await adminSupabase
       .from('payment_plan_summary')
       .select('*')

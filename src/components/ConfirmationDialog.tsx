@@ -64,8 +64,14 @@ export default function ConfirmationDialog({
   const styles = getVariantStyles()
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+    <div
+      className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm overflow-y-auto h-full w-full z-50"
+      onClick={onCancel}
+    >
+      <div
+        className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">

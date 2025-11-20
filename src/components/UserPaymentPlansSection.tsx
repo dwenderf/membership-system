@@ -225,10 +225,12 @@ export default function UserPaymentPlansSection() {
         isOpen={showConfirmModal}
         title="Confirm Payment"
         message={
-          <div className="space-y-3">
+          <div className="space-y-4">
             <p>
-              Are you sure you want to pay the remaining balance of{' '}
-              <strong className="text-lg">{selectedPlan ? formatAmount(selectedPlan.amount) : ''}</strong>?
+              Are you sure you want to pay the remaining balance of:
+            </p>
+            <p className="text-center text-2xl font-bold text-gray-900">
+              {selectedPlan ? formatAmount(selectedPlan.amount) : ''}
             </p>
             <p className="text-sm text-gray-600">
               This will immediately charge your saved payment method and complete your payment plan.

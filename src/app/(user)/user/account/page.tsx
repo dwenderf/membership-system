@@ -20,7 +20,6 @@ export default function AccountPage() {
   const [hasEmailAuth, setHasEmailAuth] = useState(false)
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
-  const [debugIdentities, setDebugIdentities] = useState<any>(null)
 
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -43,23 +42,9 @@ export default function AccountPage() {
       const { data: identitiesData } = await supabase.auth.getUserIdentities()
       const identities = identitiesData?.identities || []
 
-      // Store for debugging
-      setDebugIdentities(identities)
-
-      console.log('=== ALL IDENTITIES ===')
-      console.log(JSON.stringify(identities, null, 2))
-      console.log('=== END IDENTITIES ===')
-
       // Check for Google OAuth
       const googleIdentity = identities.find(id => id.provider === 'google')
       if (googleIdentity) {
-        console.log('=== GOOGLE IDENTITY ===')
-        console.log('Full object:', JSON.stringify(googleIdentity, null, 2))
-        console.log('id field:', googleIdentity.id)
-        console.log('identity_id field:', googleIdentity.identity_id)
-        console.log('Type of identity_id:', typeof googleIdentity.identity_id)
-        console.log('=== END GOOGLE IDENTITY ===')
-
         setGoogleOAuth({
           email: googleIdentity.identity_data?.email || '',
           id: googleIdentity.identity_id  // Use identity_id (UUID), not id (provider ID)
@@ -86,12 +71,6 @@ export default function AccountPage() {
 
     setUnlinking(true)
     try {
-      console.log('=== UNLINK ATTEMPT ===')
-      console.log('googleOAuth object:', googleOAuth)
-      console.log('identity_id being sent:', googleOAuth.id)
-      console.log('Type:', typeof googleOAuth.id)
-      console.log('=== END UNLINK ATTEMPT ===')
-
       const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
 
       if (error) {
@@ -465,23 +444,6 @@ export default function AccountPage() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Debug: Show identity data */}
-      {debugIdentities && (
-        <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
-          <h3 className="text-lg font-bold text-yellow-900 mb-2">DEBUG: Identity Data</h3>
-          <pre className="text-xs bg-white p-3 rounded overflow-auto max-h-96 text-gray-800">
-            {JSON.stringify(debugIdentities, null, 2)}
-          </pre>
-          {googleOAuth && (
-            <div className="mt-3 p-3 bg-white rounded">
-              <p className="text-sm font-semibold text-yellow-900">Currently stored googleOAuth.id:</p>
-              <p className="text-xs font-mono text-gray-800">{googleOAuth.id}</p>
-              <p className="text-xs text-gray-600 mt-1">Type: {typeof googleOAuth.id}</p>
-            </div>
-          )}
         </div>
       )}
     </div>

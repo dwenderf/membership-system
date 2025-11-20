@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -27,7 +26,6 @@ export default function UserPaymentPlansSection() {
   const [loading, setLoading] = useState(true)
   const [payingOff, setPayingOff] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
-  const supabase = createClient()
 
   useEffect(() => {
     fetchPaymentPlans()
@@ -35,22 +33,16 @@ export default function UserPaymentPlansSection() {
 
   const fetchPaymentPlans = async () => {
     try {
-      console.log('[UserPaymentPlansSection] VERSION: 2025-11-20-v2 - Using contact_id')
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      console.log('[UserPaymentPlansSection] VERSION: 2025-11-20-v3 - Using API route')
+      const response = await fetch('/api/user/payment-plans')
 
-      const { data, error } = await supabase
-        .from('payment_plan_summary')
-        .select('*')
-        .eq('contact_id', user.id)
-        .eq('status', 'active')
-
-      if (error) {
-        console.error('Error fetching payment plans:', error)
+      if (!response.ok) {
+        console.error('Error fetching payment plans:', response.statusText)
         return
       }
 
-      setPaymentPlans(data || [])
+      const data = await response.json()
+      setPaymentPlans(data.paymentPlans || [])
     } catch (error) {
       console.error('Error fetching payment plans:', error)
     } finally {
@@ -119,7 +111,7 @@ export default function UserPaymentPlansSection() {
             </p>
           </div>
           <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-mono">
-            v2025-11-20-v2 (contact_id)
+            v2025-11-20-v3 (API route)
           </div>
         </div>
       </div>

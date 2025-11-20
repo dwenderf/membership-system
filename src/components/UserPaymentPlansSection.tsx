@@ -7,29 +7,19 @@ import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 
 interface PaymentPlan {
-  id: string
+  invoice_id: string
+  contact_id: string
   total_amount: number
   paid_amount: number
-  installment_amount: number
-  installments_count: number
+  total_installments: number
   installments_paid: number
   next_payment_date: string | null
+  final_payment_date: string | null
   status: string
-  created_at: string
-  user_registrations: {
-    registration_categories: {
-      custom_name: string | null
-      categories: {
-        name: string
-      } | null
-    } | null
-    registrations: {
-      name: string
-      season: {
-        name: string
-      } | null
-    } | null
-  } | null
+  registration_id: string | null
+  registration_name: string | null
+  season_name: string | null
+  installments: any[]
 }
 
 export default function UserPaymentPlansSection() {
@@ -50,26 +40,9 @@ export default function UserPaymentPlansSection() {
 
       const { data, error } = await supabase
         .from('payment_plan_summary')
-        .select(`
-          *,
-          user_registrations (
-            registration_categories (
-              custom_name,
-              categories (
-                name
-              )
-            ),
-            registrations (
-              name,
-              season:seasons (
-                name
-              )
-            )
-          )
-        `)
-        .eq('user_id', user.id)
+        .select('*')
+        .eq('contact_id', user.id)
         .eq('status', 'active')
-        .order('created_at', { ascending: false })
 
       if (error) {
         console.error('Error fetching payment plans:', error)
@@ -146,19 +119,16 @@ export default function UserPaymentPlansSection() {
         <div className="space-y-4">
           {paymentPlans.map((plan) => {
             const remainingBalance = plan.total_amount - plan.paid_amount
-            const registrationName = plan.user_registrations?.registrations?.name || 'Unknown Registration'
-            const seasonName = plan.user_registrations?.registrations?.season?.name
-            const categoryName = plan.user_registrations?.registration_categories?.custom_name ||
-              plan.user_registrations?.registration_categories?.categories?.name ||
-              'Unknown Category'
+            const registrationName = plan.registration_name || 'Unknown Registration'
+            const seasonName = plan.season_name
 
             return (
-              <div key={plan.id} className="border border-gray-200 rounded-lg p-4">
+              <div key={plan.invoice_id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="text-sm font-medium text-gray-900">{registrationName}</h3>
                     {seasonName && (
-                      <p className="text-xs text-gray-500">{seasonName} - {categoryName}</p>
+                      <p className="text-xs text-gray-500">{seasonName}</p>
                     )}
                   </div>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -169,7 +139,7 @@ export default function UserPaymentPlansSection() {
                 {/* Progress Bar */}
                 <div className="mb-3">
                   <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>Progress: {plan.installments_paid} of {plan.installments_count} payments</span>
+                    <span>Progress: {plan.installments_paid} of {plan.total_installments} payments</span>
                     <span>{Math.round((plan.paid_amount / plan.total_amount) * 100)}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
@@ -197,7 +167,7 @@ export default function UserPaymentPlansSection() {
                 </div>
 
                 {/* Next Payment */}
-                {plan.next_payment_date && (
+                {plan.next_payment_date && plan.installments && (
                   <div className="mb-3 p-2 bg-gray-50 rounded text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Next Payment:</span>
@@ -205,7 +175,11 @@ export default function UserPaymentPlansSection() {
                     </div>
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-gray-600">Amount:</span>
-                      <span className="font-medium">{formatAmount(plan.installment_amount)}</span>
+                      <span className="font-medium">
+                        {formatAmount(
+                          plan.installments.find((i: any) => i.planned_payment_date === plan.next_payment_date)?.amount || 0
+                        )}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -213,15 +187,15 @@ export default function UserPaymentPlansSection() {
                 {/* Pay Remaining Button */}
                 {remainingBalance > 0 && (
                   <button
-                    onClick={() => handlePayRemaining(plan.id, remainingBalance)}
-                    disabled={payingOff === plan.id}
+                    onClick={() => handlePayRemaining(plan.invoice_id, remainingBalance)}
+                    disabled={payingOff === plan.invoice_id}
                     className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      payingOff === plan.id
+                      payingOff === plan.invoice_id
                         ? 'bg-gray-400 text-white cursor-not-allowed'
                         : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
                   >
-                    {payingOff === plan.id
+                    {payingOff === plan.invoice_id
                       ? 'Processing...'
                       : `Pay Remaining Balance (${formatAmount(remainingBalance)})`
                     }

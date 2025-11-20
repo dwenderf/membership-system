@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { formatDate } from '@/lib/date-utils'
 import { createClient } from '@/lib/supabase/client'
+import { useToast } from '@/contexts/ToastContext'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
 import dynamic from 'next/dynamic'
@@ -21,6 +22,7 @@ export default function AccountPage() {
   const [unlinking, setUnlinking] = useState(false)
 
   const supabase = createClient()
+  const { showSuccess, showError } = useToast()
 
   useEffect(() => {
     const getUser = async () => {
@@ -59,10 +61,11 @@ export default function AccountPage() {
     }
 
     getUser()
-  }, [])
+  }, [supabase])
 
   const handleUnlinkGoogle = async () => {
-    if (!googleOAuth) return
+    // Pre-check: verify both conditions before attempting unlink
+    if (!googleOAuth || !hasEmailAuth) return
 
     setUnlinking(true)
     try {
@@ -76,20 +79,23 @@ export default function AccountPage() {
       const emailIdentity = identities.find(id => id.provider === 'email')
 
       if (!emailIdentity) {
-        // This shouldn't happen if hasEmailAuth was true, but verify
-        alert('Account Lockout Prevented: Unable to unlink Google account because no email authentication method was found. Please contact support.')
-        setUnlinking(false)
+        // Update UI state to reflect that Google was unlinked
+        setGoogleOAuth(null)
         setShowUnlinkConfirm(false)
+
+        // This shouldn't happen if hasEmailAuth was true, but verify
+        showError('Account Lockout Prevented', 'Unable to unlink Google account because no email authentication method was found. Please contact support.')
+        setUnlinking(false)
         return
       }
 
       // Success - update UI
       setGoogleOAuth(null)
       setShowUnlinkConfirm(false)
-      alert('Google account unlinked successfully. You can now only sign in using magic links sent to your email.')
+      showSuccess('Google Account Unlinked', 'You can now only sign in using magic links sent to your email.')
     } catch (error) {
       console.error('Error unlinking Google account:', error)
-      alert('Failed to unlink Google account. Please try again or contact support.')
+      showError('Failed to Unlink', 'Failed to unlink Google account. Please try again or contact support.')
     } finally {
       setUnlinking(false)
     }
@@ -314,6 +320,7 @@ export default function AccountPage() {
                   <p className="text-sm text-blue-700">
                     You can{' '}
                     <button
+                      type="button"
                       onClick={() => setShowUnlinkConfirm(true)}
                       className="text-blue-600 hover:text-blue-800 underline font-medium"
                     >
@@ -328,6 +335,7 @@ export default function AccountPage() {
                 <p className="text-sm text-blue-700">
                   To delete your account and permanently remove all of your personal information,{' '}
                   <button
+                    type="button"
                     onClick={() => setShowDeleteAccount(true)}
                     className="text-blue-600 hover:text-blue-800 underline font-medium"
                   >
@@ -397,6 +405,7 @@ export default function AccountPage() {
                 </div>
                 <div className="items-center px-4 py-3">
                   <button
+                    type="button"
                     onClick={handleUnlinkGoogle}
                     disabled={unlinking}
                     className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -404,6 +413,7 @@ export default function AccountPage() {
                     {unlinking ? 'Unlinking...' : 'Yes, Unlink Google Account'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowUnlinkConfirm(false)}
                     disabled={unlinking}
                     className="mt-3 px-4 py-2 bg-gray-100 text-gray-700 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"

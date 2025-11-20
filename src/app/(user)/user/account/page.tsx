@@ -42,10 +42,19 @@ export default function AccountPage() {
       const { data: identitiesData } = await supabase.auth.getUserIdentities()
       const identities = identitiesData?.identities || []
 
+      console.log('=== ALL IDENTITIES ===')
+      console.log(JSON.stringify(identities, null, 2))
+      console.log('=== END IDENTITIES ===')
+
       // Check for Google OAuth
       const googleIdentity = identities.find(id => id.provider === 'google')
       if (googleIdentity) {
-        console.log('Google Identity object:', JSON.stringify(googleIdentity, null, 2))
+        console.log('=== GOOGLE IDENTITY ===')
+        console.log('Full object:', JSON.stringify(googleIdentity, null, 2))
+        console.log('id field:', googleIdentity.id)
+        console.log('Type of id:', typeof googleIdentity.id)
+        console.log('=== END GOOGLE IDENTITY ===')
+
         setGoogleOAuth({
           email: googleIdentity.identity_data?.email || '',
           id: googleIdentity.id
@@ -72,7 +81,12 @@ export default function AccountPage() {
 
     setUnlinking(true)
     try {
-      console.log('Attempting to unlink with identity_id:', googleOAuth.id)
+      console.log('=== UNLINK ATTEMPT ===')
+      console.log('googleOAuth object:', googleOAuth)
+      console.log('identity_id being sent:', googleOAuth.id)
+      console.log('Type:', typeof googleOAuth.id)
+      console.log('=== END UNLINK ATTEMPT ===')
+
       const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
 
       if (error) {

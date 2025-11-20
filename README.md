@@ -687,7 +687,7 @@ The Hockey Association Team
 
 **Data Variables:**
 
-- `firstName` - User's first name ("Admin" for admin notification emails)
+- `firstName` - User's first name (formatted as "FirstName (old@email.com)" for admin notifications)
 - `oldEmail` - Previous email address
 - `newEmail` - New email address
 - `googleAuthWarning` - Warning message if Google OAuth email differs from new email (empty string if no mismatch)

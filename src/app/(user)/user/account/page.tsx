@@ -62,7 +62,7 @@ export default function AccountPage() {
     }
 
     getUser()
-  }, [supabase])
+  }, [])
 
   const handleUnlinkGoogle = async () => {
     // Pre-check: verify both conditions before attempting unlink

@@ -4,7 +4,7 @@ import { PaymentPlanService } from './payment-plan-service'
 import { emailStagingManager } from '@/lib/email/staging'
 import { EMAIL_EVENTS } from '@/lib/email/service'
 import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from './payment-plan-config'
-import { formatDate } from '@/lib/date-utils'
+import { formatDate, formatDateString } from '@/lib/date-utils'
 import { formatAmount } from '@/lib/format-utils'
 
 /**
@@ -415,7 +415,7 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
             installment_number: payment.installment_number,
             total_installments: planSummary?.total_installments || 4,
             installment_amount: formatAmount(payment.amount_paid),
-            next_payment_date: formatDate(new Date(payment.planned_payment_date)),
+            next_payment_date: formatDateString(payment.planned_payment_date),
             amount_paid: formatAmount(planSummary?.paid_amount || 0),
             remaining_balance: formatAmount(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0),
             account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`

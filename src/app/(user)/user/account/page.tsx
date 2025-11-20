@@ -345,8 +345,14 @@ export default function AccountPage() {
       {showUnlinkConfirm && googleOAuth && (
         <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+          tabIndex={-1}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
+              setShowUnlinkConfirm(false)
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
               setShowUnlinkConfirm(false)
             }
           }}

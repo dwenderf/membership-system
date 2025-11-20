@@ -111,10 +111,17 @@ export default function UserPaymentPlansSection() {
   return (
     <div className="bg-white shadow rounded-lg mb-6">
       <div className="px-6 py-4 border-b border-gray-200">
-        <h2 className="text-lg font-medium text-gray-900">Payment Plans</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Active payment plans for your registrations
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-medium text-gray-900">Payment Plans</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Active payment plans for your registrations
+            </p>
+          </div>
+          <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-xs font-mono">
+            v2025-11-20-v2 (contact_id)
+          </div>
+        </div>
       </div>
       <div className="px-6 py-4">
         <div className="space-y-4">

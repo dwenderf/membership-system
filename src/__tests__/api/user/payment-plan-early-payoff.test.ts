@@ -181,7 +181,7 @@ describe('/api/user/payment-plans/early-payoff', () => {
         success: true,
         message: 'Payment plan paid in full successfully'
       })
-      expect(PaymentPlanService.processEarlyPayoff).toHaveBeenCalledWith('invoice-id')
+      expect(PaymentPlanService.processEarlyPayoff).toHaveBeenCalledWith('invoice-id', 'user-id')
     })
 
     it('should handle payment processing failures', async () => {

@@ -1,43 +1,39 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
+import ConfirmationDialog from './ConfirmationDialog'
+
+interface Installment {
+  planned_payment_date: string
+  amount: number
+}
 
 interface PaymentPlan {
-  id: string
+  invoice_id: string
+  contact_id: string
   total_amount: number
   paid_amount: number
-  installment_amount: number
-  installments_count: number
+  total_installments: number
   installments_paid: number
   next_payment_date: string | null
+  final_payment_date: string | null
   status: string
-  created_at: string
-  user_registrations: {
-    registration_categories: {
-      custom_name: string | null
-      categories: {
-        name: string
-      } | null
-    } | null
-    registrations: {
-      name: string
-      season: {
-        name: string
-      } | null
-    } | null
-  } | null
+  registration_id: string | null
+  registration_name: string | null
+  season_name: string | null
+  installments: Installment[]
 }
 
 export default function UserPaymentPlansSection() {
   const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [payingOff, setPayingOff] = useState<string | null>(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; amount: number } | null>(null)
   const { showSuccess, showError } = useToast()
-  const supabase = createClient()
 
   useEffect(() => {
     fetchPaymentPlans()
@@ -45,38 +41,15 @@ export default function UserPaymentPlansSection() {
 
   const fetchPaymentPlans = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const response = await fetch('/api/user/payment-plans')
 
-      const { data, error } = await supabase
-        .from('payment_plans')
-        .select(`
-          *,
-          user_registrations (
-            registration_categories (
-              custom_name,
-              categories (
-                name
-              )
-            ),
-            registrations (
-              name,
-              season:seasons (
-                name
-              )
-            )
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching payment plans:', error)
+      if (!response.ok) {
+        console.error('Error fetching payment plans:', response.statusText)
         return
       }
 
-      setPaymentPlans(data || [])
+      const data = await response.json()
+      setPaymentPlans(data.paymentPlans || [])
     } catch (error) {
       console.error('Error fetching payment plans:', error)
     } finally {
@@ -84,12 +57,16 @@ export default function UserPaymentPlansSection() {
     }
   }
 
-  const handlePayRemaining = async (planId: string, remainingAmount: number) => {
-    if (!confirm(`Are you sure you want to pay the remaining balance of ${formatAmount(remainingAmount)}? This will immediately charge your saved payment method.`)) {
-      return
-    }
+  const handlePayRemainingClick = (planId: string, remainingAmount: number) => {
+    setSelectedPlan({ id: planId, amount: remainingAmount })
+    setShowConfirmModal(true)
+  }
 
-    setPayingOff(planId)
+  const handleConfirmPayment = async () => {
+    if (!selectedPlan) return
+
+    setShowConfirmModal(false)
+    setPayingOff(selectedPlan.id)
 
     try {
       const response = await fetch('/api/user/payment-plans/early-payoff', {
@@ -97,7 +74,7 @@ export default function UserPaymentPlansSection() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId: selectedPlan.id }),
       })
 
       const data = await response.json()
@@ -114,6 +91,7 @@ export default function UserPaymentPlansSection() {
       showError('Payment Failed', 'An unexpected error occurred')
     } finally {
       setPayingOff(null)
+      setSelectedPlan(null)
     }
   }
 
@@ -146,19 +124,16 @@ export default function UserPaymentPlansSection() {
         <div className="space-y-4">
           {paymentPlans.map((plan) => {
             const remainingBalance = plan.total_amount - plan.paid_amount
-            const registrationName = plan.user_registrations?.registrations?.name || 'Unknown Registration'
-            const seasonName = plan.user_registrations?.registrations?.season?.name
-            const categoryName = plan.user_registrations?.registration_categories?.custom_name ||
-              plan.user_registrations?.registration_categories?.categories?.name ||
-              'Unknown Category'
+            const registrationName = plan.registration_name || 'Unknown Registration'
+            const seasonName = plan.season_name
 
             return (
-              <div key={plan.id} className="border border-gray-200 rounded-lg p-4">
+              <div key={plan.invoice_id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="text-sm font-medium text-gray-900">{registrationName}</h3>
                     {seasonName && (
-                      <p className="text-xs text-gray-500">{seasonName} - {categoryName}</p>
+                      <p className="text-xs text-gray-500">{seasonName}</p>
                     )}
                   </div>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -169,7 +144,7 @@ export default function UserPaymentPlansSection() {
                 {/* Progress Bar */}
                 <div className="mb-3">
                   <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>Progress: {plan.installments_paid} of {plan.installments_count} payments</span>
+                    <span>Progress: {plan.installments_paid} of {plan.total_installments} payments</span>
                     <span>{Math.round((plan.paid_amount / plan.total_amount) * 100)}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
@@ -197,7 +172,7 @@ export default function UserPaymentPlansSection() {
                 </div>
 
                 {/* Next Payment */}
-                {plan.next_payment_date && (
+                {plan.next_payment_date && plan.installments && (
                   <div className="mb-3 p-2 bg-gray-50 rounded text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Next Payment:</span>
@@ -205,7 +180,11 @@ export default function UserPaymentPlansSection() {
                     </div>
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-gray-600">Amount:</span>
-                      <span className="font-medium">{formatAmount(plan.installment_amount)}</span>
+                      <span className="font-medium">
+                        {formatAmount(
+                          plan.installments.find((i) => i.planned_payment_date === plan.next_payment_date)?.amount || 0
+                        )}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -213,15 +192,16 @@ export default function UserPaymentPlansSection() {
                 {/* Pay Remaining Button */}
                 {remainingBalance > 0 && (
                   <button
-                    onClick={() => handlePayRemaining(plan.id, remainingBalance)}
-                    disabled={payingOff === plan.id}
+                    type="button"
+                    onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
+                    disabled={payingOff === plan.invoice_id}
                     className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      payingOff === plan.id
+                      payingOff === plan.invoice_id
                         ? 'bg-gray-400 text-white cursor-not-allowed'
                         : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
                   >
-                    {payingOff === plan.id
+                    {payingOff === plan.invoice_id
                       ? 'Processing...'
                       : `Pay Remaining Balance (${formatAmount(remainingBalance)})`
                     }
@@ -245,6 +225,30 @@ export default function UserPaymentPlansSection() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationDialog
+        isOpen={showConfirmModal}
+        title="Confirm Payment"
+        message={
+          <div className="space-y-4">
+            <p>
+              Are you sure you want to pay the remaining balance of:
+            </p>
+            <p className="text-center text-2xl font-bold text-gray-900">
+              {selectedPlan ? formatAmount(selectedPlan.amount) : ''}
+            </p>
+            <p className="text-sm text-gray-600">
+              This will immediately charge your saved payment method and complete your payment plan.
+            </p>
+          </div>
+        }
+        confirmText="Pay Now"
+        cancelText="Cancel"
+        onConfirm={handleConfirmPayment}
+        onCancel={() => setShowConfirmModal(false)}
+        variant="info"
+      />
     </div>
   )
 }

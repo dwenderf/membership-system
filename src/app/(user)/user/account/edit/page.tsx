@@ -61,6 +61,7 @@ export default function EditProfilePage() {
         lastName: userProfile.last_name || '',
         email: user.email || '', // Track original email for future contact sync
       })
+
       setLoading(false)
     }
 

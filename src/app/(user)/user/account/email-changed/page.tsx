@@ -18,7 +18,9 @@ export default function EmailChangedPage() {
 
   useEffect(() => {
     // Prevent running multiple times
-    if (hasRun.current) return
+    if (hasRun.current) {
+      return
+    }
     hasRun.current = true
 
     let redirectTimeout: NodeJS.Timeout | null = null

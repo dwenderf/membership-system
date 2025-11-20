@@ -255,8 +255,24 @@ export default function EditProfilePage() {
         console.error('Failed to unlink Google account:', error)
         showError('Failed to unlink Google account', error.message)
       } else {
+        // Verify email authentication still exists after unlinking (prevent account lockout)
+        const { data: identitiesData } = await supabase.auth.getUserIdentities()
+        const identities = identitiesData?.identities || []
+        const emailIdentity = identities.find(id => id.provider === 'email')
+
+        if (!emailIdentity) {
+          // This should never happen due to pre-check, but safeguard against race conditions
+          console.error('CRITICAL: Email authentication missing after Google unlink')
+          showError('Account Lockout Prevented', 'Unable to unlink Google - email authentication is missing. Please contact support.')
+
+          // Note: The unlink already happened, but user still has Google auth in Supabase
+          // They may need to re-link or contact support
+          return
+        }
+
         showSuccess('Google account unlinked', 'You can now only sign in with your email address.')
         setGoogleOAuth(null)
+        setHasEmailAuth(true) // Confirm email auth is still present
         setShowUnlinkConfirm(false)
       }
     } catch (error) {
@@ -481,7 +497,7 @@ export default function EditProfilePage() {
               </label>
               <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-300 rounded-md">
                 <div className="flex items-center">
-                  <svg className="w-5 h-5 mr-3 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-5 h-5 mr-3 text-gray-600" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="Google">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -510,15 +526,24 @@ export default function EditProfilePage() {
 
       {/* Unlink Confirmation Modal */}
       {showUnlinkConfirm && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          onClick={() => setShowUnlinkConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-lg max-w-md w-full p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unlink-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center mb-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-label="Warning">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                 </svg>
               </div>
-              <h3 className="ml-3 text-lg font-medium text-gray-900">Unlink Google Account</h3>
+              <h3 id="unlink-modal-title" className="ml-3 text-lg font-medium text-gray-900">Unlink Google Account</h3>
             </div>
 
             <p className="text-sm text-gray-600 mb-6">

@@ -213,19 +213,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Send confirmation emails to both addresses
+    const userFirstName = user.first_name || 'User'
     try {
-      await sendConfirmationEmail(oldEmail, user.first_name, oldEmail, newEmail, googleAuthWarning)
-      await sendConfirmationEmail(newEmail, user.first_name, oldEmail, newEmail, googleAuthWarning)
+      await sendConfirmationEmail(oldEmail, userFirstName, oldEmail, newEmail, googleAuthWarning)
+      await sendConfirmationEmail(newEmail, userFirstName, oldEmail, newEmail, googleAuthWarning)
     } catch (emailError) {
       console.error('Error sending confirmation emails:', emailError)
       // Don't fail the request, just log
     }
 
-    // Send notification to admins
+    // Send notification to admins with user identification
     const supportEmail = process.env.SUPPORT_EMAIL
     if (supportEmail) {
       try {
-        await sendConfirmationEmail(supportEmail, 'Admin', oldEmail, newEmail, googleAuthWarning)
+        const adminFirstName = `${userFirstName} (${oldEmail})`
+        await sendConfirmationEmail(supportEmail, adminFirstName, oldEmail, newEmail, googleAuthWarning)
       } catch (adminEmailError) {
         console.error('Error sending admin notification:', adminEmailError)
         // Don't fail the request, just log

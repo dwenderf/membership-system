@@ -35,6 +35,7 @@ export default function UserPaymentPlansSection() {
 
   const fetchPaymentPlans = async () => {
     try {
+      console.log('[UserPaymentPlansSection] VERSION: 2025-11-20-v2 - Using contact_id')
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 

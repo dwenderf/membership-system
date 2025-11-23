@@ -56,7 +56,7 @@ LEFT JOIN payments p ON xi.payment_id = p.id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN discount_codes dc ON xil.discount_code_id = dc.id
 LEFT JOIN discount_categories dcat ON dc.discount_category_id = dcat.id
-WHERE xi.sync_status = 'synced'
+WHERE xi.sync_status IN ('synced', 'pending')
   AND xi.invoice_status != 'DRAFT'
   AND p.status = 'completed';
 

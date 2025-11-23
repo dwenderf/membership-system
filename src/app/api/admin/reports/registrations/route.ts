@@ -112,6 +112,33 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist data', { error: waitlistError, registrationId }, 'error')
       }
 
+      // Get alternate selections for this registration
+      const { data: alternateSelectionsData, error: alternatesError } = await adminSupabase
+        .from('alternate_selections')
+        .select(`
+          *,
+          users!alternate_selections_user_id_fkey (
+            id,
+            email,
+            first_name,
+            last_name,
+            is_lgbtq,
+            is_goalie
+          ),
+          alternate_registrations!inner (
+            id,
+            registration_id,
+            game_description,
+            game_date
+          )
+        `)
+        .eq('alternate_registrations.registration_id', registrationId)
+        .order('selected_at', { ascending: false })
+
+      if (alternatesError) {
+        logger.logSystem('registration-reports-api', 'Error fetching alternates data', { error: alternatesError, registrationId }, 'error')
+      }
+
       // Get discount usage for waitlist users to check seasonal limits
       const waitlistUserIds = waitlistData?.map(w => {
         const user = Array.isArray(w.users) ? w.users[0] : w.users
@@ -223,9 +250,63 @@ export async function GET(request: NextRequest) {
         }
       }) || []
 
-      return NextResponse.json({ 
+      // Process alternate selections data - group by user and calculate stats
+      const alternatesMap = new Map<string, {
+        user_id: string
+        first_name: string
+        last_name: string
+        email: string
+        is_lgbtq: boolean | null
+        is_goalie: boolean
+        times_played: number
+        total_paid: number
+        selections: Array<{
+          game_description: string
+          game_date: string
+          amount_charged: number
+          selected_at: string
+        }>
+      }>()
+
+      alternateSelectionsData?.forEach(selection => {
+        const user = Array.isArray(selection.users) ? selection.users[0] : selection.users
+        const alternateReg = Array.isArray(selection.alternate_registrations) ? selection.alternate_registrations[0] : selection.alternate_registrations
+
+        if (!user) return
+
+        const userId = user.id
+        if (!alternatesMap.has(userId)) {
+          alternatesMap.set(userId, {
+            user_id: userId,
+            first_name: user.first_name || '',
+            last_name: user.last_name || '',
+            email: user.email || 'Unknown',
+            is_lgbtq: user.is_lgbtq,
+            is_goalie: user.is_goalie || false,
+            times_played: 0,
+            total_paid: 0,
+            selections: []
+          })
+        }
+
+        const userData = alternatesMap.get(userId)!
+        userData.times_played += 1
+        userData.total_paid += selection.amount_charged || 0
+        userData.selections.push({
+          game_description: alternateReg?.game_description || 'Unknown Game',
+          game_date: alternateReg?.game_date || '',
+          amount_charged: selection.amount_charged || 0,
+          selected_at: selection.selected_at
+        })
+      })
+
+      // Convert map to array
+      const processedAlternatesData = Array.from(alternatesMap.values())
+
+      return NextResponse.json({
         data: processedData,
-        waitlistData: processedWaitlistData 
+        waitlistData: processedWaitlistData,
+        alternatesData: processedAlternatesData
       })
     } else {
       // Get all registrations for selection with category counts

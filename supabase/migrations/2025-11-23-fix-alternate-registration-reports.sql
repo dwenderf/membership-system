@@ -209,9 +209,17 @@ SELECT
     COALESCE(r.name, r2.name) as registration_name,
     COALESCE(r.type, r2.type) as registration_type,
     rc.id as registration_category_id,
-    rc.custom_name as registration_category_name,
+    -- Show "Alternate" for category name when this is an alternate (no user_registrations entry)
+    CASE
+        WHEN ur.id IS NULL AND r2.id IS NOT NULL THEN 'Alternate'
+        ELSE rc.custom_name
+    END as registration_category_name,
     rc.price as registration_category_price,
-    c.name as category_name,
+    -- Show "Alternate" for category name when this is an alternate
+    CASE
+        WHEN ur.id IS NULL AND r2.id IS NOT NULL THEN 'Alternate'
+        ELSE c.name
+    END as category_name,
     COALESCE(s.id, s2.id) as season_id,
     COALESCE(s.name, s2.name) as season_name
 FROM reports_financial_data rfd

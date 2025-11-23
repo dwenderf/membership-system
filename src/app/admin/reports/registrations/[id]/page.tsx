@@ -49,6 +49,23 @@ interface WaitlistData {
   final_amount: number
 }
 
+interface AlternateData {
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+  is_lgbtq: boolean | null
+  is_goalie: boolean
+  times_played: number
+  total_paid: number
+  selections: Array<{
+    game_description: string
+    game_date: string
+    amount_charged: number
+    selected_at: string
+  }>
+}
+
 export default function RegistrationDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -56,6 +73,7 @@ export default function RegistrationDetailPage() {
 
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
   const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
+  const [alternatesData, setAlternatesData] = useState<AlternateData[]>([])
   const [registrationName, setRegistrationName] = useState('')
   const [seasonName, setSeasonName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -65,8 +83,11 @@ export default function RegistrationDetailPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [waitlistSortField, setWaitlistSortField] = useState<keyof WaitlistData>('joined_at')
   const [waitlistSortDirection, setWaitlistSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [alternatesSortField, setAlternatesSortField] = useState<keyof AlternateData>('first_name')
+  const [alternatesSortDirection, setAlternatesSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isWaitlistExpanded, setIsWaitlistExpanded] = useState(true)
   const [isRegistrationsExpanded, setIsRegistrationsExpanded] = useState(true)
+  const [isAlternatesExpanded, setIsAlternatesExpanded] = useState(true)
   const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
   const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
 
@@ -87,6 +108,7 @@ export default function RegistrationDetailPage() {
       const result = await response.json()
       setRegistrationData(result.data || [])
       setWaitlistData(result.waitlistData || [])
+      setAlternatesData(result.alternatesData || [])
 
       // Set title information from first registration record
       if (result.data && result.data.length > 0) {
@@ -115,6 +137,15 @@ export default function RegistrationDetailPage() {
     } else {
       setWaitlistSortField(field)
       setWaitlistSortDirection('asc')
+    }
+  }
+
+  const handleAlternatesSort = (field: keyof AlternateData) => {
+    if (alternatesSortField === field) {
+      setAlternatesSortDirection(alternatesSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setAlternatesSortField(field)
+      setAlternatesSortDirection('asc')
     }
   }
 
@@ -543,6 +574,137 @@ export default function RegistrationDetailPage() {
                       </div>
                     )
                   })
+                )}
+              </>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Alternates Section */}
+      {alternatesData && alternatesData.length > 0 && (() => {
+        // Filter alternates data by search term
+        const filteredAlternatesData = alternatesData.filter(alternate => {
+          const fullName = `${alternate.first_name} ${alternate.last_name}`.toLowerCase()
+          const email = alternate.email.toLowerCase()
+          const search = searchTerm.toLowerCase()
+
+          return fullName.includes(search) || email.includes(search)
+        })
+
+        // Sort alternates data
+        const sortedAlternatesData = [...filteredAlternatesData].sort((a, b) => {
+          let aValue = a[alternatesSortField]
+          let bValue = b[alternatesSortField]
+
+          // Handle boolean fields by converting to display labels for proper sorting
+          if (alternatesSortField === 'is_lgbtq') {
+            aValue = getLgbtqStatusLabel(a.is_lgbtq)
+            bValue = getLgbtqStatusLabel(b.is_lgbtq)
+          } else if (alternatesSortField === 'is_goalie') {
+            aValue = getGoalieStatusLabel(a.is_goalie)
+            bValue = getGoalieStatusLabel(b.is_goalie)
+          }
+
+          if (alternatesSortField === 'times_played' || alternatesSortField === 'total_paid') {
+            const aNum = typeof aValue === 'number' ? aValue : 0
+            const bNum = typeof bValue === 'number' ? bValue : 0
+            return alternatesSortDirection === 'asc' ? aNum - bNum : bNum - aNum
+          }
+
+          if (typeof aValue === 'string' && typeof bValue === 'string') {
+            return alternatesSortDirection === 'asc'
+              ? aValue.localeCompare(bValue)
+              : bValue.localeCompare(aValue)
+          }
+
+          return 0
+        })
+
+        return (
+          <div className="mb-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Alternates ({filteredAlternatesData.length}{filteredAlternatesData.length !== alternatesData.length ? ` of ${alternatesData.length}` : ''} total)
+              </h3>
+              <button
+                onClick={() => setIsAlternatesExpanded(!isAlternatesExpanded)}
+                className="flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                {isAlternatesExpanded ? 'Collapse' : 'Expand'}
+                <span className="ml-1">
+                  {isAlternatesExpanded ? '↑' : '↓'}
+                </span>
+              </button>
+            </div>
+            {isAlternatesExpanded && (
+              <>
+                {filteredAlternatesData.length === 0 ? (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <p className="text-gray-500 text-center">No alternates match your search criteria.</p>
+                  </div>
+                ) : (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {[
+                              { key: 'first_name', label: 'Participant' },
+                              { key: 'email', label: 'Email' },
+                              { key: 'is_lgbtq', label: 'LGBTQ+' },
+                              { key: 'is_goalie', label: 'Goalie' },
+                              { key: 'times_played', label: 'Times Played' },
+                              { key: 'total_paid', label: 'Total Paid' }
+                            ].map(({ key, label }) => (
+                              <th
+                                key={key}
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                onClick={() => handleAlternatesSort(key as keyof AlternateData)}
+                              >
+                                <div className="flex items-center">
+                                  {label}
+                                  {alternatesSortField === key && (
+                                    <span className="ml-1">
+                                      {alternatesSortDirection === 'asc' ? '↑' : '↓'}
+                                    </span>
+                                  )}
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {sortedAlternatesData.map((alternate) => (
+                            <tr key={alternate.user_id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {alternate.first_name} {alternate.last_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {alternate.email}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(alternate.is_lgbtq)}`}>
+                                  {getLgbtqStatusLabel(alternate.is_lgbtq)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGoalieStatusStyles(alternate.is_goalie)}`}>
+                                  {getGoalieStatusLabel(alternate.is_goalie)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                {alternate.times_played}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                {formatCurrency(alternate.total_paid)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </>
             )}

@@ -1492,12 +1492,12 @@ export class XeroBatchSyncManager {
           stagingId,
           xeroPaymentId,
           tenantId,
-          errorMessage: error.message,
-          errorCode: error.code
+          errorMessage: error?.message || String(error),
+          errorCode: error?.code || 'UNKNOWN'
         }
       })
 
-      throw new Error(`Failed to mark payment as synced in database: ${error.message}`)
+      throw new Error(`Failed to mark payment as synced in database: ${error?.message || String(error)}`)
     } else {
       console.log('✅ Payment marked as synced successfully:', data)
     }

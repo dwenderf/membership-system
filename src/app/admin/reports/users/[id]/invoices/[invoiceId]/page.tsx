@@ -61,6 +61,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
         invoice_status,
         total_amount,
         net_amount,
+        is_payment_plan,
         xero_invoice_line_items (
           id,
           description,
@@ -219,47 +220,20 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
           </div>
 
           <div className="space-y-6">
-            {/* Payment details */}
+            {/* Payment Summary */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {invoice.isPaymentPlan ? 'Invoice Information' : 'Payment Information'}
-              </h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Summary</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Invoice Number</dt>
                   <dd className="mt-1 text-sm text-gray-900">{invoice.number}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">
-                    {invoice.isPaymentPlan ? 'Invoice Date' : 'Payment Date'}
-                  </dt>
-                  <dd className="mt-1 text-sm text-gray-900">
-                    {formatDate(new Date(invoice.date))}
+                  <dt className="text-sm font-medium text-gray-500">Total Amount</dt>
+                  <dd className="mt-1 text-sm font-medium text-gray-900">
+                    {formatAmount(invoice.isPaymentPlan ? invoice.totalPaid : payment.final_amount)}
                   </dd>
                 </div>
-                {invoice.isPaymentPlan ? (
-                  <>
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Total Invoice Amount</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{formatAmount(invoice.totalAmount)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Total Paid</dt>
-                      <dd className="mt-1 text-sm font-medium text-green-600">{formatAmount(invoice.totalPaid)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Remaining Balance</dt>
-                      <dd className="mt-1 text-sm font-medium text-orange-600">
-                        {formatAmount(Math.max(0, invoice.totalAmount - invoice.totalPaid))}
-                      </dd>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Payment Amount</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{formatAmount(payment.final_amount)}</dd>
-                  </div>
-                )}
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
                   <dd className="mt-1">
@@ -274,14 +248,6 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                     </span>
                   </dd>
                 </div>
-                {payment.stripe_payment_intent_id && (
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Stripe Payment ID</dt>
-                    <dd className="mt-1 text-xs text-gray-900 font-mono">
-                      {payment.stripe_payment_intent_id}
-                    </dd>
-                  </div>
-                )}
                 {totalRefunded > 0 && (
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Total Refunded</dt>
@@ -322,51 +288,63 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
               )}
             </div>
 
-            {/* Payment Plan Payments Section */}
-            {invoice.isPaymentPlan && invoice.allPayments.length > 0 && (
+            {/* Payment Line Items Section */}
+            {invoice.isPaymentPlan && invoice.allPayments.length > 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Payments</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Line Items</h3>
                 <div className="border rounded-md">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payment ID</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stripe Payment ID</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {invoice.allPayments.map((pmt: any) => (
+                      {invoice.allPayments
+                        .filter((pmt: any) => pmt.sync_status === 'synced')
+                        .map((pmt: any) => (
                         <tr key={pmt.id}>
                           <td className="px-4 py-2 text-sm text-gray-900">
                             {pmt.created_at ? formatDate(new Date(pmt.created_at)) : 'N/A'}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-500">
-                            {pmt.payment_type === 'full' ? 'Payoff' :
-                             pmt.payment_type === 'installment' ? `Installment ${pmt.installment_number || ''}` :
-                             pmt.payment_type}
-                          </td>
-                          <td className="px-4 py-2">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              pmt.sync_status === 'synced' ? 'bg-green-100 text-green-800' :
-                              pmt.sync_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              pmt.sync_status === 'failed' ? 'bg-red-100 text-red-800' :
-                              pmt.sync_status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
-                              {pmt.sync_status.charAt(0).toUpperCase() + pmt.sync_status.slice(1)}
-                            </span>
                           </td>
                           <td className="px-4 py-2 text-sm text-gray-900 text-right">
                             {formatAmount(pmt.amount_paid)}
                           </td>
                           <td className="px-4 py-2 text-xs text-gray-500 font-mono">
-                            {pmt.xero_payment_id?.slice(0, 8) || 'Pending'}
+                            {pmt.staging_metadata?.stripe_charge_id || 'N/A'}
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : !invoice.isPaymentPlan && payment.stripe_payment_intent_id && (
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Line Items</h3>
+                <div className="border rounded-md">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stripe Payment ID</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {formatDate(new Date(payment.completed_at || payment.created_at))}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                          {formatAmount(payment.final_amount)}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-gray-500 font-mono">
+                          {payment.stripe_payment_intent_id}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>

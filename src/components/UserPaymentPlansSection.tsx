@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -34,6 +35,7 @@ export default function UserPaymentPlansSection() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<{ id: string; amount: number } | null>(null)
   const { showSuccess, showError } = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     fetchPaymentPlans()
@@ -81,8 +83,8 @@ export default function UserPaymentPlansSection() {
 
       if (response.ok && data.success) {
         showSuccess('Payment Successful', 'Your payment plan has been paid in full!')
-        // Refresh payment plans
-        await fetchPaymentPlans()
+        // Refresh the entire page to show updated status across all sections
+        router.refresh()
       } else {
         showError('Payment Failed', data.error || 'Failed to process early payoff')
       }

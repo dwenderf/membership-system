@@ -223,44 +223,44 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
             {/* Invoice Summary */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Summary</h3>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Invoice Number: </span>
-                  <span className="text-sm text-gray-900">{invoice.number}</span>
+              <dl className="space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-sm font-medium text-gray-500">Invoice Number:</dt>
+                  <dd className="text-sm text-gray-900">{invoice.number}</dd>
                 </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Invoice Date: </span>
-                  <span className="text-sm text-gray-900">
-                    {formatDateTime(invoice.date)}
-                  </span>
+                <div className="flex justify-between">
+                  <dt className="text-sm font-medium text-gray-500">Invoice Date:</dt>
+                  <dd className="text-sm text-gray-900">{formatDateTime(invoice.date)}</dd>
                 </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Total Amount: </span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {formatAmount(invoice.isPaymentPlan ? invoice.totalPaid : payment.final_amount)}
-                  </span>
+                <div className="flex justify-between">
+                  <dt className="text-sm font-medium text-gray-500">Invoice Amount:</dt>
+                  <dd className="text-sm font-medium text-gray-900">
+                    {formatAmount(invoice.totalAmount)}
+                  </dd>
                 </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-500">Status: </span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
-                    invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {invoice.status === 'partially_paid' ? 'Partially Paid' :
-                     invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                  </span>
+                <div className="flex justify-between">
+                  <dt className="text-sm font-medium text-gray-500">Status:</dt>
+                  <dd>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
+                      invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {invoice.status === 'partially_paid' ? 'Partially Paid' :
+                       invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                    </span>
+                  </dd>
                 </div>
                 {totalRefunded > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-sm font-medium text-gray-500">Total Refunded: </span>
-                    <span className="text-sm text-red-600 font-medium">
+                  <div className="flex justify-between">
+                    <dt className="text-sm font-medium text-gray-500">Total Refunded:</dt>
+                    <dd className="text-sm text-red-600 font-medium">
                       -{formatAmount(totalRefunded)}
-                    </span>
+                    </dd>
                   </div>
                 )}
-              </div>
+              </dl>
               
               {/* Line items if available */}
               {invoice.lineItems.length > 0 && (
@@ -292,65 +292,63 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
               )}
             </div>
 
-            {/* Payment Line Items Section */}
+            {/* Payment Summary Section */}
             {invoice.isPaymentPlan && invoice.allPayments.length > 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Line Items</h3>
-                <div className="border rounded-md">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stripe Payment ID</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {invoice.allPayments
-                        .filter((pmt: any) => pmt.sync_status === 'synced')
-                        .map((pmt: any) => (
-                        <tr key={pmt.id}>
-                          <td className="px-4 py-2 text-sm text-gray-900">
-                            {pmt.created_at ? formatDateTime(pmt.created_at) : 'N/A'}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-900 text-right">
-                            {formatAmount(pmt.amount_paid)}
-                          </td>
-                          <td className="px-4 py-2 text-xs text-gray-500 font-mono">
-                            {pmt.staging_metadata?.stripe_charge_id || 'N/A'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Summary</h3>
+
+                {/* Total Amount Paid */}
+                <div className="flex justify-between mb-4 pb-4 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-500">Total Amount Paid:</span>
+                  <span className="text-sm font-medium text-gray-900">{formatAmount(invoice.totalPaid)}</span>
+                </div>
+
+                {/* Payment Line Items */}
+                <div className="space-y-3">
+                  {invoice.allPayments
+                    .filter((pmt: any) => pmt.sync_status === 'synced')
+                    .map((pmt: any) => (
+                    <div key={pmt.id} className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3 border-b border-gray-100 last:border-b-0">
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-900">
+                          {pmt.created_at ? formatDateTime(pmt.created_at) : 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500 font-mono mt-1">
+                          {pmt.staging_metadata?.stripe_charge_id || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900 sm:text-right">
+                        {formatAmount(pmt.amount_paid)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : !invoice.isPaymentPlan && payment.stripe_payment_intent_id && (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Line Items</h3>
-                <div className="border rounded-md">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Stripe Payment ID</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-4 py-2 text-sm text-gray-900">
-                          {formatDateTime(payment.completed_at || payment.created_at)}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-900 text-right">
-                          {formatAmount(payment.final_amount)}
-                        </td>
-                        <td className="px-4 py-2 text-xs text-gray-500 font-mono">
-                          {payment.stripe_payment_intent_id}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Summary</h3>
+
+                {/* Total Amount Paid */}
+                <div className="flex justify-between mb-4 pb-4 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-500">Total Amount Paid:</span>
+                  <span className="text-sm font-medium text-gray-900">{formatAmount(payment.final_amount)}</span>
+                </div>
+
+                {/* Payment Line Items */}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3">
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-900">
+                        {formatDateTime(payment.completed_at || payment.created_at)}
+                      </div>
+                      <div className="text-sm text-gray-500 font-mono mt-1">
+                        {payment.stripe_payment_intent_id}
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium text-gray-900 sm:text-right">
+                      {formatAmount(payment.final_amount)}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

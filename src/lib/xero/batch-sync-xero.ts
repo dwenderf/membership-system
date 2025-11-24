@@ -1424,12 +1424,12 @@ export class XeroBatchSyncManager {
           xeroId,
           invoiceNumber: number,
           tenantId,
-          errorMessage: error.message,
-          errorCode: error.code
+          errorMessage: error?.message || String(error),
+          errorCode: error?.code || 'UNKNOWN'
         }
       })
 
-      throw new Error(`Failed to mark invoice as synced in database: ${error.message}`)
+      throw new Error(`Failed to mark invoice as synced in database: ${error?.message || String(error)}`)
     } else {
       console.log('✅ Invoice marked as synced successfully:', data)
     }

@@ -263,7 +263,6 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
               {/* Line items if available */}
               {invoice.lineItems.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Line Items</h4>
                   <div className="space-y-3">
                     {invoice.lineItems.map((item: any) => (
                       <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3 border-b border-gray-100 last:border-b-0">

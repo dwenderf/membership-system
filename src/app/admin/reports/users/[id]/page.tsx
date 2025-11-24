@@ -169,15 +169,10 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       || validInvoices.find((inv: any) => inv.sync_status === 'pending')
       || validInvoices[0]
 
-    // Log potential data integrity issue if no valid invoice found
-    if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
-      const logger = Logger.getInstance();
-      logger.logAdminAction('No synced or pending ACCREC invoice found for payment', {
-        paymentId: payment.id,
-        invoicesCount: payment.xero_invoices.length,
-        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type),
-        syncStatuses: payment.xero_invoices.map((inv: any) => inv.sync_status)
-      });
+    // Skip payments without a valid invoice (e.g., payment plan payoffs)
+    // These payments are already reflected in the original invoice's payment status
+    if (!originalInvoice) {
+      return null
     }
 
     // Determine invoice number display (show "Pending Sync" for pending invoices)
@@ -213,7 +208,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false,
       paymentPlanAmountPaid: paymentPlanStatus?.amountPaid ?? 0
     }
-  }) || []
+  }).filter(invoice => invoice !== null) || []
 
   // Transform credit notes and add them to the invoices list
   const creditNoteInvoices = userCreditNotes?.filter(creditNote => {

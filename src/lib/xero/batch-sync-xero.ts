@@ -1120,27 +1120,46 @@ export class XeroBatchSyncManager {
           console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
 
           // Mark payment as failed
-          await this.markPaymentAsFailed(
-            originalRecord.id,
-            `Xero validation error: ${errorMessages}`
-          )
+          try {
+            await this.markPaymentAsFailed(
+              originalRecord.id,
+              `Xero validation error: ${errorMessages}`
+            )
 
-          // Log failure
-          await logXeroSync({
-            tenant_id: tenantId,
-            operation: 'payment_sync',
-            record_type: 'payment',
-            record_id: originalRecord.id,
-            success: false,
-            details: `Payment sync failed: ${errorMessages}`,
-            response_data: {
-              validationErrors: xeroPayment.validationErrors,
-              payment: xeroPayment
-            },
-            request_data: {
-              payment: xeroPayments[i]
-            }
-          })
+            // Log failure
+            await logXeroSync({
+              tenant_id: tenantId,
+              operation: 'payment_sync',
+              record_type: 'payment',
+              record_id: originalRecord.id,
+              success: false,
+              details: `Payment sync failed: ${errorMessages}`,
+              response_data: {
+                validationErrors: xeroPayment.validationErrors,
+                payment: xeroPayment
+              },
+              request_data: {
+                payment: xeroPayments[i]
+              }
+            })
+          } catch (dbError) {
+            Sentry.captureException(dbError, {
+              level: 'error',
+              tags: {
+                component: 'xero-batch-sync',
+                operation: 'batch_payment_validation_error',
+                critical: 'true'
+              },
+              extra: {
+                context: 'failed_to_mark_payment_as_failed_after_xero_validation_error_in_success_path',
+                paymentRecordId: originalRecord.id,
+                xeroValidationErrors: errorMessages,
+                batchIndex: i,
+                tenantId
+              }
+            })
+            console.error(`❌ Failed to mark payment ${originalRecord.id} as failed in database:`, dbError)
+          }
 
           continue // Skip to next payment
         }

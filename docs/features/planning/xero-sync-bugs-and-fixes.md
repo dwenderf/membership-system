@@ -157,41 +157,91 @@ for (let i = 0; i < paymentsSynced.length; i++) {
     const errorMessages = xeroPayment.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
     console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
 
-    // Mark payment as failed
-    await this.markPaymentAsFailed(
+    // ✅ Mark payment as failed with error handling
+    try {
+      await this.markPaymentAsFailed(
+        originalRecord.id,
+        `Xero validation error: ${errorMessages}`
+      )
+
+      // Log failure
+      await logXeroSync({
+        tenant_id: tenantId,
+        operation: 'payment_sync',
+        record_type: 'payment',
+        record_id: originalRecord.id,
+        success: false,
+        details: `Payment sync failed: ${errorMessages}`,
+        response_data: {
+          validationErrors: xeroPayment.validationErrors,
+          payment: xeroPayment
+        },
+        request_data: {
+          payment: xeroPayments[i]
+        }
+      })
+    } catch (dbError) {
+      // Database error - log to Sentry and continue with batch
+      Sentry.captureException(dbError, {
+        level: 'error',
+        tags: {
+          component: 'xero-batch-sync',
+          operation: 'batch_payment_validation_error',
+          critical: 'true'
+        },
+        extra: {
+          context: 'failed_to_mark_payment_as_failed_after_xero_validation_error',
+          paymentRecordId: originalRecord.id,
+          xeroValidationErrors: errorMessages,
+          batchIndex: i,
+          tenantId
+        }
+      })
+      console.error(`❌ Failed to mark payment as failed in database:`, dbError)
+    }
+
+    continue  // Skip to next payment
+  }
+
+  // ✅ Only mark as synced if NO errors (with error handling)
+  try {
+    await this.markPaymentAsSynced(
       originalRecord.id,
-      `Xero validation error: ${errorMessages}`
+      xeroPayment.paymentID!,
+      tenantId
     )
 
-    // Log failure
+    // Log success
     await logXeroSync({
       tenant_id: tenantId,
       operation: 'payment_sync',
       record_type: 'payment',
       record_id: originalRecord.id,
-      success: false,
-      details: `Payment sync failed: ${errorMessages}`,
-      response_data: {
-        validationErrors: xeroPayment.validationErrors,
-        payment: xeroPayment
+      xero_id: xeroPayment.paymentID,
+      success: true,
+      details: `Payment ${xeroPayment.paymentID} created successfully`,
+      response_data: { payment: xeroPayment },
+      request_data: { payment: xeroPayments[i] }
+    })
+  } catch (dbError) {
+    // Database error - log to Sentry and continue with batch
+    Sentry.captureException(dbError, {
+      level: 'error',
+      tags: {
+        component: 'xero-batch-sync',
+        operation: 'batch_payment_sync_success',
+        critical: 'true'
       },
-      request_data: {
-        payment: xeroPayments[i]
+      extra: {
+        context: 'payment_synced_to_xero_but_database_update_failed',
+        paymentRecordId: originalRecord.id,
+        xeroPaymentId: xeroPayment.paymentID,
+        batchIndex: i,
+        tenantId
       }
     })
-
-    continue  // Skip to next payment
+    console.error(`❌ Failed to mark payment as synced in database:`, dbError)
   }
-
-  // Only mark as synced if NO errors
-  await this.markPaymentAsSynced(
-    originalRecord.id,
-    xeroPayment.paymentID!,
-    tenantId
-  )
-
-  // Log success (existing code)
-  await logXeroSync({ ... })
 }
 ```
 

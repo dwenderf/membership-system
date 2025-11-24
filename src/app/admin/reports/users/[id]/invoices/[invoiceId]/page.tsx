@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
-import { formatDate } from '@/lib/date-utils'
+import { formatDate, formatDateTime } from '@/lib/date-utils'
 
 interface PageProps {
   params: {
@@ -220,40 +220,44 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
           </div>
 
           <div className="space-y-6">
-            {/* Payment Summary */}
+            {/* Invoice Summary */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Summary</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Summary</h3>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-3">
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Invoice Number</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{invoice.number}</dd>
+                  <span className="text-sm font-medium text-gray-500">Invoice Number: </span>
+                  <span className="text-sm text-gray-900">{invoice.number}</span>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Total Amount</dt>
-                  <dd className="mt-1 text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-gray-500">Invoice Date: </span>
+                  <span className="text-sm text-gray-900">
+                    {formatDateTime(invoice.date)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-500">Total Amount: </span>
+                  <span className="text-sm font-medium text-gray-900">
                     {formatAmount(invoice.isPaymentPlan ? invoice.totalPaid : payment.final_amount)}
-                  </dd>
+                  </span>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Status</dt>
-                  <dd className="mt-1">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
-                      invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {invoice.status === 'partially_paid' ? 'Partially Paid' :
-                       invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                    </span>
-                  </dd>
+                  <span className="text-sm font-medium text-gray-500">Status: </span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
+                    invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {invoice.status === 'partially_paid' ? 'Partially Paid' :
+                     invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                  </span>
                 </div>
                 {totalRefunded > 0 && (
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Total Refunded</dt>
-                    <dd className="mt-1 text-sm text-red-600 font-medium">
+                  <div className="col-span-2">
+                    <span className="text-sm font-medium text-gray-500">Total Refunded: </span>
+                    <span className="text-sm text-red-600 font-medium">
                       -{formatAmount(totalRefunded)}
-                    </dd>
+                    </span>
                   </div>
                 )}
               </div>
@@ -307,7 +311,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                         .map((pmt: any) => (
                         <tr key={pmt.id}>
                           <td className="px-4 py-2 text-sm text-gray-900">
-                            {pmt.created_at ? formatDate(new Date(pmt.created_at)) : 'N/A'}
+                            {pmt.created_at ? formatDateTime(pmt.created_at) : 'N/A'}
                           </td>
                           <td className="px-4 py-2 text-sm text-gray-900 text-right">
                             {formatAmount(pmt.amount_paid)}
@@ -336,7 +340,7 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                     <tbody className="bg-white divide-y divide-gray-200">
                       <tr>
                         <td className="px-4 py-2 text-sm text-gray-900">
-                          {formatDate(new Date(payment.completed_at || payment.created_at))}
+                          {formatDateTime(payment.completed_at || payment.created_at)}
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-900 text-right">
                           {formatAmount(payment.final_amount)}

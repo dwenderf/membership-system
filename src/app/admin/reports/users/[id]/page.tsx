@@ -135,17 +135,18 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     )
 
     if (originalInvoice) {
-      // Check if all installments are completed and calculate amount paid
-      const { data: installments } = await adminSupabase
+      // Get all payments for this invoice (installments + payoff)
+      const { data: allPayments } = await adminSupabase
         .from('xero_payments')
         .select('sync_status, payment_type, amount_paid')
         .eq('xero_invoice_id', originalInvoice.id)
-        .eq('payment_type', 'installment')
+        .in('payment_type', ['installment', 'full'])
 
-      const isFullyPaid = installments?.every(inst => inst.sync_status === 'synced') ?? false
-      const amountPaid = installments
-        ?.filter(inst => inst.sync_status === 'synced')
-        .reduce((sum, inst) => sum + inst.amount_paid, 0) ?? 0
+      const syncedPayments = allPayments?.filter(p => p.sync_status === 'synced') ?? []
+      const amountPaid = syncedPayments.reduce((sum, p) => sum + p.amount_paid, 0)
+
+      // Fully paid if amount paid equals or exceeds the invoice total
+      const isFullyPaid = amountPaid >= originalInvoice.net_amount
 
       paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid, amountPaid })
     }

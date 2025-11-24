@@ -128,14 +128,50 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
   const availableForRefund = payment.final_amount - totalRefunded
   const canRefund = payment.status === 'completed' && totalRefunded === 0
 
+  // Check if this is a payment plan invoice
+  const xeroInvoice = payment.xero_invoices?.[0]
+  const isPaymentPlan = xeroInvoice?.is_payment_plan ?? false
+
+  // For payment plans, fetch all payments (installments + payoff)
+  let allInvoicePayments: any[] = []
+  let totalPaidAmount = payment.final_amount
+  let invoiceStatus = payment.status
+
+  if (isPaymentPlan && xeroInvoice) {
+    const { data: xeroPayments } = await supabase
+      .from('xero_payments')
+      .select('*')
+      .eq('xero_invoice_id', xeroInvoice.id)
+      .in('payment_type', ['installment', 'full'])
+      .order('created_at', { ascending: true })
+
+    allInvoicePayments = xeroPayments || []
+
+    // Calculate total paid from all synced payments
+    totalPaidAmount = allInvoicePayments
+      .filter(p => p.sync_status === 'synced')
+      .reduce((sum, p) => sum + p.amount_paid, 0)
+
+    // Determine status: Completed if fully paid, otherwise Partially Paid
+    if (totalPaidAmount >= xeroInvoice.net_amount) {
+      invoiceStatus = 'completed'
+    } else if (totalPaidAmount > 0) {
+      invoiceStatus = 'partially_paid'
+    }
+  }
+
   const invoice = {
     id: payment.id,
-    number: payment.xero_invoices?.[0]?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
+    number: xeroInvoice?.invoice_number || `PAY-${payment.id.slice(0, 8)}`,
     date: payment.completed_at || payment.created_at,
     amount: payment.final_amount,
-    status: payment.status,
-    hasXeroInvoice: !!payment.xero_invoices?.[0],
-    lineItems: payment.xero_invoices?.[0]?.xero_invoice_line_items || []
+    totalAmount: xeroInvoice?.net_amount || payment.final_amount,
+    totalPaid: totalPaidAmount,
+    status: invoiceStatus,
+    hasXeroInvoice: !!xeroInvoice,
+    lineItems: xeroInvoice?.xero_invoice_line_items || [],
+    isPaymentPlan: isPaymentPlan,
+    allPayments: allInvoicePayments
   }
 
   return (
@@ -185,31 +221,56 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
           <div className="space-y-6">
             {/* Payment details */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {invoice.isPaymentPlan ? 'Invoice Information' : 'Payment Information'}
+              </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Invoice Number</dt>
                   <dd className="mt-1 text-sm text-gray-900">{invoice.number}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Payment Date</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    {invoice.isPaymentPlan ? 'Invoice Date' : 'Payment Date'}
+                  </dt>
                   <dd className="mt-1 text-sm text-gray-900">
                     {formatDate(new Date(invoice.date))}
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">Payment Amount</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{formatAmount(payment.final_amount)}</dd>
-                </div>
+                {invoice.isPaymentPlan ? (
+                  <>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Total Invoice Amount</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{formatAmount(invoice.totalAmount)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Total Paid</dt>
+                      <dd className="mt-1 text-sm font-medium text-green-600">{formatAmount(invoice.totalPaid)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Remaining Balance</dt>
+                      <dd className="mt-1 text-sm font-medium text-orange-600">
+                        {formatAmount(Math.max(0, invoice.totalAmount - invoice.totalPaid))}
+                      </dd>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Payment Amount</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{formatAmount(payment.final_amount)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
                   <dd className="mt-1">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      payment.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      payment.status === 'refunded' ? 'bg-red-100 text-red-800' :
+                      invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
+                      invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                      {invoice.status === 'partially_paid' ? 'Partially Paid' :
+                       invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                     </span>
                   </dd>
                 </div>
@@ -260,6 +321,57 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                 </div>
               )}
             </div>
+
+            {/* Payment Plan Payments Section */}
+            {invoice.isPaymentPlan && invoice.allPayments.length > 0 && (
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Payments</h3>
+                <div className="border rounded-md">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payment ID</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {invoice.allPayments.map((pmt: any) => (
+                        <tr key={pmt.id}>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            {pmt.created_at ? formatDate(new Date(pmt.created_at)) : 'N/A'}
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-500">
+                            {pmt.payment_type === 'full' ? 'Payoff' :
+                             pmt.payment_type === 'installment' ? `Installment ${pmt.installment_number || ''}` :
+                             pmt.payment_type}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              pmt.sync_status === 'synced' ? 'bg-green-100 text-green-800' :
+                              pmt.sync_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              pmt.sync_status === 'failed' ? 'bg-red-100 text-red-800' :
+                              pmt.sync_status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {pmt.sync_status.charAt(0).toUpperCase() + pmt.sync_status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                            {formatAmount(pmt.amount_paid)}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-gray-500 font-mono">
+                            {pmt.xero_payment_id?.slice(0, 8) || 'Pending'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Refund History Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">

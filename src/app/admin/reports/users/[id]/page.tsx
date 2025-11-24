@@ -135,17 +135,18 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     )
 
     if (originalInvoice) {
-      // Check if all installments are completed and calculate amount paid
-      const { data: installments } = await adminSupabase
+      // Get all payments for this invoice (installments + payoff)
+      const { data: allPayments } = await adminSupabase
         .from('xero_payments')
         .select('sync_status, payment_type, amount_paid')
         .eq('xero_invoice_id', originalInvoice.id)
-        .eq('payment_type', 'installment')
+        .in('payment_type', ['installment', 'full'])
 
-      const isFullyPaid = installments?.every(inst => inst.sync_status === 'synced') ?? false
-      const amountPaid = installments
-        ?.filter(inst => inst.sync_status === 'synced')
-        .reduce((sum, inst) => sum + inst.amount_paid, 0) ?? 0
+      const syncedPayments = allPayments?.filter(p => p.sync_status === 'synced') ?? []
+      const amountPaid = syncedPayments.reduce((sum, p) => sum + p.amount_paid, 0)
+
+      // Fully paid if amount paid equals or exceeds the invoice total
+      const isFullyPaid = amountPaid >= originalInvoice.net_amount
 
       paymentPlanStatuses.set(payment.id, { isPaymentPlan: true, isFullyPaid, amountPaid })
     }
@@ -169,15 +170,10 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       || validInvoices.find((inv: any) => inv.sync_status === 'pending')
       || validInvoices[0]
 
-    // Log potential data integrity issue if no valid invoice found
-    if (!originalInvoice && payment.xero_invoices && payment.xero_invoices.length > 0) {
-      const logger = Logger.getInstance();
-      logger.logAdminAction('No synced or pending ACCREC invoice found for payment', {
-        paymentId: payment.id,
-        invoicesCount: payment.xero_invoices.length,
-        invoiceTypes: payment.xero_invoices.map((inv: any) => inv.invoice_type),
-        syncStatuses: payment.xero_invoices.map((inv: any) => inv.sync_status)
-      });
+    // Skip payments without a valid invoice (e.g., payment plan payoffs)
+    // These payments are already reflected in the original invoice's payment status
+    if (!originalInvoice) {
+      return null
     }
 
     // Determine invoice number display (show "Pending Sync" for pending invoices)
@@ -213,7 +209,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
       isPaymentPlanFullyPaid: paymentPlanStatus?.isFullyPaid ?? false,
       paymentPlanAmountPaid: paymentPlanStatus?.amountPaid ?? 0
     }
-  }) || []
+  }).filter(invoice => invoice !== null) || []
 
   // Transform credit notes and add them to the invoices list
   const creditNoteInvoices = userCreditNotes?.filter(creditNote => {

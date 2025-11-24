@@ -222,7 +222,19 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
           <div className="space-y-6">
             {/* Invoice Summary */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Summary</h3>
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Invoice Summary</h3>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
+                  invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {invoice.status === 'partially_paid' ? 'Partially Paid' :
+                   invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                </span>
+              </div>
+
               <dl className="space-y-2">
                 <div className="flex justify-between">
                   <dt className="text-sm font-medium text-gray-500">Invoice Number:</dt>
@@ -238,20 +250,6 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                     {formatAmount(invoice.totalAmount)}
                   </dd>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Status:</dt>
-                  <dd>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      invoice.status === 'partially_paid' ? 'bg-yellow-100 text-yellow-800' :
-                      invoice.status === 'refunded' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {invoice.status === 'partially_paid' ? 'Partially Paid' :
-                       invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                    </span>
-                  </dd>
-                </div>
                 {totalRefunded > 0 && (
                   <div className="flex justify-between">
                     <dt className="text-sm font-medium text-gray-500">Total Refunded:</dt>
@@ -261,32 +259,23 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
                   </div>
                 )}
               </dl>
-              
+
               {/* Line items if available */}
               {invoice.lineItems.length > 0 && (
-                <div className="mt-6">
+                <div className="mt-6 pt-6 border-t border-gray-200">
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Line Items</h4>
-                  <div className="border rounded-md">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Account Code</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {invoice.lineItems.map((item: any) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
-                            <td className="px-4 py-2 text-sm text-gray-500">{item.account_code}</td>
-                            <td className="px-4 py-2 text-sm text-gray-900 text-right">
-                              {formatAmount(item.line_amount)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-3">
+                    {invoice.lineItems.map((item: any) => (
+                      <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3 border-b border-gray-100 last:border-b-0">
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-900">{item.description}</div>
+                          <div className="text-sm text-gray-500 mt-1">{item.account_code}</div>
+                        </div>
+                        <div className="text-sm font-medium text-gray-900 sm:text-right">
+                          {formatAmount(item.line_amount)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

@@ -5,9 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import RegistrationRefundModal from './RegistrationRefundModal'
+import ChangeCategoryModal from './ChangeCategoryModal'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 
 interface RegistrationData {
+  id: string
   registration_id: string
   registration_name: string
   season_name: string
@@ -26,6 +29,8 @@ interface RegistrationData {
   presale_code_used: string | null
   is_lgbtq: boolean | null
   is_goalie: boolean
+  payment_id: string | null
+  invoice_number: string | null
 }
 
 interface WaitlistData {
@@ -90,6 +95,10 @@ export default function RegistrationDetailPage() {
   const [isAlternatesExpanded, setIsAlternatesExpanded] = useState(true)
   const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
   const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
+  const [selectedRegistrationForRefund, setSelectedRegistrationForRefund] = useState<RegistrationData | null>(null)
+  const [showRefundModal, setShowRefundModal] = useState(false)
+  const [selectedRegistrationForCategoryChange, setSelectedRegistrationForCategoryChange] = useState<RegistrationData | null>(null)
+  const [showChangeCategoryModal, setShowChangeCategoryModal] = useState(false)
 
   useEffect(() => {
     if (registrationId) {
@@ -522,6 +531,9 @@ export default function RegistrationDetailPage() {
                                     </div>
                                   </th>
                                 ))}
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -565,6 +577,48 @@ export default function RegistrationDetailPage() {
                                     ) : (
                                       <span className="text-gray-400">-</span>
                                     )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <div className="flex items-center space-x-2">
+                                      {registration.payment_status === 'paid' && registration.payment_id && (
+                                        <button
+                                          onClick={() => {
+                                            setSelectedRegistrationForRefund(registration)
+                                            setShowRefundModal(true)
+                                          }}
+                                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                          title="Process refund for this registration"
+                                        >
+                                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m5 5v1a4 4 0 01-4 4H8m0 0l3-3m-3 3l3 3" />
+                                          </svg>
+                                          Refund
+                                        </button>
+                                      )}
+                                      {registration.payment_status === 'paid' && (
+                                        <button
+                                          onClick={() => {
+                                            setSelectedRegistrationForCategoryChange(registration)
+                                            setShowChangeCategoryModal(true)
+                                          }}
+                                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                          title="Change user's registration category"
+                                        >
+                                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                          </svg>
+                                          Change Category
+                                        </button>
+                                      )}
+                                      {registration.payment_status === 'refunded' && (
+                                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                                          Refunded
+                                        </span>
+                                      )}
+                                      {registration.payment_status !== 'paid' && registration.payment_status !== 'refunded' && (
+                                        <span className="text-gray-400">—</span>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -726,6 +780,42 @@ export default function RegistrationDetailPage() {
           onCancel={() => {
             setShowWaitlistSelectionModal(false)
             setSelectedWaitlistEntry(null)
+          }}
+        />
+      )}
+
+      {/* Registration Refund Modal */}
+      {showRefundModal && selectedRegistrationForRefund && selectedRegistrationForRefund.payment_id && (
+        <RegistrationRefundModal
+          registration={selectedRegistrationForRefund}
+          registrationName={registrationName}
+          onCancel={() => {
+            setShowRefundModal(false)
+            setSelectedRegistrationForRefund(null)
+          }}
+        />
+      )}
+
+      {/* Change Category Modal */}
+      {showChangeCategoryModal && selectedRegistrationForCategoryChange && (
+        <ChangeCategoryModal
+          userRegistrationId={selectedRegistrationForCategoryChange.id}
+          userId={selectedRegistrationForCategoryChange.user_id}
+          registrationId={registrationId}
+          currentCategoryId={selectedRegistrationForCategoryChange.category_id}
+          currentCategoryName={selectedRegistrationForCategoryChange.category_name}
+          currentAmountPaid={selectedRegistrationForCategoryChange.amount_paid}
+          userName={`${selectedRegistrationForCategoryChange.first_name} ${selectedRegistrationForCategoryChange.last_name}`}
+          registrationName={registrationName}
+          onSuccess={() => {
+            setShowChangeCategoryModal(false)
+            setSelectedRegistrationForCategoryChange(null)
+            // Refresh the registration data
+            fetchRegistrationData(registrationId)
+          }}
+          onCancel={() => {
+            setShowChangeCategoryModal(false)
+            setSelectedRegistrationForCategoryChange(null)
           }}
         />
       )}

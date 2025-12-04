@@ -1,124 +1,79 @@
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 
+/**
+ * GET /api/admin/registration-categories/[registrationId]
+ *
+ * Returns all categories for a registration with current counts
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
   const supabase = await createClient()
-  const adminSupabase = createAdminClient()
-    
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+
+  try {
+    // Check admin authorization
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
+    const { data: currentUser } = await supabase
       .from('users')
       .select('is_admin')
-      .eq('id', user.id)
+      .eq('id', authUser.id)
       .single()
 
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    if (!currentUser?.is_admin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get the category
-    const { data: category, error } = await adminSupabase
-      .from('categories')
-      .select('*')
-      .eq('id', params.id)
-      .single()
+    // Get categories for this registration
+    const { data: categories, error: catError } = await supabase
+      .from('registration_categories')
+      .select(`
+        id,
+        price,
+        max_capacity,
+        custom_name,
+        categories (
+          name
+        )
+      `)
+      .eq('registration_id', params.id)
+      .order('sort_order', { ascending: true })
 
-    if (error || !category) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    if (catError) {
+      return NextResponse.json({
+        error: 'Failed to fetch categories'
+      }, { status: 500 })
     }
 
-    return NextResponse.json(category)
-  } catch (error) {
-    console.error('Error in GET /api/admin/registration-categories/[id]:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-  const supabase = await createClient()
-  const adminSupabase = createAdminClient()
-    
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !userData?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
-    // Check if category exists
-    const { data: existingCategory } = await adminSupabase
-      .from('categories')
-      .select('*')
-      .eq('id', params.id)
-      .single()
-
-    if (!existingCategory) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
-    }
-
-    const body = await request.json()
-    const { name, description } = body
-
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
-    }
-
-    // Check for duplicate name among system categories (excluding this one)
-    const { data: duplicateCategory } = await adminSupabase
-      .from('categories')
-      .select('id')
-      .eq('name', name.trim())
-      .eq('category_type', 'system')
-      .neq('id', params.id)
-      .single()
-
-    if (duplicateCategory) {
-      return NextResponse.json({ error: 'A system category with this name already exists' }, { status: 400 })
-    }
-
-    // Update the category
-    const { data: updatedCategory, error } = await adminSupabase
-      .from('categories')
-      .update({
-        name: name.trim(),
-        description: description?.trim() || null
+    // Get current counts for each category
+    const categoriesWithCounts = await Promise.all(
+      (categories || []).map(async (cat) => {
+        const count = await getSingleCategoryRegistrationCount(cat.id)
+        const category = Array.isArray(cat.categories) ? cat.categories[0] : cat.categories
+        return {
+          id: cat.id,
+          name: category?.name || cat.custom_name,
+          price: cat.price,
+          maxCapacity: cat.max_capacity,
+          currentCount: count
+        }
       })
-      .eq('id', params.id)
-      .select()
-      .single()
+    )
 
-    if (error) {
-      console.error('Error updating category:', error)
-      return NextResponse.json({ error: 'Failed to update category' }, { status: 500 })
-    }
+    return NextResponse.json({
+      categories: categoriesWithCounts
+    })
 
-    return NextResponse.json(updatedCategory)
   } catch (error) {
-    console.error('Error in PUT /api/admin/registration-categories/[id]:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Internal server error'
+    }, { status: 500 })
   }
 }

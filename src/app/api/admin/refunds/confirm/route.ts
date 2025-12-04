@@ -134,6 +134,57 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', refund.id)
 
+      // Update user_registrations status for proportional refunds
+      // Check if this is a proportional refund by looking at staging metadata
+      const { data: stagingRecord } = await supabase
+        .from('xero_invoices')
+        .select('staging_metadata')
+        .eq('id', stagingId)
+        .single()
+
+      // Check if it's a proportional refund (refund_type = 'refund' or 'proportional')
+      const refundType = stagingRecord?.staging_metadata?.refund_type
+      if (refundType === 'refund' || refundType === 'proportional') {
+        // This is a proportional refund (not a discount code refund)
+        // Find all user_registrations associated with this payment
+        const { data: registrations } = await supabase
+          .from('user_registrations')
+          .select('id, user_id, registration_id')
+          .eq('payment_id', paymentId)
+          .eq('payment_status', 'paid')
+
+        if (registrations && registrations.length > 0) {
+          // Update all registrations to refunded status
+          const { error: statusUpdateError } = await supabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'refunded',
+              updated_at: new Date().toISOString()
+            })
+            .eq('payment_id', paymentId)
+            .eq('payment_status', 'paid')
+
+          if (statusUpdateError) {
+            logger.logSystem('refund-status-update-error',
+              'Failed to update registration status after refund', {
+              refundId: refund.id,
+              paymentId,
+              registrationCount: registrations.length,
+              error: statusUpdateError.message
+            })
+            // Don't fail the refund - just log the issue for admin attention
+          } else {
+            logger.logSystem('refund-status-updated',
+              'Updated registration status to refunded', {
+              refundId: refund.id,
+              paymentId,
+              registrationIds: registrations.map(r => r.id),
+              count: registrations.length
+            })
+          }
+        }
+      }
+
       // Discount usage tracking will be handled by the webhook after successful refund
 
       // Staging records will be moved from 'staged' to 'pending' by webhook

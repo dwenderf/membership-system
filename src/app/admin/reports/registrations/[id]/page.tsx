@@ -7,6 +7,7 @@ import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoa
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
 import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
+import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface RegistrationData {
   id: string
@@ -577,7 +578,11 @@ export default function RegistrationDetailPage() {
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     {registration.payment_status === 'paid' && registration.payment_id ? (
                                       <Link
-                                        href={`/admin/reports/users/${registration.user_id}/invoices/${registration.payment_id}`}
+                                        href={buildBreadcrumbUrl(
+                                          `/admin/reports/users/${registration.user_id}/invoices/${registration.payment_id}`,
+                                          [{ path: `/admin/reports/registrations/${registrationId}`, label: registrationName || 'Registration Detail' }],
+                                          { path: `/admin/reports/users/${registration.user_id}`, label: `${registration.first_name} ${registration.last_name}` }
+                                        )}
                                         className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                       >
                                         <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

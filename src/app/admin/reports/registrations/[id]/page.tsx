@@ -537,6 +537,8 @@ export default function RegistrationDetailPage() {
                                       userId={registration.user_id}
                                       firstName={registration.first_name}
                                       lastName={registration.last_name}
+                                      fromPath={`/admin/reports/registrations/${registrationId}`}
+                                      fromLabel={registrationName || 'Registration Detail'}
                                     />
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { buildBreadcrumbUrl, type Breadcrumb } from './BreadcrumbNav'
 
 interface UserLinkProps {
   userId: string
@@ -10,6 +11,8 @@ interface UserLinkProps {
   showAvatar?: boolean
   useXeroName?: boolean
   className?: string
+  fromPath?: string
+  fromLabel?: string
 }
 
 function getInitials(firstName: string | null, lastName: string | null, xeroName?: string | null): string {
@@ -73,14 +76,22 @@ export default function UserLink({
   xeroCustomerName,
   showAvatar = true,
   useXeroName = false,
-  className = ''
+  className = '',
+  fromPath,
+  fromLabel
 }: UserLinkProps) {
   const displayName = getDisplayName(firstName, lastName, xeroCustomerName, useXeroName)
   const initials = getInitials(firstName, lastName, useXeroName ? xeroCustomerName : undefined)
 
+  // Build URL with breadcrumb context if provided
+  const basePath = `/admin/reports/users/${userId}`
+  const href = fromPath && fromLabel
+    ? buildBreadcrumbUrl(basePath, [], { path: fromPath, label: fromLabel })
+    : basePath
+
   return (
     <Link
-      href={`/admin/reports/users/${userId}`}
+      href={href}
       className={`inline-flex items-center gap-2 hover:opacity-75 transition-opacity ${className}`}
     >
       {showAvatar && (

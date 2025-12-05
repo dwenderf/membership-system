@@ -5,15 +5,26 @@ import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
+import BreadcrumbNav, { parseBreadcrumbs } from '@/components/BreadcrumbNav'
 
 interface PageProps {
   params: {
     id: string
     invoiceId: string // This is actually a paymentId
   }
+  searchParams: {
+    openRefund?: string
+    back?: string
+    backLabel?: string
+    back2?: string
+    backLabel2?: string
+    back3?: string
+    backLabel3?: string
+    [key: string]: string | string[] | undefined
+  }
 }
 
-export default async function AdminUserInvoiceDetailPage({ params }: PageProps) {
+export default async function AdminUserInvoiceDetailPage({ params, searchParams }: PageProps) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
 
@@ -175,18 +186,18 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
     allPayments: allInvoicePayments
   }
 
+  // Parse breadcrumbs from URL params
+  const breadcrumbs = parseBreadcrumbs(searchParams)
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Breadcrumb Navigation */}
+          <BreadcrumbNav breadcrumbs={breadcrumbs} position="top" />
+
           {/* Header */}
           <div className="mb-8">
-            <Link 
-              href={`/admin/reports/users/${params.id}`}
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
-            >
-              ← Back to User Details
-            </Link>
             <div className="flex justify-between items-start">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Payment Details</h1>
@@ -446,6 +457,9 @@ export default async function AdminUserInvoiceDetailPage({ params }: PageProps) 
               )}
             </div>
           </div>
+
+          {/* Breadcrumb Navigation - Bottom */}
+          <BreadcrumbNav breadcrumbs={breadcrumbs} position="bottom" />
         </div>
       </div>
     </div>

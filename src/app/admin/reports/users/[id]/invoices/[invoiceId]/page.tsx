@@ -5,7 +5,8 @@ import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
-import BreadcrumbNav, { parseBreadcrumbs } from '@/components/BreadcrumbNav'
+import BreadcrumbNav from '@/components/BreadcrumbNav'
+import { parseBreadcrumbs } from '@/lib/breadcrumb-utils'
 
 interface PageProps {
   params: {

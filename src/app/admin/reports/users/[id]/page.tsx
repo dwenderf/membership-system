@@ -8,7 +8,8 @@ import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
 import DiscountUsage from '@/components/DiscountUsage'
 import PaymentPlanSection from './PaymentPlanSection'
-import BreadcrumbNav, { parseBreadcrumbs, buildBreadcrumbUrl } from '@/components/BreadcrumbNav'
+import BreadcrumbNav from '@/components/BreadcrumbNav'
+import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface PageProps {
   params: {

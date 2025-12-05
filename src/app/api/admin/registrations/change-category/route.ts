@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Get current registration
     const { data: registration, error: regError } = await supabase
       .from('user_registrations')
-      .select(\`
+      .select(`
         *,
         users!inner (
           id,
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           id,
           name
         )
-      \`)
+      `)
       .eq('id', userRegistrationId)
       .single()
 
@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (registration.payment_status !== 'paid') {
-      return NextResponse.json({ 
-        error: \`Cannot change category for registration with status: \${registration.payment_status}\` 
+      return NextResponse.json({
+        error: `Cannot change category for registration with status: ${registration.payment_status}`
       }, { status: 400 })
     }
 
@@ -93,12 +93,12 @@ export async function POST(request: NextRequest) {
     // Get new category
     const { data: newCategory, error: catError } = await supabase
       .from('registration_categories')
-      .select(\`
+      .select(`
         *,
         categories (
           name
         )
-      \`)
+      `)
       .eq('id', newCategoryId)
       .eq('registration_id', registration.registration_id)
       .single()
@@ -112,11 +112,11 @@ export async function POST(request: NextRequest) {
       .from('user_registrations')
       .select('*', { count: 'exact', head: true })
       .eq('registration_category_id', newCategoryId)
-      .or(\`payment_status.eq.paid,payment_status.eq.processing,and(payment_status.eq.awaiting_payment,reservation_expires_at.gt.\${new Date().toISOString()})\`)
+      .or(`payment_status.eq.paid,payment_status.eq.processing,and(payment_status.eq.awaiting_payment,reservation_expires_at.gt.${new Date().toISOString()})`)
 
     if (newCategory.max_capacity && currentCount !== null && currentCount >= newCategory.max_capacity) {
-      return NextResponse.json({ 
-        error: \`Target category is at full capacity (\${currentCount}/\${newCategory.max_capacity})\` 
+      return NextResponse.json({
+        error: `Target category is at full capacity (${currentCount}/${newCategory.max_capacity})`
       }, { status: 400 })
     }
 
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         payment_method: user.stripe_payment_method_id,
         off_session: true,
         confirm: true,
-        description: \`Category change: \${oldCategoryName} → \${newCategoryName}\`,
+        description: `Category change: ${oldCategoryName} → ${newCategoryName}`,
         metadata: {
           user_id: registration.user_id,
           registration_id: registration.registration_id,
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
         success: true,
         action: 'charged',
         amount: priceDifference,
-        message: \`Category changed successfully. User charged $\${(priceDifference / 100).toFixed(2)}.\`
+        message: `Category changed successfully. User charged $${(priceDifference / 100).toFixed(2)}.`
       })
 
     } else if (priceDifference < 0) {
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
           payment_id: registration.payment_id,
           user_id: registration.user_id,
           amount: refundAmount,
-          reason: \`Category change: \${oldCategoryName} → \${newCategoryName}. \${reason}\`,
+          reason: `Category change: ${oldCategoryName} → ${newCategoryName}. ${reason}`,
           status: 'pending',
           processed_by: authUser.id,
         })
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
           success: true,
           action: 'refunded',
           amount: refundAmount,
-          message: \`Category changed successfully. User refunded $\${(refundAmount / 100).toFixed(2)}.\`
+          message: `Category changed successfully. User refunded $${(refundAmount / 100).toFixed(2)}.`
         })
 
       } catch (stripeError) {

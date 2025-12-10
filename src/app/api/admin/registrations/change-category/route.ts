@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       .from('user_registrations')
       .select(`
         *,
-        users!inner (
+        users (
           id,
           first_name,
           last_name,
@@ -84,24 +84,34 @@ export async function POST(request: NextRequest) {
           stripe_payment_method_id,
           stripe_customer_id
         ),
-        registration_categories!inner (
+        registration_categories (
           id,
           price,
           custom_name,
+          category_id,
           categories (
             name,
             accounting_code
           )
         ),
-        registrations!inner (
+        registrations (
           id,
-          name
+          name,
+          season_id
         )
       `)
       .eq('id', userRegistrationId)
       .single()
 
-    if (regError || !registration) {
+    if (regError) {
+      logger.logSystem('category-change-error', 'Failed to fetch registration', {
+        userRegistrationId,
+        error: regError.message
+      })
+      return NextResponse.json({ error: 'Registration not found', details: regError.message }, { status: 404 })
+    }
+
+    if (!registration) {
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 

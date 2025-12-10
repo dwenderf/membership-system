@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       discountCategoryId = matchingDiscount.category_id
     }
 
-    // Get current registration with accounting codes
+    // Get current registration
     const { data: registration, error: regError } = await supabase
       .from('user_registrations')
       .select(`
@@ -90,8 +90,7 @@ export async function POST(request: NextRequest) {
           custom_name,
           category_id,
           categories (
-            name,
-            accounting_code
+            name
           )
         ),
         registrations (
@@ -191,8 +190,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Get accounting code for the new category
-      const newCat = Array.isArray(newCategory.categories) ? newCategory.categories[0] : newCategory.categories
-      const accountingCode = newCat?.accounting_code
+      const { data: newCategoryData } = await supabase
+        .from('categories')
+        .select('accounting_code')
+        .eq('id', newCategory.category_id)
+        .single()
+
+      const accountingCode = newCategoryData?.accounting_code
 
       if (!accountingCode) {
         return NextResponse.json({
@@ -376,8 +380,14 @@ export async function POST(request: NextRequest) {
 
       // Get accounting code for the credit note (use old category code)
       const oldCat = Array.isArray(registration.registration_categories) ? registration.registration_categories[0] : registration.registration_categories
-      const oldCategoryObj = oldCat?.categories ? (Array.isArray(oldCat.categories) ? oldCat.categories[0] : oldCat.categories) : null
-      const accountingCode = oldCategoryObj?.accounting_code
+
+      const { data: oldCategoryData } = await supabase
+        .from('categories')
+        .select('accounting_code')
+        .eq('id', oldCat.category_id)
+        .single()
+
+      const accountingCode = oldCategoryData?.accounting_code
 
       if (!accountingCode) {
         return NextResponse.json({
@@ -524,11 +534,22 @@ export async function POST(request: NextRequest) {
     } else {
       // PRICES EQUAL: Check if accounting codes differ
       const oldCat = Array.isArray(registration.registration_categories) ? registration.registration_categories[0] : registration.registration_categories
-      const oldCategoryObj = oldCat?.categories ? (Array.isArray(oldCat.categories) ? oldCat.categories[0] : oldCat.categories) : null
-      const oldAccountingCode = oldCategoryObj?.accounting_code
 
-      const newCat = Array.isArray(newCategory.categories) ? newCategory.categories[0] : newCategory.categories
-      const newAccountingCode = newCat?.accounting_code
+      // Fetch accounting codes separately
+      const { data: oldCategoryData } = await supabase
+        .from('categories')
+        .select('accounting_code')
+        .eq('id', oldCat.category_id)
+        .single()
+
+      const { data: newCategoryData } = await supabase
+        .from('categories')
+        .select('accounting_code')
+        .eq('id', newCategory.category_id)
+        .single()
+
+      const oldAccountingCode = oldCategoryData?.accounting_code
+      const newAccountingCode = newCategoryData?.accounting_code
 
       // Check if we need to create accounting records
       const needsAccountingRecords = oldPrice > 0 && oldAccountingCode && newAccountingCode && oldAccountingCode !== newAccountingCode

@@ -53,10 +53,13 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
-    // Validate payment has Stripe payment intent
-    if (!payment.stripe_payment_intent_id) {
-      return NextResponse.json({ 
-        error: 'Cannot refund payment without Stripe payment intent' 
+    // Check if this is a zero-dollar refund (free registration cancellation)
+    const isZeroDollarRefund = refundAmount === 0
+
+    // Validate payment has Stripe payment intent (unless zero-dollar refund)
+    if (!isZeroDollarRefund && !payment.stripe_payment_intent_id) {
+      return NextResponse.json({
+        error: 'Cannot refund payment without Stripe payment intent'
       }, { status: 400 })
     }
 
@@ -68,21 +71,62 @@ export async function POST(request: NextRequest) {
         user_id: payment.user_id,
         amount: refundAmount,
         reason: reason || 'Admin processed refund',
-        status: 'pending', // Will be updated based on Stripe response
+        status: isZeroDollarRefund ? 'completed' : 'pending', // Zero-dollar refunds complete immediately
         processed_by: authUser.id,
+        ...(isZeroDollarRefund && { completed_at: new Date().toISOString() })
       })
       .select()
       .single()
 
     if (refundError || !refund) {
-      return NextResponse.json({ 
-        error: 'Failed to create refund record' 
+      return NextResponse.json({
+        error: 'Failed to create refund record'
       }, { status: 500 })
     }
 
-    // Payment validation was already done above - payment.stripe_payment_intent_id exists
+    // Payment validation was already done above - payment.stripe_payment_intent_id exists (unless zero-dollar)
 
     try {
+      // For zero-dollar refunds (free registration cancellations), skip Stripe and just update status
+      if (isZeroDollarRefund) {
+        // Find all user_registrations associated with this payment
+        const { data: registrations } = await supabase
+          .from('user_registrations')
+          .select('id, user_id, registration_id')
+          .eq('payment_id', paymentId)
+          .eq('payment_status', 'paid')
+
+        if (registrations && registrations.length > 0) {
+          // Update all registrations to refunded status
+          await supabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'refunded',
+              updated_at: new Date().toISOString()
+            })
+            .eq('payment_id', paymentId)
+            .eq('payment_status', 'paid')
+
+          logger.logSystem('zero-dollar-refund-complete',
+            'Free registration cancelled successfully', {
+            refundId: refund.id,
+            paymentId,
+            registrationCount: registrations.length
+          })
+        }
+
+        return NextResponse.json({
+          success: true,
+          refund: {
+            id: refund.id,
+            amount: 0,
+            status: 'completed'
+          },
+          message: 'Free registration cancelled successfully'
+        })
+      }
+
+      // Regular (non-zero) refund processing with Stripe
       // Update staging records with the newly created refund ID
       // First get the existing staging metadata to preserve it
       const { data: existingStaging } = await supabase
@@ -104,7 +148,7 @@ export async function POST(request: NextRequest) {
       // Update refund status to processing
       await supabase
         .from('refunds')
-        .update({ 
+        .update({
           status: 'processing',
           updated_at: new Date().toISOString()
         })

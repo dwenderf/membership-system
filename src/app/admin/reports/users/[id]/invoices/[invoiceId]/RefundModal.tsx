@@ -330,7 +330,9 @@ export default function RefundModal({
   // Validate refund amount in real-time
   const isValidAmount = () => {
     const amountInCents = Math.round(parseFloat(refundAmount) * 100)
-    return !isNaN(amountInCents) && amountInCents > 0 && amountInCents <= availableAmount
+    // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+    const minAmount = isRegistrationPayment ? 0 : 1
+    return !isNaN(amountInCents) && amountInCents >= minAmount && amountInCents <= availableAmount
   }
 
   // Validate that reason is provided

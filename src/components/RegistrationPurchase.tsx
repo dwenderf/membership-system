@@ -54,6 +54,7 @@ interface Registration {
   allow_alternates?: boolean
   allow_lgbtq_presale?: boolean
   presale_code?: string | null
+  allow_discounts?: boolean
   season?: {
     name: string
     start_date: string
@@ -1086,7 +1087,7 @@ export default function RegistrationPurchase({
       )}
 
       {/* Discount Code Section */}
-      {selectedCategory && isTimingAvailable && !isUserOnWaitlist && (
+      {selectedCategory && isTimingAvailable && !isUserOnWaitlist && registration.allow_discounts !== false && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
           <div className="flex items-start">
             <svg className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

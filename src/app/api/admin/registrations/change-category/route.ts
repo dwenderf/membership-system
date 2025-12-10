@@ -126,21 +126,29 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get new category with accounting code
+    // Get new category
     const { data: newCategory, error: catError } = await supabase
       .from('registration_categories')
       .select(`
         *,
         categories (
-          name,
-          accounting_code
+          name
         )
       `)
       .eq('id', newCategoryId)
       .eq('registration_id', registration.registration_id)
       .single()
 
-    if (catError || !newCategory) {
+    if (catError) {
+      logger.logSystem('category-change-error', 'Failed to fetch new category', {
+        newCategoryId,
+        registrationId: registration.registration_id,
+        error: catError.message
+      })
+      return NextResponse.json({ error: 'Target category not found', details: catError.message }, { status: 404 })
+    }
+
+    if (!newCategory) {
       return NextResponse.json({ error: 'Target category not found' }, { status: 404 })
     }
 

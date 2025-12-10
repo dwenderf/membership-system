@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 import Stripe from 'stripe'
+import { xeroStagingManager } from '@/lib/xero/staging'
+import { centsToCents } from '@/types/currency'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get current registration
+    // Get current registration with accounting codes
     const { data: registration, error: regError } = await supabase
       .from('user_registrations')
       .select(`
@@ -63,7 +65,8 @@ export async function POST(request: NextRequest) {
           price,
           custom_name,
           categories (
-            name
+            name,
+            accounting_code
           )
         ),
         registrations!inner (
@@ -90,13 +93,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get new category
+    // Get new category with accounting code
     const { data: newCategory, error: catError } = await supabase
       .from('registration_categories')
       .select(`
         *,
         categories (
-          name
+          name,
+          accounting_code
         )
       `)
       .eq('id', newCategoryId)
@@ -145,9 +149,44 @@ export async function POST(request: NextRequest) {
     if (priceDifference > 0) {
       // NEW PRICE > OLD PRICE: User owes money
       if (!user.stripe_payment_method_id) {
-        return NextResponse.json({ 
-          error: 'User must have a payment method on file to upgrade category' 
+        return NextResponse.json({
+          error: 'User must have a payment method on file to upgrade category'
         }, { status: 400 })
+      }
+
+      // Get accounting code for the new category
+      const newCat = Array.isArray(newCategory.categories) ? newCategory.categories[0] : newCategory.categories
+      const accountingCode = newCat?.accounting_code
+
+      if (!accountingCode) {
+        return NextResponse.json({
+          error: 'New category has no accounting code configured'
+        }, { status: 400 })
+      }
+
+      // Create Xero staging record BEFORE charging
+      const stagingData = {
+        user_id: registration.user_id,
+        total_amount: centsToCents(priceDifference),
+        discount_amount: 0,
+        final_amount: centsToCents(priceDifference),
+        payment_items: [{
+          item_type: 'registration' as const,
+          item_id: registration.registration_id,
+          item_amount: centsToCents(priceDifference),
+          description: `Category Upgrade: ${oldCategoryName} → ${newCategoryName}`,
+          accounting_code: accountingCode
+        }],
+        discount_codes_used: [],
+        stripe_payment_intent_id: null // Will be added after payment intent created
+      }
+
+      const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData)
+
+      if (!stagingRecord) {
+        return NextResponse.json({
+          error: 'Failed to create Xero staging record'
+        }, { status: 500 })
       }
 
       // Create payment intent for difference
@@ -166,13 +205,14 @@ export async function POST(request: NextRequest) {
           category_change: 'true',
           old_category: oldCategoryName,
           new_category: newCategoryName,
-          reason: reason
+          reason: reason,
+          xero_staging_record_id: stagingRecord.id // Link to staging record for webhook
         }
       })
 
       if (paymentIntent.status !== 'succeeded') {
-        return NextResponse.json({ 
-          error: 'Payment for category upgrade failed' 
+        return NextResponse.json({
+          error: 'Payment for category upgrade failed'
         }, { status: 400 })
       }
 
@@ -195,6 +235,18 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
 
+      // Update staging record with payment ID and payment intent ID
+      await supabase
+        .from('xero_invoices')
+        .update({
+          payment_id: newPayment?.id,
+          staging_metadata: {
+            ...stagingRecord.staging_metadata,
+            stripe_payment_intent_id: paymentIntent.id
+          }
+        })
+        .eq('id', stagingRecord.id)
+
       // Update registration
       await supabase
         .from('user_registrations')
@@ -210,7 +262,8 @@ export async function POST(request: NextRequest) {
       logger.logSystem('category-change-complete', 'Category upgraded with payment', {
         registrationId: userRegistrationId,
         paymentId: newPayment?.id,
-        amountCharged: priceDifference
+        amountCharged: priceDifference,
+        xeroStagingId: stagingRecord.id
       })
 
       return NextResponse.json({
@@ -225,8 +278,8 @@ export async function POST(request: NextRequest) {
       const refundAmount = Math.abs(priceDifference)
 
       if (!registration.payment_id) {
-        return NextResponse.json({ 
-          error: 'Original payment not found for refund processing' 
+        return NextResponse.json({
+          error: 'Original payment not found for refund processing'
         }, { status: 404 })
       }
 
@@ -237,8 +290,19 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (!originalPayment?.stripe_payment_intent_id) {
-        return NextResponse.json({ 
-          error: 'Cannot process refund - original payment has no Stripe payment intent' 
+        return NextResponse.json({
+          error: 'Cannot process refund - original payment has no Stripe payment intent'
+        }, { status: 400 })
+      }
+
+      // Get accounting code for the credit note (use old category code)
+      const oldCat = Array.isArray(registration.registration_categories) ? registration.registration_categories[0] : registration.registration_categories
+      const oldCategoryObj = oldCat?.categories ? (Array.isArray(oldCat.categories) ? oldCat.categories[0] : oldCat.categories) : null
+      const accountingCode = oldCategoryObj?.accounting_code
+
+      if (!accountingCode) {
+        return NextResponse.json({
+          error: 'Old category has no accounting code configured'
         }, { status: 400 })
       }
 
@@ -260,6 +324,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create refund record' }, { status: 500 })
       }
 
+      // Create credit note staging record
+      const { data: creditNoteStaging, error: creditError } = await supabase
+        .from('xero_invoices')
+        .insert({
+          payment_id: registration.payment_id,
+          invoice_type: 'ACCRECCREDIT', // Credit note type
+          invoice_status: 'DRAFT',
+          total_amount: refundAmount,
+          net_amount: refundAmount,
+          sync_status: 'staged',
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            refund_id: refund.id,
+            user_id: registration.user_id,
+            refund_type: 'category_change',
+            refund_amount: refundAmount,
+            original_payment_id: registration.payment_id
+          }
+        })
+        .select()
+        .single()
+
+      if (creditError || !creditNoteStaging) {
+        return NextResponse.json({
+          error: 'Failed to create credit note staging'
+        }, { status: 500 })
+      }
+
+      // Create line item for the credit note
+      await supabase
+        .from('xero_invoice_line_items')
+        .insert({
+          xero_invoice_id: creditNoteStaging.id,
+          description: `Category Downgrade: ${oldCategoryName} → ${newCategoryName}`,
+          quantity: 1,
+          unit_amount: refundAmount,
+          line_amount: refundAmount,
+          account_code: accountingCode,
+          tax_type: 'NONE',
+          line_item_type: 'refund'
+        })
+
       // Process Stripe refund
       try {
         await supabase
@@ -274,7 +380,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             refund_id: refund.id,
             processed_by: authUser.id,
-            category_change: 'true'
+            category_change: 'true',
+            staging_id: creditNoteStaging.id // Link to staging record for webhook
           }
         })
 
@@ -301,7 +408,8 @@ export async function POST(request: NextRequest) {
         logger.logSystem('category-change-complete', 'Category downgraded with refund', {
           registrationId: userRegistrationId,
           refundId: refund.id,
-          amountRefunded: refundAmount
+          amountRefunded: refundAmount,
+          xeroStagingId: creditNoteStaging.id
         })
 
         return NextResponse.json({
@@ -320,31 +428,156 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', refund.id)
 
-        return NextResponse.json({ 
-          error: 'Refund processing failed' 
+        // Mark staging as failed
+        await supabase
+          .from('xero_invoices')
+          .update({
+            sync_status: 'failed',
+            sync_error: stripeError instanceof Error ? stripeError.message : 'Unknown error'
+          })
+          .eq('id', creditNoteStaging.id)
+
+        return NextResponse.json({
+          error: 'Refund processing failed'
         }, { status: 500 })
       }
 
     } else {
-      // PRICES EQUAL: Just update category
-      await supabase
-        .from('user_registrations')
-        .update({
-          registration_category_id: newCategoryId,
-          updated_at: new Date().toISOString()
+      // PRICES EQUAL: Check if accounting codes differ
+      const oldCat = Array.isArray(registration.registration_categories) ? registration.registration_categories[0] : registration.registration_categories
+      const oldCategoryObj = oldCat?.categories ? (Array.isArray(oldCat.categories) ? oldCat.categories[0] : oldCat.categories) : null
+      const oldAccountingCode = oldCategoryObj?.accounting_code
+
+      const newCat = Array.isArray(newCategory.categories) ? newCategory.categories[0] : newCategory.categories
+      const newAccountingCode = newCat?.accounting_code
+
+      // Check if we need to create accounting records
+      const needsAccountingRecords = oldPrice > 0 && oldAccountingCode && newAccountingCode && oldAccountingCode !== newAccountingCode
+
+      if (needsAccountingRecords) {
+        // Same price but different accounting codes - create zero-value invoice with two line items
+        logger.logSystem('category-change-accounting-transfer', 'Creating zero-value invoice for accounting code change', {
+          registrationId: userRegistrationId,
+          oldCode: oldAccountingCode,
+          newCode: newAccountingCode,
+          amount: oldPrice
         })
-        .eq('id', userRegistrationId)
 
-      logger.logSystem('category-change-complete', 'Category changed (no price difference)', {
-        registrationId: userRegistrationId
-      })
+        // Create Xero staging record with two line items (credit old, charge new)
+        const stagingData = {
+          user_id: registration.user_id,
+          total_amount: 0, // Net zero
+          discount_amount: 0,
+          final_amount: 0,
+          payment_items: [
+            {
+              item_type: 'registration' as const,
+              item_id: registration.registration_id,
+              item_amount: centsToCents(-oldPrice), // Credit the old category (negative)
+              description: `Category Change (From): ${oldCategoryName}`,
+              accounting_code: oldAccountingCode
+            },
+            {
+              item_type: 'registration' as const,
+              item_id: registration.registration_id,
+              item_amount: centsToCents(oldPrice), // Charge the new category (positive)
+              description: `Category Change (To): ${newCategoryName}`,
+              accounting_code: newAccountingCode
+            }
+          ],
+          discount_codes_used: [],
+          stripe_payment_intent_id: null
+        }
 
-      return NextResponse.json({
-        success: true,
-        action: 'updated',
-        amount: 0,
-        message: 'Category changed successfully (no price difference).'
-      })
+        const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: true })
+
+        if (!stagingRecord) {
+          return NextResponse.json({
+            error: 'Failed to create Xero staging record for accounting transfer'
+          }, { status: 500 })
+        }
+
+        // Create a zero-value payment record to link the staging
+        const { data: transferPayment } = await supabase
+          .from('payments')
+          .insert({
+            user_id: registration.user_id,
+            total_amount: 0,
+            final_amount: 0,
+            stripe_payment_intent_id: null,
+            status: 'completed',
+            payment_method: 'free',
+            completed_at: new Date().toISOString(),
+            metadata: {
+              type: 'category_change_accounting_transfer',
+              old_category_id: registration.registration_category_id,
+              new_category_id: newCategoryId,
+              user_registration_id: userRegistrationId,
+              old_accounting_code: oldAccountingCode,
+              new_accounting_code: newAccountingCode
+            }
+          })
+          .select()
+          .single()
+
+        // Link staging to payment
+        await supabase
+          .from('xero_invoices')
+          .update({ payment_id: transferPayment?.id })
+          .eq('id', stagingRecord.id)
+
+        // Update the staging status to pending (since there's no Stripe webhook for free transactions)
+        await supabase
+          .from('xero_invoices')
+          .update({
+            sync_status: 'pending',
+            invoice_status: 'AUTHORISED'
+          })
+          .eq('id', stagingRecord.id)
+
+        // Update registration
+        await supabase
+          .from('user_registrations')
+          .update({
+            registration_category_id: newCategoryId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userRegistrationId)
+
+        logger.logSystem('category-change-complete', 'Category changed with accounting transfer', {
+          registrationId: userRegistrationId,
+          xeroStagingId: stagingRecord.id,
+          paymentId: transferPayment?.id
+        })
+
+        return NextResponse.json({
+          success: true,
+          action: 'updated',
+          amount: 0,
+          message: 'Category changed successfully (accounting codes updated in Xero).'
+        })
+      } else {
+        // No accounting records needed (both $0 or same accounting code)
+        await supabase
+          .from('user_registrations')
+          .update({
+            registration_category_id: newCategoryId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userRegistrationId)
+
+        logger.logSystem('category-change-complete', 'Category changed (no accounting impact)', {
+          registrationId: userRegistrationId,
+          reason: oldPrice === 0 ? 'both_categories_free' : 'same_accounting_code'
+        })
+
+        return NextResponse.json({
+          success: true,
+          action: 'updated',
+          amount: 0,
+          message: 'Category changed successfully (no price difference).'
+        })
+      }
     }
 
   } catch (error) {

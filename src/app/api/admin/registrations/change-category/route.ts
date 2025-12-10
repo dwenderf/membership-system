@@ -323,8 +323,7 @@ export async function POST(request: NextRequest) {
             discount_category_id: discountCategoryId,
             season_id: (registration.registrations as any).season_id,
             amount_saved: discountAmount,
-            registration_id: registration.registration_id,
-            user_registration_id: userRegistrationId
+            registration_id: registration.registration_id
           })
       }
 
@@ -686,8 +685,7 @@ export async function POST(request: NextRequest) {
               discount_category_id: discountCategoryId,
               season_id: (registration.registrations as any).season_id,
               amount_saved: discountAmount,
-              registration_id: registration.registration_id,
-              user_registration_id: userRegistrationId
+              registration_id: registration.registration_id
             })
         }
 

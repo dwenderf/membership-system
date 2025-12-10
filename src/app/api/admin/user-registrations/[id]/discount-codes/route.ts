@@ -25,7 +25,19 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get discount codes used for this user registration
+    // First get the user_id and registration_id from user_registrations
+    const { data: userReg, error: userRegError } = await supabase
+      .from('user_registrations')
+      .select('user_id, registration_id')
+      .eq('id', params.id)
+      .single()
+
+    if (userRegError || !userReg) {
+      console.error('Error fetching user registration:', userRegError)
+      return NextResponse.json({ discountCodes: [] })
+    }
+
+    // Get discount codes used for this user and registration
     const { data: discountUsage, error } = await supabase
       .from('discount_usage')
       .select(`
@@ -37,7 +49,8 @@ export async function GET(
           discount_category_id
         )
       `)
-      .eq('user_registration_id', params.id)
+      .eq('user_id', userReg.user_id)
+      .eq('registration_id', userReg.registration_id)
 
     if (error) {
       console.error('Error fetching discount codes:', error)

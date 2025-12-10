@@ -253,11 +253,6 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
                     currentAmountPaid={userRegistration.amount_paid}
                     userName={`${user.first_name} ${user.last_name}`}
                     registrationName={(userRegistration.registrations as any).name}
-                    onSuccess={() => {
-                      // Refresh the page
-                      window.location.reload()
-                    }}
-                    onCancel={() => {}}
                   />
                 )}
 

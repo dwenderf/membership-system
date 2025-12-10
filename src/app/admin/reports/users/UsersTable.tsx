@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/date-utils'
+import UserLink from '@/components/UserLink'
 
 interface User {
   id: string
@@ -174,27 +175,19 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                   <tr key={user.id} className={`hover:bg-gray-50 ${isCurrentUser ? 'bg-blue-50' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                            isCurrentUser ? 'bg-blue-100 ring-2 ring-blue-500' : 'bg-gray-300'
-                          }`}>
-                            <span className={`text-sm font-medium ${
-                              isCurrentUser ? 'text-blue-700' : 'text-gray-700'
-                            }`}>
-                              {user.first_name?.[0]}{user.last_name?.[0]}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 flex items-center">
-                            {user.first_name} {user.last_name}
-                            {isCurrentUser && (
-                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                You
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        <UserLink
+                          userId={user.id}
+                          firstName={user.first_name}
+                          lastName={user.last_name}
+                          showAvatar={true}
+                          fromPath="/admin/reports/users"
+                          fromLabel="Users Report"
+                        />
+                        {isCurrentUser && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            You
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

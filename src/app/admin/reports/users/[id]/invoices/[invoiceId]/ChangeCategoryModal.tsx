@@ -19,8 +19,8 @@ interface ChangeCategoryModalProps {
   currentAmountPaid: number
   userName: string
   registrationName: string
-  onSuccess: () => void
-  onCancel: () => void
+  onSuccess?: () => void
+  onCancel?: () => void
 }
 
 function formatAmount(cents: number): string {
@@ -38,6 +38,7 @@ export default function ChangeCategoryModal({
   onSuccess,
   onCancel
 }: ChangeCategoryModalProps) {
+  const [isOpen, setIsOpen] = useState(false)
   const [categories, setCategories] = useState<CategoryOption[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('')
   const [reason, setReason] = useState('')
@@ -47,8 +48,10 @@ export default function ChangeCategoryModal({
   const [successMessage, setSuccessMessage] = useState('')
 
   useEffect(() => {
-    fetchCategories()
-  }, [registrationId])
+    if (isOpen) {
+      fetchCategories()
+    }
+  }, [isOpen, registrationId])
 
   const fetchCategories = async () => {
     try {
@@ -152,7 +155,12 @@ export default function ChangeCategoryModal({
 
       setSuccessMessage(data.message)
       setTimeout(() => {
-        onSuccess()
+        if (onSuccess) {
+          onSuccess()
+        } else {
+          // Default behavior: refresh the page
+          window.location.reload()
+        }
       }, 1500)
 
     } catch (err) {
@@ -163,12 +171,33 @@ export default function ChangeCategoryModal({
     }
   }
 
+  const handleClose = () => {
+    if (onCancel) {
+      onCancel()
+    }
+    setIsOpen(false)
+  }
+
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Change Registration Category</h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600" disabled={isProcessing}>
+    <>
+      {/* Trigger Button */}
+      <button
+        onClick={() => setIsOpen(true)}
+        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+      >
+        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+        Change Category
+      </button>
+
+      {/* Modal */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Change Registration Category</h3>
+              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600" disabled={isProcessing}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -323,5 +352,7 @@ export default function ChangeCategoryModal({
         )}
       </div>
     </div>
+      )}
+    </>
   )
 }

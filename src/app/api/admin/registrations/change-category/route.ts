@@ -198,17 +198,28 @@ export async function POST(request: NextRequest) {
       }
 
       // Get accounting code for the new category
-      const { data: newCategoryData } = await supabase
+      const { data: newCategoryData, error: categoryError } = await supabase
         .from('categories')
         .select('accounting_code')
         .eq('id', newCategory.category_id)
         .single()
 
+      logger.logSystem('category-change-debug', 'Fetching accounting code for new category', {
+        categoryId: newCategory.category_id,
+        foundData: newCategoryData,
+        error: categoryError?.message
+      })
+
       const accountingCode = newCategoryData?.accounting_code
 
       if (!accountingCode) {
         return NextResponse.json({
-          error: 'New category has no accounting code configured'
+          error: 'New category has no accounting code configured',
+          debug: {
+            categoryId: newCategory.category_id,
+            categoryData: newCategoryData,
+            hasAccountingCode: !!newCategoryData?.accounting_code
+          }
         }, { status: 400 })
       }
 

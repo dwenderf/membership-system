@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
+import ChangeCategoryModal from './ChangeCategoryModal'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs } from '@/lib/breadcrumb-utils'
@@ -187,6 +188,35 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
     allPayments: allInvoicePayments
   }
 
+  // Check if this payment is for a registration (for Change Category button)
+  const { data: userRegistration } = await supabase
+    .from('user_registrations')
+    .select(`
+      id,
+      registration_id,
+      registration_category_id,
+      payment_status,
+      amount_paid,
+      registration_categories!inner (
+        id,
+        price,
+        custom_name,
+        categories (
+          name
+        )
+      ),
+      registrations!inner (
+        id,
+        name
+      )
+    `)
+    .eq('payment_id', payment.id)
+    .eq('payment_status', 'paid')
+    .maybeSingle()
+
+  const isRegistrationPayment = !!userRegistration
+  const canChangeCategory = isRegistrationPayment && userRegistration.payment_status === 'paid'
+
   // Parse breadcrumbs from URL params
   const breadcrumbs = parseBreadcrumbs(searchParams)
 
@@ -206,8 +236,32 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
                   Payment for {user.first_name} {user.last_name} ({user.email})
                 </p>
               </div>
-              {/* Refund button */}
+              {/* Action buttons */}
               <div className="flex space-x-3">
+                {/* Change Category button (for paid registrations only) */}
+                {canChangeCategory && userRegistration && (
+                  <ChangeCategoryModal
+                    userRegistrationId={userRegistration.id}
+                    userId={params.id}
+                    registrationId={userRegistration.registration_id}
+                    currentCategoryId={userRegistration.registration_category_id}
+                    currentCategoryName={
+                      (userRegistration.registration_categories.categories as any)?.name ||
+                      userRegistration.registration_categories.custom_name ||
+                      'Unknown'
+                    }
+                    currentAmountPaid={userRegistration.amount_paid}
+                    userName={`${user.first_name} ${user.last_name}`}
+                    registrationName={(userRegistration.registrations as any).name}
+                    onSuccess={() => {
+                      // Refresh the page
+                      window.location.reload()
+                    }}
+                    onCancel={() => {}}
+                  />
+                )}
+
+                {/* Refund button */}
                 {canRefund ? (
                   <RefundModal
                     paymentId={payment.id}
@@ -223,7 +277,7 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m5 5v1a4 4 0 01-4 4H8m0 0l3-3m-3 3l3 3"></path>
                     </svg>
-                    {totalRefunded >= payment.final_amount ? 'Fully Refunded' : 
+                    {totalRefunded >= payment.final_amount ? 'Fully Refunded' :
                      totalRefunded > 0 ? 'Partially Refunded' : 'Cannot Refund'}
                   </button>
                 )}

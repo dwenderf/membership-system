@@ -6,8 +6,21 @@ interface CategoryOption {
   id: string
   name: string
   price: number
+  discountedPrice: number
   currentCount: number
   maxCapacity: number | null
+  discountInfo?: {
+    code: string
+    percentage: number
+    amountSaved: number
+  }
+}
+
+interface DiscountCodeInfo {
+  id: string
+  code: string
+  percentage: number
+  category_id: string
 }
 
 interface ChangeCategoryModalProps {
@@ -48,13 +61,36 @@ export default function ChangeCategoryModal({
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [hasPaymentMethod, setHasPaymentMethod] = useState<boolean | null>(null)
+  const [discountCodes, setDiscountCodes] = useState<DiscountCodeInfo[]>([])
 
   useEffect(() => {
     if (isOpen) {
-      fetchCategories()
+      fetchDiscountCodes()
       checkPaymentMethod()
     }
-  }, [isOpen, registrationId, userId])
+  }, [isOpen, userRegistrationId, userId])
+
+  const fetchDiscountCodes = async () => {
+    try {
+      setIsLoading(true)
+      // Fetch discount codes used in the original registration
+      const response = await fetch(`/api/admin/user-registrations/${userRegistrationId}/discount-codes`)
+
+      if (response.ok) {
+        const data = await response.json()
+        setDiscountCodes(data.discountCodes || [])
+      } else {
+        setDiscountCodes([])
+      }
+
+      // After getting discount codes, fetch categories
+      await fetchCategories()
+    } catch (err) {
+      console.error('Failed to fetch discount codes:', err)
+      setDiscountCodes([])
+      await fetchCategories()
+    }
+  }
 
   const checkPaymentMethod = async () => {
     try {
@@ -73,7 +109,6 @@ export default function ChangeCategoryModal({
 
   const fetchCategories = async () => {
     try {
-      setIsLoading(true)
       const response = await fetch(`/api/admin/registration-categories/${registrationId}`)
 
       if (!response.ok) {
@@ -82,9 +117,36 @@ export default function ChangeCategoryModal({
 
       const data = await response.json()
 
-      const availableCategories = data.categories.filter(
-        (cat: CategoryOption) => cat.id !== currentCategoryId
-      )
+      const availableCategories = data.categories
+        .filter((cat: any) => cat.id !== currentCategoryId)
+        .map((cat: any) => {
+          // Apply discount codes to calculate discounted price
+          let discountedPrice = cat.price
+          let discountInfo = null
+
+          // Find applicable discount code for this category
+          const applicableDiscount = discountCodes.find(dc => dc.category_id === cat.category_id)
+
+          if (applicableDiscount) {
+            const discountAmount = Math.round((cat.price * applicableDiscount.percentage) / 100)
+            discountedPrice = cat.price - discountAmount
+            discountInfo = {
+              code: applicableDiscount.code,
+              percentage: applicableDiscount.percentage,
+              amountSaved: discountAmount
+            }
+          }
+
+          return {
+            id: cat.id,
+            name: cat.name,
+            price: cat.price,
+            discountedPrice,
+            currentCount: cat.currentCount,
+            maxCapacity: cat.maxCapacity,
+            discountInfo
+          }
+        })
 
       setCategories(availableCategories)
     } catch (err) {
@@ -101,7 +163,7 @@ export default function ChangeCategoryModal({
   const calculatePriceDifference = () => {
     const selected = getSelectedCategory()
     if (!selected) return 0
-    return selected.price - currentAmountPaid
+    return selected.discountedPrice - currentAmountPaid
   }
 
   const getPriceDifferenceDisplay = () => {
@@ -153,6 +215,8 @@ export default function ChangeCategoryModal({
     setError('')
 
     try {
+      const selectedCategory = getSelectedCategory()
+
       const response = await fetch('/api/admin/registrations/change-category', {
         method: 'POST',
         headers: {
@@ -161,7 +225,9 @@ export default function ChangeCategoryModal({
         body: JSON.stringify({
           userRegistrationId,
           newCategoryId: selectedCategoryId,
-          reason: reason.trim()
+          reason: reason.trim(),
+          discountCodes: discountCodes.length > 0 ? discountCodes : undefined,
+          discountInfo: selectedCategory?.discountInfo
         })
       })
 
@@ -299,11 +365,16 @@ export default function ChangeCategoryModal({
                               {category.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {formatAmount(category.price)}
-                              {category.maxCapacity && (
-                                <span className="ml-2">
-                                  ({category.currentCount}/{category.maxCapacity} spots filled)
-                                </span>
+                              {category.discountInfo ? (
+                                <>
+                                  <span className="line-through text-gray-400">{formatAmount(category.price)}</span>
+                                  <span className="ml-1 font-semibold text-green-600">{formatAmount(category.discountedPrice)}</span>
+                                  <span className="ml-2 text-green-600">
+                                    ({category.discountInfo.percentage}% {category.discountInfo.code} discount applied)
+                                  </span>
+                                </>
+                              ) : (
+                                formatAmount(category.price)
                               )}
                               {isAtCapacity && (
                                 <span className="ml-2 text-red-600 font-semibold">FULL</span>

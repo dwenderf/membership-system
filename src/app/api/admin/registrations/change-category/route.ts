@@ -9,10 +9,25 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
 })
 
+interface DiscountInfo {
+  code: string
+  percentage: number
+  amountSaved: number
+}
+
+interface DiscountCodeInfo {
+  id: string
+  code: string
+  percentage: number
+  category_id: string
+}
+
 interface ChangeCategoryRequest {
   userRegistrationId: string
   newCategoryId: string
   reason: string
+  discountCodes?: DiscountCodeInfo[]
+  discountInfo?: DiscountInfo
 }
 
 export async function POST(request: NextRequest) {
@@ -39,12 +54,21 @@ export async function POST(request: NextRequest) {
 
     // Parse request
     const body: ChangeCategoryRequest = await request.json()
-    const { userRegistrationId, newCategoryId, reason } = body
+    const { userRegistrationId, newCategoryId, reason, discountCodes, discountInfo } = body
 
     if (!userRegistrationId || !newCategoryId || !reason?.trim()) {
-      return NextResponse.json({ 
-        error: 'User registration ID, new category ID, and reason are required' 
+      return NextResponse.json({
+        error: 'User registration ID, new category ID, and reason are required'
       }, { status: 400 })
+    }
+
+    // Get discount code details if provided
+    let discountCodeId: string | undefined
+    let discountCategoryId: string | undefined
+    if (discountInfo && discountCodes && discountCodes.length > 0) {
+      const matchingDiscount = discountCodes[0] // Use first discount code
+      discountCodeId = matchingDiscount.id
+      discountCategoryId = matchingDiscount.category_id
     }
 
     // Get current registration with accounting codes
@@ -124,9 +148,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Calculate price difference
+    // Calculate price difference (using discounted price if discount was applied)
     const oldPrice = registration.amount_paid
-    const newPrice = newCategory.price
+    const newPriceBase = newCategory.price
+    const discountAmount = discountInfo?.amountSaved || 0
+    const newPrice = newPriceBase - discountAmount  // Discounted price
     const priceDifference = newPrice - oldPrice
     
     const oldCat = Array.isArray(registration.registration_categories) ? registration.registration_categories[0] : registration.registration_categories
@@ -165,19 +191,47 @@ export async function POST(request: NextRequest) {
       }
 
       // Create Xero staging record BEFORE charging
+      const payment_items = [{
+        item_type: 'registration' as const,
+        item_id: registration.registration_id,
+        item_amount: centsToCents(newPriceBase), // Full price (before discount)
+        description: `Category Upgrade: ${oldCategoryName} → ${newCategoryName}`,
+        accounting_code: accountingCode
+      }]
+
+      // Add discount line item if applicable
+      if (discountInfo && discountAmount > 0 && discountCategoryId) {
+        const { data: discountCategory } = await supabase
+          .from('discount_categories')
+          .select('accounting_code')
+          .eq('id', discountCategoryId)
+          .single()
+
+        if (discountCategory?.accounting_code) {
+          payment_items.push({
+            item_type: 'discount' as const,
+            item_id: null,
+            item_amount: centsToCents(-discountAmount), // Negative for discount
+            description: `Discount: ${discountInfo.code} (${discountInfo.percentage}%)`,
+            accounting_code: discountCategory.accounting_code,
+            discount_code_id: discountCodeId
+          })
+        }
+      }
+
       const stagingData = {
         user_id: registration.user_id,
-        total_amount: centsToCents(priceDifference),
-        discount_amount: 0,
-        final_amount: centsToCents(priceDifference),
-        payment_items: [{
-          item_type: 'registration' as const,
-          item_id: registration.registration_id,
-          item_amount: centsToCents(priceDifference),
-          description: `Category Upgrade: ${oldCategoryName} → ${newCategoryName}`,
-          accounting_code: accountingCode
-        }],
-        discount_codes_used: [],
+        total_amount: centsToCents(newPriceBase),
+        discount_amount: centsToCents(discountAmount),
+        final_amount: centsToCents(priceDifference), // Net amount after discount
+        payment_items,
+        discount_codes_used: discountInfo ? [{
+          code: discountInfo.code,
+          amount_saved: centsToCents(discountAmount),
+          category_name: '',
+          accounting_code: '',
+          discount_code_id: discountCodeId
+        }] : [],
         stripe_payment_intent_id: null // Will be added after payment intent created
       }
 
@@ -253,17 +307,33 @@ export async function POST(request: NextRequest) {
         .update({
           registration_category_id: newCategoryId,
           registration_fee: newCategory.price,
-          amount_paid: oldPrice + priceDifference,
+          amount_paid: newPrice, // Discounted price
           payment_id: newPayment?.id,
           updated_at: new Date().toISOString()
         })
         .eq('id', userRegistrationId)
 
+      // Record discount usage if discount was applied
+      if (discountCodeId && discountCategoryId && discountAmount > 0) {
+        await supabase
+          .from('discount_usage')
+          .insert({
+            user_id: registration.user_id,
+            discount_code_id: discountCodeId,
+            discount_category_id: discountCategoryId,
+            season_id: (registration.registrations as any).season_id,
+            amount_saved: discountAmount,
+            registration_id: registration.registration_id,
+            user_registration_id: userRegistrationId
+          })
+      }
+
       logger.logSystem('category-change-complete', 'Category upgraded with payment', {
         registrationId: userRegistrationId,
         paymentId: newPayment?.id,
         amountCharged: priceDifference,
-        xeroStagingId: stagingRecord.id
+        xeroStagingId: stagingRecord.id,
+        discountApplied: discountInfo ? `${discountInfo.code} (${discountInfo.percentage}%)` : 'none'
       })
 
       return NextResponse.json({
@@ -463,29 +533,91 @@ export async function POST(request: NextRequest) {
           amount: oldPrice
         })
 
-        // Create Xero staging record with two line items (credit old, charge new)
+        // Create Xero staging record with line items showing full prices and discounts
+        const payment_items = []
+        let totalDiscountAmount = 0
+
+        // Get old category full price (before any discount)
+        const oldCategoryPrice = (oldCat as any)?.price || oldPrice
+
+        // Credit old category at full price
+        payment_items.push({
+          item_type: 'registration' as const,
+          item_id: registration.registration_id,
+          item_amount: centsToCents(-oldCategoryPrice),
+          description: `Category Change (From): ${oldCategoryName}`,
+          accounting_code: oldAccountingCode
+        })
+
+        // If old category had a discount, add it back (negative credit = charge)
+        const oldDiscountAmount = oldCategoryPrice - oldPrice
+        if (oldDiscountAmount > 0 && discountCodes && discountCodes.length > 0) {
+          const oldDiscount = discountCodes.find(dc =>
+            dc.category_id === (oldCat as any)?.category_id
+          )
+          if (oldDiscount && discountCategoryId) {
+            const { data: discountCategory } = await supabase
+              .from('discount_categories')
+              .select('accounting_code')
+              .eq('id', discountCategoryId)
+              .single()
+
+            if (discountCategory?.accounting_code) {
+              payment_items.push({
+                item_type: 'discount' as const,
+                item_id: null,
+                item_amount: centsToCents(oldDiscountAmount), // Positive to reverse the discount
+                description: `Reverse Discount: ${oldDiscount.code} (${oldDiscount.percentage}%)`,
+                accounting_code: discountCategory.accounting_code,
+                discount_code_id: oldDiscount.id
+              })
+            }
+          }
+        }
+
+        // Charge new category at full price
+        payment_items.push({
+          item_type: 'registration' as const,
+          item_id: registration.registration_id,
+          item_amount: centsToCents(newPriceBase),
+          description: `Category Change (To): ${newCategoryName}`,
+          accounting_code: newAccountingCode
+        })
+
+        // If new category has a discount, apply it (negative charge = credit)
+        if (discountInfo && discountAmount > 0 && discountCategoryId) {
+          const { data: discountCategory } = await supabase
+            .from('discount_categories')
+            .select('accounting_code')
+            .eq('id', discountCategoryId)
+            .single()
+
+          if (discountCategory?.accounting_code) {
+            payment_items.push({
+              item_type: 'discount' as const,
+              item_id: null,
+              item_amount: centsToCents(-discountAmount), // Negative for discount
+              description: `Discount: ${discountInfo.code} (${discountInfo.percentage}%)`,
+              accounting_code: discountCategory.accounting_code,
+              discount_code_id: discountCodeId
+            })
+            totalDiscountAmount = discountAmount
+          }
+        }
+
         const stagingData = {
           user_id: registration.user_id,
           total_amount: 0, // Net zero
-          discount_amount: 0,
+          discount_amount: centsToCents(totalDiscountAmount),
           final_amount: 0,
-          payment_items: [
-            {
-              item_type: 'registration' as const,
-              item_id: registration.registration_id,
-              item_amount: centsToCents(-oldPrice), // Credit the old category (negative)
-              description: `Category Change (From): ${oldCategoryName}`,
-              accounting_code: oldAccountingCode
-            },
-            {
-              item_type: 'registration' as const,
-              item_id: registration.registration_id,
-              item_amount: centsToCents(oldPrice), // Charge the new category (positive)
-              description: `Category Change (To): ${newCategoryName}`,
-              accounting_code: newAccountingCode
-            }
-          ],
-          discount_codes_used: [],
+          payment_items,
+          discount_codes_used: discountInfo ? [{
+            code: discountInfo.code,
+            amount_saved: centsToCents(discountAmount),
+            category_name: '',
+            accounting_code: '',
+            discount_code_id: discountCodeId
+          }] : [],
           stripe_payment_intent_id: null
         }
 
@@ -544,10 +676,26 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', userRegistrationId)
 
+        // Record discount usage if discount was applied to new category
+        if (discountCodeId && discountCategoryId && discountAmount > 0) {
+          await supabase
+            .from('discount_usage')
+            .insert({
+              user_id: registration.user_id,
+              discount_code_id: discountCodeId,
+              discount_category_id: discountCategoryId,
+              season_id: (registration.registrations as any).season_id,
+              amount_saved: discountAmount,
+              registration_id: registration.registration_id,
+              user_registration_id: userRegistrationId
+            })
+        }
+
         logger.logSystem('category-change-complete', 'Category changed with accounting transfer', {
           registrationId: userRegistrationId,
           xeroStagingId: stagingRecord.id,
-          paymentId: transferPayment?.id
+          paymentId: transferPayment?.id,
+          discountApplied: discountInfo ? `${discountInfo.code} (${discountInfo.percentage}%)` : 'none'
         })
 
         return NextResponse.json({

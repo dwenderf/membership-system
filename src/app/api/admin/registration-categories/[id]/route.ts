@@ -39,6 +39,7 @@ export async function GET(
         price,
         max_capacity,
         custom_name,
+        category_id,
         categories (
           name
         )
@@ -62,7 +63,8 @@ export async function GET(
           name: category?.name || cat.custom_name,
           price: cat.price,
           maxCapacity: cat.max_capacity,
-          currentCount: count
+          currentCount: count,
+          category_id: cat.category_id
         }
       })
     )

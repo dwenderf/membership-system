@@ -331,7 +331,7 @@ export default function RefundModal({
   const isValidAmount = () => {
     const amountInCents = Math.round(parseFloat(refundAmount) * 100)
     // Allow zero-dollar refunds for registration payments (to cancel free registrations)
-    const minAmount = isRegistrationPayment ? 0 : 1
+    const minAmount = isRegistrationPayment === true ? 0 : 1
     return !isNaN(amountInCents) && amountInCents >= minAmount && amountInCents <= availableAmount
   }
 
@@ -468,7 +468,7 @@ export default function RefundModal({
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     step="0.01"
-                    min={isRegistrationPayment ? "0.00" : "0.01"}
+                    min={isRegistrationPayment === true ? "0.00" : "0.01"}
                     max={(availableAmount / 100).toFixed(2)}
                     className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0.00"
@@ -486,7 +486,7 @@ export default function RefundModal({
                 </div>
                 {refundAmount && !isValidAmount() && (
                   <div className="mt-1 text-xs text-red-600">
-                    Amount must be between {isRegistrationPayment ? '$0.00' : '$0.01'} and {formatAmount(availableAmount)}
+                    Amount must be between {isRegistrationPayment === true ? '$0.00' : '$0.01'} and {formatAmount(availableAmount)}
                   </div>
                 )}
               </div>

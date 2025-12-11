@@ -267,6 +267,8 @@ CREATE TABLE user_registrations (
     reservation_expires_at TIMESTAMP WITH TIME ZONE, -- When the spot reservation expires (user must complete payment before this time)
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Auto-updated by trigger
+    refunded_at TIMESTAMP WITH TIME ZONE, -- Set when registration is refunded
     UNIQUE(user_id, registration_id)
 );
 

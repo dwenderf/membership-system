@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
             .from('user_registrations')
             .update({
               payment_status: 'refunded',
-              updated_at: new Date().toISOString()
+              refunded_at: new Date().toISOString()
             })
             .eq('payment_id', paymentId)
             .eq('payment_status', 'paid')
@@ -153,7 +153,74 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', stagingId)
 
-      // Update refund status to processing
+      // For zero-dollar refunds with line items (e.g., $50 registration - $50 discount)
+      // Skip Stripe but still process the credit note for accounting
+      if (isZeroDollarRefund) {
+        // Mark staging as pending for Xero sync (skip webhook)
+        await supabase
+          .from('xero_invoices')
+          .update({
+            sync_status: 'pending',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stagingId)
+
+        await supabase
+          .from('xero_payments')
+          .update({
+            sync_status: 'pending',
+            updated_at: new Date().toISOString()
+          })
+          .eq('xero_invoice_id', stagingId)
+
+        // Update refund to completed
+        await supabase
+          .from('refunds')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', refund.id)
+
+        // Update user_registrations to refunded
+        const { data: registrations } = await supabase
+          .from('user_registrations')
+          .select('id')
+          .eq('payment_id', paymentId)
+          .eq('payment_status', 'paid')
+
+        if (registrations && registrations.length > 0) {
+          await supabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'refunded',
+              refunded_at: new Date().toISOString()
+            })
+            .eq('payment_id', paymentId)
+            .eq('payment_status', 'paid')
+
+          logger.logSystem('zero-dollar-refund-with-credit-note',
+            'Zero-dollar refund with credit note processed', {
+            refundId: refund.id,
+            paymentId,
+            stagingId,
+            registrationCount: registrations.length
+          })
+        }
+
+        return NextResponse.json({
+          success: true,
+          refund: {
+            id: refund.id,
+            amount: 0,
+            status: 'completed'
+          },
+          message: 'Zero-dollar refund processed with credit note for accounting'
+        })
+      }
+
+      // Update refund status to processing (for non-zero refunds only)
       await supabase
         .from('refunds')
         .update({
@@ -211,7 +278,7 @@ export async function POST(request: NextRequest) {
             .from('user_registrations')
             .update({
               payment_status: 'refunded',
-              updated_at: new Date().toISOString()
+              refunded_at: new Date().toISOString()
             })
             .eq('payment_id', paymentId)
             .eq('payment_status', 'paid')

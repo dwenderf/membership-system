@@ -79,8 +79,16 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (refundError || !refund) {
+      console.error('[refunds/confirm] Failed to create refund record:', {
+        error: refundError,
+        refundAmount,
+        paymentId,
+        userId: payment.user_id,
+        isZeroDollar: isZeroDollarRefund
+      })
       return NextResponse.json({
-        error: 'Failed to create refund record'
+        error: 'Failed to create refund record',
+        details: refundError?.message || 'Unknown error'
       }, { status: 500 })
     }
 

@@ -167,9 +167,9 @@ CREATE TABLE refunds (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure refund amount is positive
-    CONSTRAINT chk_refund_amount_positive CHECK (amount > 0),
+
+    -- Ensure refund amount is non-negative (allows zero for free registration cancellations)
+    CONSTRAINT chk_refund_amount_not_negative CHECK (amount >= 0),
     -- Ensure Stripe fee refunded is not negative
     CONSTRAINT chk_stripe_fee_refunded_not_negative CHECK (stripe_fee_refunded >= 0)
 );

@@ -468,7 +468,7 @@ export default function RefundModal({
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     step="0.01"
-                    min="0.01"
+                    min={isRegistrationPayment ? "0.00" : "0.01"}
                     max={(availableAmount / 100).toFixed(2)}
                     className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0.00"
@@ -486,7 +486,7 @@ export default function RefundModal({
                 </div>
                 {refundAmount && !isValidAmount() && (
                   <div className="mt-1 text-xs text-red-600">
-                    Amount must be between $0.01 and {formatAmount(availableAmount)}
+                    Amount must be between {isRegistrationPayment ? '$0.00' : '$0.01'} and {formatAmount(availableAmount)}
                   </div>
                 )}
               </div>

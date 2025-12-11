@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import RefundModal from './RefundModal'
-import ChangeCategoryModal from './ChangeCategoryModal'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs } from '@/lib/breadcrumb-utils'
@@ -188,35 +187,6 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
     allPayments: allInvoicePayments
   }
 
-  // Check if this payment is for a registration (for Change Category button)
-  const { data: userRegistration } = await supabase
-    .from('user_registrations')
-    .select(`
-      id,
-      registration_id,
-      registration_category_id,
-      payment_status,
-      amount_paid,
-      registration_categories!inner (
-        id,
-        price,
-        custom_name,
-        categories (
-          name
-        )
-      ),
-      registrations!inner (
-        id,
-        name
-      )
-    `)
-    .eq('payment_id', payment.id)
-    .eq('payment_status', 'paid')
-    .maybeSingle()
-
-  const isRegistrationPayment = !!userRegistration
-  const canChangeCategory = isRegistrationPayment && userRegistration.payment_status === 'paid'
-
   // Parse breadcrumbs from URL params
   const breadcrumbs = parseBreadcrumbs(searchParams)
 
@@ -238,24 +208,6 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
               </div>
               {/* Action buttons */}
               <div className="flex space-x-3">
-                {/* Change Category button (for paid registrations only) */}
-                {canChangeCategory && userRegistration && (
-                  <ChangeCategoryModal
-                    userRegistrationId={userRegistration.id}
-                    userId={params.id}
-                    registrationId={userRegistration.registration_id}
-                    currentCategoryId={userRegistration.registration_category_id}
-                    currentCategoryName={
-                      (userRegistration.registration_categories.categories as any)?.name ||
-                      userRegistration.registration_categories.custom_name ||
-                      'Unknown'
-                    }
-                    currentAmountPaid={userRegistration.amount_paid}
-                    userName={`${user.first_name} ${user.last_name}`}
-                    registrationName={(userRegistration.registrations as any).name}
-                  />
-                )}
-
                 {/* Refund button */}
                 {canRefund ? (
                   <RefundModal

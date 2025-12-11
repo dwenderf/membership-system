@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (refundType === 'proportional') {
       // Allow zero-dollar refunds for registration payments (to cancel free registrations)
       const minAllowed = isRegistrationPayment ? 0 : 0.01
-      if (!amount || amount < minAllowed) {
+      if (amount === null || amount === undefined || amount < minAllowed) {
         console.warn('[refunds/preview] Invalid amount for proportional refund:', amount)
         return NextResponse.json({
           error: 'Positive refund amount required for proportional refunds'

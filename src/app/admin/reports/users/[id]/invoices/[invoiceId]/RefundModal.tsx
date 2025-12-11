@@ -211,8 +211,10 @@ export default function RefundModal({
 
       if (refundType === 'proportional') {
         const amount = parseFloat(refundAmount)
-        
-        if (isNaN(amount) || amount <= 0) {
+
+        // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+        const minAllowed = isRegistrationPayment === true ? 0 : 0.01
+        if (isNaN(amount) || amount < minAllowed) {
           setError('Please enter a valid refund amount')
           return
         }

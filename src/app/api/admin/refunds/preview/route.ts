@@ -65,6 +65,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Check if this is a registration payment (to allow zero-dollar refunds for free registrations)
+    const { data: registrations } = await supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('payment_id', paymentId)
+    const isRegistrationPayment = registrations && registrations.length > 0
+    console.log('[refunds/preview] Is registration payment:', isRegistrationPayment)
+
     // Check available refund amount
     const { data: existingRefunds } = await supabase
       .from('refunds')
@@ -80,10 +88,12 @@ export async function POST(request: NextRequest) {
   let refundData
 
     if (refundType === 'proportional') {
-      if (!amount || amount <= 0) {
+      // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+      const minAllowed = isRegistrationPayment ? 0 : 0.01
+      if (!amount || amount < minAllowed) {
         console.warn('[refunds/preview] Invalid amount for proportional refund:', amount)
-        return NextResponse.json({ 
-          error: 'Positive refund amount required for proportional refunds' 
+        return NextResponse.json({
+          error: 'Positive refund amount required for proportional refunds'
         }, { status: 400 })
       }
 

@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { stagingId, reason, paymentId, refundAmount } = body
 
-    if (!stagingId || !paymentId || !refundAmount) {
-      return NextResponse.json({ 
-        error: 'Staging ID, payment ID, and refund amount are required' 
+    if (!stagingId || !paymentId || refundAmount === null || refundAmount === undefined) {
+      return NextResponse.json({
+        error: 'Staging ID, payment ID, and refund amount are required'
       }, { status: 400 })
     }
 

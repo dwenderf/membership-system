@@ -1320,12 +1320,13 @@ export class XeroStagingManager {
       discountCategoryId?: string
     }
   ): Promise<string | false> {
-    if (refundType === 'proportional' && refundData.amount) {
+    // Allow zero amounts for refunds with line items (e.g., registration + discount = $0)
+    if (refundType === 'proportional' && refundData.amount !== null && refundData.amount !== undefined) {
       return this.createProportionalCreditNoteStaging(refundId, paymentId, refundData.amount)
-    } else if (refundType === 'discount_code' && refundData.discountCode && refundData.discountAmount) {
+    } else if (refundType === 'discount_code' && refundData.discountCode && refundData.discountAmount !== null && refundData.discountAmount !== undefined) {
       return this.createDiscountCreditNoteStaging(
         refundId,
-        paymentId, 
+        paymentId,
         refundData.discountCode,
         refundData.discountAmount,
         refundData.discountAccountingCode!,

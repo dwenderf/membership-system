@@ -1131,30 +1131,42 @@ export class XeroStagingManager {
       }
       
       if (originalInvoice?.xero_invoice_line_items && !invoiceError) {
-        // Proportionally allocate refund across original line items
+        // Calculate total invoice amount
         const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
           (sum: number, item: any) => sum + item.line_amount, 0
         )
-        
-        lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
-          // Calculate proportion maintaining the sign of the original line item
-          const proportion = item.line_amount / totalInvoiceAmount
-          const creditAmount = centsToCents(refundAmountCents * proportion)
-          
-          return {
+
+        // For zero-dollar refunds, reverse the exact line items (can't use proportional allocation)
+        if (refundAmountCents === 0 && totalInvoiceAmount === 0) {
+          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => ({
             description: `Credit: ${item.description}`,
-            line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
+            line_amount: centsToCents(-item.line_amount), // Reverse the sign of each line item
             account_code: item.account_code,
             tax_type: item.tax_type,
             line_item_type: item.line_item_type
+          }))
+        } else {
+          // Proportionally allocate refund across original line items
+          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+            // Calculate proportion maintaining the sign of the original line item
+            const proportion = item.line_amount / totalInvoiceAmount
+            const creditAmount = centsToCents(refundAmountCents * proportion)
+
+            return {
+              description: `Credit: ${item.description}`,
+              line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
+              account_code: item.account_code,
+              tax_type: item.tax_type,
+              line_item_type: item.line_item_type
+            }
+          })
+
+          // Ensure total matches refund amount exactly (handle rounding)
+          const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+          const difference = refundAmountCents - calculatedTotal
+          if (difference !== 0 && lineItems.length > 0) {
+            lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
           }
-        })
-        
-        // Ensure total matches refund amount exactly (handle rounding)
-        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
-        const difference = refundAmountCents - calculatedTotal
-        if (difference !== 0 && lineItems.length > 0) {
-          lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
         }
       } else {
         // No fallback - this indicates a serious issue that needs admin attention

@@ -107,49 +107,10 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // For zero-dollar refunds, check if there are any line items in the original invoice
-      // If there are line items (e.g., registration + discount = $0), we need to create a credit note
-      // If no line items (truly free registration), skip Xero staging entirely
+      // For zero-dollar refunds, still create Xero staging (credit notes can be $0)
+      // Zero-dollar credit notes will sync to Xero just like zero-dollar invoices do
       if (amountInCents === 0) {
-        console.log('[refunds/preview] Zero-dollar refund - checking for line items')
-
-        // Look for the original invoice
-        const { data: originalInvoice } = await supabase
-          .from('xero_invoices')
-          .select(`
-            id,
-            xero_invoice_line_items (id)
-          `)
-          .eq('payment_id', paymentId)
-          .eq('invoice_type', 'ACCREC')
-          .maybeSingle()
-
-        const hasLineItems = originalInvoice?.xero_invoice_line_items && originalInvoice.xero_invoice_line_items.length > 0
-        console.log('[refunds/preview] Original invoice has line items:', hasLineItems, 'invoice:', originalInvoice?.id)
-
-        // Only skip Xero staging if there are NO line items (truly free registration)
-        if (!hasLineItems) {
-          console.log('[refunds/preview] No line items - skipping Xero staging for truly free registration')
-          return NextResponse.json({
-            success: true,
-            staging: {
-              refund_id: null,
-              staging_id: 'zero-dollar-refund',
-              refund_type: 'proportional',
-              total_amount: 0,
-              line_items: [],
-              payment_info: {
-                payment_id: paymentId,
-                original_amount: payment.final_amount,
-                available_for_refund: availableForRefund
-              },
-              zero_dollar_message: 'This is a free registration cancellation. No credit note will be created in Xero.'
-            }
-          })
-        }
-
-        // If there ARE line items, continue to create a credit note to reverse them
-        console.log('[refunds/preview] Has line items - will create credit note to reverse accounting')
+        console.log('[refunds/preview] Zero-dollar refund - creating credit note staging')
       }
 
       refundData = {

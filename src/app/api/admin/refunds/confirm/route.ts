@@ -95,61 +95,6 @@ export async function POST(request: NextRequest) {
     // Payment validation was already done above - payment.stripe_payment_intent_id exists (unless zero-dollar)
 
     try {
-      // For zero-dollar refunds (free registration cancellations), skip Stripe and just update status
-      if (isZeroDollarRefund) {
-        // Find all user_registrations associated with this payment
-        const { data: registrations } = await supabase
-          .from('user_registrations')
-          .select('id, user_id, registration_id')
-          .eq('payment_id', paymentId)
-          .eq('payment_status', 'paid')
-
-        if (registrations && registrations.length > 0) {
-          // Update all registrations to refunded status
-          const { data: updateResult, error: updateError } = await supabase
-            .from('user_registrations')
-            .update({
-              payment_status: 'refunded',
-              refunded_at: new Date().toISOString()
-            })
-            .eq('payment_id', paymentId)
-            .eq('payment_status', 'paid')
-            .select()
-
-          if (updateError) {
-            console.error('[zero-dollar-refund] Failed to update user_registrations:', {
-              error: updateError,
-              paymentId,
-              registrationIds: registrations.map(r => r.id)
-            })
-          } else {
-            console.log('[zero-dollar-refund] Updated user_registrations:', {
-              count: updateResult?.length,
-              paymentId
-            })
-          }
-
-          logger.logSystem('zero-dollar-refund-complete',
-            'Free registration cancelled successfully', {
-            refundId: refund.id,
-            paymentId,
-            registrationCount: registrations.length,
-            updateSuccess: !updateError,
-            updatedCount: updateResult?.length
-          })
-        }
-
-        return NextResponse.json({
-          success: true,
-          refund: {
-            id: refund.id,
-            amount: 0,
-            status: 'completed'
-          },
-          message: 'Free registration cancelled successfully'
-        })
-      }
-
       // Regular (non-zero) refund processing with Stripe
       // Update staging records with the newly created refund ID
       // First get the existing staging metadata to preserve it

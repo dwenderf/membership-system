@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
-import { EmailService } from '@/lib/email/service'
+import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -147,8 +147,11 @@ export async function POST(request: NextRequest) {
           .eq('id', refund.id)
 
         // Update user_registrations to refunded
+        // Use admin client to bypass RLS policies (admin updating user's registrations)
+        const adminSupabase = createAdminClient()
+
         console.log('[zero-dollar-refund] Querying user_registrations for paymentId:', paymentId)
-        const { data: registrations, error: queryError } = await supabase
+        const { data: registrations, error: queryError } = await adminSupabase
           .from('user_registrations')
           .select('id, payment_status, registration_id, user_id')
           .eq('payment_id', paymentId)
@@ -168,7 +171,7 @@ export async function POST(request: NextRequest) {
           })
 
           if (paidRegistrations.length > 0) {
-            const { data: updateResult, error: updateError } = await supabase
+            const { data: updateResult, error: updateError } = await adminSupabase
               .from('user_registrations')
               .update({
                 payment_status: 'refunded',
@@ -217,7 +220,6 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
-            const emailService = new EmailService()
             await emailService.sendRefund({
               userId: payment.user_id,
               email: user.email,
@@ -283,6 +285,9 @@ export async function POST(request: NextRequest) {
         .eq('id', refund.id)
 
       // Update user_registrations status for proportional refunds
+      // Use admin client to bypass RLS policies (admin updating user's registrations)
+      const adminSupabase = createAdminClient()
+
       // Check if this is a proportional refund by looking at staging metadata
       const { data: stagingRecord } = await supabase
         .from('xero_invoices')
@@ -295,7 +300,7 @@ export async function POST(request: NextRequest) {
       if (refundType === 'refund' || refundType === 'proportional') {
         // This is a proportional refund (not a discount code refund)
         // Find all user_registrations associated with this payment
-        const { data: registrations } = await supabase
+        const { data: registrations } = await adminSupabase
           .from('user_registrations')
           .select('id, user_id, registration_id')
           .eq('payment_id', paymentId)
@@ -303,7 +308,7 @@ export async function POST(request: NextRequest) {
 
         if (registrations && registrations.length > 0) {
           // Update all registrations to refunded status
-          const { error: statusUpdateError } = await supabase
+          const { error: statusUpdateError } = await adminSupabase
             .from('user_registrations')
             .update({
               payment_status: 'refunded',
@@ -355,7 +360,6 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
-          const emailService = new EmailService()
           await emailService.sendRefund({
             userId: payment.user_id,
             email: user.email,

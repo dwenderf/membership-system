@@ -268,9 +268,16 @@ CREATE TABLE user_registrations (
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Auto-updated by trigger
-    refunded_at TIMESTAMP WITH TIME ZONE, -- Set when registration is refunded
-    UNIQUE(user_id, registration_id)
+    refunded_at TIMESTAMP WITH TIME ZONE -- Set when registration is refunded
+    -- Note: UNIQUE constraint removed in favor of partial index user_registrations_active_unique
+    -- which only enforces uniqueness for paid registrations, allowing re-registration after refund
 );
+
+-- Partial unique index: only allow one paid registration per user+registration combination
+-- Allows re-registration after refund since refunded/failed registrations are excluded
+CREATE UNIQUE INDEX IF NOT EXISTS user_registrations_active_unique
+ON user_registrations(user_id, registration_id)
+WHERE payment_status = 'paid';
 
 -- Registration pricing tiers table
 CREATE TABLE registration_pricing_tiers (

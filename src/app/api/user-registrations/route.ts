@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's paid and refunded registrations (exclude processing, awaiting_payment, failed)
+    // Get user's paid registrations only (exclude refunded, processing, awaiting_payment, failed)
     const { data: userRegistrations, error } = await supabase
       .from('user_registrations')
       .select(`
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('user_id', user.id)
-      .in('payment_status', ['paid', 'refunded'])
+      .eq('payment_status', 'paid')
       .order('registered_at', { ascending: false })
 
     if (error) {

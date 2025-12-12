@@ -492,10 +492,13 @@ export default function RegistrationDetailPage() {
                       return 0
                     })
 
+                    // Count only non-refunded registrations for the category total
+                    const activeCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
+
                     return (
                       <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
                         <h4 className="text-md font-semibold text-gray-900 mb-4">
-                          {categoryName} ({categoryRegistrations.length})
+                          {categoryName} ({activeCount}{activeCount !== categoryRegistrations.length ? ` active, ${categoryRegistrations.length} total` : ''})
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">

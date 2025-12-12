@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
+import { EmailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -117,6 +118,12 @@ export async function POST(request: NextRequest) {
       // For zero-dollar refunds with line items (e.g., $50 registration - $50 discount)
       // Skip Stripe but still process the credit note for accounting
       if (isZeroDollarRefund) {
+        console.log('[zero-dollar-refund] Processing zero-dollar refund:', {
+          refundId: refund.id,
+          paymentId,
+          stagingId
+        })
+
         // Mark staging as pending for Xero sync (skip webhook)
         await supabase
           .from('xero_invoices')
@@ -126,13 +133,8 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', stagingId)
 
-        await supabase
-          .from('xero_payments')
-          .update({
-            sync_status: 'pending',
-            updated_at: new Date().toISOString()
-          })
-          .eq('xero_invoice_id', stagingId)
+        // Zero-dollar refunds don't have payment records (similar to zero-dollar invoices)
+        // So we skip the xero_payments update entirely
 
         // Update refund to completed
         await supabase
@@ -145,45 +147,95 @@ export async function POST(request: NextRequest) {
           .eq('id', refund.id)
 
         // Update user_registrations to refunded
-        const { data: registrations } = await supabase
+        console.log('[zero-dollar-refund] Querying user_registrations for paymentId:', paymentId)
+        const { data: registrations, error: queryError } = await supabase
           .from('user_registrations')
-          .select('id')
+          .select('id, payment_status, registration_id, user_id')
           .eq('payment_id', paymentId)
-          .eq('payment_status', 'paid')
+
+        console.log('[zero-dollar-refund] Found registrations:', {
+          count: registrations?.length || 0,
+          registrations,
+          queryError
+        })
 
         if (registrations && registrations.length > 0) {
-          const { data: updateResult, error: updateError } = await supabase
-            .from('user_registrations')
-            .update({
-              payment_status: 'refunded',
-              refunded_at: new Date().toISOString()
-            })
-            .eq('payment_id', paymentId)
-            .eq('payment_status', 'paid')
-            .select()
+          // Filter to only 'paid' registrations
+          const paidRegistrations = registrations.filter(r => r.payment_status === 'paid')
+          console.log('[zero-dollar-refund] Paid registrations to update:', {
+            paidCount: paidRegistrations.length,
+            paidIds: paidRegistrations.map(r => r.id)
+          })
 
-          if (updateError) {
-            console.error('[zero-dollar-credit-note] Failed to update user_registrations:', {
-              error: updateError,
+          if (paidRegistrations.length > 0) {
+            const { data: updateResult, error: updateError } = await supabase
+              .from('user_registrations')
+              .update({
+                payment_status: 'refunded',
+                refunded_at: new Date().toISOString()
+              })
+              .eq('payment_id', paymentId)
+              .eq('payment_status', 'paid')
+              .select()
+
+            if (updateError) {
+              console.error('[zero-dollar-refund] Failed to update user_registrations:', {
+                error: updateError,
+                paymentId,
+                registrationIds: paidRegistrations.map(r => r.id)
+              })
+            } else {
+              console.log('[zero-dollar-refund] Updated user_registrations:', {
+                count: updateResult?.length,
+                paymentId,
+                updatedRecords: updateResult
+              })
+            }
+
+            logger.logSystem('zero-dollar-refund-complete',
+              'Zero-dollar refund processed successfully', {
+              refundId: refund.id,
               paymentId,
-              registrationIds: registrations.map(r => r.id)
+              stagingId,
+              registrationCount: paidRegistrations.length,
+              updateSuccess: !updateError,
+              updatedCount: updateResult?.length
             })
           } else {
-            console.log('[zero-dollar-credit-note] Updated user_registrations:', {
-              count: updateResult?.length,
-              paymentId
-            })
+            console.warn('[zero-dollar-refund] No paid registrations to update')
           }
+        } else {
+          console.warn('[zero-dollar-refund] No registrations found for payment:', paymentId)
+        }
 
-          logger.logSystem('zero-dollar-refund-with-credit-note',
-            'Zero-dollar refund with credit note processed', {
-            refundId: refund.id,
-            paymentId,
-            stagingId,
-            registrationCount: registrations.length,
-            updateSuccess: !updateError,
-            updatedCount: updateResult?.length
-          })
+        // Send refund email notification
+        try {
+          const { data: user } = await supabase
+            .from('users')
+            .select('email, first_name, last_name')
+            .eq('id', payment.user_id)
+            .single()
+
+          if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
+            const emailService = new EmailService()
+            await emailService.sendRefund({
+              userId: payment.user_id,
+              email: user.email,
+              userName: `${user.first_name} ${user.last_name}`,
+              refundAmount: 0,
+              originalAmount: payment.final_amount,
+              reason: reason || 'Registration cancelled',
+              paymentDate: new Date(payment.created_at).toLocaleDateString(),
+              refundDate: new Date().toLocaleDateString()
+            })
+
+            console.log('[zero-dollar-refund] Refund email sent to:', user.email)
+          } else if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
+            console.warn('[zero-dollar-refund] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email')
+          }
+        } catch (emailError) {
+          console.error('[zero-dollar-refund] Failed to send refund email:', emailError)
+          // Don't fail the refund if email fails
         }
 
         return NextResponse.json({
@@ -293,6 +345,36 @@ export async function POST(request: NextRequest) {
         amount: refund.amount,
         processedBy: authUser.id
       })
+
+      // Send refund email notification
+      try {
+        const { data: user } = await supabase
+          .from('users')
+          .select('email, first_name, last_name')
+          .eq('id', payment.user_id)
+          .single()
+
+        if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
+          const emailService = new EmailService()
+          await emailService.sendRefund({
+            userId: payment.user_id,
+            email: user.email,
+            userName: `${user.first_name} ${user.last_name}`,
+            refundAmount: refund.amount,
+            originalAmount: payment.final_amount,
+            reason: reason || 'Refund processed by administrator',
+            paymentDate: new Date(payment.created_at).toLocaleDateString(),
+            refundDate: new Date().toLocaleDateString()
+          })
+
+          console.log('[refund-confirmed] Refund email sent to:', user.email)
+        } else if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
+          console.warn('[refund-confirmed] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email')
+        }
+      } catch (emailError) {
+        console.error('[refund-confirmed] Failed to send refund email:', emailError)
+        // Don't fail the refund if email fails
+      }
 
       return NextResponse.json({
         success: true,

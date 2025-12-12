@@ -1244,57 +1244,72 @@ export class XeroStagingManager {
         }
       }
 
-      // Get Stripe bank account code for payment staging
-      const stripeBankAccountCode = await this.getStripeBankAccountCode()
-      
-      // Create corresponding payment record for the refund (negative amount = money going out)
-      const { data: paymentStaging, error: paymentStagingError } = await this.supabase
-        .from('xero_payments')
-        .insert({
-          xero_invoice_id: stagingRecord.id, // Links to the credit note record
-          tenant_id: null, // Will be populated during sync
-          xero_payment_id: null, // Will be populated when synced to Xero
-          payment_method: 'stripe',
-          payment_type: 'full', // Refunds are full payments (not installments)
-          bank_account_code: stripeBankAccountCode,
-          amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
-          stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
-          reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
-          sync_status: 'staged', // Waiting for Stripe confirmation
-          staged_at: new Date().toISOString(),
-          staging_metadata: {
-            refund_id: refundId || null,
-            payment_id: paymentId,
-            refund_type: 'refund',
-            refund_amount: refundAmountCents,
-            credit_note_id: stagingRecord.id
-          }
-        })
-        .select()
-        .single()
-      
-      if (paymentStagingError) {
+      // For zero-dollar refunds, skip payment staging (Xero doesn't need payments for $0 credit notes)
+      // This is similar to how zero-dollar invoices don't require payment records
+      let paymentStagingId = null
+      if (refundAmountCents > 0) {
+        // Get Stripe bank account code for payment staging
+        const stripeBankAccountCode = await this.getStripeBankAccountCode()
+
+        // Create corresponding payment record for the refund (negative amount = money going out)
+        const { data: paymentStaging, error: paymentStagingError } = await this.supabase
+          .from('xero_payments')
+          .insert({
+            xero_invoice_id: stagingRecord.id, // Links to the credit note record
+            tenant_id: null, // Will be populated during sync
+            xero_payment_id: null, // Will be populated when synced to Xero
+            payment_method: 'stripe',
+            payment_type: 'full', // Refunds are full payments (not installments)
+            bank_account_code: stripeBankAccountCode,
+            amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
+            stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
+            reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
+            sync_status: 'staged', // Waiting for Stripe confirmation
+            staged_at: new Date().toISOString(),
+            staging_metadata: {
+              refund_id: refundId || null,
+              payment_id: paymentId,
+              refund_type: 'refund',
+              refund_amount: refundAmountCents,
+              credit_note_id: stagingRecord.id
+            }
+          })
+          .select()
+          .single()
+
+        if (paymentStagingError) {
+          logger.logXeroSync(
+            'staging-credit-note-payment-error',
+            'Failed to create credit note payment staging record',
+            { refundId, error: paymentStagingError.message },
+            'error'
+          )
+          // Clean up the credit note staging record if payment failed
+          await this.supabase
+            .from('xero_invoices')
+            .delete()
+            .eq('id', stagingRecord.id)
+          return false
+        }
+
+        paymentStagingId = paymentStaging.id
+      } else {
         logger.logXeroSync(
-          'staging-credit-note-payment-error',
-          'Failed to create credit note payment staging record',
-          { refundId, error: paymentStagingError.message },
-          'error'
+          'staging-credit-note-zero-dollar',
+          'Skipping payment staging for zero-dollar credit note',
+          { refundId, creditNoteId: stagingRecord.id },
+          'info'
         )
-        // Clean up the credit note staging record if payment failed
-        await this.supabase
-          .from('xero_invoices')
-          .delete()
-          .eq('id', stagingRecord.id)
-        return false
       }
 
       logger.logXeroSync(
         'staging-credit-note-success',
         'Credit note staging completed successfully',
-        { 
-          refundId, 
-          creditNoteId: stagingRecord.id, 
-          paymentId: paymentStaging.id 
+        {
+          refundId,
+          creditNoteId: stagingRecord.id,
+          paymentId: paymentStagingId,
+          isZeroDollar: refundAmountCents === 0
         },
         'info'
       )

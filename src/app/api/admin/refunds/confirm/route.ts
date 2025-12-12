@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
         if (registrations && registrations.length > 0) {
           // Update all registrations to refunded status
-          await supabase
+          const { data: updateResult, error: updateError } = await supabase
             .from('user_registrations')
             .update({
               payment_status: 'refunded',
@@ -114,12 +114,28 @@ export async function POST(request: NextRequest) {
             })
             .eq('payment_id', paymentId)
             .eq('payment_status', 'paid')
+            .select()
+
+          if (updateError) {
+            console.error('[zero-dollar-refund] Failed to update user_registrations:', {
+              error: updateError,
+              paymentId,
+              registrationIds: registrations.map(r => r.id)
+            })
+          } else {
+            console.log('[zero-dollar-refund] Updated user_registrations:', {
+              count: updateResult?.length,
+              paymentId
+            })
+          }
 
           logger.logSystem('zero-dollar-refund-complete',
             'Free registration cancelled successfully', {
             refundId: refund.id,
             paymentId,
-            registrationCount: registrations.length
+            registrationCount: registrations.length,
+            updateSuccess: !updateError,
+            updatedCount: updateResult?.length
           })
         }
 
@@ -191,7 +207,7 @@ export async function POST(request: NextRequest) {
           .eq('payment_status', 'paid')
 
         if (registrations && registrations.length > 0) {
-          await supabase
+          const { data: updateResult, error: updateError } = await supabase
             .from('user_registrations')
             .update({
               payment_status: 'refunded',
@@ -199,13 +215,29 @@ export async function POST(request: NextRequest) {
             })
             .eq('payment_id', paymentId)
             .eq('payment_status', 'paid')
+            .select()
+
+          if (updateError) {
+            console.error('[zero-dollar-credit-note] Failed to update user_registrations:', {
+              error: updateError,
+              paymentId,
+              registrationIds: registrations.map(r => r.id)
+            })
+          } else {
+            console.log('[zero-dollar-credit-note] Updated user_registrations:', {
+              count: updateResult?.length,
+              paymentId
+            })
+          }
 
           logger.logSystem('zero-dollar-refund-with-credit-note',
             'Zero-dollar refund with credit note processed', {
             refundId: refund.id,
             paymentId,
             stagingId,
-            registrationCount: registrations.length
+            registrationCount: registrations.length,
+            updateSuccess: !updateError,
+            updatedCount: updateResult?.length
           })
         }
 

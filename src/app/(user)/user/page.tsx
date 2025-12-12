@@ -270,6 +270,7 @@ export default async function UserDashboardPage() {
                   {/* Show active registrations */}
                   {userRegistrations?.map((registration) => {
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === registration.registration?.id)
+                    const isRefunded = registration.payment_status === 'refunded'
                     return (
                       <div key={`reg-${registration.id}`} className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
@@ -285,6 +286,12 @@ export default async function UserDashboardPage() {
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(registration.registration_category)}
+                            </span>
+                          )}
+                          {/* Refunded tag if applicable */}
+                          {isRefunded && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                              Refunded
                             </span>
                           )}
                           {/* Alternate tag if applicable */}

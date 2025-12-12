@@ -60,6 +60,12 @@ export async function GET(request: NextRequest) {
             categories (
               name
             )
+          ),
+          payments (
+            id,
+            xero_invoices (
+              invoice_number
+            )
           )
         `)
         .eq('registration_id', registrationId)
@@ -165,8 +171,11 @@ export async function GET(request: NextRequest) {
         const registrationCategory = Array.isArray(item.registration_categories) ? item.registration_categories[0] : item.registration_categories
         const season = registration?.seasons ? (Array.isArray(registration.seasons) ? registration.seasons[0] : registration.seasons) : null
         const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
+        const payment = Array.isArray(item.payments) ? item.payments[0] : item.payments
+        const xeroInvoice = payment?.xero_invoices ? (Array.isArray(payment.xero_invoices) ? payment.xero_invoices[0] : payment.xero_invoices) : null
 
         return {
+          id: item.id,
           registration_id: item.registration_id,
           registration_name: registration?.name || 'Unknown Registration',
           season_name: season?.name || 'Unknown Season',
@@ -184,7 +193,9 @@ export async function GET(request: NextRequest) {
           registration_fee: item.registration_fee || 0,
           presale_code_used: item.presale_code_used,
           is_lgbtq: user?.is_lgbtq,
-          is_goalie: user?.is_goalie || false
+          is_goalie: user?.is_goalie || false,
+          payment_id: item.payment_id || null,
+          invoice_number: xeroInvoice?.invoice_number || null
         }
       }) || []
 

@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
+import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -34,9 +35,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { stagingId, reason, paymentId, refundAmount } = body
 
-    if (!stagingId || !paymentId || !refundAmount) {
-      return NextResponse.json({ 
-        error: 'Staging ID, payment ID, and refund amount are required' 
+    if (!stagingId || !paymentId || refundAmount === null || refundAmount === undefined) {
+      return NextResponse.json({
+        error: 'Staging ID, payment ID, and refund amount are required'
       }, { status: 400 })
     }
 
@@ -53,10 +54,13 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
-    // Validate payment has Stripe payment intent
-    if (!payment.stripe_payment_intent_id) {
-      return NextResponse.json({ 
-        error: 'Cannot refund payment without Stripe payment intent' 
+    // Check if this is a zero-dollar refund (free registration cancellation)
+    const isZeroDollarRefund = refundAmount === 0
+
+    // Validate payment has Stripe payment intent (unless zero-dollar refund)
+    if (!isZeroDollarRefund && !payment.stripe_payment_intent_id) {
+      return NextResponse.json({
+        error: 'Cannot refund payment without Stripe payment intent'
       }, { status: 400 })
     }
 
@@ -68,21 +72,31 @@ export async function POST(request: NextRequest) {
         user_id: payment.user_id,
         amount: refundAmount,
         reason: reason || 'Admin processed refund',
-        status: 'pending', // Will be updated based on Stripe response
+        status: isZeroDollarRefund ? 'completed' : 'pending', // Zero-dollar refunds complete immediately
         processed_by: authUser.id,
+        ...(isZeroDollarRefund && { completed_at: new Date().toISOString() })
       })
       .select()
       .single()
 
     if (refundError || !refund) {
-      return NextResponse.json({ 
-        error: 'Failed to create refund record' 
+      console.error('[refunds/confirm] Failed to create refund record:', {
+        error: refundError,
+        refundAmount,
+        paymentId,
+        userId: payment.user_id,
+        isZeroDollar: isZeroDollarRefund
+      })
+      return NextResponse.json({
+        error: 'Failed to create refund record',
+        details: refundError?.message || 'Unknown error'
       }, { status: 500 })
     }
 
-    // Payment validation was already done above - payment.stripe_payment_intent_id exists
+    // Payment validation was already done above - payment.stripe_payment_intent_id exists (unless zero-dollar)
 
     try {
+      // Regular (non-zero) refund processing with Stripe
       // Update staging records with the newly created refund ID
       // First get the existing staging metadata to preserve it
       const { data: existingStaging } = await supabase
@@ -101,10 +115,146 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', stagingId)
 
-      // Update refund status to processing
+      // For zero-dollar refunds with line items (e.g., $50 registration - $50 discount)
+      // Skip Stripe but still process the credit note for accounting
+      if (isZeroDollarRefund) {
+        console.log('[zero-dollar-refund] Processing zero-dollar refund:', {
+          refundId: refund.id,
+          paymentId,
+          stagingId
+        })
+
+        // Mark staging as pending for Xero sync (skip webhook)
+        await supabase
+          .from('xero_invoices')
+          .update({
+            sync_status: 'pending',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stagingId)
+
+        // Zero-dollar refunds don't have payment records (similar to zero-dollar invoices)
+        // So we skip the xero_payments update entirely
+
+        // Update refund to completed
+        await supabase
+          .from('refunds')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', refund.id)
+
+        // Update user_registrations to refunded
+        // Use admin client to bypass RLS policies (admin updating user's registrations)
+        const adminSupabase = createAdminClient()
+
+        console.log('[zero-dollar-refund] Querying user_registrations for paymentId:', paymentId)
+        const { data: registrations, error: queryError } = await adminSupabase
+          .from('user_registrations')
+          .select('id, payment_status, registration_id, user_id')
+          .eq('payment_id', paymentId)
+
+        console.log('[zero-dollar-refund] Found registrations:', {
+          count: registrations?.length || 0,
+          registrations,
+          queryError
+        })
+
+        if (registrations && registrations.length > 0) {
+          // Filter to only 'paid' registrations
+          const paidRegistrations = registrations.filter(r => r.payment_status === 'paid')
+          console.log('[zero-dollar-refund] Paid registrations to update:', {
+            paidCount: paidRegistrations.length,
+            paidIds: paidRegistrations.map(r => r.id)
+          })
+
+          if (paidRegistrations.length > 0) {
+            const { data: updateResult, error: updateError } = await adminSupabase
+              .from('user_registrations')
+              .update({
+                payment_status: 'refunded',
+                refunded_at: new Date().toISOString()
+              })
+              .eq('payment_id', paymentId)
+              .eq('payment_status', 'paid')
+              .select()
+
+            if (updateError) {
+              console.error('[zero-dollar-refund] Failed to update user_registrations:', {
+                error: updateError,
+                paymentId,
+                registrationIds: paidRegistrations.map(r => r.id)
+              })
+            } else {
+              console.log('[zero-dollar-refund] Updated user_registrations:', {
+                count: updateResult?.length,
+                paymentId,
+                updatedRecords: updateResult
+              })
+            }
+
+            logger.logSystem('zero-dollar-refund-complete',
+              'Zero-dollar refund processed successfully', {
+              refundId: refund.id,
+              paymentId,
+              stagingId,
+              registrationCount: paidRegistrations.length,
+              updateSuccess: !updateError,
+              updatedCount: updateResult?.length
+            })
+          } else {
+            console.warn('[zero-dollar-refund] No paid registrations to update')
+          }
+        } else {
+          console.warn('[zero-dollar-refund] No registrations found for payment:', paymentId)
+        }
+
+        // Send refund email notification
+        try {
+          const { data: user } = await supabase
+            .from('users')
+            .select('email, first_name, last_name')
+            .eq('id', payment.user_id)
+            .single()
+
+          if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
+            await emailService.sendRefund({
+              userId: payment.user_id,
+              email: user.email,
+              userName: `${user.first_name} ${user.last_name}`,
+              refundAmount: 0,
+              originalAmount: payment.final_amount,
+              reason: reason || 'Registration cancelled',
+              paymentDate: new Date(payment.created_at).toLocaleDateString(),
+              refundDate: new Date().toLocaleDateString()
+            })
+
+            console.log('[zero-dollar-refund] Refund email sent to:', user.email)
+          } else if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
+            console.warn('[zero-dollar-refund] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email')
+          }
+        } catch (emailError) {
+          console.error('[zero-dollar-refund] Failed to send refund email:', emailError)
+          // Don't fail the refund if email fails
+        }
+
+        return NextResponse.json({
+          success: true,
+          refund: {
+            id: refund.id,
+            amount: 0,
+            status: 'completed'
+          },
+          message: 'Zero-dollar refund processed with credit note for accounting'
+        })
+      }
+
+      // Update refund status to processing (for non-zero refunds only)
       await supabase
         .from('refunds')
-        .update({ 
+        .update({
           status: 'processing',
           updated_at: new Date().toISOString()
         })
@@ -134,6 +284,60 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', refund.id)
 
+      // Update user_registrations status for proportional refunds
+      // Use admin client to bypass RLS policies (admin updating user's registrations)
+      const adminSupabase = createAdminClient()
+
+      // Check if this is a proportional refund by looking at staging metadata
+      const { data: stagingRecord } = await supabase
+        .from('xero_invoices')
+        .select('staging_metadata')
+        .eq('id', stagingId)
+        .single()
+
+      // Check if it's a proportional refund (refund_type = 'refund' or 'proportional')
+      const refundType = stagingRecord?.staging_metadata?.refund_type
+      if (refundType === 'refund' || refundType === 'proportional') {
+        // This is a proportional refund (not a discount code refund)
+        // Find all user_registrations associated with this payment
+        const { data: registrations } = await adminSupabase
+          .from('user_registrations')
+          .select('id, user_id, registration_id')
+          .eq('payment_id', paymentId)
+          .eq('payment_status', 'paid')
+
+        if (registrations && registrations.length > 0) {
+          // Update all registrations to refunded status
+          const { error: statusUpdateError } = await adminSupabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'refunded',
+              refunded_at: new Date().toISOString()
+            })
+            .eq('payment_id', paymentId)
+            .eq('payment_status', 'paid')
+
+          if (statusUpdateError) {
+            logger.logSystem('refund-status-update-error',
+              'Failed to update registration status after refund', {
+              refundId: refund.id,
+              paymentId,
+              registrationCount: registrations.length,
+              error: statusUpdateError.message
+            })
+            // Don't fail the refund - just log the issue for admin attention
+          } else {
+            logger.logSystem('refund-status-updated',
+              'Updated registration status to refunded', {
+              refundId: refund.id,
+              paymentId,
+              registrationIds: registrations.map(r => r.id),
+              count: registrations.length
+            })
+          }
+        }
+      }
+
       // Discount usage tracking will be handled by the webhook after successful refund
 
       // Staging records will be moved from 'staged' to 'pending' by webhook
@@ -146,6 +350,35 @@ export async function POST(request: NextRequest) {
         amount: refund.amount,
         processedBy: authUser.id
       })
+
+      // Send refund email notification
+      try {
+        const { data: user } = await supabase
+          .from('users')
+          .select('email, first_name, last_name')
+          .eq('id', payment.user_id)
+          .single()
+
+        if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
+          await emailService.sendRefund({
+            userId: payment.user_id,
+            email: user.email,
+            userName: `${user.first_name} ${user.last_name}`,
+            refundAmount: refund.amount,
+            originalAmount: payment.final_amount,
+            reason: reason || 'Refund processed by administrator',
+            paymentDate: new Date(payment.created_at).toLocaleDateString(),
+            refundDate: new Date().toLocaleDateString()
+          })
+
+          console.log('[refund-confirmed] Refund email sent to:', user.email)
+        } else if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
+          console.warn('[refund-confirmed] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email')
+        }
+      } catch (emailError) {
+        console.error('[refund-confirmed] Failed to send refund email:', emailError)
+        // Don't fail the refund if email fails
+      }
 
       return NextResponse.json({
         success: true,

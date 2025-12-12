@@ -5,9 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
+import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface RegistrationData {
+  id: string
   registration_id: string
   registration_name: string
   season_name: string
@@ -15,7 +18,6 @@ interface RegistrationData {
   user_id: string
   first_name: string
   last_name: string
-  email: string
   category_name: string
   category_id: string
   registration_category_name: string
@@ -26,6 +28,8 @@ interface RegistrationData {
   presale_code_used: string | null
   is_lgbtq: boolean | null
   is_goalie: boolean
+  payment_id: string | null
+  invoice_number: string | null
 }
 
 interface WaitlistData {
@@ -488,10 +492,13 @@ export default function RegistrationDetailPage() {
                       return 0
                     })
 
+                    // Count only non-refunded registrations for the category total
+                    const activeCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
+
                     return (
                       <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
                         <h4 className="text-md font-semibold text-gray-900 mb-4">
-                          {categoryName} ({categoryRegistrations.length})
+                          {categoryName} ({activeCount}{activeCount !== categoryRegistrations.length ? ` active, ${categoryRegistrations.length} total` : ''})
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">
@@ -499,7 +506,6 @@ export default function RegistrationDetailPage() {
                               <tr>
                                 {[
                                   { key: 'first_name', label: 'Participant' },
-                                  { key: 'email', label: 'Email' },
                                   { key: 'is_lgbtq', label: 'LGBTQ+' },
                                   { key: 'is_goalie', label: 'Goalie' },
                                   { key: 'amount_paid', label: 'Amount Paid' },
@@ -522,16 +528,22 @@ export default function RegistrationDetailPage() {
                                     </div>
                                   </th>
                                 ))}
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {sortedCategoryRegistrations.map((registration, index) => (
                                 <tr key={index} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {registration.first_name} {registration.last_name}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {registration.email}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <UserLink
+                                      userId={registration.user_id}
+                                      firstName={registration.first_name}
+                                      lastName={registration.last_name}
+                                      fromPath={`/admin/reports/registrations/${registrationId}`}
+                                      fromLabel={registrationName || 'Registration Detail'}
+                                    />
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
@@ -564,6 +576,29 @@ export default function RegistrationDetailPage() {
                                       </span>
                                     ) : (
                                       <span className="text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    {registration.payment_status === 'paid' && registration.payment_id ? (
+                                      <Link
+                                        href={buildBreadcrumbUrl(
+                                          `/admin/reports/users/${registration.user_id}/invoices/${registration.payment_id}`,
+                                          [{ path: `/admin/reports/registrations/${registrationId}`, label: registrationName || 'Registration Detail' }],
+                                          { path: `/admin/reports/users/${registration.user_id}`, label: `${registration.first_name} ${registration.last_name}` }
+                                        )}
+                                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                      >
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        View Details
+                                      </Link>
+                                    ) : registration.payment_status === 'refunded' ? (
+                                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                                        Refunded
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
                                     )}
                                   </td>
                                 </tr>
@@ -729,6 +764,7 @@ export default function RegistrationDetailPage() {
           }}
         />
       )}
+
     </div>
   )
 }

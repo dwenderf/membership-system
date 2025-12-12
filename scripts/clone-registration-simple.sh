@@ -12,7 +12,7 @@ if [ -z "$SOURCE_ID" ] || [ -z "$NEW_NAME" ]; then
   echo "Usage: $0 <source-registration-id> <new-registration-name>"
   echo ""
   echo "Example:"
-  echo "  $0 '42e33282-0564-45f2-a509-b0ad3b8bc811' 'Scrimmage #8'"
+  echo "  $0 '00000000-0000-0000-0000-000000000000' 'Scrimmage #8'"
   echo ""
   exit 1
 fi

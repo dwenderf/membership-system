@@ -625,21 +625,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if user already has a completed registration (exclude failed records for audit trail)
+    // Check if user already has a completed registration (exclude failed and refunded for audit trail)
     const { data: existingRegistration } = await supabase
       .from('user_registrations')
       .select('id, payment_status')
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
-      .in('payment_status', ['paid', 'refunded'])
+      .eq('payment_status', 'paid')
       .single()
 
     if (existingRegistration) {
       capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
-      return NextResponse.json({ 
-        error: existingRegistration.payment_status === 'paid' 
-          ? 'You are already registered for this event'
-          : 'You have a refunded registration for this event. Please contact support for assistance.'
+      return NextResponse.json({
+        error: 'You are already registered for this event'
       }, { status: 400 })
     }
 

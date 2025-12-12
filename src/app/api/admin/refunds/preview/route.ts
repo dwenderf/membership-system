@@ -65,6 +65,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Check if this is a registration payment (to allow zero-dollar refunds for free registrations)
+    const { data: registrations } = await supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('payment_id', paymentId)
+    const isRegistrationPayment = registrations && registrations.length > 0
+    console.log('[refunds/preview] Is registration payment:', isRegistrationPayment)
+
     // Check available refund amount
     const { data: existingRefunds } = await supabase
       .from('refunds')
@@ -80,21 +88,29 @@ export async function POST(request: NextRequest) {
   let refundData
 
     if (refundType === 'proportional') {
-      if (!amount || amount <= 0) {
+      // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+      const minAllowed = isRegistrationPayment ? 0 : 0.01
+      if (amount === null || amount === undefined || amount < minAllowed) {
         console.warn('[refunds/preview] Invalid amount for proportional refund:', amount)
-        return NextResponse.json({ 
-          error: 'Positive refund amount required for proportional refunds' 
+        return NextResponse.json({
+          error: 'Positive refund amount required for proportional refunds'
         }, { status: 400 })
       }
 
       const amountInCents = Math.round(amount * 100)
       console.log('[refunds/preview] Proportional refund amount in cents:', amountInCents)
-      
+
       if (amountInCents > availableForRefund) {
         console.warn('[refunds/preview] Refund amount exceeds available:', { amountInCents, availableForRefund })
-        return NextResponse.json({ 
-          error: `Cannot refund $${amount.toFixed(2)}. Only $${(availableForRefund / 100).toFixed(2)} available.` 
+        return NextResponse.json({
+          error: `Cannot refund $${amount.toFixed(2)}. Only $${(availableForRefund / 100).toFixed(2)} available.`
         }, { status: 400 })
+      }
+
+      // For zero-dollar refunds, still create Xero staging (credit notes can be $0)
+      // Zero-dollar credit notes will sync to Xero just like zero-dollar invoices do
+      if (amountInCents === 0) {
+        console.log('[refunds/preview] Zero-dollar refund - creating credit note staging')
       }
 
       refundData = {

@@ -492,13 +492,14 @@ export default function RegistrationDetailPage() {
                       return 0
                     })
 
-                    // Count only non-refunded registrations for the category total
+                    // Count active and refunded registrations separately
                     const activeCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
+                    const refundedCount = categoryRegistrations.filter(r => r.payment_status === 'refunded').length
 
                     return (
                       <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
                         <h4 className="text-md font-semibold text-gray-900 mb-4">
-                          {categoryName} ({activeCount}{activeCount !== categoryRegistrations.length ? ` active, ${categoryRegistrations.length} total` : ''})
+                          {categoryName} ({activeCount} active{refundedCount > 0 ? `, ${refundedCount} refunded` : ''})
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">
@@ -506,10 +507,10 @@ export default function RegistrationDetailPage() {
                               <tr>
                                 {[
                                   { key: 'first_name', label: 'Participant' },
+                                  { key: 'payment_status', label: 'Active' },
                                   { key: 'is_lgbtq', label: 'LGBTQ+' },
                                   { key: 'is_goalie', label: 'Goalie' },
                                   { key: 'amount_paid', label: 'Amount Paid' },
-                                  { key: 'registration_fee', label: 'Registration Fee' },
                                   { key: 'registered_at', label: 'Registered At' },
                                   { key: 'presale_code_used', label: 'Presale Code' }
                                 ].map(({ key, label }) => (
@@ -529,7 +530,7 @@ export default function RegistrationDetailPage() {
                                   </th>
                                 ))}
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Actions
+                                  Details
                                 </th>
                               </tr>
                             </thead>
@@ -546,6 +547,15 @@ export default function RegistrationDetailPage() {
                                     />
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                      registration.payment_status === 'paid'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      {registration.payment_status === 'paid' ? 'Yes' : 'No'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
                                       {getLgbtqStatusLabel(registration.is_lgbtq)}
                                     </span>
@@ -557,9 +567,6 @@ export default function RegistrationDetailPage() {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                     {formatCurrency(registration.amount_paid)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {formatCurrency(registration.registration_fee)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <div>
@@ -579,7 +586,7 @@ export default function RegistrationDetailPage() {
                                     )}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    {registration.payment_status === 'paid' && registration.payment_id ? (
+                                    {registration.payment_id ? (
                                       <Link
                                         href={buildBreadcrumbUrl(
                                           `/admin/reports/users/${registration.user_id}/invoices/${registration.payment_id}`,
@@ -593,10 +600,6 @@ export default function RegistrationDetailPage() {
                                         </svg>
                                         View Details
                                       </Link>
-                                    ) : registration.payment_status === 'refunded' ? (
-                                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
-                                        Refunded
-                                      </span>
                                     ) : (
                                       <span className="text-gray-400">—</span>
                                     )}

@@ -8,6 +8,8 @@ interface UserLinkProps {
   firstName: string | null
   lastName: string | null
   xeroCustomerName?: string | null
+  membershipNumber?: string | number | null
+  showMembershipNumber?: boolean
   showAvatar?: boolean
   useXeroName?: boolean
   className?: string
@@ -44,29 +46,37 @@ function getDisplayName(
   firstName: string | null,
   lastName: string | null,
   xeroName?: string | null,
-  useXeroName?: boolean
+  useXeroName?: boolean,
+  membershipNumber?: string | number | null,
+  showMembershipNumber?: boolean
 ): string {
+  let baseName = ''
+
   if (useXeroName && xeroName) {
-    return xeroName
+    baseName = xeroName
+  } else {
+    const first = firstName?.trim() || ''
+    const last = lastName?.trim() || ''
+
+    if (first && last) {
+      baseName = `${first} ${last}`
+    } else if (first) {
+      baseName = first
+    } else if (last) {
+      baseName = last
+    } else if (xeroName) {
+      baseName = xeroName
+    } else {
+      baseName = 'Unknown User'
+    }
   }
 
-  const first = firstName?.trim() || ''
-  const last = lastName?.trim() || ''
-
-  if (first && last) {
-    return `${first} ${last}`
-  }
-  if (first) {
-    return first
-  }
-  if (last) {
-    return last
-  }
-  if (xeroName) {
-    return xeroName
+  // Append membership number if requested and available
+  if (showMembershipNumber && membershipNumber) {
+    return `${baseName} - ${membershipNumber}`
   }
 
-  return 'Unknown User'
+  return baseName
 }
 
 export default function UserLink({
@@ -74,13 +84,22 @@ export default function UserLink({
   firstName,
   lastName,
   xeroCustomerName,
+  membershipNumber,
+  showMembershipNumber = false,
   showAvatar = true,
   useXeroName = false,
   className = '',
   fromPath,
   fromLabel
 }: UserLinkProps) {
-  const displayName = getDisplayName(firstName, lastName, xeroCustomerName, useXeroName)
+  const displayName = getDisplayName(
+    firstName,
+    lastName,
+    xeroCustomerName,
+    useXeroName,
+    membershipNumber,
+    showMembershipNumber
+  )
   const initials = getInitials(firstName, lastName, useXeroName ? xeroCustomerName : undefined)
 
   // Build URL with breadcrumb context if provided

@@ -380,6 +380,12 @@ export async function POST(request: NextRequest) {
         // Don't fail the refund if email fails
       }
 
+      // Check if this is a partial or full refund
+      const isPartialRefund = refund.amount < payment.final_amount
+      const refundMessage = isPartialRefund
+        ? `Partial refund of $${(refund.amount / 100).toFixed(2)} (of $${(payment.final_amount / 100).toFixed(2)}) processed successfully`
+        : `Full refund of $${(refund.amount / 100).toFixed(2)} processed successfully`
+
       return NextResponse.json({
         success: true,
         refund: {
@@ -388,7 +394,7 @@ export async function POST(request: NextRequest) {
           amount: refund.amount,
           status: 'completed'
         },
-        message: `Refund of $${(refund.amount / 100).toFixed(2)} processed successfully`
+        message: refundMessage
       })
 
     } catch (stripeError) {

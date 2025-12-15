@@ -1113,7 +1113,9 @@ export class XeroStagingManager {
             line_amount,
             account_code,
             tax_type,
-            line_item_type
+            line_item_type,
+            discount_code_id,
+            item_id
           )
         `)
         .eq('payment_id', paymentId)
@@ -1143,7 +1145,9 @@ export class XeroStagingManager {
             line_amount: centsToCents(-item.line_amount), // Reverse the sign of each line item
             account_code: item.account_code,
             tax_type: item.tax_type,
-            line_item_type: item.line_item_type
+            line_item_type: item.line_item_type,
+            discount_code_id: item.discount_code_id || null,
+            item_id: item.item_id || null
           }))
         } else {
           // Proportionally allocate refund across original line items
@@ -1157,7 +1161,9 @@ export class XeroStagingManager {
               line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
               account_code: item.account_code,
               tax_type: item.tax_type,
-              line_item_type: item.line_item_type
+              line_item_type: item.line_item_type,
+              discount_code_id: item.discount_code_id || null,
+              item_id: item.item_id || null
             }
           })
 
@@ -1224,7 +1230,9 @@ export class XeroStagingManager {
               line_amount: item.line_amount, // Already in cents
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',
-              line_item_type: item.line_item_type
+              line_item_type: item.line_item_type,
+              discount_code_id: item.discount_code_id || null,
+              item_id: item.item_id || null
             }))
           )
         

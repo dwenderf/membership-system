@@ -211,6 +211,24 @@ export async function POST(request: NextRequest) {
           console.warn('[zero-dollar-refund] No registrations found for payment:', paymentId)
         }
 
+        // Update payment status to refunded
+        const { error: paymentUpdateError } = await adminSupabase
+          .from('payments')
+          .update({
+            status: 'refunded',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', paymentId)
+
+        if (paymentUpdateError) {
+          console.error('[zero-dollar-refund] Failed to update payment status:', {
+            error: paymentUpdateError,
+            paymentId
+          })
+        } else {
+          console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
+        }
+
         // Send refund email notification
         try {
           const { data: user } = await supabase

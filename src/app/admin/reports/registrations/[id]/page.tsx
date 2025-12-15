@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
 import UserLink from '@/components/UserLink'
+import InvoiceDetailLink from '@/components/InvoiceDetailLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
@@ -590,19 +591,14 @@ export default function RegistrationDetailPage() {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     {registration.payment_id ? (
-                                      <Link
-                                        href={buildBreadcrumbUrl(
-                                          `/admin/reports/users/${registration.user_id}/invoices/${registration.payment_id}`,
-                                          [{ path: `/admin/reports/registrations/${registrationId}`, label: registrationName || 'Registration Detail' }],
-                                          { path: `/admin/reports/users/${registration.user_id}`, label: `${registration.first_name} ${registration.last_name}` }
-                                        )}
-                                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                      >
-                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        View Details
-                                      </Link>
+                                      <InvoiceDetailLink
+                                        userId={registration.user_id}
+                                        invoiceId={registration.payment_id}
+                                        label="Detail"
+                                        showIcon={false}
+                                        fromPath={`/admin/reports/registrations/${registrationId}`}
+                                        fromLabel={registrationName || 'Registration Detail'}
+                                      />
                                     ) : (
                                       <span className="text-gray-400">—</span>
                                     )}

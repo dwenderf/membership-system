@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
-            await emailService.sendRefund({
+            await emailService.sendRefundNotification({
               userId: payment.user_id,
               email: user.email,
               userName: `${user.first_name} ${user.last_name}`,
@@ -378,7 +378,7 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
-          await emailService.sendRefund({
+          await emailService.sendRefundNotification({
             userId: payment.user_id,
             email: user.email,
             userName: `${user.first_name} ${user.last_name}`,

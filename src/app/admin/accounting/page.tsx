@@ -449,12 +449,22 @@ export default function AccountingIntegrationPage() {
       if (response.ok) {
         const data = await response.json()
         const resetCount = data.reset_results.invoices + data.reset_results.payments
-        const syncedCount = data.sync_results.total_synced
-        showSuccess(`Retry completed: ${resetCount} items reset, ${syncedCount} synced successfully`)
-        
+        const { total_synced, total_failed } = data.sync_results
+
+        // Show appropriate toast based on results
+        if (total_failed === 0 && total_synced > 0) {
+          showSuccess(`Retry completed: ${resetCount} items reset, ${total_synced} synced successfully`)
+        } else if (total_synced === 0 && total_failed > 0) {
+          showError(`Retry completed: ${resetCount} items reset, but all ${total_failed} failed to sync`)
+        } else if (total_synced > 0 && total_failed > 0) {
+          showError(`Retry partially completed: ${resetCount} items reset, ${total_synced} synced, ${total_failed} failed`)
+        } else {
+          showSuccess(`Retry completed: ${resetCount} items reset`)
+        }
+
         // Clear selections
         setSelectedFailedItems(new Set())
-        
+
         // Refresh the status to get updated counts
         await fetchXeroStatus()
       } else {

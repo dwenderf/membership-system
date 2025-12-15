@@ -326,8 +326,8 @@ export async function GET(request: NextRequest) {
       const { data: registrationsList, error: registrationsError } = await adminSupabase
         .from('registrations')
         .select(`
-          id, 
-          name, 
+          id,
+          name,
           type,
           seasons (
             name
@@ -342,7 +342,7 @@ export async function GET(request: NextRequest) {
           )
         `)
         .eq('is_active', true)
-        .order('name')
+        .order('created_at', { ascending: false })
 
       if (registrationsError) {
         logger.logSystem('registration-reports-api', 'Error fetching registrations list', { error: registrationsError }, 'error')

@@ -192,8 +192,10 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     // For payment plans, use the full invoice amount; otherwise use the payment amount
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
     const netAmount = invoiceAmount - totalRefunded
-    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < invoiceAmount
-    const isFullyRefunded = invoiceAmount > 0 && totalRefunded >= invoiceAmount
+    // Use payment status instead of calculating refund flags
+    // payment.status is updated to 'refunded' for full and zero-dollar refunds
+    const isPartiallyRefunded = totalRefunded > 0 && payment.status === 'completed'
+    const isFullyRefunded = payment.status === 'refunded'
 
     // Get payment plan status
     const paymentPlanStatus = paymentPlanStatuses.get(payment.id)

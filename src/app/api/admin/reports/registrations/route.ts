@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
             email,
             first_name,
             last_name,
+            member_id,
             is_lgbtq,
             is_goalie
           ),
@@ -183,6 +184,7 @@ export async function GET(request: NextRequest) {
           user_id: user?.id || 'Unknown',
           first_name: user?.first_name || '',
           last_name: user?.last_name || '',
+          member_id: user?.member_id || null,
           email: user?.email || 'Unknown',
           category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
           category_id: item.registration_category_id || 'unknown',

@@ -85,7 +85,7 @@ export default function UserLink({
   lastName,
   xeroCustomerName,
   membershipNumber,
-  showMembershipNumber = false,
+  showMembershipNumber = true,
   showAvatar = true,
   useXeroName = false,
   className = '',

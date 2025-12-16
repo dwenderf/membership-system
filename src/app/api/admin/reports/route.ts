@@ -365,6 +365,7 @@ export async function GET(request: NextRequest) {
         userId: transaction.user_id,
         firstName: transaction.first_name,
         lastName: transaction.last_name,
+        email: transaction.email,
         memberId: transaction.member_id,
         amount: transaction.amount || 0,
         type: transaction.transaction_type || 'unknown',

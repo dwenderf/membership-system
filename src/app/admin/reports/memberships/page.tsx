@@ -338,7 +338,6 @@ export default function MembershipReportsPage() {
                       {[
                         { key: 'member_id', label: 'Member ID' },
                         { key: 'full_name', label: 'Full Name' },
-                        { key: 'email', label: 'Email' },
                         { key: 'lgbtq_status', label: 'LGBTQ+' },
                         { key: 'is_goalie', label: 'Goalie' },
                         { key: 'member_since', label: 'Member Since' },
@@ -365,8 +364,14 @@ export default function MembershipReportsPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedMembers.map((member, index) => (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {member.member_id}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {member.member_id && member.member_id !== 'N/A' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              #{member.member_id}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">Not assigned</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {member.user_id ? (
@@ -374,17 +379,16 @@ export default function MembershipReportsPage() {
                               userId={member.user_id}
                               firstName={member.first_name}
                               lastName={member.last_name}
+                              email={member.email}
                               showAvatar={true}
                               showMembershipNumber={false}
+                              showEmail={true}
                               fromPath="/admin/reports/memberships"
                               fromLabel="Active Members"
                             />
                           ) : (
                             <span>{member.full_name}</span>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {member.email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(member.is_lgbtq)}`}>

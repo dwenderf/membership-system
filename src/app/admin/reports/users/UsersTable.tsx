@@ -113,22 +113,13 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th 
+              <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleSort('name')}
               >
                 <div className="flex items-center space-x-1">
                   <span>Name</span>
                   <SortIcon field="name" />
-                </div>
-              </th>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleSort('email')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Email</span>
-                  <SortIcon field="email" />
                 </div>
               </th>
               <th 
@@ -175,7 +166,9 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                           userId={user.id}
                           firstName={user.first_name}
                           lastName={user.last_name}
+                          email={user.email}
                           showAvatar={true}
+                          showEmail={true}
                           fromPath="/admin/reports/users"
                           fromLabel="Users Report"
                         />
@@ -185,9 +178,6 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.email}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.member_id ? (
@@ -245,7 +235,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               })
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>

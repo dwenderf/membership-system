@@ -99,6 +99,7 @@ interface ReportData {
     userId: string
     firstName: string | null
     lastName: string | null
+    email: string | null
     memberId: string | null
     amount: number
     type: string
@@ -756,9 +757,11 @@ export default function ReportsPage() {
                               userId={transaction.userId}
                               firstName={transaction.firstName}
                               lastName={transaction.lastName}
+                              email={transaction.email}
                               membershipNumber={transaction.memberId}
                               showAvatar={false}
                               showMembershipNumber={true}
+                              showEmail={true}
                               fromPath="/admin/reports/financial"
                               fromLabel="Financial Reports"
                             />

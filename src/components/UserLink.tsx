@@ -7,10 +7,12 @@ interface UserLinkProps {
   userId: string
   firstName: string | null
   lastName: string | null
+  email?: string | null
   xeroCustomerName?: string | null
   membershipNumber?: string | number | null
   showMembershipNumber?: boolean
   showAvatar?: boolean
+  showEmail?: boolean
   useXeroName?: boolean
   className?: string
   fromPath?: string
@@ -83,10 +85,12 @@ export default function UserLink({
   userId,
   firstName,
   lastName,
+  email,
   xeroCustomerName,
   membershipNumber,
   showMembershipNumber = true,
   showAvatar = true,
+  showEmail = false,
   useXeroName = false,
   className = '',
   fromPath,
@@ -118,9 +122,16 @@ export default function UserLink({
           {initials}
         </div>
       )}
-      <span className="text-indigo-600 hover:text-indigo-800 font-medium">
-        {displayName}
-      </span>
+      <div className="flex flex-col">
+        <span className="text-indigo-600 hover:text-indigo-800 font-medium">
+          {displayName}
+        </span>
+        {showEmail && email && (
+          <span className="text-sm text-gray-500">
+            {email}
+          </span>
+        )}
+      </div>
     </Link>
   )
 }

@@ -262,13 +262,14 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                         userId={user.userId}
                         firstName={user.firstName}
                         lastName={user.lastName}
+                        email={user.email}
                         membershipNumber={user.memberId}
                         showAvatar={true}
                         showMembershipNumber={true}
+                        showEmail={true}
                         fromPath="/admin/reports/payment-plans"
                         fromLabel="Payment Plans"
                       />
-                      <div className="text-sm text-gray-500 mt-1">{user.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

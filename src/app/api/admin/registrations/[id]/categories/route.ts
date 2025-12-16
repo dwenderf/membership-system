@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 
 /**
- * GET /api/admin/registration-categories/[registrationId]
+ * GET /api/admin/registrations/[id]/categories
  *
  * Returns all categories for a registration with current counts
  */

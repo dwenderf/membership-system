@@ -8,6 +8,8 @@ import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
 import DiscountUsage from '@/components/DiscountUsage'
 import PaymentPlanSection from './PaymentPlanSection'
+import BreadcrumbNav from '@/components/BreadcrumbNav'
+import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface PageProps {
   params: {
@@ -15,6 +17,13 @@ interface PageProps {
   }
   searchParams: {
     from?: string
+    back?: string
+    backLabel?: string
+    back2?: string
+    backLabel2?: string
+    back3?: string
+    backLabel3?: string
+    [key: string]: string | string[] | undefined
   }
 }
 
@@ -183,8 +192,13 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     // For payment plans, use the full invoice amount; otherwise use the payment amount
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
     const netAmount = invoiceAmount - totalRefunded
-    const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < invoiceAmount
-    const isFullyRefunded = invoiceAmount > 0 && totalRefunded >= invoiceAmount
+    // Use payment status instead of calculating refund flags
+    // DEPENDENCY: Assumes payment.status is correctly maintained throughout the system:
+    // - 'completed' for partial refunds (or no refund)
+    // - 'refunded' for full and zero-dollar refunds
+    // See docs/troubleshooting/refund_issues_summary.md for historical data issues that may require manual fixes
+    const isPartiallyRefunded = totalRefunded > 0 && payment.status === 'completed'
+    const isFullyRefunded = payment.status === 'refunded'
 
     // Get payment plan status
     const paymentPlanStatus = paymentPlanStatuses.get(payment.id)
@@ -242,20 +256,29 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     new Date(b.date).getTime() - new Date(a.date).getTime()
   )
 
+  // Parse breadcrumbs from URL params
+  const breadcrumbs = parseBreadcrumbs(searchParams)
+
+  // Fallback to old "from" parameter if no breadcrumbs
+  if (breadcrumbs.length === 0 && searchParams.from) {
+    if (searchParams.from === 'payment-plans') {
+      breadcrumbs.push({ path: '/admin/reports/payment-plans', label: 'Payment Plans' })
+    } else {
+      breadcrumbs.push({ path: '/admin/reports/users', label: 'Users' })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Breadcrumb Navigation */}
+          <BreadcrumbNav breadcrumbs={breadcrumbs} position="top" />
+
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <Link
-                  href={searchParams.from === 'payment-plans' ? '/admin/reports/payment-plans' : '/admin/reports/users'}
-                  className="text-blue-600 hover:text-blue-500 text-sm font-medium mb-4 inline-block"
-                >
-                  ← {searchParams.from === 'payment-plans' ? 'Back to Payment Plans' : 'Back to Users'}
-                </Link>
                 <h1 className="text-3xl font-bold text-gray-900">
                   {user.first_name} {user.last_name}
                 </h1>
@@ -568,7 +591,11 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
                               )}
                             </div>
                             <Link
-                              href={`/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`}
+                              href={buildBreadcrumbUrl(
+                                `/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`,
+                                breadcrumbs,
+                                { path: `/admin/reports/users/${params.id}`, label: `${user.first_name} ${user.last_name}` }
+                              )}
                               prefetch={false}
                               className="text-xs text-blue-600 hover:text-blue-500"
                             >
@@ -687,6 +714,9 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
               </div>
             </div>
           </div>
+
+          {/* Breadcrumb Navigation - Bottom */}
+          <BreadcrumbNav breadcrumbs={breadcrumbs} position="bottom" />
         </div>
       </div>
     </div>

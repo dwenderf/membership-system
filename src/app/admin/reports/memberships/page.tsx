@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
+import UserLink from '@/components/UserLink'
 
 interface MembershipType {
   id: string
@@ -12,7 +13,10 @@ interface MembershipType {
 }
 
 interface MemberData {
+  user_id: string
   member_id: string
+  first_name: string | null
+  last_name: string | null
   full_name: string
   email: string
   member_since: string
@@ -108,7 +112,10 @@ export default function MembershipReportsPage() {
 
       // Process the data - much simpler now since the view handles all the logic
       const membersList: MemberData[] = membershipData?.map((item: any) => ({
+        user_id: item.user_id || '',
         member_id: item.member_id?.toString() || 'N/A',
+        first_name: item.first_name,
+        last_name: item.last_name,
         full_name: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A',
         email: item.email || 'N/A',
         member_since: item.onboarding_completed_at || 'N/A',
@@ -331,7 +338,6 @@ export default function MembershipReportsPage() {
                       {[
                         { key: 'member_id', label: 'Member ID' },
                         { key: 'full_name', label: 'Full Name' },
-                        { key: 'email', label: 'Email' },
                         { key: 'lgbtq_status', label: 'LGBTQ+' },
                         { key: 'is_goalie', label: 'Goalie' },
                         { key: 'member_since', label: 'Member Since' },
@@ -358,14 +364,30 @@ export default function MembershipReportsPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedMembers.map((member, index) => (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {member.member_id}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {member.member_id && member.member_id !== 'N/A' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              #{member.member_id}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">Not assigned</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {member.full_name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {member.email}
+                          {member.user_id ? (
+                            <UserLink
+                              userId={member.user_id}
+                              firstName={member.first_name}
+                              lastName={member.last_name}
+                              email={member.email}
+                              showAvatar={true}
+                              showMembershipNumber={false}
+                              fromPath="/admin/reports/memberships"
+                              fromLabel="Active Members"
+                            />
+                          ) : (
+                            <span>{member.full_name}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(member.is_lgbtq)}`}>

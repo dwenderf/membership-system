@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user's paid registrations only (exclude processing)
+    // Get user's paid registrations only (exclude refunded, processing, awaiting_payment, failed)
     const { data: userRegistrations, error } = await supabase
       .from('user_registrations')
       .select(`

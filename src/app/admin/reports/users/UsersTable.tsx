@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
 import { formatDate } from '@/lib/date-utils'
+import UserLink from '@/components/UserLink'
 
 interface User {
   id: string
@@ -113,22 +113,13 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th 
+              <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleSort('name')}
               >
                 <div className="flex items-center space-x-1">
                   <span>Name</span>
                   <SortIcon field="name" />
-                </div>
-              </th>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                onClick={() => handleSort('email')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Email</span>
-                  <SortIcon field="email" />
                 </div>
               </th>
               <th 
@@ -152,7 +143,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Attributes
               </th>
-              <th 
+              <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleSort('created_at')}
               >
@@ -160,9 +151,6 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                   <span>Created</span>
                   <SortIcon field="created_at" />
                 </div>
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
               </th>
             </tr>
           </thead>
@@ -174,31 +162,21 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                   <tr key={user.id} className={`hover:bg-gray-50 ${isCurrentUser ? 'bg-blue-50' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                            isCurrentUser ? 'bg-blue-100 ring-2 ring-blue-500' : 'bg-gray-300'
-                          }`}>
-                            <span className={`text-sm font-medium ${
-                              isCurrentUser ? 'text-blue-700' : 'text-gray-700'
-                            }`}>
-                              {user.first_name?.[0]}{user.last_name?.[0]}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 flex items-center">
-                            {user.first_name} {user.last_name}
-                            {isCurrentUser && (
-                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                You
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        <UserLink
+                          userId={user.id}
+                          firstName={user.first_name}
+                          lastName={user.last_name}
+                          email={user.email}
+                          showAvatar={true}
+                          fromPath="/admin/reports/users"
+                          fromLabel="Users Report"
+                        />
+                        {isCurrentUser && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            You
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.email}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.member_id ? (
@@ -251,20 +229,12 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                         : 'Unknown'
                       }
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Link
-                        href={`/admin/reports/users/${user.id}`}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View Details
-                      </Link>
-                    </td>
                   </tr>
                 )
               })
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>

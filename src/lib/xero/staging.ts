@@ -1113,7 +1113,9 @@ export class XeroStagingManager {
             line_amount,
             account_code,
             tax_type,
-            line_item_type
+            line_item_type,
+            discount_code_id,
+            item_id
           )
         `)
         .eq('payment_id', paymentId)
@@ -1131,30 +1133,49 @@ export class XeroStagingManager {
       }
       
       if (originalInvoice?.xero_invoice_line_items && !invoiceError) {
-        // Proportionally allocate refund across original line items
+        // Calculate total invoice amount
         const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
           (sum: number, item: any) => sum + item.line_amount, 0
         )
-        
-        lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
-          // Calculate proportion maintaining the sign of the original line item
-          const proportion = item.line_amount / totalInvoiceAmount
-          const creditAmount = centsToCents(refundAmountCents * proportion)
-          
-          return {
+
+        // For zero-dollar refunds, reverse the exact line items (can't use proportional allocation)
+        if (refundAmountCents === 0 && totalInvoiceAmount === 0) {
+          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => ({
             description: `Credit: ${item.description}`,
-            line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
+            // Reverse the sign of each line item for credit note:
+            // - Revenue items (positive) become negative (refund reduces revenue)
+            // - Discount items (negative) become positive (refund gives back discount capacity)
+            line_amount: centsToCents(-item.line_amount),
             account_code: item.account_code,
             tax_type: item.tax_type,
-            line_item_type: item.line_item_type
+            line_item_type: item.line_item_type,
+            discount_code_id: item.discount_code_id || null,
+            item_id: item.item_id || null
+          }))
+        } else {
+          // Proportionally allocate refund across original line items
+          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+            // Calculate proportion maintaining the sign of the original line item
+            const proportion = item.line_amount / totalInvoiceAmount
+            const creditAmount = centsToCents(refundAmountCents * proportion)
+
+            return {
+              description: `Credit: ${item.description}`,
+              line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
+              account_code: item.account_code,
+              tax_type: item.tax_type,
+              line_item_type: item.line_item_type,
+              discount_code_id: item.discount_code_id || null,
+              item_id: item.item_id || null
+            }
+          })
+
+          // Ensure total matches refund amount exactly (handle rounding)
+          const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+          const difference = refundAmountCents - calculatedTotal
+          if (difference !== 0 && lineItems.length > 0) {
+            lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
           }
-        })
-        
-        // Ensure total matches refund amount exactly (handle rounding)
-        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
-        const difference = refundAmountCents - calculatedTotal
-        if (difference !== 0 && lineItems.length > 0) {
-          lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
         }
       } else {
         // No fallback - this indicates a serious issue that needs admin attention
@@ -1212,7 +1233,9 @@ export class XeroStagingManager {
               line_amount: item.line_amount, // Already in cents
               account_code: item.account_code,
               tax_type: item.tax_type || 'NONE',
-              line_item_type: item.line_item_type
+              line_item_type: item.line_item_type,
+              discount_code_id: item.discount_code_id || null,
+              item_id: item.item_id || null
             }))
           )
         
@@ -1232,57 +1255,72 @@ export class XeroStagingManager {
         }
       }
 
-      // Get Stripe bank account code for payment staging
-      const stripeBankAccountCode = await this.getStripeBankAccountCode()
-      
-      // Create corresponding payment record for the refund (negative amount = money going out)
-      const { data: paymentStaging, error: paymentStagingError } = await this.supabase
-        .from('xero_payments')
-        .insert({
-          xero_invoice_id: stagingRecord.id, // Links to the credit note record
-          tenant_id: null, // Will be populated during sync
-          xero_payment_id: null, // Will be populated when synced to Xero
-          payment_method: 'stripe',
-          payment_type: 'full', // Refunds are full payments (not installments)
-          bank_account_code: stripeBankAccountCode,
-          amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
-          stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
-          reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
-          sync_status: 'staged', // Waiting for Stripe confirmation
-          staged_at: new Date().toISOString(),
-          staging_metadata: {
-            refund_id: refundId || null,
-            payment_id: paymentId,
-            refund_type: 'refund',
-            refund_amount: refundAmountCents,
-            credit_note_id: stagingRecord.id
-          }
-        })
-        .select()
-        .single()
-      
-      if (paymentStagingError) {
+      // For zero-dollar refunds, skip payment staging (Xero doesn't need payments for $0 credit notes)
+      // This is similar to how zero-dollar invoices don't require payment records
+      let paymentStagingId = null
+      if (refundAmountCents > 0) {
+        // Get Stripe bank account code for payment staging
+        const stripeBankAccountCode = await this.getStripeBankAccountCode()
+
+        // Create corresponding payment record for the refund (negative amount = money going out)
+        const { data: paymentStaging, error: paymentStagingError } = await this.supabase
+          .from('xero_payments')
+          .insert({
+            xero_invoice_id: stagingRecord.id, // Links to the credit note record
+            tenant_id: null, // Will be populated during sync
+            xero_payment_id: null, // Will be populated when synced to Xero
+            payment_method: 'stripe',
+            payment_type: 'full', // Refunds are full payments (not installments)
+            bank_account_code: stripeBankAccountCode,
+            amount_paid: negativeCents(refundAmountCents), // Negative amount = money going OUT
+            stripe_fee_amount: 0, // Refunds don't have additional Stripe fees
+            reference: `Refund for ${originalInvoice?.invoice_number || 'INV-UNKNOWN'}`,
+            sync_status: 'staged', // Waiting for Stripe confirmation
+            staged_at: new Date().toISOString(),
+            staging_metadata: {
+              refund_id: refundId || null,
+              payment_id: paymentId,
+              refund_type: 'refund',
+              refund_amount: refundAmountCents,
+              credit_note_id: stagingRecord.id
+            }
+          })
+          .select()
+          .single()
+
+        if (paymentStagingError) {
+          logger.logXeroSync(
+            'staging-credit-note-payment-error',
+            'Failed to create credit note payment staging record',
+            { refundId, error: paymentStagingError.message },
+            'error'
+          )
+          // Clean up the credit note staging record if payment failed
+          await this.supabase
+            .from('xero_invoices')
+            .delete()
+            .eq('id', stagingRecord.id)
+          return false
+        }
+
+        paymentStagingId = paymentStaging.id
+      } else {
         logger.logXeroSync(
-          'staging-credit-note-payment-error',
-          'Failed to create credit note payment staging record',
-          { refundId, error: paymentStagingError.message },
-          'error'
+          'staging-credit-note-zero-dollar',
+          'Skipping payment staging for zero-dollar credit note',
+          { refundId, creditNoteId: stagingRecord.id },
+          'info'
         )
-        // Clean up the credit note staging record if payment failed
-        await this.supabase
-          .from('xero_invoices')
-          .delete()
-          .eq('id', stagingRecord.id)
-        return false
       }
 
       logger.logXeroSync(
         'staging-credit-note-success',
         'Credit note staging completed successfully',
-        { 
-          refundId, 
-          creditNoteId: stagingRecord.id, 
-          paymentId: paymentStaging.id 
+        {
+          refundId,
+          creditNoteId: stagingRecord.id,
+          paymentId: paymentStagingId,
+          isZeroDollar: refundAmountCents === 0
         },
         'info'
       )
@@ -1320,12 +1358,13 @@ export class XeroStagingManager {
       discountCategoryId?: string
     }
   ): Promise<string | false> {
-    if (refundType === 'proportional' && refundData.amount) {
+    // Allow zero amounts for refunds with line items (e.g., registration + discount = $0)
+    if (refundType === 'proportional' && refundData.amount !== null && refundData.amount !== undefined) {
       return this.createProportionalCreditNoteStaging(refundId, paymentId, refundData.amount)
-    } else if (refundType === 'discount_code' && refundData.discountCode && refundData.discountAmount) {
+    } else if (refundType === 'discount_code' && refundData.discountCode && refundData.discountAmount !== null && refundData.discountAmount !== undefined) {
       return this.createDiscountCreditNoteStaging(
         refundId,
-        paymentId, 
+        paymentId,
         refundData.discountCode,
         refundData.discountAmount,
         refundData.discountAccountingCode!,

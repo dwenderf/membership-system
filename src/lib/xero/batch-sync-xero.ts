@@ -181,14 +181,15 @@ export class XeroBatchSyncManager {
   }
 
   /**
-   * Sync all pending invoices and payments with intelligent batching
-   * 
+   * Sync all pending invoices, credit notes, and payments with intelligent batching
+   *
    * This method is protected against concurrent execution - if called while
    * another sync is running, it will return the result of the existing sync.
    * It also enforces a minimum delay between sync operations to prevent rate limits.
    */
   async syncAllPendingRecords(): Promise<{
     invoices: { synced: number; failed: number }
+    credit_notes: { synced: number; failed: number }
     payments: { synced: number; failed: number }
     connectionStatus: 'valid' | 'failed' | 'no_tenant'
   }> {
@@ -207,6 +208,7 @@ export class XeroBatchSyncManager {
       console.log(`⚠️ [${callId}] No existing promise found, returning empty result`)
       return {
         invoices: { synced: 0, failed: 0 },
+        credit_notes: { synced: 0, failed: 0 },
         payments: { synced: 0, failed: 0 },
         connectionStatus: 'valid' as 'valid' | 'failed' | 'no_tenant'
       }
@@ -255,6 +257,7 @@ export class XeroBatchSyncManager {
    */
   private async performSync(): Promise<{
     invoices: { synced: number; failed: number }
+    credit_notes: { synced: number; failed: number }
     payments: { synced: number; failed: number }
     connectionStatus: 'valid' | 'failed' | 'no_tenant'
   }> {
@@ -263,6 +266,7 @@ export class XeroBatchSyncManager {
 
     const results = {
       invoices: { synced: 0, failed: 0 },
+      credit_notes: { synced: 0, failed: 0 },
       payments: { synced: 0, failed: 0 },
       connectionStatus: 'valid' as 'valid' | 'failed' | 'no_tenant'
     }
@@ -369,28 +373,22 @@ export class XeroBatchSyncManager {
         }
 
         // Sync credit notes
-        let creditNoteResult = true
+        let creditNoteResult = { success: true, synced: 0, failed: 0 }
         if (xeroCreditNotesToSync.length > 0) {
           creditNoteResult = await this.syncXeroCreditNotes(xeroCreditNotesToSync, xeroApi, activeTenant.tenant_id)
         }
 
-        // Update results based on both invoice and credit note sync results
-        const totalSynced = invoiceResult.synced + (creditNoteResult ? xeroCreditNotesToSync.length : 0)
-        const totalFailed = invoiceResult.failed + (creditNoteResult ? 0 : xeroCreditNotesToSync.length)
+        // Update results separately for invoices and credit notes
+        results.invoices.synced = invoiceResult.synced
+        results.invoices.failed = invoiceResult.failed + xeroInvoicesFailed.filter(item => item.invoice_type === 'ACCREC').length
 
-        results.invoices.synced = totalSynced
-        results.invoices.failed = totalFailed
+        results.credit_notes.synced = creditNoteResult.synced
+        results.credit_notes.failed = creditNoteResult.failed + xeroInvoicesFailed.filter(item => item.invoice_type === 'ACCRECCREDIT').length
 
         console.log(`📊 Invoice sync completed: ${invoiceResult.synced} synced, ${invoiceResult.failed} failed`)
         if (xeroCreditNotesToSync.length > 0) {
-          if (creditNoteResult) {
-            console.log(`✅ Successfully synced ${xeroCreditNotesToSync.length} credit notes`)
-          } else {
-            console.log(`❌ Failed to sync ${xeroCreditNotesToSync.length} credit notes`)
-          }
+          console.log(`📊 Credit note sync completed: ${creditNoteResult.synced} synced, ${creditNoteResult.failed} failed`)
         }
-
-        results.invoices.failed += xeroInvoicesFailed.length
 
         const invoiceDuration = Date.now() - invoiceStartTime
         console.log(`📊 Invoice sync completed in ${invoiceDuration}ms:`, {
@@ -470,8 +468,8 @@ export class XeroBatchSyncManager {
         ...results,
         totalDuration,
         totalRecords: (pendingInvoices?.length || 0) + (filteredPayments?.length || 0),
-        totalSuccessful: results.invoices.synced + results.payments.synced,
-        totalFailed: results.invoices.failed + results.payments.failed
+        totalSuccessful: results.invoices.synced + results.credit_notes.synced + results.payments.synced,
+        totalFailed: results.invoices.failed + results.credit_notes.failed + results.payments.failed
       })
       
       return results
@@ -1022,7 +1020,10 @@ export class XeroBatchSyncManager {
   /**
    * Sync credit notes to Xero using batch API
    */
-  async syncXeroCreditNotes(xeroCreditNotesToSync: {xeroCreditNote: CreditNote, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<boolean> {
+  async syncXeroCreditNotes(xeroCreditNotesToSync: {xeroCreditNote: CreditNote, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<{ success: boolean; synced: number; failed: number }> {
+    let syncedCount = 0
+    let failedCount = 0
+
     try{
       const response = await xeroApi.accountingApi.createCreditNotes(
         tenantId,
@@ -1030,65 +1031,220 @@ export class XeroBatchSyncManager {
       )
 
       const creditNotesSynced = response.body.creditNotes || []
-      
+
       // Use array index to correlate request with response
       for (let i = 0; i < creditNotesSynced.length; i++) {
         const xeroCreditNote = creditNotesSynced[i]
         const originalRecord = xeroCreditNotesToSync[i]?.invoiceRecord
-        
+
         if (!originalRecord) {
           console.error(`❌ No original record found for response index ${i}`)
           continue
         }
 
-        // Mark credit note as synced in database
-        await this.markItemAsSynced(
-          originalRecord.id,
-          xeroCreditNote.creditNoteID!,
-          xeroCreditNote.creditNoteNumber!,
-          tenantId
-        )
+        // Check if credit note has validation errors
+        if (xeroCreditNote.hasErrors || (xeroCreditNote.validationErrors && xeroCreditNote.validationErrors.length > 0)) {
+          const errorMessages = xeroCreditNote.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
+          console.error(`❌ Credit note validation failed for record ${originalRecord.id}:`, errorMessages)
 
-        // Log success
-        await logXeroSync({
-          tenant_id: tenantId,
-          operation: 'credit_note_sync',
-          record_type: 'credit_note',
-          record_id: originalRecord.id,
-          xero_id: xeroCreditNote.creditNoteID,
-          success: true,
-          details: `Credit note ${xeroCreditNote.creditNoteNumber} created successfully`,
-          response_data: {
-            creditNote: {
-              creditNoteID: xeroCreditNote.creditNoteID,
-              creditNoteNumber: xeroCreditNote.creditNoteNumber,
-              status: xeroCreditNote.status,
-              type: xeroCreditNote.type,
-              total: xeroCreditNote.total,
-              subTotal: xeroCreditNote.subTotal,
-              date: xeroCreditNote.date,
-              currencyCode: xeroCreditNote.currencyCode
+          // Mark credit note as failed
+          await this.markItemAsFailed(
+            originalRecord.id,
+            `Xero validation error: ${errorMessages}`
+          )
+
+          // Log failure
+          await logXeroSync({
+            tenant_id: tenantId,
+            operation: 'credit_note_sync',
+            record_type: 'credit_note',
+            record_id: originalRecord.id,
+            success: false,
+            details: `Credit note sync failed: ${errorMessages}`,
+            response_data: {
+              validationErrors: xeroCreditNote.validationErrors,
+              creditNote: xeroCreditNote
+            },
+            request_data: {
+              creditNote: xeroCreditNotesToSync[i].xeroCreditNote
             }
-          },
-          request_data: {
-            creditNote: {
-              type: xeroCreditNotesToSync[i].xeroCreditNote.type,
-              contact: xeroCreditNotesToSync[i].xeroCreditNote.contact,
-              lineItems: xeroCreditNotesToSync[i].xeroCreditNote.lineItems,
-              date: xeroCreditNotesToSync[i].xeroCreditNote.date,
-              reference: xeroCreditNotesToSync[i].xeroCreditNote.reference,
-              status: xeroCreditNotesToSync[i].xeroCreditNote.status,
-              currencyCode: xeroCreditNotesToSync[i].xeroCreditNote.currencyCode
+          })
+
+          failedCount++
+          continue
+        }
+
+        // Mark credit note as synced in database (with error handling for database issues)
+        try {
+          await this.markItemAsSynced(
+            originalRecord.id,
+            xeroCreditNote.creditNoteID!,
+            xeroCreditNote.creditNoteNumber!,
+            tenantId
+          )
+
+          // Log success
+          await logXeroSync({
+            tenant_id: tenantId,
+            operation: 'credit_note_sync',
+            record_type: 'credit_note',
+            record_id: originalRecord.id,
+            xero_id: xeroCreditNote.creditNoteID,
+            success: true,
+            details: `Credit note ${xeroCreditNote.creditNoteNumber} created successfully`,
+            response_data: {
+              creditNote: {
+                creditNoteID: xeroCreditNote.creditNoteID,
+                creditNoteNumber: xeroCreditNote.creditNoteNumber,
+                status: xeroCreditNote.status,
+                type: xeroCreditNote.type,
+                total: xeroCreditNote.total,
+                subTotal: xeroCreditNote.subTotal,
+                date: xeroCreditNote.date,
+                currencyCode: xeroCreditNote.currencyCode
+              }
+            },
+            request_data: {
+              creditNote: {
+                type: xeroCreditNotesToSync[i].xeroCreditNote.type,
+                contact: xeroCreditNotesToSync[i].xeroCreditNote.contact,
+                lineItems: xeroCreditNotesToSync[i].xeroCreditNote.lineItems,
+                date: xeroCreditNotesToSync[i].xeroCreditNote.date,
+                reference: xeroCreditNotesToSync[i].xeroCreditNote.reference,
+                status: xeroCreditNotesToSync[i].xeroCreditNote.status,
+                currencyCode: xeroCreditNotesToSync[i].xeroCreditNote.currencyCode
+              }
             }
-          }
-        })
+          })
+
+          syncedCount++
+        } catch (dbError) {
+          // Database error while marking as synced - credit note was created in Xero but database update failed
+          const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown database error'
+          console.error(`❌ Failed to mark credit note ${originalRecord.id} as synced in database:`, dbError)
+          console.error(
+            `CRITICAL: Credit note ${xeroCreditNote.creditNoteNumber} (${xeroCreditNote.creditNoteID}) was successfully created in Xero, but the database update failed. 
+Admin must manually update the database record with id=${originalRecord.id} and set:
+  xero_invoice_id = '${xeroCreditNote.creditNoteID}',
+  sync_status = 'synced'
+to match Xero. Immediate manual intervention is required to prevent data inconsistency.`
+          )
+          // Mark as failed so admin can see it and take action
+          await this.markItemAsFailed(
+            originalRecord.id,
+            `Credit note synced to Xero (${xeroCreditNote.creditNoteNumber}) but database update failed: ${errorMessage}`
+          )
+
+          await Sentry.captureException(dbError, {
+            level: 'error',
+            tags: {
+              component: 'xero-batch-sync',
+              operation: 'batch_credit_note_sync_success',
+              critical: 'true'
+            },
+            extra: {
+              context: 'credit_note_synced_to_xero_but_database_update_failed',
+              creditNoteRecordId: originalRecord.id,
+              xeroCreditNoteId: xeroCreditNote.creditNoteID,
+              xeroCreditNoteNumber: xeroCreditNote.creditNoteNumber,
+              batchIndex: i,
+              tenantId,
+              errorMessage: errorMessage
+            }
+          })
+
+          failedCount++
+        }
       }
 
-      console.log('✅ Xero credit note(s) created:', response.body.creditNotes?.length || 0)
-      return true
-    } catch (error) {
+      console.log(`✅ Xero credit note sync completed: ${syncedCount} synced, ${failedCount} failed`)
+      return { success: true, synced: syncedCount, failed: failedCount }
+    } catch (error: any) {
       console.error('❌ Error syncing Xero credit notes:', error)
-      return false
+
+      // The Xero SDK may serialize the error as a JSON string
+      let parsedError = error
+      if (typeof error === 'string') {
+        try {
+          parsedError = JSON.parse(error)
+        } catch (e) {
+          // If parsing fails, use original error
+          parsedError = error
+        }
+      }
+
+      // The Xero SDK wraps errors - check both error.response.body and error.body
+      const errorBody = parsedError?.response?.body || parsedError?.body || parsedError
+
+      // Check if we have Elements array (batch error response)
+      if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
+        console.log('📋 Processing individual credit note errors from Xero batch response')
+        console.log(`📋 Found ${errorBody.Elements.length} elements in error response`)
+
+        // Each Element is a credit note with ValidationErrors directly on it
+        for (let i = 0; i < errorBody.Elements.length; i++) {
+          const element = errorBody.Elements[i]
+          const originalRecord = xeroCreditNotesToSync[i]?.invoiceRecord
+
+          if (!originalRecord) {
+            console.error(`❌ No original record found for element index ${i}`)
+            continue
+          }
+
+          // Extract validation errors from the element
+          const validationErrors = element.ValidationErrors || []
+          if (validationErrors.length > 0) {
+            const errorMessages = validationErrors.map((e: any) => e.Message).join('; ')
+            console.error(`❌ Credit note validation failed for record ${originalRecord.id}:`, errorMessages)
+
+            // Mark credit note as failed with specific error
+            await this.markItemAsFailed(
+              originalRecord.id,
+              `Xero validation error: ${errorMessages}`
+            )
+
+            // Log failure
+            await logXeroSync({
+              tenant_id: tenantId,
+              operation: 'credit_note_sync',
+              record_type: 'credit_note',
+              record_id: originalRecord.id,
+              success: false,
+              details: `Credit note sync failed: ${errorMessages}`,
+              response_data: {
+                validationErrors: validationErrors,
+                creditNote: element
+              },
+              request_data: {
+                creditNote: xeroCreditNotesToSync[i]?.xeroCreditNote
+              }
+            })
+
+            failedCount++
+          } else {
+            console.log(`✅ Element ${i} has no validation errors, marking as synced`)
+            // This credit note succeeded - mark it as synced
+            const xeroCreditNoteId = element.CreditNoteID
+            const xeroCreditNoteNumber = element.CreditNoteNumber
+            if (xeroCreditNoteId && xeroCreditNoteId !== '00000000-0000-0000-0000-000000000000' && xeroCreditNoteNumber) {
+              await this.markItemAsSynced(originalRecord.id, xeroCreditNoteId, xeroCreditNoteNumber, tenantId)
+              await logXeroSync({
+                tenant_id: tenantId,
+                operation: 'credit_note_sync',
+                record_type: 'credit_note',
+                record_id: originalRecord.id,
+                success: true,
+                details: `Credit note ${xeroCreditNoteNumber} synced successfully`,
+                response_data: { creditNote: element }
+              })
+
+              syncedCount++
+            }
+          }
+        }
+      }
+
+      return { success: false, synced: syncedCount, failed: failedCount }
     }
   }
 

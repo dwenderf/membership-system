@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
 import { filterActivePlans } from '@/lib/payment-plan-utils'
+import UserLink from '@/components/UserLink'
 
 interface PaymentPlan {
   id: string
@@ -26,6 +26,7 @@ interface User {
   email: string
   firstName: string
   lastName: string
+  memberId: string | null
   paymentPlanEnabled: boolean
   activePlansCount: number
   totalPlansCount: number
@@ -250,9 +251,6 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Next Payment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -260,10 +258,17 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                 <>
                   <tr key={user.userId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {user.firstName} {user.lastName}
-                      </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
+                      <UserLink
+                        userId={user.userId}
+                        firstName={user.firstName}
+                        lastName={user.lastName}
+                        email={user.email}
+                        membershipNumber={user.memberId}
+                        showAvatar={true}
+                        showMembershipNumber={true}
+                        fromPath="/admin/reports/payment-plans"
+                        fromLabel="Payment Plans"
+                      />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -305,20 +310,12 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.nextPaymentDate ? formatDateString(user.nextPaymentDate) : '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <Link
-                        href={`/admin/reports/users/${user.userId}?from=payment-plans`}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View Details
-                      </Link>
-                    </td>
                   </tr>
 
                   {/* Expanded row showing individual plans */}
                   {expandedRows.has(user.userId) && user.plans.length > 0 && (
                     <tr key={`${user.userId}-details`}>
-                      <td colSpan={8} className="px-6 py-4 bg-gray-50">
+                      <td colSpan={7} className="px-6 py-4 bg-gray-50">
                         <table className="min-w-full divide-y divide-gray-200 bg-white rounded border border-gray-200">
                           <thead className="bg-gray-100">
                             <tr>

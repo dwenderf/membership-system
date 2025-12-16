@@ -5,9 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import UserLink from '@/components/UserLink'
+import InvoiceDetailLink from '@/components/InvoiceDetailLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
+import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface RegistrationData {
+  id: string
   registration_id: string
   registration_name: string
   season_name: string
@@ -16,6 +20,7 @@ interface RegistrationData {
   first_name: string
   last_name: string
   email: string
+  member_id: number | null
   category_name: string
   category_id: string
   registration_category_name: string
@@ -26,6 +31,8 @@ interface RegistrationData {
   presale_code_used: string | null
   is_lgbtq: boolean | null
   is_goalie: boolean
+  payment_id: string | null
+  invoice_number: string | null
 }
 
 interface WaitlistData {
@@ -488,10 +495,14 @@ export default function RegistrationDetailPage() {
                       return 0
                     })
 
+                    // Count paid and refunded registrations separately
+                    const paidCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
+                    const refundedCount = categoryRegistrations.filter(r => r.payment_status === 'refunded').length
+
                     return (
                       <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
                         <h4 className="text-md font-semibold text-gray-900 mb-4">
-                          {categoryName} ({categoryRegistrations.length})
+                          {categoryName} ({paidCount} paid{refundedCount > 0 ? `, ${refundedCount} refunded` : ''})
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">
@@ -499,11 +510,10 @@ export default function RegistrationDetailPage() {
                               <tr>
                                 {[
                                   { key: 'first_name', label: 'Participant' },
-                                  { key: 'email', label: 'Email' },
+                                  { key: 'payment_status', label: 'Payment Status' },
                                   { key: 'is_lgbtq', label: 'LGBTQ+' },
                                   { key: 'is_goalie', label: 'Goalie' },
                                   { key: 'amount_paid', label: 'Amount Paid' },
-                                  { key: 'registration_fee', label: 'Registration Fee' },
                                   { key: 'registered_at', label: 'Registered At' },
                                   { key: 'presale_code_used', label: 'Presale Code' }
                                 ].map(({ key, label }) => (
@@ -522,16 +532,34 @@ export default function RegistrationDetailPage() {
                                     </div>
                                   </th>
                                 ))}
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Details
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {sortedCategoryRegistrations.map((registration, index) => (
-                                <tr key={index} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {registration.first_name} {registration.last_name}
+                                <tr key={index} className={`hover:bg-gray-50 ${registration.payment_status === 'refunded' ? 'opacity-60' : ''}`}>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <UserLink
+                                      userId={registration.user_id}
+                                      firstName={registration.first_name}
+                                      lastName={registration.last_name}
+                                      email={registration.email}
+                                      membershipNumber={registration.member_id}
+                                      showMembershipNumber={true}
+                                      fromPath={`/admin/reports/registrations/${registrationId}`}
+                                      fromLabel={registrationName || 'Registration Detail'}
+                                    />
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {registration.email}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                      registration.payment_status === 'paid'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      {registration.payment_status === 'paid' ? 'Paid' : 'Refunded'}
+                                    </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getLgbtqStatusStyles(registration.is_lgbtq)}`}>
@@ -545,9 +573,6 @@ export default function RegistrationDetailPage() {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                     {formatCurrency(registration.amount_paid)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {formatCurrency(registration.registration_fee)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <div>
@@ -564,6 +589,20 @@ export default function RegistrationDetailPage() {
                                       </span>
                                     ) : (
                                       <span className="text-gray-400">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    {registration.payment_id ? (
+                                      <InvoiceDetailLink
+                                        userId={registration.user_id}
+                                        invoiceId={registration.payment_id}
+                                        label="Detail"
+                                        showIcon={false}
+                                        fromPath={`/admin/reports/registrations/${registrationId}`}
+                                        fromLabel={registrationName || 'Registration Detail'}
+                                      />
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
                                     )}
                                   </td>
                                 </tr>
@@ -729,6 +768,7 @@ export default function RegistrationDetailPage() {
           }}
         />
       )}
+
     </div>
   )
 }

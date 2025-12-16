@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDateTime } from '@/lib/date-utils'
+import UserLink from '@/components/UserLink'
+import InvoiceDetailLink from '@/components/InvoiceDetailLink'
 
 interface ReportData {
   dateRange: {
@@ -94,6 +96,11 @@ interface ReportData {
     id: string
     invoiceNumber: string
     customerName: string
+    userId: string
+    firstName: string | null
+    lastName: string | null
+    email: string | null
+    memberId: string | null
     amount: number
     type: string
     date: string
@@ -719,7 +726,7 @@ export default function ReportsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
@@ -731,11 +738,35 @@ export default function ReportsPage() {
                   {reportData.recentTransactions.length > 0 ? (
                     reportData.recentTransactions.map((transaction) => (
                       <tr key={transaction.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {transaction.invoiceNumber || 'N/A'}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          {transaction.userId && transaction.id ? (
+                            <InvoiceDetailLink
+                              userId={transaction.userId}
+                              invoiceId={transaction.id}
+                              label={transaction.invoiceNumber || 'N/A'}
+                              fromPath="/admin/reports/financial"
+                              fromLabel="Financial Reports"
+                            />
+                          ) : (
+                            <span className="text-gray-400">{transaction.invoiceNumber || 'N/A'}</span>
+                          )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {transaction.customerName}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {transaction.userId ? (
+                            <UserLink
+                              userId={transaction.userId}
+                              firstName={transaction.firstName}
+                              lastName={transaction.lastName}
+                              email={transaction.email}
+                              membershipNumber={transaction.memberId}
+                              showAvatar={false}
+                              showMembershipNumber={true}
+                              fromPath="/admin/reports/financial"
+                              fromLabel="Financial Reports"
+                            />
+                          ) : (
+                            <span className="text-gray-900">{transaction.customerName}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

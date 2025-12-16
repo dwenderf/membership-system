@@ -211,8 +211,10 @@ export default function RefundModal({
 
       if (refundType === 'proportional') {
         const amount = parseFloat(refundAmount)
-        
-        if (isNaN(amount) || amount <= 0) {
+
+        // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+        const minAllowed = isRegistrationPayment === true ? 0 : 0.01
+        if (isNaN(amount) || amount < minAllowed) {
           setError('Please enter a valid refund amount')
           return
         }
@@ -266,7 +268,7 @@ export default function RefundModal({
     setError('')
 
     try {
-      const response = await fetch('/api/admin/refunds/confirm', {
+      const response = await fetch('/api/admin/refunds/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -330,7 +332,9 @@ export default function RefundModal({
   // Validate refund amount in real-time
   const isValidAmount = () => {
     const amountInCents = Math.round(parseFloat(refundAmount) * 100)
-    return !isNaN(amountInCents) && amountInCents > 0 && amountInCents <= availableAmount
+    // Allow zero-dollar refunds for registration payments (to cancel free registrations)
+    const minAmount = isRegistrationPayment === true ? 0 : 1
+    return !isNaN(amountInCents) && amountInCents >= minAmount && amountInCents <= availableAmount
   }
 
   // Validate that reason is provided
@@ -466,7 +470,7 @@ export default function RefundModal({
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     step="0.01"
-                    min="0.01"
+                    min={isRegistrationPayment === true ? "0.00" : "0.01"}
                     max={(availableAmount / 100).toFixed(2)}
                     className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0.00"
@@ -484,10 +488,25 @@ export default function RefundModal({
                 </div>
                 {refundAmount && !isValidAmount() && (
                   <div className="mt-1 text-xs text-red-600">
-                    Amount must be between $0.01 and {formatAmount(availableAmount)}
+                    Amount must be between {isRegistrationPayment === true ? '$0.00' : '$0.01'} and {formatAmount(availableAmount)}
                   </div>
                 )}
               </div>
+
+              {/* Warning for proportional refunds on registration payments */}
+              {isRegistrationPayment && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-xs text-yellow-800">
+                      <div className="font-semibold">Registration Status Update</div>
+                      <div className="mt-1">This proportional refund will automatically mark the user&apos;s registration(s) as &quot;refunded&quot;, removing them from the active roster and freeing up their spot for others.</div>
+                    </div>
+                  </div>
+                </div>
+              )}
                 </>
               ) : (
                 /* Discount Code Refund Fields */

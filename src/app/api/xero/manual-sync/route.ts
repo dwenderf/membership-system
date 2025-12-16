@@ -37,12 +37,12 @@ export async function POST(request: NextRequest) {
       initiator,
       startTime,
       {
-        processed: results.invoices.synced + results.invoices.failed + results.payments.synced + results.payments.failed,
-        successful: results.invoices.synced + results.payments.synced,
-        failed: results.invoices.failed + results.payments.failed
+        processed: results.invoices.synced + results.invoices.failed + results.credit_notes.synced + results.credit_notes.failed + results.payments.synced + results.payments.failed,
+        successful: results.invoices.synced + results.credit_notes.synced + results.payments.synced,
+        failed: results.invoices.failed + results.credit_notes.failed + results.payments.failed
       }
     )
-    
+
     // Check for connection failures
     if (results.connectionStatus === 'failed') {
       console.log('❌ Manual Xero sync failed: Connection authentication failed')
@@ -68,9 +68,13 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Manual Xero sync completed:', {
       invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
+      credit_notes: `${results.credit_notes.synced} synced, ${results.credit_notes.failed} failed`,
       payments: `${results.payments.synced} synced, ${results.payments.failed} failed`,
       connectionStatus: results.connectionStatus
     })
+
+    const totalSynced = results.invoices.synced + results.credit_notes.synced + results.payments.synced
+    const totalFailed = results.invoices.failed + results.credit_notes.failed + results.payments.failed
 
     return NextResponse.json({
       success: true,
@@ -82,13 +86,18 @@ export async function POST(request: NextRequest) {
           failed: results.invoices.failed,
           total_processed: results.invoices.synced + results.invoices.failed
         },
+        credit_notes: {
+          synced: results.credit_notes.synced,
+          failed: results.credit_notes.failed,
+          total_processed: results.credit_notes.synced + results.credit_notes.failed
+        },
         payments: {
           synced: results.payments.synced,
           failed: results.payments.failed,
           total_processed: results.payments.synced + results.payments.failed
         },
-        total_synced: results.invoices.synced + results.payments.synced,
-        total_failed: results.invoices.failed + results.payments.failed
+        total_synced: totalSynced,
+        total_failed: totalFailed
       }
     })
 

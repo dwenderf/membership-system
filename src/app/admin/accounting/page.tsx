@@ -105,6 +105,105 @@ interface SyncStats {
   ignored_count?: number
 }
 
+// Component to display individual pending items with expand/collapse state
+function PendingItemCard({
+  item,
+  itemType,
+  bgColor,
+  borderColor,
+  badgeColor
+}: {
+  item: PendingItem
+  itemType: 'invoice' | 'credit_note' | 'payment'
+  bgColor: string
+  borderColor: string
+  badgeColor: string
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const isInvoice = itemType === 'invoice'
+  const isCreditNote = itemType === 'credit_note'
+  const isPayment = itemType === 'payment'
+
+  // Get user data based on item type
+  let user: { first_name: string | null; last_name: string | null; member_id: string | null } | undefined
+  if (isInvoice || isCreditNote) {
+    user = item.payments?.users
+  } else if (isPayment) {
+    user = item.xero_invoices?.payments?.users
+  }
+
+  // For credit notes, also check staging metadata as fallback
+  const metadata = item.staging_metadata as any
+
+  // Use Xero contact naming convention: "First Last - MemberID"
+  const userDisplayName = user?.first_name && user?.last_name
+    ? user.member_id
+      ? `${user.first_name} ${user.last_name} - ${user.member_id}`
+      : `${user.first_name} ${user.last_name}`
+    : metadata?.customer?.name || 'Unknown User'
+
+  const itemLabel = isCreditNote ? 'Credit Note' : isInvoice ? 'Invoice' : 'Payment'
+
+  return (
+    <div key={`pending-${itemType}-${item.id}`} className={`p-3 ${bgColor} rounded-lg border ${borderColor}`}>
+      <div className="flex items-start">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeColor}`}>
+                {itemLabel}
+              </span>
+              <span className="ml-2 text-sm font-medium text-gray-900">
+                {userDisplayName}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <time className="text-xs text-gray-500">
+                Staged: {new Date(item.last_synced_at).toLocaleString()}
+              </time>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {isExpanded ? '▼ Hide Details' : '▶ Show Details'}
+              </button>
+            </div>
+          </div>
+          <div className="mt-1 flex items-center space-x-4 text-sm text-gray-600">
+            <span><strong>Status:</strong> {item.sync_status}</span>
+            {isInvoice && <span><strong>Amount:</strong> ${(item.net_amount || 0) / 100}</span>}
+            {isCreditNote && <span><strong>Refund Amount:</strong> ${Math.abs(item.net_amount || 0) / 100}</span>}
+            {item.payments?.stripe_payment_intent_id && (
+              <span className="text-xs font-mono">
+                <strong>Payment Intent:</strong> {item.payments.stripe_payment_intent_id}
+              </span>
+            )}
+            {isCreditNote && metadata?.refund_id && (
+              <span className="text-xs font-mono">
+                <strong>Refund ID:</strong> {metadata.refund_id.slice(0, 8)}...
+              </span>
+            )}
+            {isPayment && item.xero_invoices?.payments?.stripe_payment_intent_id && (
+              <span className="text-xs font-mono">
+                <strong>Payment Intent:</strong> {item.xero_invoices.payments.stripe_payment_intent_id}
+              </span>
+            )}
+          </div>
+          {isExpanded && item.staging_metadata && (
+            <div className="mt-2 text-xs">
+              <div className="font-medium text-gray-700 mb-1">Staging Metadata:</div>
+              <pre className="bg-white p-2 rounded border border-gray-300 overflow-x-auto">
+                {JSON.stringify(item.staging_metadata, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Component to display individual failed items with expand/collapse state
 function FailedItemCard({
   item,
@@ -350,12 +449,22 @@ export default function AccountingIntegrationPage() {
       if (response.ok) {
         const data = await response.json()
         const resetCount = data.reset_results.invoices + data.reset_results.payments
-        const syncedCount = data.sync_results.total_synced
-        showSuccess(`Retry completed: ${resetCount} items reset, ${syncedCount} synced successfully`)
-        
+        const { total_synced, total_failed } = data.sync_results
+
+        // Show appropriate toast based on results
+        if (total_failed === 0 && total_synced > 0) {
+          showSuccess(`Retry completed: ${resetCount} items reset, ${total_synced} synced successfully`)
+        } else if (total_synced === 0 && total_failed > 0) {
+          showError(`Retry completed: ${resetCount} items reset, but all ${total_failed} failed to sync`)
+        } else if (total_synced > 0 && total_failed > 0) {
+          showError(`Retry partially completed: ${resetCount} items reset, ${total_synced} synced, ${total_failed} failed`)
+        } else {
+          showSuccess(`Retry completed: ${resetCount} items reset`)
+        }
+
         // Clear selections
         setSelectedFailedItems(new Set())
-        
+
         // Refresh the status to get updated counts
         await fetchXeroStatus()
       } else {
@@ -563,132 +672,42 @@ export default function AccountingIntegrationPage() {
               {(syncStats.pending_invoices > 0 || syncStats.pending_credit_notes > 0 || syncStats.pending_payments > 0) && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-gray-900 mb-3">Pending Items Details</h3>
-                  
+
                   {/* Pending Invoices */}
-                  {syncStats.pending_invoices_list.map((item) => {
-                    const user = item.payments?.users
-                    
-                    // Use Xero contact naming convention: "First Last - MemberID"
-                    const userDisplayName = user?.first_name && user?.last_name 
-                      ? user.member_id 
-                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
-                        : `${user.first_name} ${user.last_name}`
-                      : 'Unknown User'
-                    
-                    return (
-                      <div key={`pending-inv-${item.id}`} className="flex items-start p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                Invoice
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-gray-900">
-                                {userDisplayName}
-                              </span>
-                              <span className="ml-2 text-xs text-gray-500 font-mono">
-                                ID: {item.id}
-                              </span>
-                            </div>
-                            <time className="text-xs text-gray-500">
-                              Staged: {new Date(item.last_synced_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <div className="mt-1 flex items-center space-x-4 text-sm text-gray-600">
-                            <span><strong>Status:</strong> {item.sync_status}</span>
-                            <span><strong>Amount:</strong> ${(item.net_amount || 0) / 100}</span>
-                            {item.payments?.stripe_payment_intent_id && (
-                              <span className="text-xs font-mono">
-                                <strong>Payment Intent:</strong> {item.payments.stripe_payment_intent_id}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {syncStats.pending_invoices_list.map((item) => (
+                    <PendingItemCard
+                      key={`pending-inv-${item.id}`}
+                      item={item}
+                      itemType="invoice"
+                      bgColor="bg-blue-50"
+                      borderColor="border-blue-200"
+                      badgeColor="bg-blue-100 text-blue-800"
+                    />
+                  ))}
 
                   {/* Pending Credit Notes */}
-                  {syncStats.pending_credit_notes_list.map((item) => {
-                    // For credit notes, the user info comes from staging_metadata since they're linked to refunds
-                    const metadata = item.staging_metadata as any
-                    const userDisplayName = metadata?.customer?.name || 'Unknown User'
-                    
-                    return (
-                      <div key={`pending-cn-${item.id}`} className="flex items-start p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Credit Note
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-gray-900">
-                                {userDisplayName}
-                              </span>
-                              <span className="ml-2 text-xs text-gray-500 font-mono">
-                                ID: {item.id}
-                              </span>
-                            </div>
-                            <time className="text-xs text-gray-500">
-                              Staged: {new Date(item.last_synced_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <div className="mt-1 flex items-center space-x-4 text-sm text-gray-600">
-                            <span><strong>Status:</strong> {item.sync_status}</span>
-                            <span><strong>Refund Amount:</strong> ${Math.abs(item.net_amount || 0) / 100}</span>
-                            {metadata?.refund_id && (
-                              <span className="text-xs font-mono">
-                                <strong>Refund ID:</strong> {metadata.refund_id.slice(0, 8)}...
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {syncStats.pending_credit_notes_list.map((item) => (
+                    <PendingItemCard
+                      key={`pending-cn-${item.id}`}
+                      item={item}
+                      itemType="credit_note"
+                      bgColor="bg-green-50"
+                      borderColor="border-green-200"
+                      badgeColor="bg-green-100 text-green-800"
+                    />
+                  ))}
 
                   {/* Pending Payments */}
-                  {syncStats.pending_payments_list.map((item) => {
-                    const user = item.xero_invoices?.payments?.users
-                    
-                    // Use Xero contact naming convention: "First Last - MemberID"
-                    const userDisplayName = user?.first_name && user?.last_name 
-                      ? user.member_id 
-                        ? `${user.first_name} ${user.last_name} - ${user.member_id}`
-                        : `${user.first_name} ${user.last_name}`
-                      : 'Unknown User'
-                    
-                    return (
-                      <div key={`pending-pay-${item.id}`} className="flex items-start p-3 bg-purple-50 rounded-lg border border-purple-200">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                Payment
-                              </span>
-                              <span className="ml-2 text-sm font-medium text-gray-900">
-                                {userDisplayName}
-                              </span>
-                              <span className="ml-2 text-xs text-gray-500 font-mono">
-                                ID: {item.id}
-                              </span>
-                            </div>
-                            <time className="text-xs text-gray-500">
-                              Staged: {new Date(item.last_synced_at).toLocaleString()}
-                            </time>
-                          </div>
-                          <div className="mt-1 flex items-center space-x-4 text-sm text-gray-600">
-                            <span><strong>Status:</strong> {item.xero_invoices?.payments?.status || 'Unknown'}</span>
-                            {item.xero_invoices?.payments?.stripe_payment_intent_id && (
-                              <span className="text-xs font-mono">
-                                <strong>Payment Intent:</strong> {item.xero_invoices.payments.stripe_payment_intent_id}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {syncStats.pending_payments_list.map((item) => (
+                    <PendingItemCard
+                      key={`pending-pay-${item.id}`}
+                      item={item}
+                      itemType="payment"
+                      bgColor="bg-purple-50"
+                      borderColor="border-purple-200"
+                      badgeColor="bg-purple-100 text-purple-800"
+                    />
+                  ))}
                 </div>
               )}
 

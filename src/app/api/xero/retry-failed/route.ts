@@ -115,9 +115,10 @@ export async function POST(request: NextRequest) {
       reset_results: retryResults,
       sync_results: {
         invoices: syncResults.invoices,
+        credit_notes: syncResults.credit_notes,
         payments: syncResults.payments,
-        total_synced: syncResults.invoices.synced + syncResults.payments.synced,
-        total_failed: syncResults.invoices.failed + syncResults.payments.failed
+        total_synced: syncResults.invoices.synced + syncResults.credit_notes.synced + syncResults.payments.synced,
+        total_failed: syncResults.invoices.failed + syncResults.credit_notes.failed + syncResults.payments.failed
       }
     })
 

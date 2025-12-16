@@ -354,14 +354,19 @@ export async function GET(request: NextRequest) {
 
     // Process recent transactions from the view
     let processedTransactions = recentTransactions?.map(transaction => {
-      const customerName = transaction.first_name && transaction.last_name 
-        ? `${transaction.first_name} ${transaction.last_name}`.trim() 
+      const customerName = transaction.first_name && transaction.last_name
+        ? `${transaction.first_name} ${transaction.last_name}`.trim()
         : 'Unknown'
 
       return {
         id: transaction.transaction_id,
         invoiceNumber: transaction.invoice_number || 'N/A',
         customerName,
+        userId: transaction.user_id,
+        firstName: transaction.first_name,
+        lastName: transaction.last_name,
+        email: transaction.email,
+        memberId: transaction.member_id,
         amount: transaction.amount || 0,
         type: transaction.transaction_type || 'unknown',
         date: transaction.transaction_date,

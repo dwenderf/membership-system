@@ -167,9 +167,9 @@ CREATE TABLE refunds (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure refund amount is positive
-    CONSTRAINT chk_refund_amount_positive CHECK (amount > 0),
+
+    -- Ensure refund amount is non-negative (allows zero for free registration cancellations)
+    CONSTRAINT chk_refund_amount_not_negative CHECK (amount >= 0),
     -- Ensure Stripe fee refunded is not negative
     CONSTRAINT chk_stripe_fee_refunded_not_negative CHECK (stripe_fee_refunded >= 0)
 );
@@ -267,8 +267,18 @@ CREATE TABLE user_registrations (
     reservation_expires_at TIMESTAMP WITH TIME ZONE, -- When the spot reservation expires (user must complete payment before this time)
     registered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, registration_id)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Auto-updated by trigger
+    refunded_at TIMESTAMP WITH TIME ZONE -- Set when registration is refunded
+    -- Note: UNIQUE constraint removed in favor of partial index user_registrations_active_unique
+    -- which only enforces uniqueness for paid registrations, allowing re-registration after refund
+    -- See migration: 2025-12-12-allow-reregistration-after-refund.sql
 );
+
+-- Partial unique index: only allow one paid registration per user+registration combination
+-- Allows re-registration after refund since refunded/failed registrations are excluded
+CREATE UNIQUE INDEX IF NOT EXISTS user_registrations_active_unique
+ON user_registrations(user_id, registration_id)
+WHERE payment_status = 'paid';
 
 -- Registration pricing tiers table
 CREATE TABLE registration_pricing_tiers (

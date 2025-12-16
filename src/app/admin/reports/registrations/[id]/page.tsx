@@ -495,14 +495,14 @@ export default function RegistrationDetailPage() {
                       return 0
                     })
 
-                    // Count active and refunded registrations separately
-                    const activeCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
+                    // Count paid and refunded registrations separately
+                    const paidCount = categoryRegistrations.filter(r => r.payment_status === 'paid').length
                     const refundedCount = categoryRegistrations.filter(r => r.payment_status === 'refunded').length
 
                     return (
                       <div key={categoryName} className="bg-white p-6 rounded-lg shadow">
                         <h4 className="text-md font-semibold text-gray-900 mb-4">
-                          {categoryName} ({activeCount} active{refundedCount > 0 ? `, ${refundedCount} refunded` : ''})
+                          {categoryName} ({paidCount} paid{refundedCount > 0 ? `, ${refundedCount} refunded` : ''})
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">
@@ -510,7 +510,7 @@ export default function RegistrationDetailPage() {
                               <tr>
                                 {[
                                   { key: 'first_name', label: 'Participant' },
-                                  { key: 'payment_status', label: 'Active' },
+                                  { key: 'payment_status', label: 'Payment Status' },
                                   { key: 'is_lgbtq', label: 'LGBTQ+' },
                                   { key: 'is_goalie', label: 'Goalie' },
                                   { key: 'amount_paid', label: 'Amount Paid' },
@@ -539,7 +539,7 @@ export default function RegistrationDetailPage() {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {sortedCategoryRegistrations.map((registration, index) => (
-                                <tr key={index} className="hover:bg-gray-50">
+                                <tr key={index} className={`hover:bg-gray-50 ${registration.payment_status === 'refunded' ? 'opacity-60' : ''}`}>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <UserLink
                                       userId={registration.user_id}

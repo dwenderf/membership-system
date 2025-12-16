@@ -196,7 +196,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     // DEPENDENCY: Assumes payment.status is correctly maintained throughout the system:
     // - 'completed' for partial refunds (or no refund)
     // - 'refunded' for full and zero-dollar refunds
-    // See refund_issues_summary.md for historical data issues that may require manual fixes
+    // See docs/troubleshooting/refund_issues_summary.md for historical data issues that may require manual fixes
     const isPartiallyRefunded = totalRefunded > 0 && payment.status === 'completed'
     const isFullyRefunded = payment.status === 'refunded'
 

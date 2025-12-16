@@ -271,6 +271,7 @@ CREATE TABLE user_registrations (
     refunded_at TIMESTAMP WITH TIME ZONE -- Set when registration is refunded
     -- Note: UNIQUE constraint removed in favor of partial index user_registrations_active_unique
     -- which only enforces uniqueness for paid registrations, allowing re-registration after refund
+    -- See migration: 2025-12-12-allow-reregistration-after-refund.sql
 );
 
 -- Partial unique index: only allow one paid registration per user+registration combination

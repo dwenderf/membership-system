@@ -382,7 +382,6 @@ export default function MembershipReportsPage() {
                               email={member.email}
                               showAvatar={true}
                               showMembershipNumber={false}
-                              showEmail={true}
                               fromPath="/admin/reports/memberships"
                               fromLabel="Active Members"
                             />

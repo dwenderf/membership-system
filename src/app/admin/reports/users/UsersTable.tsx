@@ -168,7 +168,6 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                           lastName={user.last_name}
                           email={user.email}
                           showAvatar={true}
-                          showEmail={true}
                           fromPath="/admin/reports/users"
                           fromLabel="Users Report"
                         />

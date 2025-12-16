@@ -266,7 +266,6 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                         membershipNumber={user.memberId}
                         showAvatar={true}
                         showMembershipNumber={true}
-                        showEmail={true}
                         fromPath="/admin/reports/payment-plans"
                         fromLabel="Payment Plans"
                       />

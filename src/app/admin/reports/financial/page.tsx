@@ -761,7 +761,6 @@ export default function ReportsPage() {
                               membershipNumber={transaction.memberId}
                               showAvatar={false}
                               showMembershipNumber={true}
-                              showEmail={true}
                               fromPath="/admin/reports/financial"
                               fromLabel="Financial Reports"
                             />

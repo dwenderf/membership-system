@@ -19,6 +19,7 @@ interface RegistrationData {
   user_id: string
   first_name: string
   last_name: string
+  email: string
   member_id: number | null
   category_name: string
   category_id: string
@@ -544,6 +545,7 @@ export default function RegistrationDetailPage() {
                                       userId={registration.user_id}
                                       firstName={registration.first_name}
                                       lastName={registration.last_name}
+                                      email={registration.email}
                                       membershipNumber={registration.member_id}
                                       showMembershipNumber={true}
                                       fromPath={`/admin/reports/registrations/${registrationId}`}

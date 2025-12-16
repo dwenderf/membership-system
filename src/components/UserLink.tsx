@@ -90,7 +90,7 @@ export default function UserLink({
   membershipNumber,
   showMembershipNumber = true,
   showAvatar = true,
-  showEmail = false,
+  showEmail = true,
   useXeroName = false,
   className = '',
   fromPath,

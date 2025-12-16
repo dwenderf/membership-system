@@ -225,11 +225,15 @@ export async function POST(request: NextRequest) {
             error: paymentUpdateError,
             paymentId
           })
-        } else {
-          console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
+          return NextResponse.json(
+            { error: 'Failed to update payment status to refunded', details: paymentUpdateError },
+            { status: 500 }
+          )
         }
 
-        // Send refund email notification
+        console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
+
+        // Send refund email notification (only after successful payment update)
         try {
           const { data: user } = await supabase
             .from('users')

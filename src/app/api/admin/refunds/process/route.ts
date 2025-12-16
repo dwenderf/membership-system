@@ -133,7 +133,7 @@ async function sendRefundEmail(
   }
 }
 
-// POST /api/admin/refunds/confirm - Submit staged refund to Stripe
+// POST /api/admin/refunds/process - Process refund (create refund record, submit to Stripe, update registrations)
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const logger = Logger.getInstance()

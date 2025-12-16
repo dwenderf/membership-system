@@ -268,7 +268,7 @@ export default function RefundModal({
     setError('')
 
     try {
-      const response = await fetch('/api/admin/refunds/confirm', {
+      const response = await fetch('/api/admin/refunds/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

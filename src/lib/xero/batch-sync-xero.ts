@@ -1122,8 +1122,13 @@ export class XeroBatchSyncManager {
           // Database error while marking as synced - credit note was created in Xero but database update failed
           const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown database error'
           console.error(`❌ Failed to mark credit note ${originalRecord.id} as synced in database:`, dbError)
-          console.error(`CRITICAL: Credit note ${xeroCreditNote.creditNoteNumber} (${xeroCreditNote.creditNoteID}) was successfully created in Xero, but the database update failed. Admin must manually update xero_invoice_id and sync_status in the database to match Xero. Immediate manual intervention is required to prevent data inconsistency.`)
-
+          console.error(
+            `CRITICAL: Credit note ${xeroCreditNote.creditNoteNumber} (${xeroCreditNote.creditNoteID}) was successfully created in Xero, but the database update failed. 
+Admin must manually update the database record with id=${originalRecord.id} and set:
+  xero_invoice_id = '${xeroCreditNote.creditNoteID}',
+  sync_status = 'synced'
+to match Xero. Immediate manual intervention is required to prevent data inconsistency.`
+          )
           // Mark as failed so admin can see it and take action
           await this.markItemAsFailed(
             originalRecord.id,

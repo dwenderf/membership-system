@@ -1142,7 +1142,10 @@ export class XeroStagingManager {
         if (refundAmountCents === 0 && totalInvoiceAmount === 0) {
           lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => ({
             description: `Credit: ${item.description}`,
-            line_amount: centsToCents(-item.line_amount), // Reverse the sign of each line item
+            // Reverse the sign of each line item for credit note:
+            // - Revenue items (positive) become negative (refund reduces revenue)
+            // - Discount items (negative) become positive (refund gives back discount capacity)
+            line_amount: centsToCents(-item.line_amount),
             account_code: item.account_code,
             tax_type: item.tax_type,
             line_item_type: item.line_item_type,

@@ -193,7 +193,10 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
     const invoiceAmount = originalInvoice?.net_amount ?? payment.final_amount
     const netAmount = invoiceAmount - totalRefunded
     // Use payment status instead of calculating refund flags
-    // payment.status is updated to 'refunded' for full and zero-dollar refunds
+    // DEPENDENCY: Assumes payment.status is correctly maintained throughout the system:
+    // - 'completed' for partial refunds (or no refund)
+    // - 'refunded' for full and zero-dollar refunds
+    // See refund_issues_summary.md for historical data issues that may require manual fixes
     const isPartiallyRefunded = totalRefunded > 0 && payment.status === 'completed'
     const isFullyRefunded = payment.status === 'refunded'
 

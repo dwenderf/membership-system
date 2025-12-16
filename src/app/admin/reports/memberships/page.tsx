@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
+import UserLink from '@/components/UserLink'
 
 interface MembershipType {
   id: string
@@ -12,7 +13,10 @@ interface MembershipType {
 }
 
 interface MemberData {
+  user_id: string
   member_id: string
+  first_name: string | null
+  last_name: string | null
   full_name: string
   email: string
   member_since: string
@@ -108,7 +112,10 @@ export default function MembershipReportsPage() {
 
       // Process the data - much simpler now since the view handles all the logic
       const membersList: MemberData[] = membershipData?.map((item: any) => ({
+        user_id: item.user_id || '',
         member_id: item.member_id?.toString() || 'N/A',
+        first_name: item.first_name,
+        last_name: item.last_name,
         full_name: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A',
         email: item.email || 'N/A',
         member_since: item.onboarding_completed_at || 'N/A',
@@ -362,7 +369,19 @@ export default function MembershipReportsPage() {
                           {member.member_id}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {member.full_name}
+                          {member.user_id ? (
+                            <UserLink
+                              userId={member.user_id}
+                              firstName={member.first_name}
+                              lastName={member.last_name}
+                              showAvatar={true}
+                              showMembershipNumber={false}
+                              fromPath="/admin/reports/memberships"
+                              fromLabel="Active Members"
+                            />
+                          ) : (
+                            <span>{member.full_name}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {member.email}

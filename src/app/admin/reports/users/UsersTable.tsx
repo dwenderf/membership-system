@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
 import { formatDate } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
 
@@ -153,7 +152,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Attributes
               </th>
-              <th 
+              <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleSort('created_at')}
               >
@@ -161,9 +160,6 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                   <span>Created</span>
                   <SortIcon field="created_at" />
                 </div>
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
               </th>
             </tr>
           </thead>
@@ -244,20 +240,12 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                         : 'Unknown'
                       }
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Link
-                        href={`/admin/reports/users/${user.id}`}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View Details
-                      </Link>
-                    </td>
                   </tr>
                 )
               })
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>

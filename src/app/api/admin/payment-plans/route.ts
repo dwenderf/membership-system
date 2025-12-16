@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     // Build query for users (exclude deleted users)
     const { data: users, error: usersError } = await adminSupabase
       .from('users')
-      .select('id, email, first_name, last_name, created_at, payment_plan_enabled')
+      .select('id, email, first_name, last_name, member_id, created_at, payment_plan_enabled')
       .is('deleted_at', null)
       .order('email')
 
@@ -132,6 +132,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
+        memberId: user.member_id,
         paymentPlanEnabled: user.payment_plan_enabled || false,
         activePlansCount: activePlans.length,
         totalPlansCount: userPlans.length,

@@ -137,7 +137,7 @@ class EmailService {
             email_data: data,
             loops_event_id: loopsEventId,
             error_message: sendSucceeded ? null : 'Failed to send via Loops',
-            sent_at: sendSucceeded ? new Date().toISOString() : null
+            sent_at: new Date().toISOString() // Always set, even for failures
           })
           .select('id')
           .single()
@@ -185,7 +185,8 @@ class EmailService {
             triggered_by: triggeredBy,
             triggered_by_user_id: triggeredByUserId,
             email_data: data,
-            error_message: error instanceof Error ? error.message : 'Unknown error'
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+            sent_at: new Date().toISOString() // Always set, even for failures
           })
       } catch (logError) {
         console.error('Failed to log email send failure:', logError)

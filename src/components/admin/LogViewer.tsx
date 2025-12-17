@@ -198,7 +198,10 @@ export default function LogViewer() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Log Type</label>
             <select
               value={filters.logType}
-              onChange={(e) => setFilters(prev => ({ ...prev, logType: e.target.value as LogType }))}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, logType: e.target.value as LogType }))
+                setSearchTerm('') // Clear search when switching log types
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="email_logs">📧 Emails Sent</option>

@@ -951,7 +951,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
   }
 }
 
-// Helper function to send refund notification email
+// Helper function to stage refund notification email
 async function sendRefundNotificationEmail(refundId: string, userId: string, paymentId: string) {
   try {
     const supabase = createAdminClient()
@@ -1000,25 +1000,43 @@ async function sendRefundNotificationEmail(refundId: string, userId: string, pay
       .eq('invoice_type', 'ACCREC')
       .single()
 
-    const invoiceNumber = invoice?.invoice_number || `PAY-${paymentId.slice(0, 8)}`
+    const invoiceNumber = invoice?.invoice_number || 'N/A'
 
-    // Send the refund notification using the existing email service
-    await emailService.sendRefundNotification({
-      userId: userId,
-      email: user.email,
-      userName: `${user.first_name} ${user.last_name}`,
-      refundAmount: refund.amount,
-      originalAmount: payment.final_amount,
-      reason: refund.reason,
-      paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
-      invoiceNumber: invoiceNumber,
-      refundDate: formatDate(new Date(refund.created_at))
+    // Stage the refund notification email for batch processing
+    const { emailStagingManager } = await import('@/lib/email/staging')
+
+    if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
+      console.warn('⚠️ LOOPS_REFUND_TEMPLATE_ID not configured, skipping refund email')
+      return
+    }
+
+    await emailStagingManager.stageEmail({
+      user_id: userId,
+      email_address: user.email,
+      event_type: 'refund.processed',
+      subject: `Refund Processed - $${(refund.amount / 100).toFixed(2)}`,
+      template_id: process.env.LOOPS_REFUND_TEMPLATE_ID,
+      email_data: {
+        userName: `${user.first_name} ${user.last_name}`,
+        refundAmount: (refund.amount / 100).toFixed(2),
+        originalAmount: (payment.final_amount / 100).toFixed(2),
+        reason: refund.reason || 'Refund processed by administrator',
+        paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
+        invoiceNumber: invoiceNumber,
+        refundDate: formatDate(new Date(refund.created_at)),
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+      },
+      triggered_by: 'automated',
+      related_entity_type: 'payments',
+      related_entity_id: refundId,
+      payment_id: paymentId
     })
 
-    console.log(`✅ Sent refund notification email to ${user.email} for refund ${refundId}`)
+    console.log(`✅ Staged refund notification email for ${user.email} for refund ${refundId}`)
 
   } catch (error) {
-    console.error('❌ Error sending refund notification email:', error)
+    console.error('❌ Error staging refund notification email:', error)
     // Don't throw - we don't want to fail the entire webhook for this
   }
 }

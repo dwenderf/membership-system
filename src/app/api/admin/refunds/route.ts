@@ -174,48 +174,8 @@ export async function POST(request: NextRequest) {
       // Note: Xero credit note will be created automatically via webhook when Stripe
       // sends the charge.refunded event. The staging workflow handles this asynchronously.
 
-      // Send refund notification email (async, don't wait for completion)
-      const sendRefundEmail = async () => {
-        try {
-          const { data: userDetails, error: userError } = await supabase
-            .from('users')
-            .select('first_name, last_name, email')
-            .eq('id', payment.user_id)
-            .single()
-
-          if (userError) {
-            logger.logSystem('refund-email-user-error', 'Failed to fetch user details for refund email', {
-              refundId: refundRecord.id,
-              userId: payment.user_id,
-              error: userError.message
-            })
-            return
-          }
-
-          if (userDetails) {
-            await emailService.sendRefundNotification({
-              userId: payment.user_id,
-              email: userDetails.email,
-              userName: `${userDetails.first_name} ${userDetails.last_name}`,
-              refundAmount: amount,
-              originalAmount: payment.final_amount,
-              reason: reason,
-              paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
-              invoiceNumber: `PAY-${payment.id.slice(0, 8)}`,
-              refundDate: formatDate(new Date())
-            })
-          }
-        } catch (error) {
-          logger.logSystem('refund-email-error', 'Failed to send refund notification email', {
-            refundId: refundRecord.id,
-            userId: payment.user_id,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-
-      // Execute email sending without waiting for completion
-      sendRefundEmail()
+      // Email notification will be sent by webhook handler when refund completes
+      // This ensures the invoice number is available in the email and prevents duplicates
 
       // Log successful refund
       logger.logSystem('refund-processed', 'Refund processed successfully', {

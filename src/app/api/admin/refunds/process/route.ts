@@ -1,7 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
-import { emailService } from '@/lib/email/service'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -91,46 +90,6 @@ async function updateRegistrationsToRefunded(
   })
 
   return { success: true, count: updateResult?.length || 0 }
-}
-
-/**
- * Helper function to send refund email notification
- */
-async function sendRefundEmail(
-  userId: string,
-  payment: any,
-  refundAmount: number,
-  reason: string,
-  supabase: any,
-  logPrefix: string
-): Promise<void> {
-  try {
-    const { data: user } = await supabase
-      .from('users')
-      .select('email, first_name, last_name')
-      .eq('id', userId)
-      .single()
-
-    if (user && process.env.LOOPS_REFUND_TEMPLATE_ID) {
-      await emailService.sendRefundNotification({
-        userId,
-        email: user.email,
-        userName: `${user.first_name} ${user.last_name}`,
-        refundAmount,
-        originalAmount: payment.final_amount,
-        reason: reason || 'Refund processed by administrator',
-        paymentDate: new Date(payment.created_at).toLocaleDateString(),
-        refundDate: new Date().toLocaleDateString()
-      })
-
-      console.log(`[${logPrefix}] Refund email sent to:`, user.email)
-    } else if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
-      console.warn(`[${logPrefix}] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email`)
-    }
-  } catch (emailError) {
-    console.error(`[${logPrefix}] Failed to send refund email:`, emailError)
-    // Don't fail the refund if email fails
-  }
 }
 
 // POST /api/admin/refunds/process - Process refund (create refund record, submit to Stripe, update registrations)
@@ -317,8 +276,8 @@ export async function POST(request: NextRequest) {
 
         console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
 
-        // Send refund email notification (only after successful payment update)
-        await sendRefundEmail(payment.user_id, payment, 0, reason || 'Registration cancelled', supabase, 'zero-dollar-refund')
+        // Email notification will be sent by webhook handler when Xero sync completes
+        // This ensures the invoice number is available in the email
 
         return NextResponse.json({
           success: true,
@@ -407,8 +366,8 @@ export async function POST(request: NextRequest) {
         processedBy: authUser.id
       })
 
-      // Send refund email notification
-      await sendRefundEmail(payment.user_id, payment, refund.amount, reason || 'Refund processed by administrator', supabase, 'refund-confirmed')
+      // Email notification will be sent by webhook handler when refund completes
+      // This ensures the invoice number is available in the email
 
       // Check if this is a partial or full refund
       const isPartialRefund = refund.amount < payment.final_amount

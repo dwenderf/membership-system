@@ -1,19 +1,23 @@
 /**
  * Admin Logs API
- * 
- * Provides endpoints for reading and managing application logs
+ *
+ * Provides endpoints for reading database logs:
+ * - email_logs: Email sending history
+ * - email_change_logs: Email change audit trail
+ * - xero_sync_logs: Xero synchronization logs
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { logger, LogLevel, LogCategory } from '@/lib/logging/logger'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
 export async function GET(request: NextRequest) {
   try {
     // Verify admin access
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -31,93 +35,37 @@ export async function GET(request: NextRequest) {
 
     // Parse query parameters
     const url = new URL(request.url)
-    const category = url.searchParams.get('category') as LogCategory | null
-    const level = url.searchParams.get('level') as LogLevel | null
-    const startDate = url.searchParams.get('startDate')
-    const endDate = url.searchParams.get('endDate')
+    const logType = url.searchParams.get('logType') as LogType || 'email_logs'
     const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
-    const action = url.searchParams.get('action') || 'logs'
 
-    // Check if we're in serverless environment
-    const isServerless = !!(
-      process.env.VERCEL ||
-      process.env.NETLIFY ||
-      process.env.AWS_LAMBDA_FUNCTION_NAME
-    )
+    // Use admin client to bypass RLS
+    const adminSupabase = createAdminClient()
 
-    // Handle different actions
-    switch (action) {
-      case 'stats':
-        if (isServerless) {
-          return NextResponse.json({ 
-            stats: {
-              totalEntries: 0,
-              entriesByLevel: { debug: 0, info: 0, warn: 0, error: 0 },
-              entriesByCategory: {
-                'payment-processing': 0,
-                'xero-sync': 0,
-                'batch-processing': 0,
-                'service-management': 0,
-                'admin-action': 0,
-                'system': 0
-              }
-            },
-            serverless: true,
-            message: 'File-based logs not available in serverless environment. Check Vercel logs instead.'
-          })
-        }
-        
-        const stats = await logger.getLogStats()
-        return NextResponse.json({ stats })
+    // Query the appropriate log table
+    const { data: logs, error } = await adminSupabase
+      .from(logType)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
-      case 'logs':
-      default:
-        if (isServerless) {
-          return NextResponse.json({ 
-            logs: [],
-            filters: {
-              category,
-              level,
-              startDate,
-              endDate,
-              limit
-            },
-            total: 0,
-            serverless: true,
-            message: 'File-based logs not available in serverless environment. Check Vercel Function Logs in your Vercel dashboard.'
-          })
-        }
-
-        const logs = await logger.readLogs(
-          category || undefined,
-          level || undefined,
-          startDate || undefined,
-          endDate || undefined,
-          limit
-        )
-        
-        return NextResponse.json({ 
-          logs,
-          filters: {
-            category,
-            level,
-            startDate,
-            endDate,
-            limit
-          },
-          total: logs.length
-        })
+    if (error) {
+      console.error(`Error fetching ${logType}:`, error)
+      return NextResponse.json(
+        { error: `Failed to fetch ${logType}` },
+        { status: 500 }
+      )
     }
+
+    return NextResponse.json({
+      logs,
+      logType,
+      total: logs.length,
+      limit
+    })
 
   } catch (error) {
     console.error('Error handling logs request:', error)
-    await logger.error(
-      'admin-action',
-      'logs-api-error',
-      'Failed to handle admin logs request',
-      { error: error instanceof Error ? error.message : String(error) }
-    )
-    
+
     return NextResponse.json(
       { error: 'Failed to retrieve logs' },
       { status: 500 }

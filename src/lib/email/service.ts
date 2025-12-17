@@ -136,7 +136,7 @@ class EmailService {
             triggered_by_user_id: triggeredByUserId,
             email_data: data,
             loops_event_id: loopsEventId,
-            error_message: sendSucceeded ? null : 'Failed to send via Loops',
+            bounce_reason: sendSucceeded ? null : 'Failed to send via Loops',
             sent_at: new Date().toISOString() // Always set, even for failures
           })
           .select('id')
@@ -185,7 +185,7 @@ class EmailService {
             triggered_by: triggeredBy,
             triggered_by_user_id: triggeredByUserId,
             email_data: data,
-            error_message: error instanceof Error ? error.message : 'Unknown error',
+            bounce_reason: error instanceof Error ? error.message : 'Unknown error',
             sent_at: new Date().toISOString() // Always set, even for failures
           })
       } catch (logError) {

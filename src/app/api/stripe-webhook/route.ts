@@ -952,7 +952,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
 }
 
 // Helper function to stage refund notification email
-async function sendRefundNotificationEmail(refundId: string, userId: string, paymentId: string) {
+async function stageRefundNotificationEmail(refundId: string, userId: string, paymentId: string) {
   try {
     const supabase = createAdminClient()
 

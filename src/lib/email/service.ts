@@ -76,8 +76,6 @@ class EmailService {
       triggeredByUserId
     } = options
 
-    let emailLogId: string | null = null
-
     try {
       // If Loops is not configured, just log and return success for development
       if (!this.loops) {
@@ -141,10 +139,6 @@ class EmailService {
           })
           .select('id')
           .single()
-
-        if (!logError && logData) {
-          emailLogId = logData.id
-        }
       } catch (logError) {
         console.error('Failed to log immediate email send:', logError)
         // Don't fail the email send just because logging failed

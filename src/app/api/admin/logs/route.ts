@@ -1,19 +1,23 @@
 /**
  * Admin Logs API
- * 
- * Provides endpoints for reading and managing application logs
+ *
+ * Provides endpoints for reading database logs:
+ * - email_logs: Email sending history
+ * - email_change_logs: Email change audit trail
+ * - xero_sync_logs: Xero synchronization logs
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { logger, LogLevel, LogCategory } from '@/lib/logging/logger'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
 export async function GET(request: NextRequest) {
   try {
     // Verify admin access
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -31,93 +35,50 @@ export async function GET(request: NextRequest) {
 
     // Parse query parameters
     const url = new URL(request.url)
-    const category = url.searchParams.get('category') as LogCategory | null
-    const level = url.searchParams.get('level') as LogLevel | null
-    const startDate = url.searchParams.get('startDate')
-    const endDate = url.searchParams.get('endDate')
-    const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
-    const action = url.searchParams.get('action') || 'logs'
+    const logTypeParam = url.searchParams.get('logType') || 'email_logs'
+    const limitParam = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
 
-    // Check if we're in serverless environment
-    const isServerless = !!(
-      process.env.VERCEL ||
-      process.env.NETLIFY ||
-      process.env.AWS_LAMBDA_FUNCTION_NAME
-    )
+    // Validate limit to prevent excessive database load
+    const limit = Math.min(Math.max(limitParam, 1), 1000) // Clamp between 1 and 1000
 
-    // Handle different actions
-    switch (action) {
-      case 'stats':
-        if (isServerless) {
-          return NextResponse.json({ 
-            stats: {
-              totalEntries: 0,
-              entriesByLevel: { debug: 0, info: 0, warn: 0, error: 0 },
-              entriesByCategory: {
-                'payment-processing': 0,
-                'xero-sync': 0,
-                'batch-processing': 0,
-                'service-management': 0,
-                'admin-action': 0,
-                'system': 0
-              }
-            },
-            serverless: true,
-            message: 'File-based logs not available in serverless environment. Check Vercel logs instead.'
-          })
-        }
-        
-        const stats = await logger.getLogStats()
-        return NextResponse.json({ stats })
+    // Validate logType against whitelist to prevent SQL injection
+    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs']
+    const logType = validLogTypes.includes(logTypeParam as LogType)
+      ? (logTypeParam as LogType)
+      : 'email_logs'
 
-      case 'logs':
-      default:
-        if (isServerless) {
-          return NextResponse.json({ 
-            logs: [],
-            filters: {
-              category,
-              level,
-              startDate,
-              endDate,
-              limit
-            },
-            total: 0,
-            serverless: true,
-            message: 'File-based logs not available in serverless environment. Check Vercel Function Logs in your Vercel dashboard.'
-          })
-        }
+    // Use admin client to bypass RLS
+    const adminSupabase = createAdminClient()
 
-        const logs = await logger.readLogs(
-          category || undefined,
-          level || undefined,
-          startDate || undefined,
-          endDate || undefined,
-          limit
-        )
-        
-        return NextResponse.json({ 
-          logs,
-          filters: {
-            category,
-            level,
-            startDate,
-            endDate,
-            limit
-          },
-          total: logs.length
-        })
+    // Use indexed column for sorting to improve performance
+    // email_logs has an index on sent_at, others use created_at
+    const sortColumn = logType === 'email_logs' ? 'sent_at' : 'created_at'
+
+    // Query the appropriate log table
+    const { data: logs, error } = await adminSupabase
+      .from(logType)
+      .select('*')
+      .order(sortColumn, { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error(`Error fetching ${logType}:`, error)
+      return NextResponse.json(
+        { error: `Failed to fetch ${logType}` },
+        { status: 500 }
+      )
     }
+
+    return NextResponse.json({
+      logs,
+      logType,
+      count: logs.length, // Number of logs returned (not total in DB)
+      limit
+    })
 
   } catch (error) {
     console.error('Error handling logs request:', error)
-    await logger.error(
-      'admin-action',
-      'logs-api-error',
-      'Failed to handle admin logs request',
-      { error: error instanceof Error ? error.message : String(error) }
-    )
-    
+
     return NextResponse.json(
       { error: 'Failed to retrieve logs' },
       { status: 500 }

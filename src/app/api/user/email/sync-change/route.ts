@@ -46,7 +46,7 @@ async function sendConfirmationEmail(
     return
   }
 
-  await emailService.sendEmail({
+  await emailService.sendEmailImmediately({
     userId: '',
     email,
     eventType: 'email_change_confirmed' as any,

@@ -35,8 +35,14 @@ export async function GET(request: NextRequest) {
 
     // Parse query parameters
     const url = new URL(request.url)
-    const logType = url.searchParams.get('logType') as LogType || 'email_logs'
+    const logTypeParam = url.searchParams.get('logType') || 'email_logs'
     const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
+
+    // Validate logType against whitelist to prevent SQL injection
+    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs']
+    const logType = validLogTypes.includes(logTypeParam as LogType)
+      ? (logTypeParam as LogType)
+      : 'email_logs'
 
     // Use admin client to bypass RLS
     const adminSupabase = createAdminClient()

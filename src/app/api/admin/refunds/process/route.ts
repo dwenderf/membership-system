@@ -276,8 +276,74 @@ export async function POST(request: NextRequest) {
 
         console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
 
-        // Email notification will be sent by webhook handler when Xero sync completes
-        // This ensures the invoice number is available in the email
+        // Send refund notification email for zero-dollar refunds
+        // (Zero-dollar refunds don't trigger Stripe webhooks, so we must send email here)
+        try {
+          // Get user details
+          const { data: user, error: userError } = await adminSupabase
+            .from('users')
+            .select('first_name, last_name, email')
+            .eq('id', payment.user_id)
+            .single()
+
+          if (!userError && user) {
+            // Get invoice number
+            const { data: invoice } = await adminSupabase
+              .from('xero_invoices')
+              .select('invoice_number')
+              .eq('payment_id', paymentId)
+              .eq('invoice_type', 'ACCREC')
+              .single()
+
+            const invoiceNumber = invoice?.invoice_number || 'N/A'
+
+            // Format date helper
+            const formatDate = (date: Date) => {
+              return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })
+            }
+
+            // Stage the refund notification email
+            const { emailStagingManager } = await import('@/lib/email/staging')
+
+            if (process.env.LOOPS_REFUND_TEMPLATE_ID) {
+              await emailStagingManager.stageEmail({
+                user_id: payment.user_id,
+                email_address: user.email,
+                event_type: 'refund.processed',
+                subject: `Refund Processed - $${(refundAmount / 100).toFixed(2)}`,
+                template_id: process.env.LOOPS_REFUND_TEMPLATE_ID,
+                email_data: {
+                  userName: `${user.first_name} ${user.last_name}`,
+                  refundAmount: (refundAmount / 100).toFixed(2),
+                  originalAmount: (payment.final_amount / 100).toFixed(2),
+                  reason: refund.reason || 'Refund processed by administrator',
+                  paymentDate: formatDate(new Date(payment.completed_at || payment.created_at)),
+                  invoiceNumber: invoiceNumber,
+                  refundDate: formatDate(new Date(refund.created_at)),
+                  supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
+                  dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+                },
+                triggered_by: 'automated',
+                related_entity_type: 'payments',
+                related_entity_id: refund.id,
+                payment_id: paymentId
+              })
+
+              console.log(`[zero-dollar-refund] Staged refund notification email for ${user.email}`)
+            } else {
+              console.warn('[zero-dollar-refund] LOOPS_REFUND_TEMPLATE_ID not configured, skipping email')
+            }
+          } else {
+            console.error('[zero-dollar-refund] Failed to fetch user details for email:', userError)
+          }
+        } catch (emailError) {
+          console.error('[zero-dollar-refund] Error staging refund notification email:', emailError)
+          // Don't fail the refund just because email failed
+        }
 
         return NextResponse.json({
           success: true,

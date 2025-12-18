@@ -77,7 +77,7 @@ class EmailService {
     } = options
 
     try {
-      // If Loops is not configured, just log and return success for development
+      // If Loops is not configured, log to database and console for development tracking
       if (!this.loops) {
         console.log('📧 Email would be sent (Loops not configured):', {
           to: email,
@@ -85,6 +85,21 @@ class EmailService {
           eventType,
           data
         })
+
+        // Still log to email_logs so developers can track what would have been sent
+        await this.logEmailToDatabase({
+          userId,
+          email,
+          eventType,
+          subject,
+          templateId,
+          status: 'dev_mode',
+          triggeredBy,
+          triggeredByUserId,
+          data,
+          bounceReason: 'Loops not configured - development mode'
+        })
+
         return { success: true }
       }
 
@@ -119,30 +134,19 @@ class EmailService {
       const loopsEventId = sendSucceeded ? (loopsResponse as any).id : undefined
 
       // Log to email_logs for tracking (even for immediate sends)
-      try {
-        const supabase = createAdminClient()
-        const { data: logData, error: logError } = await supabase
-          .from('email_logs')
-          .insert({
-            user_id: userId,
-            email_address: email,
-            event_type: eventType,
-            subject: subject,
-            template_id: templateId,
-            status: sendSucceeded ? 'sent' : 'failed',
-            triggered_by: triggeredBy,
-            triggered_by_user_id: triggeredByUserId,
-            email_data: data,
-            loops_event_id: loopsEventId,
-            bounce_reason: sendSucceeded ? null : 'Failed to send via Loops',
-            sent_at: new Date().toISOString() // Always set, even for failures
-          })
-          .select('id')
-          .single()
-      } catch (logError) {
-        console.error('Failed to log immediate email send:', logError)
-        // Don't fail the email send just because logging failed
-      }
+      await this.logEmailToDatabase({
+        userId,
+        email,
+        eventType,
+        subject,
+        templateId,
+        status: sendSucceeded ? 'sent' : 'failed',
+        triggeredBy,
+        triggeredByUserId,
+        data,
+        loopsEventId,
+        bounceReason: sendSucceeded ? undefined : 'Failed to send via Loops'
+      })
 
       if (sendSucceeded) {
         return {
@@ -165,26 +169,18 @@ class EmailService {
       }
 
       // Try to log the failure
-      try {
-        const supabase = createAdminClient()
-        await supabase
-          .from('email_logs')
-          .insert({
-            user_id: userId,
-            email_address: email,
-            event_type: eventType,
-            subject: subject,
-            template_id: templateId,
-            status: 'failed',
-            triggered_by: triggeredBy,
-            triggered_by_user_id: triggeredByUserId,
-            email_data: data,
-            bounce_reason: error instanceof Error ? error.message : 'Unknown error',
-            sent_at: new Date().toISOString() // Always set, even for failures
-          })
-      } catch (logError) {
-        console.error('Failed to log email send failure:', logError)
-      }
+      await this.logEmailToDatabase({
+        userId,
+        email,
+        eventType,
+        subject,
+        templateId,
+        status: 'failed',
+        triggeredBy,
+        triggeredByUserId,
+        data,
+        bounceReason: error instanceof Error ? error.message : 'Unknown error'
+      })
 
       return {
         success: false,
@@ -193,6 +189,48 @@ class EmailService {
     }
   }
 
+  /**
+   * Helper method to log email sends to the database
+   *
+   * Extracted to reduce code duplication between success/failure paths.
+   * Logs are used for tracking and debugging email delivery.
+   */
+  private async logEmailToDatabase(params: {
+    userId: string
+    email: string
+    eventType: EmailEventType
+    subject: string
+    templateId?: string
+    status: 'sent' | 'failed' | 'dev_mode'
+    triggeredBy?: 'user_action' | 'admin_send' | 'automated'
+    triggeredByUserId?: string
+    data?: EmailData
+    loopsEventId?: string
+    bounceReason?: string
+  }): Promise<void> {
+    try {
+      const supabase = createAdminClient()
+      await supabase
+        .from('email_logs')
+        .insert({
+          user_id: params.userId,
+          email_address: params.email,
+          event_type: params.eventType,
+          subject: params.subject,
+          template_id: params.templateId,
+          status: params.status,
+          triggered_by: params.triggeredBy,
+          triggered_by_user_id: params.triggeredByUserId,
+          email_data: params.data,
+          loops_event_id: params.loopsEventId || null,
+          bounce_reason: params.bounceReason || null,
+          sent_at: new Date().toISOString()
+        })
+    } catch (logError) {
+      console.error('Failed to log email to database:', logError)
+      // Don't throw - we don't want to fail the operation just because logging failed
+    }
+  }
 
   /**
    * Send membership purchase confirmation email immediately (bypasses queue)

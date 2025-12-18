@@ -68,16 +68,22 @@ export default function LogViewer() {
   const filteredLogs = logs.filter(log => {
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
-    // Search across all string fields
-    return Object.values(log).some(value =>
-      String(value).toLowerCase().includes(searchLower)
-    )
+    // Search across primitive fields only (skip objects/arrays to avoid "[object Object]" matches)
+    return Object.values(log).some(value => {
+      // Skip non-primitive values (objects, arrays, null, undefined)
+      if (value === null || value === undefined || typeof value === 'object') {
+        return false
+      }
+      // Search in primitive values (string, number, boolean)
+      return String(value).toLowerCase().includes(searchLower)
+    })
   })
 
   // Load data on mount and filter changes
+  // Use specific filter properties instead of entire object to prevent unnecessary re-renders
   useEffect(() => {
     loadLogs()
-  }, [filters])
+  }, [filters.logType, filters.limit])
 
   // Get human-readable log type name
   const getLogTypeName = (logType: LogType) => {

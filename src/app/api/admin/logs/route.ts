@@ -47,11 +47,15 @@ export async function GET(request: NextRequest) {
     // Use admin client to bypass RLS
     const adminSupabase = createAdminClient()
 
+    // Use indexed column for sorting to improve performance
+    // email_logs has an index on sent_at, others use created_at
+    const sortColumn = logType === 'email_logs' ? 'sent_at' : 'created_at'
+
     // Query the appropriate log table
     const { data: logs, error } = await adminSupabase
       .from(logType)
       .select('*')
-      .order('created_at', { ascending: false })
+      .order(sortColumn, { ascending: false })
       .limit(limit)
 
     if (error) {

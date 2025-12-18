@@ -6,7 +6,7 @@
  * Displays database logs from email_logs, email_change_logs, and xero_sync_logs tables
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
@@ -33,8 +33,8 @@ export default function LogViewer() {
     limit: 100
   })
 
-  // Load logs
-  const loadLogs = async () => {
+  // Load logs - wrapped in useCallback to satisfy exhaustive-deps
+  const loadLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
 
@@ -62,7 +62,7 @@ export default function LogViewer() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters.logType, filters.limit])
 
   // Filter logs by search term
   const filteredLogs = logs.filter(log => {
@@ -80,10 +80,9 @@ export default function LogViewer() {
   })
 
   // Load data on mount and filter changes
-  // Use specific filter properties instead of entire object to prevent unnecessary re-renders
   useEffect(() => {
     loadLogs()
-  }, [filters.logType, filters.limit])
+  }, [loadLogs])
 
   // Get human-readable log type name
   const getLogTypeName = (logType: LogType) => {

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
+import { formatDate } from '@/lib/date-utils'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -296,15 +297,6 @@ export async function POST(request: NextRequest) {
               .single()
 
             const invoiceNumber = invoice?.invoice_number || 'N/A'
-
-            // Format date helper
-            const formatDate = (date: Date) => {
-              return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })
-            }
 
             // Stage the refund notification email
             const { emailStagingManager } = await import('@/lib/email/staging')

@@ -736,7 +736,7 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
             await processRefundDiscountUsage(stagingId, existingRefund.id, payment.id, payment.user_id)
 
             // Send refund notification email
-            await sendRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
+            await stageRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
           } else {
             // EXTERNAL REFUND: No staging_id means this was processed outside our system
             console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)

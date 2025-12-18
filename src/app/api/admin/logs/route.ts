@@ -12,6 +12,13 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
+// Safe display names to prevent format string vulnerabilities
+const LOG_TYPE_NAMES: Record<LogType, string> = {
+  'email_logs': 'email_logs',
+  'email_change_logs': 'email_change_logs',
+  'xero_sync_logs': 'xero_sync_logs'
+} as const
+
 export async function GET(request: NextRequest) {
   try {
     // Verify admin access
@@ -62,9 +69,11 @@ export async function GET(request: NextRequest) {
       .limit(limit)
 
     if (error) {
-      console.error(`Error fetching ${logType}:`, error)
+      // Use safe mapping to prevent format string vulnerabilities
+      const safeLogTypeName = LOG_TYPE_NAMES[logType]
+      console.error(`Error fetching ${safeLogTypeName}:`, error)
       return NextResponse.json(
-        { error: `Failed to fetch ${logType}` },
+        { error: `Failed to fetch ${safeLogTypeName}` },
         { status: 500 }
       )
     }

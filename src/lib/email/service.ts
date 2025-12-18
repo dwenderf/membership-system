@@ -87,7 +87,8 @@ class EmailService {
         })
 
         // Still log to email_logs so developers can track what would have been sent
-        await this.logEmailToDatabase({
+        // Fire-and-forget to avoid blocking the response
+        this.logEmailToDatabase({
           userId,
           email,
           eventType,
@@ -100,7 +101,10 @@ class EmailService {
           bounceReason: 'Loops not configured - development mode'
         })
 
-        return { success: true }
+        return {
+          success: false,
+          error: 'Loops not configured - email not sent'
+        }
       }
 
       // Send email via Loops.so
@@ -134,7 +138,8 @@ class EmailService {
       const loopsEventId = sendSucceeded ? (loopsResponse as any).id : undefined
 
       // Log to email_logs for tracking (even for immediate sends)
-      await this.logEmailToDatabase({
+      // Fire-and-forget to avoid blocking the response
+      this.logEmailToDatabase({
         userId,
         email,
         eventType,
@@ -169,7 +174,8 @@ class EmailService {
       }
 
       // Try to log the failure
-      await this.logEmailToDatabase({
+      // Fire-and-forget to avoid blocking the response
+      this.logEmailToDatabase({
         userId,
         email,
         eventType,

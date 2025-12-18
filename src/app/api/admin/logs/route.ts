@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
     // Parse query parameters
     const url = new URL(request.url)
     const logTypeParam = url.searchParams.get('logType') || 'email_logs'
-    const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
+    const limitParam = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 100
+
+    // Validate limit to prevent excessive database load
+    const limit = Math.min(Math.max(limitParam, 1), 1000) // Clamp between 1 and 1000
 
     // Validate logType against whitelist to prevent SQL injection
     const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs']

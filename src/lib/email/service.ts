@@ -53,9 +53,14 @@ class EmailService {
   }
 
   /**
-   * Send a transactional email using Loops.so
+   * Send a transactional email immediately (bypasses queue).
+   *
+   * This method sends emails directly to Loops API without queuing.
+   * Emails are logged to email_logs with status='sent' or 'failed' for tracking.
+   *
+   * For queued emails (recommended), use emailStagingManager.stageEmail() instead.
    */
-  async sendEmail(options: SendEmailOptions): Promise<{
+  async sendEmailImmediately(options: SendEmailOptions): Promise<{
     success: boolean
     loopsEventId?: string
     error?: string
@@ -72,10 +77,7 @@ class EmailService {
     } = options
 
     try {
-      // NOTE: This method no longer creates email logs to prevent duplicates.
-      // Email logging should be handled by the calling code when needed.
-
-      // If Loops is not configured, just log and return success for development
+      // If Loops is not configured, log to database and console for development tracking
       if (!this.loops) {
         console.log('📧 Email would be sent (Loops not configured):', {
           to: email,
@@ -83,7 +85,26 @@ class EmailService {
           eventType,
           data
         })
-        return { success: true }
+
+        // Still log to email_logs so developers can track what would have been sent
+        // Fire-and-forget to avoid blocking the response
+        this.logEmailToDatabase({
+          userId,
+          email,
+          eventType,
+          subject,
+          templateId,
+          status: 'failed',
+          triggeredBy,
+          triggeredByUserId,
+          data,
+          bounceReason: 'Loops not configured - development mode'
+        })
+
+        return {
+          success: false,
+          error: 'Loops not configured - email not sent'
+        }
       }
 
       // Send email via Loops.so
@@ -94,7 +115,7 @@ class EmailService {
         const cleanData = Object.fromEntries(
           Object.entries(data).filter(([_, value]) => value !== undefined)
         )
-        
+
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
@@ -112,11 +133,30 @@ class EmailService {
         })
       }
 
-      // Return success/failure based on Loops response
-      if (loopsResponse && 'success' in loopsResponse && loopsResponse.success) {
+      // Determine success/failure based on Loops response
+      const sendSucceeded = loopsResponse && 'success' in loopsResponse && loopsResponse.success
+      const loopsEventId = sendSucceeded ? (loopsResponse as any).id : undefined
+
+      // Log to email_logs for tracking (even for immediate sends)
+      // Fire-and-forget to avoid blocking the response
+      this.logEmailToDatabase({
+        userId,
+        email,
+        eventType,
+        subject,
+        templateId,
+        status: sendSucceeded ? 'sent' : 'failed',
+        triggeredBy,
+        triggeredByUserId,
+        data,
+        loopsEventId,
+        bounceReason: sendSucceeded ? undefined : 'Failed to send via Loops'
+      })
+
+      if (sendSucceeded) {
         return {
           success: true,
-          loopsEventId: (loopsResponse as any).id
+          loopsEventId
         }
       } else {
         return {
@@ -127,11 +167,26 @@ class EmailService {
 
     } catch (error) {
       console.error('Email sending failed:', error)
-      
+
       // Log additional error details if available
       if (error && typeof error === 'object' && 'json' in error) {
         console.error('Loops.so API error details:', (error as any).json)
       }
+
+      // Try to log the failure
+      // Fire-and-forget to avoid blocking the response
+      this.logEmailToDatabase({
+        userId,
+        email,
+        eventType,
+        subject,
+        templateId,
+        status: 'failed',
+        triggeredBy,
+        triggeredByUserId,
+        data,
+        bounceReason: error instanceof Error ? error.message : 'Unknown error'
+      })
 
       return {
         success: false,
@@ -140,9 +195,51 @@ class EmailService {
     }
   }
 
+  /**
+   * Helper method to log email sends to the database
+   *
+   * Extracted to reduce code duplication between success/failure paths.
+   * Logs are used for tracking and debugging email delivery.
+   */
+  private async logEmailToDatabase(params: {
+    userId: string
+    email: string
+    eventType: EmailEventType
+    subject: string
+    templateId?: string
+    status: 'sent' | 'failed'
+    triggeredBy?: 'user_action' | 'admin_send' | 'automated'
+    triggeredByUserId?: string
+    data?: EmailData
+    loopsEventId?: string
+    bounceReason?: string
+  }): Promise<void> {
+    try {
+      const supabase = createAdminClient()
+      await supabase
+        .from('email_logs')
+        .insert({
+          user_id: params.userId,
+          email_address: params.email,
+          event_type: params.eventType,
+          subject: params.subject,
+          template_id: params.templateId,
+          status: params.status,
+          triggered_by: params.triggeredBy,
+          triggered_by_user_id: params.triggeredByUserId,
+          email_data: params.data,
+          loops_event_id: params.loopsEventId || null,
+          bounce_reason: params.bounceReason || null,
+          sent_at: new Date().toISOString()
+        })
+    } catch (logError) {
+      console.error('Failed to log email to database:', logError)
+      // Don't throw - we don't want to fail the operation just because logging failed
+    }
+  }
 
   /**
-   * Send membership purchase confirmation email
+   * Send membership purchase confirmation email immediately (bypasses queue)
    */
   async sendMembershipPurchaseConfirmation(options: {
     userId: string
@@ -156,7 +253,7 @@ class EmailService {
     paymentIntentId: string
     triggeredBy?: 'user_action' | 'admin_send' | 'automated'
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.MEMBERSHIP_PURCHASED,
@@ -178,7 +275,7 @@ class EmailService {
   }
 
   /**
-   * Send membership expiration warning email
+   * Send membership expiration warning email immediately (bypasses queue)
    */
   async sendMembershipExpirationWarning(options: {
     userId: string
@@ -188,7 +285,7 @@ class EmailService {
     expirationDate: string
     daysUntilExpiration: number
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.MEMBERSHIP_EXPIRING,
@@ -205,14 +302,14 @@ class EmailService {
   }
 
   /**
-   * Send welcome email to new users
+   * Send welcome email to new users immediately (bypasses queue)
    */
   async sendWelcomeEmail(options: {
     userId: string
     email: string
     userName: string
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.WELCOME,
@@ -227,7 +324,7 @@ class EmailService {
   }
 
   /**
-   * Send account deletion confirmation email
+   * Send account deletion confirmation email immediately (bypasses queue)
    */
   async sendAccountDeletionConfirmation(options: {
     userId: string
@@ -236,7 +333,7 @@ class EmailService {
     deletedAt: string
     supportEmail?: string
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.ACCOUNT_DELETED,
@@ -252,7 +349,7 @@ class EmailService {
   }
 
   /**
-   * Send registration confirmation email
+   * Send registration confirmation email immediately (bypasses queue)
    */
   async sendRegistrationConfirmation(options: {
     userId: string
@@ -265,7 +362,7 @@ class EmailService {
     paymentIntentId: string
     triggeredBy?: 'user_action' | 'admin_send' | 'automated'
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.REGISTRATION_COMPLETED,
@@ -286,7 +383,7 @@ class EmailService {
   }
 
   /**
-   * Send waitlist added notification email
+   * Send waitlist added notification email immediately (bypasses queue)
    */
   async sendWaitlistAddedNotification(options: {
     userId: string
@@ -297,7 +394,7 @@ class EmailService {
     seasonName: string
     position: number
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.WAITLIST_ADDED,
@@ -316,7 +413,7 @@ class EmailService {
   }
 
   /**
-   * Send waitlist selected confirmation email
+   * Send waitlist selected confirmation email immediately (bypasses queue)
    */
   async sendWaitlistSelectedNotification(options: {
     userId: string
@@ -329,7 +426,7 @@ class EmailService {
     paymentIntentId?: string
     discountApplied?: string
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.WAITLIST_SELECTED,
@@ -351,7 +448,7 @@ class EmailService {
   }
 
   /**
-   * Send refund processed notification email
+   * Send refund processed notification email immediately (bypasses queue)
    */
   async sendRefundNotification(options: {
     userId: string
@@ -364,7 +461,7 @@ class EmailService {
     invoiceNumber?: string
     refundDate?: string
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.REFUND_PROCESSED,
@@ -386,7 +483,7 @@ class EmailService {
   }
 
   /**
-   * Send payment plan pre-notification email (3 days before charge)
+   * Send payment plan pre-notification email (3 days before charge) immediately (bypasses queue)
    */
   async sendPaymentPlanPreNotification(options: {
     userId: string
@@ -400,7 +497,7 @@ class EmailService {
     amountPaid: number
     remainingBalance: number
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.PAYMENT_PLAN_PRE_NOTIFICATION,
@@ -422,7 +519,7 @@ class EmailService {
   }
 
   /**
-   * Send payment plan payment processed email
+   * Send payment plan payment processed email immediately (bypasses queue)
    */
   async sendPaymentPlanPaymentProcessed(options: {
     userId: string
@@ -438,7 +535,7 @@ class EmailService {
     nextPaymentDate?: string
     isFinalPayment: boolean
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_PROCESSED,
@@ -465,7 +562,7 @@ class EmailService {
   }
 
   /**
-   * Send payment plan payment failed email
+   * Send payment plan payment failed email immediately (bypasses queue)
    */
   async sendPaymentPlanPaymentFailed(options: {
     userId: string
@@ -481,7 +578,7 @@ class EmailService {
     amountPaid: number
     remainingBalance: number
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.PAYMENT_PLAN_PAYMENT_FAILED,
@@ -505,7 +602,7 @@ class EmailService {
   }
 
   /**
-   * Send payment plan completed email
+   * Send payment plan completed email immediately (bypasses queue)
    */
   async sendPaymentPlanCompleted(options: {
     userId: string
@@ -517,7 +614,7 @@ class EmailService {
     planStartDate: string
     completionDate: string
   }) {
-    return this.sendEmail({
+    return this.sendEmailImmediately({
       userId: options.userId,
       email: options.email,
       eventType: EMAIL_EVENTS.PAYMENT_PLAN_COMPLETED,

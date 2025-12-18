@@ -2,258 +2,217 @@
 
 /**
  * Admin Log Viewer Component
- * 
- * Provides a comprehensive interface for viewing and filtering application logs
+ *
+ * Displays database logs from email_logs, email_change_logs, and xero_sync_logs tables
  */
 
-import { useState, useEffect } from 'react'
-import { LogEntry, LogLevel, LogCategory } from '@/lib/logging/logger'
+import { useState, useEffect, useCallback } from 'react'
 
-interface LogStats {
-  totalEntries: number
-  entriesByLevel: Record<LogLevel, number>
-  entriesByCategory: Record<LogCategory, number>
-  oldestEntry?: string
-  newestEntry?: string
-}
-
-interface LogResponse {
-  logs: LogEntry[]
-  filters: any
-  total: number
-  serverless?: boolean
-  message?: string
-}
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
 interface LogFilters {
-  category: LogCategory | 'all'
-  level: LogLevel | 'all'
-  startDate: string
-  endDate: string
+  logType: LogType
   limit: number
 }
 
+interface LogResponse {
+  logs: any[]
+  logType: LogType
+  total: number
+  limit: number
+  error?: string
+}
+
 export default function LogViewer() {
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [stats, setStats] = useState<LogStats | null>(null)
+  const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [isServerless, setIsServerless] = useState(false)
-  const [serverlessMessage, setServerlessMessage] = useState('')
   const [filters, setFilters] = useState<LogFilters>({
-    category: 'all',
-    level: 'all',
-    startDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Yesterday
-    endDate: new Date().toISOString().split('T')[0], // Today
+    logType: 'email_logs',
     limit: 100
   })
 
-  // Load logs
-  const loadLogs = async () => {
+  // Load logs - wrapped in useCallback to satisfy exhaustive-deps
+  const loadLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const params = new URLSearchParams({
-        action: 'logs',
-        limit: filters.limit.toString(),
-        startDate: filters.startDate + 'T00:00:00.000Z',
-        endDate: filters.endDate + 'T23:59:59.999Z'
+        logType: filters.logType,
+        limit: filters.limit.toString()
       })
-      
-      if (filters.category !== 'all') params.set('category', filters.category)
-      if (filters.level !== 'all') params.set('level', filters.level)
-      
+
       const response = await fetch(`/api/admin/logs?${params}`)
-      
+
       if (!response.ok) {
         throw new Error('Failed to load logs')
       }
-      
+
       const data: LogResponse = await response.json()
-      setLogs(data.logs)
-      
-      if (data.serverless) {
-        setIsServerless(true)
-        setServerlessMessage(data.message || '')
+
+      if (data.error) {
+        throw new Error(data.error)
       }
+
+      setLogs(data.logs)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
-  }
-
-  // Load stats
-  const loadStats = async () => {
-    try {
-      const response = await fetch('/api/admin/logs?action=stats')
-      
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data.stats)
-      }
-    } catch (err) {
-      console.error('Failed to load log stats:', err)
-    }
-  }
+  }, [filters.logType, filters.limit])
 
   // Filter logs by search term
   const filteredLogs = logs.filter(log => {
     if (!searchTerm) return true
     const searchLower = searchTerm.toLowerCase()
-    return (
-      log.message.toLowerCase().includes(searchLower) ||
-      log.operation.toLowerCase().includes(searchLower) ||
-      JSON.stringify(log.metadata || {}).toLowerCase().includes(searchLower)
-    )
+    // Search across primitive fields only (skip objects/arrays to avoid "[object Object]" matches)
+    return Object.values(log).some(value => {
+      // Skip non-primitive values (objects, arrays, null, undefined)
+      if (value === null || value === undefined || typeof value === 'object') {
+        return false
+      }
+      // Search in primitive values (string, number, boolean)
+      return String(value).toLowerCase().includes(searchLower)
+    })
   })
 
   // Load data on mount and filter changes
   useEffect(() => {
     loadLogs()
-    loadStats()
-  }, [filters])
+  }, [loadLogs])
 
-  // Auto-refresh functionality
-  useEffect(() => {
-    if (!autoRefresh) return
-    
-    const interval = setInterval(() => {
-      loadLogs()
-      loadStats()
-    }, 5000) // Refresh every 5 seconds
-    
-    return () => clearInterval(interval)
-  }, [autoRefresh, filters])
-
-  // Log level styling
-  const getLevelStyle = (level: LogLevel) => {
-    const styles = {
-      debug: 'bg-gray-100 text-gray-700 border-gray-300',
-      info: 'bg-blue-100 text-blue-700 border-blue-300',
-      warn: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-      error: 'bg-red-100 text-red-700 border-red-300'
+  // Get human-readable log type name
+  const getLogTypeName = (logType: LogType) => {
+    const names = {
+      'email_logs': '📧 Emails Sent',
+      'email_change_logs': '✉️ Email Changes',
+      'xero_sync_logs': '📊 Xero Sync'
     }
-    return styles[level]
+    return names[logType]
   }
 
-  // Category styling
-  const getCategoryIcon = (category: LogCategory) => {
-    const icons = {
-      'payment-processing': '💳',
-      'xero-sync': '📊',
-      'batch-processing': '📦',
-      'service-management': '⚙️',
-      'admin-action': '👨‍💼',
-      'system': '🖥️'
+  // Render field value with appropriate formatting
+  const renderFieldValue = (key: string, value: any) => {
+    // Null/undefined
+    if (value === null || value === undefined) {
+      return <span className="text-gray-400 italic">null</span>
     }
-    return icons[category]
+
+    // Boolean
+    if (typeof value === 'boolean') {
+      return (
+        <span className={value ? 'text-green-600' : 'text-red-600'}>
+          {value ? '✓ true' : '✗ false'}
+        </span>
+      )
+    }
+
+    // Date/timestamp fields
+    if (key.includes('_at') || key.includes('_date')) {
+      try {
+        const date = new Date(value)
+        if (!isNaN(date.getTime())) {
+          return (
+            <span className="text-gray-700">
+              {date.toLocaleString()}
+            </span>
+          )
+        }
+      } catch {
+        // Fall through to default
+      }
+    }
+
+    // JSONB fields (objects/arrays) - make expandable
+    if (typeof value === 'object') {
+      return (
+        <details className="inline">
+          <summary className="text-blue-600 cursor-pointer hover:text-blue-800">
+            {Array.isArray(value) ? `[${value.length} items]` : '{object}'}
+          </summary>
+          <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-x-auto border">
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        </details>
+      )
+    }
+
+    // Status fields - color-coded
+    if (key === 'status') {
+      const statusColors: Record<string, string> = {
+        'success': 'bg-green-100 text-green-800 border-green-200',
+        'sent': 'bg-green-100 text-green-800 border-green-200',
+        'delivered': 'bg-blue-100 text-blue-800 border-blue-200',
+        'pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        'error': 'bg-red-100 text-red-800 border-red-200',
+        'failed': 'bg-red-100 text-red-800 border-red-200',
+        'warning': 'bg-orange-100 text-orange-800 border-orange-200',
+        'bounced': 'bg-purple-100 text-purple-800 border-purple-200',
+        'spam': 'bg-gray-100 text-gray-800 border-gray-200'
+      }
+      const colorClass = statusColors[value] || 'bg-gray-100 text-gray-800 border-gray-200'
+      return (
+        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded border ${colorClass}`}>
+          {value}
+        </span>
+      )
+    }
+
+    // Default: string or number
+    return <span className="text-gray-700">{String(value)}</span>
+  }
+
+  // Get displayable fields (exclude internal/redundant fields)
+  const getDisplayFields = (log: any) => {
+    const excludeFields = ['id']
+    return Object.keys(log).filter(key => !excludeFields.includes(key))
+  }
+
+  // Format field name for display
+  const formatFieldName = (key: string) => {
+    return key
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Application Logs</h1>
-        <div className="flex items-center space-x-4">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            <span className="text-sm text-gray-600">Auto-refresh</span>
-          </label>
-          <button
-            onClick={() => { loadLogs(); loadStats(); }}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
+        <h2 className="text-xl font-semibold text-gray-900">
+          {getLogTypeName(filters.logType)}
+        </h2>
+        <button
+          onClick={loadLogs}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
       </div>
-
-      {/* Stats Overview */}
-      {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg border">
-            <div className="text-2xl font-bold text-blue-600">{stats.totalEntries}</div>
-            <div className="text-sm text-gray-600">Total Entries</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border">
-            <div className="text-2xl font-bold text-red-600">{stats.entriesByLevel.error}</div>
-            <div className="text-sm text-gray-600">Errors</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border">
-            <div className="text-2xl font-bold text-yellow-600">{stats.entriesByLevel.warn}</div>
-            <div className="text-sm text-gray-600">Warnings</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border">
-            <div className="text-2xl font-bold text-green-600">{stats.entriesByLevel.info}</div>
-            <div className="text-sm text-gray-600">Info</div>
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Log Type</label>
             <select
-              value={filters.category}
-              onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value as LogCategory | 'all' }))}
+              value={filters.logType}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, logType: e.target.value as LogType }))
+                setSearchTerm('') // Clear search when switching log types
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             >
-              <option value="all">All Categories</option>
-              <option value="payment-processing">💳 Payment Processing</option>
-              <option value="xero-sync">📊 Xero Sync</option>
-              <option value="batch-processing">📦 Batch Processing</option>
-              <option value="service-management">⚙️ Service Management</option>
-              <option value="admin-action">👨‍💼 Admin Actions</option>
-              <option value="system">🖥️ System</option>
+              <option value="email_logs">📧 Emails Sent</option>
+              <option value="email_change_logs">✉️ Email Changes</option>
+              <option value="xero_sync_logs">📊 Xero Sync</option>
             </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
-            <select
-              value={filters.level}
-              onChange={(e) => setFilters(prev => ({ ...prev, level: e.target.value as LogLevel | 'all' }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="all">All Levels</option>
-              <option value="debug">🐛 Debug</option>
-              <option value="info">ℹ️ Info</option>
-              <option value="warn">⚠️ Warning</option>
-              <option value="error">❌ Error</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
           </div>
 
           <div>
@@ -265,47 +224,23 @@ export default function LogViewer() {
             >
               <option value={50}>50 entries</option>
               <option value={100}>100 entries</option>
+              <option value={200}>200 entries</option>
               <option value={500}>500 entries</option>
-              <option value={1000}>1000 entries</option>
             </select>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-          <input
-            type="text"
-            placeholder="Search logs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-        </div>
-      </div>
-
-      {/* Serverless Environment Notice */}
-      {isServerless && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-blue-400 text-xl">☁️</span>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">
-                Serverless Environment Detected
-              </h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <p>{serverlessMessage}</p>
-                <p className="mt-2">
-                  <strong>Console logs are still working!</strong> Check your terminal during development 
-                  or visit your <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" 
-                  className="underline hover:text-blue-900">Vercel Dashboard → Functions → Logs</a> for production logs.
-                </p>
-              </div>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
           </div>
         </div>
-      )}
+      </div>
 
       {/* Error Display */}
       {error && (
@@ -316,50 +251,43 @@ export default function LogViewer() {
 
       {/* Log Entries */}
       <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b bg-gray-50">
+          <h3 className="text-lg font-semibold text-gray-900">
             Log Entries ({filteredLogs.length})
-          </h2>
+          </h3>
         </div>
-        
+
         <div className="divide-y divide-gray-200">
-          {filteredLogs.map((log, index) => (
-            <div key={index} className="p-4 hover:bg-gray-50">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <span className="text-lg">{getCategoryIcon(log.category)}</span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded border ${getLevelStyle(log.level)}`}>
-                      {log.level.toUpperCase()}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900">{log.operation}</span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  
-                  <div className="text-sm text-gray-700 mb-2">
-                    {log.message}
-                  </div>
-                  
-                  {log.metadata && Object.keys(log.metadata).length > 0 && (
-                    <details className="text-xs">
-                      <summary className="text-gray-500 cursor-pointer hover:text-gray-700">
-                        Metadata
-                      </summary>
-                      <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
-                        {JSON.stringify(log.metadata, null, 2)}
-                      </pre>
-                    </details>
-                  )}
+          {filteredLogs.map((log, index) => {
+            const displayFields = getDisplayFields(log)
+
+            return (
+              <div key={log.id || index} className="p-4 hover:bg-gray-50">
+                <div className="space-y-2">
+                  {displayFields.map(key => (
+                    <div key={key} className="grid grid-cols-4 gap-4">
+                      <div className="col-span-1 text-sm font-medium text-gray-500">
+                        {formatFieldName(key)}:
+                      </div>
+                      <div className="col-span-3 text-sm">
+                        {renderFieldValue(key, log[key])}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          ))}
-          
+            )
+          })}
+
           {filteredLogs.length === 0 && !loading && (
             <div className="p-8 text-center text-gray-500">
-              No logs found matching the current filters.
+              No logs found.
+            </div>
+          )}
+
+          {loading && (
+            <div className="p-8 text-center text-gray-500">
+              Loading logs...
             </div>
           )}
         </div>

@@ -93,7 +93,7 @@ class EmailService {
           eventType,
           subject,
           templateId,
-          status: 'dev_mode',
+          status: 'failed',
           triggeredBy,
           triggeredByUserId,
           data,
@@ -201,7 +201,7 @@ class EmailService {
     eventType: EmailEventType
     subject: string
     templateId?: string
-    status: 'sent' | 'failed' | 'dev_mode'
+    status: 'sent' | 'failed'
     triggeredBy?: 'user_action' | 'admin_send' | 'automated'
     triggeredByUserId?: string
     data?: EmailData

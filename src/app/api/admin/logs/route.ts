@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       logs,
       logType,
-      total: logs.length,
+      count: logs.length, // Number of logs returned (not total in DB)
       limit
     })
 

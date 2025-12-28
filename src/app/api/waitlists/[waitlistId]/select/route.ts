@@ -3,6 +3,7 @@ import { formatDate } from '@/lib/date-utils'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { logger } from '@/lib/logging/logger'
 import { emailService } from '@/lib/email'
 
@@ -111,28 +112,20 @@ export async function POST(
     // Determine effective base price (before discounts)
     const effectiveBasePrice = overridePrice !== undefined ? overridePrice : category.price
 
-    // Only validate payment method if payment will be required
-    // (skip for zero-cost registrations)
-    if (effectiveBasePrice > 0) {
-      if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
-        return NextResponse.json({
-          error: 'User does not have a valid payment method'
-        }, { status: 400 })
+    // Validate registration eligibility using shared service
+    // This checks for duplicate registrations and payment method (if payment required)
+    const validationResult = await RegistrationValidationService.validateRegistrationEligibility(
+      supabase,
+      waitlistEntry.user_id,
+      waitlistEntry.registration_id,
+      {
+        effectivePrice: effectiveBasePrice
       }
-    }
+    )
 
-    // Check if user is already registered for this registration (only check active/paid registrations)
-    const { data: existingRegistration } = await supabase
-      .from('user_registrations')
-      .select('id')
-      .eq('user_id', waitlistEntry.user_id)
-      .eq('registration_id', waitlistEntry.registration_id)
-      .eq('payment_status', 'paid')
-      .single()
-
-    if (existingRegistration) {
+    if (!validationResult.canRegister) {
       return NextResponse.json({
-        error: 'User is already registered for this event'
+        error: validationResult.error || 'Cannot register for this event'
       }, { status: 400 })
     }
 

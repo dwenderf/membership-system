@@ -9,6 +9,7 @@ import { logger } from '@/lib/logging/logger'
 import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { centsToCents } from '@/types/currency'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 
 // Force import server config
 
@@ -625,19 +626,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if user already has a completed registration (exclude failed and refunded for audit trail)
-    const { data: existingRegistration } = await supabase
-      .from('user_registrations')
-      .select('id, payment_status')
-      .eq('user_id', user.id)
-      .eq('registration_id', registrationId)
-      .eq('payment_status', 'paid')
-      .single()
+    // Validate registration eligibility using shared service
+    const validationResult = await RegistrationValidationService.canUserRegister(
+      supabase,
+      user.id,
+      registrationId
+    )
 
-    if (existingRegistration) {
+    if (!validationResult.canRegister) {
       capturePaymentError(new Error('User already registered'), paymentContext, 'warning')
       return NextResponse.json({
-        error: 'You are already registered for this event'
+        error: validationResult.error || 'You are already registered for this event'
       }, { status: 400 })
     }
 

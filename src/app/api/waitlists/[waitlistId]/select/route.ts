@@ -108,19 +108,26 @@ export async function POST(
       }
     }
 
-    // Validate payment method
-    if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
-      return NextResponse.json({
-        error: 'User does not have a valid payment method'
-      }, { status: 400 })
+    // Determine effective base price (before discounts)
+    const effectiveBasePrice = overridePrice !== undefined ? overridePrice : category.price
+
+    // Only validate payment method if payment will be required
+    // (skip for zero-cost registrations)
+    if (effectiveBasePrice > 0) {
+      if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
+        return NextResponse.json({
+          error: 'User does not have a valid payment method'
+        }, { status: 400 })
+      }
     }
 
-    // Check if user is already registered for this registration
+    // Check if user is already registered for this registration (only check active/paid registrations)
     const { data: existingRegistration } = await supabase
       .from('user_registrations')
       .select('id')
       .eq('user_id', waitlistEntry.user_id)
       .eq('registration_id', waitlistEntry.registration_id)
+      .eq('payment_status', 'paid')
       .single()
 
     if (existingRegistration) {

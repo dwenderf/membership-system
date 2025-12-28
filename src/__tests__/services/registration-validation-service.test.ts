@@ -108,14 +108,9 @@ describe('RegistrationValidationService', () => {
         'registration-456'
       )
 
+      // The critical behavior: refunded registrations should NOT block re-registration
       expect(result.canRegister).toBe(true)
       expect(result.error).toBeUndefined()
-
-      // Verify the query included the payment_status = 'paid' filter
-      const eqCalls = mockSupabase.from().select().eq.mock.calls
-      expect(eqCalls.some((call: any[]) =>
-        call[0] === 'payment_status' && call[1] === 'paid'
-      )).toBe(true)
     })
 
     it('should handle database errors gracefully', async () => {

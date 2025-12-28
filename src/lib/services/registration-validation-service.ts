@@ -72,8 +72,7 @@ export class RegistrationValidationService {
    */
   static async validatePaymentMethod(
     supabase: SupabaseClient,
-    userId: string,
-    requireForZeroCost: boolean = false
+    userId: string
   ): Promise<PaymentMethodValidationResult> {
     try {
       const { data: user, error } = await supabase

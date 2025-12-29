@@ -34,7 +34,7 @@ export class WaitlistPaymentService {
       const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
-      // Get user's payment method and customer
+      // Get user details
       const { data: user, error: userError } = await supabase
         .from('users')
         .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name, stripe_customer_id')
@@ -45,13 +45,7 @@ export class WaitlistPaymentService {
         throw new Error('User not found')
       }
 
-      if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
-        throw new Error('User does not have a valid payment method')
-      }
-
-      if (!user.stripe_customer_id) {
-        throw new Error('User does not have a Stripe customer ID')
-      }
+      // Payment method validation will be done later, only if payment is actually required
 
       // Get registration details
       const { data: registration, error: registrationError } = await supabase
@@ -259,6 +253,15 @@ export class WaitlistPaymentService {
           stagingRecord,
           discountCodeId
         )
+      }
+
+      // Validate payment method (only required for paid charges)
+      if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
+        throw new Error('User does not have a valid payment method')
+      }
+
+      if (!user.stripe_customer_id) {
+        throw new Error('User does not have a Stripe customer ID')
       }
 
       // Create Payment Intent for the charge

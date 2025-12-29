@@ -109,18 +109,14 @@ export async function POST(
       }
     }
 
-    // Determine effective base price (before discounts)
-    const effectiveBasePrice = overridePrice !== undefined ? overridePrice : category.price
-
-    // Validate registration eligibility using shared service
-    // This checks for duplicate registrations and payment method (if payment required)
-    const validationResult = await RegistrationValidationService.validateRegistrationEligibility(
+    // Validate that user doesn't already have an active registration
+    // Note: We only check for duplicate registrations here, NOT payment method
+    // Payment method validation happens in WaitlistPaymentService AFTER discount calculation
+    // This ensures 100% discounts don't incorrectly require payment methods
+    const validationResult = await RegistrationValidationService.canUserRegister(
       supabase,
       waitlistEntry.user_id,
-      waitlistEntry.registration_id,
-      {
-        effectivePrice: effectiveBasePrice
-      }
+      waitlistEntry.registration_id
     )
 
     if (!validationResult.canRegister) {

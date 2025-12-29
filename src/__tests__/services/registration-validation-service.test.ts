@@ -500,5 +500,45 @@ describe('RegistrationValidationService', () => {
       expect(result.canRegister).toBe(true)
       expect(result.error).toBeUndefined()
     })
+
+    it('should skip payment validation when discounts might apply (waitlist flow)', async () => {
+      // Scenario: Waitlist selection with potential 100% discount code
+      // We can't validate payment method based on base price because discounts might make it free
+      // Solution: Only check for duplicate registration, let payment service validate after discount calculation
+
+      // Step 1: Check if user can register (no duplicate)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: 'PGRST116' }
+                })
+              })
+            })
+          })
+        })
+      })
+
+      // When we DON'T pass effectivePrice, payment method validation is skipped
+      const result = await RegistrationValidationService.validateRegistrationEligibility(
+        mockSupabase,
+        'user-123',
+        'registration-456',
+        {
+          // No effectivePrice provided - skip payment validation
+          // Payment service will validate AFTER calculating final discounted amount
+        }
+      )
+
+      expect(result.canRegister).toBe(true)
+      expect(result.error).toBeUndefined()
+
+      // Verify ONLY duplicate check was performed (1 query), NOT payment method check
+      expect(mockSupabase.from).toHaveBeenCalledTimes(1)
+      expect(mockSupabase.from).toHaveBeenCalledWith('user_registrations')
+    })
   })
 })

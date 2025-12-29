@@ -107,6 +107,14 @@ export class RegistrationValidationService {
   /**
    * Comprehensive validation for registration eligibility
    * Combines duplicate check and payment method validation
+   *
+   * IMPORTANT: Only use this when you know the FINAL price after all discounts.
+   * If discounts might apply (e.g., waitlist with discount codes), use canUserRegister()
+   * and validate payment method AFTER calculating the final discounted amount.
+   *
+   * Example:
+   * - Normal registration: Use this with final calculated price ✅
+   * - Waitlist selection: Use canUserRegister() only, validate payment in service ✅
    */
   static async validateRegistrationEligibility(
     supabase: SupabaseClient,

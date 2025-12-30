@@ -3,6 +3,7 @@ import { formatDate } from '@/lib/date-utils'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { logger } from '@/lib/logging/logger'
 import { emailService } from '@/lib/email'
 
@@ -108,24 +109,19 @@ export async function POST(
       }
     }
 
-    // Validate payment method
-    if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
-      return NextResponse.json({
-        error: 'User does not have a valid payment method'
-      }, { status: 400 })
-    }
+    // Validate that user doesn't already have an active registration
+    // Note: We only check for duplicate registrations here, NOT payment method
+    // Payment method validation happens in WaitlistPaymentService AFTER discount calculation
+    // This ensures 100% discounts don't incorrectly require payment methods
+    const validationResult = await RegistrationValidationService.canUserRegister(
+      supabase,
+      waitlistEntry.user_id,
+      waitlistEntry.registration_id
+    )
 
-    // Check if user is already registered for this registration
-    const { data: existingRegistration } = await supabase
-      .from('user_registrations')
-      .select('id')
-      .eq('user_id', waitlistEntry.user_id)
-      .eq('registration_id', waitlistEntry.registration_id)
-      .single()
-
-    if (existingRegistration) {
+    if (!validationResult.canRegister) {
       return NextResponse.json({
-        error: 'User is already registered for this event'
+        error: validationResult.error || 'Cannot register for this event'
       }, { status: 400 })
     }
 

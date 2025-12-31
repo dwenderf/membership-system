@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { logger } from '@/lib/logging/logger'
-import { emailService } from '@/lib/email'
 
 // POST /api/waitlists/[waitlistId]/select - Select a user from waitlist
 export async function POST(
@@ -193,43 +192,8 @@ export async function POST(
         })
       }
 
-      // Get discount code details if applicable
-      let discountApplied = ''
-      if (waitlistEntry.discount_code_id) {
-        const { data: discountCode } = await supabase
-          .from('discount_codes')
-          .select('code, percentage')
-          .eq('id', waitlistEntry.discount_code_id)
-          .single()
-
-        if (discountCode) {
-          const discountAmount = Math.round((category.price * discountCode.percentage) / 100)
-          discountApplied = `${discountCode.code}: -$${(discountAmount / 100).toFixed(2)}`
-        }
-      }
-
-      // Send confirmation email
-      try {
-        await emailService.sendWaitlistSelectedNotification({
-          userId: waitlistEntry.user_id,
-          email: user.email,
-          userName: `${user.first_name} ${user.last_name}`,
-          registrationName: registration.name,
-          categoryName: categoryName,
-          seasonName: season ? `${season.name} (${formatDate(new Date(season.start_date))} - ${formatDate(new Date(season.end_date))})` : 'Unknown Season',
-          amountCharged: chargeResult.amountCharged,
-          paymentIntentId: chargeResult.paymentIntentId,
-          discountApplied: discountApplied
-        })
-      } catch (emailError) {
-        // Log email error but don't fail the request
-        logger.logSystem('waitlist-selection-email-failed', 'Failed to send waitlist selection email', {
-          waitlistId,
-          userId: waitlistEntry.user_id,
-          error: emailError instanceof Error ? emailError.message : String(emailError)
-        })
-      }
-
+      // Email confirmation will be sent via webhook after payment is confirmed
+      // This ensures emails are only sent if payment succeeds
       logger.logSystem('waitlist-selection-success', 'Successfully selected user from waitlist', {
         waitlistId,
         userId: waitlistEntry.user_id,

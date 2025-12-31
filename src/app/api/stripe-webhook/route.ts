@@ -420,6 +420,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
       .update({
         payment_status: 'paid',
         registered_at: new Date().toISOString(),
+        stripe_payment_intent_id: paymentIntent.id,
       })
       .eq('user_id', userId)
       .eq('registration_id', registrationId)
@@ -1532,6 +1533,7 @@ export async function POST(request: NextRequest) {
                 .update({
                   payment_status: 'paid',
                   registered_at: new Date().toISOString(),
+                  stripe_payment_intent_id: paymentIntent.id,
                 })
                 .eq('user_id', paymentIntent.metadata.userId)
                 .eq('registration_id', paymentIntent.metadata.registrationId)

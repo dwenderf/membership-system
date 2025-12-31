@@ -234,6 +234,7 @@ export async function POST(request: NextRequest) {
         amount_paid: paymentIntent.amount,
         presale_code_used: paymentIntent.metadata.presaleCodeUsed || null,
         registered_at: new Date().toISOString(),
+        stripe_payment_intent_id: paymentIntent.id,
       }
 
       const { data, error } = await adminSupabase

@@ -157,7 +157,8 @@ export async function POST(
           amount_paid: chargeResult.amountCharged,
           payment_status: 'paid',
           payment_id: chargeResult.paymentId,
-          registered_at: new Date().toISOString()
+          registered_at: new Date().toISOString(),
+          stripe_payment_intent_id: chargeResult.paymentIntentId,
         })
         .select()
         .single()

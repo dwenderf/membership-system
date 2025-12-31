@@ -92,25 +92,25 @@ export class EmailProcessor {
 
       // Handle membership emails
       if (event.trigger_source === 'user_memberships' || event.trigger_source === 'stripe_webhook_membership' || event.trigger_source === 'free_membership') {
-        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering membership email staging', { 
+        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering membership email staging', {
           triggerSource: event.trigger_source,
           amount: event.amount,
           isFree: event.amount === 0
         })
         await this.stageMembershipConfirmationEmail(event, user)
-      } 
-      // Handle registration emails
-      else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration' || event.trigger_source === 'free_registration') {
-        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering registration email staging', { 
+      }
+      // Handle registration emails (including waitlist selections)
+      else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration' || event.trigger_source === 'free_registration' || event.trigger_source === 'stripe_webhook_waitlist') {
+        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering registration email staging', {
           triggerSource: event.trigger_source,
           amount: event.amount,
           isFree: event.amount === 0
         })
         await this.stageRegistrationConfirmationEmail(event, user)
-      } 
+      }
       // Handle alternate selection emails
       else if (event.trigger_source === 'stripe_webhook_alternate') {
-        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering alternate selection email staging', { 
+        this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering alternate selection email staging', {
           triggerSource: event.trigger_source,
           amount: event.amount
         })
@@ -118,9 +118,9 @@ export class EmailProcessor {
       }
       // Unknown trigger source
       else {
-        this.logger.logPaymentProcessing('process-confirmation-emails', '⚠️ Unknown trigger source, no email staged', { 
+        this.logger.logPaymentProcessing('process-confirmation-emails', '⚠️ Unknown trigger source, no email staged', {
           triggerSource: event.trigger_source,
-          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration', 'stripe_webhook_alternate']
+          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration', 'stripe_webhook_waitlist', 'stripe_webhook_alternate']
         }, 'warn')
       }
 

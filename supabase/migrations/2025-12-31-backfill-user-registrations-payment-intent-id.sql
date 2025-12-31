@@ -23,22 +23,21 @@ BEGIN
   RAISE NOTICE 'Records to update: %', records_to_update;
 END $$;
 
--- Perform the backfill
-UPDATE user_registrations ur
-SET stripe_payment_intent_id = p.stripe_payment_intent_id,
-    updated_at = NOW()
-FROM payments p
-WHERE ur.payment_id = p.id
-  AND ur.stripe_payment_intent_id IS NULL
-  AND p.stripe_payment_intent_id IS NOT NULL;
-
--- Show summary after update
+-- Show summary after update and perform the backfill
 DO $$
 DECLARE
   records_updated INTEGER;
   total_paid_registrations INTEGER;
   registrations_with_payment_intent INTEGER;
 BEGIN
+  -- Perform the backfill
+  UPDATE user_registrations ur
+  SET stripe_payment_intent_id = p.stripe_payment_intent_id,
+      updated_at = NOW()
+  FROM payments p
+  WHERE ur.payment_id = p.id
+    AND ur.stripe_payment_intent_id IS NULL
+    AND p.stripe_payment_intent_id IS NOT NULL;
   -- Get counts for summary
   GET DIAGNOSTICS records_updated = ROW_COUNT;
 

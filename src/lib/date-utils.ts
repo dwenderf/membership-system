@@ -110,3 +110,35 @@ export function toDateString(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   return dateObj.toISOString().substring(0, 10)
 }
+
+/**
+ * Convert UTC ISO string to datetime-local input format (YYYY-MM-DDTHH:mm)
+ * Displays the time in America/New_York timezone
+ * Used when populating datetime-local input fields from database values
+ * @param utcIsoString - UTC ISO string from database (e.g., "2025-09-28T21:30:00Z")
+ * @returns Datetime-local format string (e.g., "2025-09-28T17:30")
+ */
+export function convertFromUTCToNYDateTimeLocal(utcIsoString: string): string {
+  if (!utcIsoString) return ''
+
+  const date = new Date(utcIsoString)
+
+  // Get the date/time components in NY timezone
+  const nyDateString = date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+
+  // Parse the NY date string (format: "MM/DD/YYYY, HH:mm")
+  const [datePart, timePart] = nyDateString.split(', ')
+  const [month, day, year] = datePart.split('/')
+  const [hour, minute] = timePart.split(':')
+
+  // Return in datetime-local format (YYYY-MM-DDTHH:mm)
+  return `${year}-${month}-${day}T${hour}:${minute}`
+}

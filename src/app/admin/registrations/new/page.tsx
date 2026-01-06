@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { formatDateString } from '@/lib/date-utils'
+import { formatDateString, convertToNYTimezone } from '@/lib/date-utils'
 import Link from 'next/link'
 
 export default function NewRegistrationPage() {
@@ -18,6 +18,8 @@ export default function NewRegistrationPage() {
     allow_alternates: false,
     alternate_price: '',
     alternate_accounting_code: '',
+    start_date: '',
+    end_date: '',
   })
   
   const [seasons, setSeasons] = useState<any[]>([])
@@ -93,6 +95,13 @@ export default function NewRegistrationPage() {
         allow_alternates: formData.allow_alternates,
         alternate_price: formData.allow_alternates ? parseInt(formData.alternate_price) * 100 : null, // Convert to cents
         alternate_accounting_code: formData.allow_alternates ? formData.alternate_accounting_code : null,
+        // Convert datetime-local input (NY time) to UTC for storage
+        start_date: (formData.type === 'event' || formData.type === 'scrimmage') && formData.start_date
+          ? convertToNYTimezone(formData.start_date)
+          : null,
+        end_date: (formData.type === 'event' || formData.type === 'scrimmage') && formData.end_date
+          ? convertToNYTimezone(formData.end_date)
+          : null,
       }
 
       const { error: insertError } = await supabase
@@ -129,15 +138,18 @@ export default function NewRegistrationPage() {
     registration.name.toLowerCase() === formData.name.trim().toLowerCase()
   )
   
-  const canCreateRegistration = formData.season_id && 
-                               formData.name.trim() && 
+  const requiresDates = formData.type === 'event' || formData.type === 'scrimmage'
+
+  const canCreateRegistration = formData.season_id &&
+                               formData.name.trim() &&
                                !registrationNameExists &&
                                accountingCodesValid === true &&
                                (!formData.allow_alternates || (
-                                 formData.alternate_price.trim() && 
+                                 formData.alternate_price.trim() &&
                                  parseFloat(formData.alternate_price) > 0 &&
                                  formData.alternate_accounting_code.trim()
-                               ))
+                               )) &&
+                               (!requiresDates || (formData.start_date && formData.end_date))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -238,6 +250,49 @@ export default function NewRegistrationPage() {
                   Type of registration (team, scrimmage, or event)
                 </p>
               </div>
+
+              {/* Event/Scrimmage Date Fields - Only shown for events and scrimmages */}
+              {requiresDates && (
+                <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="text-sm text-blue-800 mb-3">
+                    <strong>Event Date & Time:</strong> Enter times in Eastern Time (New York)
+                  </div>
+
+                  <div>
+                    <label htmlFor="start_date" className="block text-sm font-medium text-gray-700">
+                      Start Date & Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      id="start_date"
+                      value={formData.start_date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      required={requiresDates}
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      When the {formData.type} starts (Eastern Time)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="end_date" className="block text-sm font-medium text-gray-700">
+                      End Date & Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      id="end_date"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      required={requiresDates}
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      When the {formData.type} ends (Eastern Time)
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Registration Name */}
               <div>

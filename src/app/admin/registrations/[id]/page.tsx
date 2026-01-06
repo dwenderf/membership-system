@@ -9,6 +9,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
+import EditableEventDates from '@/components/EditableEventDates'
 import GamesPreview from '@/components/GamesPreview'
 
 export default async function RegistrationDetailPage({
@@ -191,6 +192,12 @@ export default async function RegistrationDetailPage({
                       </dd>
                     </div>
                   )}
+                  <EditableEventDates
+                    registrationId={id}
+                    registrationType={registration.type}
+                    initialStartDate={registration.start_date}
+                    initialEndDate={registration.end_date}
+                  />
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Discount Codes</dt>
                     <dd className="mt-1 text-sm text-gray-900">

@@ -435,6 +435,11 @@ export class EmailProcessor {
         emailData.eventEndDate = formatDateTime(registration.registration.end_date)
         emailData.hasCalendarLinks = true
       } else {
+        // Set calendar fields to null when not applicable
+        emailData.calendarDownloadUrl = null
+        emailData.googleCalendarUrl = null
+        emailData.eventStartDate = null
+        emailData.eventEndDate = null
         emailData.hasCalendarLinks = false
       }
 

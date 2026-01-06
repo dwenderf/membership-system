@@ -146,7 +146,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
   
   const closedRegistrations = registrations.filter(reg => {
     const status = getRegistrationStatus(reg as any)
-    return status === 'expired'
+    return status === 'expired' || status === 'past'
   })
 
   return (

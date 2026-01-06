@@ -62,15 +62,15 @@ export default async function RegistrationsPage() {
                       return status === 'open' || status === 'presale'
                     }).length
                     const draftCount = registrations.filter((reg: any) => !reg.is_active).length
-                    const expiredCount = registrations.filter((reg: any) => {
+                    const closedCount = registrations.filter((reg: any) => {
                       const status = getRegistrationStatus(reg)
-                      return status === 'expired'
+                      return status === 'expired' || status === 'past'
                     }).length
                     const comingSoonCount = registrations.filter((reg: any) => {
                       const status = getRegistrationStatus(reg)
                       return status === 'coming_soon'
                     }).length
-                    
+
                     return (
                       <>
                         <span className="text-gray-600 font-medium">{draftCount} Draft</span>
@@ -79,7 +79,7 @@ export default async function RegistrationsPage() {
                         <span className="text-gray-400">•</span>
                         <span className="text-yellow-600 font-medium">{comingSoonCount} Coming Soon</span>
                         <span className="text-gray-400">•</span>
-                        <span className="text-red-600 font-medium">{expiredCount} Closed</span>
+                        <span className="text-red-600 font-medium">{closedCount} Closed</span>
                       </>
                     )
                   })()}

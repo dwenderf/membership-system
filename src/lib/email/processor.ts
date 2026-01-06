@@ -15,7 +15,8 @@
 import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
-import { formatDate, formatTime, toNYDateString } from '@/lib/date-utils'
+import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
+import { generateGoogleCalendarUrl } from '@/lib/calendar-utils'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -347,7 +348,11 @@ export class EmailProcessor {
         .select(`
           *,
           registration:registrations (
+            id,
             name,
+            type,
+            start_date,
+            end_date,
             season:seasons (name, start_date, end_date)
           ),
           registration_category:registration_categories (
@@ -390,11 +395,48 @@ export class EmailProcessor {
                           registration.registration_category?.category?.name || 
                           'Standard'
 
-      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '✅ Registration found, staging email', { 
+      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '✅ Registration found, staging email', {
         email: user.email,
         registrationName: registration.registration.name,
         categoryName: categoryName
       })
+
+      // Prepare base email data
+      const emailData: any = {
+        userName: `${user.first_name} ${user.last_name}`,
+        registrationName: registration.registration.name,
+        categoryName: categoryName,
+        seasonName: registration.registration.season.name,
+        amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
+        paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
+        registrationDate: toNYDateString(registration.created_at || new Date()),
+        dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      }
+
+      // Add calendar download links for events/scrimmages with dates
+      const regType = registration.registration.type
+      const hasEventDates = registration.registration.start_date && registration.registration.end_date
+      if ((regType === 'event' || regType === 'scrimmage') && hasEventDates) {
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+
+        // Generate calendar download URL (API endpoint)
+        emailData.calendarDownloadUrl = `${baseUrl}/api/calendar?registrationId=${registration.registration.id}&userRegistrationId=${registration.id}`
+
+        // Generate Google Calendar URL
+        emailData.googleCalendarUrl = generateGoogleCalendarUrl(
+          registration.registration.name,
+          registration.registration.start_date,
+          registration.registration.end_date,
+          `${regType.charAt(0).toUpperCase() + regType.slice(1)} - ${categoryName}`
+        )
+
+        // Add formatted event date/time for display
+        emailData.eventStartDate = formatDateTime(registration.registration.start_date)
+        emailData.eventEndDate = formatDateTime(registration.registration.end_date)
+        emailData.hasCalendarLinks = true
+      } else {
+        emailData.hasCalendarLinks = false
+      }
 
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({
@@ -403,16 +445,7 @@ export class EmailProcessor {
         event_type: 'registration.completed',
         subject: `Registration Confirmation - ${registration.registration.name}`,
         template_id: process.env.LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
-        email_data: {
-          userName: `${user.first_name} ${user.last_name}`,
-          registrationName: registration.registration.name,
-          categoryName: categoryName,
-          seasonName: registration.registration.season.name,
-          amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
-          paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
-          registrationDate: toNYDateString(registration.created_at || new Date()),
-          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
-        },
+        email_data: emailData,
         related_entity_type: 'user_registrations',
         related_entity_id: event.record_id || undefined,
         payment_id: event.payment_id || undefined

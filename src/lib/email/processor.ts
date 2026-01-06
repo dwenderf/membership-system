@@ -532,13 +532,52 @@ export class EmailProcessor {
       // Format game date for display
       // Note: Database stores TIMESTAMP WITH TIME ZONE, so we should preserve the original timezone
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
-      
+
+      // Calculate end time as 90 minutes after start (default game duration)
+      const gameEndDate = new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes in milliseconds
+
       // Format date and time in Eastern Time (the timezone for NYCGHA events)
       const formattedDate = formatDate(gameDate)
-      
+
       // For time, we want to show what time it actually is in New York, regardless of how it was stored
       const formattedTime = formatTime(gameDate)
-      
+
+      // Prepare base email data
+      const emailData: any = {
+        userName: `${user.first_name} ${user.last_name}`,
+        registrationName: alternateSelection.alternate_registration.registration.name,
+        seasonName: alternateSelection.alternate_registration.registration.season?.name || '',
+        gameDescription: alternateSelection.alternate_registration.game_description,
+        gameDate: formattedDate,
+        gameTime: formattedTime,
+        amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
+        paymentIntentId: payment?.stripe_payment_intent_id || 'unknown',
+        purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
+        dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      }
+
+      // Add calendar download links for the game
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      const gameStartISO = gameDate.toISOString()
+      const gameEndISO = gameEndDate.toISOString()
+
+      // For alternates, we'll create a simple calendar entry for the game
+      // Note: We don't have a user_registration record for alternates, so we'll use the alternate_registration ID
+      emailData.calendarDownloadUrl = `${baseUrl}/api/calendar/alternate?alternateRegistrationId=${alternateSelection.alternate_registration_id}&alternateSelectionId=${alternateSelection.id}`
+
+      // Generate Google Calendar URL
+      emailData.googleCalendarUrl = generateGoogleCalendarUrl(
+        alternateSelection.alternate_registration.game_description,
+        gameStartISO,
+        gameEndISO,
+        `Alternate game for ${alternateSelection.alternate_registration.registration.name}`
+      )
+
+      // Add formatted event date/time for display
+      emailData.eventStartDate = formatDateTime(gameStartISO)
+      emailData.eventEndDate = formatDateTime(gameEndISO)
+      emailData.hasCalendarLinks = true
+
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({
         user_id: event.user_id,
@@ -546,18 +585,7 @@ export class EmailProcessor {
         event_type: 'alternate_selection.completed',
         subject: `Alternate Selection Confirmation - ${alternateSelection.alternate_registration.game_description}`,
         template_id: templateId,
-        email_data: {
-          userName: `${user.first_name} ${user.last_name}`,
-          registrationName: alternateSelection.alternate_registration.registration.name,
-          seasonName: alternateSelection.alternate_registration.registration.season?.name || '',
-          gameDescription: alternateSelection.alternate_registration.game_description,
-          gameDate: formattedDate,
-          gameTime: formattedTime,
-          amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
-          paymentIntentId: payment?.stripe_payment_intent_id || 'unknown',
-          purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
-          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
-        },
+        email_data: emailData,
         related_entity_type: 'alternate_selections',
         related_entity_id: alternateSelection.id,
         payment_id: event.payment_id

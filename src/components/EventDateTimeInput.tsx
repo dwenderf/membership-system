@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import DateTimePicker from '@/components/DateTimePicker'
 
 interface EventDateTimeInputProps {
   startDate: string
@@ -34,22 +35,6 @@ export default function EventDateTimeInput({
     }
   }, [startDate])
 
-  // Round minutes to nearest 5-minute increment
-  const handleDateChange = (value: string) => {
-    if (value && value.includes('T')) {
-      const [datePart, timePart] = value.split('T')
-      if (timePart && timePart.includes(':')) {
-        const [hours, minutes] = timePart.split(':')
-        const roundedMinutes = Math.round(parseInt(minutes) / 5) * 5
-        const formattedMinutes = roundedMinutes.toString().padStart(2, '0')
-        const roundedValue = `${datePart}T${hours}:${formattedMinutes}`
-        onStartDateChange(roundedValue)
-        return
-      }
-    }
-    onStartDateChange(value)
-  }
-
   return (
     <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
       <div className="text-sm text-blue-800 mb-3">
@@ -57,20 +42,20 @@ export default function EventDateTimeInput({
       </div>
 
       <div>
-        <label htmlFor="start_date" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
           Start Date & Time {required && <span className="text-red-500">*</span>}
         </label>
-        <input
-          type="datetime-local"
+        <DateTimePicker
           id="start_date"
           value={startDate}
-          onChange={(e) => handleDateChange(e.target.value)}
-          step="300"
-          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          onChange={onStartDateChange}
+          enableTime={true}
+          minuteIncrement={5}
           required={required}
           disabled={disabled}
+          placeholder="Select date and time..."
         />
-        <p className="mt-1 text-xs text-gray-500">Time will be rounded to nearest 5-minute increment</p>
+        <p className="mt-1 text-xs text-gray-500">Time in 5-minute increments</p>
 
         {isPastDate && (
           <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md">

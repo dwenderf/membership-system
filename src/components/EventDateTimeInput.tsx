@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface EventDateTimeInputProps {
   startDate: string
@@ -21,6 +21,35 @@ export default function EventDateTimeInput({
   required = false,
   disabled = false,
 }: EventDateTimeInputProps) {
+  const [isPastDate, setIsPastDate] = useState(false)
+
+  // Check if the selected date is in the past
+  useEffect(() => {
+    if (startDate) {
+      const selectedDate = new Date(startDate)
+      const now = new Date()
+      setIsPastDate(selectedDate < now)
+    } else {
+      setIsPastDate(false)
+    }
+  }, [startDate])
+
+  // Round minutes to nearest 5-minute increment
+  const handleDateChange = (value: string) => {
+    if (value && value.includes('T')) {
+      const [datePart, timePart] = value.split('T')
+      if (timePart && timePart.includes(':')) {
+        const [hours, minutes] = timePart.split(':')
+        const roundedMinutes = Math.round(parseInt(minutes) / 5) * 5
+        const formattedMinutes = roundedMinutes.toString().padStart(2, '0')
+        const roundedValue = `${datePart}T${hours}:${formattedMinutes}`
+        onStartDateChange(roundedValue)
+        return
+      }
+    }
+    onStartDateChange(value)
+  }
+
   return (
     <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
       <div className="text-sm text-blue-800 mb-3">
@@ -35,13 +64,26 @@ export default function EventDateTimeInput({
           type="datetime-local"
           id="start_date"
           value={startDate}
-          onChange={(e) => onStartDateChange(e.target.value)}
+          onChange={(e) => handleDateChange(e.target.value)}
           step="300"
           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
           required={required}
           disabled={disabled}
         />
-        <p className="mt-1 text-xs text-gray-500">5-minute increments</p>
+        <p className="mt-1 text-xs text-gray-500">Time will be rounded to nearest 5-minute increment</p>
+
+        {isPastDate && (
+          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md">
+            <div className="flex items-start">
+              <svg className="h-5 w-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-yellow-800">
+                <strong>Warning:</strong> You've selected a date/time in the past.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -54,7 +96,7 @@ export default function EventDateTimeInput({
             id="duration_minutes"
             value={durationMinutes}
             onChange={(e) => onDurationChange(e.target.value)}
-            min="5"
+            min="1"
             step="5"
             className="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             required={required}

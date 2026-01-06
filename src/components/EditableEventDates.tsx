@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { convertToNYTimezone, convertFromUTCToNYDateTimeLocal, formatDateTime } from '@/lib/date-utils'
+import EventDateTimeInput from '@/components/EventDateTimeInput'
 
 interface EditableEventDatesProps {
   registrationId: string
@@ -92,50 +93,16 @@ export default function EditableEventDates({
 
   if (isEditing) {
     return (
-      <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <div className="text-sm text-blue-800 mb-3">
-          <strong>Edit Event Dates:</strong> Enter times in Eastern Time (New York)
-        </div>
-
-        <div>
-          <label htmlFor="edit_start_date" className="block text-sm font-medium text-gray-700">
-            Start Date & Time
-          </label>
-          <input
-            type="datetime-local"
-            id="edit_start_date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            step="300"
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={loading}
-          />
-          <p className="mt-1 text-xs text-gray-500">5-minute increments</p>
-        </div>
-
-        <div>
-          <label htmlFor="edit_duration_minutes" className="block text-sm font-medium text-gray-700">
-            Duration
-          </label>
-          <div className="mt-1 flex items-center space-x-2">
-            <input
-              type="number"
-              id="edit_duration_minutes"
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
-              min="5"
-              step="5"
-              className="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              disabled={loading}
-            />
-            <span className="text-sm text-gray-700">minutes</span>
-            {durationMinutes && (
-              <span className="text-sm text-gray-500">
-                ({Math.floor(parseInt(durationMinutes) / 60)}h {parseInt(durationMinutes) % 60}m)
-              </span>
-            )}
-          </div>
-        </div>
+      <div className="space-y-4">
+        <EventDateTimeInput
+          startDate={startDate}
+          durationMinutes={durationMinutes}
+          onStartDateChange={setStartDate}
+          onDurationChange={setDurationMinutes}
+          registrationType={registrationType}
+          required={true}
+          disabled={loading}
+        />
 
         {error && (
           <p className="text-sm text-red-600">{error}</p>

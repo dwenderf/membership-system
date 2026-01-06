@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
           id,
           game_description,
           game_date,
+          game_end_time,
           registration:registrations (
             name
           )
@@ -49,7 +50,10 @@ export async function GET(request: NextRequest) {
     }
 
     const gameDate = new Date(alternateSelection.alternate_registration.game_date)
-    const gameEndDate = new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes
+    // Use game_end_time if available, otherwise fall back to 90 minutes
+    const gameEndDate = alternateSelection.alternate_registration.game_end_time
+      ? new Date(alternateSelection.alternate_registration.game_end_time)
+      : new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes as fallback
 
     // Generate iCal content
     const icalContent = generateICalContent(

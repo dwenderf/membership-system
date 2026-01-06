@@ -499,6 +499,7 @@ export class EmailProcessor {
           alternate_registration:alternate_registrations (
             game_description,
             game_date,
+            game_end_time,
             registration:registrations (
               name,
               season:seasons (name)
@@ -533,8 +534,10 @@ export class EmailProcessor {
       // Note: Database stores TIMESTAMP WITH TIME ZONE, so we should preserve the original timezone
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
 
-      // Calculate end time as 90 minutes after start (default game duration)
-      const gameEndDate = new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes in milliseconds
+      // Use game_end_time if available, otherwise calculate as 90 minutes after start (default game duration)
+      const gameEndDate = alternateSelection.alternate_registration.game_end_time
+        ? new Date(alternateSelection.alternate_registration.game_end_time)
+        : new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes as fallback
 
       // Format date and time in Eastern Time (the timezone for NYCGHA events)
       const formattedDate = formatDate(gameDate)

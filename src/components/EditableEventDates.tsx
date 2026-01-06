@@ -18,9 +18,21 @@ export default function EditableEventDates({
 }: EditableEventDatesProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [startDate, setStartDate] = useState(initialStartDate ? convertFromUTCToNYDateTimeLocal(initialStartDate) : '')
-  const [endDate, setEndDate] = useState(initialEndDate ? convertFromUTCToNYDateTimeLocal(initialEndDate) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Calculate initial duration in minutes
+  const calculateInitialDuration = () => {
+    if (initialStartDate && initialEndDate) {
+      const start = new Date(initialStartDate)
+      const end = new Date(initialEndDate)
+      return Math.round((end.getTime() - start.getTime()) / (60 * 1000)) // milliseconds to minutes
+    }
+    // Default durations
+    return registrationType === 'scrimmage' ? 90 : 180
+  }
+
+  const [durationMinutes, setDurationMinutes] = useState(calculateInitialDuration().toString())
 
   // Only show for events and scrimmages
   if (registrationType === 'team') {
@@ -28,8 +40,8 @@ export default function EditableEventDates({
   }
 
   const handleSave = async () => {
-    if (!startDate || !endDate) {
-      setError('Both start and end dates are required')
+    if (!startDate || !durationMinutes) {
+      setError('Start date and duration are required')
       return
     }
 
@@ -37,14 +49,22 @@ export default function EditableEventDates({
     setError('')
 
     try {
+      // Convert start date to UTC
+      const startDateUTC = convertToNYTimezone(startDate)
+
+      // Calculate end date from start + duration
+      const start = new Date(startDateUTC)
+      const end = new Date(start.getTime() + parseInt(durationMinutes) * 60 * 1000)
+      const endDateUTC = end.toISOString()
+
       const response = await fetch(`/api/admin/registrations/${registrationId}/dates`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          start_date: convertToNYTimezone(startDate),
-          end_date: convertToNYTimezone(endDate),
+          start_date: startDateUTC,
+          end_date: endDateUTC,
         }),
       })
 
@@ -65,7 +85,7 @@ export default function EditableEventDates({
 
   const handleCancel = () => {
     setStartDate(initialStartDate ? convertFromUTCToNYDateTimeLocal(initialStartDate) : '')
-    setEndDate(initialEndDate ? convertFromUTCToNYDateTimeLocal(initialEndDate) : '')
+    setDurationMinutes(calculateInitialDuration().toString())
     setIsEditing(false)
     setError('')
   }
@@ -86,23 +106,35 @@ export default function EditableEventDates({
             id="edit_start_date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            step="300"
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             disabled={loading}
           />
+          <p className="mt-1 text-xs text-gray-500">5-minute increments</p>
         </div>
 
         <div>
-          <label htmlFor="edit_end_date" className="block text-sm font-medium text-gray-700">
-            End Date & Time
+          <label htmlFor="edit_duration_minutes" className="block text-sm font-medium text-gray-700">
+            Duration
           </label>
-          <input
-            type="datetime-local"
-            id="edit_end_date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            disabled={loading}
-          />
+          <div className="mt-1 flex items-center space-x-2">
+            <input
+              type="number"
+              id="edit_duration_minutes"
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(e.target.value)}
+              min="5"
+              step="5"
+              className="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              disabled={loading}
+            />
+            <span className="text-sm text-gray-700">minutes</span>
+            {durationMinutes && (
+              <span className="text-sm text-gray-500">
+                ({Math.floor(parseInt(durationMinutes) / 60)}h {parseInt(durationMinutes) % 60}m)
+              </span>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -112,7 +144,7 @@ export default function EditableEventDates({
         <div className="flex items-center space-x-2">
           <button
             onClick={handleSave}
-            disabled={loading || !startDate || !endDate}
+            disabled={loading || !startDate || !durationMinutes}
             className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Save Dates'}

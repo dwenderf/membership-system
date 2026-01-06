@@ -19,7 +19,7 @@ export default function NewRegistrationPage() {
     alternate_price: '',
     alternate_accounting_code: '',
     start_date: '',
-    end_date: '',
+    duration_minutes: '', // Duration in minutes instead of end_date
   })
   
   const [seasons, setSeasons] = useState<any[]>([])
@@ -87,6 +87,19 @@ export default function NewRegistrationPage() {
     setError('')
 
     try {
+      // Calculate end_date from start_date + duration
+      let startDateUTC = null
+      let endDateUTC = null
+
+      if ((formData.type === 'event' || formData.type === 'scrimmage') && formData.start_date && formData.duration_minutes) {
+        startDateUTC = convertToNYTimezone(formData.start_date)
+
+        // Calculate end date by adding duration to start date
+        const startDate = new Date(startDateUTC)
+        const endDate = new Date(startDate.getTime() + parseInt(formData.duration_minutes) * 60 * 1000)
+        endDateUTC = endDate.toISOString()
+      }
+
       const registrationData = {
         season_id: formData.season_id,
         name: formData.name,
@@ -95,13 +108,8 @@ export default function NewRegistrationPage() {
         allow_alternates: formData.allow_alternates,
         alternate_price: formData.allow_alternates ? parseInt(formData.alternate_price) * 100 : null, // Convert to cents
         alternate_accounting_code: formData.allow_alternates ? formData.alternate_accounting_code : null,
-        // Convert datetime-local input (NY time) to UTC for storage
-        start_date: (formData.type === 'event' || formData.type === 'scrimmage') && formData.start_date
-          ? convertToNYTimezone(formData.start_date)
-          : null,
-        end_date: (formData.type === 'event' || formData.type === 'scrimmage') && formData.end_date
-          ? convertToNYTimezone(formData.end_date)
-          : null,
+        start_date: startDateUTC,
+        end_date: endDateUTC,
       }
 
       const { error: insertError } = await supabase
@@ -140,6 +148,13 @@ export default function NewRegistrationPage() {
   
   const requiresDates = formData.type === 'event' || formData.type === 'scrimmage'
 
+  // Set default duration when type changes
+  const getDefaultDuration = (type: string) => {
+    if (type === 'scrimmage') return '90' // 90 minutes
+    if (type === 'event') return '180' // 3 hours
+    return ''
+  }
+
   const canCreateRegistration = formData.season_id &&
                                formData.name.trim() &&
                                !registrationNameExists &&
@@ -149,7 +164,7 @@ export default function NewRegistrationPage() {
                                  parseFloat(formData.alternate_price) > 0 &&
                                  formData.alternate_accounting_code.trim()
                                )) &&
-                               (!requiresDates || (formData.start_date && formData.end_date))
+                               (!requiresDates || (formData.start_date && formData.duration_minutes))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -238,7 +253,14 @@ export default function NewRegistrationPage() {
                 <select
                   id="type"
                   value={formData.type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'team' | 'scrimmage' | 'event' }))}
+                  onChange={(e) => {
+                    const newType = e.target.value as 'team' | 'scrimmage' | 'event'
+                    setFormData(prev => ({
+                      ...prev,
+                      type: newType,
+                      duration_minutes: getDefaultDuration(newType)
+                    }))
+                  }}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   required
                 >
@@ -267,28 +289,39 @@ export default function NewRegistrationPage() {
                       id="start_date"
                       value={formData.start_date}
                       onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                      step="300"
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       required={requiresDates}
                     />
                     <p className="mt-1 text-sm text-gray-500">
-                      When the {formData.type} starts (Eastern Time)
+                      When the {formData.type} starts (Eastern Time, 5-minute increments)
                     </p>
                   </div>
 
                   <div>
-                    <label htmlFor="end_date" className="block text-sm font-medium text-gray-700">
-                      End Date & Time <span className="text-red-500">*</span>
+                    <label htmlFor="duration_minutes" className="block text-sm font-medium text-gray-700">
+                      Duration <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      id="end_date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      required={requiresDates}
-                    />
+                    <div className="mt-1 flex items-center space-x-2">
+                      <input
+                        type="number"
+                        id="duration_minutes"
+                        value={formData.duration_minutes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                        min="5"
+                        step="5"
+                        className="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        required={requiresDates}
+                      />
+                      <span className="text-sm text-gray-700">minutes</span>
+                      {formData.duration_minutes && (
+                        <span className="text-sm text-gray-500">
+                          ({Math.floor(parseInt(formData.duration_minutes) / 60)}h {parseInt(formData.duration_minutes) % 60}m)
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm text-gray-500">
-                      When the {formData.type} ends (Eastern Time)
+                      Default: {formData.type === 'scrimmage' ? '90 minutes (1.5 hours)' : '180 minutes (3 hours)'}
                     </p>
                   </div>
                 </div>

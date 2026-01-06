@@ -329,8 +329,13 @@ export async function GET(request: NextRequest) {
           id,
           name,
           type,
+          start_date,
+          end_date,
           seasons (
-            name
+            id,
+            name,
+            start_date,
+            end_date
           ),
           registration_categories (
             id,
@@ -434,7 +439,12 @@ export async function GET(request: NextRequest) {
           id: item.id,
           name: item.name,
           type: item.type,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          season_id: season?.id || null,
           season_name: season?.name || 'Unknown Season',
+          season_start_date: season?.start_date || null,
+          season_end_date: season?.end_date || null,
           total_count: totalCount,
           total_capacity: totalCapacity > 0 ? totalCapacity : null,
           total_waitlist_count: totalWaitlistCount,

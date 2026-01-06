@@ -6,8 +6,13 @@ import { useRouter } from 'next/navigation'
 interface Registration {
   id: string
   name: string
+  season_id: string | null
   season_name: string
+  season_start_date: string | null
+  season_end_date: string | null
   type: string
+  start_date: string | null
+  end_date: string | null
   total_count: number
   total_capacity: number | null
   total_waitlist_count: number
@@ -25,6 +30,8 @@ export default function RegistrationReportsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedSeason, setSelectedSeason] = useState<string>('all')
+  const [showPastEvents, setShowPastEvents] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -64,9 +71,84 @@ export default function RegistrationReportsPage() {
     router.push(`/admin/reports/registrations/${registrationId}`)
   }
 
+  // Helper function to check if a registration is currently active
+  const isRegistrationActive = (registration: Registration): boolean => {
+    // For events and scrimmages with dates set, use the event end_date
+    if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+      const eventEndDate = new Date(registration.end_date)
+      return eventEndDate >= new Date()
+    }
+
+    // For teams or events/scrimmages without dates, use season end_date
+    if (!registration.season_end_date) return false
+    const seasonEndDate = new Date(registration.season_end_date)
+    return seasonEndDate >= new Date()
+  }
+
+  // Get unique seasons for filter dropdown
+  const seasons = Array.from(new Set(registrations.map(r => JSON.stringify({ id: r.season_id, name: r.season_name }))))
+    .map(s => JSON.parse(s))
+    .sort((a, b) => b.name.localeCompare(a.name))
+
+  // Filter registrations based on selected season and show past events toggle
+  const filteredRegistrations = registrations.filter(registration => {
+    // Filter by season
+    if (selectedSeason !== 'all' && registration.season_id !== selectedSeason) {
+      return false
+    }
+
+    // Filter by active/past status
+    if (!showPastEvents && !isRegistrationActive(registration)) {
+      return false
+    }
+
+    return true
+  })
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Registration Reports</h1>
+
+      {/* Filtering Controls */}
+      <div className="mb-6 bg-white shadow rounded-lg p-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[200px]">
+            <label htmlFor="season-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Filter by Season
+            </label>
+            <select
+              id="season-filter"
+              value={selectedSeason}
+              onChange={(e) => setSelectedSeason(e.target.value)}
+              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              <option value="all">All Seasons</option>
+              {seasons.map((season) => (
+                <option key={season.id} value={season.id}>
+                  {season.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center mt-6">
+            <input
+              id="show-past-events"
+              type="checkbox"
+              checked={showPastEvents}
+              onChange={(e) => setShowPastEvents(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="show-past-events" className="ml-2 block text-sm text-gray-900">
+              Show past events/scrimmages
+            </label>
+          </div>
+
+          <div className="flex-1 text-right text-sm text-gray-600 mt-6">
+            Showing {filteredRegistrations.length} of {registrations.length} registrations
+          </div>
+        </div>
+      </div>
 
       {/* Error Display */}
       {error && (
@@ -96,9 +178,18 @@ export default function RegistrationReportsPage() {
               </div>
             ))}
           </div>
+        ) : filteredRegistrations.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-gray-500">No registrations found matching your filters.</p>
+            {!showPastEvents && (
+              <p className="text-sm text-gray-400 mt-2">
+                Try enabling "Show past events/scrimmages" to see more results.
+              </p>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {registrations.map((registration) => (
+            {filteredRegistrations.map((registration) => (
               <button
                 key={registration.id}
                 onClick={() => handleRegistrationClick(registration.id)}

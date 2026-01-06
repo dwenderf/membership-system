@@ -46,12 +46,22 @@ export default async function UserDashboardPage() {
     })
     if (registrationsResponse.ok) {
       const allRegistrations = await registrationsResponse.json()
-      // Filter to only active registrations (where season hasn't expired)
+      // Filter to only active registrations
       const activeRegistrations = allRegistrations.filter((reg: any) => {
-        const season = reg.registration?.season
+        const registration = reg.registration
+        if (!registration) return false
+
+        // For events and scrimmages with dates set, use the event end_date
+        if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+          const eventEndDate = new Date(registration.end_date)
+          return eventEndDate >= new Date()
+        }
+
+        // For teams or events/scrimmages without dates, use season end_date
+        const season = registration.season
         if (!season) return false
-        const endDate = new Date(season.end_date)
-        return endDate >= new Date()
+        const seasonEndDate = new Date(season.end_date)
+        return seasonEndDate >= new Date()
       })
       userRegistrations = activeRegistrations.slice(0, 5) // Limit to 5 for dashboard
     }
@@ -310,11 +320,23 @@ export default async function UserDashboardPage() {
                     // Only show if user is NOT already registered as regular participant
                     return !userRegistrations?.some(reg => reg.registration?.id === alt.registration?.id)
                   }).slice(0, 2).map((alternateReg) => {
-                    // Filter to only active seasons
-                    const season = alternateReg.registration?.season
-                    if (!season) return null
-                    const endDate = new Date(season.end_date)
-                    if (endDate < new Date()) return null
+                    const registration = alternateReg.registration
+                    if (!registration) return null
+
+                    // Check if registration is active based on type
+                    let isActive = false
+                    if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+                      // For events/scrimmages with dates, use event end_date
+                      const eventEndDate = new Date(registration.end_date)
+                      isActive = eventEndDate >= new Date()
+                    } else {
+                      // For teams or events/scrimmages without dates, use season end_date
+                      const season = registration.season
+                      if (!season) return null
+                      const seasonEndDate = new Date(season.end_date)
+                      isActive = seasonEndDate >= new Date()
+                    }
+                    if (!isActive) return null
                     
                     return (
                       <div key={`alt-${alternateReg.id}`} className="flex justify-between items-start">
@@ -337,11 +359,21 @@ export default async function UserDashboardPage() {
                   
                   {/* Show active waitlist entries */}
                   {userWaitlistEntries?.filter(waitlistEntry => {
-                    // Filter to only active seasons
-                    const season = waitlistEntry.registration?.season
+                    const registration = waitlistEntry.registration
+                    if (!registration) return false
+
+                    // Check if registration is active based on type
+                    if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+                      // For events/scrimmages with dates, use event end_date
+                      const eventEndDate = new Date(registration.end_date)
+                      return eventEndDate >= new Date()
+                    }
+
+                    // For teams or events/scrimmages without dates, use season end_date
+                    const season = registration.season
                     if (!season) return false
-                    const endDate = new Date(season.end_date)
-                    return endDate >= new Date()
+                    const seasonEndDate = new Date(season.end_date)
+                    return seasonEndDate >= new Date()
                   }).slice(0, 2).map((waitlistEntry) => (
                     <div key={`wait-${waitlistEntry.id}`} className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">

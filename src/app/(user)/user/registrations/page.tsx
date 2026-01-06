@@ -18,6 +18,23 @@ function formatDateString(dateString: string): string {
   return formatDate(date)
 }
 
+// Helper function to check if a registration is currently active
+function isRegistrationActive(registration: any): boolean {
+  if (!registration) return false
+
+  // For events and scrimmages with dates set, use the event end_date
+  if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+    const eventEndDate = new Date(registration.end_date)
+    return eventEndDate >= new Date()
+  }
+
+  // For teams or events/scrimmages without dates, use season end_date
+  const season = registration.season
+  if (!season) return false
+  const seasonEndDate = new Date(season.end_date)
+  return seasonEndDate >= new Date()
+}
+
 export default async function UserRegistrationsPage() {
   const headersList = await headers()
   const supabase = await createClient()
@@ -149,49 +166,31 @@ export default async function UserRegistrationsPage() {
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
-  const currentRegistrations = userRegistrations?.filter(ur => {
-    const season = ur.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
+  const currentRegistrations = userRegistrations?.filter(ur =>
+    isRegistrationActive(ur.registration)
+  ) || []
 
-  const pastRegistrations = userRegistrations?.filter(ur => {
-    const season = ur.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  const pastRegistrations = userRegistrations?.filter(ur =>
+    !isRegistrationActive(ur.registration)
+  ) || []
 
   // Split waitlist entries into current and past
-  const currentWaitlistEntries = userWaitlistEntries?.filter(we => {
-    const season = we.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
+  const currentWaitlistEntries = userWaitlistEntries?.filter(we =>
+    isRegistrationActive(we.registration)
+  ) || []
 
-  const pastWaitlistEntries = userWaitlistEntries?.filter(we => {
-    const season = we.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  const pastWaitlistEntries = userWaitlistEntries?.filter(we =>
+    !isRegistrationActive(we.registration)
+  ) || []
 
   // Split alternate registrations into current and past
-  const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
-    const season = ar.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
+  const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
+    isRegistrationActive(ar.registration)
+  ) || []
 
-  const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
-    const season = ar.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
+    !isRegistrationActive(ar.registration)
+  ) || []
 
   return (
     <div className="px-4 py-6 sm:px-0">

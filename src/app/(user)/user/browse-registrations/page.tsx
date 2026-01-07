@@ -344,7 +344,7 @@ export default async function BrowseRegistrationsPage() {
                       
                       <div className="mt-3">
                         {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-base font-bold text-blue-700">
                             {formatEventDateTime(registration.start_date)}
                           </p>
                         ) : (

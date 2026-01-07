@@ -9,9 +9,11 @@ interface RegistrationTypeBadgeProps {
  * RegistrationTypeBadge - A standardized badge component for registration types
  *
  * Provides consistent colors across the application:
- * - Team: Blue
- * - Scrimmage: Green
- * - Event: Purple
+ * - Team: Blue (bg-blue-100 text-blue-800)
+ * - Scrimmage: Orange (bg-orange-100 text-orange-800)
+ * - Event: Purple (bg-purple-100 text-purple-800)
+ *
+ * Note: Green is reserved for status indicators (Active, Open, Paid)
  *
  * @example
  * ```tsx
@@ -25,7 +27,7 @@ export default function RegistrationTypeBadge({ type, className = '' }: Registra
       case 'team':
         return 'bg-blue-100 text-blue-800'
       case 'scrimmage':
-        return 'bg-green-100 text-green-800'
+        return 'bg-orange-100 text-orange-800'
       case 'event':
         return 'bg-purple-100 text-purple-800'
       default:

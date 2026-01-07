@@ -276,7 +276,10 @@ export default async function UserDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* My Discount Usage */}
+        <DiscountUsage />
+
         {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
@@ -530,9 +533,6 @@ export default async function UserDashboardPage() {
             </div>
           </div>
         </div>
-
-        {/* Discount Usage */}
-        <DiscountUsage />
       </div>
 
 

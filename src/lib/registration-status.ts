@@ -31,10 +31,10 @@ export function getRegistrationStatus(registration: RegistrationWithTiming): Reg
     return 'draft'
   }
 
-  // For events and scrimmages, check if the event has already passed
-  if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date) {
-    const eventStartDate = new Date(registration.start_date)
-    if (now > eventStartDate) {
+  // For events and scrimmages, check if the event has already ended
+  if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+    const eventEndDate = new Date(registration.end_date)
+    if (now > eventEndDate) {
       return 'past'
     }
   }

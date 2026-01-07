@@ -31,19 +31,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 
-    // Verify user has access to this registration
-    if (userRegistrationId) {
-      const { data: userReg, error: userRegError } = await supabase
-        .from('user_registrations')
-        .select('id')
-        .eq('id', userRegistrationId)
-        .eq('user_id', user.id)
-        .eq('registration_id', registrationId)
-        .single()
+    // Verify user has registered for this event
+    // Check by userRegistrationId if provided, otherwise verify user has any registration for this event
+    let userRegQuery = supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('registration_id', registrationId)
+      .eq('payment_status', 'paid')
 
-      if (userRegError || !userReg) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-      }
+    if (userRegistrationId) {
+      userRegQuery = userRegQuery.eq('id', userRegistrationId)
+    }
+
+    const { data: userReg, error: userRegError } = await userRegQuery.maybeSingle()
+
+    if (userRegError || !userReg) {
+      return NextResponse.json({ error: 'Access denied - you must be registered for this event' }, { status: 403 })
     }
 
     // Check if this registration has dates (events/scrimmages only)

@@ -196,19 +196,15 @@ export default async function UserDashboardPage() {
             href="/user/browse-memberships"
             className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
           >
+            <span className="mr-2 text-lg">🎫</span>
             Browse Memberships
-            <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
           </a>
           <a
             href="/user/browse-registrations"
             className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
           >
+            <span className="mr-2 text-lg">🏒</span>
             Browse Registrations
-            <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
           </a>
         </div>
       </div>
@@ -249,11 +245,11 @@ export default async function UserDashboardPage() {
           </div>
         </div>
 
-        {/* Teams */}
+        {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Teams
+              My Teams
             </h3>
             <div className="mt-4">
               {teamRegistrations.length > 0 ||
@@ -379,11 +375,11 @@ export default async function UserDashboardPage() {
           </div>
         </div>
 
-        {/* Upcoming Events */}
+        {/* My Upcoming Events */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Upcoming Events
+              My Upcoming Events
             </h3>
             <div className="mt-4">
               {eventRegistrations.length > 0 ||

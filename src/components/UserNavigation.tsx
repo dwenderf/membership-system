@@ -61,8 +61,12 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/user" className="text-xl font-bold text-gray-900">
-                {getOrganizationName('short')}
+              <Link href="/user" className="flex items-center">
+                <img
+                  src="/images/logo.png"
+                  alt={getOrganizationName('short')}
+                  className="h-10 w-auto"
+                />
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">

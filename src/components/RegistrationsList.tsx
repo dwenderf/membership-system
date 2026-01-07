@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 
 interface Registration {
   id: string
@@ -87,13 +88,7 @@ function RegistrationItem({ registration }: { registration: Registration }) {
               <p className="text-lg font-medium text-gray-900 truncate">
                 {registration.name}
               </p>
-              <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                'bg-purple-100 text-purple-800'
-              }`}>
-                {registration.type}
-              </span>
+              <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} className="ml-2" />
               <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 getStatusBadgeStyle(status)
               }`}>

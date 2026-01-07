@@ -5,8 +5,9 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate, formatDateTime, formatEventDateTime } from '@/lib/date-utils'
+import { formatDate } from '@/lib/date-utils'
 import EventCalendarButton from '@/components/EventCalendarButton'
+import RegistrationDateDisplay from '@/components/RegistrationDateDisplay'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -217,9 +218,12 @@ export default async function UserRegistrationsPage() {
                           <p className="text-sm font-medium text-gray-900">
                             {userRegistration.registration?.name}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            {userRegistration.registration?.season?.name}
-                          </p>
+                          <RegistrationDateDisplay
+                            type={userRegistration.registration?.type}
+                            startDate={userRegistration.registration?.start_date}
+                            seasonName={userRegistration.registration?.season?.name}
+                            className="text-sm text-gray-600"
+                          />
                         </div>
                       </div>
                       <div className="text-right">
@@ -309,9 +313,12 @@ export default async function UserRegistrationsPage() {
                             <p className="text-sm font-medium text-gray-900">
                               {alternateReg.registration?.name}
                             </p>
-                            <p className="text-sm text-gray-600">
-                              {alternateReg.registration?.season?.name}
-                            </p>
+                            <RegistrationDateDisplay
+                              type={alternateReg.registration?.type}
+                              startDate={alternateReg.registration?.start_date}
+                              seasonName={alternateReg.registration?.season?.name}
+                              className="text-sm text-gray-600"
+                            />
                           </div>
                         </div>
                         <div className="text-right">
@@ -422,9 +429,16 @@ export default async function UserRegistrationsPage() {
                           <p className="text-sm font-medium text-gray-900">
                             {waitlistEntry.registration?.name}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
-                          </p>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <RegistrationDateDisplay
+                              type={waitlistEntry.registration?.type}
+                              startDate={waitlistEntry.registration?.start_date}
+                              seasonName={waitlistEntry.registration?.season?.name}
+                              className="text-sm text-gray-600"
+                            />
+                            <span className="mx-2">•</span>
+                            <span>{getCategoryDisplayName(waitlistEntry.registration_category)}</span>
+                          </div>
                         </div>
                         <div className="ml-4 flex-shrink-0">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -474,9 +488,12 @@ export default async function UserRegistrationsPage() {
                         <p className="text-sm font-medium text-gray-900">
                           {userRegistration.registration?.name}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          {userRegistration.registration?.season?.name}
-                        </p>
+                        <RegistrationDateDisplay
+                          type={userRegistration.registration?.type}
+                          startDate={userRegistration.registration?.start_date}
+                          seasonName={userRegistration.registration?.season?.name}
+                          className="text-sm text-gray-600"
+                        />
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-900">
@@ -509,9 +526,16 @@ export default async function UserRegistrationsPage() {
                         <p className="text-sm font-medium text-gray-900">
                           {waitlistEntry.registration?.name}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
-                        </p>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <RegistrationDateDisplay
+                            type={waitlistEntry.registration?.type}
+                            startDate={waitlistEntry.registration?.start_date}
+                            seasonName={waitlistEntry.registration?.season?.name}
+                            className="text-sm text-gray-600"
+                          />
+                          <span className="mx-2">•</span>
+                          <span>{getCategoryDisplayName(waitlistEntry.registration_category)}</span>
+                        </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">

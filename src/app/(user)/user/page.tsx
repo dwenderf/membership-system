@@ -6,7 +6,7 @@ import { getOrganizationName } from '@/lib/organization'
 import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
 import { formatAmount } from '@/lib/format-utils'
 import DiscountUsage from '@/components/DiscountUsage'
-import { formatDate } from '@/lib/date-utils'
+import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -77,6 +77,9 @@ export default async function UserDashboardPage() {
       registration:registrations(
         id,
         name,
+        type,
+        start_date,
+        end_date,
         season:seasons(name, start_date, end_date)
       )
     `)
@@ -281,14 +284,20 @@ export default async function UserDashboardPage() {
                   {userRegistrations?.map((registration) => {
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === registration.registration?.id)
                     const isRefunded = registration.payment_status === 'refunded'
+                    const reg = registration.registration
+                    const isEventOrScrimmage = reg?.type === 'event' || reg?.type === 'scrimmage'
+                    const hasStartDate = reg?.start_date
                     return (
                       <div key={`reg-${registration.id}`} className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {registration.registration?.name}
+                            {reg?.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {registration.registration?.season?.name}
+                            {isEventOrScrimmage && hasStartDate
+                              ? formatEventDateTime(reg.start_date)
+                              : reg?.season?.name
+                            }
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
@@ -337,15 +346,21 @@ export default async function UserDashboardPage() {
                       isActive = seasonEndDate >= new Date()
                     }
                     if (!isActive) return null
-                    
+
+                    const isEventOrScrimmage = registration.type === 'event' || registration.type === 'scrimmage'
+                    const hasStartDate = registration.start_date
+
                     return (
                       <div key={`alt-${alternateReg.id}`} className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {alternateReg.registration?.name}
+                            {registration.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {alternateReg.registration?.season?.name}
+                            {isEventOrScrimmage && hasStartDate
+                              ? formatEventDateTime(registration.start_date)
+                              : registration.season?.name
+                            }
                           </p>
                         </div>
                         <div className="ml-2">
@@ -374,16 +389,24 @@ export default async function UserDashboardPage() {
                     if (!season) return false
                     const seasonEndDate = new Date(season.end_date)
                     return seasonEndDate >= new Date()
-                  }).slice(0, 2).map((waitlistEntry) => (
-                    <div key={`wait-${waitlistEntry.id}`} className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {waitlistEntry.registration?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {waitlistEntry.registration?.season?.name}
-                        </p>
-                      </div>
+                  }).slice(0, 2).map((waitlistEntry) => {
+                    const registration = waitlistEntry.registration
+                    const isEventOrScrimmage = registration?.type === 'event' || registration?.type === 'scrimmage'
+                    const hasStartDate = registration?.start_date
+
+                    return (
+                      <div key={`wait-${waitlistEntry.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {registration?.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {isEventOrScrimmage && hasStartDate
+                              ? formatEventDateTime(registration.start_date)
+                              : registration?.season?.name
+                            }
+                          </p>
+                        </div>
                       <div className="ml-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                           Waitlist

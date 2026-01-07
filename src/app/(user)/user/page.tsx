@@ -407,13 +407,14 @@ export default async function UserDashboardPage() {
                             }
                           </p>
                         </div>
-                      <div className="ml-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Waitlist
-                        </span>
+                        <div className="ml-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Waitlist
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-gray-600">

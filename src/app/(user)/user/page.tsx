@@ -172,6 +172,32 @@ export default async function UserDashboardPage() {
   const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
 
+  // Check for recently expired memberships (within 60 days)
+  const recentlyExpiredMemberships = paidMemberships.filter(um => {
+    const validUntil = new Date(um.valid_until)
+    const daysSinceExpiration = Math.ceil((now.getTime() - validUntil.getTime()) / (1000 * 60 * 60 * 24))
+    return validUntil <= now && daysSinceExpiration <= 60
+  }).reduce((acc, um) => {
+    // Group by membership type
+    const membershipId = um.membership_id
+    if (!acc[membershipId]) {
+      acc[membershipId] = {
+        membership: um.membership,
+        validUntil: um.valid_until
+      }
+    }
+    return acc
+  }, {} as Record<string, any>)
+
+  const recentlyExpired = Object.values(recentlyExpiredMemberships)
+
+  // Check for expiring soon memberships (within 90 days)
+  const expiringSoonMemberships = activeMemberships.filter((consolidatedMembership: any) => {
+    const validUntil = new Date(consolidatedMembership.validUntil)
+    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiration <= 90
+  })
+
   // Separate team registrations from event/scrimmage registrations
   const teamRegistrations = userRegistrations.filter((reg: any) => {
     const registration = reg.registration
@@ -191,6 +217,47 @@ export default async function UserDashboardPage() {
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {userProfile?.first_name}!
         </h1>
+
+        {/* Membership status subtitle */}
+        <div className="mt-2 text-sm">
+          {!hasActiveMembership && recentlyExpired.length === 0 ? (
+            // No active or recently expired memberships
+            <p className="text-gray-600">
+              You do not have any active memberships.{' '}
+              <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                Click here to purchase
+              </a>
+            </p>
+          ) : (
+            <>
+              {/* Show expiring soon memberships */}
+              {expiringSoonMemberships.map((consolidatedMembership: any) => {
+                const validUntil = new Date(consolidatedMembership.validUntil)
+                const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+                return (
+                  <p key={`expiring-${consolidatedMembership.membershipId}`} className="text-amber-600">
+                    ⚠️ Your {consolidatedMembership.membership?.name} expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}.{' '}
+                    <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                      Click here to extend
+                    </a>
+                  </p>
+                )
+              })}
+
+              {/* Show recently expired memberships */}
+              {recentlyExpired.map((expiredMembership: any) => (
+                <p key={`expired-${expiredMembership.membership?.id}`} className="text-red-600">
+                  Your {expiredMembership.membership?.name} has expired!{' '}
+                  <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                    Click here to renew
+                  </a>
+                </p>
+              ))}
+            </>
+          )}
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-3">
           <a
             href="/user/browse-memberships"
@@ -209,42 +276,7 @@ export default async function UserDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Membership Status */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Membership Status
-            </h3>
-            {hasActiveMembership ? (
-              <div className="mt-4 space-y-3">
-                {activeMemberships.map((consolidatedMembership: any) => {
-                  const validUntil = new Date(consolidatedMembership.validUntil)
-                  const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                  const isExpiringSoon = daysUntilExpiration <= 90
-
-                  return (
-                    <div key={consolidatedMembership.membershipId} className="text-sm text-gray-600">
-                      <strong>{consolidatedMembership.membership?.name}</strong>
-                      <br />
-                      <span className="inline-flex items-center gap-2">
-                        <span>Valid until: {formatDate(validUntil)}</span>
-                        {isExpiringSoon && (
-                          <span>⚠️ Expires Soon</span>
-                        )}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-600">
-                You don't have an active membership. Purchase one to access registrations.
-              </p>
-            )}
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">

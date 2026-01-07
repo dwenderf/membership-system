@@ -4,6 +4,20 @@
  */
 
 /**
+ * Escape special characters in iCalendar text fields per RFC 5545
+ * @param text - Text to escape
+ * @returns Escaped text safe for iCalendar format
+ */
+function escapeICalText(text: string): string {
+  // Must escape backslashes FIRST, then other special characters
+  return text
+    .replace(/\\/g, '\\\\')  // Escape backslashes
+    .replace(/\n/g, '\\n')   // Escape newlines
+    .replace(/,/g, '\\,')    // Escape commas
+    .replace(/;/g, '\\;')    // Escape semicolons
+}
+
+/**
  * Format a date to iCal format (YYYYMMDDTHHMMSSZ)
  * @param date - Date object or ISO string
  * @returns Formatted date string for iCal
@@ -42,13 +56,13 @@ export function generateICalContent(
   const dtstart = formatICalDate(startDate)
   const dtend = formatICalDate(endDate)
 
-  // Generate a unique ID for this event
-  const uid = `${formatICalDate(now)}-${Math.random().toString(36).substr(2, 9)}@membership-system`
+  // Generate a cryptographically secure unique ID for this event
+  const uid = `${crypto.randomUUID()}@membership-system`
 
-  // Escape special characters in text fields
-  const escapedName = eventName.replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
-  const escapedDescription = description?.replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;') || ''
-  const escapedLocation = location?.replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;') || ''
+  // Escape special characters in text fields per RFC 5545
+  const escapedName = escapeICalText(eventName)
+  const escapedDescription = description ? escapeICalText(description) : ''
+  const escapedLocation = location ? escapeICalText(location) : ''
 
   const lines = [
     'BEGIN:VCALENDAR',

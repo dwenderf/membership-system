@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate, formatTime } from '@/lib/date-utils'
+import { formatDate, formatTime, formatEventDateTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
@@ -343,12 +343,20 @@ export default async function BrowseRegistrationsPage() {
                       </div>
                       
                       <div className="mt-3">
-                        <p className="text-sm font-medium text-gray-900">
-                          {registration.season?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
-                        </p>
+                        {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
+                          <p className="text-sm font-medium text-gray-900">
+                            {formatEventDateTime(registration.start_date)}
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium text-gray-900">
+                              {registration.season?.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
+                            </p>
+                          </>
+                        )}
                       </div>
 
                       <div className="mt-5">

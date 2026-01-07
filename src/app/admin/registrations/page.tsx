@@ -28,7 +28,18 @@ export default async function RegistrationsPage() {
   const { data: registrations, error } = await supabase
     .from('registrations')
     .select(`
-      *,
+      id,
+      name,
+      type,
+      is_active,
+      allow_discounts,
+      presale_code,
+      presale_start_at,
+      regular_start_at,
+      registration_end_at,
+      start_date,
+      end_date,
+      created_at,
       seasons (
         id,
         name,

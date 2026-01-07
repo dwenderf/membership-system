@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
+import { formatEventDateTime } from '@/lib/date-utils'
 
 interface Registration {
   id: string
@@ -12,7 +13,12 @@ interface Registration {
   is_active: boolean
   allow_discounts: boolean
   presale_code: string | null
+  presale_start_at?: string | null
+  regular_start_at?: string | null
+  registration_end_at?: string | null
   created_at: string
+  start_date?: string | null
+  end_date?: string | null
   seasons?: {
     name: string
   }
@@ -96,7 +102,11 @@ function RegistrationItem({ registration }: { registration: Registration }) {
               </span>
             </div>
             <div className="mt-1 flex items-center text-sm text-gray-500">
-              <span>{registration.seasons?.name || 'No season'}</span>
+              {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
+                <span>{formatEventDateTime(registration.start_date)}</span>
+              ) : (
+                <span>{registration.seasons?.name || 'No season'}</span>
+              )}
               {!registration.allow_discounts && (
                 <>
                   <span className="mx-2">•</span>

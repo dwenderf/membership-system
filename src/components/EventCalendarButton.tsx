@@ -88,12 +88,6 @@ export default function EventCalendarButton({
                 Download .ics file
                 <span className="ml-auto text-xs text-gray-500">iCal</span>
               </button>
-
-              <div className="border-t border-gray-100 my-1"></div>
-
-              <div className="px-4 py-2 text-xs text-gray-500">
-                Works with Apple Calendar, Outlook, and other calendar apps
-              </div>
             </div>
           </div>
         </>

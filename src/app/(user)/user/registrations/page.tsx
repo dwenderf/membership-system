@@ -5,8 +5,8 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate, formatDateTime } from '@/lib/date-utils'
-import CalendarDownload from '@/components/CalendarDownload'
+import { formatDate, formatDateTime, formatEventDateTime } from '@/lib/date-utils'
+import EventCalendarButton from '@/components/EventCalendarButton'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -248,26 +248,12 @@ export default async function UserRegistrationsPage() {
                       {(userRegistration.registration?.type === 'event' || userRegistration.registration?.type === 'scrimmage') &&
                        userRegistration.registration?.start_date &&
                        userRegistration.registration?.end_date && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
-                          <p className="text-sm font-medium text-blue-900 mb-1">
-                            {userRegistration.registration.type === 'event' ? 'Event' : 'Scrimmage'} Date & Time
-                          </p>
-                          <p className="text-sm text-blue-800">
-                            <strong>Start:</strong> {formatDateTime(userRegistration.registration.start_date)}
-                          </p>
-                          <p className="text-sm text-blue-800">
-                            <strong>End:</strong> {formatDateTime(userRegistration.registration.end_date)}
-                          </p>
-                          <div className="mt-2">
-                            <CalendarDownload
-                              eventName={userRegistration.registration.name}
-                              startDate={userRegistration.registration.start_date}
-                              endDate={userRegistration.registration.end_date}
-                              description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
-                              className="w-full"
-                            />
-                          </div>
-                        </div>
+                        <EventCalendarButton
+                          eventName={userRegistration.registration.name}
+                          startDate={userRegistration.registration.start_date}
+                          endDate={userRegistration.registration.end_date}
+                          description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
+                        />
                       )}
                     </div>
                   </div>

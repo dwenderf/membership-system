@@ -2,11 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
-import { getOrganizationName } from '@/lib/organization'
-import { getUserUnpaidInvoices } from '@/lib/invoice-utils'
-import { formatAmount } from '@/lib/format-utils'
 import DiscountUsage from '@/components/DiscountUsage'
-import { formatDate } from '@/lib/date-utils'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
+import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -77,6 +75,9 @@ export default async function UserDashboardPage() {
       registration:registrations(
         id,
         name,
+        type,
+        start_date,
+        end_date,
         season:seasons(name, start_date, end_date)
       )
     `)
@@ -93,9 +94,13 @@ export default async function UserDashboardPage() {
         id,
         game_description,
         game_date,
+        game_end_time,
         registration:registrations(
           id,
           name,
+          type,
+          start_date,
+          end_date,
           season:seasons(name, start_date, end_date)
         )
       ),
@@ -107,7 +112,6 @@ export default async function UserDashboardPage() {
     `)
     .eq('user_id', user.id)
     .order('selected_at', { ascending: false })
-    .limit(10)
 
   // Get user's current waitlist entries
   const { data: userWaitlistEntries } = await supabase
@@ -168,315 +172,371 @@ export default async function UserDashboardPage() {
   const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
 
-  // Check for unpaid invoices (only for admins)
-  const unpaidInvoices = userProfile?.is_admin 
-    ? await getUserUnpaidInvoices(user.id)
-    : { count: 0, totalAmount: 0 }
+  // Check for recently expired memberships (within 60 days)
+  const recentlyExpiredMemberships = paidMemberships.filter(um => {
+    const validUntil = new Date(um.valid_until)
+    const daysSinceExpiration = Math.ceil((now.getTime() - validUntil.getTime()) / (1000 * 60 * 60 * 24))
+    return validUntil <= now && daysSinceExpiration <= 60
+  }).reduce((acc, um) => {
+    // Group by membership type
+    const membershipId = um.membership_id
+    if (!acc[membershipId]) {
+      acc[membershipId] = {
+        membership: um.membership,
+        validUntil: um.valid_until
+      }
+    }
+    return acc
+  }, {} as Record<string, any>)
+
+  const recentlyExpired = Object.values(recentlyExpiredMemberships)
+
+  // Check for expiring soon memberships (within 90 days)
+  const expiringSoonMemberships = activeMemberships.filter((consolidatedMembership: any) => {
+    const validUntil = new Date(consolidatedMembership.validUntil)
+    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiration <= 90
+  })
+
+  // Separate team registrations from event/scrimmage registrations
+  const teamRegistrations = userRegistrations.filter((reg: any) => {
+    const registration = reg.registration
+    if (!registration) return false
+    return registration.type === 'team'
+  })
+
+  const eventRegistrations = userRegistrations.filter((reg: any) => {
+    const registration = reg.registration
+    if (!registration) return false
+    return registration.type === 'event' || registration.type === 'scrimmage'
+  })
 
   return (
     <div className="px-4 py-6 sm:px-0">
-      {/* Unpaid Invoices Warning - Only show for admins */}
-      {userProfile?.is_admin && unpaidInvoices.count > 0 && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                You have {unpaidInvoices.count} unpaid invoice{unpaidInvoices.count !== 1 ? 's' : ''}
-              </h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>
-                  Total outstanding: {formatAmount(unpaidInvoices.totalAmount)}. 
-                  Please review and pay your invoices to avoid any service interruptions.
-                </p>
-              </div>
-              <div className="mt-4">
-                <a
-                  href="/user/invoices"
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  View Invoices
-                  <svg className="ml-2 -mr-0.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {userProfile?.first_name}!
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Manage your {getOrganizationName('long').toLowerCase()} membership and registrations
-        </p>
+
+        {/* Membership status subtitle */}
+        <div className="mt-2 text-sm">
+          {!hasActiveMembership && recentlyExpired.length === 0 ? (
+            // No active or recently expired memberships
+            <p className="text-gray-600">
+              You do not have any active memberships.{' '}
+              <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                Click here to purchase
+              </a>
+            </p>
+          ) : (
+            <>
+              {/* Show expiring soon memberships */}
+              {expiringSoonMemberships.map((consolidatedMembership: any) => {
+                const validUntil = new Date(consolidatedMembership.validUntil)
+                const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+                return (
+                  <p key={`expiring-${consolidatedMembership.membershipId}`} className="text-amber-600">
+                    ⚠️ Your {consolidatedMembership.membership?.name} expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}.{' '}
+                    <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                      Click here to extend
+                    </a>
+                  </p>
+                )
+              })}
+
+              {/* Show recently expired memberships */}
+              {recentlyExpired.map((expiredMembership: any) => (
+                <p key={`expired-${expiredMembership.membership?.id}`} className="text-red-600">
+                  Your {expiredMembership.membership?.name} has expired!{' '}
+                  <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                    Click here to renew
+                  </a>
+                </p>
+              ))}
+            </>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <a
+            href="/user/browse-memberships"
+            className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+          >
+            <span className="mr-2 text-lg">🎫</span>
+            Browse Memberships
+          </a>
+          <a
+            href="/user/browse-registrations"
+            className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+          >
+            <span className="mr-2 text-lg">🏒</span>
+            Browse Registrations
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Membership Status */}
+        {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5 flex flex-col h-full">
-            <div className="flex-grow">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Membership Status
-              </h3>
-              {hasActiveMembership ? (
-                <div className="mt-4 space-y-3">
-                  {activeMemberships.map((consolidatedMembership: any) => {
-                    const validUntil = new Date(consolidatedMembership.validUntil)
-                    const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-                    const isExpiringSoon = daysUntilExpiration <= 90
-
-                    return (
-                      <div key={consolidatedMembership.membershipId} className="text-sm text-gray-600">
-                        <strong>{consolidatedMembership.membership?.name}</strong>
-                        <br />
-                        <span className="inline-flex items-center gap-2">
-                          <span>Valid until: {formatDate(validUntil)}</span>
-                          {isExpiringSoon && (
-                            <span>⚠️ Expires Soon</span>
-                          )}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-gray-600">
-                  You don't have an active membership. Purchase one to access registrations.
-                </p>
-              )}
-            </div>
-            <div className="mt-5">
-              <a
-                href="/user/browse-memberships"
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-              >
-                Browse Memberships
-                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Registrations */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5 flex flex-col h-full">
+          <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Registrations
+              My Teams
             </h3>
-            <div className="flex-grow">
-              {(userRegistrations && userRegistrations.length > 0) || (userAlternateRegistrations && userAlternateRegistrations.length > 0) || (userWaitlistEntries && userWaitlistEntries.length > 0) ? (
-                <div className="mt-4 space-y-3">
-                  {/* Show active registrations */}
-                  {userRegistrations?.map((registration) => {
-                    const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === registration.registration?.id)
-                    const isRefunded = registration.payment_status === 'refunded'
+            <div className="mt-4">
+              {teamRegistrations.length > 0 ||
+               userAlternateRegistrations?.some(alt => alt.registration?.type === 'team' && alt.registration?.season && new Date(alt.registration.season.end_date) >= now) ||
+               userWaitlistEntries?.some(w => w.registration?.type === 'team' && w.registration?.season && new Date(w.registration.season.end_date) >= now) ? (
+                <div className="space-y-3">
+                  {/* Show team registrations */}
+                  {teamRegistrations.map((registration: any) => {
+                    const reg = registration.registration
+                    const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === reg?.id)
+                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
+
                     return (
-                      <div key={`reg-${registration.id}`} className="flex justify-between items-start">
+                      <div key={`team-reg-${registration.id}`} className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {registration.registration?.name}
+                            {reg?.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {registration.registration?.season?.name}
+                            {reg?.season?.name}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
-                          {/* Category tag */}
+                          <RegistrationTypeBadge type="team" />
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(registration.registration_category)}
                             </span>
                           )}
-                          {/* Refunded tag if applicable */}
-                          {isRefunded && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                              Refunded
-                            </span>
-                          )}
-                          {/* Alternate tag if applicable */}
                           {isAlternate && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                               Alternate
                             </span>
                           )}
+                          {isWaitlist && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          )}
                         </div>
                       </div>
                     )
                   })}
-                  
-                  {/* Show alternate-only registrations (where user is alternate but not regular participant) */}
+
+                  {/* Show alternate-only team registrations */}
                   {userAlternateRegistrations?.filter(alt => {
-                    // Only show if user is NOT already registered as regular participant
-                    return !userRegistrations?.some(reg => reg.registration?.id === alt.registration?.id)
-                  }).slice(0, 2).map((alternateReg) => {
+                    const registration = alt.registration
+                    if (!registration || registration.type !== 'team') return false
+                    if (!registration.season) return false
+                    const seasonEndDate = new Date(registration.season.end_date)
+                    if (seasonEndDate < now) return false
+                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                  }).map((alternateReg) => {
                     const registration = alternateReg.registration
                     if (!registration) return null
+                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === registration.id)
 
-                    // Check if registration is active based on type
-                    let isActive = false
-                    if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
-                      // For events/scrimmages with dates, use event end_date
-                      const eventEndDate = new Date(registration.end_date)
-                      isActive = eventEndDate >= new Date()
-                    } else {
-                      // For teams or events/scrimmages without dates, use season end_date
-                      const season = registration.season
-                      if (!season) return null
-                      const seasonEndDate = new Date(season.end_date)
-                      isActive = seasonEndDate >= new Date()
-                    }
-                    if (!isActive) return null
-                    
                     return (
-                      <div key={`alt-${alternateReg.id}`} className="flex justify-between items-start">
+                      <div key={`team-alt-${alternateReg.id}`} className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {alternateReg.registration?.name}
+                            {registration.name}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {alternateReg.registration?.season?.name}
+                            {registration.season?.name}
                           </p>
                         </div>
-                        <div className="ml-2">
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          <RegistrationTypeBadge type="team" />
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                             Alternate
+                          </span>
+                          {isWaitlist && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Show waitlist-only team registrations */}
+                  {userWaitlistEntries?.filter(waitlist => {
+                    const registration = waitlist.registration
+                    if (!registration || registration.type !== 'team') return false
+                    if (!registration.season) return false
+                    const seasonEndDate = new Date(registration.season.end_date)
+                    if (seasonEndDate < now) return false
+                    // Only show if not already in team registrations or alternates
+                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
+                           !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
+                  }).map((waitlistEntry) => {
+                    const registration = waitlistEntry.registration
+                    if (!registration) return null
+
+                    return (
+                      <div key={`team-wait-${waitlistEntry.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {registration.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {registration.season?.name}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          <RegistrationTypeBadge type="team" />
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Waitlist
                           </span>
                         </div>
                       </div>
                     )
                   })}
-                  
-                  {/* Show active waitlist entries */}
-                  {userWaitlistEntries?.filter(waitlistEntry => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return false
-
-                    // Check if registration is active based on type
-                    if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
-                      // For events/scrimmages with dates, use event end_date
-                      const eventEndDate = new Date(registration.end_date)
-                      return eventEndDate >= new Date()
-                    }
-
-                    // For teams or events/scrimmages without dates, use season end_date
-                    const season = registration.season
-                    if (!season) return false
-                    const seasonEndDate = new Date(season.end_date)
-                    return seasonEndDate >= new Date()
-                  }).slice(0, 2).map((waitlistEntry) => (
-                    <div key={`wait-${waitlistEntry.id}`} className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {waitlistEntry.registration?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {waitlistEntry.registration?.season?.name}
-                        </p>
-                      </div>
-                      <div className="ml-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Waitlist
-                        </span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-gray-600">
-                  No active registrations yet. Browse available registrations to get started.
+                <p className="text-sm text-gray-600">
+                  No active team registrations.
                 </p>
               )}
             </div>
-            <div className="mt-5">
-              <a
-              href="/user/browse-registrations"
-              className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-              >
-              Browse Registrations
-                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </a>
-            </div>
           </div>
         </div>
 
-        {/* Invoice Summary - Only show for admins */}
-        {userProfile?.is_admin && (
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5 flex flex-col h-full">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className={`w-8 h-8 rounded-md flex items-center justify-center ${
-                  unpaidInvoices.count > 0 ? 'bg-red-100' : 'bg-green-100'
-                }`}>
-                  <svg className={`w-5 h-5 ${
-                    unpaidInvoices.count > 0 ? 'text-red-600' : 'text-green-600'
-                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  Invoices
-                </h3>
-              </div>
-            </div>
-            <div className="mt-4 flex-grow">
-              {unpaidInvoices.count > 0 ? (
+        {/* My Upcoming Events */}
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              My Upcoming Events
+            </h3>
+            <div className="mt-4">
+              {eventRegistrations.length > 0 ||
+               userAlternateSelections?.some(sel => {
+                 const reg = sel.alternate_registration?.registration
+                 const gameDate = sel.alternate_registration?.game_date
+                 return reg && (reg.type === 'event' || reg.type === 'scrimmage') && gameDate && new Date(gameDate) >= now
+               }) ||
+               userWaitlistEntries?.some(w => {
+                 const reg = w.registration
+                 return reg && (reg.type === 'event' || reg.type === 'scrimmage') && reg.end_date && new Date(reg.end_date) >= now
+               }) ? (
                 <div className="space-y-3">
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium text-red-600">
-                      {unpaidInvoices.count} unpaid invoice{unpaidInvoices.count !== 1 ? 's' : ''}
-                    </p>
-                    <p className="mt-1">
-                      Total outstanding: {formatAmount(unpaidInvoices.totalAmount)}
-                    </p>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <p>Please review and pay your invoices to avoid service interruptions.</p>
-                  </div>
+                  {/* Show event/scrimmage registrations */}
+                  {eventRegistrations.map((registration: any) => {
+                    const reg = registration.registration
+                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
+
+                    return (
+                      <div key={`event-reg-${registration.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {reg?.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {reg?.start_date ? formatEventDateTime(reg.start_date) : reg?.season?.name}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          <RegistrationTypeBadge type={reg?.type as 'scrimmage' | 'event'} />
+                          {registration.registration_category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {getCategoryDisplayName(registration.registration_category)}
+                            </span>
+                          )}
+                          {isWaitlist && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Show alternate selections for future games */}
+                  {userAlternateSelections?.filter(sel => {
+                    const altReg = sel.alternate_registration
+                    const reg = altReg?.registration
+                    if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage')) return false
+                    const gameDate = altReg?.game_date
+                    if (!gameDate || new Date(gameDate) < now) return false
+                    // Only show if not already in event registrations
+                    return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
+                  }).map((selection) => {
+                    const altReg = selection.alternate_registration
+                    const reg = altReg?.registration
+                    if (!reg || !altReg) return null
+
+                    return (
+                      <div key={`event-sel-${selection.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {reg.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {formatEventDateTime(altReg.game_date)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          <RegistrationTypeBadge type={reg.type as 'scrimmage' | 'event'} />
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                            Selected
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Show waitlist-only event registrations */}
+                  {userWaitlistEntries?.filter(waitlist => {
+                    const registration = waitlist.registration
+                    if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
+                    if (!registration.end_date || new Date(registration.end_date) < now) return false
+                    // Only show if not already in event registrations
+                    return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                  }).map((waitlistEntry) => {
+                    const registration = waitlistEntry.registration
+                    if (!registration) return null
+
+                    return (
+                      <div key={`event-wait-${waitlistEntry.id}`} className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {registration.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 ml-2">
+                          <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Waitlist
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
-                <div className="text-sm text-gray-600">
-                  <p className="font-medium text-green-600">All invoices paid</p>
-                  <p className="mt-1">You're up to date with all your payments.</p>
-                </div>
+                <p className="text-sm text-gray-600">
+                  No upcoming events or scrimmages.
+                </p>
               )}
-            </div>
-            <div className="mt-5">
-              <a
-                href="/user/invoices"
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-              >
-                View All Invoices
-                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </a>
             </div>
           </div>
         </div>
-        )}
 
-        {/* Discount Usage */}
+        {/* My Discount Usage */}
         <DiscountUsage />
       </div>
 
 
-      
+
     </div>
   )
 }

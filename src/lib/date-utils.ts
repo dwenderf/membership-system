@@ -142,3 +142,32 @@ export function convertFromUTCToNYDateTimeLocal(utcIsoString: string): string {
   // Return in datetime-local format (YYYY-MM-DDTHH:mm)
   return `${year}-${month}-${day}T${hour}:${minute}`
 }
+
+/**
+ * Format event start date/time in a user-friendly way for dashboard display
+ * @param date - Date object, ISO string, or timestamp
+ * @returns Formatted string like "Sunday, Jan 11 @ 4:00pm" (no year)
+ */
+export function formatEventDateTime(date: Date | string | number): string {
+  const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
+
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: APP_TIMEZONE
+  })
+
+  const monthDay = dateObj.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: APP_TIMEZONE
+  })
+
+  const time = dateObj.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: APP_TIMEZONE,
+    hour12: true
+  }).toLowerCase()
+
+  return `${dayOfWeek}, ${monthDay} @ ${time}`
+}

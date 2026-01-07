@@ -1,0 +1,140 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+
+interface DurationInputProps {
+  value: string
+  onChange: (value: string) => void
+  id?: string
+  required?: boolean
+  disabled?: boolean
+  className?: string
+  minMinutes?: number
+  roundToNearest?: number
+}
+
+/**
+ * DurationInput - A reusable input for duration in minutes
+ *
+ * Features:
+ * - Prevents negative values
+ * - Automatically rounds to nearest 5-minute increment
+ * - Enforces minimum duration (default 1 minute)
+ * - Displays hours and minutes for better readability
+ *
+ * @example
+ * ```tsx
+ * <DurationInput
+ *   value={durationMinutes}
+ *   onChange={setDurationMinutes}
+ *   required={true}
+ * />
+ * ```
+ */
+export default function DurationInput({
+  value,
+  onChange,
+  id = 'duration_minutes',
+  required = false,
+  disabled = false,
+  className = '',
+  minMinutes = 1,
+  roundToNearest = 5,
+}: DurationInputProps) {
+  const [localValue, setLocalValue] = useState(value)
+
+  // Update local value when prop changes
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  // Round to nearest increment
+  const roundValue = (val: string): string => {
+    if (!val || val === '') return ''
+
+    const numValue = parseInt(val)
+
+    // Prevent negative values
+    if (numValue < 0) return String(minMinutes)
+
+    // Enforce minimum
+    if (numValue < minMinutes) return String(minMinutes)
+
+    // Round to nearest increment
+    const rounded = Math.round(numValue / roundToNearest) * roundToNearest
+
+    // Make sure we don't round down below minimum
+    return String(Math.max(rounded, minMinutes))
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+
+    // Allow empty string while typing
+    if (newValue === '') {
+      setLocalValue('')
+      return
+    }
+
+    // Parse and validate
+    const numValue = parseInt(newValue)
+
+    // Prevent negative values during input
+    if (numValue < 0) {
+      return
+    }
+
+    setLocalValue(newValue)
+  }
+
+  const handleBlur = () => {
+    if (localValue === '') {
+      onChange('')
+      return
+    }
+
+    const rounded = roundValue(localValue)
+    setLocalValue(rounded)
+    onChange(rounded)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Round and commit on Enter
+    if (e.key === 'Enter') {
+      handleBlur()
+    }
+  }
+
+  // Format hours and minutes for display
+  const formatDuration = (minutes: string): string => {
+    if (!minutes || minutes === '') return ''
+    const min = parseInt(minutes)
+    const hours = Math.floor(min / 60)
+    const mins = min % 60
+    return `${hours}h ${mins}m`
+  }
+
+  return (
+    <div className="flex items-center space-x-2">
+      <input
+        type="number"
+        id={id}
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        min={minMinutes}
+        step={roundToNearest}
+        className={`block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${className}`}
+        required={required}
+        disabled={disabled}
+      />
+      <span className="text-sm text-gray-700">minutes</span>
+      {localValue && localValue !== '' && (
+        <span className="text-sm text-gray-500">
+          ({formatDuration(localValue)})
+        </span>
+      )}
+    </div>
+  )
+}

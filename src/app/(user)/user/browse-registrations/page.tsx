@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate, formatTime } from '@/lib/date-utils'
+import { formatDate, formatTime, formatEventDateTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
 
 // Helper function to safely parse date strings without timezone conversion
@@ -326,13 +327,7 @@ export default async function BrowseRegistrationsPage() {
                             {registration.name}
                           </h3>
                           <div className="mt-1 flex items-center space-x-2">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                              registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                              registration.type === 'scrimmage' ? 'bg-purple-100 text-purple-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {registration.type}
-                            </span>
+                            <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} />
                             {registrationStatus === 'presale' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
                                 Pre-Sale
@@ -348,12 +343,20 @@ export default async function BrowseRegistrationsPage() {
                       </div>
                       
                       <div className="mt-3">
-                        <p className="text-sm font-medium text-gray-900">
-                          {registration.season?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
-                        </p>
+                        {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
+                          <p className="text-base font-bold text-blue-700">
+                            {formatEventDateTime(registration.start_date)}
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium text-gray-900">
+                              {registration.season?.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
+                            </p>
+                          </>
+                        )}
                       </div>
 
                       <div className="mt-5">

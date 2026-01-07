@@ -5,6 +5,7 @@ import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-uti
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDndList'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
@@ -165,12 +166,7 @@ export default async function RegistrationDetailPage({
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Type</dt>
                     <dd className="mt-1 text-sm text-gray-900 capitalize">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                        registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                          'bg-purple-100 text-purple-800'
-                        }`}>
-                        {registration.type}
-                      </span>
+                      <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} />
                     </dd>
                   </div>
                   <div>

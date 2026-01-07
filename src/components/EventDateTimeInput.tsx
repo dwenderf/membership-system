@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import DateTimePicker from '@/components/DateTimePicker'
+import DurationInput from '@/components/DurationInput'
 
 interface EventDateTimeInputProps {
   startDate: string
@@ -75,24 +76,16 @@ export default function EventDateTimeInput({
         <label htmlFor="duration_minutes" className="block text-sm font-medium text-gray-700">
           Duration {required && <span className="text-red-500">*</span>}
         </label>
-        <div className="mt-1 flex items-center space-x-2">
-          <input
-            type="number"
+        <div className="mt-1">
+          <DurationInput
             id="duration_minutes"
             value={durationMinutes}
-            onChange={(e) => onDurationChange(e.target.value)}
-            min="1"
-            step="5"
-            className="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            onChange={onDurationChange}
             required={required}
             disabled={disabled}
+            minMinutes={1}
+            roundToNearest={5}
           />
-          <span className="text-sm text-gray-700">minutes</span>
-          {durationMinutes && (
-            <span className="text-sm text-gray-500">
-              ({Math.floor(parseInt(durationMinutes) / 60)}h {parseInt(durationMinutes) % 60}m)
-            </span>
-          )}
         </div>
         <p className="mt-1 text-sm text-gray-500">
           Default: {registrationType === 'scrimmage' || registrationType === 'game' ? '90 minutes (1.5 hours)' : '180 minutes (3 hours)'}

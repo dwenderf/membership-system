@@ -412,16 +412,15 @@ export class EmailProcessor {
         dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
       }
 
-      // Add formatted event date/time for display (for events/scrimmages with dates)
+      // Add formatted date/time information text
       const regType = registration.registration.type
       const hasEventDates = registration.registration.start_date && registration.registration.end_date
       if ((regType === 'event' || regType === 'scrimmage') && hasEventDates) {
-        emailData.eventStartDate = formatDateTime(registration.registration.start_date)
-        emailData.eventEndDate = formatDateTime(registration.registration.end_date)
+        const formattedEventStart = formatDateTime(registration.registration.start_date)
+        emailData.registrationDateTimeInformation = `${registration.registration.name} is scheduled for ${formattedEventStart}. You can add this event to your calendar by logging in to your dashboard and going to "My Registrations".`
       } else {
-        // Set date fields to null for team registrations
-        emailData.eventStartDate = null
-        emailData.eventEndDate = null
+        // For team registrations
+        emailData.registrationDateTimeInformation = `You are registered for the ${registration.registration.season.name} season.`
       }
 
       // Stage the email for batch processing
@@ -540,12 +539,10 @@ export class EmailProcessor {
         dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
       }
 
-      // Add formatted event date/time for display
+      // Add formatted date/time information text
       const gameStartISO = gameDate.toISOString()
-      const gameEndISO = gameEndDate.toISOString()
-
-      emailData.eventStartDate = formatDateTime(gameStartISO)
-      emailData.eventEndDate = formatDateTime(gameEndISO)
+      const formattedGameStart = formatDateTime(gameStartISO)
+      emailData.registrationDateTimeInformation = `${alternateSelection.alternate_registration.game_description} is scheduled for ${formattedGameStart}. You can add this event to your calendar by logging in to your dashboard and going to "My Registrations".`
 
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { formatDateString, convertToNYTimezone } from '@/lib/date-utils'
+import { convertToNYTimezone } from '@/lib/date-utils'
 import Link from 'next/link'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
 

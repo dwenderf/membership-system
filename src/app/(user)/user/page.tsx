@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
-import { formatDate, formatEventDateTime } from '@/lib/date-utils'
+import { formatEventDateTime } from '@/lib/date-utils'
 
 export default async function UserDashboardPage() {
   const headersList = await headers()

@@ -185,13 +185,9 @@ export default async function UserRegistrationsPage() {
     !isRegistrationActive(we.registration)
   ) || []
 
-  // Split alternate registrations into current and past
+  // Get current alternate registrations
   const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
     isRegistrationActive(ar.registration)
-  ) || []
-
-  const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
-    !isRegistrationActive(ar.registration)
   ) || []
 
   return (

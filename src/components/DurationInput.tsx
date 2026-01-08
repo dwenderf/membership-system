@@ -42,11 +42,20 @@ export default function DurationInput({
   roundToNearest = 5,
 }: DurationInputProps) {
   const [localValue, setLocalValue] = useState(value)
+  const [error, setError] = useState<string | null>(null)
 
   // Update local value when prop changes
   useEffect(() => {
     setLocalValue(value)
   }, [value])
+
+  // Clear error message after 3 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
 
   // Round to nearest increment
   const roundValue = (val: string): string => {
@@ -73,6 +82,7 @@ export default function DurationInput({
     // Allow empty string while typing
     if (newValue === '') {
       setLocalValue('')
+      setError(null)
       return
     }
 
@@ -81,9 +91,11 @@ export default function DurationInput({
 
     // Prevent negative values during input
     if (numValue < 0) {
+      setError('Duration cannot be negative')
       return
     }
 
+    setError(null)
     setLocalValue(newValue)
   }
 
@@ -115,25 +127,36 @@ export default function DurationInput({
   }
 
   return (
-    <div className="flex items-center space-x-2">
-      <input
-        type="number"
-        id={id}
-        value={localValue}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        min={minMinutes}
-        step={roundToNearest}
-        className={`block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${className}`}
-        required={required}
-        disabled={disabled}
-      />
-      <span className="text-sm text-gray-700">minutes</span>
-      {localValue && localValue !== '' && (
-        <span className="text-sm text-gray-500">
-          ({formatDuration(localValue)})
-        </span>
+    <div>
+      <div className="flex items-center space-x-2">
+        <input
+          type="number"
+          id={id}
+          value={localValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          min={minMinutes}
+          step={roundToNearest}
+          className={`block w-32 rounded-md shadow-sm sm:text-sm ${
+            error
+              ? 'border-red-300 text-red-900 focus:ring-red-500 focus:border-red-500'
+              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+          } ${className}`}
+          required={required}
+          disabled={disabled}
+        />
+        <span className="text-sm text-gray-700">minutes</span>
+        {localValue && localValue !== '' && !error && (
+          <span className="text-sm text-gray-500">
+            ({formatDuration(localValue)})
+          </span>
+        )}
+      </div>
+      {error && (
+        <p className="mt-1 text-sm text-red-600" role="alert">
+          {error}
+        </p>
       )}
     </div>
   )

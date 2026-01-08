@@ -94,7 +94,7 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
               <Link href="/admin" className="flex items-center space-x-2">
                 <img
                   src="/images/logo.png"
-                  alt={getOrganizationName('short')}
+                  alt={`${getOrganizationName('short')} logo`}
                   className="h-10 w-auto"
                 />
                 <span className="text-xl font-bold text-gray-900">Admin</span>

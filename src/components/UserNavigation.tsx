@@ -64,7 +64,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
               <Link href="/user" className="flex items-center">
                 <img
                   src="/images/logo.png"
-                  alt={getOrganizationName('short')}
+                  alt={`${getOrganizationName('short')} logo`}
                   className="h-10 w-auto"
                 />
               </Link>

@@ -16,7 +16,6 @@ import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
 import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
-import { generateGoogleCalendarUrl } from '@/lib/calendar-utils'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -413,34 +412,16 @@ export class EmailProcessor {
         dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
       }
 
-      // Add calendar download links for events/scrimmages with dates
+      // Add formatted event date/time for display (for events/scrimmages with dates)
       const regType = registration.registration.type
       const hasEventDates = registration.registration.start_date && registration.registration.end_date
       if ((regType === 'event' || regType === 'scrimmage') && hasEventDates) {
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
-
-        // Generate calendar download URL (API endpoint)
-        emailData.calendarDownloadUrl = `${baseUrl}/api/calendar?registrationId=${registration.registration.id}&userRegistrationId=${registration.id}`
-
-        // Generate Google Calendar URL
-        emailData.googleCalendarUrl = generateGoogleCalendarUrl(
-          registration.registration.name,
-          registration.registration.start_date,
-          registration.registration.end_date,
-          `${regType.charAt(0).toUpperCase() + regType.slice(1)} - ${categoryName}`
-        )
-
-        // Add formatted event date/time for display
         emailData.eventStartDate = formatDateTime(registration.registration.start_date)
         emailData.eventEndDate = formatDateTime(registration.registration.end_date)
-        emailData.hasCalendarLinks = true
       } else {
-        // Set calendar fields to null when not applicable
-        emailData.calendarDownloadUrl = null
-        emailData.googleCalendarUrl = null
+        // Set date fields to null for team registrations
         emailData.eventStartDate = null
         emailData.eventEndDate = null
-        emailData.hasCalendarLinks = false
       }
 
       // Stage the email for batch processing
@@ -559,27 +540,12 @@ export class EmailProcessor {
         dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
       }
 
-      // Add calendar download links for the game
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      // Add formatted event date/time for display
       const gameStartISO = gameDate.toISOString()
       const gameEndISO = gameEndDate.toISOString()
 
-      // For alternates, we'll create a simple calendar entry for the game
-      // Note: We don't have a user_registration record for alternates, so we'll use the alternate_registration ID
-      emailData.calendarDownloadUrl = `${baseUrl}/api/calendar/alternate?alternateRegistrationId=${alternateSelection.alternate_registration_id}&alternateSelectionId=${alternateSelection.id}`
-
-      // Generate Google Calendar URL
-      emailData.googleCalendarUrl = generateGoogleCalendarUrl(
-        alternateSelection.alternate_registration.game_description,
-        gameStartISO,
-        gameEndISO,
-        `Alternate game for ${alternateSelection.alternate_registration.registration.name}`
-      )
-
-      // Add formatted event date/time for display
       emailData.eventStartDate = formatDateTime(gameStartISO)
       emailData.eventEndDate = formatDateTime(gameEndISO)
-      emailData.hasCalendarLinks = true
 
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({

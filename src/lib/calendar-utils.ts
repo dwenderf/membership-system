@@ -4,6 +4,32 @@
  */
 
 /**
+ * Generate a cryptographically secure UUID
+ * Uses crypto.randomUUID() if available, with fallback for older browsers
+ * @returns A UUID string
+ */
+function generateSecureUUID(): string {
+  // Try to use crypto.randomUUID() if available (Node 15.6+ / modern browsers)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  // Fallback for older browsers using crypto.getRandomValues()
+  // This is RFC 4122 version 4 compliant
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (crypto.getRandomValues(new Uint8Array(1))[0] % 16) | 0
+      const v = c === 'x' ? r : (r & 0x3) | 0x8
+      return v.toString(16)
+    })
+  }
+
+  // Final fallback (should never happen in modern environments)
+  // Use timestamp + random for uniqueness
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+}
+
+/**
  * Escape special characters in iCalendar text fields per RFC 5545
  * @param text - Text to escape
  * @returns Escaped text safe for iCalendar format
@@ -57,7 +83,7 @@ export function generateICalContent(
   const dtend = formatICalDate(endDate)
 
   // Generate a cryptographically secure unique ID for this event
-  const uid = `${crypto.randomUUID()}@membership-system`
+  const uid = `${generateSecureUUID()}@membership-system`
 
   // Escape special characters in text fields per RFC 5545
   const escapedName = escapeICalText(eventName)

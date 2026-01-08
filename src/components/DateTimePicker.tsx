@@ -25,7 +25,7 @@ interface DateTimePickerProps {
  *
  * Provides a consistent, cross-browser date/time picking experience with:
  * - 5-minute increments by default
- * - 24-hour time format
+ * - 12-hour time format with AM/PM
  * - Eastern Time display (handled by parent component via value conversion)
  * - Mobile-friendly UI
  *
@@ -62,9 +62,9 @@ export default function DateTimePicker({
     // Initialize flatpickr
     flatpickrRef.current = flatpickr(inputRef.current, {
       enableTime,
-      time_24hr: true,
+      time_24hr: false,
       minuteIncrement,
-      dateFormat: enableTime ? 'Y-m-d H:i' : 'Y-m-d',
+      dateFormat: enableTime ? 'Y-m-d h:i K' : 'Y-m-d',
       altInput: true,
       altFormat: enableTime ? 'M j, Y at h:i K' : 'M j, Y',
       minDate,

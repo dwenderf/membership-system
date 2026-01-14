@@ -7,6 +7,7 @@
  * Generate a cryptographically secure UUID
  * Uses crypto.randomUUID() if available, with fallback for older browsers
  * @returns A UUID string
+ * @throws Error if no cryptographically secure random source is available
  */
 function generateSecureUUID(): string {
   // Try to use crypto.randomUUID() if available (Node 15.6+ / modern browsers)
@@ -24,9 +25,8 @@ function generateSecureUUID(): string {
     })
   }
 
-  // Final fallback (should never happen in modern environments)
-  // Use timestamp + random for uniqueness
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+  // No cryptographically secure random source available
+  throw new Error('Cryptographically secure random number generator not available')
 }
 
 /**

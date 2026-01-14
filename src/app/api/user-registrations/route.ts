@@ -17,8 +17,12 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         registration:registrations(
-          *,
-          season:seasons(*)
+          id,
+          name,
+          type,
+          start_date,
+          end_date,
+          season:seasons(id, name, start_date, end_date)
         ),
         registration_category:registration_categories(
           *,

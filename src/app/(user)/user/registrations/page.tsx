@@ -6,6 +6,8 @@ import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
+import EventCalendarButton from '@/components/EventCalendarButton'
+import RegistrationDateDisplay from '@/components/RegistrationDateDisplay'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -16,6 +18,23 @@ function formatDateString(dateString: string): string {
   const date = new Date(year, month -1, day) // month is 0-indexed
 
   return formatDate(date)
+}
+
+// Helper function to check if a registration is currently active
+function isRegistrationActive(registration: any): boolean {
+  if (!registration) return false
+
+  // For events and scrimmages with dates set, use the event end_date
+  if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+    const eventEndDate = new Date(registration.end_date)
+    return eventEndDate >= new Date()
+  }
+
+  // For teams or events/scrimmages without dates, use season end_date
+  const season = registration.season
+  if (!season) return false
+  const seasonEndDate = new Date(season.end_date)
+  return seasonEndDate >= new Date()
 }
 
 export default async function UserRegistrationsPage() {
@@ -149,49 +168,27 @@ export default async function UserRegistrationsPage() {
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
-  const currentRegistrations = userRegistrations?.filter(ur => {
-    const season = ur.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
+  const currentRegistrations = userRegistrations?.filter(ur =>
+    isRegistrationActive(ur.registration)
+  ) || []
 
-  const pastRegistrations = userRegistrations?.filter(ur => {
-    const season = ur.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  const pastRegistrations = userRegistrations?.filter(ur =>
+    !isRegistrationActive(ur.registration)
+  ) || []
 
   // Split waitlist entries into current and past
-  const currentWaitlistEntries = userWaitlistEntries?.filter(we => {
-    const season = we.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
+  const currentWaitlistEntries = userWaitlistEntries?.filter(we =>
+    isRegistrationActive(we.registration)
+  ) || []
 
-  const pastWaitlistEntries = userWaitlistEntries?.filter(we => {
-    const season = we.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  const pastWaitlistEntries = userWaitlistEntries?.filter(we =>
+    !isRegistrationActive(we.registration)
+  ) || []
 
-  // Split alternate registrations into current and past
-  const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
-    const season = ar.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate >= new Date()
-  }) || []
-
-  const pastAlternateRegistrations = userAlternateRegistrations?.filter(ar => {
-    const season = ar.registration?.season
-    if (!season) return false
-    const endDate = new Date(season.end_date)
-    return endDate < new Date()
-  }) || []
+  // Get current alternate registrations
+  const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
+    isRegistrationActive(ar.registration)
+  ) || []
 
   return (
     <div className="px-4 py-6 sm:px-0">
@@ -217,9 +214,12 @@ export default async function UserRegistrationsPage() {
                           <p className="text-sm font-medium text-gray-900">
                             {userRegistration.registration?.name}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            {userRegistration.registration?.season?.name}
-                          </p>
+                          <RegistrationDateDisplay
+                            type={userRegistration.registration?.type}
+                            startDate={userRegistration.registration?.start_date}
+                            seasonName={userRegistration.registration?.season?.name}
+                            className="text-sm text-gray-600"
+                          />
                         </div>
                       </div>
                       <div className="text-right">
@@ -243,6 +243,18 @@ export default async function UserRegistrationsPage() {
                       <p className="text-sm text-gray-500">
                         Season: {formatDateString(userRegistration.registration?.season?.start_date || '')} - {formatDateString(userRegistration.registration?.season?.end_date || '')}
                       </p>
+
+                      {/* Display event dates for events/scrimmages */}
+                      {(userRegistration.registration?.type === 'event' || userRegistration.registration?.type === 'scrimmage') &&
+                       userRegistration.registration?.start_date &&
+                       userRegistration.registration?.end_date && (
+                        <EventCalendarButton
+                          eventName={userRegistration.registration.name}
+                          startDate={userRegistration.registration.start_date}
+                          endDate={userRegistration.registration.end_date}
+                          description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
+                        />
+                      )}
                     </div>
                   </div>
                 </li>
@@ -297,9 +309,12 @@ export default async function UserRegistrationsPage() {
                             <p className="text-sm font-medium text-gray-900">
                               {alternateReg.registration?.name}
                             </p>
-                            <p className="text-sm text-gray-600">
-                              {alternateReg.registration?.season?.name}
-                            </p>
+                            <RegistrationDateDisplay
+                              type={alternateReg.registration?.type}
+                              startDate={alternateReg.registration?.start_date}
+                              seasonName={alternateReg.registration?.season?.name}
+                              className="text-sm text-gray-600"
+                            />
                           </div>
                         </div>
                         <div className="text-right">
@@ -410,9 +425,16 @@ export default async function UserRegistrationsPage() {
                           <p className="text-sm font-medium text-gray-900">
                             {waitlistEntry.registration?.name}
                           </p>
-                          <p className="text-sm text-gray-600">
-                            {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
-                          </p>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <RegistrationDateDisplay
+                              type={waitlistEntry.registration?.type}
+                              startDate={waitlistEntry.registration?.start_date}
+                              seasonName={waitlistEntry.registration?.season?.name}
+                              className="text-sm text-gray-600"
+                            />
+                            <span className="mx-2">•</span>
+                            <span>{getCategoryDisplayName(waitlistEntry.registration_category)}</span>
+                          </div>
                         </div>
                         <div className="ml-4 flex-shrink-0">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -462,9 +484,12 @@ export default async function UserRegistrationsPage() {
                         <p className="text-sm font-medium text-gray-900">
                           {userRegistration.registration?.name}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          {userRegistration.registration?.season?.name}
-                        </p>
+                        <RegistrationDateDisplay
+                          type={userRegistration.registration?.type}
+                          startDate={userRegistration.registration?.start_date}
+                          seasonName={userRegistration.registration?.season?.name}
+                          className="text-sm text-gray-600"
+                        />
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-900">
@@ -497,9 +522,16 @@ export default async function UserRegistrationsPage() {
                         <p className="text-sm font-medium text-gray-900">
                           {waitlistEntry.registration?.name}
                         </p>
-                        <p className="text-sm text-gray-600">
-                          {waitlistEntry.registration?.season?.name} • {getCategoryDisplayName(waitlistEntry.registration_category)}
-                        </p>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <RegistrationDateDisplay
+                            type={waitlistEntry.registration?.type}
+                            startDate={waitlistEntry.registration?.start_date}
+                            seasonName={waitlistEntry.registration?.season?.name}
+                            className="text-sm text-gray-600"
+                          />
+                          <span className="mx-2">•</span>
+                          <span>{getCategoryDisplayName(waitlistEntry.registration_category)}</span>
+                        </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">

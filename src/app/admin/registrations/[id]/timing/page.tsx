@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import DateTimePicker from '@/components/DateTimePicker'
 
 export default function EditRegistrationTimingPage() {
   const router = useRouter()
@@ -263,20 +264,21 @@ export default function EditRegistrationTimingPage() {
 
               {/* Pre-sale Start */}
               <div>
-                <label htmlFor="presale_start_at" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="presale_start_at" className="block text-sm font-medium text-gray-700 mb-1">
                   Pre-sale Start Date & Time (optional)
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   id="presale_start_at"
                   value={formData.presale_start_at}
-                  onChange={(e) => setFormData(prev => ({ ...prev, presale_start_at: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  onChange={(value) => setFormData(prev => ({ ...prev, presale_start_at: value }))}
+                  enableTime={true}
+                  minuteIncrement={5}
+                  placeholder="Select pre-sale start time..."
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   When pre-sale registration opens (requires pre-sale code)
                 </p>
-                {formData.presale_start_at && formData.regular_start_at && 
+                {formData.presale_start_at && formData.regular_start_at &&
                  new Date(formData.presale_start_at) >= new Date(formData.regular_start_at) && (
                   <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded-md p-3">
                     <p className="text-sm text-yellow-800">
@@ -330,20 +332,21 @@ export default function EditRegistrationTimingPage() {
 
               {/* Regular Start */}
               <div>
-                <label htmlFor="regular_start_at" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="regular_start_at" className="block text-sm font-medium text-gray-700 mb-1">
                   General Registration Start Date & Time (optional)
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   id="regular_start_at"
                   value={formData.regular_start_at}
-                  onChange={(e) => setFormData(prev => ({ ...prev, regular_start_at: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  onChange={(value) => setFormData(prev => ({ ...prev, regular_start_at: value }))}
+                  enableTime={true}
+                  minuteIncrement={5}
+                  placeholder="Select general registration start time..."
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   When registration opens to all users
                 </p>
-                {formData.regular_start_at && formData.registration_end_at && 
+                {formData.regular_start_at && formData.registration_end_at &&
                  new Date(formData.regular_start_at) >= new Date(formData.registration_end_at) && (
                   <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded-md p-3">
                     <p className="text-sm text-yellow-800">
@@ -355,20 +358,21 @@ export default function EditRegistrationTimingPage() {
 
               {/* Registration End */}
               <div>
-                <label htmlFor="registration_end_at" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="registration_end_at" className="block text-sm font-medium text-gray-700 mb-1">
                   Registration End Date & Time (optional)
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   id="registration_end_at"
                   value={formData.registration_end_at}
-                  onChange={(e) => setFormData(prev => ({ ...prev, registration_end_at: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  onChange={(value) => setFormData(prev => ({ ...prev, registration_end_at: value }))}
+                  enableTime={true}
+                  minuteIncrement={5}
+                  placeholder="Select registration end time..."
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   When registration closes
                 </p>
-                {formData.presale_start_at && formData.registration_end_at && 
+                {formData.presale_start_at && formData.registration_end_at &&
                  new Date(formData.presale_start_at) >= new Date(formData.registration_end_at) && (
                   <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded-md p-3">
                     <p className="text-sm text-yellow-800">

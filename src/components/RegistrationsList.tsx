@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
+import { formatEventDateTime } from '@/lib/date-utils'
 
 interface Registration {
   id: string
@@ -11,7 +13,12 @@ interface Registration {
   is_active: boolean
   allow_discounts: boolean
   presale_code: string | null
+  presale_start_at?: string | null
+  regular_start_at?: string | null
+  registration_end_at?: string | null
   created_at: string
+  start_date?: string | null
+  end_date?: string | null
   seasons?: {
     name: string
   }
@@ -87,13 +94,7 @@ function RegistrationItem({ registration }: { registration: Registration }) {
               <p className="text-lg font-medium text-gray-900 truncate">
                 {registration.name}
               </p>
-              <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                registration.type === 'team' ? 'bg-blue-100 text-blue-800' :
-                registration.type === 'scrimmage' ? 'bg-green-100 text-green-800' :
-                'bg-purple-100 text-purple-800'
-              }`}>
-                {registration.type}
-              </span>
+              <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} className="ml-2" />
               <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 getStatusBadgeStyle(status)
               }`}>
@@ -101,7 +102,11 @@ function RegistrationItem({ registration }: { registration: Registration }) {
               </span>
             </div>
             <div className="mt-1 flex items-center text-sm text-gray-500">
-              <span>{registration.seasons?.name || 'No season'}</span>
+              {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
+                <span>{formatEventDateTime(registration.start_date)}</span>
+              ) : (
+                <span>{registration.seasons?.name || 'No season'}</span>
+              )}
               {!registration.allow_discounts && (
                 <>
                   <span className="mx-2">•</span>
@@ -146,7 +151,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
   
   const closedRegistrations = registrations.filter(reg => {
     const status = getRegistrationStatus(reg as any)
-    return status === 'expired'
+    return status === 'expired' || status === 'past'
   })
 
   return (

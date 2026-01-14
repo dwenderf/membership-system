@@ -110,3 +110,64 @@ export function toDateString(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   return dateObj.toISOString().substring(0, 10)
 }
+
+/**
+ * Convert UTC ISO string to datetime-local input format (YYYY-MM-DDTHH:mm)
+ * Displays the time in America/New_York timezone
+ * Used when populating datetime-local input fields from database values
+ * @param utcIsoString - UTC ISO string from database (e.g., "2025-09-28T21:30:00Z")
+ * @returns Datetime-local format string (e.g., "2025-09-28T17:30")
+ */
+export function convertFromUTCToNYDateTimeLocal(utcIsoString: string): string {
+  if (!utcIsoString) return ''
+
+  const date = new Date(utcIsoString)
+
+  // Get the date/time components in NY timezone
+  const nyDateString = date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+
+  // Parse the NY date string (format: "MM/DD/YYYY, HH:mm")
+  const [datePart, timePart] = nyDateString.split(', ')
+  const [month, day, year] = datePart.split('/')
+  const [hour, minute] = timePart.split(':')
+
+  // Return in datetime-local format (YYYY-MM-DDTHH:mm)
+  return `${year}-${month}-${day}T${hour}:${minute}`
+}
+
+/**
+ * Format event start date/time in a user-friendly way for dashboard display
+ * @param date - Date object, ISO string, or timestamp
+ * @returns Formatted string like "Sunday, Jan 11 @ 4:00pm" (no year)
+ */
+export function formatEventDateTime(date: Date | string | number): string {
+  const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
+
+  const dayOfWeek = dateObj.toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: APP_TIMEZONE
+  })
+
+  const monthDay = dateObj.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: APP_TIMEZONE
+  })
+
+  const time = dateObj.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: APP_TIMEZONE,
+    hour12: true
+  }).toLowerCase()
+
+  return `${dayOfWeek}, ${monthDay} @ ${time}`
+}

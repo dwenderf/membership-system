@@ -116,12 +116,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check if user is already registered for this registration
+    // Check if user is already registered for this registration (with paid status)
     const { data: existingRegistration } = await supabase
       .from('user_registrations')
       .select('id')
       .eq('user_id', user.id)
       .eq('registration_id', registrationId)
+      .eq('payment_status', 'paid')
       .single()
 
     if (existingRegistration) {

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { generateICalContent, generateGoogleCalendarUrl, downloadICalFile, generateCalendarFilename } from '@/lib/calendar-utils'
-import { formatEventDateTime } from '@/lib/date-utils'
 
 interface EventCalendarButtonProps {
   eventName: string
@@ -38,11 +37,6 @@ export default function EventCalendarButton({
 
   return (
     <div className={`relative inline-block ${className}`}>
-      {/* Event Date Display */}
-      <p className="text-lg font-semibold text-gray-900 mb-2">
-        {formatEventDateTime(startDate)}
-      </p>
-
       {/* Compact Calendar Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}

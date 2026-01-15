@@ -5,9 +5,9 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate } from '@/lib/date-utils'
+import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 import EventCalendarButton from '@/components/EventCalendarButton'
-import RegistrationDateDisplay from '@/components/RegistrationDateDisplay'
+import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import WaitlistBadge from '@/components/WaitlistBadge'
 
 // Helper function to safely parse date strings without timezone conversion
@@ -209,53 +209,60 @@ export default async function UserRegistrationsPage() {
               {currentRegistrations.map((userRegistration) => (
                 <li key={userRegistration.id}>
                   <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {userRegistration.registration?.name}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        {/* Registration name as H3 */}
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {userRegistration.registration?.name}
+                        </h3>
+
+                        {/* Date/Season as H4 */}
+                        {(userRegistration.registration?.type === 'event' || userRegistration.registration?.type === 'scrimmage') && userRegistration.registration?.start_date ? (
+                          <>
+                            <h4 className="text-base text-gray-700 mt-1">
+                              {formatEventDateTime(userRegistration.registration.start_date)}
+                            </h4>
+                            {/* Add to Calendar button */}
+                            {userRegistration.registration?.end_date && (
+                              <div className="mt-2">
+                                <EventCalendarButton
+                                  eventName={userRegistration.registration.name}
+                                  startDate={userRegistration.registration.start_date}
+                                  endDate={userRegistration.registration.end_date}
+                                  description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
+                                />
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <h4 className="text-base text-gray-700 mt-1">
+                            {userRegistration.registration?.season?.name}
+                          </h4>
+                        )}
+                      </div>
+
+                      {/* Badges and price in top-right */}
+                      <div className="ml-4 flex flex-col items-end space-y-2">
+                        {/* Badges */}
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <RegistrationTypeBadge type={userRegistration.registration?.type} />
+                          {userRegistration.registration_category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {getCategoryDisplayName(userRegistration.registration_category)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Price and date */}
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-gray-900">
+                            ${(userRegistration.amount_paid / 100).toFixed(2)}
                           </p>
-                          <RegistrationDateDisplay
-                            type={userRegistration.registration?.type}
-                            startDate={userRegistration.registration?.start_date}
-                            seasonName={userRegistration.registration?.season?.name}
-                            className="text-sm text-gray-600"
-                          />
+                          <p className="text-xs text-gray-500">
+                            Registered: {formatDate(new Date(userRegistration.registered_at))}
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-900">
-                          ${(userRegistration.amount_paid / 100).toFixed(2)}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Registered: {formatDate(new Date(userRegistration.registered_at))}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-2">
-                      {userRegistration.registration_category && (
-                        <p className="text-sm text-gray-600">
-                          Category: {getCategoryDisplayName(userRegistration.registration_category)}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-600">
-                        Type: {userRegistration.registration?.type}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Season: {formatDateString(userRegistration.registration?.season?.start_date || '')} - {formatDateString(userRegistration.registration?.season?.end_date || '')}
-                      </p>
-
-                      {/* Display event dates for events/scrimmages */}
-                      {(userRegistration.registration?.type === 'event' || userRegistration.registration?.type === 'scrimmage') &&
-                       userRegistration.registration?.start_date &&
-                       userRegistration.registration?.end_date && (
-                        <EventCalendarButton
-                          eventName={userRegistration.registration.name}
-                          startDate={userRegistration.registration.start_date}
-                          endDate={userRegistration.registration.end_date}
-                          description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
-                        />
-                      )}
                     </div>
                   </div>
                 </li>
@@ -420,40 +427,45 @@ export default async function UserRegistrationsPage() {
               {currentWaitlistEntries.map((waitlistEntry) => (
                 <li key={waitlistEntry.id}>
                   <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {waitlistEntry.registration?.name}
-                          </p>
-                          <div className="flex items-center text-sm text-gray-600">
-                            <RegistrationDateDisplay
-                              type={waitlistEntry.registration?.type}
-                              startDate={waitlistEntry.registration?.start_date}
-                              seasonName={waitlistEntry.registration?.season?.name}
-                              className="text-sm text-gray-600"
-                            />
-                            <span className="mx-2">•</span>
-                            <span>{getCategoryDisplayName(waitlistEntry.registration_category)}</span>
-                          </div>
-                        </div>
-                        <div className="ml-4 flex-shrink-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        {/* Registration name as H3 */}
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {waitlistEntry.registration?.name}
+                        </h3>
+
+                        {/* Date/Season as H4 */}
+                        {(waitlistEntry.registration?.type === 'event' || waitlistEntry.registration?.type === 'scrimmage') && waitlistEntry.registration?.start_date ? (
+                          <h4 className="text-base text-gray-700 mt-1">
+                            {formatEventDateTime(waitlistEntry.registration.start_date)}
+                          </h4>
+                        ) : (
+                          <h4 className="text-base text-gray-700 mt-1">
+                            {waitlistEntry.registration?.season?.name}
+                          </h4>
+                        )}
+                      </div>
+
+                      {/* Badges and date in top-right */}
+                      <div className="ml-4 flex flex-col items-end space-y-2">
+                        {/* Badges */}
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <RegistrationTypeBadge type={waitlistEntry.registration?.type} />
+                          {waitlistEntry.registration_category && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              {getCategoryDisplayName(waitlistEntry.registration_category)}
+                            </span>
+                          )}
                           <WaitlistBadge />
                         </div>
+
+                        {/* Joined date */}
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">
+                            Joined: {formatDate(new Date(waitlistEntry.joined_at))}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">
-                          Joined: {formatDate(new Date(waitlistEntry.joined_at))}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-600">
-                        Type: {waitlistEntry.registration?.type}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Season: {formatDateString(waitlistEntry.registration?.season?.start_date || '')} - {formatDateString(waitlistEntry.registration?.season?.end_date || '')}
-                      </p>
                     </div>
                   </div>
                 </li>

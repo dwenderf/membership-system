@@ -161,29 +161,41 @@ export async function POST(request: NextRequest) {
     const nextPosition = maxPosition ? maxPosition.position + 1 : 1
 
     // Add user to waitlist
+    const waitlistData = {
+      user_id: user.id,
+      registration_id: registrationId,
+      registration_category_id: categoryId,
+      position: nextPosition,
+      discount_code_id: validatedDiscountCodeId
+    }
+
+    console.log('Attempting to insert waitlist entry:', waitlistData)
+
     const { data: waitlistEntry, error: waitlistError } = await supabase
       .from('waitlists')
-      .insert({
-        user_id: user.id,
-        registration_id: registrationId,
-        registration_category_id: categoryId,
-        position: nextPosition,
-        discount_code_id: validatedDiscountCodeId
-      })
+      .insert(waitlistData)
       .select()
       .single()
 
     if (waitlistError) {
       console.error('Error adding to waitlist:', waitlistError)
+      console.error('Failed waitlist data:', waitlistData)
       Sentry.captureException(waitlistError, {
         tags: {
           operation: 'waitlist_join',
           user_id: user.id,
           registration_id: registrationId,
           category_id: categoryId
+        },
+        extra: {
+          waitlistData,
+          errorDetails: waitlistError
         }
       })
-      return NextResponse.json({ error: 'Failed to join waitlist' }, { status: 500 })
+      return NextResponse.json({
+        error: 'Failed to join waitlist',
+        details: process.env.NODE_ENV === 'development' ? waitlistError.message : undefined
+      }, { status: 500 })
     }
 
     // Get registration and user details for email

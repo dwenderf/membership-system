@@ -8,6 +8,7 @@ import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import RegistrationDateDisplay from '@/components/RegistrationDateDisplay'
+import WaitlistBadge from '@/components/WaitlistBadge'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -437,9 +438,7 @@ export default async function UserRegistrationsPage() {
                           </div>
                         </div>
                         <div className="ml-4 flex-shrink-0">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            On Waitlist
-                          </span>
+                          <WaitlistBadge />
                         </div>
                       </div>
                       <div className="text-right">
@@ -535,9 +534,9 @@ export default async function UserRegistrationsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-500">
-                          On Waitlist
+                          <WaitlistBadge />
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 mt-1">
                           Joined: {formatDate(new Date(waitlistEntry.joined_at))}
                         </p>
                       </div>

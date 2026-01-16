@@ -79,14 +79,24 @@ function formatICalDate(date: Date | string): string {
 }
 
 /**
- * Generate VTIMEZONE component for America/New_York
- * Includes both EST (Standard) and EDT (Daylight) definitions
+ * Generate VTIMEZONE component for the configured timezone
+ * NOTE: The timezone rules (offsets, DST transitions) are hardcoded for America/New_York.
+ * If NEXT_PUBLIC_APP_TIMEZONE is set to a different timezone, this will cause incorrect
+ * calendar behavior. Only America/New_York is supported.
  * @returns VTIMEZONE component as string array
  */
 function generateVTimezone(): string[] {
+  // Validate that APP_TIMEZONE is America/New_York
+  if (APP_TIMEZONE !== 'America/New_York') {
+    console.error(
+      `Error: NEXT_PUBLIC_APP_TIMEZONE is set to "${APP_TIMEZONE}" but only "America/New_York" is supported. ` +
+      `Calendar exports will use America/New_York timezone rules regardless.`
+    )
+  }
+
   return [
     'BEGIN:VTIMEZONE',
-    'TZID:America/New_York',
+    `TZID:${APP_TIMEZONE}`,
     'BEGIN:DAYLIGHT',
     'TZOFFSETFROM:-0500',
     'TZOFFSETTO:-0400',

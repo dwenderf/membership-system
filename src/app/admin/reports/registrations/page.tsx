@@ -17,6 +17,7 @@ interface Registration {
   total_capacity: number | null
   total_waitlist_count: number
   alternates_count: number
+  alternates_enabled: boolean
   category_breakdown: Array<{
     id: string
     name: string
@@ -221,7 +222,7 @@ export default function RegistrationReportsPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 font-semibold">Alternates</span>
                     <span className="font-bold text-gray-900">
-                      {registration.alternates_count}
+                      {registration.alternates_enabled ? registration.alternates_count : '-'}
                     </span>
                   </div>
                 </div>

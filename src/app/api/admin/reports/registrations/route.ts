@@ -378,6 +378,19 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
       }
 
+      // Get which registrations have alternates enabled by checking for alternate_registrations records
+      const { data: alternateRegistrations, error: alternateRegsError } = await adminSupabase
+        .from('alternate_registrations')
+        .select('registration_id')
+        .in('registration_id', registrationIds)
+
+      if (alternateRegsError) {
+        logger.logSystem('registration-reports-api', 'Error fetching alternate registrations', { error: alternateRegsError }, 'error')
+      }
+
+      // Create a set of registration IDs that have alternates enabled
+      const registrationsWithAlternates = new Set(alternateRegistrations?.map(ar => ar.registration_id) || [])
+
       // Get alternates counts for each registration
       const { data: alternatesCounts, error: alternatesError } = await adminSupabase
         .from('alternate_selections')
@@ -468,6 +481,7 @@ export async function GET(request: NextRequest) {
 
         // Get alternates count (unique users who have selected alternates for this registration)
         const alternatesCount = alternatesCountMap.get(item.id)?.size || 0
+        const alternatesEnabled = registrationsWithAlternates.has(item.id)
 
         return {
           id: item.id,
@@ -483,6 +497,7 @@ export async function GET(request: NextRequest) {
           total_capacity: totalCapacity > 0 ? totalCapacity : null,
           total_waitlist_count: totalWaitlistCount,
           alternates_count: alternatesCount,
+          alternates_enabled: alternatesEnabled,
           category_breakdown: categoryBreakdown
         }
       }) || []

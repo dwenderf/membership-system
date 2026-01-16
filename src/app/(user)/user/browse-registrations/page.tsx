@@ -323,10 +323,24 @@ export default async function BrowseRegistrationsPage() {
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="text-lg leading-6 font-medium text-gray-900">
+                          {/* Registration name as H3 */}
+                          <h3 className="text-lg font-semibold text-gray-900">
                             {registration.name}
                           </h3>
-                          <div className="mt-1 flex items-center space-x-2">
+
+                          {/* Date/Season as H4 */}
+                          {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
+                            <h4 className="text-base text-gray-700 mt-1">
+                              {formatEventDateTime(registration.start_date)}
+                            </h4>
+                          ) : (
+                            <h4 className="text-base text-gray-700 mt-1">
+                              {registration.season?.name}
+                            </h4>
+                          )}
+
+                          {/* Status badges */}
+                          <div className="mt-2 flex items-center space-x-2">
                             <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} />
                             {registrationStatus === 'presale' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
@@ -340,23 +354,6 @@ export default async function BrowseRegistrationsPage() {
                             )}
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="mt-3">
-                        {(registration.type === 'event' || registration.type === 'scrimmage') && registration.start_date ? (
-                          <p className="text-base font-bold text-blue-700">
-                            {formatEventDateTime(registration.start_date)}
-                          </p>
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium text-gray-900">
-                              {registration.season?.name}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {formatDateString(registration.season?.start_date || '')} - {formatDateString(registration.season?.end_date || '')}
-                            </p>
-                          </>
-                        )}
                       </div>
 
                       <div className="mt-5">

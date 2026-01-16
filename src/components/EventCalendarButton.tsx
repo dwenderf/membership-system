@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { generateICalContent, generateGoogleCalendarUrl, downloadICalFile, generateCalendarFilename } from '@/lib/calendar-utils'
-import { formatEventDateTime } from '@/lib/date-utils'
 
 interface EventCalendarButtonProps {
   eventName: string
@@ -37,22 +36,16 @@ export default function EventCalendarButton({
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative inline-block ${className}`}>
+      {/* Compact Calendar Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full mt-3 p-4 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors text-left"
+        className="inline-flex items-center px-3 py-1.5 text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors"
       >
-        <div className="text-center">
-          <p className="text-lg font-semibold text-blue-900">
-            {formatEventDateTime(startDate)}
-          </p>
-          <div className="flex items-center justify-center mt-2 text-sm text-blue-700">
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Add to Calendar
-          </div>
-        </div>
+        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        Add to Calendar
       </button>
 
       {isOpen && (
@@ -63,8 +56,8 @@ export default function EventCalendarButton({
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Dropdown menu - positioned relative to button */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 z-20 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+          {/* Dropdown menu - positioned below button */}
+          <div className="absolute left-0 z-20 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
             <div className="py-1" role="menu">
               <button
                 onClick={handleAddToGoogleCalendar}

@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
         registration_id,
         game_description,
         game_date,
+        game_end_time,
         created_at,
         created_by,
         alternate_selections (
@@ -99,12 +100,13 @@ export async function GET(request: NextRequest) {
     const formattedGames = (games || []).map(game => {
       const selectedCount = Array.isArray(game.alternate_selections) ? game.alternate_selections.length : 0
       const availableCount = Math.max(0, totalAvailableCount - selectedCount)
-      
+
       return {
         id: game.id,
         registration_id: game.registration_id,
         game_description: game.game_description,
         game_date: game.game_date,
+        game_end_time: game.game_end_time,
         created_at: game.created_at,
         selected_count: selectedCount,
         available_count: availableCount
@@ -145,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, gameDescription, gameDate } = body
+    const { registrationId, gameDescription, gameDate, gameEndTime } = body
 
     // Validate required fields
     if (!registrationId) {
@@ -197,6 +199,7 @@ export async function POST(request: NextRequest) {
         registration_id: registrationId,
         game_description: gameDescription.trim(),
         game_date: gameDate || null,
+        game_end_time: gameEndTime || null,
         created_by: authUser.id
       })
       .select(`
@@ -204,6 +207,7 @@ export async function POST(request: NextRequest) {
         registration_id,
         game_description,
         game_date,
+        game_end_time,
         created_at,
         created_by
       `)
@@ -234,6 +238,7 @@ export async function POST(request: NextRequest) {
       registration_id: newGame.registration_id,
       game_description: newGame.game_description,
       game_date: newGame.game_date,
+      game_end_time: newGame.game_end_time,
       created_at: newGame.created_at
     }
 

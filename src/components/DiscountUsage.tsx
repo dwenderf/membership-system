@@ -58,7 +58,7 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
     return (
       <div className="bg-white overflow-hidden shadow rounded-lg">
         <div className="p-5">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">My Discount Usage</h3>
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
@@ -67,32 +67,15 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
     )
   }
 
-  if (error) {
-    return (
-      <div className="bg-white overflow-hidden shadow rounded-lg">
-        <div className="p-5">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
-          <div className="text-red-600 text-sm">{error}</div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!data?.discountUsage || data.discountUsage.length === 0) {
-    return (
-      <div className="bg-white overflow-hidden shadow rounded-lg">
-        <div className="p-5">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
-          <div className="text-sm text-gray-600">No recent discount usage.</div>
-        </div>
-      </div>
-    )
+  if (error || !data?.discountUsage || data.discountUsage.length === 0) {
+    // Don't render anything if there's an error or no discount usage
+    return null
   }
 
   return (
     <div className="bg-white overflow-hidden shadow rounded-lg">
       <div className="p-5">
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Discount Usage</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">My Discount Usage</h3>
       
       <div className="space-y-4">
         {data.discountUsage.map((season) => (

@@ -15,7 +15,7 @@
 import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
-import { formatDate, formatTime, toNYDateString } from '@/lib/date-utils'
+import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -347,7 +347,11 @@ export class EmailProcessor {
         .select(`
           *,
           registration:registrations (
+            id,
             name,
+            type,
+            start_date,
+            end_date,
             season:seasons (name, start_date, end_date)
           ),
           registration_category:registration_categories (
@@ -390,11 +394,34 @@ export class EmailProcessor {
                           registration.registration_category?.category?.name || 
                           'Standard'
 
-      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '✅ Registration found, staging email', { 
+      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '✅ Registration found, staging email', {
         email: user.email,
         registrationName: registration.registration.name,
         categoryName: categoryName
       })
+
+      // Prepare base email data
+      const emailData: any = {
+        userName: `${user.first_name} ${user.last_name}`,
+        registrationName: registration.registration.name,
+        categoryName: categoryName,
+        seasonName: registration.registration.season.name,
+        amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
+        paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
+        registrationDate: toNYDateString(registration.created_at || new Date()),
+        dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      }
+
+      // Add formatted date/time information text
+      const regType = registration.registration.type
+      const hasEventDates = registration.registration.start_date && registration.registration.end_date
+      if ((regType === 'event' || regType === 'scrimmage') && hasEventDates) {
+        const formattedEventStart = formatDateTime(registration.registration.start_date)
+        emailData.registrationDateTimeInformation = `${registration.registration.name} is scheduled for ${formattedEventStart}. You can add this event to your calendar by logging in to your dashboard and going to "My Registrations".`
+      } else {
+        // For team registrations
+        emailData.registrationDateTimeInformation = `You are registered for the ${registration.registration.season.name} season.`
+      }
 
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({
@@ -403,16 +430,7 @@ export class EmailProcessor {
         event_type: 'registration.completed',
         subject: `Registration Confirmation - ${registration.registration.name}`,
         template_id: process.env.LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
-        email_data: {
-          userName: `${user.first_name} ${user.last_name}`,
-          registrationName: registration.registration.name,
-          categoryName: categoryName,
-          seasonName: registration.registration.season.name,
-          amount: Number((centsToDollars(registration.amount_paid || 0)).toFixed(2)),
-          paymentIntentId: registration.stripe_payment_intent_id || 'unknown',
-          registrationDate: toNYDateString(registration.created_at || new Date()),
-          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
-        },
+        email_data: emailData,
         related_entity_type: 'user_registrations',
         related_entity_id: event.record_id || undefined,
         payment_id: event.payment_id || undefined
@@ -461,6 +479,7 @@ export class EmailProcessor {
           alternate_registration:alternate_registrations (
             game_description,
             game_date,
+            game_end_time,
             registration:registrations (
               name,
               season:seasons (name)
@@ -494,13 +513,37 @@ export class EmailProcessor {
       // Format game date for display
       // Note: Database stores TIMESTAMP WITH TIME ZONE, so we should preserve the original timezone
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
-      
+
+      // Use game_end_time if available, otherwise calculate as 90 minutes after start (default game duration)
+      const gameEndDate = alternateSelection.alternate_registration.game_end_time
+        ? new Date(alternateSelection.alternate_registration.game_end_time)
+        : new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes as fallback
+
       // Format date and time in Eastern Time (the timezone for NYCGHA events)
       const formattedDate = formatDate(gameDate)
-      
+
       // For time, we want to show what time it actually is in New York, regardless of how it was stored
       const formattedTime = formatTime(gameDate)
-      
+
+      // Prepare base email data
+      const emailData: any = {
+        userName: `${user.first_name} ${user.last_name}`,
+        registrationName: alternateSelection.alternate_registration.registration.name,
+        seasonName: alternateSelection.alternate_registration.registration.season?.name || '',
+        gameDescription: alternateSelection.alternate_registration.game_description,
+        gameDate: formattedDate,
+        gameTime: formattedTime,
+        amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
+        paymentIntentId: payment?.stripe_payment_intent_id || 'unknown',
+        purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
+        dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
+      }
+
+      // Add formatted date/time information text
+      const gameStartISO = gameDate.toISOString()
+      const formattedGameStart = formatDateTime(gameStartISO)
+      emailData.registrationDateTimeInformation = `${alternateSelection.alternate_registration.game_description} is scheduled for ${formattedGameStart}. You can add this event to your calendar by logging in to your dashboard and going to "My Registrations".`
+
       // Stage the email for batch processing
       const stagingResult = await emailStagingManager.stageEmail({
         user_id: event.user_id,
@@ -508,18 +551,7 @@ export class EmailProcessor {
         event_type: 'alternate_selection.completed',
         subject: `Alternate Selection Confirmation - ${alternateSelection.alternate_registration.game_description}`,
         template_id: templateId,
-        email_data: {
-          userName: `${user.first_name} ${user.last_name}`,
-          registrationName: alternateSelection.alternate_registration.registration.name,
-          seasonName: alternateSelection.alternate_registration.registration.season?.name || '',
-          gameDescription: alternateSelection.alternate_registration.game_description,
-          gameDate: formattedDate,
-          gameTime: formattedTime,
-          amount: Number((centsToDollars(payment?.final_amount || event.amount)).toFixed(2)),
-          paymentIntentId: payment?.stripe_payment_intent_id || 'unknown',
-          purchaseDate: toNYDateString(alternateSelection.selected_at || new Date()),
-          dashboardUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://nycgha.org'
-        },
+        email_data: emailData,
         related_entity_type: 'alternate_selections',
         related_entity_id: alternateSelection.id,
         payment_id: event.payment_id

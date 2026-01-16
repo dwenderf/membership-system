@@ -14,6 +14,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
+import WaitlistBadge from './WaitlistBadge'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -769,9 +770,7 @@ export default function RegistrationPurchase({
                             </span>
                           )}
                           {!isUnavailableDueToExistingRegistration && userWaitlistEntries[category.id] && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              Waitlist
-                            </span>
+                            <WaitlistBadge className="ml-2" />
                           )}
                         </div>
                         {requiresMembership && (
@@ -875,9 +874,7 @@ export default function RegistrationPurchase({
                         }`}>
                           {categoryName}
                           {userWaitlistEntries[category.id] && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              Waitlist
-                            </span>
+                            <WaitlistBadge className="ml-2" />
                           )}
                         </div>
                         {requiresMembership && (

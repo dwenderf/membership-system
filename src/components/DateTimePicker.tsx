@@ -106,7 +106,25 @@ export default function DateTimePicker({
 
   // Update flatpickr when value changes externally
   useEffect(() => {
-    if (flatpickrRef.current && value !== flatpickrRef.current.input.value) {
+    if (!flatpickrRef.current) return
+
+    // Compare the selected dates (parsed Date objects) instead of string representations
+    // to avoid format mismatch issues (value is in datetime-local format YYYY-MM-DDTHH:MM,
+    // while flatpickr.input.value is in dateFormat which is YYYY-MM-DD HH:MM K)
+    const valueAsDate = value ? flatpickrRef.current.parseDate(value) : null
+    const currentSelectedDate =
+      flatpickrRef.current.selectedDates.length > 0
+        ? flatpickrRef.current.selectedDates[0]
+        : null
+
+    // Check if the dates are actually different
+    const datesAreDifferent =
+      (valueAsDate === null) !== (currentSelectedDate === null) ||
+      (valueAsDate &&
+        currentSelectedDate &&
+        valueAsDate.getTime() !== currentSelectedDate.getTime())
+
+    if (datesAreDifferent) {
       if (value) {
         flatpickrRef.current.setDate(value, false)
       } else {

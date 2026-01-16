@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
+import EventCalendarButton from '@/components/EventCalendarButton'
 import { formatEventDateTime } from '@/lib/date-utils'
 
 export default async function UserDashboardPage() {
@@ -439,6 +440,14 @@ export default async function UserDashboardPage() {
                           <p className="text-sm text-gray-500">
                             {reg?.start_date ? formatEventDateTime(reg.start_date) : reg?.season?.name}
                           </p>
+                          {reg?.start_date && reg?.end_date && (
+                            <EventCalendarButton
+                              eventName={reg.name}
+                              startDate={reg.start_date}
+                              endDate={reg.end_date}
+                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - ${getCategoryDisplayName(registration.registration_category)}`}
+                            />
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
                           <RegistrationTypeBadge type={reg?.type as 'scrimmage' | 'event'} />
@@ -480,6 +489,14 @@ export default async function UserDashboardPage() {
                           <p className="text-sm text-gray-500">
                             {formatEventDateTime(altReg.game_date)}
                           </p>
+                          {altReg.game_date && altReg.game_end_time && (
+                            <EventCalendarButton
+                              eventName={reg.name}
+                              startDate={altReg.game_date}
+                              endDate={altReg.game_end_time}
+                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - Selected Alternate`}
+                            />
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
                           <RegistrationTypeBadge type={reg.type as 'scrimmage' | 'event'} />
@@ -511,6 +528,14 @@ export default async function UserDashboardPage() {
                           <p className="text-sm text-gray-500">
                             {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
                           </p>
+                          {registration.start_date && registration.end_date && (
+                            <EventCalendarButton
+                              eventName={registration.name}
+                              startDate={registration.start_date}
+                              endDate={registration.end_date}
+                              description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
+                            />
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1 ml-2">
                           <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />

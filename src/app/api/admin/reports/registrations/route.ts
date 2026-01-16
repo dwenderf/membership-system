@@ -331,6 +331,7 @@ export async function GET(request: NextRequest) {
           type,
           start_date,
           end_date,
+          allow_alternates,
           seasons (
             id,
             name,
@@ -468,8 +469,6 @@ export async function GET(request: NextRequest) {
 
         // Get alternates count (unique users who have selected alternates for this registration)
         const alternatesCount = alternatesCountMap.get(item.id)?.size || 0
-        // Alternates are only applicable for team registrations
-        const alternatesEnabled = item.type === 'team'
 
         return {
           id: item.id,
@@ -485,7 +484,7 @@ export async function GET(request: NextRequest) {
           total_capacity: totalCapacity > 0 ? totalCapacity : null,
           total_waitlist_count: totalWaitlistCount,
           alternates_count: alternatesCount,
-          alternates_enabled: alternatesEnabled,
+          alternates_enabled: item.allow_alternates || false,
           category_breakdown: categoryBreakdown
         }
       }) || []

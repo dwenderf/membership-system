@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import DateTimePicker from '@/components/DateTimePicker'
 import DurationInput from '@/components/DurationInput'
+import { convertToNYTimezone } from '@/lib/date-utils'
 
 interface EventDateTimeInputProps {
   startDate: string
@@ -28,7 +29,9 @@ export default function EventDateTimeInput({
   // Check if the selected date is in the past
   useEffect(() => {
     if (startDate) {
-      const selectedDate = new Date(startDate)
+      // Convert datetime-local to NY timezone before comparing
+      const selectedDateISO = convertToNYTimezone(startDate)
+      const selectedDate = new Date(selectedDateISO)
       const now = new Date()
       setIsPastDate(selectedDate < now)
     } else {

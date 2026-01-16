@@ -80,39 +80,52 @@ function formatICalDate(date: Date | string): string {
 
 /**
  * Generate VTIMEZONE component for the configured timezone
- * NOTE: The timezone rules (offsets, DST transitions) are hardcoded for America/New_York.
- * If NEXT_PUBLIC_APP_TIMEZONE is set to a different timezone, this will cause incorrect
- * calendar behavior. Only America/New_York is supported.
+ * Uses IANA timezone database to generate RFC 5545 compliant VTIMEZONE blocks
+ * Supports 597+ IANA timezones via timezones-ical-library
  * @returns VTIMEZONE component as string array
  */
 function generateVTimezone(): string[] {
-  // Validate that APP_TIMEZONE is America/New_York
-  if (APP_TIMEZONE !== 'America/New_York') {
-    console.error(
-      `Error: NEXT_PUBLIC_APP_TIMEZONE is set to "${APP_TIMEZONE}" but only "America/New_York" is supported. ` +
-      `Calendar exports will use America/New_York timezone rules regardless.`
-    )
-  }
+  try {
+    // Dynamic import for Node.js/SSR context only
+    // This library provides VTIMEZONE data for 597+ IANA timezones
+    const { tzlib_get_ical_block } = require('timezones-ical-library')
+    const vtimezoneBlock = tzlib_get_ical_block(APP_TIMEZONE)
 
-  return [
-    'BEGIN:VTIMEZONE',
-    `TZID:${APP_TIMEZONE}`,
-    'BEGIN:DAYLIGHT',
-    'TZOFFSETFROM:-0500',
-    'TZOFFSETTO:-0400',
-    'TZNAME:EDT',
-    'DTSTART:19700308T020000',
-    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
-    'END:DAYLIGHT',
-    'BEGIN:STANDARD',
-    'TZOFFSETFROM:-0400',
-    'TZOFFSETTO:-0500',
-    'TZNAME:EST',
-    'DTSTART:19701101T020000',
-    'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
-    'END:STANDARD',
-    'END:VTIMEZONE'
-  ]
+    // The library returns a string with embedded newlines, split into array
+    if (typeof vtimezoneBlock === 'string') {
+      return vtimezoneBlock.split('\n').map(line => line.trim()).filter(line => line)
+    }
+
+    // If it's already an array, return as-is
+    return Array.isArray(vtimezoneBlock) ? vtimezoneBlock : [vtimezoneBlock]
+  } catch (error) {
+    // Fallback: If library is not available (shouldn't happen in production)
+    console.warn(
+      `Warning: timezones-ical-library not available for timezone ${APP_TIMEZONE}. ` +
+      `Using fallback America/New_York timezone definition.`
+    )
+
+    // Return America/New_York as fallback
+    return [
+      'BEGIN:VTIMEZONE',
+      'TZID:America/New_York',
+      'BEGIN:DAYLIGHT',
+      'TZOFFSETFROM:-0500',
+      'TZOFFSETTO:-0400',
+      'TZNAME:EDT',
+      'DTSTART:19700308T020000',
+      'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+      'END:DAYLIGHT',
+      'BEGIN:STANDARD',
+      'TZOFFSETFROM:-0400',
+      'TZOFFSETTO:-0500',
+      'TZNAME:EST',
+      'DTSTART:19701101T020000',
+      'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+      'END:STANDARD',
+      'END:VTIMEZONE'
+    ]
+  }
 }
 
 /**

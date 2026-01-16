@@ -4,6 +4,12 @@
  */
 
 /**
+ * App-wide timezone configuration
+ * Falls back to America/New_York if not set
+ */
+const APP_TIMEZONE = process.env.NEXT_PUBLIC_APP_TIMEZONE || 'America/New_York'
+
+/**
  * Generate a cryptographically secure UUID
  * Uses crypto.randomUUID() if available, with fallback for older browsers
  * @returns A UUID string
@@ -44,21 +50,59 @@ function escapeICalText(text: string): string {
 }
 
 /**
- * Format a date to iCal format (YYYYMMDDTHHMMSSZ)
+ * Format a date to iCal format in the app's timezone (YYYYMMDDTHHMMSS)
+ * Note: Does not include 'Z' suffix as these are timezone-specific, not UTC
  * @param date - Date object or ISO string
  * @returns Formatted date string for iCal
  */
 function formatICalDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
 
-  const year = d.getUTCFullYear()
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  const hours = String(d.getUTCHours()).padStart(2, '0')
-  const minutes = String(d.getUTCMinutes()).padStart(2, '0')
-  const seconds = String(d.getUTCSeconds()).padStart(2, '0')
+  // Get date/time components in app's timezone
+  const dateString = d.toLocaleString('en-US', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
 
-  return `${year}${month}${day}T${hours}${minutes}${seconds}Z`
+  // Parse the formatted string (format: "MM/DD/YYYY, HH:mm:ss")
+  const [datePart, timePart] = dateString.split(', ')
+  const [month, day, year] = datePart.split('/')
+  const [hour, minute, second] = timePart.split(':')
+
+  return `${year}${month}${day}T${hour}${minute}${second}`
+}
+
+/**
+ * Generate VTIMEZONE component for America/New_York
+ * Includes both EST (Standard) and EDT (Daylight) definitions
+ * @returns VTIMEZONE component as string array
+ */
+function generateVTimezone(): string[] {
+  return [
+    'BEGIN:VTIMEZONE',
+    'TZID:America/New_York',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:-0500',
+    'TZOFFSETTO:-0400',
+    'TZNAME:EDT',
+    'DTSTART:19700308T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:-0400',
+    'TZOFFSETTO:-0500',
+    'TZNAME:EST',
+    'DTSTART:19701101T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+    'END:STANDARD',
+    'END:VTIMEZONE'
+  ]
 }
 
 /**
@@ -96,11 +140,12 @@ export function generateICalContent(
     'PRODID:-//Membership System//Event Calendar//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
+    ...generateVTimezone(),
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${dtstamp}`,
-    `DTSTART:${dtstart}`,
-    `DTEND:${dtend}`,
+    `DTSTART;TZID=${APP_TIMEZONE}:${dtstart}`,
+    `DTEND;TZID=${APP_TIMEZONE}:${dtend}`,
     `SUMMARY:${escapedName}`,
   ]
 
@@ -138,7 +183,7 @@ export function generateGoogleCalendarUrl(
   const start = new Date(startDate)
   const end = new Date(endDate)
 
-  // Format dates as YYYYMMDDTHHmmssZ for Google Calendar
+  // Format dates in app timezone (YYYYMMDDTHHMMSS)
   const formatGoogleDate = (date: Date): string => {
     return formatICalDate(date)
   }
@@ -147,6 +192,7 @@ export function generateGoogleCalendarUrl(
     action: 'TEMPLATE',
     text: eventName,
     dates: `${formatGoogleDate(start)}/${formatGoogleDate(end)}`,
+    ctz: APP_TIMEZONE, // Specify timezone for the event
   })
 
   if (description) {

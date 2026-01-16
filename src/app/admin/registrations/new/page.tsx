@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { convertToNYTimezone } from '@/lib/date-utils'
 import Link from 'next/link'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
+import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 export default function NewRegistrationPage() {
   const router = useRouter()
@@ -408,19 +409,15 @@ export default function NewRegistrationPage() {
 
                     {/* Alternate Accounting Code */}
                     <div>
-                      <label htmlFor="alternate_accounting_code" className="block text-sm font-medium text-gray-700">
-                        Alternate Accounting Code
-                      </label>
-                      <input
-                        type="text"
-                        id="alternate_accounting_code"
+                      <AccountingCodeInput
                         value={formData.alternate_accounting_code}
-                        onChange={(e) => setFormData(prev => ({ ...prev, alternate_accounting_code: e.target.value }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="e.g., ALT001"
+                        onChange={(value) => setFormData(prev => ({ ...prev, alternate_accounting_code: value }))}
+                        label="Alternate Accounting Code"
                         required={formData.allow_alternates}
+                        placeholder="Search by code or name..."
+                        suggestedAccountType="REVENUE"
                       />
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         Accounting code used for alternate charges in Xero
                       </p>
                     </div>

@@ -16,6 +16,8 @@ interface Registration {
   total_count: number
   total_capacity: number | null
   total_waitlist_count: number
+  alternates_count: number
+  alternates_enabled: boolean
   category_breakdown: Array<{
     id: string
     name: string
@@ -208,7 +210,7 @@ export default function RegistrationReportsPage() {
                 {/* Total registration count */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 font-semibold">Total Registrations</span>
+                    <span className="text-gray-600 font-semibold">Registrations</span>
                     <span className="font-bold text-gray-900">
                       {registration.total_count}
                     </span>
@@ -217,8 +219,7 @@ export default function RegistrationReportsPage() {
 
                 {/* Category breakdown */}
                 {registration.category_breakdown.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Categories</p>
+                  <div className="space-y-2 mb-3">
                     {registration.category_breakdown.slice(0, 3).map((category) => (
                       <div key={category.id} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
@@ -252,6 +253,16 @@ export default function RegistrationReportsPage() {
                     )}
                   </div>
                 )}
+
+                {/* Alternates count */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 font-semibold">Alternates</span>
+                    <span className="font-bold text-gray-900">
+                      {registration.alternates_enabled ? registration.alternates_count : '-'}
+                    </span>
+                  </div>
+                </div>
               </button>
             ))}
           </div>

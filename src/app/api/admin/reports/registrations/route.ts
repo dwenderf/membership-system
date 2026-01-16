@@ -378,6 +378,34 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
       }
 
+      // Get which registrations have alternates enabled by checking for alternate_registrations records
+      const { data: alternateRegistrations, error: alternateRegsError } = await adminSupabase
+        .from('alternate_registrations')
+        .select('registration_id')
+        .in('registration_id', registrationIds)
+
+      if (alternateRegsError) {
+        logger.logSystem('registration-reports-api', 'Error fetching alternate registrations', { error: alternateRegsError }, 'error')
+      }
+
+      // Create a set of registration IDs that have alternates enabled
+      const registrationsWithAlternates = new Set(alternateRegistrations?.map(ar => ar.registration_id) || [])
+
+      // Get alternates counts for each registration
+      const { data: alternatesCounts, error: alternatesError } = await adminSupabase
+        .from('alternate_selections')
+        .select(`
+          user_id,
+          alternate_registrations!inner (
+            registration_id
+          )
+        `)
+        .in('alternate_registrations.registration_id', registrationIds)
+
+      if (alternatesError) {
+        logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
+      }
+
       // Create a map of registration counts by registration_id and category_id
       const countsMap = new Map<string, Map<string, number>>()
       registrationCounts?.forEach(count => {
@@ -397,13 +425,29 @@ export async function GET(request: NextRequest) {
       waitlistCounts?.forEach(count => {
         const regId = count.registration_id
         const catId = count.registration_category_id || 'no-category'
-        
+
         if (!waitlistMap.has(regId)) {
           waitlistMap.set(regId, new Map())
         }
-        
+
         const regMap = waitlistMap.get(regId)!
         regMap.set(catId, (regMap.get(catId) || 0) + 1)
+      })
+
+      // Create a map of unique alternates count by registration_id
+      const alternatesCountMap = new Map<string, Set<string>>()
+      alternatesCounts?.forEach(selection => {
+        const alternateReg = Array.isArray(selection.alternate_registrations) ? selection.alternate_registrations[0] : selection.alternate_registrations
+        const regId = alternateReg?.registration_id
+
+        if (regId) {
+          if (!alternatesCountMap.has(regId)) {
+            alternatesCountMap.set(regId, new Set())
+          }
+
+          // Add user_id to the set (automatically handles uniqueness)
+          alternatesCountMap.get(regId)!.add(selection.user_id)
+        }
       })
 
       // Process the data to flatten the structure and add counts
@@ -435,6 +479,10 @@ export async function GET(request: NextRequest) {
         const totalCapacity = categoryBreakdown.reduce((sum, cat) => sum + (cat.max_capacity || 0), 0)
         const totalWaitlistCount = categoryBreakdown.reduce((sum, cat) => sum + cat.waitlist_count, 0)
 
+        // Get alternates count (unique users who have selected alternates for this registration)
+        const alternatesCount = alternatesCountMap.get(item.id)?.size || 0
+        const alternatesEnabled = registrationsWithAlternates.has(item.id)
+
         return {
           id: item.id,
           name: item.name,
@@ -448,6 +496,8 @@ export async function GET(request: NextRequest) {
           total_count: totalCount,
           total_capacity: totalCapacity > 0 ? totalCapacity : null,
           total_waitlist_count: totalWaitlistCount,
+          alternates_count: alternatesCount,
+          alternates_enabled: alternatesEnabled,
           category_breakdown: categoryBreakdown
         }
       }) || []

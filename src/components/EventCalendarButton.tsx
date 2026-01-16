@@ -37,12 +37,12 @@ export default function EventCalendarButton({
 
   return (
     <div className={`relative inline-block ${className}`}>
-      {/* Compact Calendar Button */}
+      {/* Text-style Calendar Link */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center px-3 py-1.5 text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors"
+        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
       >
-        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         Add to Calendar

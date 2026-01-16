@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 interface EditableAlternateConfigurationProps {
   registrationId: string
@@ -161,17 +162,14 @@ export default function EditableAlternateConfiguration({
 
           {/* Alternate Accounting Code */}
           <div>
-            <label htmlFor="alternate_accounting_code" className="block text-xs font-medium text-gray-700">
-              Accounting Code
-            </label>
-            <input
-              type="text"
-              id="alternate_accounting_code"
+            <AccountingCodeInput
               value={config.alternate_accounting_code}
-              onChange={(e) => setConfig(prev => ({ ...prev, alternate_accounting_code: e.target.value }))}
-              className="mt-1 block w-full py-1 text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., ALT001"
+              onChange={(value) => setConfig(prev => ({ ...prev, alternate_accounting_code: value }))}
+              label="Accounting Code"
               required
+              placeholder="Search by code or name..."
+              suggestedAccountType="REVENUE"
+              className="text-sm"
             />
           </div>
         </div>

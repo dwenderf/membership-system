@@ -1,12 +1,15 @@
 # Captain Access Feature
 
+**Status:** Planning - Ready for UI Mockups
+**Created:** 2026-01-17
+**Updated:** 2026-01-17
+**Priority:** Medium
+
+> **Note:** This document serves as both the planning doc AND the implementation spec. Once UI mockups are created and approved, we'll move forward with Phase 1 implementation using this doc as the reference.
+
 ## Overview
 
 This feature will add captain-level access to the membership system, allowing designated captains to manage their own teams, view registrations, manage alternates, and optionally receive email notifications when members register for their teams.
-
-**Status:** Planning
-**Created:** 2026-01-17
-**Priority:** Medium
 
 ## Goals
 
@@ -80,23 +83,29 @@ FOR SELECT USING (
 
 **Proposed URL Structure:**
 ```
-/captain                              # Captain dashboard (shows all teams they captain)
-/captain/[registrationId]             # Team detail page
-/captain/[registrationId]/alternates  # Manage alternates for team
-/captain/[registrationId]/roster      # View registered members
+/captain                     # Captain dashboard (shows all teams they captain)
+/captain/roster/[id]         # View registered members for a team
+/captain/alternates/[id]     # Manage alternates for team
 ```
+
+**Why this structure:**
+- Consistent with admin pattern: sections first, then drill down by ID
+- `/captain/roster/[id]` mirrors `/admin/reports/registrations/[id]` (both show roster)
+- `/captain/alternates/[id]` is scoped version of `/admin/alternates`
+- Clear separation of functionality (roster vs alternates)
 
 **API Routes:**
 ```
-/api/captain/registrations            # Get all registrations user captains
-/api/captain/[registrationId]/roster  # Get roster for specific team
-/api/captain/[registrationId]/alternates  # Manage alternates
+/api/captain/registrations           # Get all registrations user captains
+/api/captain/roster/[id]             # Get roster for specific team
+/api/captain/alternates/[id]         # Manage alternates
 ```
 
 **Admin Routes for Captain Management:**
 ```
-/admin/registrations/[id]/captains    # Assign/remove captains
-/api/admin/registrations/[id]/captains  # API for captain management
+/admin/registrations/[id]            # Registration detail page (add captain management section)
+/admin/registrations/new             # Create registration flow (add captain selection)
+/api/admin/registrations/[id]/captains  # API for captain management (CRUD)
 ```
 
 ### 2. Code Reuse vs. Security Isolation
@@ -145,12 +154,12 @@ export function RosterTable({
 
 ### 4. Role Switching
 
-**Recommendation: Three-mode toggle (Member / Captain / Admin)**
+**Decision: Two-mode toggle (admins stay in admin mode)**
 
 **Implementation:**
 ```
 Member Mode:  /user/*
-Captain Mode: /captain/*
+Captain Mode: /captain/* (non-admin captains only)
 Admin Mode:   /admin/* (admins only)
 ```
 
@@ -165,18 +174,16 @@ interface UserRoles {
 // Toggle component shows:
 // - Member-only users: No toggle (always in member mode)
 // - Captains only: "Member" / "Captain" toggle
-// - Admins only: "Member" / "Admin" toggle
-// - Captain + Admin: "Member" / "Captain" / "Admin" toggle
+// - Admins: "Member" / "Admin" toggle (captain mode hidden even if they're a captain)
 ```
 
-**Question for clarification:**
-Should admins have access to captain pages if they're also captains? Or should admins only use admin pages (which show everything)?
-
-**Proposed approach:**
-- If user is admin, hide captain mode even if they're assigned as captain
-- Admins use admin pages which already show all teams
-- Simpler toggle: Member/Admin for admins, Member/Captain for captains
+**Rationale:**
+- Admins already see all teams and have all captain permissions
+- Simpler UX: avoid three-mode toggle
 - Prevents confusion about which mode to use
+- If admin wants to "test" captain experience, they can temporarily remove their admin access
+
+**Note:** This means if a user is both admin and captain, they won't see the captain pages. They'll use admin pages which have superset of captain functionality.
 
 ## Detailed Requirements
 
@@ -213,34 +220,41 @@ Type: Scrimmage | Season: Spring 2024
 [View Roster]
 ```
 
-### 2. Team Roster Page (`/captain/[registrationId]/roster`)
+### 2. Team Roster Page (`/captain/roster/[id]`)
 
 **Features:**
 - View all registered members for the team (similar to `/admin/reports/registrations/[id]`)
 - Display member information:
   - Name, email, phone
   - Member ID
-  - Payment status
+  - Payment status (Paid, Pending, Failed, Refunded)
   - Registration date
   - User attributes (LGBTQ, Goalie, etc.)
+- Show refunded members as greyed out (removed from team but still visible)
 - Sortable and searchable table
 - Export to CSV (optional, for future)
 
 **Permissions:**
-- Can view: Members who registered for captain's team
-- Cannot: Edit registrations, process refunds, view payment details
+- Can view: Members who registered for captain's team (including refunded)
+- Cannot: Edit registrations, process refunds, view specific payment amounts
+
+**Payment Visibility:**
+- Show status badges: Paid, Pending, Failed, Refunded
+- Show summary counts (e.g., "12 paid, 2 pending, 1 refunded")
+- Do NOT show actual dollar amounts
+- Refunded members appear greyed out with "Refunded" badge
 
 **API Endpoint:**
 ```typescript
-// GET /api/captain/[registrationId]/roster
+// GET /api/captain/roster/[id]
 // Validates captain access before returning data
 ```
 
-### 3. Alternates Management (`/captain/[registrationId]/alternates`)
+### 3. Alternates Management (`/captain/alternates/[id]`)
 
 **Features:**
 - Reuse existing `AlternatesManager` component
-- Show only registrations the user captains (filtered)
+- Scoped to the specific registration ID in the URL
 - Full alternate functionality:
   - Create alternate requests for specific games/dates
   - View members who opted into alternates
@@ -250,19 +264,19 @@ Type: Scrimmage | Season: Spring 2024
 **Permissions:**
 - Captains can only create/manage alternates for their assigned registrations
 - RLS policies already enforce this at database level
+- URL access validated: captain must be assigned to registration [id]
 
 **API Endpoints:**
 ```typescript
-// GET /api/captain/[registrationId]/alternates
-// POST /api/captain/[registrationId]/alternates/games
-// POST /api/captain/[registrationId]/alternates/[gameId]/select
+// GET /api/captain/alternates/[id]           # Get alternate data for registration
+// POST /api/captain/alternates/[id]/games    # Create new alternate request
+// POST /api/captain/alternates/[id]/select   # Select members for game
 ```
 
-**Scoping:**
-When captain opens `/captain/alternates`, they see:
-- Only their registrations in the dropdown filter
-- Cannot select other registrations
-- Simpler UX than admin view (which shows all)
+**UX Difference from Admin:**
+- Admin: `/admin/alternates` shows dropdown to select any registration
+- Captain: `/captain/alternates/[id]` is already scoped to one registration (from dashboard link)
+- Simpler interface with no registration selector needed
 
 ### 4. Email Notifications
 
@@ -324,28 +338,44 @@ To stop receiving these notifications, update your captain settings.
 
 ### 5. Captain Assignment (Admin Feature)
 
-**Admin UI:** `/admin/registrations/[id]/captains`
+**Location:** Integrated into `/admin/registrations/[id]` page
 
 **Features:**
-- Tab or section in registration detail page
+
+**A) Registration Detail Page - Captain Section**
+- Add "Captains" section/tab to existing registration detail page
 - List current captains with:
   - Name, email, member ID
   - Date assigned
   - Assigned by (admin name)
-  - Email notification status (on/off)
+  - Email notification status (on/off toggle)
   - [Remove] button
-- Add captain:
-  - Search for user by name, email, or member ID
-  - Select user
-  - Toggle "Enable email notifications" (default: off)
+- Add captain interface:
+  - Search/autocomplete for user by name, email, or member ID
+  - Selected user preview
+  - Checkbox: "Enable email notifications" (default: off)
   - [Add Captain] button
+
+**B) Registration Creation Flow**
+- Add captain selection step in `/admin/registrations/new`
+- Optional field: "Assign Captains" (can skip, add later)
+- Same search/select interface as above
+- Can add multiple captains during creation
+- Email notifications toggle per captain
+
+**C) Registration Reports - Show Captains**
+- On `/admin/reports/registrations` page
+- Each registration tile shows assigned captains
+- Display format: "Captains: John D., Sarah M." (or "No captains assigned")
+- Limit to 2-3 names, then "+ X more" if many captains
+- Helps admins see at a glance which teams have captain coverage
 
 **API Endpoints:**
 ```typescript
-// GET /api/admin/registrations/[id]/captains
-// POST /api/admin/registrations/[id]/captains
-// DELETE /api/admin/registrations/[id]/captains/[userId]
-// PATCH /api/admin/registrations/[id]/captains/[userId]  // Update notification settings
+// GET /api/admin/registrations/[id]/captains        # Get captains for a registration
+// POST /api/admin/registrations/[id]/captains       # Add captain
+// DELETE /api/admin/registrations/[id]/captains/[userId]  # Remove captain
+// PATCH /api/admin/registrations/[id]/captains/[userId]   # Update notification settings
 ```
 
 **Database Changes Needed:**
@@ -355,8 +385,12 @@ ALTER TABLE registration_captains
 ADD COLUMN email_notifications BOOLEAN DEFAULT FALSE;
 ```
 
-**New email template for captain assignment:**
+**Email Templates (3 total):**
+
+**Template 1: Captain Assignment**
 ```
+Template ID: LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID
+
 Subject: You've been assigned as captain for {registrationName}
 
 Hi {captainName},
@@ -373,43 +407,81 @@ As a captain, you can:
 If you have questions, please contact your league administrator.
 ```
 
+**Template 2: Captain Registration Notification**
+(Already defined above in section 4)
+
+**Template 3: Captain Removal**
+```
+Template ID: LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID
+
+Subject: Captain access removed for {registrationName}
+
+Hi {captainName},
+
+You've been removed as captain for {registrationName}.
+
+You no longer have access to manage this team, but you can still access your member account and any teams you're registered for.
+
+If you believe this was done in error, please contact your league administrator.
+
+[Go to My Dashboard]
+```
+
 ## Implementation Phases
 
 ### Phase 1: Foundation (MVP)
-**Goal:** Core captain access with roster viewing
+**Goal:** Core captain access with roster viewing and admin captain management
 
+**Database:**
 - [ ] Add `email_notifications` column to `registration_captains` table
+
+**Captain Pages:**
 - [ ] Create captain middleware for route protection
 - [ ] Build `/captain` dashboard page
   - [ ] API: GET `/api/captain/registrations`
   - [ ] UI: Captain dashboard with registration tiles
-- [ ] Build `/captain/[registrationId]` detail page
-  - [ ] API: GET `/api/captain/[registrationId]/roster`
-  - [ ] UI: Roster table (reuse admin component)
+- [ ] Build `/captain/roster/[id]` page
+  - [ ] API: GET `/api/captain/roster/[id]`
+  - [ ] UI: Roster table with payment status (reuse/adapt admin component)
+  - [ ] Show refunded members as greyed out
 - [ ] Add captain/member toggle to navigation
   - [ ] Update `UserNavigation` to detect captain status
-  - [ ] Add toggle UI component
+  - [ ] Add toggle UI component (hide for admins)
+
+**Admin Pages:**
 - [ ] Admin: Captain assignment UI
-  - [ ] Page: `/admin/registrations/[id]/captains`
-  - [ ] API: Captain CRUD endpoints
-  - [ ] UI: List captains, add/remove
+  - [ ] Add "Captains" section to `/admin/registrations/[id]` page
+  - [ ] API: Captain CRUD endpoints (`/api/admin/registrations/[id]/captains`)
+  - [ ] UI: List captains, add/remove, toggle notifications
+- [ ] Add captain selection to `/admin/registrations/new` (creation flow)
+  - [ ] Optional field during registration creation
+  - [ ] Can add multiple captains with notification preferences
+- [ ] Show captains on registration tiles (`/admin/reports/registrations`)
+  - [ ] Display format: "Captains: John D., Sarah M." or "No captains"
+  - [ ] Limit to 2-3 names, then "+ X more"
+
+**Email:**
+- [ ] Create Loops template for captain assignment
+  - [ ] Template ID: `LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID`
+- [ ] Send assignment email when captain is added
 
 **Testing:**
-- Assign captain to registration
+- Assign captain to registration (both in detail page and during creation)
 - Captain logs in, sees team in dashboard
-- Captain views roster, sees only their team's members
+- Captain views roster, sees only their team's members with correct payment status
 - Non-captains cannot access `/captain` routes
+- Registration tiles show assigned captains
 
 ### Phase 2: Alternates Management
 **Goal:** Captains can manage alternates for their teams
 
-- [ ] Build `/captain/[registrationId]/alternates` page
+- [ ] Build `/captain/alternates/[id]` page
   - [ ] Reuse `AlternatesManager` component with captain scope
-  - [ ] Filter to only show captain's registrations
+  - [ ] Pre-scoped to registration ID in URL (no dropdown selector)
 - [ ] Create captain-scoped alternate APIs
-  - [ ] GET `/api/captain/[registrationId]/alternates`
-  - [ ] POST `/api/captain/[registrationId]/alternates/games`
-  - [ ] POST `/api/captain/[registrationId]/alternates/select`
+  - [ ] GET `/api/captain/alternates/[id]`
+  - [ ] POST `/api/captain/alternates/[id]/games`
+  - [ ] POST `/api/captain/alternates/[id]/select`
 - [ ] Update RLS policies if needed (may already be in place)
 - [ ] Test captain can only manage alternates for their teams
 
@@ -433,16 +505,19 @@ If you have questions, please contact your league administrator.
 ### Phase 4: Polish & Additional Features
 **Goal:** Improved UX and admin features
 
-- [ ] Captain assignment notification email
-  - [ ] New Loops template
-  - [ ] Send when captain is added
+- [ ] Captain removal notification email
+  - [ ] Create Loops template (`LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID`)
+  - [ ] Send when captain is removed from registration
 - [ ] Export roster to CSV (captain page)
 - [ ] Mobile-responsive captain pages
 - [ ] Analytics/metrics for captain dashboard
   - [ ] Registrations over time
   - [ ] Alternate usage stats
 - [ ] Audit logging for captain actions
-- [ ] Captain removal notification email
+- [ ] Possible: Global `/admin/captains` page
+  - [ ] List all captains across all registrations
+  - [ ] Useful for seeing who has captain access system-wide
+  - [ ] Not MVP, but could be helpful later
 
 ## Security Considerations
 
@@ -536,46 +611,43 @@ const data = await supabase
   .in('registration_id', registrationIds)
 ```
 
-## Open Questions & Decisions Needed
+## Design Decisions Made
 
-### 1. Admin/Captain Role Overlap
+### 1. Admin/Captain Role Overlap ✓ DECIDED
 
-**Question:** If a user is both an admin and a captain, how should the toggle work?
+**Decision:** Hide captain mode for admins (admins use admin pages only)
 
-**Option A:** Show all three modes (Member / Captain / Admin)
-- Pros: Maximum flexibility
-- Cons: More complex UI, potential confusion
+**Rationale:**
+- Simpler UX - no three-mode toggle
+- Admins already see everything in admin mode
+- Prevents confusion about which mode to use
+- If admin wants to test captain experience, they can temporarily remove their admin access
 
-**Option B:** Hide captain mode for admins (admins use admin pages only)
-- Pros: Simpler, admins already see everything
-- Cons: Can't "test" captain experience
+**Implementation:** Navigation toggle shows Member/Admin for admins, even if they're also assigned as captain
 
-**Option C:** Show captain mode for admins, but as a separate link (not in toggle)
-- Pros: Admins can test captain features, clear primary mode
-- Cons: Slightly more complex
+### 2. Captain Self-Assignment ✓ DECIDED
 
-**Recommendation:** Option B for simplicity. Admins who want to test captain features can temporarily remove their admin access.
+**Decision:** No. Only admins should assign captains.
 
-### 2. Captain Self-Assignment
+**Rationale:**
+- Prevents captain "wars" (removing each other)
+- Prevents captains adding themselves to other teams
+- Clear authority structure
+- Reduces security complexity
 
-**Question:** Should captains be able to assign other captains to their teams?
+**Implementation:** Captain assignment UI only in admin pages
 
-**Recommendation:** No. Only admins should assign captains. This prevents:
-- Captain "wars" (removing each other)
-- Captains adding themselves to other teams
-- Confusion about authority
+### 3. Registration Type Restrictions ✓ DECIDED
 
-### 3. Registration Type Restrictions
+**Decision:** Allow all types (teams, scrimmages, events) initially.
 
-**Question:** Should we restrict captains to only team registrations, or allow scrimmages/events?
+**Rationale:**
+- Captains may lead scrimmage teams or event groups
+- More flexible and future-proof
+- Database schema already supports this (no type restriction)
+- Easy to restrict later if needed
 
-**Recommendation:** Allow all types initially. Easy to restrict later if needed.
-
-**Implementation:** No type filtering in queries. If restriction needed later:
-```sql
-ALTER TABLE registration_captains
-ADD COLUMN allowed_types TEXT[] DEFAULT ARRAY['team', 'scrimmage', 'event'];
-```
+**Implementation:** No type filtering in queries. If restriction needed later, can add `allowed_types` column to `registration_captains`
 
 ### 4. Historical Data
 
@@ -586,46 +658,47 @@ ADD COLUMN allowed_types TEXT[] DEFAULT ARRAY['team', 'scrimmage', 'event'];
 - Can still view roster and alternates
 - Cannot create new alternate requests for past registrations (already enforced by registration end date)
 
-### 5. Payment Information Visibility
+### 5. Payment Information Visibility ✓ DECIDED
 
-**Question:** Should captains see payment status and amounts?
-
-**Current Recommendation:** Yes, show payment status (Paid, Pending, Failed) but NOT actual amounts.
+**Decision:** Show payment status (Paid, Pending, Failed, Refunded) but NOT actual dollar amounts.
 
 **Rationale:**
 - Captains need to know if team is fully paid for planning purposes
 - Don't need to see specific dollar amounts (privacy)
 - Admin reports already show amounts, captains get simplified view
+- Refunded members should be visible but greyed out (removed from active roster)
 
 **UI:**
 ```
-Member Payment Status:
+Member Payment Status Summary:
 ✓ Paid: 12 members
 ⏳ Pending: 2 members
 ✗ Failed: 1 member
+↩ Refunded: 1 member (greyed out in roster)
 ```
 
-### 6. Captain Notifications - Granularity
+### 6. Captain Notifications - Granularity ✓ DECIDED
 
-**Question:** Should notification settings be per-registration or global?
-
-**Recommendation:** Per-registration (already in schema as FK to registration_id)
+**Decision:** Per-registration (not global)
 
 **Rationale:**
 - Captain may want notifications for competitive team but not casual scrimmage
-- More flexible
+- More flexible user experience
 - Easy to add "enable all" toggle later
+- Already supported by schema (notification setting in `registration_captains` table)
 
-### 7. Waitlist Visibility
+**Implementation:** Each captain-registration relationship has its own `email_notifications` boolean
 
-**Question:** Should captains see waitlisted members?
+### 7. Waitlist Visibility ✓ DECIDED
 
-**Recommendation:** Yes, read-only.
+**Decision:** Yes, captains can see waitlisted members (read-only)
 
 **Rationale:**
 - Helps captains plan (know if spots will fill)
-- Cannot move users from waitlist (admin function)
-- Same data shown on roster page with "Waitlist" badge
+- Cannot move users from waitlist to roster (admin-only function)
+- Same data shown on roster page with "Waitlist" badge/section
+
+**Implementation:** Include waitlist data in roster API response, display in separate section
 
 ## Technical Notes
 
@@ -652,8 +725,10 @@ COMMENT ON COLUMN registration_captains.email_notifications IS
 
 Add to `.env.local` and Vercel:
 ```bash
-LOOPS_CAPTAIN_REGISTRATION_NOTIFICATION_TEMPLATE_ID=tmpl_xxx
-LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID=tmpl_yyy
+# Captain email notification templates
+LOOPS_CAPTAIN_REGISTRATION_NOTIFICATION_TEMPLATE_ID=tmpl_xxx  # When member registers for team
+LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID=tmpl_yyy    # When captain is assigned
+LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID=tmpl_zzz       # When captain is removed
 ```
 
 ### Type Definitions
@@ -838,18 +913,31 @@ describe('CaptainDashboard', () => {
 
 ## Approval & Sign-off
 
-**Decision needed on:**
-1. Admin/captain role overlap (recommendation: Option B - hide captain mode for admins)
-2. Payment info visibility (recommendation: show status, not amounts)
-3. Confirm registration type scope (recommendation: allow all types)
+**✓ Design Decisions Approved:**
+1. ✓ Admin/captain role overlap: Hide captain mode for admins (they use admin pages)
+2. ✓ Payment info visibility: Show status badges (Paid, Pending, Failed, Refunded), not amounts
+3. ✓ Registration type scope: Allow all types (teams, scrimmages, events)
+4. ✓ URL structure: `/captain/roster/[id]` and `/captain/alternates/[id]`
+5. ✓ Captain management: Integrated into `/admin/registrations/[id]` page
+6. ✓ Show captains on registration tiles in reports
 
 **Ready to implement after:**
-- [ ] Design decisions approved
-- [ ] Loops templates created
-- [ ] UI mockups reviewed (optional, but recommended for dashboard)
-- [ ] Security approach confirmed
+- [ ] This planning document reviewed and approved
+- [ ] UI mockups created for:
+  - [ ] Captain dashboard (`/captain`)
+  - [ ] Captain roster view (`/captain/roster/[id]`)
+  - [ ] Captain section in admin registration detail
+  - [ ] Captain display on registration tiles
+- [ ] Loops email templates created:
+  - [ ] Captain assignment notification
+  - [ ] Captain registration notification
+  - [ ] Captain removal notification
+- [ ] Security approach confirmed (middleware, RLS policies, API validation)
 
 ---
 
 **Next Steps:**
-Once this plan is approved, move this document to `docs/features/approved/` and begin Phase 1 implementation.
+1. Create UI mockups for review
+2. Once mockups approved, create Loops templates
+3. Move this document to `docs/features/approved/`
+4. Begin Phase 1 implementation

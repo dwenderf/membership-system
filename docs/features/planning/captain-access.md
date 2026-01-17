@@ -1,11 +1,11 @@
 # Captain Access Feature
 
-**Status:** Planning - Ready for UI Mockups
+**Status:** Planning - Approved Architecture
 **Created:** 2026-01-17
 **Updated:** 2026-01-17
 **Priority:** Medium
 
-> **Note:** This document serves as both the planning doc AND the implementation spec. Once UI mockups are created and approved, we'll move forward with Phase 1 implementation using this doc as the reference.
+> **Note:** This document serves as both the planning doc AND the implementation spec. Architecture approved: Captain will be a tab within `/user`, using nested routes (`/user/captain/[id]/*`). Next step: Create UI mockups, then begin Phase 1 implementation.
 
 ## Overview
 
@@ -68,37 +68,42 @@ FOR SELECT USING (
 
 ### 1. URL Structure
 
-**Recommendation: Use `/captain` base URL**
+**Decision: Captain as a tab within `/user` (not a separate top-level route)**
 
-**Pros:**
-- Clear separation of concerns
-- Easier to secure via middleware
-- Follows existing `/admin` pattern
-- URL structure clearly indicates permission level
-- Future-proof for adding captain-specific features
+**Rationale:**
+- Captain is a permission/feature for members, not a separate role like admin
+- Solves admin/captain overlap naturally - admins can just click the Captain tab
+- No mode switching needed - just tabs within member dashboard
+- Consistent with existing user navigation pattern
+- Simpler mental model and UX
 
-**Cons:**
-- Some code duplication from admin pages
-- More files to maintain
-
-**Proposed URL Structure:**
+**Proposed URL Structure (Option B - Nested):**
 ```
-/captain                     # Captain dashboard (shows all teams they captain)
-/captain/roster/[id]         # View registered members for a team
-/captain/alternates/[id]     # Manage alternates for team
+/user/captain                # Captain dashboard (list of all teams user captains)
+/user/captain/[id]           # Team detail/overview page (optional, can add later)
+/user/captain/[id]/roster    # View registered members for a team
+/user/captain/[id]/alternates # Manage alternates for team
 ```
 
-**Why this structure:**
-- Consistent with admin pattern: sections first, then drill down by ID
-- `/captain/roster/[id]` mirrors `/admin/reports/registrations/[id]` (both show roster)
-- `/captain/alternates/[id]` is scoped version of `/admin/alternates`
-- Clear separation of functionality (roster vs alternates)
+**Why nested structure:**
+- Groups all team-specific pages under `/user/captain/[id]/*`
+- Clear hierarchy: dashboard → team → team features
+- Cleaner organization as more features are added
+- Mirrors how `/admin` organizes by resource
+
+**Navigation:**
+```
+User dashboard tabs:
+[Dashboard] [Memberships] [Captain] [Registrations] [Invoices] [Account]
+                          ↑
+                  Only shown if user has captain assignments
+```
 
 **API Routes:**
 ```
-/api/captain/registrations           # Get all registrations user captains
-/api/captain/roster/[id]             # Get roster for specific team
-/api/captain/alternates/[id]         # Manage alternates
+/api/user/captain/registrations           # Get all registrations user captains
+/api/user/captain/[id]/roster             # Get roster for specific team
+/api/user/captain/[id]/alternates         # Manage alternates
 ```
 
 **Admin Routes for Captain Management:**
@@ -152,18 +157,11 @@ export function RosterTable({
 
 **Note:** If specific registration types need restriction later, we can add a `allowed_types` column to `registration_captains`.
 
-### 4. Role Switching
+### 4. Navigation: Tabs Instead of Mode Switching
 
-**Decision: Two-mode toggle (admins stay in admin mode)**
+**Decision: Captain is a tab within `/user`, not a separate mode**
 
 **Implementation:**
-```
-Member Mode:  /user/*
-Captain Mode: /captain/* (non-admin captains only)
-Admin Mode:   /admin/* (admins only)
-```
-
-**Toggle Logic:**
 ```typescript
 interface UserRoles {
   isMember: boolean      // Everyone
@@ -171,26 +169,32 @@ interface UserRoles {
   isAdmin: boolean       // users.is_admin = true
 }
 
-// Toggle component shows:
-// - Member-only users: No toggle (always in member mode)
-// - Captains only: "Member" / "Captain" toggle
-// - Admins: "Member" / "Admin" toggle (captain mode hidden even if they're a captain)
+// Navigation tabs in /user layout:
+// - All users: [Dashboard] [Memberships] [Registrations] [Invoices] [Account]
+// - Captains also see: [Captain] tab (shown conditionally)
+// - Admins still have separate admin/member toggle for /admin vs /user
 ```
 
 **Rationale:**
-- Admins already see all teams and have all captain permissions
-- Simpler UX: avoid three-mode toggle
-- Prevents confusion about which mode to use
-- If admin wants to "test" captain experience, they can temporarily remove their admin access
+- Captain is a feature/permission, not a role level like admin
+- No mode switching confusion - just click the tab you need
+- Works seamlessly for admins who are also captains
+- Admins can use Captain tab (same view as non-admin captains) OR use admin pages (full access)
+- Non-captains who navigate to `/user/captain` see empty state or are redirected
 
-**Note:** This means if a user is both admin and captain, they won't see the captain pages. They'll use admin pages which have superset of captain functionality.
+**Empty State for Non-Captains:**
+If a non-captain somehow reaches `/user/captain`:
+```
+You're not assigned as a captain for any teams.
+
+[Return to Dashboard]
+```
 
 ## Detailed Requirements
 
-### 1. Captain Dashboard (`/captain`)
+### 1. Captain Dashboard (`/user/captain`)
 
 **Features:**
-- Page title: "Captain" (similar to how admin pages show "Admin")
 - Display all registrations where user is a captain
 - Show registration tiles similar to `/admin/reports/registrations`
 - Each tile shows:
@@ -198,17 +202,18 @@ interface UserRoles {
   - Season
   - Number of registered members
   - Number of alternates (if enabled)
-  - Quick actions: View Roster, Manage Alternates
+  - Quick links to: View Roster, Manage Alternates
+- If user has no captain assignments, show empty state
 
 **API Endpoint:**
 ```typescript
-// GET /api/captain/registrations
+// GET /api/user/captain/registrations
 // Returns: Registration[] filtered by captain access
 ```
 
 **Mock-up:**
 ```
-Captain
+My Teams
 
 [Summer 2024 - Softball A Team]
 Type: Team | Season: Summer 2024
@@ -221,7 +226,16 @@ Type: Scrimmage | Season: Spring 2024
 [View Roster]
 ```
 
-### 2. Team Roster Page (`/captain/roster/[id]`)
+**Empty State (non-captains):**
+```
+You're not assigned as a captain for any teams.
+
+If you believe this is an error, please contact your league administrator.
+
+[Return to Dashboard]
+```
+
+### 2. Team Roster Page (`/user/captain/[id]/roster`)
 
 **Features:**
 - View all registered members for the team (similar to `/admin/reports/registrations/[id]`)
@@ -247,11 +261,11 @@ Type: Scrimmage | Season: Spring 2024
 
 **API Endpoint:**
 ```typescript
-// GET /api/captain/roster/[id]
+// GET /api/user/captain/[id]/roster
 // Validates captain access before returning data
 ```
 
-### 3. Alternates Management (`/captain/alternates/[id]`)
+### 3. Alternates Management (`/user/captain/[id]/alternates`)
 
 **Features:**
 - Reuse existing `AlternatesManager` component
@@ -269,14 +283,14 @@ Type: Scrimmage | Season: Spring 2024
 
 **API Endpoints:**
 ```typescript
-// GET /api/captain/alternates/[id]           # Get alternate data for registration
-// POST /api/captain/alternates/[id]/games    # Create new alternate request
-// POST /api/captain/alternates/[id]/select   # Select members for game
+// GET /api/user/captain/[id]/alternates      # Get alternate data for registration
+// POST /api/user/captain/[id]/alternates/games    # Create new alternate request
+// POST /api/user/captain/[id]/alternates/select   # Select members for game
 ```
 
 **UX Difference from Admin:**
 - Admin: `/admin/alternates` shows dropdown to select any registration
-- Captain: `/captain/alternates/[id]` is already scoped to one registration (from dashboard link)
+- Captain: `/user/captain/[id]/alternates` is already scoped to one registration (from dashboard link)
 - Simpler interface with no registration selector needed
 
 ### 4. Email Notifications
@@ -301,7 +315,7 @@ Type: Scrimmage | Season: Spring 2024
   memberPhone?: string         // "(555) 123-4567"
   registrationDate: string     // "January 17, 2026"
   totalMembers: number         // 15
-  viewRosterUrl: string        // "https://my.nycpha.org/captain/abc-123/roster"
+  viewRosterUrl: string        // "https://my.nycpha.org/user/captain/abc-123/roster"
 }
 ```
 
@@ -437,17 +451,19 @@ If you believe this was done in error, please contact your league administrator.
 - [ ] Add `email_notifications` column to `registration_captains` table
 
 **Captain Pages:**
-- [ ] Create captain middleware for route protection
-- [ ] Build `/captain` dashboard page
-  - [ ] API: GET `/api/captain/registrations`
+- [ ] Build `/user/captain` dashboard page
+  - [ ] API: GET `/api/user/captain/registrations`
   - [ ] UI: Captain dashboard with registration tiles
-- [ ] Build `/captain/roster/[id]` page
-  - [ ] API: GET `/api/captain/roster/[id]`
+  - [ ] Empty state for non-captains
+- [ ] Build `/user/captain/[id]/roster` page
+  - [ ] API: GET `/api/user/captain/[id]/roster`
   - [ ] UI: Roster table with payment status (reuse/adapt admin component)
   - [ ] Show refunded members as greyed out
-- [ ] Add captain/member toggle to navigation
+  - [ ] Validate captain access to registration [id]
+- [ ] Add "Captain" tab to user navigation
   - [ ] Update `UserNavigation` to detect captain status
-  - [ ] Add toggle UI component (hide for admins)
+  - [ ] Show/hide tab based on captain assignments
+  - [ ] Tab visible to admins if they're also captains
 
 **Admin Pages:**
 - [ ] Admin: Captain assignment UI
@@ -468,21 +484,23 @@ If you believe this was done in error, please contact your league administrator.
 
 **Testing:**
 - Assign captain to registration (both in detail page and during creation)
-- Captain logs in, sees team in dashboard
+- Captain logs in, sees "Captain" tab in navigation
+- Captain clicks tab, sees their teams in dashboard
 - Captain views roster, sees only their team's members with correct payment status
-- Non-captains cannot access `/captain` routes
+- Non-captains see empty state on `/user/captain`
+- Admins who are also captains can see Captain tab and use it
 - Registration tiles show assigned captains
 
 ### Phase 2: Alternates Management
 **Goal:** Captains can manage alternates for their teams
 
-- [ ] Build `/captain/alternates/[id]` page
+- [ ] Build `/user/captain/[id]/alternates` page
   - [ ] Reuse `AlternatesManager` component with captain scope
   - [ ] Pre-scoped to registration ID in URL (no dropdown selector)
 - [ ] Create captain-scoped alternate APIs
-  - [ ] GET `/api/captain/alternates/[id]`
-  - [ ] POST `/api/captain/alternates/[id]/games`
-  - [ ] POST `/api/captain/alternates/[id]/select`
+  - [ ] GET `/api/user/captain/[id]/alternates`
+  - [ ] POST `/api/user/captain/[id]/alternates/games`
+  - [ ] POST `/api/user/captain/[id]/alternates/select`
 - [ ] Update RLS policies if needed (may already be in place)
 - [ ] Test captain can only manage alternates for their teams
 
@@ -498,10 +516,10 @@ If you believe this was done in error, please contact your league administrator.
   - [ ] Filter captains with `email_notifications = true`
   - [ ] Send email to each captain
   - [ ] Log emails in `email_logs` table
-- [ ] Build `/captain/settings` page
+- [ ] Build `/user/captain/settings` page (or integrate into `/user/captain` dashboard)
   - [ ] List all registrations user captains
   - [ ] Toggle email notifications per registration
-  - [ ] API: PATCH `/api/captain/settings/notifications`
+  - [ ] API: PATCH `/api/user/captain/settings/notifications`
 
 ### Phase 4: Polish & Additional Features
 **Goal:** Improved UX and admin features
@@ -527,11 +545,13 @@ If you believe this was done in error, please contact your league administrator.
 **Middleware Checks:**
 ```typescript
 // src/middleware.ts
-if (pathname.startsWith('/captain')) {
-  // 1. Check user is authenticated
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return redirectToLogin()
+// Captain routes are under /user/captain, so they inherit /user authentication
+// No additional middleware needed for /user/captain/*
+// The /user/* routes already require authentication
 
+// However, for better UX, we can check captain status:
+if (pathname.startsWith('/user/captain')) {
+  // 1. User is already authenticated (from /user check)
   // 2. Check user is a captain of at least one registration
   const { data: captainships } = await supabase
     .from('registration_captains')
@@ -539,11 +559,12 @@ if (pathname.startsWith('/captain')) {
     .eq('user_id', user.id)
     .limit(1)
 
-  if (!captainships?.length) {
-    return NextResponse.redirect('/user')  // Not a captain
-  }
+  // If not a captain, allow access but page will show empty state
+  // This is simpler than redirecting and handles edge cases gracefully
 }
 ```
+
+**Note:** Since captain is a tab within `/user`, we don't need strict middleware blocking. Non-captains who navigate to `/user/captain` will simply see an empty state. This is simpler and more user-friendly than hard redirects.
 
 **Per-Registration Access:**
 ```typescript
@@ -614,17 +635,22 @@ const data = await supabase
 
 ## Design Decisions Made
 
-### 1. Admin/Captain Role Overlap ✓ DECIDED
+### 1. Captain as Tab vs Separate Mode ✓ DECIDED
 
-**Decision:** Hide captain mode for admins (admins use admin pages only)
+**Decision:** Captain is a tab within `/user`, not a separate top-level route or mode
 
 **Rationale:**
-- Simpler UX - no three-mode toggle
-- Admins already see everything in admin mode
-- Prevents confusion about which mode to use
-- If admin wants to test captain experience, they can temporarily remove their admin access
+- Captain is a permission/feature, not a role level like admin
+- Solves admin/captain overlap naturally - admins can use the Captain tab
+- No mode switching confusion - just click the tab you need
+- Consistent with existing `/user` navigation pattern
+- Simpler implementation - no toggle logic needed
+- Graceful degradation - non-captains see empty state
 
-**Implementation:** Navigation toggle shows Member/Admin for admins, even if they're also assigned as captain
+**Implementation:**
+- URLs: `/user/captain/*` (nested under user routes)
+- Navigation: Show "Captain" tab only if user has captain assignments
+- Admins who are also captains can use the Captain tab OR admin pages (their choice)
 
 ### 2. Captain Self-Assignment ✓ DECIDED
 
@@ -915,25 +941,27 @@ describe('CaptainDashboard', () => {
 ## Approval & Sign-off
 
 **✓ Design Decisions Approved:**
-1. ✓ Admin/captain role overlap: Hide captain mode for admins (they use admin pages)
-2. ✓ Payment info visibility: Show status badges (Paid, Pending, Failed, Refunded), not amounts
-3. ✓ Registration type scope: Allow all types (teams, scrimmages, events)
-4. ✓ URL structure: `/captain/roster/[id]` and `/captain/alternates/[id]`
+1. ✓ Captain as tab within `/user` (not separate mode or top-level route)
+2. ✓ URL structure: `/user/captain/[id]/roster` and `/user/captain/[id]/alternates` (nested)
+3. ✓ Payment info visibility: Show status badges (Paid, Pending, Failed, Refunded), not amounts
+4. ✓ Registration type scope: Allow all types (teams, scrimmages, events)
 5. ✓ Captain management: Integrated into `/admin/registrations/[id]` page
 6. ✓ Show captains on registration tiles in reports
+7. ✓ Admin/captain overlap solved naturally - admins can use Captain tab
 
 **Ready to implement after:**
 - [ ] This planning document reviewed and approved
 - [ ] UI mockups created for:
-  - [ ] Captain dashboard (`/captain`)
-  - [ ] Captain roster view (`/captain/roster/[id]`)
+  - [ ] Captain dashboard (`/user/captain`)
+  - [ ] Captain roster view (`/user/captain/[id]/roster`)
+  - [ ] Captain tab in user navigation
   - [ ] Captain section in admin registration detail
   - [ ] Captain display on registration tiles
 - [ ] Loops email templates created:
   - [ ] Captain assignment notification
   - [ ] Captain registration notification
   - [ ] Captain removal notification
-- [ ] Security approach confirmed (middleware, RLS policies, API validation)
+- [ ] Security approach confirmed (RLS policies, API validation)
 
 ---
 

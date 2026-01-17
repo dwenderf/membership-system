@@ -49,7 +49,9 @@ export default function RegistrationAlternatesSection({
 
   // Fetch games for this registration
   useEffect(() => {
-    fetchGames()
+    fetchGames().catch(err => {
+      console.error('Error in useEffect fetchGames:', err)
+    })
   }, [registration.id])
 
   const fetchGames = async () => {
@@ -209,7 +211,7 @@ export default function RegistrationAlternatesSection({
           <div className="text-center py-8">
             <div className="text-red-600 text-sm">{error}</div>
             <button
-              onClick={fetchGames}
+              onClick={() => fetchGames().catch(err => console.error('Error retrying fetch:', err))}
               className="mt-2 text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               Try Again

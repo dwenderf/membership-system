@@ -65,7 +65,9 @@ export default function AlternateSelectionInterface({
   const [summary, setSummary] = useState<any>(null)
 
   useEffect(() => {
-    fetchAlternates()
+    fetchAlternates().catch(err => {
+      console.error('Error in useEffect fetchAlternates:', err)
+    })
   }, [gameId])
 
   const fetchAlternates = async () => {

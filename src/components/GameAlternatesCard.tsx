@@ -74,7 +74,9 @@ export default function GameAlternatesCard({
   // Fetch alternates when expanded
   useEffect(() => {
     if (isExpanded && alternates.length === 0) {
-      fetchAlternates()
+      fetchAlternates().catch(err => {
+        console.error('Error in useEffect fetchAlternates:', err)
+      })
     }
   }, [isExpanded])
 
@@ -246,7 +248,7 @@ export default function GameAlternatesCard({
             <div className="text-center py-4">
               <div className="text-red-600 text-sm mb-2">{error}</div>
               <button
-                onClick={fetchAlternates}
+                onClick={() => fetchAlternates().catch(err => console.error('Error retrying fetch:', err))}
                 className="text-blue-600 hover:text-blue-500 text-sm font-medium"
               >
                 Try Again

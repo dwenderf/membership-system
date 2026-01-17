@@ -43,7 +43,7 @@ This document contains visual mockups for all captain access UI components.
 
 **Layout:** Full-width page with registration tiles
 
-### 2A. With Teams (Active Captain)
+### 2A. With Current/Future Teams
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -57,6 +57,8 @@ This document contains visual mockups for all captain access UI components.
 │                                                                  │
 │  My Teams                                                        │
 │                                                                  │
+│  ☐ Show past teams                                              │
+│                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Summer 2024 - Softball A Team                           │  │
 │  │  ─────────────────────────────────                       │  │
@@ -65,6 +67,55 @@ This document contains visual mockups for all captain access UI components.
 │  │                                                           │  │
 │  │  [View Roster]  [Manage Alternates]                      │  │
 │  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Fall 2024 - Softball B Team                            │  │
+│  │  ─────────────────────────────────                       │  │
+│  │  Type: Team  •  Season: Fall 2024                        │  │
+│  │  18 members  •  5 alternates                             │  │
+│  │                                                           │  │
+│  │  [View Roster]  [Manage Alternates]                      │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2B. With Past Teams Shown (Checkbox Checked)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  NYC PHA                                    John Smith  [Admin] │
+└─────────────────────────────────────────────────────────────────┘
+
+  [Dashboard]  [Memberships]  [Captain]  [Registrations]  [Invoices]  [Account]
+                              ─────────
+
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  My Teams                                                        │
+│                                                                  │
+│  ☑ Show past teams                                              │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Summer 2024 - Softball A Team                           │  │
+│  │  ─────────────────────────────────                       │  │
+│  │  Type: Team  •  Season: Summer 2024                      │  │
+│  │  15 members  •  3 alternates                             │  │
+│  │                                                           │  │
+│  │  [View Roster]  [Manage Alternates]                      │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Fall 2024 - Softball B Team                            │  │
+│  │  ─────────────────────────────────────                       │  │
+│  │  Type: Team  •  Season: Fall 2024                        │  │
+│  │  18 members  •  5 alternates                             │  │
+│  │                                                           │  │
+│  │  [View Roster]  [Manage Alternates]                      │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  Past Teams                                                      │
+│  ──────────                                                      │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Spring 2024 Scrimmage - Division B                      │  │
@@ -76,10 +127,10 @@ This document contains visual mockups for all captain access UI components.
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Fall 2023 - Softball B Team                            │  │
+│  │  Winter 2023 - Basketball League                         │  │
 │  │  ─────────────────────────────────                       │  │
-│  │  Type: Team  •  Season: Fall 2023                        │  │
-│  │  18 members  •  5 alternates                             │  │
+│  │  Type: Team  •  Season: Winter 2023                      │  │
+│  │  14 members  •  2 alternates                             │  │
 │  │                                                           │  │
 │  │  [View Roster]  [Manage Alternates]                      │  │
 │  └──────────────────────────────────────────────────────────┘  │
@@ -87,11 +138,43 @@ This document contains visual mockups for all captain access UI components.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2B. Empty State (Non-Captain)
+### 2C. Empty State - No Current Teams (But Has Past Teams)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  NYC PHA                                    Jane Doe            │
+└─────────────────────────────────────────────────────────────────┘
+
+  [Dashboard]  [Memberships]  [Captain]  [Registrations]  [Invoices]  [Account]
+                              ─────────
+
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  My Teams                                                        │
+│                                                                  │
+│  ☐ Show past teams                                              │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                                                           │  │
+│  │                         ℹ️                                │  │
+│  │                                                           │  │
+│  │    You're not assigned as captain of any active teams.   │  │
+│  │                                                           │  │
+│  │    Click the "Show past teams" checkbox above to view    │  │
+│  │    teams from previous seasons.                          │  │
+│  │                                                           │  │
+│  │                   [Return to Dashboard]                  │  │
+│  │                                                           │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2D. Empty State - No Teams At All (Non-Captain)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  NYC PHA                                    Alex Smith          │
 └─────────────────────────────────────────────────────────────────┘
 
   [Dashboard]  [Memberships]  [Captain]  [Registrations]  [Invoices]  [Account]
@@ -118,12 +201,21 @@ This document contains visual mockups for all captain access UI components.
 ```
 
 **Design Notes:**
+- "Show past teams" checkbox at top (default: unchecked)
+  - Unchecked: Show only current season and future season teams
+  - Checked: Show all teams, with "Past Teams" section separator
+  - Consistent with admin/reports/registrations pattern
+- Empty state logic:
+  - Has past teams but no current: Show message directing to checkbox (ℹ️ info icon)
+  - No teams at all: Show message to contact admin (⚠️ warning icon)
+  - Don't show checkbox if user has no captain assignments at all
 - Tiles use same style as `/admin/reports/registrations`
 - Each tile is clickable (entire card)
 - Buttons for quick actions to roster/alternates
 - Registration name is prominent (larger font)
 - Metadata (type, season, counts) in lighter text
 - "Manage Alternates" only shown if alternates enabled for that registration
+- Past teams may be read-only for certain actions (e.g., can't create new alternate requests for past seasons)
 
 ---
 
@@ -495,75 +587,47 @@ This document contains visual mockups for all captain access UI components.
 
 ---
 
-## 8. Captain Settings/Notifications (Phase 3)
+## 8. Email Notifications - Opt-Out via Loops
 
-**Location:** `/user/captain/settings` OR integrated into dashboard
+**Approach:** Use Loops' built-in unsubscribe functionality instead of custom settings page
 
-**Layout:** Simple settings page for notification preferences
+**Implementation:**
+- When captain is assigned, default `email_notifications` to `TRUE` in database
+- Captain registration notification emails include Loops unsubscribe link (automatic)
+- If captain clicks unsubscribe, Loops handles opt-out
+- We sync Loops opt-out status back to our database via webhook (optional, Phase 4)
 
+**Email Footer (handled by Loops):**
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  NYC PHA                                    John Smith  [Admin] │
-└─────────────────────────────────────────────────────────────────┘
-
-  [Dashboard]  [Memberships]  [Captain]  [Registrations]  [Invoices]  [Account]
-                              ─────────
-
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                  │
-│  Captain Notification Settings                                   │
-│                                                                  │
-│  Manage email notifications for your teams. You'll receive an   │
-│  email when a new member registers for teams where you've       │
-│  enabled notifications.                                          │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Summer 2024 - Softball A Team                           │  │
-│  │  ─────────────────────────────────                       │  │
-│  │  Email notifications: [ON]  [OFF]                        │  │
-│  │                      ────                                │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Spring 2024 Scrimmage - Division B                      │  │
-│  │  ─────────────────────────────────                       │  │
-│  │  Email notifications: [ON]  [OFF]                        │  │
-│  │                            ─────                         │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Fall 2023 - Softball B Team                            │  │
-│  │  ─────────────────────────────────                       │  │
-│  │  Email notifications: [ON]  [OFF]                        │  │
-│  │                      ────                                │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  [Save Changes]                                                  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+────────────────────────────────────────────────────
+You're receiving this email because you're a captain for [Team Name].
+[Unsubscribe from these notifications]
 ```
 
-**Alternative:** Integrate into dashboard as section at bottom
-```
-  My Teams
-  --------
-  [Teams listed here...]
+**Benefits:**
+- ✅ No custom settings page needed (simpler implementation)
+- ✅ Leverages Loops' built-in unsubscribe management
+- ✅ Compliance with email regulations (CAN-SPAM, GDPR)
+- ✅ Captains can opt out without logging in
+- ✅ Reduces development scope for MVP
 
-  Notification Settings
-  ─────────────────────
-  ☑ Summer 2024 - Softball A Team
-  ☐ Spring 2024 Scrimmage - Division B
-  ☑ Fall 2023 - Softball B Team
+**Admin Control:**
+- Admins can still toggle `email_notifications` ON/OFF per captain in registration detail page
+- This overrides captain preference (admin can force-disable notifications)
+- Useful if captain wants notifications but admin wants to prevent them temporarily
 
-  [Save Settings]
-```
+**Future Enhancement (Phase 4):**
+- Build custom settings page at `/user/captain/settings` if needed
+- Sync Loops unsubscribe status back to database via webhook
+- Allow captains to re-enable notifications from our UI
+- For now: Keep it simple, rely on Loops
 
 **Design Notes:**
-- Simple ON/OFF toggle per team
-- Clear explanation of what notifications do
-- Can be separate page or integrated into dashboard
-- Changes save immediately (or with Save button)
-- Phase 3 feature (not MVP)
+- Captain assignment notification email = transactional (always sent, no opt-out)
+- Captain removal notification email = transactional (always sent, no opt-out)
+- Captain registration notification email = marketing/informational (can opt-out via Loops)
+- Phase 3 simplified: Just implement the emails with Loops unsubscribe
+- Custom notification settings page removed from Phase 3 scope (moved to Phase 4 if needed)
 
 ---
 

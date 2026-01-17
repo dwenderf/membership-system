@@ -190,6 +190,7 @@ interface UserRoles {
 ### 1. Captain Dashboard (`/captain`)
 
 **Features:**
+- Page title: "Captain" (similar to how admin pages show "Admin")
 - Display all registrations where user is a captain
 - Show registration tiles similar to `/admin/reports/registrations`
 - Each tile shows:
@@ -207,7 +208,7 @@ interface UserRoles {
 
 **Mock-up:**
 ```
-My Teams
+Captain
 
 [Summer 2024 - Softball A Team]
 Type: Team | Season: Summer 2024

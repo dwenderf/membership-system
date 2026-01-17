@@ -50,7 +50,9 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
 
   // Fetch games for all registrations for the overview
   useEffect(() => {
-    fetchAllRegistrationsGames()
+    fetchAllRegistrationsGames().catch(err => {
+      console.error('Error in useEffect fetchAllRegistrationsGames:', err)
+    })
   }, [registrations])
 
   const fetchAllRegistrationsGames = async () => {

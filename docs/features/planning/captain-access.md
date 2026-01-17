@@ -195,40 +195,57 @@ You're not assigned as a captain for any teams.
 ### 1. Captain Dashboard (`/user/captain`)
 
 **Features:**
-- Display all registrations where user is a captain
-- Show registration tiles similar to `/admin/reports/registrations`
+- Display registrations where user is a captain
+- "Show past teams" checkbox (default: unchecked)
+  - Unchecked: Show only current season and future season teams
+  - Checked: Show all teams with "Past Teams" section separator
+- Registration tiles similar to `/admin/reports/registrations`
 - Each tile shows:
   - Registration name and type (Team, Scrimmage, Event)
   - Season
   - Number of registered members
   - Number of alternates (if enabled)
   - Quick links to: View Roster, Manage Alternates
-- If user has no captain assignments, show empty state
+- Empty state logic:
+  - Has past teams but no current: Direct to checkbox
+  - No teams at all: Contact admin message
 
 **API Endpoint:**
 ```typescript
-// GET /api/user/captain/registrations
+// GET /api/user/captain/registrations?includePast=false
 // Returns: Registration[] filtered by captain access
+// Query param: includePast (boolean) - default false
 ```
 
-**Mock-up:**
+**Mock-up (with current teams):**
 ```
 My Teams
+
+☐ Show past teams
 
 [Summer 2024 - Softball A Team]
 Type: Team | Season: Summer 2024
 15 members | 3 alternates
 [View Roster] [Manage Alternates]
 
-[Spring Scrimmage - Division B]
-Type: Scrimmage | Season: Spring 2024
-12 members
-[View Roster]
+[Fall 2024 - Softball B Team]
+Type: Team | Season: Fall 2024
+18 members | 5 alternates
+[View Roster] [Manage Alternates]
 ```
 
-**Empty State (non-captains):**
+**Empty State (no current teams, has past teams):**
 ```
-You're not assigned as a captain for any teams.
+ℹ️ You're not assigned as captain of any active teams.
+
+Click the "Show past teams" checkbox above to view teams from previous seasons.
+
+[Return to Dashboard]
+```
+
+**Empty State (no teams at all):**
+```
+⚠️ You're not assigned as a captain for any teams.
 
 If you believe this is an error, please contact your league administrator.
 
@@ -342,10 +359,23 @@ To stop receiving these notifications, update your captain settings.
 ```
 
 **Implementation:**
-- Add `captain_email_notifications` boolean to `registration_captains` table
-- Default to `false` (opt-in)
-- Add settings page: `/captain/settings` to manage notification preferences
+- Add `email_notifications` boolean to `registration_captains` table
+- Default to `TRUE` when captain is assigned (opt-out model)
+- Use Loops' built-in unsubscribe functionality for opt-out
+- Captains can unsubscribe via link in email (handled by Loops)
+- Admins can toggle notifications ON/OFF per captain in admin UI
 - Trigger email in registration completion webhook
+- No custom notification settings page needed (simplified)
+
+**Opt-Out Approach:**
+- Loops automatically includes unsubscribe link in emails
+- Captain clicks unsubscribe → Loops handles it
+- Optional: Sync Loops status back to database via webhook (Phase 4)
+- Simpler than building custom settings UI
+
+**Email Classification:**
+- Assignment/removal emails = transactional (always sent, no opt-out)
+- Registration notification emails = informational (can opt-out via Loops)
 
 **Note:** This template should be generic enough that admins could also receive it:
 - Don't use "captain" in template name, use "team_registration_notification"
@@ -368,7 +398,7 @@ To stop receiving these notifications, update your captain settings.
 - Add captain interface:
   - Search/autocomplete for user by name, email, or member ID
   - Selected user preview
-  - Checkbox: "Enable email notifications" (default: off)
+  - Checkbox: "Enable email notifications" (default: checked/on)
   - [Add Captain] button
 
 **B) Registration Creation Flow**
@@ -509,17 +539,18 @@ If you believe this was done in error, please contact your league administrator.
 
 - [ ] Create Loops template for registration notifications
   - [ ] Template ID: `LOOPS_CAPTAIN_REGISTRATION_NOTIFICATION_TEMPLATE_ID`
+  - [ ] Include Loops unsubscribe link (automatic)
   - [ ] Test template in Loops dashboard
 - [ ] Add environment variable for template ID
 - [ ] Update registration completion webhook
   - [ ] Query captains for the registration
   - [ ] Filter captains with `email_notifications = true`
-  - [ ] Send email to each captain
+  - [ ] Send email to each captain via Loops
   - [ ] Log emails in `email_logs` table
-- [ ] Build `/user/captain/settings` page (or integrate into `/user/captain` dashboard)
-  - [ ] List all registrations user captains
-  - [ ] Toggle email notifications per registration
-  - [ ] API: PATCH `/api/user/captain/settings/notifications`
+- [ ] (Optional) Loops webhook integration
+  - [ ] Listen for unsubscribe events from Loops
+  - [ ] Update `email_notifications` to `false` when captain unsubscribes
+  - [ ] Low priority - can be added later (Phase 4)
 
 ### Phase 4: Polish & Additional Features
 **Goal:** Improved UX and admin features
@@ -736,7 +767,7 @@ Member Payment Status Summary:
 -- File: supabase/migrations/YYYYMMDD_add_captain_email_notifications.sql
 
 ALTER TABLE registration_captains
-ADD COLUMN email_notifications BOOLEAN DEFAULT FALSE;
+ADD COLUMN email_notifications BOOLEAN DEFAULT TRUE;
 
 -- Index for efficient notification queries
 CREATE INDEX idx_registration_captains_notifications

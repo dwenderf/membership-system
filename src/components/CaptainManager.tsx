@@ -15,6 +15,7 @@ interface User {
   email: string
   first_name: string
   last_name: string
+  member_id?: number
 }
 
 interface CaptainManagerProps {
@@ -140,7 +141,8 @@ export default function CaptainManager({
         return (
           user.email.toLowerCase().includes(search) ||
           user.first_name?.toLowerCase().includes(search) ||
-          user.last_name?.toLowerCase().includes(search)
+          user.last_name?.toLowerCase().includes(search) ||
+          (user.member_id && user.member_id.toString().includes(search))
         )
       }).slice(0, 5)
     : []
@@ -194,7 +196,7 @@ export default function CaptainManager({
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by name or email..."
+          placeholder="Search by name, email, or member #..."
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
           disabled={adding}
         />
@@ -211,6 +213,9 @@ export default function CaptainManager({
               >
                 <p className="text-sm font-medium text-gray-900">
                   {user.first_name} {user.last_name}
+                  {user.member_id && (
+                    <span className="ml-2 text-xs text-gray-500">#{user.member_id}</span>
+                  )}
                 </p>
                 <p className="text-xs text-gray-500">{user.email}</p>
               </button>

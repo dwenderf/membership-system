@@ -33,7 +33,7 @@ export async function GET(
         id,
         user_id,
         email_notifications,
-        users!inner (
+        users!registration_captains_user_id_fkey!inner (
           id,
           email,
           first_name,
@@ -135,7 +135,7 @@ export async function POST(
         id,
         user_id,
         email_notifications,
-        users!inner (
+        users!registration_captains_user_id_fkey!inner (
           id,
           email,
           first_name,

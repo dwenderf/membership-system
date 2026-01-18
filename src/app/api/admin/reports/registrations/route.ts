@@ -399,7 +399,7 @@ export async function GET(request: NextRequest) {
         .from('registration_captains')
         .select(`
           registration_id,
-          users!inner (
+          users!registration_captains_user_id_fkey!inner (
             first_name,
             last_name
           )

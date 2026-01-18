@@ -45,13 +45,14 @@ export default function CaptainManager({
   const fetchCaptains = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await fetch(`/api/admin/registrations/${registrationId}/captains`)
       if (!response.ok) throw new Error('Failed to fetch captains')
       const data = await response.json()
       setCaptains(data.captains || [])
     } catch (err) {
       console.error('Error fetching captains:', err)
-      setError('Failed to load captains')
+      setError('No captains assigned')
     } finally {
       setLoading(false)
     }

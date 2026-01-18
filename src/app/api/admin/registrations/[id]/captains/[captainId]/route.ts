@@ -35,7 +35,7 @@ export async function DELETE(
       .select(`
         id,
         user_id,
-        users!inner (
+        users!registration_captains_user_id_fkey!inner (
           id,
           email,
           first_name,

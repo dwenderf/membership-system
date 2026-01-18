@@ -40,7 +40,6 @@ export async function GET(
         )
       `)
       .eq('registration_id', registrationId)
-      .order('created_at', { ascending: true })
 
     if (captainsError) {
       console.error('Error fetching captains:', captainsError)

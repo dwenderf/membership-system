@@ -8,7 +8,6 @@ interface Captain {
   first_name: string
   last_name: string
   email: string
-  email_notifications: boolean
 }
 
 interface User {

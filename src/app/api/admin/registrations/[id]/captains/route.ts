@@ -32,7 +32,6 @@ export async function GET(
       .select(`
         id,
         user_id,
-        email_notifications,
         users!registration_captains_user_id_fkey!inner (
           id,
           email,
@@ -57,7 +56,6 @@ export async function GET(
       return {
         id: captain.id,
         user_id: captain.user_id,
-        email_notifications: captain.email_notifications,
         first_name: user?.first_name || '',
         last_name: user?.last_name || '',
         email: user?.email || ''
@@ -128,13 +126,11 @@ export async function POST(
       .from('registration_captains')
       .insert({
         registration_id: registrationId,
-        user_id: userId,
-        email_notifications: true // Default to true (opt-out model)
+        user_id: userId
       })
       .select(`
         id,
         user_id,
-        email_notifications,
         users!registration_captains_user_id_fkey!inner (
           id,
           email,
@@ -187,7 +183,6 @@ export async function POST(
       captain: {
         id: newCaptain.id,
         user_id: newCaptain.user_id,
-        email_notifications: newCaptain.email_notifications,
         first_name: captainUser?.first_name || '',
         last_name: captainUser?.last_name || '',
         email: captainUser?.email || ''

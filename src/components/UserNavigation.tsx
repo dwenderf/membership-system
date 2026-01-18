@@ -24,6 +24,7 @@ interface UserNavigationProps {
 export default function UserNavigation({ user, useToggle = false }: UserNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [hasUnpaid, setHasUnpaid] = useState(false)
+  const [isCaptain, setIsCaptain] = useState(false)
   const pathname = usePathname()
 
   // Check for unpaid invoices (only for admins)
@@ -39,21 +40,46 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
     }
   }, [user?.id, user?.is_admin])
 
+  // Check if user is a captain of any registration
+  useEffect(() => {
+    if (user?.id) {
+      fetch('/api/user/captain/registrations')
+        .then(res => res.json())
+        .then(data => setIsCaptain(data.data && data.data.length > 0))
+        .catch(error => {
+          console.error('Error checking captain status:', error)
+          setIsCaptain(false)
+        })
+    }
+  }, [user?.id])
+
   const baseNavigation = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },
   ]
 
+  // Build navigation array with conditional tabs
+  let navigation = [...baseNavigation]
+
+  // Add Captain tab if user is a captain
+  if (isCaptain) {
+    navigation.push({
+      name: 'Captain',
+      href: '/user/captain',
+      current: pathname.startsWith('/user/captain')
+    })
+  }
+
   // Add invoices navigation only for admins
-  const navigation = user?.is_admin 
-    ? [...baseNavigation, { 
-        name: 'My Invoices', 
-        href: '/user/invoices', 
-        current: pathname === '/user/invoices',
-        badge: hasUnpaid ? '!' : undefined
-      }]
-    : baseNavigation
+  if (user?.is_admin) {
+    navigation.push({
+      name: 'My Invoices',
+      href: '/user/invoices',
+      current: pathname === '/user/invoices',
+      badge: hasUnpaid ? '!' : undefined
+    })
+  }
 
   return (
     <nav className="bg-white shadow-sm">

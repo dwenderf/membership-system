@@ -12,6 +12,7 @@ import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
 import EditableEventDates from '@/components/EditableEventDates'
 import GamesPreview from '@/components/GamesPreview'
+import CaptainManager from '@/components/CaptainManager'
 
 export default async function RegistrationDetailPage({
   params,
@@ -158,7 +159,7 @@ export default async function RegistrationDetailPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Registration Details */}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-6">
               <div className="bg-white shadow rounded-lg p-6">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">Registration Details</h2>
                 <dl className="space-y-4">
@@ -264,6 +265,13 @@ export default async function RegistrationDetailPage({
                   </div>
                 </dl>
               </div>
+
+              {/* Captain Management */}
+              <CaptainManager
+                registrationId={id}
+                registrationName={registration.name}
+                seasonName={season?.name || 'Unknown Season'}
+              />
             </div>
 
             {/* Registration Categories - now with drag-and-drop */}

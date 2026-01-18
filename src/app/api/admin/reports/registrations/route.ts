@@ -394,6 +394,22 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
       }
 
+      // Get captains for each registration
+      const { data: captainsData, error: captainsError } = await adminSupabase
+        .from('registration_captains')
+        .select(`
+          registration_id,
+          users!inner (
+            first_name,
+            last_name
+          )
+        `)
+        .in('registration_id', registrationIds)
+
+      if (captainsError) {
+        logger.logSystem('registration-reports-api', 'Error fetching captains', { error: captainsError }, 'error')
+      }
+
       // Create a map of registration counts by registration_id and category_id
       const countsMap = new Map<string, Map<string, number>>()
       registrationCounts?.forEach(count => {
@@ -438,6 +454,24 @@ export async function GET(request: NextRequest) {
         }
       })
 
+      // Create a map of captains by registration_id
+      const captainsMap = new Map<string, Array<{ first_name: string; last_name: string }>>()
+      captainsData?.forEach(captain => {
+        const regId = captain.registration_id
+        const user = Array.isArray(captain.users) ? captain.users[0] : captain.users
+
+        if (regId && user) {
+          if (!captainsMap.has(regId)) {
+            captainsMap.set(regId, [])
+          }
+
+          captainsMap.get(regId)!.push({
+            first_name: user.first_name || '',
+            last_name: user.last_name || ''
+          })
+        }
+      })
+
       // Process the data to flatten the structure and add counts
       const processedRegistrations = registrationsList?.map(item => {
         const season = Array.isArray(item.seasons) ? item.seasons[0] : item.seasons
@@ -470,6 +504,9 @@ export async function GET(request: NextRequest) {
         // Get alternates count (unique users who have selected alternates for this registration)
         const alternatesCount = alternatesCountMap.get(item.id)?.size || 0
 
+        // Get captains for this registration
+        const captains = captainsMap.get(item.id) || []
+
         return {
           id: item.id,
           name: item.name,
@@ -485,7 +522,8 @@ export async function GET(request: NextRequest) {
           total_waitlist_count: totalWaitlistCount,
           alternates_count: alternatesCount,
           alternates_enabled: item.allow_alternates || false,
-          category_breakdown: categoryBreakdown
+          category_breakdown: categoryBreakdown,
+          captains: captains
         }
       }) || []
 

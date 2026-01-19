@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Get all registrations where user is a captain
     const { data: captainships, error: captainshipsError } = await supabase
       .from('registration_captains')
-      .select('registration_id, email_notifications')
+      .select('registration_id')
       .eq('user_id', user.id)
 
     if (captainshipsError) {
@@ -94,9 +94,6 @@ export async function GET(request: NextRequest) {
           alternateCount = count || 0
         }
 
-        // Get email notification status for this captain
-        const captainship = captainships.find(c => c.registration_id === registration.id)
-
         return {
           id: registration.id,
           name: registration.name,
@@ -109,8 +106,7 @@ export async function GET(request: NextRequest) {
           end_date: registration.end_date,
           member_count: memberCount || 0,
           alternates_enabled: registration.allow_alternates || false,
-          alternates_count: alternateCount,
-          email_notifications: captainship?.email_notifications || false,
+          alternates_count: alternateCount
         }
       })
     )

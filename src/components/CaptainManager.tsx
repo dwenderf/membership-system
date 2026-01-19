@@ -30,6 +30,8 @@ export default function CaptainManager({
   const [error, setError] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null)
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
+  const [captainToRemove, setCaptainToRemove] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     fetchCaptains()
@@ -94,16 +96,19 @@ export default function CaptainManager({
     setSelectedUser(null)
   }
 
-  const handleRemoveCaptain = async (captainId: string) => {
-    if (!confirm('Are you sure you want to remove this captain? They will receive an email notification.')) {
-      return
-    }
+  const handleRemoveCaptain = (captainId: string, captainName: string) => {
+    setCaptainToRemove({ id: captainId, name: captainName })
+    setRemoveDialogOpen(true)
+  }
+
+  const handleConfirmRemoveCaptain = async () => {
+    if (!captainToRemove) return
 
     try {
-      setRemovingId(captainId)
+      setRemovingId(captainToRemove.id)
       setError(null)
 
-      const response = await fetch(`/api/admin/registrations/${registrationId}/captains/${captainId}`, {
+      const response = await fetch(`/api/admin/registrations/${registrationId}/captains/${captainToRemove.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,12 +123,19 @@ export default function CaptainManager({
       }
 
       await fetchCaptains()
+      setRemoveDialogOpen(false)
+      setCaptainToRemove(null)
     } catch (err) {
       console.error('Error removing captain:', err)
       setError(err instanceof Error ? err.message : 'Failed to remove captain')
     } finally {
       setRemovingId(null)
     }
+  }
+
+  const handleCancelRemoveCaptain = () => {
+    setRemoveDialogOpen(false)
+    setCaptainToRemove(null)
   }
 
   // Get captain user IDs to exclude from picker
@@ -158,7 +170,7 @@ export default function CaptainManager({
                 <p className="text-xs text-gray-500 truncate">{captain.email}</p>
               </div>
               <button
-                onClick={() => handleRemoveCaptain(captain.id)}
+                onClick={() => handleRemoveCaptain(captain.id, `${captain.first_name} ${captain.last_name}`)}
                 disabled={removingId === captain.id}
                 className="ml-2 text-red-600 hover:text-red-800 text-xs font-medium disabled:opacity-50"
               >
@@ -181,7 +193,7 @@ export default function CaptainManager({
         Captains can view and manage team rosters. They will receive an email notification when assigned or removed.
       </p>
 
-      {/* Confirmation Dialog */}
+      {/* Add Captain Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={confirmDialogOpen}
         title="Add Captain"
@@ -197,6 +209,24 @@ export default function CaptainManager({
         onCancel={handleCancelAddCaptain}
         isLoading={adding}
         variant="info"
+      />
+
+      {/* Remove Captain Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={removeDialogOpen}
+        title="Remove Captain"
+        message={
+          <div>
+            <p>Are you sure you want to remove <strong>{captainToRemove?.name}</strong> as a captain for <strong>{registrationName}</strong>?</p>
+            <p className="mt-2 text-sm text-gray-600">They will receive an email notification.</p>
+          </div>
+        }
+        confirmText="Remove Captain"
+        cancelText="Cancel"
+        onConfirm={handleConfirmRemoveCaptain}
+        onCancel={handleCancelRemoveCaptain}
+        isLoading={removingId === captainToRemove?.id}
+        variant="danger"
       />
     </div>
   )

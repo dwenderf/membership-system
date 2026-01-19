@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
 
 // GET /api/admin/registrations/[id]/captains - List captains for a registration
 export async function GET(
@@ -148,35 +149,24 @@ export async function POST(
       )
     }
 
-    // Send assignment email via Loops
+    // Send assignment email via EmailService (logs to email_logs)
     const captainUser = Array.isArray(newCaptain.users) ? newCaptain.users[0] : newCaptain.users
-    try {
-      const loopsResponse = await fetch('https://app.loops.so/api/v1/transactional', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.LOOPS_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transactionalId: process.env.LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID,
-          email: captainUser.email,
-          dataVariables: {
-            userName: captainUser.first_name,
-            registrationName: registrationName,
-            seasonName: seasonName,
-            captainDashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/captain`,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
-          }
-        })
-      })
-
-      if (!loopsResponse.ok) {
-        console.error('Failed to send captain assignment email:', await loopsResponse.text())
-      }
-    } catch (emailError) {
-      console.error('Error sending captain assignment email:', emailError)
-      // Don't fail the request if email fails
-    }
+    await emailService.sendEmailImmediately({
+      userId: userId,
+      email: captainUser.email,
+      eventType: EMAIL_EVENTS.CAPTAIN_ASSIGNED,
+      subject: `You've been added as a captain for ${registrationName}`,
+      templateId: process.env.LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID,
+      data: {
+        userName: captainUser.first_name,
+        registrationName: registrationName,
+        seasonName: seasonName,
+        captainDashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/captain`,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
+      },
+      triggeredBy: 'admin_send',
+      triggeredByUserId: user.id
+    })
 
     return NextResponse.json({
       success: true,

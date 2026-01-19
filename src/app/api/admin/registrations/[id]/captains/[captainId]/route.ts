@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
 
 // DELETE /api/admin/registrations/[id]/captains/[captainId] - Remove a captain
 export async function DELETE(
@@ -68,34 +69,23 @@ export async function DELETE(
       )
     }
 
-    // Send removal email via Loops
+    // Send removal email via EmailService (logs to email_logs)
     const captainUser = Array.isArray(captain.users) ? captain.users[0] : captain.users
-    try {
-      const loopsResponse = await fetch('https://app.loops.so/api/v1/transactional', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.LOOPS_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transactionalId: process.env.LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID,
-          email: captainUser.email,
-          dataVariables: {
-            userName: captainUser.first_name,
-            registrationName: registrationName,
-            seasonName: seasonName,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
-          }
-        })
-      })
-
-      if (!loopsResponse.ok) {
-        console.error('Failed to send captain removal email:', await loopsResponse.text())
-      }
-    } catch (emailError) {
-      console.error('Error sending captain removal email:', emailError)
-      // Don't fail the request if email fails
-    }
+    await emailService.sendEmailImmediately({
+      userId: captain.user_id,
+      email: captainUser.email,
+      eventType: EMAIL_EVENTS.CAPTAIN_REMOVED,
+      subject: `You've been removed as a captain for ${registrationName}`,
+      templateId: process.env.LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID,
+      data: {
+        userName: captainUser.first_name,
+        registrationName: registrationName,
+        seasonName: seasonName,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
+      },
+      triggeredBy: 'admin_send',
+      triggeredByUserId: user.id
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import UserPicker from '@/components/admin/UserPicker'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 
 interface Captain {
   id: string
@@ -27,6 +28,8 @@ export default function CaptainManager({
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     fetchCaptains()
@@ -48,7 +51,14 @@ export default function CaptainManager({
     }
   }
 
-  const handleAddCaptain = async (userId: string) => {
+  const handleUserSelect = (userId: string, userName: string) => {
+    setSelectedUser({ id: userId, name: userName })
+    setConfirmDialogOpen(true)
+  }
+
+  const handleConfirmAddCaptain = async () => {
+    if (!selectedUser) return
+
     try {
       setAdding(true)
       setError(null)
@@ -57,7 +67,7 @@ export default function CaptainManager({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
+          userId: selectedUser.id,
           registrationName,
           seasonName
         })
@@ -69,12 +79,19 @@ export default function CaptainManager({
       }
 
       await fetchCaptains()
+      setConfirmDialogOpen(false)
+      setSelectedUser(null)
     } catch (err) {
       console.error('Error adding captain:', err)
       setError(err instanceof Error ? err.message : 'Failed to add captain')
     } finally {
       setAdding(false)
     }
+  }
+
+  const handleCancelAddCaptain = () => {
+    setConfirmDialogOpen(false)
+    setSelectedUser(null)
   }
 
   const handleRemoveCaptain = async (captainId: string) => {
@@ -155,7 +172,7 @@ export default function CaptainManager({
       {/* Add Captain Search */}
       <UserPicker
         label="Add Captain"
-        onSelect={handleAddCaptain}
+        onSelect={handleUserSelect}
         excludeUserIds={captainUserIds}
         disabled={adding}
       />
@@ -163,6 +180,24 @@ export default function CaptainManager({
       <p className="mt-2 text-xs text-gray-500">
         Captains can view and manage team rosters. They will receive an email notification when assigned or removed.
       </p>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmDialogOpen}
+        title="Add Captain"
+        message={
+          <div>
+            <p>Are you sure you want to add <strong>{selectedUser?.name}</strong> as a captain for <strong>{registrationName}</strong>?</p>
+            <p className="mt-2 text-sm text-gray-600">They will receive an email notification.</p>
+          </div>
+        }
+        confirmText="Add Captain"
+        cancelText="Cancel"
+        onConfirm={handleConfirmAddCaptain}
+        onCancel={handleCancelAddCaptain}
+        isLoading={adding}
+        variant="info"
+      />
     </div>
   )
 }

@@ -125,7 +125,8 @@ export async function POST(
       .from('registration_captains')
       .insert({
         registration_id: registrationId,
-        user_id: userId
+        user_id: userId,
+        assigned_by: user.id
       })
       .select(`
         id,

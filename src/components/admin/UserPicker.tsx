@@ -11,7 +11,7 @@ interface User {
 }
 
 interface UserPickerProps {
-  onSelect: (userId: string) => void
+  onSelect: (userId: string, userName: string) => void
   excludeUserIds?: string[]
   label?: string
   placeholder?: string
@@ -145,7 +145,8 @@ export default function UserPicker({
   }
 
   const handleSelectUser = (user: User) => {
-    onSelect(user.id)
+    const userName = `${user.first_name} ${user.last_name}`.trim()
+    onSelect(user.id, userName)
     setSearchTerm('')
     setIsOpen(false)
     inputRef.current?.blur()

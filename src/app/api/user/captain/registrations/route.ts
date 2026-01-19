@@ -63,25 +63,61 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // For each registration, get member count and alternate count
+    // For each registration, get category breakdown and alternate count
     const enrichedRegistrations = await Promise.all(
       (registrations || []).map(async (registration) => {
-        // Get member count (excluding refunded)
-        const { count: memberCount } = await supabase
+        // Get all categories for this registration
+        const { data: categories } = await supabase
+          .from('registration_categories')
+          .select(`
+            id,
+            custom_name,
+            max_capacity,
+            categories (
+              name
+            )
+          `)
+          .eq('registration_id', registration.id)
+
+        // Get all user registrations with their categories (excluding refunded)
+        const { data: userRegistrations } = await supabase
           .from('user_registrations')
-          .select('*', { count: 'exact', head: true })
+          .select('registration_category_id, payment_status')
           .eq('registration_id', registration.id)
           .neq('payment_status', 'refunded')
 
-        // Get alternate count if alternates are enabled
+        // Build category breakdown with counts
+        const categoryBreakdown = (categories || []).map(cat => {
+          const category = Array.isArray(cat.categories) ? cat.categories[0] : cat.categories
+          const count = userRegistrations?.filter(ur => ur.registration_category_id === cat.id).length || 0
+
+          return {
+            id: cat.id,
+            name: category?.name || cat.custom_name || 'Unknown Category',
+            count: count,
+            max_capacity: cat.max_capacity
+          }
+        })
+
+        // Calculate total count
+        const totalCount = categoryBreakdown.reduce((sum, cat) => sum + cat.count, 0)
+
+        // Get unique alternates count if alternates are enabled
         let alternateCount = 0
         if (registration.allow_alternates) {
-          const { count } = await supabase
-            .from('user_alternate_registrations')
-            .select('*', { count: 'exact', head: true })
-            .eq('registration_id', registration.id)
+          const { data: alternateSelections } = await supabase
+            .from('alternate_selections')
+            .select(`
+              user_id,
+              alternate_registrations!inner (
+                registration_id
+              )
+            `)
+            .eq('alternate_registrations.registration_id', registration.id)
 
-          alternateCount = count || 0
+          // Count unique user_ids
+          const uniqueUserIds = new Set(alternateSelections?.map(s => s.user_id) || [])
+          alternateCount = uniqueUserIds.size
         }
 
         return {
@@ -94,7 +130,8 @@ export async function GET(request: NextRequest) {
           season_end_date: registration.seasons?.end_date || null,
           start_date: registration.start_date,
           end_date: registration.end_date,
-          member_count: memberCount || 0,
+          total_count: totalCount,
+          category_breakdown: categoryBreakdown,
           alternates_enabled: registration.allow_alternates || false,
           alternates_count: alternateCount
         }

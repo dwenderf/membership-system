@@ -14,10 +14,15 @@ interface CaptainRegistration {
   season_end_date: string | null
   start_date: string | null
   end_date: string | null
-  member_count: number
+  total_count: number
+  category_breakdown: Array<{
+    id: string
+    name: string
+    count: number
+    max_capacity: number | null
+  }>
   alternates_enabled: boolean
   alternates_count: number
-  email_notifications: boolean
 }
 
 export default function CaptainDashboardPage() {
@@ -191,19 +196,49 @@ export default function CaptainDashboardPage() {
                   </span>
                 </div>
 
-                {/* Member count */}
+                {/* Total registration count */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Members</span>
-                    <span className="font-bold text-gray-900">{registration.member_count}</span>
+                    <span className="text-gray-600 font-semibold">Registrations</span>
+                    <span className="font-bold text-gray-900">
+                      {registration.total_count}
+                    </span>
                   </div>
                 </div>
+
+                {/* Category breakdown */}
+                {registration.category_breakdown.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {registration.category_breakdown.map((category) => (
+                      <div key={category.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600 truncate flex-1">{category.name}</span>
+                          <span className="font-medium text-gray-900 ml-2">
+                            {category.count}
+                            {category.max_capacity && ` / ${category.max_capacity}`}
+                          </span>
+                        </div>
+                        {/* Only show progress bar for capacity-limited categories */}
+                        {category.max_capacity && (
+                          <div className="w-full bg-gray-200 rounded-full h-1">
+                            <div
+                              className="bg-indigo-600 h-1 rounded-full"
+                              style={{
+                                width: `${Math.min((category.count / category.max_capacity) * 100, 100)}%`
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Alternates count */}
                 {registration.alternates_enabled && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Alternates</span>
+                      <span className="text-gray-600 font-semibold">Alternates</span>
                       <span className="font-bold text-gray-900">{registration.alternates_count}</span>
                     </div>
                   </div>
@@ -217,14 +252,6 @@ export default function CaptainDashboardPage() {
                   >
                     View Roster
                   </Link>
-                  {registration.alternates_enabled && (
-                    <Link
-                      href={`/user/captain/${registration.id}/alternates`}
-                      className="flex-1 text-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                    >
-                      Manage Alternates
-                    </Link>
-                  )}
                 </div>
               </div>
             ))}
@@ -252,19 +279,49 @@ export default function CaptainDashboardPage() {
                   </span>
                 </div>
 
-                {/* Member count */}
+                {/* Total registration count */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Members</span>
-                    <span className="font-bold text-gray-700">{registration.member_count}</span>
+                    <span className="text-gray-500 font-semibold">Registrations</span>
+                    <span className="font-bold text-gray-700">
+                      {registration.total_count}
+                    </span>
                   </div>
                 </div>
+
+                {/* Category breakdown */}
+                {registration.category_breakdown.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {registration.category_breakdown.map((category) => (
+                      <div key={category.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 truncate flex-1">{category.name}</span>
+                          <span className="font-medium text-gray-700 ml-2">
+                            {category.count}
+                            {category.max_capacity && ` / ${category.max_capacity}`}
+                          </span>
+                        </div>
+                        {/* Only show progress bar for capacity-limited categories */}
+                        {category.max_capacity && (
+                          <div className="w-full bg-gray-300 rounded-full h-1">
+                            <div
+                              className="bg-gray-600 h-1 rounded-full"
+                              style={{
+                                width: `${Math.min((category.count / category.max_capacity) * 100, 100)}%`
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Alternates count */}
                 {registration.alternates_enabled && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Alternates</span>
+                      <span className="text-gray-500 font-semibold">Alternates</span>
                       <span className="font-bold text-gray-700">{registration.alternates_count}</span>
                     </div>
                   </div>

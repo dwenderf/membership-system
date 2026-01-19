@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
 
     const registrationIds = captainships.map(c => c.registration_id)
 
-    // Build query for registrations with aggregated data
-    let registrationsQuery = supabase
+    // Fetch all registrations (we'll filter by date later)
+    const { data: registrations, error: registrationsError } = await supabase
       .from('registrations')
       .select(`
         id,
@@ -54,16 +54,6 @@ export async function GET(request: NextRequest) {
         )
       `)
       .in('id', registrationIds)
-
-    // If not including past, filter by season/registration end date
-    if (!includePast) {
-      const today = new Date().toISOString()
-      registrationsQuery = registrationsQuery.or(
-        `end_date.gte.${today},and(end_date.is.null,seasons.end_date.gte.${today})`
-      )
-    }
-
-    const { data: registrations, error: registrationsError } = await registrationsQuery
 
     if (registrationsError) {
       console.error('Error fetching registrations:', registrationsError)
@@ -111,8 +101,26 @@ export async function GET(request: NextRequest) {
       })
     )
 
+    // Filter by date if not including past
+    let filteredRegistrations = enrichedRegistrations
+    if (!includePast) {
+      const today = new Date()
+      filteredRegistrations = enrichedRegistrations.filter(registration => {
+        // Check registration end_date first
+        if (registration.end_date) {
+          return new Date(registration.end_date) >= today
+        }
+        // Fall back to season end_date
+        if (registration.season_end_date) {
+          return new Date(registration.season_end_date) >= today
+        }
+        // If no dates, include it
+        return true
+      })
+    }
+
     // Sort: current/future first (by season start date), then past
-    enrichedRegistrations.sort((a, b) => {
+    filteredRegistrations.sort((a, b) => {
       const aEnd = a.end_date || a.season_end_date
       const bEnd = b.end_date || b.season_end_date
 
@@ -124,7 +132,7 @@ export async function GET(request: NextRequest) {
       return new Date(bEnd).getTime() - new Date(aEnd).getTime()
     })
 
-    return NextResponse.json({ data: enrichedRegistrations })
+    return NextResponse.json({ data: filteredRegistrations })
   } catch (error) {
     console.error('Error in captain registrations API:', error)
     return NextResponse.json(

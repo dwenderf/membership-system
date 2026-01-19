@@ -158,7 +158,7 @@ export async function POST(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          transactionalId: process.env.LOOPS_CAPTAIN_ASSIGNED_TEMPLATE_ID,
+          transactionalId: process.env.LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID,
           email: captainUser.email,
           dataVariables: {
             userName: captainUser.first_name,

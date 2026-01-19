@@ -78,7 +78,7 @@ export async function DELETE(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          transactionalId: process.env.LOOPS_CAPTAIN_REMOVED_TEMPLATE_ID,
+          transactionalId: process.env.LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID,
           email: captainUser.email,
           dataVariables: {
             userName: captainUser.first_name,

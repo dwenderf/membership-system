@@ -164,8 +164,8 @@ export async function POST(
             userName: captainUser.first_name,
             registrationName: registrationName,
             seasonName: seasonName,
-            captainDashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/user/captain`,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/user`
+            captainDashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/captain`,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
           }
         })
       })

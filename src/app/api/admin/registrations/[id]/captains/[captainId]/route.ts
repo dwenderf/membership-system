@@ -84,7 +84,7 @@ export async function DELETE(
             userName: captainUser.first_name,
             registrationName: registrationName,
             seasonName: seasonName,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/user`
+            dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
           }
         })
       })

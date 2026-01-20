@@ -18,7 +18,7 @@ interface DurationInputProps {
  *
  * Features:
  * - Prevents negative values
- * - Automatically rounds to nearest 5-minute increment
+ * - Automatically rounds floats to nearest integer
  * - Enforces minimum duration (default 1 minute)
  * - Displays hours and minutes for better readability
  *
@@ -57,23 +57,25 @@ export default function DurationInput({
     }
   }, [error])
 
-  // Round to nearest increment
+  // Round to nearest integer
   const roundValue = (val: string): string => {
     if (!val || val === '') return ''
 
-    const numValue = parseInt(val)
+    const numValue = parseFloat(val)
+
+    // Check if it's a valid number
+    if (isNaN(numValue)) return ''
 
     // Prevent negative values
     if (numValue < 0) return String(minMinutes)
 
+    // Round to nearest integer
+    const rounded = Math.round(numValue)
+
     // Enforce minimum
-    if (numValue < minMinutes) return String(minMinutes)
+    if (rounded < minMinutes) return String(minMinutes)
 
-    // Round to nearest increment
-    const rounded = Math.round(numValue / roundToNearest) * roundToNearest
-
-    // Make sure we don't round down below minimum
-    return String(Math.max(rounded, minMinutes))
+    return String(rounded)
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +89,13 @@ export default function DurationInput({
     }
 
     // Parse and validate
-    const numValue = parseInt(newValue)
+    const numValue = parseFloat(newValue)
+
+    // Check if it's a valid number
+    if (isNaN(numValue)) {
+      setError('Please enter a valid number')
+      return
+    }
 
     // Prevent negative values during input
     if (numValue < 0) {
@@ -130,14 +138,13 @@ export default function DurationInput({
     <div>
       <div className="flex items-center space-x-2">
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
           id={id}
           value={localValue}
           onChange={handleChange}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          min={minMinutes}
-          step={roundToNearest}
           className={`block w-32 rounded-md shadow-sm sm:text-sm ${
             error
               ? 'border-red-300 text-red-900 focus:ring-red-500 focus:border-red-500 dark:border-red-600 dark:text-red-300'

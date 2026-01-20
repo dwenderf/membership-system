@@ -64,6 +64,22 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Navigation - Top */}
+          <div className="mb-4 flex gap-4">
+            <Link
+              href={`/user/captain/${registrationId}/roster`}
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+            >
+              ← View Roster
+            </Link>
+            <Link
+              href="/user/captain"
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+            >
+              ← Back to My Teams
+            </Link>
+          </div>
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Manage Alternates</h1>
@@ -78,17 +94,17 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
             userAccess={userAccess}
           />
 
-          {/* Navigation */}
+          {/* Navigation - Bottom */}
           <div className="mt-6 flex gap-4">
             <Link
               href={`/user/captain/${registrationId}/roster`}
-              className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
             >
               ← View Roster
             </Link>
             <Link
               href="/user/captain"
-              className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
             >
               ← Back to My Teams
             </Link>

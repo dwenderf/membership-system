@@ -189,8 +189,16 @@ export default function CaptainRosterPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Back Link */}
-      <div className="mb-4">
+      {/* Navigation - Top */}
+      <div className="mb-4 flex gap-4">
+        {alternatesData.length > 0 && (
+          <Link
+            href={`/user/captain/${registrationId}/alternates`}
+            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+          >
+            → Manage Alternates
+          </Link>
+        )}
         <Link
           href="/user/captain"
           className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
@@ -525,6 +533,24 @@ export default function CaptainRosterPage() {
               </div>
             )
           })()}
+
+          {/* Navigation - Bottom */}
+          <div className="mt-8 flex gap-4">
+            {alternatesData.length > 0 && (
+              <Link
+                href={`/user/captain/${registrationId}/alternates`}
+                className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+              >
+                → Manage Alternates
+              </Link>
+            )}
+            <Link
+              href="/user/captain"
+              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+            >
+              ← Back to My Teams
+            </Link>
+          </div>
         </>
       )}
     </div>

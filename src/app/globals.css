@@ -49,60 +49,14 @@ input.flatpickr-input + input {
   padding-bottom: 0.625rem !important;
 }
 
-/* Confirm button styling */
-.flatpickr-confirm {
-  background-color: #2563eb !important;
-  color: white !important;
-  border: none !important;
-  padding: 8px 16px !important;
-  border-radius: 4px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  margin: 8px !important;
-  font-size: 14px !important;
-}
-
-.flatpickr-confirm:hover {
-  background-color: #1d4ed8 !important;
-}
-
-/* Hide the checkmark icon */
-.flatpickr-confirm::before,
-.flatpickr-confirm::after {
-  display: none !important;
-  content: none !important;
-}
-
-.flatpickr-confirm svg {
-  display: none !important;
-}
-
-/* Disabled state styling */
-.flatpickr-confirm:disabled {
-  background-color: #9ca3af !important;
-  cursor: not-allowed !important;
-  opacity: 0.6 !important;
-}
-
-.flatpickr-confirm:disabled:hover {
-  background-color: #9ca3af !important;
-}
-
-/* Mobile optimization for flatpickr */
+/* Desktop optimization for flatpickr */
 .flatpickr-calendar {
   z-index: 9999 !important;
-  touch-action: manipulation !important;
 }
 
-@media (max-width: 640px) {
+@media (min-width: 641px) {
+  /* Desktop-specific flatpickr styling */
   .flatpickr-calendar {
-    width: 100% !important;
-    max-width: calc(100vw - 20px) !important;
-  }
-
-  .flatpickr-months,
-  .flatpickr-weekdays,
-  .flatpickr-days {
-    width: 100% !important;
+    touch-action: manipulation !important;
   }
 }

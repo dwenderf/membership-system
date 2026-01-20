@@ -65,13 +65,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {/* Navigation - Top */}
-          <div className="mb-4 flex gap-4">
-            <Link
-              href={`/user/captain/${registrationId}/roster`}
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-            >
-              ← View Roster
-            </Link>
+          <div className="mb-4">
             <Link
               href="/user/captain"
               className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
@@ -95,13 +89,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
           />
 
           {/* Navigation - Bottom */}
-          <div className="mt-6 flex gap-4">
-            <Link
-              href={`/user/captain/${registrationId}/roster`}
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-            >
-              ← View Roster
-            </Link>
+          <div className="mt-6">
             <Link
               href="/user/captain"
               className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"

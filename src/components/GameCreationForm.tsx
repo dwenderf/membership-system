@@ -30,14 +30,20 @@ export default function GameCreationForm({
     // Show warning if setting a date but description is empty
     if (newDate && !gameDescription.trim()) {
       setShowDescriptionWarning(true)
+    } else {
+      // Hide warning if description exists or date is cleared
+      setShowDescriptionWarning(false)
     }
   }
 
   const handleDescriptionChange = (newDescription: string) => {
     setGameDescription(newDescription)
-    // Hide warning once description is entered
+    // Show/hide warning based on whether description is filled and date is set
     if (newDescription.trim()) {
       setShowDescriptionWarning(false)
+    } else if (gameDate) {
+      // Show warning if description is empty and date is already set
+      setShowDescriptionWarning(true)
     }
   }
 

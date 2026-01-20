@@ -31,52 +31,13 @@ html {
 }
 
 /* Flatpickr customizations */
-/* On desktop: hide the raw input to prevent duplicate display */
-@media (min-width: 641px) {
-  .flatpickr-input {
-    display: none !important;
-  }
-
-  .flatpickr-input.active {
-    display: none !important;
-  }
-
-  input.flatpickr-input[readonly] {
-    display: none !important;
-  }
-
-  .flatpickr-calendar {
-    touch-action: manipulation !important;
-  }
+.flatpickr-calendar {
+  z-index: 9999 !important;
 }
 
-/* On mobile: show the raw input and hide the alt input for native picker */
-@media (max-width: 640px) {
-  .flatpickr-input {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    position: relative !important;
-    width: 100% !important;
-    min-height: 38px !important;
-    padding: 0.625rem 0.75rem !important;
-    border: 1px solid #d1d5db !important;
-    border-radius: 0.375rem !important;
-    font-size: 0.875rem !important;
-  }
-
-  input.flatpickr-input + input {
-    display: none !important;
-  }
-}
-
-/* All devices */
-input.flatpickr-input + input {
+/* Ensure flatpickr input has proper height */
+input.flatpickr-input {
   min-height: 38px !important;
   padding-top: 0.625rem !important;
   padding-bottom: 0.625rem !important;
-}
-
-.flatpickr-calendar {
-  z-index: 9999 !important;
 }

@@ -23,11 +23,12 @@ interface DateTimePickerProps {
 /**
  * DateTimePicker - A reusable date/time picker component using Flatpickr
  *
- * Provides a consistent, cross-browser date/time picking experience with:
+ * Provides a consistent, cross-browser date/time picking experience:
+ * - Desktop: Custom flatpickr calendar with formatted display (e.g., "Jan 22, 2026 at 12:00 PM")
+ * - Mobile: Native browser date/time picker (automatically detected by flatpickr)
  * - 5-minute increments by default
  * - 12-hour time format with AM/PM
- * - Eastern Time display (handled by parent component via value conversion)
- * - Mobile-friendly UI
+ * - Eastern Time (handled by parent component via value conversion)
  *
  * @example
  * ```tsx
@@ -64,9 +65,7 @@ export default function DateTimePicker({
       enableTime,
       time_24hr: false,
       minuteIncrement,
-      dateFormat: enableTime ? 'Y-m-d h:i K' : 'Y-m-d',
-      altInput: true,
-      altFormat: enableTime ? 'M j, Y at h:i K' : 'M j, Y',
+      dateFormat: enableTime ? 'M j, Y \\a\\t h:i K' : 'M j, Y',
       minDate,
       maxDate,
       mode,
@@ -135,11 +134,11 @@ export default function DateTimePicker({
 
   // Update disabled state
   useEffect(() => {
-    if (flatpickrRef.current) {
+    if (flatpickrRef.current && inputRef.current) {
       if (disabled) {
-        flatpickrRef.current.altInput?.setAttribute('disabled', 'disabled')
+        inputRef.current.setAttribute('disabled', 'disabled')
       } else {
-        flatpickrRef.current.altInput?.removeAttribute('disabled')
+        inputRef.current.removeAttribute('disabled')
       }
     }
   }, [disabled])

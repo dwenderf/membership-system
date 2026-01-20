@@ -31,19 +31,12 @@ html {
 }
 
 /* Flatpickr customizations */
-.flatpickr-input {
-  display: none !important;
+.flatpickr-calendar {
+  z-index: 9999 !important;
 }
 
-.flatpickr-input.active {
-  display: none !important;
-}
-
-input.flatpickr-input[readonly] {
-  display: none !important;
-}
-
-input.flatpickr-input + input {
+/* Ensure flatpickr input has proper height */
+input.flatpickr-input {
   min-height: 38px !important;
   padding-top: 0.625rem !important;
   padding-bottom: 0.625rem !important;

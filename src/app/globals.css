@@ -67,7 +67,13 @@ input.flatpickr-input + input {
 }
 
 /* Hide the checkmark icon */
-.flatpickr-confirm::before {
+.flatpickr-confirm::before,
+.flatpickr-confirm::after {
+  display: none !important;
+  content: none !important;
+}
+
+.flatpickr-confirm svg {
   display: none !important;
 }
 
@@ -80,4 +86,23 @@ input.flatpickr-input + input {
 
 .flatpickr-confirm:disabled:hover {
   background-color: #9ca3af !important;
+}
+
+/* Mobile optimization for flatpickr */
+.flatpickr-calendar {
+  z-index: 9999 !important;
+  touch-action: manipulation !important;
+}
+
+@media (max-width: 640px) {
+  .flatpickr-calendar {
+    width: 100% !important;
+    max-width: calc(100vw - 20px) !important;
+  }
+
+  .flatpickr-months,
+  .flatpickr-weekdays,
+  .flatpickr-days {
+    width: 100% !important;
+  }
 }

@@ -72,6 +72,7 @@ export default function DateTimePicker({
       minDate,
       maxDate,
       mode,
+      disableMobile: true, // Force flatpickr on mobile instead of native picker
       plugins: [
         confirmDatePlugin({
           confirmText: 'OK',

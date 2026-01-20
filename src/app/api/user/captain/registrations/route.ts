@@ -141,15 +141,18 @@ export async function GET(request: NextRequest) {
     // Filter by date if not including past
     let filteredRegistrations = enrichedRegistrations
     if (!includePast) {
-      const today = new Date()
+      // Extract date portion (YYYY-MM-DD) for consistent comparison
+      const todayDateString = new Date().toISOString().split('T')[0]
       filteredRegistrations = enrichedRegistrations.filter(registration => {
         // Check registration end_date first
         if (registration.end_date) {
-          return new Date(registration.end_date) >= today
+          const endDateString = registration.end_date.split('T')[0]
+          return endDateString >= todayDateString
         }
         // Fall back to season end_date
         if (registration.season_end_date) {
-          return new Date(registration.season_end_date) >= today
+          const seasonEndDateString = registration.season_end_date.split('T')[0]
+          return seasonEndDateString >= todayDateString
         }
         // If no dates, include it
         return true

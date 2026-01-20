@@ -71,22 +71,27 @@ export default function CaptainDashboardPage() {
     }
   }
 
-  const isRegistrationActive = (registration: CaptainRegistration): boolean => {
+  const isRegistrationActive = (registration: CaptainRegistration, today: string): boolean => {
     // For events and scrimmages with dates set, use the event end_date
     if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
-      const eventEndDate = new Date(registration.end_date)
-      return eventEndDate >= new Date()
+      // Extract date portion (YYYY-MM-DD) for comparison
+      const eventEndDate = registration.end_date.split('T')[0]
+      return eventEndDate >= today
     }
 
     // For teams or events/scrimmages without dates, use season end_date
     if (!registration.season_end_date) return false
-    const seasonEndDate = new Date(registration.season_end_date)
-    return seasonEndDate >= new Date()
+    // Extract date portion (YYYY-MM-DD) for comparison
+    const seasonEndDate = registration.season_end_date.split('T')[0]
+    return seasonEndDate >= today
   }
 
+  // Capture current date once for consistent evaluation
+  const todayDateString = new Date().toISOString().split('T')[0]
+
   // Separate current and past teams
-  const currentTeams = registrations.filter(r => isRegistrationActive(r))
-  const pastTeams = registrations.filter(r => !isRegistrationActive(r))
+  const currentTeams = registrations.filter(r => isRegistrationActive(r, todayDateString))
+  const pastTeams = registrations.filter(r => !isRegistrationActive(r, todayDateString))
   const hasPastTeams = pastTeams.length > 0
   const hasCurrentTeams = currentTeams.length > 0
   const hasNoTeams = registrations.length === 0 && !loading

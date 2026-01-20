@@ -50,8 +50,21 @@ html {
   }
 }
 
-/* On mobile: hide the alt input and show the native input for native picker */
+/* On mobile: show the raw input and hide the alt input for native picker */
 @media (max-width: 640px) {
+  .flatpickr-input {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    min-height: 38px !important;
+    padding: 0.625rem 0.75rem !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.875rem !important;
+  }
+
   input.flatpickr-input + input {
     display: none !important;
   }

@@ -22,7 +22,24 @@ export default function GameCreationForm({
   const [durationMinutes, setDurationMinutes] = useState('90') // Default to 90 minutes for games
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showDescriptionWarning, setShowDescriptionWarning] = useState(false)
   const { showSuccess, showError } = useToast()
+
+  const handleDateChange = (newDate: string) => {
+    setGameDate(newDate)
+    // Show warning if setting a date but description is empty
+    if (newDate && !gameDescription.trim()) {
+      setShowDescriptionWarning(true)
+    }
+  }
+
+  const handleDescriptionChange = (newDescription: string) => {
+    setGameDescription(newDescription)
+    // Hide warning once description is entered
+    if (newDescription.trim()) {
+      setShowDescriptionWarning(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,6 +101,7 @@ export default function GameCreationForm({
       setGameDate('')
       setDurationMinutes('90') // Reset to default
       setError('') // Clear any previous errors
+      setShowDescriptionWarning(false) // Clear warning
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create game'
@@ -113,7 +131,7 @@ export default function GameCreationForm({
             type="text"
             id="gameDescription"
             value={gameDescription}
-            onChange={(e) => setGameDescription(e.target.value)}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
             placeholder="e.g., Game vs Team A, Practice Session, Tournament Game"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={loading}
@@ -124,15 +142,24 @@ export default function GameCreationForm({
           </p>
         </div>
 
-        <EventDateTimeInput
-          startDate={gameDate}
-          durationMinutes={durationMinutes}
-          onStartDateChange={setGameDate}
-          onDurationChange={setDurationMinutes}
-          registrationType="game"
-          required={true}
-          disabled={loading}
-        />
+        <div>
+          <EventDateTimeInput
+            startDate={gameDate}
+            durationMinutes={durationMinutes}
+            onStartDateChange={handleDateChange}
+            onDurationChange={setDurationMinutes}
+            registrationType="game"
+            required={true}
+            disabled={loading}
+          />
+          {showDescriptionWarning && (
+            <div className="mt-2 p-3 bg-orange-50 border border-orange-300 rounded-md">
+              <p className="text-orange-800 text-sm font-medium">
+                ⚠️ Don't forget to enter a game description above!
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="flex space-x-3 pt-4">
           <button

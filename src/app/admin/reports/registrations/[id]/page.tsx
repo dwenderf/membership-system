@@ -208,8 +208,8 @@ export default function RegistrationDetailPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Back Navigation */}
-      <div className="mb-6">
+      {/* Navigation - Top */}
+      <div className="mb-4">
         <Link
           href="/admin/reports/registrations"
           className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
@@ -768,6 +768,19 @@ export default function RegistrationDetailPage() {
           }}
         />
       )}
+
+      {/* Navigation - Bottom */}
+      <div className="mt-6">
+        <Link
+          href="/admin/reports/registrations"
+          className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Return to Registrations
+        </Link>
+      </div>
 
     </div>
   )

@@ -108,6 +108,22 @@ export default function XeroConnectPage() {
   return (
     <div className="p-6">
       <div className="max-w-2xl mx-auto">
+        {/* Navigation - Top */}
+        <div className="mb-4 flex gap-4">
+          <Link
+            href="/admin/accounting/xero"
+            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+          >
+            ← Back to Xero Integration
+          </Link>
+          <Link
+            href="/admin/accounting"
+            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+          >
+            Accounting Overview
+          </Link>
+        </div>
+
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Connect to Xero</h1>
           <p className="mt-2 text-sm text-gray-600">
@@ -221,16 +237,15 @@ export default function XeroConnectPage() {
           </ul>
         </div>
 
-        {/* Navigation */}
-        <div className="mt-6 flex justify-between">
-          <Link 
+        {/* Navigation - Bottom */}
+        <div className="mt-6 flex gap-4">
+          <Link
             href="/admin/accounting/xero"
             className="text-blue-600 hover:text-blue-500 text-sm font-medium"
           >
             ← Back to Xero Integration
           </Link>
-          
-          <Link 
+          <Link
             href="/admin/accounting"
             className="text-blue-600 hover:text-blue-500 text-sm font-medium"
           >

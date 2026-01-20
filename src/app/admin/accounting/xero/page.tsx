@@ -155,6 +155,22 @@ function XeroIntegrationContent() {
 
   return (
     <div className="p-6">
+      {/* Navigation - Top */}
+      <div className="mb-4 flex gap-4">
+        <Link
+          href="/admin/accounting"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          ← Back to Accounting Integration
+        </Link>
+        <Link
+          href="/admin"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          Admin Dashboard
+        </Link>
+      </div>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Xero Integration</h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -333,16 +349,15 @@ function XeroIntegrationContent() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="mt-6 flex justify-between">
-        <Link 
+      {/* Navigation - Bottom */}
+      <div className="mt-6 flex gap-4">
+        <Link
           href="/admin/accounting"
           className="text-blue-600 hover:text-blue-500 text-sm font-medium"
         >
           ← Back to Accounting Integration
         </Link>
-        
-        <Link 
+        <Link
           href="/admin"
           className="text-blue-600 hover:text-blue-500 text-sm font-medium"
         >

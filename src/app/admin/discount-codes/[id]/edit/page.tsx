@@ -146,6 +146,16 @@ export default function EditDiscountCodePage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Navigation - Top */}
+          <div className="mb-4">
+            <Link
+              href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to Category Codes
+            </Link>
+          </div>
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Edit Discount Code</h1>
@@ -317,6 +327,16 @@ export default function EditDiscountCodePage() {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Navigation - Bottom */}
+          <div className="mt-6">
+            <Link
+              href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to Category Codes
+            </Link>
           </div>
         </div>
       </div>

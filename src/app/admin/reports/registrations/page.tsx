@@ -26,6 +26,10 @@ interface Registration {
     max_capacity: number | null
     percentage_full: number | null
   }>
+  captains?: Array<{
+    first_name: string
+    last_name: string
+  }>
 }
 
 export default function RegistrationReportsPage() {
@@ -251,6 +255,22 @@ export default function RegistrationReportsPage() {
                     {registration.category_breakdown.length > 3 && (
                       <p className="text-xs text-gray-500">+{registration.category_breakdown.length - 3} more categories</p>
                     )}
+                  </div>
+                )}
+
+                {/* Captains */}
+                {registration.captains && registration.captains.length > 0 && (
+                  <div className="mb-3 pb-3 border-b border-gray-200">
+                    <div className="text-sm">
+                      <span className="text-gray-600 font-semibold">Captains:</span>
+                      <div className="mt-1 text-xs text-gray-700">
+                        {registration.captains.map((captain, idx) => (
+                          <div key={idx}>
+                            {captain.first_name} {captain.last_name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 

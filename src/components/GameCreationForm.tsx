@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { convertToNYTimezone } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
@@ -25,26 +25,18 @@ export default function GameCreationForm({
   const [showDescriptionWarning, setShowDescriptionWarning] = useState(false)
   const { showSuccess, showError } = useToast()
 
+  // Watch for changes to both gameDate and gameDescription to show/hide warning
+  useEffect(() => {
+    // Only show warning if date is set but description is empty
+    setShowDescriptionWarning(gameDate !== '' && gameDescription.trim() === '')
+  }, [gameDate, gameDescription])
+
   const handleDateChange = (newDate: string) => {
     setGameDate(newDate)
-    // Show warning if setting a date but description is empty
-    if (newDate && !gameDescription.trim()) {
-      setShowDescriptionWarning(true)
-    } else {
-      // Hide warning if description exists or date is cleared
-      setShowDescriptionWarning(false)
-    }
   }
 
   const handleDescriptionChange = (newDescription: string) => {
     setGameDescription(newDescription)
-    // Show/hide warning based on whether description is filled and date is set
-    if (newDescription.trim()) {
-      setShowDescriptionWarning(false)
-    } else if (gameDate) {
-      // Show warning if description is empty and date is already set
-      setShowDescriptionWarning(true)
-    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,9 +135,13 @@ export default function GameCreationForm({
             disabled={loading}
             required
           />
-          <p className="text-xs text-gray-500 mt-1">
-            Describe the game or event that needs alternates
-          </p>
+          {showDescriptionWarning && (
+            <div className="mt-2 p-3 bg-orange-50 border border-orange-300 rounded-md">
+              <p className="text-orange-800 text-sm font-medium">
+                ⚠️ Don't forget to enter a game description!
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -158,13 +154,6 @@ export default function GameCreationForm({
             required={true}
             disabled={loading}
           />
-          {showDescriptionWarning && (
-            <div className="mt-2 p-3 bg-orange-50 border border-orange-300 rounded-md">
-              <p className="text-orange-800 text-sm font-medium">
-                ⚠️ Don't forget to enter a game description above!
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="flex space-x-3 pt-4">

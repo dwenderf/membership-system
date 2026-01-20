@@ -68,7 +68,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
           <div className="mb-4">
             <Link
               href="/user/captain"
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               ← Back to My Teams
             </Link>
@@ -92,7 +92,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
           <div className="mt-6">
             <Link
               href="/user/captain"
-              className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               ← Back to My Teams
             </Link>

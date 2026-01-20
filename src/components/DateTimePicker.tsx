@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react'
 import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
+import confirmDatePlugin from 'flatpickr/dist/plugins/confirmDate/confirmDate'
+import 'flatpickr/dist/plugins/confirmDate/confirmDate.css'
 import { Instance } from 'flatpickr/dist/types/instance'
 
 interface DateTimePickerProps {
@@ -70,6 +72,13 @@ export default function DateTimePicker({
       minDate,
       maxDate,
       mode,
+      plugins: [
+        confirmDatePlugin({
+          confirmText: 'OK',
+          showAlways: false,
+          theme: 'light'
+        })
+      ],
       onChange: (selectedDates, dateStr) => {
         // Convert to datetime-local format (YYYY-MM-DDTHH:MM)
         if (selectedDates.length > 0) {

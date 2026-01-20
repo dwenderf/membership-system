@@ -48,3 +48,20 @@ input.flatpickr-input + input {
   padding-top: 0.625rem !important;
   padding-bottom: 0.625rem !important;
 }
+
+/* Confirm button styling */
+.flatpickr-confirm {
+  background-color: #2563eb !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  margin: 8px !important;
+  font-size: 14px !important;
+}
+
+.flatpickr-confirm:hover {
+  background-color: #1d4ed8 !important;
+}

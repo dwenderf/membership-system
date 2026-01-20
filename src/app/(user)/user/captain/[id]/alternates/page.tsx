@@ -57,7 +57,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
     hasAccess: true,
     isAdmin: access.isAdmin,
     isCaptain: access.isCaptain,
-    accessibleRegistrations: [registrationId]
+    accessibleRegistrations: access.isAdmin ? undefined : [registrationId]
   }
 
   return (

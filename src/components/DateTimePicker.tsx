@@ -75,7 +75,7 @@ export default function DateTimePicker({
       plugins: [
         confirmDatePlugin({
           confirmText: 'OK',
-          showAlways: false,
+          showAlways: true,
           theme: 'light'
         })
       ],

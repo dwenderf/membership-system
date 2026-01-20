@@ -65,3 +65,19 @@ input.flatpickr-input + input {
 .flatpickr-confirm:hover {
   background-color: #1d4ed8 !important;
 }
+
+/* Hide the checkmark icon */
+.flatpickr-confirm::before {
+  display: none !important;
+}
+
+/* Disabled state styling */
+.flatpickr-confirm:disabled {
+  background-color: #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}
+
+.flatpickr-confirm:disabled:hover {
+  background-color: #9ca3af !important;
+}

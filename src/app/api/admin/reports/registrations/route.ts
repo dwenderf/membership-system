@@ -119,18 +119,37 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist data', { error: waitlistError, registrationId }, 'error')
       }
 
-      // Get alternate selections for this registration
-      const { data: alternateSelectionsData, error: alternatesError } = await adminSupabase
-        .from('alternate_selections')
+      // Get ALL users who registered as alternates for this registration
+      const { data: userAlternateRegistrations, error: userAlternatesError } = await adminSupabase
+        .from('user_alternate_registrations')
         .select(`
-          *,
-          users!alternate_selections_user_id_fkey (
+          id,
+          user_id,
+          registration_id,
+          discount_code_id,
+          created_at,
+          users!inner (
             id,
             email,
             first_name,
             last_name,
             is_lgbtq,
             is_goalie
+          )
+        `)
+        .eq('registration_id', registrationId)
+
+      if (userAlternatesError) {
+        logger.logSystem('registration-reports-api', 'Error fetching user alternates', { error: userAlternatesError, registrationId }, 'error')
+      }
+
+      // Get alternate selections for this registration to calculate times_played and total_paid
+      const { data: alternateSelectionsData, error: alternatesError } = await adminSupabase
+        .from('alternate_selections')
+        .select(`
+          *,
+          users!alternate_selections_user_id_fkey (
+            id
           ),
           alternate_registrations!inner (
             id,
@@ -143,7 +162,7 @@ export async function GET(request: NextRequest) {
         .order('selected_at', { ascending: false })
 
       if (alternatesError) {
-        logger.logSystem('registration-reports-api', 'Error fetching alternates data', { error: alternatesError, registrationId }, 'error')
+        logger.logSystem('registration-reports-api', 'Error fetching alternates selections data', { error: alternatesError, registrationId }, 'error')
       }
 
       // Get discount usage for waitlist users to check seasonal limits
@@ -263,7 +282,7 @@ export async function GET(request: NextRequest) {
         }
       }) || []
 
-      // Process alternate selections data - group by user and calculate stats
+      // Build alternates map from ALL registered alternates, not just those who have played
       const alternatesMap = new Map<string, {
         user_id: string
         first_name: string
@@ -281,10 +300,9 @@ export async function GET(request: NextRequest) {
         }>
       }>()
 
-      alternateSelectionsData?.forEach(selection => {
-        const user = Array.isArray(selection.users) ? selection.users[0] : selection.users
-        const alternateReg = Array.isArray(selection.alternate_registrations) ? selection.alternate_registrations[0] : selection.alternate_registrations
-
+      // First, add ALL registered alternates to the map (even if they haven't played)
+      userAlternateRegistrations?.forEach(altReg => {
+        const user = Array.isArray(altReg.users) ? altReg.users[0] : altReg.users
         if (!user) return
 
         const userId = user.id
@@ -296,6 +314,30 @@ export async function GET(request: NextRequest) {
             email: user.email || 'Unknown',
             is_lgbtq: user.is_lgbtq,
             is_goalie: user.is_goalie || false,
+            times_played: 0,
+            total_paid: 0,
+            selections: []
+          })
+        }
+      })
+
+      // Then, add selection details for those who have played
+      alternateSelectionsData?.forEach(selection => {
+        const user = Array.isArray(selection.users) ? selection.users[0] : selection.users
+        const alternateReg = Array.isArray(selection.alternate_registrations) ? selection.alternate_registrations[0] : selection.alternate_registrations
+
+        if (!user) return
+
+        const userId = user.id
+        // Get or create the user entry (should already exist from above, but defensive)
+        if (!alternatesMap.has(userId)) {
+          alternatesMap.set(userId, {
+            user_id: userId,
+            first_name: '',
+            last_name: '',
+            email: 'Unknown',
+            is_lgbtq: null,
+            is_goalie: false,
             times_played: 0,
             total_paid: 0,
             selections: []
@@ -379,16 +421,11 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
       }
 
-      // Get alternates counts for each registration
-      const { data: alternatesCounts, error: alternatesError } = await adminSupabase
-        .from('alternate_selections')
-        .select(`
-          user_id,
-          alternate_registrations!inner (
-            registration_id
-          )
-        `)
-        .in('alternate_registrations.registration_id', registrationIds)
+      // Get alternates counts for each registration (all registered alternates, not just those who played)
+      const { data: alternatesCounts, error: alternatesError} = await adminSupabase
+        .from('user_alternate_registrations')
+        .select('user_id, registration_id')
+        .in('registration_id', registrationIds)
 
       if (alternatesError) {
         logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
@@ -440,9 +477,8 @@ export async function GET(request: NextRequest) {
 
       // Create a map of unique alternates count by registration_id
       const alternatesCountMap = new Map<string, Set<string>>()
-      alternatesCounts?.forEach(selection => {
-        const alternateReg = Array.isArray(selection.alternate_registrations) ? selection.alternate_registrations[0] : selection.alternate_registrations
-        const regId = alternateReg?.registration_id
+      alternatesCounts?.forEach(altReg => {
+        const regId = altReg.registration_id
 
         if (regId) {
           if (!alternatesCountMap.has(regId)) {
@@ -450,7 +486,7 @@ export async function GET(request: NextRequest) {
           }
 
           // Add user_id to the set (automatically handles uniqueness)
-          alternatesCountMap.get(regId)!.add(selection.user_id)
+          alternatesCountMap.get(regId)!.add(altReg.user_id)
         }
       })
 

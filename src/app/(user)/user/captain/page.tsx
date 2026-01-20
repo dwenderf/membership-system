@@ -257,6 +257,14 @@ export default function CaptainDashboardPage() {
                   >
                     View Roster
                   </Link>
+                  {registration.alternates_enabled && (
+                    <Link
+                      href={`/user/captain/${registration.id}/alternates`}
+                      className="flex-1 text-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                    >
+                      Manage Alternates
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}

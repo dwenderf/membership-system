@@ -59,7 +59,6 @@ export default function EventDateTimeInput({
           disabled={disabled}
           placeholder="Select date and time..."
         />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Time in 5-minute increments</p>
 
         {isPastDate && (
           <div className="mt-2 p-2 bg-yellow-50 border border-yellow-300 rounded-md dark:bg-yellow-900/20 dark:border-yellow-800">
@@ -87,7 +86,7 @@ export default function EventDateTimeInput({
             required={required}
             disabled={disabled}
             minMinutes={1}
-            roundToNearest={5}
+            roundToNearest={1}
           />
         </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">

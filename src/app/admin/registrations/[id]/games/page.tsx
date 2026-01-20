@@ -65,7 +65,7 @@ export default function RegistrationGamesPage() {
       setRegistration(regData)
 
       // Fetch games for this registration
-      const response = await fetch(`/api/alternate-registrations?registration_id=${registrationId}`)
+      const response = await fetch(`/api/alternate-registrations?registrationId=${registrationId}`)
 
       if (!response.ok) {
         const errorData = await response.json()

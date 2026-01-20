@@ -213,14 +213,14 @@ export default async function UserDashboardPage() {
   })
 
   return (
-    <div className="px-4 py-6 sm:px-0">
+    <div className="px-4 py-3 sm:px-0">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">
           Welcome back, {userProfile?.first_name}!
         </h1>
 
         {/* Membership status subtitle */}
-        <div className="mt-2 text-sm">
+        <div className="mb-6 text-sm">
           {!hasActiveMembership && recentlyExpired.length === 0 ? (
             // No active or recently expired memberships
             <p className="text-gray-600">
@@ -259,27 +259,38 @@ export default async function UserDashboardPage() {
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
+        {/* Action Tiles - constrained to grid width */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
           <a
             href="/user/browse-memberships"
-            className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+            className="group bg-white border-l-4 border-l-blue-600 overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
-            <span className="mr-2 text-lg">🎫</span>
-            Browse Memberships
+            <div className="flex items-center">
+              <span className="mr-3 text-2xl">🎫</span>
+              <span className="text-base font-medium text-gray-900">Browse Memberships</span>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </a>
           <a
             href="/user/browse-registrations"
-            className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
+            className="group bg-white border-l-4 border-l-blue-600 overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
-            <span className="mr-2 text-lg">🏒</span>
-            Browse Registrations
+            <div className="flex items-center">
+              <span className="mr-3 text-2xl">🏒</span>
+              <span className="text-base font-medium text-gray-900">Browse Registrations</span>
+            </div>
+            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </a>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* My Teams */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-gray-50 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Teams
@@ -409,7 +420,7 @@ export default async function UserDashboardPage() {
         </div>
 
         {/* My Upcoming Events */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-gray-50 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Upcoming Events

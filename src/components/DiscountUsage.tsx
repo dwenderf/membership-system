@@ -56,7 +56,7 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
 
   if (loading) {
     return (
-      <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="bg-gray-50 overflow-hidden shadow rounded-lg">
         <div className="p-5">
           <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">My Discount Usage</h3>
           <div className="flex items-center justify-center py-8">

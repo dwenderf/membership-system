@@ -40,12 +40,30 @@ interface WaitlistData {
   is_goalie: boolean
 }
 
+interface AlternateData {
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+  is_lgbtq: boolean | null
+  is_goalie: boolean
+  times_played: number
+  total_paid: number
+  selections: Array<{
+    game_description: string
+    game_date: string
+    amount_charged: number
+    selected_at: string
+  }>
+}
+
 export default function CaptainRosterPage() {
   const params = useParams()
   const registrationId = params.id as string
 
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
   const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
+  const [alternatesData, setAlternatesData] = useState<AlternateData[]>([])
   const [registrationName, setRegistrationName] = useState('')
   const [seasonName, setSeasonName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -53,6 +71,8 @@ export default function CaptainRosterPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<keyof RegistrationData>('first_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [alternatesSortField, setAlternatesSortField] = useState<keyof AlternateData>('first_name')
+  const [alternatesSortDirection, setAlternatesSortDirection] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     if (registrationId) {
@@ -76,6 +96,7 @@ export default function CaptainRosterPage() {
       const result = await response.json()
       setRegistrationData(result.data || [])
       setWaitlistData(result.waitlistData || [])
+      setAlternatesData(result.alternatesData || [])
 
       // Set title information from first registration record
       if (result.data && result.data.length > 0) {
@@ -95,6 +116,15 @@ export default function CaptainRosterPage() {
     } else {
       setSortField(field)
       setSortDirection('asc')
+    }
+  }
+
+  const handleAlternatesSort = (field: keyof AlternateData) => {
+    if (alternatesSortField === field) {
+      setAlternatesSortDirection(alternatesSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setAlternatesSortField(field)
+      setAlternatesSortDirection('asc')
     }
   }
 
@@ -159,11 +189,11 @@ export default function CaptainRosterPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Back Link */}
+      {/* Navigation - Top */}
       <div className="mb-4">
         <Link
           href="/user/captain"
-          className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
         >
           ← Back to My Teams
         </Link>
@@ -335,7 +365,7 @@ export default function CaptainRosterPage() {
 
           {/* Waitlist */}
           {waitlistData.length > 0 && (
-            <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">
                   Waitlist ({waitlistData.length})
@@ -391,6 +421,120 @@ export default function CaptainRosterPage() {
               </div>
             </div>
           )}
+
+          {/* Alternates */}
+          {alternatesData.length > 0 && (() => {
+            // Filter alternates data by search term
+            const filteredAlternatesData = alternatesData.filter(alternate => {
+              const fullName = `${alternate.first_name} ${alternate.last_name}`.toLowerCase()
+              const email = alternate.email.toLowerCase()
+              const search = searchTerm.toLowerCase()
+              return fullName.includes(search) || email.includes(search)
+            })
+
+            // Sort alternates data
+            const sortedAlternatesData = [...filteredAlternatesData].sort((a, b) => {
+              let aValue = a[alternatesSortField]
+              let bValue = b[alternatesSortField]
+
+              if (alternatesSortField === 'is_lgbtq') {
+                aValue = getLgbtqStatusLabel(a.is_lgbtq)
+                bValue = getLgbtqStatusLabel(b.is_lgbtq)
+              } else if (alternatesSortField === 'is_goalie') {
+                aValue = getGoalieStatusLabel(a.is_goalie)
+                bValue = getGoalieStatusLabel(b.is_goalie)
+              }
+
+              if (alternatesSortField === 'times_played') {
+                const aNum = typeof aValue === 'number' ? aValue : 0
+                const bNum = typeof bValue === 'number' ? bValue : 0
+                return alternatesSortDirection === 'asc' ? aNum - bNum : bNum - aNum
+              }
+
+              if (typeof aValue === 'string' && typeof bValue === 'string') {
+                return alternatesSortDirection === 'asc'
+                  ? aValue.localeCompare(bValue)
+                  : bValue.localeCompare(aValue)
+              }
+
+              return 0
+            })
+
+            return (
+              <div className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Alternates ({filteredAlternatesData.length}{filteredAlternatesData.length !== alternatesData.length ? ` of ${alternatesData.length}` : ''})
+                  </h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {[
+                          { key: 'first_name', label: 'Name' },
+                          { key: 'email', label: 'Email' },
+                          { key: 'is_lgbtq', label: 'LGBTQ+' },
+                          { key: 'is_goalie', label: 'Goalie' },
+                          { key: 'times_played', label: 'Times Played' }
+                        ].map(({ key, label }) => (
+                          <th
+                            key={key}
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => handleAlternatesSort(key as keyof AlternateData)}
+                          >
+                            <div className="flex items-center">
+                              {label}
+                              {alternatesSortField === key && (
+                                <span className="ml-1">
+                                  {alternatesSortDirection === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {sortedAlternatesData.map((alternate) => (
+                        <tr key={alternate.user_id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {alternate.first_name} {alternate.last_name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {alternate.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLgbtqStatusStyles(alternate.is_lgbtq)}`}>
+                              {getLgbtqStatusLabel(alternate.is_lgbtq)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getGoalieStatusStyles(alternate.is_goalie)}`}>
+                              {getGoalieStatusLabel(alternate.is_goalie)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                            {alternate.times_played}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Navigation - Bottom */}
+          <div className="mt-8">
+            <Link
+              href="/user/captain"
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to My Teams
+            </Link>
+          </div>
         </>
       )}
     </div>

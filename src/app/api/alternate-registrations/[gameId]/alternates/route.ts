@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
+import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -17,17 +18,6 @@ export async function GET(
     }
 
     const gameId = params.gameId
-
-    // Check if user is admin (for now, we'll add captain check later)
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     // Get game details to verify it exists and get registration info
     const { data: game, error: gameError } = await supabase
@@ -50,6 +40,12 @@ export async function GET(
 
     if (gameError || !game) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+    }
+
+    // Check if user has access to this registration's alternates (admin or captain)
+    const hasAccess = await canAccessRegistrationAlternates(game.registration_id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'You do not have access to manage alternates for this registration' }, { status: 403 })
     }
 
     const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations

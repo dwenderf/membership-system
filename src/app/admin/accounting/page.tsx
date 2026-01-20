@@ -555,6 +555,16 @@ export default function AccountingIntegrationPage() {
 
   return (
     <div className="p-6">
+      {/* Navigation - Top */}
+      <div className="mb-4">
+        <Link
+          href="/admin"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          ← Back to Admin Dashboard
+        </Link>
+      </div>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Accounting Integration</h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -996,9 +1006,9 @@ export default function AccountingIntegrationPage() {
 
       </div>
 
-      {/* Return to Admin Link */}
+      {/* Navigation - Bottom */}
       <div className="mt-6">
-        <Link 
+        <Link
           href="/admin"
           className="text-blue-600 hover:text-blue-500 text-sm font-medium"
         >

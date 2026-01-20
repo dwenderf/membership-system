@@ -58,6 +58,16 @@ export default async function RegistrationsPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Navigation - Top */}
+          <div className="mb-4">
+            <Link
+              href="/admin"
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to Admin Dashboard
+            </Link>
+          </div>
+
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
@@ -122,7 +132,7 @@ export default async function RegistrationsPage() {
             <RegistrationsList registrations={registrations} />
           )}
 
-          {/* Back to Admin Dashboard */}
+          {/* Navigation - Bottom */}
           <div className="mt-6">
             <Link
               href="/admin"

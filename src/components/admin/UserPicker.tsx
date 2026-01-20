@@ -111,6 +111,12 @@ export default function UserPicker({
           return
         }
 
+        // Enforce 2-character minimum to match hint
+        if (searchTerm.trim().length < 2) {
+          setFilteredUsers([])
+          return
+        }
+
         const lowerSearch = searchTerm.toLowerCase()
         const filtered = availableUsers.filter(
           user =>

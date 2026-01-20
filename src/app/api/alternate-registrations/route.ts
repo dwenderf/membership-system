@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
+import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 
 // GET /api/alternate-registrations - Get games for a registration
 export async function GET(request: NextRequest) {
@@ -21,15 +22,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Registration ID is required' }, { status: 400 })
     }
 
-    // Check if user is admin (for now, we'll add captain check later)
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    // Check if user has access (admin or captain)
+    const hasAccess = await canAccessRegistrationAlternates(registrationId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'You do not have access to manage alternates for this registration' }, { status: 403 })
     }
 
     // Get registration details to verify it exists and get pricing info
@@ -158,15 +154,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Game description is required' }, { status: 400 })
     }
 
-    // Check if user is admin (for now, we'll add captain check later)
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    // Check if user has access (admin or captain)
+    const hasAccess = await canAccessRegistrationAlternates(registrationId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'You do not have access to manage alternates for this registration' }, { status: 403 })
     }
 
     // Verify registration exists and allows alternates

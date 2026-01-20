@@ -47,7 +47,7 @@ export default function CaptainManager({
       setCaptains(data.captains || [])
     } catch (err) {
       console.error('Error fetching captains:', err)
-      setError('No captains assigned')
+      setError('Failed to load captains. Please try again.')
     } finally {
       setLoading(false)
     }

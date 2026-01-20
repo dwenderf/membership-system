@@ -169,6 +169,16 @@ function SecurityContent() {
 
   return (
     <div>
+      {/* Navigation - Top */}
+      <div className="mb-4">
+        <a
+          href="/admin"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          ← Back to Admin Dashboard
+        </a>
+      </div>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Security & Audit Logs</h1>
       </div>
@@ -491,7 +501,7 @@ function SecurityContent() {
         </>
       )}
 
-      {/* Return to Admin Link */}
+      {/* Navigation - Bottom */}
       <div className="mt-6">
         <a
           href="/admin"

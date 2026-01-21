@@ -262,24 +262,24 @@ export default async function UserDashboardPage() {
         {/* Action Tiles - constrained to grid width */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
           <a
-            href="/user/browse-memberships"
-            className="group bg-white border-l-4 border-l-blue-600 overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
+            href="/user/browse-registrations"
+            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center">
-              <span className="mr-3 text-2xl">🎫</span>
-              <span className="text-base font-medium text-gray-900">Browse Memberships</span>
+              <span className="mr-3 text-2xl">🏒</span>
+              <span className="text-base font-medium text-gray-900">Browse Registrations</span>
             </div>
             <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </a>
           <a
-            href="/user/browse-registrations"
-            className="group bg-white border-l-4 border-l-blue-600 overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
+            href="/user/browse-memberships"
+            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center">
-              <span className="mr-3 text-2xl">🏒</span>
-              <span className="text-base font-medium text-gray-900">Browse Registrations</span>
+              <span className="mr-3 text-2xl">🎫</span>
+              <span className="text-base font-medium text-gray-900">Browse Memberships</span>
             </div>
             <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -290,7 +290,7 @@ export default async function UserDashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* My Teams */}
-        <div className="bg-gray-50 overflow-hidden shadow rounded-lg">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Teams
@@ -420,7 +420,7 @@ export default async function UserDashboardPage() {
         </div>
 
         {/* My Upcoming Events */}
-        <div className="bg-gray-50 overflow-hidden shadow rounded-lg">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Upcoming Events

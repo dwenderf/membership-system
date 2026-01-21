@@ -50,6 +50,15 @@ export async function POST(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
+    // Validate critical fields exist before using them
+    if (!game.registration_id) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration_id' }, { status: 500 })
+    }
+
+    if (!game.registrations) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration details' }, { status: 500 })
+    }
+
     // Check if user has access to this registration's alternates (admin or captain)
     const hasAccess = await canAccessRegistrationAlternates(game.registration_id)
     if (!hasAccess) {
@@ -58,13 +67,14 @@ export async function POST(
 
     const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations
     if (!registration || !registration.allow_alternates) {
-      return NextResponse.json({ 
-        error: 'This registration does not allow alternates' 
+      return NextResponse.json({
+        error: 'This registration does not allow alternates'
       }, { status: 400 })
     }
 
+    // Access verified - use admin client to bypass RLS for data queries
     // Get alternate registration details
-    const { data: alternateRegistrations, error: alternatesError } = await supabase
+    const { data: alternateRegistrations, error: alternatesError } = await adminSupabase
       .from('user_alternate_registrations')
       .select(`
         id,
@@ -91,7 +101,7 @@ export async function POST(
     }
 
     // Check for existing selections to prevent duplicates
-    const { data: existingSelections } = await supabase
+    const { data: existingSelections } = await adminSupabase
       .from('alternate_selections')
       .select('user_id')
       .eq('alternate_registration_id', gameId)

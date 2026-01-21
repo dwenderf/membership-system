@@ -374,19 +374,7 @@ export default async function UserDashboardPage() {
                   })}
 
                   {/* Show waitlist-only team registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || registration.type !== 'team') return false
-                    if (!registration.season) return false
-                    const seasonEndDate = new Date(registration.season.end_date)
-                    if (seasonEndDate < now) return false
-                    // Only show if not already in team registrations or alternates
-                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
-                           !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
-                  }).map((waitlistEntry, index: number) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
-
+                  {(() => {
                     const alternateOnlyCount = userAlternateRegistrations?.filter(alt => {
                       const reg = alt.registration
                       if (!reg || reg.type !== 'team') return false
@@ -396,7 +384,20 @@ export default async function UserDashboardPage() {
                       return !teamRegistrations.some((r: any) => r.registration?.id === reg.id)
                     }).length || 0
 
-                    const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || registration.type !== 'team') return false
+                      if (!registration.season) return false
+                      const seasonEndDate = new Date(registration.season.end_date)
+                      if (seasonEndDate < now) return false
+                      // Only show if not already in team registrations or alternates
+                      return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
+                             !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
+
+                      const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
 
                     return (
                       <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
@@ -414,7 +415,8 @@ export default async function UserDashboardPage() {
                         </p>
                       </div>
                     )
-                  })}
+                  })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">
@@ -527,16 +529,7 @@ export default async function UserDashboardPage() {
                   })}
 
                   {/* Show waitlist-only event registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
-                    if (!registration.end_date || new Date(registration.end_date) < now) return false
-                    // Only show if not already in event registrations
-                    return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((waitlistEntry, index: number) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
-
+                  {(() => {
                     const alternateSelectionCount = userAlternateSelections?.filter(sel => {
                       const altReg = sel.alternate_registration
                       const reg = altReg?.registration
@@ -546,7 +539,17 @@ export default async function UserDashboardPage() {
                       return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
                     }).length || 0
 
-                    const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
+                      if (!registration.end_date || new Date(registration.end_date) < now) return false
+                      // Only show if not already in event registrations
+                      return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
+
+                      const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
 
                     return (
                       <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
@@ -574,7 +577,8 @@ export default async function UserDashboardPage() {
                         )}
                       </div>
                     )
-                  })}
+                  })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">

@@ -9,10 +9,11 @@
 
 ## The Opportunity
 
-The NYCPHA hosts the **Chelsea Challenge** annually on Memorial Day Weekend - our signature tournament featuring 3-4 divisions with up to 60 participants.
+The NYCPHA hosts the **Chelsea Challenge** annually on Memorial Day Weekend - our signature tournament featuring 3-4 divisions with up to 6 teams per division.
 
 **Current Challenge:**
 Tournament registration is currently handled manually or through external systems, which means:
+
 - Participants create separate accounts on different platforms
 - Payment and accounting must be reconciled manually
 - We can't easily see which participants are existing members
@@ -53,6 +54,7 @@ Before registering, the system ensures they have a qualifying membership.
 
 For **existing NYCPHA members**: ✅ Already have what they need
 For **non-members**: Choose between:
+
 - Standard Adult Membership ($400/year) - Full benefits
 - Chelsea Challenge 2025 Membership (FREE) - Tournament only
 
@@ -60,15 +62,17 @@ For **non-members**: Choose between:
 
 **Step 2: Registration Type**
 Participants choose how they're registering:
+
 - **Drop-in:** "I need to be assigned to a team"
-- **Team:** "An admin will assign me to a specific team"
+- **Team:** "I am registering for a specific team" (Admins will add teams to the tournament)
 
 **Step 3: Division Preference** (for drop-in)
 Select preferred skill level: B, C1, C2, or D
 
 **Step 4: Participant Questionnaire**
 We collect information needed for team assignments:
-- Hockey experience (text description)
+
+- Hockey experience (text description, and specific skill questions (rated 1-5) "Backward Skating", "Goal Scorer", etc)
 - Previous teams played on
 - Location / Country (some come from outside USA)
 - Pronouns
@@ -77,6 +81,7 @@ We collect information needed for team assignments:
 
 **Step 5: Payment**
 Secure payment via Stripe (same system we use for memberships)
+
 - Price automatically adjusts based on early bird / regular / late pricing
 - Immediate confirmation email
 
@@ -131,6 +136,7 @@ Admins create tournaments through our existing admin panel:
 **New Section: Admin → Tournaments**
 
 **Create Tournament Form:**
+
 - Tournament name and description
 - Start/end dates
 - Registration window (when registration opens/closes)
@@ -138,6 +144,7 @@ Admins create tournaments through our existing admin panel:
 - Base price
 
 **Pricing Tiers** (optional):
+
 - Early Bird: $150 (March 1 - April 1)
 - Regular: $175 (April 2 - May 1)
 - Late: $200 (May 2 - May 15)
@@ -145,20 +152,23 @@ Admins create tournaments through our existing admin panel:
 *System automatically applies the correct price based on registration date*
 
 **Divisions:**
-- Add divisions (B, C1, C2, D)
+
+- Add divisions (B, C1, C2, D) - Divisions can have custom names if desired.
 - Set max teams per division (e.g., 6 teams)
 
 **Membership Requirements:**
 Select which memberships qualify (can be multiple):
-- ☑ Standard Adult Membership
+
+- ☑ Standard Adult Membership (current)
 - ☑ Chelsea Challenge 2025 Membership
-- ☐ LGBTQ+ Membership
 
 **Privacy Settings:**
-- Set data retention date (e.g., 90 days after tournament)
-- System auto-deletes participant info after this date
+
+- Admins can delete tournament data
+- Users can go to their user settings to delete their tournament specific information after the tournament if desired
 
 **Status:**
+
 - Draft (hidden from public - work in progress)
 - Active (visible and accepting registrations)
 
@@ -177,6 +187,7 @@ Select which memberships qualify (can be multiple):
   45 Total Registrations
   ├─ 42 Paid ($6,300)
   ├─ 2 Pending
+  ├─ 2 Refunded (inactive)
   └─ 1 Failed
 
   12 On Waitlist
@@ -217,6 +228,7 @@ View all registrations with search and filters:
 ```
 
 **Click on any registration** to see full details:
+
 - Contact info (email, phone)
 - Hockey experience and previous teams
 - Location, pronouns, jersey size
@@ -225,6 +237,7 @@ View all registrations with search and filters:
 - Team assignment (if assigned)
 
 **Export to CSV/Excel** for offline work:
+
 - All participant data in spreadsheet format
 - Filter before export (e.g., only C1 division)
 - Useful for printing roster sheets
@@ -351,18 +364,21 @@ When tournament reaches capacity:
 **Options:**
 
 **A) Free Tournament Membership (Simplest)**
+
 - Create "Chelsea Challenge 2025" membership (free)
-- Existing members get it automatically
-- Non-members can get it during registration
+- Existing members get it automatically when registering
+- Non-members can get it during registration (must agree to code of conduct, Terms, etc)
 - Simple to implement, easy to understand
 
 **B) Multiple Qualifying Memberships (Flexible)**
+
 - Admin selects which memberships qualify (checkbox list)
 - Example: Standard Adult OR Chelsea Challenge 2025
 - More complex, but reusable for other events
 - Could be applied system-wide later
 
 **C) Hybrid**
+
 - Use option B for tournaments only
 - Keep single membership requirement for regular teams/events
 
@@ -375,10 +391,13 @@ When tournament reaches capacity:
 **Question:** What should our refund policy be for tournament registrations?
 
 **Context:**
+
 - Early bird pricing means someone might pay $150 now, but current price is $175
 - Need clear policy for cancellations
+- Admins can choose to refund anyone for any reason similar to existing registrations - they will be required to enter reason when refunding
 
 **Considerations:**
+
 - **Early cancellations** (e.g., 30+ days before): Full refund?
 - **Late cancellations** (e.g., <14 days before): Partial or no refund?
 - **No-shows**: No refund?
@@ -391,20 +410,22 @@ When tournament reaches capacity:
 
 **Question:** How long should we keep participant information after tournaments?
 
-**Proposal:** 90 days after tournament ends
+**Proposal:
+ - Admins can choose to delete all tournament information, but not before 90 days after tournament is over
+ - Users can delete their own tournament information, but only after the tournament is over
 
 **What gets deleted:**
+
 - Hockey experience descriptions
 - Previous teams
 - Pronouns, jersey size, positions
 - Location/country
 
 **What's preserved:**
+
 - Basic user account (name, email)
 - Payment records (for accounting)
 - Team assignment (historical record)
-
-**Board Decision Needed:** Approve 90-day retention policy?
 
 ---
 
@@ -412,19 +433,11 @@ When tournament reaches capacity:
 
 **Question:** Should waitlist admissions be automatic or manual?
 
-**Options:**
+**Yes**
 
-**A) Manual (Recommended)**
 - Admin sees waitlist, clicks "Admit" when ready
 - Gives control over timing
 - Can coordinate with pricing tiers
-
-**B) Automatic**
-- When someone refunds, next person auto-admitted
-- Faster but less control
-- Could admit at inconvenient times
-
-**Board Decision Needed:** Manual or automatic?
 
 ---
 
@@ -433,13 +446,10 @@ When tournament reaches capacity:
 **Question:** Should we prioritize this for Chelsea Challenge 2025 (Memorial Day)?
 
 **Timeline Consideration:**
+
 - Memorial Day Weekend 2025 is approximately 4 months away
 - Registration typically opens 2-3 months before event
 - Need time for internal testing before public launch
-
-**Board Decision Needed:**
-- Is Chelsea Challenge 2025 the target?
-- Or test with a smaller tournament first?
 
 ---
 
@@ -448,12 +458,14 @@ When tournament reaches capacity:
 ### If Board Approves
 
 **Immediate Next Steps:**
-1. Resolve the 5 decisions above
+
+1. Resolve the decisions above
 2. Begin development (Phase 1 - Core System)
 3. Create test tournament in staging environment
 4. Internal testing with board members
 
 **Phase 1 (MVP):**
+
 - Public tournament pages and registration
 - Payment processing (Stripe)
 - Accounting sync (Xero)
@@ -462,11 +474,13 @@ When tournament reaches capacity:
 - Dashboard integration
 
 **Phase 2:**
+
 - Team assignment interface
 - Position and jersey number tracking
 - Team assignment notifications
 
 **Phase 3:**
+
 - Waitlist automation
 - Capacity management
 
@@ -475,8 +489,9 @@ When tournament reaches capacity:
 ### Testing Plan
 
 Before public launch:
+
 1. **Internal testing** - Board members test registration flow
-2. **Pilot tournament** - Small event to validate system
+2. **Pilot tournament** - Small event to validate system (maybe)
 3. **Feedback loop** - Incorporate learnings
 4. **Public launch** - Open Chelsea Challenge registration
 
@@ -489,16 +504,19 @@ Before public launch:
 Once the system is built, we can use it for:
 
 **Other NYCPHA-Hosted Tournaments**
+
 - Fall tournaments
 - Specialty events
 - Multi-day clinics
 
-**External Tournaments**
+**External Tournaments (Team based)**
+
 - Track NYCPHA members attending external tournaments
+- Create teams for external tournaments
 - Group registrations for away events
-- Simplified version (no team assignments)
 
 **Future Enhancements** (not in initial build):
+
 - Tournament brackets and scheduling
 - Team messaging
 - Mobile app integration
@@ -551,6 +569,7 @@ A: Yes, they can contact admins or we can add a "edit registration" feature.
 6. **Data-Driven** - Provides insights into participant demographics and preferences
 
 **The system is designed to:**
+
 - ✅ Support Chelsea Challenge 2025
 - ✅ Scale to future tournaments
 - ✅ Integrate seamlessly with existing membership system
@@ -566,6 +585,7 @@ For board members interested in technical specifics, a comprehensive 2,000+ line
 `/docs/features/planning/tournament-system.md`
 
 This includes:
+
 - Complete database design
 - API specifications
 - Security & privacy architecture
@@ -575,21 +595,4 @@ This includes:
 
 ---
 
-## Board Vote
-
-**Motion:** Approve development of integrated tournament registration system for Chelsea Challenge 2025
-
-**Requires Board Decision On:**
-1. Membership qualification approach (A, B, or C)
-2. Refund policy
-3. Data retention timeline (90 days recommended)
-4. Waitlist management (manual recommended)
-5. Implementation priority (Chelsea Challenge 2025 target)
-
----
-
-**Presented by:** David Wender, NYCPHA
 **Date:** January 2026
-**Status:** Awaiting Board Approval
-
-**Questions?** Contact: [your-email@nycpha.org]

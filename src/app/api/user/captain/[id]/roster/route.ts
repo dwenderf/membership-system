@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
@@ -30,8 +30,11 @@ export async function GET(
       )
     }
 
-    // Get registration data with user details (captains can access via RLS)
-    const { data: registrationData, error: registrationError } = await supabase
+    // Captain is verified - use admin client to bypass RLS for data queries
+    const adminSupabase = createAdminClient()
+
+    // Get registration data with user details
+    const { data: registrationData, error: registrationError } = await adminSupabase
       .from('user_registrations')
       .select(`
         *,
@@ -73,7 +76,7 @@ export async function GET(
     }
 
     // Get waitlist details for this registration
-    const { data: waitlistData, error: waitlistError } = await supabase
+    const { data: waitlistData, error: waitlistError } = await adminSupabase
       .from('waitlists')
       .select(`
         *,
@@ -103,7 +106,7 @@ export async function GET(
     }
 
     // Get ALL users who registered as alternates for this registration
-    const { data: userAlternateRegistrations, error: userAlternatesError } = await supabase
+    const { data: userAlternateRegistrations, error: userAlternatesError } = await adminSupabase
       .from('user_alternate_registrations')
       .select(`
         id,
@@ -127,7 +130,7 @@ export async function GET(
     }
 
     // Get alternate selections to calculate times_played and total_paid
-    const { data: alternateSelectionsData, error: alternatesError } = await supabase
+    const { data: alternateSelectionsData, error: alternatesError } = await adminSupabase
       .from('alternate_selections')
       .select(`
         *,

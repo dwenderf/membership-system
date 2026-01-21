@@ -299,24 +299,19 @@ export default async function UserDashboardPage() {
               {teamRegistrations.length > 0 ||
                userAlternateRegistrations?.some(alt => alt.registration?.type === 'team' && alt.registration?.season && new Date(alt.registration.season.end_date) >= now) ||
                userWaitlistEntries?.some(w => w.registration?.type === 'team' && w.registration?.season && new Date(w.registration.season.end_date) >= now) ? (
-                <div className="space-y-3">
+                <div className="divide-y divide-gray-200">
                   {/* Show team registrations */}
-                  {teamRegistrations.map((registration: any) => {
+                  {teamRegistrations.map((registration: any, index: number) => {
                     const reg = registration.registration
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === reg?.id)
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
-                      <div key={`team-reg-${registration.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {reg?.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {reg?.season?.name}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
+                      <div key={`team-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
+                        <p className="text-sm font-bold text-gray-900">
+                          {reg?.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
                           <RegistrationTypeBadge type="team" />
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
@@ -334,6 +329,9 @@ export default async function UserDashboardPage() {
                             </span>
                           )}
                         </div>
+                        <p className="text-sm text-gray-500 mt-1.5">
+                          {reg?.season?.name}
+                        </p>
                       </div>
                     )
                   })}
@@ -346,22 +344,18 @@ export default async function UserDashboardPage() {
                     const seasonEndDate = new Date(registration.season.end_date)
                     if (seasonEndDate < now) return false
                     return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((alternateReg) => {
+                  }).map((alternateReg, index: number) => {
                     const registration = alternateReg.registration
                     if (!registration) return null
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === registration.id)
+                    const isFirst = teamRegistrations.length === 0 && index === 0
 
                     return (
-                      <div key={`team-alt-${alternateReg.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {registration.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {registration.season?.name}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
+                      <div key={`team-alt-${alternateReg.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                        <p className="text-sm font-bold text-gray-900">
+                          {registration.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
                           <RegistrationTypeBadge type="team" />
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                             Alternate
@@ -372,43 +366,57 @@ export default async function UserDashboardPage() {
                             </span>
                           )}
                         </div>
+                        <p className="text-sm text-gray-500 mt-1.5">
+                          {registration.season?.name}
+                        </p>
                       </div>
                     )
                   })}
 
                   {/* Show waitlist-only team registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || registration.type !== 'team') return false
-                    if (!registration.season) return false
-                    const seasonEndDate = new Date(registration.season.end_date)
-                    if (seasonEndDate < now) return false
-                    // Only show if not already in team registrations or alternates
-                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
-                           !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
-                  }).map((waitlistEntry) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
+                  {(() => {
+                    const alternateOnlyCount = userAlternateRegistrations?.filter(alt => {
+                      const reg = alt.registration
+                      if (!reg || reg.type !== 'team') return false
+                      if (!reg.season) return false
+                      const seasonEndDate = new Date(reg.season.end_date)
+                      if (seasonEndDate < now) return false
+                      return !teamRegistrations.some((r: any) => r.registration?.id === reg.id)
+                    }).length || 0
 
-                    return (
-                      <div key={`team-wait-${waitlistEntry.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || registration.type !== 'team') return false
+                      if (!registration.season) return false
+                      const seasonEndDate = new Date(registration.season.end_date)
+                      if (seasonEndDate < now) return false
+                      // Only show if not already in team registrations or alternates
+                      return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
+                             !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
+
+                      const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
+
+                      return (
+                        <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                          <p className="text-sm font-bold text-gray-900">
                             {registration.name}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            <RegistrationTypeBadge type="team" />
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1.5">
                             {registration.season?.name}
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
-                          <RegistrationTypeBadge type="team" />
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Waitlist
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">
@@ -436,31 +444,18 @@ export default async function UserDashboardPage() {
                  const reg = w.registration
                  return reg && (reg.type === 'event' || reg.type === 'scrimmage') && reg.end_date && new Date(reg.end_date) >= now
                }) ? (
-                <div className="space-y-3">
+                <div className="divide-y divide-gray-200">
                   {/* Show event/scrimmage registrations */}
-                  {eventRegistrations.map((registration: any) => {
+                  {eventRegistrations.map((registration: any, index: number) => {
                     const reg = registration.registration
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
-                      <div key={`event-reg-${registration.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {reg?.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {reg?.start_date ? formatEventDateTime(reg.start_date) : reg?.season?.name}
-                          </p>
-                          {reg?.start_date && reg?.end_date && (
-                            <EventCalendarButton
-                              eventName={reg.name}
-                              startDate={reg.start_date}
-                              endDate={reg.end_date}
-                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - ${getCategoryDisplayName(registration.registration_category)}`}
-                            />
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
+                      <div key={`event-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
+                        <p className="text-sm font-bold text-gray-900">
+                          {reg?.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
                           <RegistrationTypeBadge type={reg?.type as 'scrimmage' | 'event'} />
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
@@ -473,6 +468,19 @@ export default async function UserDashboardPage() {
                             </span>
                           )}
                         </div>
+                        <p className="text-sm text-gray-500 mt-1.5">
+                          {reg?.start_date ? formatEventDateTime(reg.start_date) : reg?.season?.name}
+                        </p>
+                        {reg?.start_date && reg?.end_date && (
+                          <div className="mt-1.5">
+                            <EventCalendarButton
+                              eventName={reg.name}
+                              startDate={reg.start_date}
+                              endDate={reg.end_date}
+                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - ${getCategoryDisplayName(registration.registration_category)}`}
+                            />
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -486,77 +494,91 @@ export default async function UserDashboardPage() {
                     if (!gameDate || new Date(gameDate) < now) return false
                     // Only show if not already in event registrations
                     return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
-                  }).map((selection) => {
+                  }).map((selection, index: number) => {
                     const altReg = selection.alternate_registration
                     const reg = altReg?.registration
                     if (!reg || !altReg) return null
+                    const isFirst = eventRegistrations.length === 0 && index === 0
 
                     return (
-                      <div key={`event-sel-${selection.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {reg.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {formatEventDateTime(altReg.game_date)}
-                          </p>
-                          {altReg.game_date && altReg.game_end_time && (
+                      <div key={`event-sel-${selection.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                        <p className="text-sm font-bold text-gray-900">
+                          {reg.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          <RegistrationTypeBadge type={reg.type as 'scrimmage' | 'event'} />
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                            Selected
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1.5">
+                          {formatEventDateTime(altReg.game_date)}
+                        </p>
+                        {altReg.game_date && altReg.game_end_time && (
+                          <div className="mt-1.5">
                             <EventCalendarButton
                               eventName={reg.name}
                               startDate={altReg.game_date}
                               endDate={altReg.game_end_time}
                               description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - Selected Alternate`}
                             />
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
-                          <RegistrationTypeBadge type={reg.type as 'scrimmage' | 'event'} />
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                            Selected
-                          </span>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
 
                   {/* Show waitlist-only event registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
-                    if (!registration.end_date || new Date(registration.end_date) < now) return false
-                    // Only show if not already in event registrations
-                    return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((waitlistEntry) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
+                  {(() => {
+                    const alternateSelectionCount = userAlternateSelections?.filter(sel => {
+                      const altReg = sel.alternate_registration
+                      const reg = altReg?.registration
+                      if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage')) return false
+                      const gameDate = altReg?.game_date
+                      if (!gameDate || new Date(gameDate) < now) return false
+                      return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
+                    }).length || 0
 
-                    return (
-                      <div key={`event-wait-${waitlistEntry.id}`} className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
+                      if (!registration.end_date || new Date(registration.end_date) < now) return false
+                      // Only show if not already in event registrations
+                      return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
+
+                      const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
+
+                      return (
+                        <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                          <p className="text-sm font-bold text-gray-900">
                             {registration.name}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1.5">
                             {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
                           </p>
                           {registration.start_date && registration.end_date && (
-                            <EventCalendarButton
-                              eventName={registration.name}
-                              startDate={registration.start_date}
-                              endDate={registration.end_date}
-                              description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
-                            />
+                            <div className="mt-1.5">
+                              <EventCalendarButton
+                                eventName={registration.name}
+                                startDate={registration.start_date}
+                                endDate={registration.end_date}
+                                description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
+                              />
+                            </div>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-1 ml-2">
-                          <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Waitlist
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">

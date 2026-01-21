@@ -1,8 +1,8 @@
 # Tournament Registration System
 
-**Status:** Planning - Awaiting Board Review
+**Status:** Planning - Board Decisions Incorporated
 **Created:** 2026-01-21
-**Updated:** 2026-01-21
+**Updated:** 2026-01-21 (Updated with Board feedback)
 **Priority:** High - Chelsea Challenge 2025 (Memorial Day Weekend)
 
 ## Executive Summary
@@ -10,10 +10,11 @@
 The NYCPHA hosts the Chelsea Challenge tournament annually on Memorial Day Weekend. This tournament features 3-4 divisions (B, C1, C2, D) with up to 6 teams per division. Unlike regular team registrations, tournaments require:
 
 - **Extended participant data collection** (skill level, hockey experience, demographics, positions, jersey size)
+- **Configurable questionnaire** (admins define custom questions: text, yes/no, or rating 1-5)
 - **Drop-in and team-based registration** (participants can be assigned to teams or register with existing teams)
 - **Dynamic pricing** (early bird, regular, late registration)
 - **Waitlist management** (after capacity is reached)
-- **Privacy-conscious data retention** (tournament-specific data cleanup after event)
+- **Privacy-conscious data retention** (manual deletion by admins/users after tournament)
 
 This document proposes integrating tournament functionality into the existing NYCPHA membership system, leveraging existing payment/accounting infrastructure while adding tournament-specific features.
 
@@ -21,10 +22,10 @@ This document proposes integrating tournament functionality into the existing NY
 
 ### Primary Goals
 1. Enable NYCPHA to manage Chelsea Challenge registration entirely through the membership system
-2. Collect participant information needed for team assignment and logistics
+2. Collect participant information needed for team assignment and logistics (via configurable questionnaire)
 3. Support both drop-in (need team) and team-based registration
 4. Integrate with existing Stripe payment and Xero accounting systems
-5. Maintain data privacy with automatic cleanup of tournament-specific data
+5. Maintain data privacy with manual deletion controls for tournament-specific data
 
 ### Secondary Goals
 1. Support future tournaments (both hosted and external)
@@ -145,7 +146,7 @@ CREATE TABLE tournaments (
   enable_waitlist BOOLEAN DEFAULT TRUE,
 
   -- Privacy and data retention
-  data_retention_date DATE,                     -- Auto-delete participant data after this date
+  data_retention_minimum_date DATE,             -- Admins cannot delete data before this date (90 days after tournament recommended)
 
   -- Visibility
   is_active BOOLEAN DEFAULT FALSE,              -- Draft mode (hidden from public)
@@ -170,7 +171,7 @@ CREATE TRIGGER set_tournaments_updated_at
 COMMENT ON TABLE tournaments IS 'Main tournament records (e.g., Chelsea Challenge)';
 COMMENT ON COLUMN tournaments.slug IS 'URL-friendly identifier for public pages';
 COMMENT ON COLUMN tournaments.current_price IS 'Active price in cents, updated by pricing tier system';
-COMMENT ON COLUMN tournaments.data_retention_date IS 'Participant data auto-deleted after this date for privacy';
+COMMENT ON COLUMN tournaments.data_retention_minimum_date IS 'Minimum date before participant data can be deleted (protects operational data during tournament)';
 COMMENT ON COLUMN tournaments.is_active IS 'FALSE = draft mode (hidden from public)';
 ```
 
@@ -248,6 +249,49 @@ COMMENT ON TABLE tournament_teams IS 'Teams created by admins for tournament div
 COMMENT ON COLUMN tournament_teams.division_id IS 'Division assignment, can be changed by admins';
 ```
 
+#### `tournament_questionnaire_fields`
+Admin-configurable questionnaire for participant information.
+
+```sql
+CREATE TABLE tournament_questionnaire_fields (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id UUID NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  field_key TEXT NOT NULL,                      -- "backward_skating", "hockey_experience"
+  field_label TEXT NOT NULL,                    -- "Backward Skating", "Hockey Experience"
+  field_type TEXT NOT NULL CHECK (field_type IN ('text', 'yes_no', 'rating')),
+  is_required BOOLEAN DEFAULT TRUE,
+  sort_order INTEGER DEFAULT 0,                 -- Display order in form
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(tournament_id, field_key)
+);
+
+-- Indexes
+CREATE INDEX idx_questionnaire_fields_tournament ON tournament_questionnaire_fields(tournament_id);
+CREATE INDEX idx_questionnaire_fields_sort ON tournament_questionnaire_fields(tournament_id, sort_order);
+
+-- Comments
+COMMENT ON TABLE tournament_questionnaire_fields IS 'Admin-configurable questionnaire fields for tournament registration';
+COMMENT ON COLUMN tournament_questionnaire_fields.field_key IS 'Unique key for this field (used in participant_info JSON)';
+COMMENT ON COLUMN tournament_questionnaire_fields.field_type IS 'text = free text, yes_no = boolean, rating = 1-5 scale';
+```
+
+**Standard Fields (Always Collected):**
+The following fields are always collected and don't need to be configured:
+- Location (city/state)
+- Country
+- Pronouns
+- Jersey size (S, M, L, XL, XXL, Goalie)
+- Positions (LW, RW, C, D, G - multi-select)
+
+**Custom Fields (Admin-Defined):**
+Admins can add tournament-specific questions like:
+- "Backward Skating" (rating 1-5)
+- "Goal Scorer" (rating 1-5)
+- "Hockey Experience" (text)
+- "Previous Teams" (text)
+- "First Time Tournament Participant?" (yes/no)
+
 #### `tournament_registrations`
 User registrations for tournaments (payment and participant info).
 
@@ -269,13 +313,18 @@ CREATE TABLE tournament_registrations (
   /*
     Example structure:
     {
-      "hockey_experience": "5 years recreational, 2 years competitive",
-      "previous_teams": ["NYC Warriors", "Brooklyn Blades"],
       "location": "Brooklyn, NY",
       "country": "USA",
       "pronouns": "they/them",
       "jersey_size": "L",
-      "positions": ["LW", "C"]
+      "positions": ["LW", "C"],
+
+      // Custom fields (based on tournament_questionnaire_fields)
+      "backward_skating": 4,                    // rating (1-5)
+      "goal_scorer": 5,                         // rating (1-5)
+      "hockey_experience": "5 years recreational, 2 years competitive",  // text
+      "previous_teams": "NYC Warriors, Brooklyn Blades",                 // text
+      "first_time_participant": true            // yes_no
     }
   */
 
@@ -895,11 +944,43 @@ URL: /admin/tournaments/new or /admin/tournaments/[id]/edit
 │ ☑ Chelsea Challenge 2025 Membership                 │
 │ ☐ LGBTQ+ Membership                                 │
 │                                                      │
+│ Participant Questionnaire                            │
+│ ───────────────────────────────────────────────     │
+│ Custom questions for participant registration       │
+│ Standard fields (always collected):                 │
+│ • Location, Country, Pronouns                       │
+│ • Jersey Size, Positions                            │
+│                                                      │
+│ Custom fields (optional):                           │
+│ ┌──────────────────────────────────────────────┐   │
+│ │ Backward Skating | Rating (1-5)      [Edit] │   │
+│ │ Goal Scorer      | Rating (1-5)      [Edit] │   │
+│ │ Hockey Experience| Text              [Edit] │   │
+│ │ Previous Teams   | Text              [Edit] │   │
+│ │ First Time?      | Yes/No            [Edit] │   │
+│ └──────────────────────────────────────────────┘   │
+│ [+ Add Custom Question]                             │
+│                                                      │
+│ Add Custom Question Modal:                          │
+│ ┌──────────────────────────────────────────────┐   │
+│ │ Question Label *                              │   │
+│ │ [Backward Skating                    ]       │   │
+│ │                                               │   │
+│ │ Question Type *                               │   │
+│ │ ○ Text (free-form answer)                    │   │
+│ │ ○ Yes/No (boolean)                           │   │
+│ │ ● Rating (1-5 scale)                         │   │
+│ │                                               │   │
+│ │ ☑ Required field                             │   │
+│ │                                               │   │
+│ │ [Cancel] [Add Question]                      │   │
+│ └──────────────────────────────────────────────┘   │
+│                                                      │
 │ Privacy                                              │
 │ ───────────────────────────────────────────────     │
-│ Data Retention Date                                  │
+│ Data Retention Minimum Date                          │
 │ [08/26/2025                                ]        │
-│ Participant data will be auto-deleted after this   │
+│ Admins cannot delete participant data before this  │
 │ date (90 days after tournament recommended)        │
 │                                                      │
 │ Status                                               │
@@ -916,7 +997,7 @@ URL: /admin/tournaments/new or /admin/tournaments/[id]/edit
 ```
 URL: /admin/tournaments/[id]
 
-Tabs: [Overview] [Registrations] [Divisions & Teams] [Waitlist] [Settings]
+Tabs: [Overview] [Registrations] [Divisions & Teams] [Waitlist] [Questionnaire] [Settings]
 
 Tab: Overview
 ┌──────────────────────────────────────────────────────┐
@@ -1062,12 +1143,46 @@ URL: /admin/tournaments/[id]/teams/[teamId]/roster
 │ ───────────────────────────────────────────────     │
 │ Filter by Division Preference: [C1 ▼]              │
 │                                                      │
+│ Inline skill ratings for quick team balancing:     │
+│ ┌──────────────────────────────────────────────────────────────┐ │
+│ │ Name        Positions  Skills (1-5)           Size   Action  │ │
+│ ├──────────────────────────────────────────────────────────────┤ │
+│ │ Alex Taylor LW, RW     Back:4 Goal:5 Exp:5    XL     [+ Add]│ │
+│ │ Chris Lee   C, D       Back:3 Goal:2 Exp:4    L      [+ Add]│ │
+│ │ Sam Wilson  LW, C      Back:5 Goal:4 Exp:5    M      [+ Add]│ │
+│ │ ...                                                           │ │
+│ └──────────────────────────────────────────────────────────────┘ │
+│                                                      │
+│ Skill abbreviations:                                │
+│ • Back = Backward Skating (rating)                  │
+│ • Goal = Goal Scorer (rating)                       │
+│ • Exp = Hockey Experience (rating)                  │
+│                                                      │
+│ Click participant name to see full details modal:   │
+│                                                      │
 │ ┌────────────────────────────────────────────────┐ │
-│ │ Name          Positions    Jersey Size   Action│ │
-│ ├────────────────────────────────────────────────┤ │
-│ │ Alex Taylor   LW, RW       XL       [+ Add]   │ │
-│ │ Chris Lee     C, D         L        [+ Add]   │ │
-│ │ ...                                             │ │
+│ │ Participant Details - Alex Taylor        [X]  │ │
+│ │                                               │ │
+│ │ Contact: alex@example.com | (555) 123-4567  │ │
+│ │ Location: Brooklyn, NY (USA)                 │ │
+│ │ Pronouns: they/them                          │ │
+│ │                                               │ │
+│ │ Positions: LW, RW                            │ │
+│ │ Jersey Size: XL                              │ │
+│ │                                               │ │
+│ │ Skill Ratings:                               │ │
+│ │ • Backward Skating: ★★★★☆ (4/5)            │ │
+│ │ • Goal Scorer: ★★★★★ (5/5)                 │ │
+│ │ • Hockey Experience: ★★★★★ (5/5)           │ │
+│ │                                               │ │
+│ │ Hockey Experience (text):                    │ │
+│ │ 10 years competitive, captain of NYC        │ │
+│ │ Warriors for 3 years                         │ │
+│ │                                               │ │
+│ │ Previous Teams:                              │ │
+│ │ NYC Warriors, Brooklyn Blades                │ │
+│ │                                               │ │
+│ │ [Assign to This Team]  [Close]              │ │
 │ └────────────────────────────────────────────────┘ │
 │                                                      │
 │ Or search all registrations:                        │
@@ -1075,6 +1190,8 @@ URL: /admin/tournaments/[id]/teams/[teamId]/roster
 │                                                      │
 │ [Back to Teams]                                     │
 └──────────────────────────────────────────────────────┘
+
+Note: With 6 teams × 16 players = up to 96 players, inline display makes it easier to compare participants at a glance for team balancing.
 
 When admin clicks [+ Add]:
 - Creates record in tournament_team_members
@@ -1802,52 +1919,54 @@ if (!user?.is_admin) {
 **Participant Information Protection:**
 - `participant_info` JSONB field allows flexible data collection
 - Data is scoped to tournament (not shared across tournaments)
-- Auto-deletion after `data_retention_date`
-- Users can request manual deletion (admin feature)
+- Manual deletion by admins (after minimum retention period)
+- Users can delete their own data after tournament ends
 
-**Data Retention Policy:**
-```sql
--- Cron job to clean up expired participant data
-CREATE FUNCTION cleanup_tournament_participant_data() RETURNS void AS $$
-BEGIN
-  UPDATE tournament_registrations
-  SET participant_info = '{}'::jsonb
-  WHERE tournament_id IN (
-    SELECT id FROM tournaments
-    WHERE data_retention_date < CURRENT_DATE
-  );
-END;
-$$ LANGUAGE plpgsql;
+**Data Retention Policy: Manual Deletion ✓ DECIDED**
 
--- Schedule to run daily
-SELECT cron.schedule(
-  'cleanup-tournament-data',
-  '0 2 * * *',  -- 2 AM daily
-  $$SELECT cleanup_tournament_participant_data()$$
-);
-```
+**Minimum Retention Period:**
+- Tournaments have a `data_retention_minimum_date` (recommended: 90 days after tournament ends)
+- Admins **cannot** delete participant data before this date
+- Protects operational data during and immediately after tournament
+- Allows time for post-tournament surveys, follow-ups, etc.
 
-**Manual Deletion (Admin):**
+**Admin Manual Deletion:**
 ```
 Admin can manually clear participant data:
 1. Navigate to /admin/tournaments/[id]
 2. Click "Privacy" tab
-3. Click "Clear All Participant Data"
-4. Confirmation dialog: "This will permanently delete all participant info (hockey experience, pronouns, etc.) for all registrations. User accounts and payment records will be preserved."
-5. Sets participant_info = '{}' for all registrations
+3. If current date < data_retention_minimum_date:
+   - "Clear All Participant Data" button is disabled
+   - Message: "Data cannot be deleted until [date] (90 days after tournament)"
+4. If current date >= data_retention_minimum_date:
+   - "Clear All Participant Data" button is enabled
+   - Click button → Confirmation dialog:
+     "This will permanently delete all participant info (hockey experience, skill ratings, pronouns, etc.) for all registrations. User accounts and payment records will be preserved."
+   - Sets participant_info = '{}' for all tournament_registrations
 ```
 
-**User Self-Deletion (Future):**
+**User Self-Deletion:**
 ```
 User preferences page:
 /user/account → Privacy → Tournament Data
 
 "Delete My Tournament Data"
 - View list of tournaments you've registered for
-- Checkbox next to each tournament
+- For past tournaments (end_date < today):
+  - Checkbox enabled: "Delete my data for [Tournament Name]"
+- For upcoming/ongoing tournaments:
+  - Checkbox disabled: "Data cannot be deleted until tournament ends"
 - "Delete selected" button
 - Confirmation: "This will delete your participant information but preserve your payment records."
+- Updates participant_info = '{}' for selected registrations
 ```
+
+**Why Manual vs. Automatic:**
+- ✅ Gives admins control over when data is deleted
+- ✅ Users can delete their own data proactively
+- ✅ No risk of accidental deletion if tournament is rescheduled
+- ✅ Simpler implementation (no cron job needed)
+- ✅ Complies with data minimization while preserving operational flexibility
 
 ### PII Handling
 
@@ -1925,52 +2044,51 @@ CREATE TABLE admin_audit_log (
 - Refund policy for tournaments
 - Should system support partial refunds? (requires new logic)
 
-### 4. Waitlist Automation
+### 4. Data Retention Timeline ✓ DECIDED
 
-**Question:** Should waitlist admissions be automatic or manual?
+**Decision:** Manual deletion only (no automatic deletion)
 
-**Options:**
-- **Manual**: Admin clicks "Admit" to generate bypass code
-- **Automatic**: When someone refunds, system auto-admits next person on waitlist
-- **Hybrid**: Auto-notify admin that spot opened, admin approves
+**Implementation:**
+- **Admins:** Can manually delete all tournament participant data, but NOT before `data_retention_minimum_date` (recommended: 90 days after tournament ends)
+- **Users:** Can delete their own tournament participant data from user settings, but ONLY after tournament ends
+- **No automatic deletion:** Gives admins control, prevents accidental data loss
 
-**Current System:** Manual (admin generates bypass code)
+**What gets deleted:**
+- Hockey experience descriptions
+- Custom questionnaire responses (skill ratings, etc.)
+- Pronouns, jersey size, positions
+- Location/country
 
-**Board Input Needed:**
-- Prefer automatic or manual control?
-- Time limit for bypass code redemption? (currently unlimited)
-
-### 5. Data Deletion Timeline
-
-**Question:** When should participant data be deleted?
-
-**Recommendation:** 90 days after tournament ends
+**What's preserved:**
+- Basic user account (name, email)
+- Payment records (for accounting)
+- Team assignment (historical record)
 
 **Rationale:**
-- Allows time for post-tournament feedback/surveys
-- Reduces data liability
-- Complies with data minimization principles
+- Simpler to implement (no cron job)
+- More control for admins and users
+- Still complies with data minimization
+- Protects operational data during tournament
 
-**Board Input Needed:**
-- Is 90 days appropriate?
-- Should users be notified before deletion?
-
-### 6. External Tournaments
+### 5. External Tournaments
 
 **Question:** Should we support tournaments NYCPHA doesn't host?
 
 **Example:** Boston Pride Tournament - NYCPHA sends 2 teams
 
 **Requirements:**
-- Different workflow: Register as group, single payment?
-- No division management (external tournament handles that)
-- Simplified: Just track who's going
+- Team-based registration (admin creates teams, users register for specific teams)
+- No division management (external tournament handles divisions)
+- Payment tracking for NYCPHA participants
+- Simplified workflow compared to hosted tournaments
 
 **Board Input Needed:**
 - Is this in scope for MVP?
-- Or defer to future enhancement?
+- Or defer to future enhancement (Phase 5)?
 
-### 7. Position Validation
+**Note:** Architecture will support external tournaments (team-based registration model is the same), but implementation is deferred until Chelsea Challenge is complete.
+
+### 6. Position Validation
 
 **Question:** Should we validate that teams have balanced positions?
 
@@ -1985,7 +2103,7 @@ CREATE TABLE admin_audit_log (
 - Important for Chelsea Challenge?
 - Or just helpful for admins?
 
-### 8. Jersey Number Assignment
+### 7. Jersey Number Assignment
 
 **Question:** Who assigns jersey numbers?
 
@@ -2004,9 +2122,10 @@ CREATE TABLE admin_audit_log (
 **Goal:** Support Chelsea Challenge 2025 registration
 
 **Deliverables:**
-- Database migration with all tables
+- Database migration with all tables (including `tournament_questionnaire_fields`)
 - Public tournament browsing and detail pages (`/tournaments`, `/tournaments/[slug]`)
-- Tournament registration flow (membership check, participant questionnaire, payment)
+- **Questionnaire builder:** Admin can define custom questions (text, yes/no, rating 1-5)
+- Tournament registration flow (membership check, standard fields + custom questionnaire, payment)
 - Payment integration (Stripe payment intent for tournaments)
 - Accounting integration (Xero line item type: `tournament`)
 - Admin tournament CRUD (`/admin/tournaments`)
@@ -2061,10 +2180,12 @@ CREATE TABLE admin_audit_log (
 **Deliverables:**
 - Dynamic pricing tier automation (update current_price based on date)
 - Bulk team assignment (drag-and-drop)
-- Advanced reporting (division balance, position distribution, jersey size summary)
+- Advanced reporting (division balance, position distribution, jersey size summary, skill rating distributions)
 - Excel export (formatted roster sheets)
-- Participant data deletion (admin manual + auto-cleanup)
-- Refund handling for tournament registrations
+- **Manual participant data deletion:**
+  - Admin: "Clear All Participant Data" button (disabled until after `data_retention_minimum_date`)
+  - User: Self-delete tournament data in user settings (enabled after tournament ends)
+- Refund handling for tournament registrations (reuse existing refund system with reason field)
 - Discount code support for tournaments
 
 **Testing:**
@@ -2074,13 +2195,17 @@ CREATE TABLE admin_audit_log (
 
 ### Phase 5: Future Enhancements (Post-MVP)
 **Ideas for later consideration:**
-- External tournament support
+- **External tournament support** (architecture supports it - team-based registration with same payment/accounting flow)
+  - NYCPHA sends teams to external tournaments (e.g., Boston Pride Tournament)
+  - No division management (external tournament handles divisions)
+  - Track participants and payments for NYCPHA teams
 - Tournament brackets and schedules
 - Team messaging/announcements
 - Post-tournament surveys
 - Player ratings/feedback
 - Multi-tournament season passes
 - Team customization (logos, colors)
+- Tournament templates (clone Chelsea Challenge 2025 for 2026)
 
 ## Success Metrics
 
@@ -2266,15 +2391,58 @@ All necessary indexes are included in schema above. Monitor query performance an
 - [Email Architecture](../architecture/email-architecture.md)
 - [Xero Integration](../features/completed/xero-sync-bugs-and-fixes.md)
 
+## Key Decisions Made
+
+Based on Board feedback and user input, the following decisions have been incorporated:
+
+### ✅ Decision: Waitlist Management - MANUAL
+- **Approach:** Admin manually clicks "Admit" to generate bypass code
+- **Rationale:** Gives admins control over timing, can coordinate with pricing tiers
+- **Status:** Implemented in design
+
+### ✅ Decision: Data Retention - MANUAL DELETION
+- **Approach:**
+  - **Admins:** Can manually delete all tournament participant data, but NOT before `data_retention_minimum_date` (90 days after tournament recommended)
+  - **Users:** Can delete their own tournament data from user settings, but ONLY after tournament ends
+  - **No automatic deletion:** Removed cron job, manual control only
+- **What gets deleted:** Hockey experience, skill ratings, pronouns, jersey size, positions, location
+- **What's preserved:** User account, payment records, team assignment history
+- **Rationale:** Simpler implementation, more control, prevents accidental deletion
+- **Status:** Implemented in design
+
+### ✅ Decision: Configurable Questionnaire
+- **Feature:** Admin-defined custom questions for participant registration
+- **Question types:**
+  - Text (free-form)
+  - Yes/No (boolean)
+  - Rating (1-5 scale)
+- **Standard fields:** Always collected (location, country, pronouns, jersey size, positions)
+- **Custom fields:** Admin adds tournament-specific questions (e.g., "Backward Skating", "Goal Scorer", "Hockey Experience")
+- **Display:** Inline in team assignment interface for quick comparison (up to 96 players with 6 teams × 16 players)
+- **Status:** Implemented in design (new `tournament_questionnaire_fields` table)
+
+### ✅ Decision: External Tournaments - PHASE 5
+- **Approach:** Architecture supports team-based registration for external tournaments
+- **Workflow:** Same as hosted tournaments but with team assignment by admins (no divisions)
+- **Priority:** Deferred to Phase 5 (post-MVP)
+- **Status:** Noted in Future Enhancements
+
+### ⚠️ Still TBD: Membership Qualification Method
+- **Options:**
+  - A) Free tournament membership (simplest)
+  - B) Multiple qualifying memberships via junction table (flexible)
+  - C) Hybrid (tournament-specific junction table)
+- **Status:** Awaiting Board decision
+
 ## Approval & Next Steps
 
-**This document is ready for Board review.**
+**This document has incorporated initial Board decisions.**
 
-**Questions for Board:**
-1. Approve integrated approach (vs. separate site)?
-2. Decide on membership qualification method (A, B, or C)?
-3. Confirm data retention policy (90 days)?
-4. Prioritize Phase 1 for Chelsea Challenge 2025?
+**Remaining Questions for Board:**
+1. ✅ Approve integrated approach (vs. separate site)? - **APPROVED in Board summary**
+2. ⚠️ Decide on membership qualification method (A, B, or C)?
+3. ✅ Confirm manual data retention approach? - **APPROVED**
+4. ✅ Prioritize Phase 1 for Chelsea Challenge 2025? - **YES**
 5. Any additional features required for MVP?
 
 **After Board Approval:**
@@ -2286,7 +2454,8 @@ All necessary indexes are included in schema above. Monitor query performance an
 
 ---
 
-**Document Status:** Planning - Awaiting Board Review
-**Next Review Date:** TBD
+**Document Status:** Planning - Board Decisions Incorporated (Waitlist, Data Retention, Questionnaire)
+**Next Review Date:** Board meeting TBD
 **Owner:** NYCPHA Board
 **Implementation Lead:** TBD
+**Outstanding Decisions:** Membership qualification method (A, B, or C)

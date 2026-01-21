@@ -350,7 +350,7 @@ export default async function UserDashboardPage() {
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === registration.id)
 
                     return (
-                      <div key={`team-alt-${alternateReg.id}`} className="py-3">
+                      <div key={`team-alt-${alternateReg.id}`} className="py-3 first:pt-0">
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>
@@ -387,7 +387,7 @@ export default async function UserDashboardPage() {
                     if (!registration) return null
 
                     return (
-                      <div key={`team-wait-${waitlistEntry.id}`} className="py-3">
+                      <div key={`team-wait-${waitlistEntry.id}`} className="py-3 first:pt-0">
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>
@@ -486,7 +486,7 @@ export default async function UserDashboardPage() {
                     if (!reg || !altReg) return null
 
                     return (
-                      <div key={`event-sel-${selection.id}`} className="py-3">
+                      <div key={`event-sel-${selection.id}`} className="py-3 first:pt-0">
                         <p className="text-sm font-bold text-gray-900">
                           {reg.name}
                         </p>
@@ -525,7 +525,7 @@ export default async function UserDashboardPage() {
                     if (!registration) return null
 
                     return (
-                      <div key={`event-wait-${waitlistEntry.id}`} className="py-3">
+                      <div key={`event-wait-${waitlistEntry.id}`} className="py-3 first:pt-0">
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>

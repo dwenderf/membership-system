@@ -310,6 +310,16 @@ export default function RegistrationGamesPage() {
               </div>
             )}
           </div>
+
+          {/* Navigation - Bottom */}
+          <div className="mt-6">
+            <Link
+              href={`/admin/registrations/${registrationId}`}
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to Registration
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
 import EditableEventDates from '@/components/EditableEventDates'
 import GamesPreview from '@/components/GamesPreview'
+import CaptainManager from '@/components/CaptainManager'
 
 export default async function RegistrationDetailPage({
   params,
@@ -91,6 +92,16 @@ export default async function RegistrationDetailPage({
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Navigation - Top */}
+          <div className="mb-4">
+            <Link
+              href="/admin/registrations"
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back to Registrations
+            </Link>
+          </div>
+
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
@@ -158,7 +169,7 @@ export default async function RegistrationDetailPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Registration Details */}
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-6">
               <div className="bg-white shadow rounded-lg p-6">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">Registration Details</h2>
                 <dl className="space-y-4">
@@ -264,6 +275,13 @@ export default async function RegistrationDetailPage({
                   </div>
                 </dl>
               </div>
+
+              {/* Captain Management */}
+              <CaptainManager
+                registrationId={id}
+                registrationName={registration.name}
+                seasonName={season?.name || 'Unknown Season'}
+              />
             </div>
 
             {/* Registration Categories - now with drag-and-drop */}
@@ -323,7 +341,7 @@ export default async function RegistrationDetailPage({
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation - Bottom */}
           <div className="mt-6">
             <Link
               href="/admin/registrations"

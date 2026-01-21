@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
+import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -17,17 +18,6 @@ export async function GET(
     }
 
     const gameId = params.gameId
-
-    // Check if user is admin (for now, we'll add captain check later)
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
 
     // Get game details to verify it exists and get registration info
     const { data: game, error: gameError } = await supabase
@@ -52,15 +42,33 @@ export async function GET(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
+    // Validate critical fields exist before using them
+    if (!game.registration_id) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration_id' }, { status: 500 })
+    }
+
+    if (!game.registrations) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration details' }, { status: 500 })
+    }
+
+    // Check if user has access to this registration's alternates (admin or captain)
+    const hasAccess = await canAccessRegistrationAlternates(game.registration_id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'You do not have access to manage alternates for this registration' }, { status: 403 })
+    }
+
     const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations
     if (!registration || !registration.allow_alternates) {
-      return NextResponse.json({ 
-        error: 'This registration does not allow alternates' 
+      return NextResponse.json({
+        error: 'This registration does not allow alternates'
       }, { status: 400 })
     }
 
+    // Access verified - use admin client to bypass RLS for data queries
+    const adminSupabase = createAdminClient()
+
     // Get all users who registered as alternates for this registration
-    const { data: alternates, error: alternatesError } = await supabase
+    const { data: alternates, error: alternatesError } = await adminSupabase
       .from('user_alternate_registrations')
       .select(`
         id,
@@ -101,7 +109,7 @@ export async function GET(
     }
 
     // Check which alternates are already selected for this specific game
-    const { data: existingSelections, error: selectionsError } = await supabase
+    const { data: existingSelections, error: selectionsError } = await adminSupabase
       .from('alternate_selections')
       .select('user_id')
       .eq('alternate_registration_id', gameId)
@@ -117,7 +125,7 @@ export async function GET(
 
     // Get discount usage for each user to check limits
     const userIds = alternates?.map(alt => alt.user_id) || []
-    const { data: discountUsage } = await supabase
+    const { data: discountUsage } = await adminSupabase
       .from('discount_usage')
       .select('user_id, discount_category_id, amount_saved')
       .in('user_id', userIds)

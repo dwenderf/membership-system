@@ -20,6 +20,8 @@ export const EMAIL_EVENTS = {
   PAYMENT_PLAN_PAYMENT_PROCESSED: 'payment_plan.payment_processed',
   PAYMENT_PLAN_PAYMENT_FAILED: 'payment_plan.payment_failed',
   PAYMENT_PLAN_COMPLETED: 'payment_plan.completed',
+  CAPTAIN_ASSIGNED: 'captain.assigned',
+  CAPTAIN_REMOVED: 'captain.removed',
 } as const
 
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]

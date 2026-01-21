@@ -452,8 +452,18 @@ export default function AccountingCodesPage() {
 
   return (
     <div className="p-6">
+      {/* Navigation - Top */}
+      <div className="mb-4">
+        <Link
+          href="/admin"
+          className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+        >
+          ← Back to Admin Dashboard
+        </Link>
+      </div>
+
       <h1 className="text-2xl font-bold mb-6">Accounting Code Management</h1>
-      
+
       <div className="space-y-6">
         {/* Default Codes Section */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -594,9 +604,9 @@ export default function AccountingCodesPage() {
         {/* Xero Chart of Accounts Section */}
         <XeroAccountsSection />
 
-        {/* Return to Admin Link */}
+        {/* Navigation - Bottom */}
         <div className="mt-6">
-          <Link 
+          <Link
             href="/admin"
             className="text-blue-600 hover:text-blue-500 text-sm font-medium"
           >

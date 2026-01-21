@@ -89,9 +89,6 @@ export default function EventDateTimeInput({
             roundToNearest={1}
           />
         </div>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Default: {registrationType === 'scrimmage' || registrationType === 'game' ? '90 minutes (1.5 hours)' : '180 minutes (3 hours)'}
-        </p>
       </div>
     </div>
   )

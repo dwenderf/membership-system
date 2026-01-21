@@ -26,6 +26,10 @@ interface Registration {
     max_capacity: number | null
     percentage_full: number | null
   }>
+  captains?: Array<{
+    first_name: string
+    last_name: string
+  }>
 }
 
 export default function RegistrationReportsPage() {
@@ -74,18 +78,23 @@ export default function RegistrationReportsPage() {
   }
 
   // Helper function to check if a registration is currently active
-  const isRegistrationActive = (registration: Registration): boolean => {
+  const isRegistrationActive = (registration: Registration, today: string): boolean => {
     // For events and scrimmages with dates set, use the event end_date
     if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
-      const eventEndDate = new Date(registration.end_date)
-      return eventEndDate >= new Date()
+      // Extract date portion (YYYY-MM-DD) for comparison
+      const eventEndDate = registration.end_date.split('T')[0]
+      return eventEndDate >= today
     }
 
     // For teams or events/scrimmages without dates, use season end_date
     if (!registration.season_end_date) return false
-    const seasonEndDate = new Date(registration.season_end_date)
-    return seasonEndDate >= new Date()
+    // Extract date portion (YYYY-MM-DD) for comparison
+    const seasonEndDate = registration.season_end_date.split('T')[0]
+    return seasonEndDate >= today
   }
+
+  // Capture current date once for consistent evaluation
+  const todayDateString = new Date().toISOString().split('T')[0]
 
   // Get unique seasons for filter dropdown
   const seasons = Array.from(new Set(registrations.map(r => JSON.stringify({ id: r.season_id, name: r.season_name }))))
@@ -100,7 +109,7 @@ export default function RegistrationReportsPage() {
     }
 
     // Filter by active/past status
-    if (!showPastEvents && !isRegistrationActive(registration)) {
+    if (!showPastEvents && !isRegistrationActive(registration, todayDateString)) {
       return false
     }
 
@@ -251,6 +260,22 @@ export default function RegistrationReportsPage() {
                     {registration.category_breakdown.length > 3 && (
                       <p className="text-xs text-gray-500">+{registration.category_breakdown.length - 3} more categories</p>
                     )}
+                  </div>
+                )}
+
+                {/* Captains */}
+                {registration.captains && registration.captains.length > 0 && (
+                  <div className="mb-3 pb-3 border-b border-gray-200">
+                    <div className="text-sm">
+                      <span className="text-gray-600 font-semibold">Captains:</span>
+                      <div className="mt-1 text-xs text-gray-700">
+                        {registration.captains.map((captain, idx) => (
+                          <div key={idx}>
+                            {captain.first_name} {captain.last_name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 

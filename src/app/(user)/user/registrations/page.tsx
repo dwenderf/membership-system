@@ -22,20 +22,22 @@ function formatDateString(dateString: string): string {
 }
 
 // Helper function to check if a registration is currently active
-function isRegistrationActive(registration: any): boolean {
+function isRegistrationActive(registration: any, today: string): boolean {
   if (!registration) return false
 
   // For events and scrimmages with dates set, use the event end_date
   if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
-    const eventEndDate = new Date(registration.end_date)
-    return eventEndDate >= new Date()
+    // Extract date portion (YYYY-MM-DD) for comparison
+    const eventEndDate = registration.end_date.split('T')[0]
+    return eventEndDate >= today
   }
 
   // For teams or events/scrimmages without dates, use season end_date
   const season = registration.season
   if (!season) return false
-  const seasonEndDate = new Date(season.end_date)
-  return seasonEndDate >= new Date()
+  // Extract date portion (YYYY-MM-DD) for comparison
+  const seasonEndDate = season.end_date.split('T')[0]
+  return seasonEndDate >= today
 }
 
 export default async function UserRegistrationsPage() {
@@ -43,10 +45,13 @@ export default async function UserRegistrationsPage() {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   if (!user) {
     return null // Layout will handle redirect
   }
+
+  // Capture current date once for consistent evaluation
+  const todayDateString = new Date().toISOString().split('T')[0]
 
   // Get user's paid registrations only (via API for centralized logic)
   let userRegistrations: any[] = []
@@ -170,25 +175,25 @@ export default async function UserRegistrationsPage() {
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
   const currentRegistrations = userRegistrations?.filter(ur =>
-    isRegistrationActive(ur.registration)
+    isRegistrationActive(ur.registration, todayDateString)
   ) || []
 
   const pastRegistrations = userRegistrations?.filter(ur =>
-    !isRegistrationActive(ur.registration)
+    !isRegistrationActive(ur.registration, todayDateString)
   ) || []
 
   // Split waitlist entries into current and past
   const currentWaitlistEntries = userWaitlistEntries?.filter(we =>
-    isRegistrationActive(we.registration)
+    isRegistrationActive(we.registration, todayDateString)
   ) || []
 
   const pastWaitlistEntries = userWaitlistEntries?.filter(we =>
-    !isRegistrationActive(we.registration)
+    !isRegistrationActive(we.registration, todayDateString)
   ) || []
 
   // Get current alternate registrations
   const currentAlternateRegistrations = userAlternateRegistrations?.filter(ar =>
-    isRegistrationActive(ar.registration)
+    isRegistrationActive(ar.registration, todayDateString)
   ) || []
 
   return (

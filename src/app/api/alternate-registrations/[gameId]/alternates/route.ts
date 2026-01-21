@@ -42,6 +42,15 @@ export async function GET(
       return NextResponse.json({ error: 'Game not found' }, { status: 404 })
     }
 
+    // Validate critical fields exist before using them
+    if (!game.registration_id) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration_id' }, { status: 500 })
+    }
+
+    if (!game.registrations) {
+      return NextResponse.json({ error: 'Invalid game data: missing registration details' }, { status: 500 })
+    }
+
     // Check if user has access to this registration's alternates (admin or captain)
     const hasAccess = await canAccessRegistrationAlternates(game.registration_id)
     if (!hasAccess) {

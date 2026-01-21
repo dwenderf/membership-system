@@ -301,13 +301,13 @@ export default async function UserDashboardPage() {
                userWaitlistEntries?.some(w => w.registration?.type === 'team' && w.registration?.season && new Date(w.registration.season.end_date) >= now) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show team registrations */}
-                  {teamRegistrations.map((registration: any) => {
+                  {teamRegistrations.map((registration: any, index: number) => {
                     const reg = registration.registration
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === reg?.id)
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
-                      <div key={`team-reg-${registration.id}`} className="py-3 first:pt-0">
+                      <div key={`team-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {reg?.name}
                         </p>
@@ -344,13 +344,14 @@ export default async function UserDashboardPage() {
                     const seasonEndDate = new Date(registration.season.end_date)
                     if (seasonEndDate < now) return false
                     return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((alternateReg) => {
+                  }).map((alternateReg, index: number) => {
                     const registration = alternateReg.registration
                     if (!registration) return null
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === registration.id)
+                    const isFirst = teamRegistrations.length === 0 && index === 0
 
                     return (
-                      <div key={`team-alt-${alternateReg.id}`} className="py-3 first:pt-0">
+                      <div key={`team-alt-${alternateReg.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>
@@ -382,12 +383,23 @@ export default async function UserDashboardPage() {
                     // Only show if not already in team registrations or alternates
                     return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
                            !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
-                  }).map((waitlistEntry) => {
+                  }).map((waitlistEntry, index: number) => {
                     const registration = waitlistEntry.registration
                     if (!registration) return null
 
+                    const alternateOnlyCount = userAlternateRegistrations?.filter(alt => {
+                      const reg = alt.registration
+                      if (!reg || reg.type !== 'team') return false
+                      if (!reg.season) return false
+                      const seasonEndDate = new Date(reg.season.end_date)
+                      if (seasonEndDate < now) return false
+                      return !teamRegistrations.some((r: any) => r.registration?.id === reg.id)
+                    }).length || 0
+
+                    const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
+
                     return (
-                      <div key={`team-wait-${waitlistEntry.id}`} className="py-3 first:pt-0">
+                      <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>
@@ -432,12 +444,12 @@ export default async function UserDashboardPage() {
                }) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show event/scrimmage registrations */}
-                  {eventRegistrations.map((registration: any) => {
+                  {eventRegistrations.map((registration: any, index: number) => {
                     const reg = registration.registration
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
-                      <div key={`event-reg-${registration.id}`} className="py-3 first:pt-0">
+                      <div key={`event-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {reg?.name}
                         </p>
@@ -480,13 +492,14 @@ export default async function UserDashboardPage() {
                     if (!gameDate || new Date(gameDate) < now) return false
                     // Only show if not already in event registrations
                     return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
-                  }).map((selection) => {
+                  }).map((selection, index: number) => {
                     const altReg = selection.alternate_registration
                     const reg = altReg?.registration
                     if (!reg || !altReg) return null
+                    const isFirst = eventRegistrations.length === 0 && index === 0
 
                     return (
-                      <div key={`event-sel-${selection.id}`} className="py-3 first:pt-0">
+                      <div key={`event-sel-${selection.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {reg.name}
                         </p>
@@ -520,12 +533,23 @@ export default async function UserDashboardPage() {
                     if (!registration.end_date || new Date(registration.end_date) < now) return false
                     // Only show if not already in event registrations
                     return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((waitlistEntry) => {
+                  }).map((waitlistEntry, index: number) => {
                     const registration = waitlistEntry.registration
                     if (!registration) return null
 
+                    const alternateSelectionCount = userAlternateSelections?.filter(sel => {
+                      const altReg = sel.alternate_registration
+                      const reg = altReg?.registration
+                      if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage')) return false
+                      const gameDate = altReg?.game_date
+                      if (!gameDate || new Date(gameDate) < now) return false
+                      return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
+                    }).length || 0
+
+                    const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
+
                     return (
-                      <div key={`event-wait-${waitlistEntry.id}`} className="py-3 first:pt-0">
+                      <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
                         <p className="text-sm font-bold text-gray-900">
                           {registration.name}
                         </p>

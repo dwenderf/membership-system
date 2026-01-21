@@ -374,19 +374,7 @@ export default async function UserDashboardPage() {
                   })}
 
                   {/* Show waitlist-only team registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || registration.type !== 'team') return false
-                    if (!registration.season) return false
-                    const seasonEndDate = new Date(registration.season.end_date)
-                    if (seasonEndDate < now) return false
-                    // Only show if not already in team registrations or alternates
-                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
-                           !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
-                  }).map((waitlistEntry, index: number) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
-
+                  {(() => {
                     const alternateOnlyCount = userAlternateRegistrations?.filter(alt => {
                       const reg = alt.registration
                       if (!reg || reg.type !== 'team') return false
@@ -396,25 +384,39 @@ export default async function UserDashboardPage() {
                       return !teamRegistrations.some((r: any) => r.registration?.id === reg.id)
                     }).length || 0
 
-                    const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || registration.type !== 'team') return false
+                      if (!registration.season) return false
+                      const seasonEndDate = new Date(registration.season.end_date)
+                      if (seasonEndDate < now) return false
+                      // Only show if not already in team registrations or alternates
+                      return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
+                             !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
 
-                    return (
-                      <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
-                        <p className="text-sm font-bold text-gray-900">
-                          {registration.name}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          <RegistrationTypeBadge type="team" />
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Waitlist
-                          </span>
+                      const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
+
+                      return (
+                        <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                          <p className="text-sm font-bold text-gray-900">
+                            {registration.name}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            <RegistrationTypeBadge type="team" />
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1.5">
+                            {registration.season?.name}
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1.5">
-                          {registration.season?.name}
-                        </p>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">
@@ -527,16 +529,7 @@ export default async function UserDashboardPage() {
                   })}
 
                   {/* Show waitlist-only event registrations */}
-                  {userWaitlistEntries?.filter(waitlist => {
-                    const registration = waitlist.registration
-                    if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
-                    if (!registration.end_date || new Date(registration.end_date) < now) return false
-                    // Only show if not already in event registrations
-                    return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
-                  }).map((waitlistEntry, index: number) => {
-                    const registration = waitlistEntry.registration
-                    if (!registration) return null
-
+                  {(() => {
                     const alternateSelectionCount = userAlternateSelections?.filter(sel => {
                       const altReg = sel.alternate_registration
                       const reg = altReg?.registration
@@ -546,35 +539,46 @@ export default async function UserDashboardPage() {
                       return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
                     }).length || 0
 
-                    const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
+                    return userWaitlistEntries?.filter(waitlist => {
+                      const registration = waitlist.registration
+                      if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
+                      if (!registration.end_date || new Date(registration.end_date) < now) return false
+                      // Only show if not already in event registrations
+                      return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                    }).map((waitlistEntry, index: number) => {
+                      const registration = waitlistEntry.registration
+                      if (!registration) return null
 
-                    return (
-                      <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
-                        <p className="text-sm font-bold text-gray-900">
-                          {registration.name}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Waitlist
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1.5">
-                          {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
-                        </p>
-                        {registration.start_date && registration.end_date && (
-                          <div className="mt-1.5">
-                            <EventCalendarButton
-                              eventName={registration.name}
-                              startDate={registration.start_date}
-                              endDate={registration.end_date}
-                              description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
-                            />
+                      const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
+
+                      return (
+                        <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
+                          <p className="text-sm font-bold text-gray-900">
+                            {registration.name}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Waitlist
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                          <p className="text-sm text-gray-500 mt-1.5">
+                            {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
+                          </p>
+                          {registration.start_date && registration.end_date && (
+                            <div className="mt-1.5">
+                              <EventCalendarButton
+                                eventName={registration.name}
+                                startDate={registration.start_date}
+                                endDate={registration.end_date}
+                                description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">

@@ -32,8 +32,8 @@ export class AlternatePaymentService {
       const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
-      // Get user's payment method and customer
-      const { data: user, error: userError } = await supabase
+      // Get user's payment method and customer - use admin client to bypass RLS
+      const { data: user, error: userError } = await adminSupabase
         .from('users')
         .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name, stripe_customer_id')
         .eq('id', userId)
@@ -51,8 +51,8 @@ export class AlternatePaymentService {
         throw new Error('User does not have a Stripe customer ID')
       }
 
-      // Get registration details for pricing
-      const { data: registration, error: registrationError } = await supabase
+      // Get registration details for pricing - use admin client to bypass RLS
+      const { data: registration, error: registrationError } = await adminSupabase
         .from('registrations')
         .select('name, alternate_price, alternate_accounting_code, season_id')
         .eq('id', registrationId)
@@ -200,8 +200,8 @@ export class AlternatePaymentService {
         .update({ staging_metadata: updatedMetadata })
         .eq('id', stagingRecord.id)
 
-      // Create payment record
-      const { data: paymentRecord, error: paymentError } = await supabase
+      // Create payment record - use admin client to create payment for alternate user
+      const { data: paymentRecord, error: paymentError } = await adminSupabase
         .from('payments')
         .insert({
           user_id: userId,
@@ -396,8 +396,8 @@ export class AlternatePaymentService {
       const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
-      // Create payment record with $0 amount
-      const { data: paymentRecord, error: paymentError } = await supabase
+      // Create payment record with $0 amount - use admin client for alternate user
+      const { data: paymentRecord, error: paymentError } = await adminSupabase
         .from('payments')
         .insert({
           user_id: userId,
@@ -423,7 +423,7 @@ export class AlternatePaymentService {
 
       // Record discount usage if applicable
       if (discountCodeId) {
-        const { data: registration } = await supabase
+        const { data: registration } = await adminSupabase
           .from('registrations')
           .select('alternate_price')
           .eq('id', registrationId)
@@ -507,16 +507,16 @@ export class AlternatePaymentService {
     amountSaved: number
   ): Promise<void> {
     try {
-      const supabase = await createClient()
+      const adminSupabase = createAdminClient()
 
-      // Get discount code and registration details
+      // Get discount code and registration details - use admin client for alternate users
       const [discountResult, registrationResult] = await Promise.all([
-        supabase
+        adminSupabase
           .from('discount_codes')
           .select('discount_category_id')
           .eq('id', discountCodeId)
           .single(),
-        supabase
+        adminSupabase
           .from('registrations')
           .select('season_id')
           .eq('id', registrationId)
@@ -527,9 +527,9 @@ export class AlternatePaymentService {
         throw new Error('Failed to get discount or registration details')
       }
 
-      // Record discount usage for this alternate purchase
+      // Record discount usage for this alternate purchase - use admin client for alternate users
       // No duplicate check - each alternate purchase is unique even for same registration
-      const { error: insertError } = await supabase
+      const { error: insertError } = await adminSupabase
         .from('discount_usage')
         .insert({
           user_id: userId,

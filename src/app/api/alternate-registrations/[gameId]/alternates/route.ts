@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
@@ -50,13 +50,16 @@ export async function GET(
 
     const registration = Array.isArray(game.registrations) ? game.registrations[0] : game.registrations
     if (!registration || !registration.allow_alternates) {
-      return NextResponse.json({ 
-        error: 'This registration does not allow alternates' 
+      return NextResponse.json({
+        error: 'This registration does not allow alternates'
       }, { status: 400 })
     }
 
+    // Access verified - use admin client to bypass RLS for data queries
+    const adminSupabase = createAdminClient()
+
     // Get all users who registered as alternates for this registration
-    const { data: alternates, error: alternatesError } = await supabase
+    const { data: alternates, error: alternatesError } = await adminSupabase
       .from('user_alternate_registrations')
       .select(`
         id,
@@ -97,7 +100,7 @@ export async function GET(
     }
 
     // Check which alternates are already selected for this specific game
-    const { data: existingSelections, error: selectionsError } = await supabase
+    const { data: existingSelections, error: selectionsError } = await adminSupabase
       .from('alternate_selections')
       .select('user_id')
       .eq('alternate_registration_id', gameId)
@@ -113,7 +116,7 @@ export async function GET(
 
     // Get discount usage for each user to check limits
     const userIds = alternates?.map(alt => alt.user_id) || []
-    const { data: discountUsage } = await supabase
+    const { data: discountUsage } = await adminSupabase
       .from('discount_usage')
       .select('user_id, discount_category_id, amount_saved')
       .in('user_id', userIds)

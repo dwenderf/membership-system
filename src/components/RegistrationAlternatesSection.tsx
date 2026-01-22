@@ -24,12 +24,12 @@ interface Registration {
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface RegistrationAlternatesSectionProps {
@@ -74,26 +74,26 @@ export default function RegistrationAlternatesSection({
   }
 
   const handleGameCreated = (game: Game) => {
-    // Add the new game to the list and sort by game_date (descending, like the API)
+    // Add the new game to the list and sort by gameDate (descending, like the API)
     setGames(prev => {
       const newGames = [...prev, game]
       return newGames.sort((a, b) => {
         // Handle null dates - put them at the end
-        if (!a.game_date && !b.game_date) return 0
-        if (!a.game_date) return 1
-        if (!b.game_date) return -1
-        
+        if (!a.gameDate && !b.gameDate) return 0
+        if (!a.gameDate) return 1
+        if (!b.gameDate) return -1
+
         // Sort by date descending (newest first)
-        return new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
+        return new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()
       })
     })
     setShowCreateForm(false)
   }
 
   const handleCountsUpdated = (gameId: string, selectedCount: number, availableCount: number) => {
-    setGames(prev => prev.map(game => 
-      game.id === gameId 
-        ? { ...game, selected_count: selectedCount, available_count: availableCount }
+    setGames(prev => prev.map(game =>
+      game.id === gameId
+        ? { ...game, selectedCount: selectedCount, availableCount: availableCount }
         : game
     ))
   }
@@ -231,7 +231,7 @@ export default function RegistrationAlternatesSection({
                 key={game.id}
                 game={game}
                 registration={registration}
-                dateTag={getGameDateTag(game.game_date)}
+                dateTag={getGameDateTag(game.gameDate)}
                 userAccess={userAccess}
                 onCountsUpdated={handleCountsUpdated}
               />

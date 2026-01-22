@@ -99,13 +99,18 @@ export async function GET(request: NextRequest) {
 
       return {
         id: game.id,
-        registration_id: game.registration_id,
-        game_description: game.game_description,
-        game_date: game.game_date,
-        game_end_time: game.game_end_time,
-        created_at: game.created_at,
-        selected_count: selectedCount,
-        available_count: availableCount
+        registrationId: game.registration_id,
+        registrationName: registration.name,
+        seasonName: registration.seasons?.name || '',
+        gameDescription: game.game_description,
+        gameDate: game.game_date,
+        gameEndTime: game.game_end_time,
+        alternatePrice: registration.alternate_price,
+        alternateAccountingCode: registration.alternate_accounting_code,
+        createdAt: game.created_at,
+        alternateSelections: selectedCount,
+        selectedCount: selectedCount,
+        availableCount: availableCount
       }
     })
 
@@ -223,14 +228,14 @@ export async function POST(request: NextRequest) {
       createdBy: authUser.id
     })
 
-    // Format response - using snake_case to match component expectations
+    // Format response using camelCase
     const formattedGame = {
       id: newGame.id,
-      registration_id: newGame.registration_id,
-      game_description: newGame.game_description,
-      game_date: newGame.game_date,
-      game_end_time: newGame.game_end_time,
-      created_at: newGame.created_at
+      registrationId: newGame.registration_id,
+      gameDescription: newGame.game_description,
+      gameDate: newGame.game_date,
+      gameEndTime: newGame.game_end_time,
+      createdAt: newGame.created_at
     }
 
     return NextResponse.json({

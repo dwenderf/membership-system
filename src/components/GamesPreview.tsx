@@ -9,12 +9,12 @@ import GameCreationForm from '@/components/GameCreationForm'
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface GamesPreviewProps {
@@ -66,8 +66,8 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
   }
 
   // Separate future and past games
-  const futureGames = games.filter(game => !isPastGame(game.game_date))
-  const pastGames = games.filter(game => isPastGame(game.game_date))
+  const futureGames = games.filter(game => !isPastGame(game.gameDate))
+  const pastGames = games.filter(game => isPastGame(game.gameDate))
 
   if (loading) {
     return (
@@ -136,10 +136,10 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-gray-900">
-                      {game.game_description}
+                      {game.gameDescription}
                     </h4>
                     <div className="mt-1 text-xs text-gray-500">
-                      {game.game_date ? formatDate(game.game_date) : 'No date'} • {game.selected_count || 0} alternates selected
+                      {game.gameDate ? formatDate(game.gameDate) : 'No date'} • {game.selectedCount || 0} alternates selected
                     </div>
                   </div>
                   <Link
@@ -180,10 +180,10 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-gray-700">
-                      {game.game_description}
+                      {game.gameDescription}
                     </h4>
                     <div className="mt-1 text-xs text-gray-500">
-                      {game.game_date ? formatDate(game.game_date) : 'No date'} • {game.selected_count || 0} alternates selected
+                      {game.gameDate ? formatDate(game.gameDate) : 'No date'} • {game.selectedCount || 0} alternates selected
                     </div>
                   </div>
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">

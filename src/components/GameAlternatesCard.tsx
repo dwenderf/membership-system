@@ -8,12 +8,12 @@ import { useToast } from '@/contexts/ToastContext'
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface Registration {
@@ -160,8 +160,8 @@ export default function GameAlternatesCard({
         // Update counts in parent component
         if (onCountsUpdated) {
           // Calculate new counts after refresh
-          const newSelectedCount = (game.selected_count || 0) + successful
-          const newAvailableCount = Math.max(0, (game.available_count || 0) - successful)
+          const newSelectedCount = (game.selectedCount || 0) + successful
+          const newAvailableCount = Math.max(0, (game.availableCount || 0) - successful)
           onCountsUpdated(game.id, newSelectedCount, newAvailableCount)
         }
       }
@@ -178,8 +178,8 @@ export default function GameAlternatesCard({
 
   // Use pre-calculated counts from API when available, otherwise calculate from loaded alternates
   const availableAlternates = alternates.filter(alt => !alt.isAlreadySelected)
-  const selectedCount = game.selected_count ?? alternates.filter(alt => alt.isAlreadySelected).length
-  const availableCount = game.available_count ?? availableAlternates.length
+  const selectedCount = game.selectedCount ?? alternates.filter(alt => alt.isAlreadySelected).length
+  const availableCount = game.availableCount ?? availableAlternates.length
 
   const formatGameDateTime = (dateStr: string | null) => {
     if (!dateStr) return ''
@@ -198,7 +198,7 @@ export default function GameAlternatesCard({
           <div className="flex-1">
             <div className="flex items-center space-x-3">
               <h4 className="text-lg font-medium text-gray-900">
-                {game.game_description || 'Untitled Game'}
+                {game.gameDescription || 'Untitled Game'}
               </h4>
               {dateTag && (
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -210,9 +210,9 @@ export default function GameAlternatesCard({
                 </span>
               )}
             </div>
-            {game.game_date ? (
+            {game.gameDate ? (
               <p className="text-sm text-gray-600 mt-1">
-                {formatGameDateTime(game.game_date)}
+                {formatGameDateTime(game.gameDate)}
               </p>
             ) : (
               <p className="text-sm text-gray-500 mt-1">No date specified</p>

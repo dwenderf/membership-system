@@ -19,8 +19,11 @@ export function formatDateString(dateString: string): string {
 /**
  * Formats a date object to localized date display in the app's timezone
  */
-export function formatDate(date: Date | string | number): string {
+export function formatDate(date: Date | string | number | null | undefined): string {
+  if (!date) return 'N/A'
   const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) return 'Invalid Date'
   return dateObj.toLocaleDateString('en-US', { timeZone: APP_TIMEZONE })
 }
 
@@ -31,10 +34,13 @@ export function formatDate(date: Date | string | number): string {
  * @returns Formatted time string (e.g., "2:11 PM")
  */
 export function formatTime(
-  date: Date | string | number,
+  date: Date | string | number | null | undefined,
   options: Intl.DateTimeFormatOptions = {}
 ): string {
+  if (!date) return 'N/A'
   const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) return 'Invalid Time'
   return dateObj.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -48,7 +54,8 @@ export function formatTime(
  * @param date - Date object, ISO string, or timestamp
  * @returns Formatted date and time string (e.g., "10/23/2025 at 2:11 PM")
  */
-export function formatDateTime(date: Date | string | number): string {
+export function formatDateTime(date: Date | string | number | null | undefined): string {
+  if (!date) return 'N/A'
   return `${formatDate(date)} at ${formatTime(date)}`
 }
 
@@ -148,8 +155,12 @@ export function convertFromUTCToNYDateTimeLocal(utcIsoString: string): string {
  * @param date - Date object, ISO string, or timestamp
  * @returns Formatted string like "Sunday, Jan 11 @ 4:00pm" (no year)
  */
-export function formatEventDateTime(date: Date | string | number): string {
+export function formatEventDateTime(date: Date | string | number | null | undefined): string {
+  if (!date) return 'N/A'
   const dateObj = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
+
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) return 'Invalid Date'
 
   const dayOfWeek = dateObj.toLocaleDateString('en-US', {
     weekday: 'long',

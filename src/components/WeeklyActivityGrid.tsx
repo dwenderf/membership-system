@@ -6,12 +6,12 @@ import { formatDate } from '@/lib/date-utils'
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface Registration {
@@ -64,24 +64,24 @@ export default function WeeklyActivityGrid({ games, registration, onWeekClick }:
     const weekMap = new Map<string, { games: Game[], totalSelected: number }>()
 
     games.forEach(game => {
-      if (!game.game_date) return
-      
-      const gameDate = new Date(game.game_date)
-      
+      if (!game.gameDate) return
+
+      const gameDate = new Date(game.gameDate)
+
       // Get start of week (Sunday)
       const weekStart = new Date(gameDate)
       weekStart.setDate(gameDate.getDate() - gameDate.getDay())
       weekStart.setHours(0, 0, 0, 0)
-      
+
       const weekKey = weekStart.toISOString().split('T')[0]
-      
+
       if (!weekMap.has(weekKey)) {
         weekMap.set(weekKey, { games: [], totalSelected: 0 })
       }
-      
+
       const weekData = weekMap.get(weekKey)!
       weekData.games.push(game)
-      weekData.totalSelected += game.selected_count || 0
+      weekData.totalSelected += game.selectedCount || 0
     })
 
     // Generate all weeks in the season
@@ -133,7 +133,7 @@ export default function WeeklyActivityGrid({ games, registration, onWeekClick }:
     }
 
     const gamesList = week.games.map(game =>
-      `${game.game_description} (${game.selected_count || 0} selected)`
+      `${game.gameDescription} (${game.selectedCount || 0} selected)`
     ).join(', ')
 
     return `Week ${week.weekNumber} (${formatDate(startDate)} - ${formatDate(endDate)}): ${week.totalSelected} alternates selected\nGames: ${gamesList}`

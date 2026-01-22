@@ -7,12 +7,12 @@ import { formatDate } from '@/lib/date-utils'
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface Registration {
@@ -66,18 +66,18 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     const dailyData = new Map<string, { games: Game[], totalSelected: number }>()
 
     games.forEach(game => {
-      if (!game.game_date) return
-      
-      const gameDate = new Date(game.game_date)
+      if (!game.gameDate) return
+
+      const gameDate = new Date(game.gameDate)
       const dateKey = gameDate.toISOString().split('T')[0] // YYYY-MM-DD
-      
+
       if (!dailyData.has(dateKey)) {
         dailyData.set(dateKey, { games: [], totalSelected: 0 })
       }
-      
+
       const dayData = dailyData.get(dateKey)!
       dayData.games.push(game)
-      dayData.totalSelected += game.selected_count || 0
+      dayData.totalSelected += game.selectedCount || 0
     })
 
     // Convert to heatmap format, filtering for Fri/Sat/Sun only
@@ -125,8 +125,8 @@ export default function ActivityHeatmap({ games, registration, onDateClick }: Ac
     const date = new Date(value.date)
     const formattedDate = formatDate(date)
 
-    const gamesSummary = value.games.map(game => 
-      `${game.game_description || 'Untitled Game'} (${game.selected_count || 0} selected)`
+    const gamesSummary = value.games.map(game =>
+      `${game.gameDescription || 'Untitled Game'} (${game.selectedCount || 0} selected)`
     ).join(', ')
 
     return {

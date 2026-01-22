@@ -4,6 +4,7 @@ This document outlines coding standards and best practices for the membership sy
 
 ## Table of Contents
 - [Data Access Patterns](#data-access-patterns)
+- [Property Naming Conventions](#property-naming-conventions)
 - [API Route Design](#api-route-design)
 - [Component Organization](#component-organization)
 - [Security Guidelines](#security-guidelines)
@@ -66,6 +67,101 @@ export async function GET() {
 - Very simple, well-protected operations with proper RLS policies may use direct queries
 - Real-time subscriptions may require direct Supabase access
 - Always document why direct access is used if making an exception
+
+---
+
+## Property Naming Conventions
+
+### Database ↔ API ↔ Frontend Naming Pattern
+
+**Standard**: Use snake_case in the database, convert to camelCase in API responses, and use camelCase throughout the frontend.
+
+**Why:**
+- **SQL Convention**: PostgreSQL and most SQL databases use snake_case
+- **JavaScript Convention**: JavaScript/TypeScript uses camelCase for properties
+- **API as Translation Layer**: The API serves as the boundary between database and application layers
+- **Type Safety**: Clear interfaces prevent property access errors
+- **Consistency**: Predictable pattern across the entire codebase
+
+**Pattern:**
+
+```
+Database (snake_case) → API (converts) → Frontend (camelCase)
+```
+
+**Example:**
+
+❌ **Don't** - Return database snake_case directly to frontend:
+```typescript
+// API route - BAD
+const { data: games } = await supabase
+  .from('alternate_registrations')
+  .select('*')
+
+return NextResponse.json({ games })  // Returns snake_case!
+
+// Frontend component - BREAKS
+interface Game {
+  gameDescription: string  // Expects camelCase
+  gameDate: string
+}
+// game.gameDescription is undefined! ❌
+```
+
+✅ **Do** - Convert to camelCase in API layer:
+```typescript
+// API route - GOOD
+const { data: games } = await supabase
+  .from('alternate_registrations')
+  .select('*')
+
+// Convert snake_case to camelCase
+const formattedGames = games.map(game => ({
+  id: game.id,
+  gameDescription: game.game_description,
+  gameDate: game.game_date,
+  createdAt: game.created_at,
+  selectedCount: game.selected_count
+}))
+
+return NextResponse.json({ games: formattedGames })
+
+// Frontend component - WORKS
+interface Game {
+  id: string
+  gameDescription: string
+  gameDate: string
+  createdAt: string
+  selectedCount: number
+}
+// game.gameDescription works perfectly! ✅
+```
+
+**Testing Checklist:**
+
+When updating API responses to camelCase, ensure you also update:
+- [ ] TypeScript interfaces in all consuming components
+- [ ] Property access throughout component code
+- [ ] API integration tests
+- [ ] Any parent/child component prop passing
+
+**Common Conversions:**
+
+| Database (snake_case) | Frontend (camelCase) |
+|----------------------|----------------------|
+| `game_date` | `gameDate` |
+| `created_at` | `createdAt` |
+| `updated_at` | `updatedAt` |
+| `user_id` | `userId` |
+| `registration_id` | `registrationId` |
+| `selected_count` | `selectedCount` |
+| `payment_method` | `paymentMethod` |
+
+**Implementation Notes:**
+- The conversion happens **once** in the API route, not in multiple components
+- Keep database queries using snake_case (Supabase returns snake_case)
+- Frontend should **never** use snake_case for property access
+- Consider helper functions for complex conversions to avoid repetition
 
 ---
 

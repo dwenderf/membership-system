@@ -49,5 +49,8 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.4.1",
     "typescript": "^5"
+  },
+  "overrides": {
+    "tar": "^7.5.6"
   }
 }

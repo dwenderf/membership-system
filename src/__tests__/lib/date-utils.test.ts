@@ -51,9 +51,9 @@ describe('Date Utility Functions', () => {
       expect(result).toBe('Invalid Date')
     })
 
-    it('should return "Invalid Date" for NaN', () => {
+    it('should return "N/A" for NaN', () => {
       const result = formatDate(NaN)
-      expect(result).toBe('Invalid Date')
+      expect(result).toBe('N/A')
     })
   })
 

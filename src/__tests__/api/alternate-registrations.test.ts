@@ -141,7 +141,7 @@ describe('/api/alternate-registrations', () => {
 
       expect(response.status).toBe(200)
       expect(data.games).toHaveLength(1)
-      expect(data.games[0].game_description).toBe('Test Game')
+      expect(data.games[0].gameDescription).toBe('Test Game')
       expect(data.registration.name).toBe('Test Registration')
     })
   })
@@ -262,7 +262,7 @@ describe('/api/alternate-registrations', () => {
 
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
-      expect(data.game.game_description).toBe('Test Game')
+      expect(data.game.gameDescription).toBe('Test Game')
       expect(data.message).toBe('Game created successfully')
     })
 

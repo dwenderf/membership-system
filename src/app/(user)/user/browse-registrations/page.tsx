@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatTime, formatEventDateTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus } from '@/lib/registration-status'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
@@ -103,10 +104,11 @@ export default async function BrowseRegistrationsPage() {
     .select(`
       *,
       season:seasons(*),
+      memberships:required_membership_id(id, name),
       registration_categories(
         *,
         categories:category_id(name),
-        memberships:required_membership_id(name)
+        memberships:required_membership_id(id, name)
       )
     `)
     .in('season_id', seasonIds)
@@ -287,11 +289,59 @@ export default async function BrowseRegistrationsPage() {
                 return shouldShow && (reg.type === 'team' || !isAlreadyRegistered)
               })
               .map((registration) => {
-                // Check if user has required memberships for any category
-                const hasEligibleMembership = registration.registration_categories?.some((cat: any) => {
-                  if (!cat.memberships?.name) return true // No membership required
-                  return consolidatedMembershipList.some((cm: any) => cm.membership?.name === cat.memberships?.name)
-                })
+                // Collect all qualifying membership IDs (registration-level + category-level)
+                const registrationMembershipId = registration.required_membership_id || null
+                const categoryMembershipIds = registration.registration_categories
+                  ?.map((cat: any) => cat.required_membership_id)
+                  .filter((id: string | null): id is string => id !== null) || []
+
+                // Get unique category membership IDs
+                const uniqueCategoryMembershipIds = [...new Set(categoryMembershipIds)]
+
+                // Check if user has required membership using hierarchical validation
+                // We need to check against each category since different categories may have different requirements
+                let hasEligibleMembership = false
+                let membershipValidationResult = null
+
+                if (!registrationMembershipId && uniqueCategoryMembershipIds.length === 0) {
+                  // No membership required at all
+                  hasEligibleMembership = true
+                } else {
+                  // Check if user qualifies for any category
+                  // A user is eligible if they have the registration-level membership OR any category-level membership
+                  const allQualifyingIds = [
+                    registrationMembershipId,
+                    ...uniqueCategoryMembershipIds
+                  ].filter((id): id is string => id !== null)
+
+                  // Convert user memberships to the format expected by validation service
+                  const userMembershipsForValidation = activeMemberships.map(um => ({
+                    id: um.id,
+                    membership_id: um.membership_id,
+                    valid_from: um.valid_from,
+                    valid_until: um.valid_until,
+                    payment_status: um.payment_status as 'paid' | 'pending' | 'failed' | 'refunded',
+                    memberships: um.membership ? {
+                      id: um.membership.id,
+                      name: um.membership.name
+                    } : undefined
+                  }))
+
+                  // For eligibility check, we consider user eligible if they have ANY qualifying membership
+                  // (This is more permissive than the per-category check done later in RegistrationPurchase)
+                  hasEligibleMembership = allQualifyingIds.some(qualifyingId =>
+                    userMembershipsForValidation.some(um => um.membership_id === qualifyingId)
+                  )
+
+                  // For detailed validation result (used for messaging), check with first category
+                  // This gives us a validation result we can use to show helpful messages
+                  const firstCategoryMembershipId = uniqueCategoryMembershipIds[0] || null
+                  membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
+                    registrationMembershipId,
+                    firstCategoryMembershipId,
+                    userMembershipsForValidation
+                  )
+                }
 
                 const isAlreadyRegistered = userRegistrationIds.includes(registration.id)
                 const registrationStatus = getRegistrationStatus(registration)
@@ -353,6 +403,46 @@ export default async function BrowseRegistrationsPage() {
                               </span>
                             )}
                           </div>
+
+                          {/* Membership requirement message - show only if user doesn't have valid membership AND there are multiple qualifying options */}
+                          {!hasEligibleMembership &&
+                           registrationMembershipId &&
+                           uniqueCategoryMembershipIds.length > 0 && (
+                            <div className="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3">
+                              <div className="flex items-start">
+                                <svg className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-blue-800">
+                                    Membership Required
+                                  </p>
+                                  <p className="text-xs text-blue-700 mt-1">
+                                    You need either <span className="font-semibold">{registration.memberships?.name || 'registration-level membership'}</span> or{' '}
+                                    {uniqueCategoryMembershipIds.length === 1 ? (
+                                      <span className="font-semibold">
+                                        {registration.registration_categories?.find((cat: any) =>
+                                          cat.required_membership_id === uniqueCategoryMembershipIds[0]
+                                        )?.memberships?.name || 'category-level membership'}
+                                      </span>
+                                    ) : (
+                                      <span className="font-semibold">a category-specific membership</span>
+                                    )}{' '}
+                                    to register for this event.
+                                  </p>
+                                  <Link
+                                    href="/user/browse-memberships"
+                                    className="inline-flex items-center mt-2 text-xs font-medium text-blue-800 hover:text-blue-900"
+                                  >
+                                    View Available Memberships
+                                    <svg className="ml-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 

@@ -11,6 +11,7 @@ import Link from 'next/link'
 import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
 import EditableEventDates from '@/components/EditableEventDates'
+import EditableRegistrationMembership from '@/components/EditableRegistrationMembership'
 import GamesPreview from '@/components/GamesPreview'
 import CaptainManager from '@/components/CaptainManager'
 
@@ -199,6 +200,15 @@ export default async function RegistrationDetailPage({
                       </dd>
                     </div>
                   )}
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
+                    <dd className="mt-1">
+                      <EditableRegistrationMembership
+                        registrationId={id}
+                        initialMembershipId={registration.required_membership_id}
+                      />
+                    </dd>
+                  </div>
                   <EditableEventDates
                     registrationId={id}
                     registrationType={registration.type}

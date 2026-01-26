@@ -22,10 +22,12 @@ export default function NewRegistrationPage() {
     alternate_accounting_code: '',
     start_date: '',
     duration_minutes: '', // Duration in minutes instead of end_date
+    required_membership_id: '', // Optional registration-level membership requirement
   })
-  
+
   const [seasons, setSeasons] = useState<any[]>([])
   const [existingRegistrations, setExistingRegistrations] = useState<any[]>([])
+  const [availableMemberships, setAvailableMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)
@@ -66,12 +68,22 @@ export default function NewRegistrationPage() {
       const { data: registrationsData, error: registrationsError } = await supabase
         .from('registrations')
         .select('name')
-      
+
       if (!registrationsError && registrationsData) {
         setExistingRegistrations(registrationsData)
       }
+
+      // Fetch available memberships
+      const { data: membershipsData, error: membershipsError } = await supabase
+        .from('memberships')
+        .select('id, name, price_monthly, price_annual')
+        .order('name')
+
+      if (!membershipsError && membershipsData) {
+        setAvailableMemberships(membershipsData)
+      }
     }
-    
+
     fetchData()
   }, [])
 
@@ -112,6 +124,7 @@ export default function NewRegistrationPage() {
         alternate_accounting_code: formData.allow_alternates ? formData.alternate_accounting_code : null,
         start_date: startDateUTC,
         end_date: endDateUTC,
+        required_membership_id: formData.required_membership_id || null,
       }
 
       const { error: insertError } = await supabase
@@ -246,6 +259,30 @@ export default function NewRegistrationPage() {
               </div>
 
               {/* Removed membership warning - no longer season-specific */}
+
+              {/* Required Membership (Optional) */}
+              <div>
+                <label htmlFor="required_membership_id" className="block text-sm font-medium text-gray-700">
+                  Required Membership (Optional)
+                </label>
+                <select
+                  id="required_membership_id"
+                  value={formData.required_membership_id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, required_membership_id: e.target.value }))}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="">No registration-level requirement</option>
+                  {availableMemberships.map((membership) => (
+                    <option key={membership.id} value={membership.id}>
+                      {membership.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  Optional default membership requirement. Categories can offer alternative memberships.
+                  Users need EITHER this membership OR a category-specific membership to register.
+                </p>
+              </div>
 
               {/* Registration Type */}
               <div>
@@ -445,7 +482,17 @@ export default function NewRegistrationPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Membership Requirements</dt>
+                      <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
+                      <dd className="text-sm text-gray-900">
+                        {formData.required_membership_id ? (
+                          availableMemberships.find(m => m.id === formData.required_membership_id)?.name || 'Unknown'
+                        ) : (
+                          'None (optional)'
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Category Requirements</dt>
                       <dd className="text-sm text-gray-900">
                         Set per category
                       </dd>

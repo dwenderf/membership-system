@@ -391,7 +391,7 @@ export default async function BrowseRegistrationsPage() {
 
                           {/* Status badges */}
                           <div className="mt-2 flex items-center space-x-2">
-                            <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} />
+                            <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event' | 'tournament'} />
                             {registrationStatus === 'presale' && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
                                 Pre-Sale

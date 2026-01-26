@@ -149,7 +149,7 @@ export type Database = {
           id: string
           season_id: string
           name: string
-          type: 'team' | 'scrimmage' | 'event'
+          type: 'team' | 'scrimmage' | 'event' | 'tournament'
           allow_discounts: boolean
           is_active: boolean
           presale_start_at: string | null
@@ -168,7 +168,7 @@ export type Database = {
           id?: string
           season_id: string
           name: string
-          type: 'team' | 'scrimmage' | 'event'
+          type: 'team' | 'scrimmage' | 'event' | 'tournament'
           allow_discounts?: boolean
           is_active?: boolean
           presale_start_at?: string | null

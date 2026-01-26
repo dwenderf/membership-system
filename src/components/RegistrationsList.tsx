@@ -94,7 +94,7 @@ function RegistrationItem({ registration }: { registration: Registration }) {
               <p className="text-lg font-medium text-gray-900 truncate">
                 {registration.name}
               </p>
-              <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} className="ml-2" />
+              <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event' | 'tournament'} className="ml-2" />
               <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 getStatusBadgeStyle(status)
               }`}>

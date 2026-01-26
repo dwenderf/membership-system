@@ -15,7 +15,7 @@ export default function NewRegistrationPage() {
   const [formData, setFormData] = useState({
     season_id: '',
     name: '',
-    type: 'team' as 'team' | 'scrimmage' | 'event',
+    type: 'team' as 'team' | 'scrimmage' | 'event' | 'tournament',
     allow_discounts: true,
     allow_alternates: false,
     alternate_price: '',
@@ -107,13 +107,23 @@ export default function NewRegistrationPage() {
       let startDateUTC = null
       let endDateUTC = null
 
-      if ((formData.type === 'event' || formData.type === 'scrimmage') && formData.start_date && formData.duration_minutes) {
+      if ((formData.type === 'event' || formData.type === 'scrimmage' || formData.type === 'tournament') && formData.start_date && formData.duration_minutes) {
         startDateUTC = convertToNYTimezone(formData.start_date)
 
         // Calculate end date by adding duration to start date
         const startDate = new Date(startDateUTC)
-        const endDate = new Date(startDate.getTime() + parseInt(formData.duration_minutes) * 60 * 1000)
-        endDateUTC = endDate.toISOString()
+
+        if (formData.type === 'tournament') {
+          // For tournaments, ensure we end at the last minute of the final day
+          // Duration is in minutes (days * 1440), but we want the end to be 23:59:59
+          const durationMs = parseInt(formData.duration_minutes) * 60 * 1000
+          const endDate = new Date(startDate.getTime() + durationMs - 1000) // Subtract 1 second to end at 23:59:59
+          endDateUTC = endDate.toISOString()
+        } else {
+          // For events and scrimmages, add the exact duration
+          const endDate = new Date(startDate.getTime() + parseInt(formData.duration_minutes) * 60 * 1000)
+          endDateUTC = endDate.toISOString()
+        }
       }
 
       const registrationData = {
@@ -165,12 +175,13 @@ export default function NewRegistrationPage() {
     registration.name.toLowerCase() === formData.name.trim().toLowerCase()
   )
   
-  const requiresDates = formData.type === 'event' || formData.type === 'scrimmage'
+  const requiresDates = formData.type === 'event' || formData.type === 'scrimmage' || formData.type === 'tournament'
 
   // Set default duration when type changes
   const getDefaultDuration = (type: string) => {
     if (type === 'scrimmage') return '90' // 90 minutes
     if (type === 'event') return '180' // 3 hours
+    if (type === 'tournament') return '4320' // 3 days (3 * 24 * 60 = 4320 minutes)
     return ''
   }
 
@@ -345,7 +356,7 @@ export default function NewRegistrationPage() {
                   id="type"
                   value={formData.type}
                   onChange={(e) => {
-                    const newType = e.target.value as 'team' | 'scrimmage' | 'event'
+                    const newType = e.target.value as 'team' | 'scrimmage' | 'event' | 'tournament'
                     setFormData(prev => ({
                       ...prev,
                       type: newType,
@@ -358,20 +369,21 @@ export default function NewRegistrationPage() {
                   <option value="team">Team</option>
                   <option value="scrimmage">Scrimmage</option>
                   <option value="event">Event</option>
+                  <option value="tournament">Tournament</option>
                 </select>
                 <p className="mt-1 text-sm text-gray-500">
-                  Type of registration (team, scrimmage, or event)
+                  Type of registration (team, scrimmage, event, or tournament)
                 </p>
               </div>
 
-              {/* Event/Scrimmage Date Fields - Only shown for events and scrimmages */}
+              {/* Event/Scrimmage/Tournament Date Fields - Only shown for events, scrimmages, and tournaments */}
               {requiresDates && (
                 <EventDateTimeInput
                   startDate={formData.start_date}
                   durationMinutes={formData.duration_minutes}
                   onStartDateChange={(value) => setFormData(prev => ({ ...prev, start_date: value }))}
                   onDurationChange={(value) => setFormData(prev => ({ ...prev, duration_minutes: value }))}
-                  registrationType={formData.type}
+                  registrationType={formData.type as 'event' | 'scrimmage' | 'tournament'}
                   required={requiresDates}
                 />
               )}

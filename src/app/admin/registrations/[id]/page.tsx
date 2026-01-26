@@ -179,7 +179,7 @@ export default async function RegistrationDetailPage({
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Type</dt>
                     <dd className="mt-1 text-sm text-gray-900 capitalize">
-                      <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event'} />
+                      <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event' | 'tournament'} />
                     </dd>
                   </div>
                   <div>

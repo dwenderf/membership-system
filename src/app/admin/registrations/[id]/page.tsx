@@ -12,6 +12,7 @@ import EditableRegistrationName from '@/components/EditableRegistrationName'
 import EditableAlternateConfiguration from '@/components/EditableAlternateConfiguration'
 import EditableEventDates from '@/components/EditableEventDates'
 import EditableRegistrationMembership from '@/components/EditableRegistrationMembership'
+import EditableSurveyConfiguration from '@/components/EditableSurveyConfiguration'
 import GamesPreview from '@/components/GamesPreview'
 import CaptainManager from '@/components/CaptainManager'
 
@@ -206,6 +207,18 @@ export default async function RegistrationDetailPage({
                       <EditableRegistrationMembership
                         registrationId={id}
                         initialMembershipId={registration.required_membership_id}
+                      />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Survey</dt>
+                    <dd className="mt-1">
+                      <EditableSurveyConfiguration
+                        registrationId={id}
+                        initialConfig={{
+                          require_survey: registration.require_survey || false,
+                          survey_id: registration.survey_id
+                        }}
                       />
                     </dd>
                   </div>

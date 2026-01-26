@@ -640,38 +640,24 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Check membership eligibility if required
-    if (selectedCategory.required_membership_id) {
-      const today = new Date().toISOString().split('T')[0]
-      
-      // Debug: Get all user memberships to see what we have
-      const { data: allUserMemberships } = await supabase
-        .from('user_memberships')
-        .select('id, membership_id, valid_until, payment_status')
-        .eq('user_id', user.id)
-        .eq('membership_id', selectedCategory.required_membership_id)
-      
+    // Check membership eligibility using hierarchical validation
+    // Users can qualify with EITHER registration-level OR category-level membership
+    const registrationMembershipId = registration.required_membership_id || null
+    const categoryMembershipId = selectedCategory.required_membership_id || null
 
-      const { data: userMemberships } = await supabase
-        .from('user_memberships')
-        .select('id, valid_until')
-        .eq('user_id', user.id)
-        .eq('membership_id', selectedCategory.required_membership_id)
-        .eq('payment_status', 'paid')
-        .gte('valid_until', today)
+    // Only validate if at least one requirement is set
+    if (registrationMembershipId || categoryMembershipId) {
+      const membershipValidation = await RegistrationValidationService.validateMembershipRequirementAsync(
+        supabase,
+        registrationMembershipId,
+        categoryMembershipId,
+        user.id
+      )
 
-      // Find the membership with the latest expiration date (same logic as frontend)
-      const validMembership = userMemberships && userMemberships.length > 0 
-        ? userMemberships.reduce((latest, current) => {
-            return new Date(current.valid_until) > new Date(latest.valid_until) ? current : latest
-          })
-        : null
-
-      if (!validMembership) {
-        const membershipName = selectedCategory.membership?.name || 'Required membership'
+      if (!membershipValidation.hasRequiredMembership) {
         capturePaymentError(new Error('Membership required'), paymentContext, 'warning')
-        return NextResponse.json({ 
-          error: `${membershipName} membership required for this registration` 
+        return NextResponse.json({
+          error: membershipValidation.error || 'Required membership not found'
         }, { status: 400 })
       }
     }

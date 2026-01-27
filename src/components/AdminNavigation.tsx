@@ -97,13 +97,13 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                   className="lg:hidden flex items-center text-gray-900"
                   style={{ fontFamily: "'Karben 105 Stencil', Impact, 'Arial Black', sans-serif" }}
                 >
-                  <span className="text-sm font-bold tracking-tight">NYC</span>
+                  <span className="text-base font-bold tracking-tight">NYC</span>
                   <img
                     src="/images/logo.png"
                     alt=""
-                    className="h-8 w-auto mx-1"
+                    className="h-10 w-auto mx-1"
                   />
-                  <span className="text-sm font-bold tracking-tight">PRIDE HOCKEY ALLIANCE</span>
+                  <span className="text-base font-bold tracking-tight">PRIDE HOCKEY ALLIANCE</span>
                 </span>
                 {/* Desktop: square logo */}
                 <img

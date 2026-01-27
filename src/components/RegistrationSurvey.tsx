@@ -35,11 +35,13 @@ export default function RegistrationSurvey({
         const formbricks = await import('@formbricks/js')
 
         // Initialize Formbricks
-        if (process.env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID &&
-            process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST) {
+        const envId = process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID || process.env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID
+        const apiHost = process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
+
+        if (envId && apiHost) {
           await formbricks.default.init({
-            environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID,
-            apiHost: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
+            environmentId: envId,
+            apiHost: apiHost,
             userId: userEmail,
           })
 

@@ -88,10 +88,17 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/user" className="flex items-center">
+                {/* Mobile: horizontal wordmark logo */}
+                <img
+                  src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
+                  alt={`${getOrganizationName('short')} logo`}
+                  className="h-8 w-auto sm:hidden"
+                />
+                {/* Desktop: square logo */}
                 <img
                   src="/images/logo.png"
                   alt={`${getOrganizationName('short')} logo`}
-                  className="h-10 w-auto"
+                  className="h-10 w-auto hidden sm:block"
                 />
               </Link>
             </div>

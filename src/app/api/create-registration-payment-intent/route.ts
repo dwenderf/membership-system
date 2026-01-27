@@ -27,6 +27,7 @@ async function handleFreeRegistration({
   categoryId,
   presaleCode,
   discountCode,
+  surveyResponses,
   paymentContext,
   startTime,
   request
@@ -37,6 +38,7 @@ async function handleFreeRegistration({
   categoryId: string
   presaleCode?: string
   discountCode?: string
+  surveyResponses?: Record<string, any> | null
   paymentContext: any
   startTime: number
   request: NextRequest
@@ -103,6 +105,7 @@ async function handleFreeRegistration({
         amount_paid: 0, // Amount actually paid (0 for free registration)
         registered_at: new Date().toISOString(),
         presale_code_used: presaleCode || null,
+        survey_responses: surveyResponses || null,
       })
       .select('id')
       .single()
@@ -542,7 +545,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan } = body
+    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan, surveyResponses } = body
 
     // Validate payment plan eligibility if requested
     if (usePaymentPlan) {
@@ -590,6 +593,7 @@ export async function POST(request: NextRequest) {
         categoryId,
         presaleCode,
         discountCode,
+        surveyResponses,
         paymentContext,
         startTime,
         request
@@ -735,6 +739,7 @@ export async function POST(request: NextRequest) {
         categoryId,
         presaleCode,
         discountCode,
+        surveyResponses,
         paymentContext,
         startTime,
         request
@@ -1046,6 +1051,7 @@ export async function POST(request: NextRequest) {
           registration_fee: amount,
           amount_paid: finalAmount,
           presale_code_used: presaleCode || null,
+          survey_responses: surveyResponses || null,
         })
         .select()
         .single()

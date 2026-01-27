@@ -10,6 +10,7 @@ import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
 import PaymentConfirmationScreen from './PaymentConfirmationScreen'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
+import RegistrationSurvey from './RegistrationSurvey'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -56,6 +57,8 @@ interface Registration {
   allow_lgbtq_presale?: boolean
   presale_code?: string | null
   allow_discounts?: boolean
+  require_survey?: boolean
+  survey_id?: string | null
   season?: {
     name: string
     start_date: string
@@ -84,6 +87,8 @@ export default function RegistrationPurchase({
   isAlreadyAlternate = false
 }: RegistrationPurchaseProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [showSurvey, setShowSurvey] = useState(false)
+  const [surveyResponses, setSurveyResponses] = useState<Record<string, any> | null>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showSetupIntentForm, setShowSetupIntentForm] = useState(false)
   const [showConfirmationScreen, setShowConfirmationScreen] = useState(false)
@@ -376,6 +381,12 @@ export default function RegistrationPurchase({
       return
     }
 
+    // Check if survey is required and hasn't been completed yet
+    if (registration.require_survey && registration.survey_id && !surveyResponses) {
+      setShowSurvey(true)
+      return
+    }
+
     // Handle alternate registration differently
     if (isAlternateSelected) {
       setIsLoading(true)
@@ -519,6 +530,7 @@ export default function RegistrationPurchase({
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
           savePaymentMethod: shouldSavePaymentMethod,
           usePaymentPlan: usePaymentPlan,
+          surveyResponses: surveyResponses || null,
         }),
       })
 
@@ -647,6 +659,21 @@ export default function RegistrationPurchase({
     // Reset UI state on error
     setShowConfirmationScreen(false)
     setIsLoading(false)
+  }
+
+  // Handle survey completion
+  const handleSurveyComplete = (responses: Record<string, any>) => {
+    setSurveyResponses(responses)
+    setShowSurvey(false)
+
+    // After survey is complete, proceed with payment
+    handlePurchase()
+  }
+
+  // Handle survey skip (if allowed)
+  const handleSurveySkip = () => {
+    setShowSurvey(false)
+    setError('Survey is required to complete registration')
   }
 
   // Handle using different payment method
@@ -1507,6 +1534,52 @@ export default function RegistrationPurchase({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Survey Modal */}
+      {showSurvey && registration.survey_id && (
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => setShowSurvey(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Complete Survey
+                </h3>
+                <button
+                  onClick={() => setShowSurvey(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>Registration for {registration.name}</strong>
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Please complete this survey to proceed with your registration. Your responses help us improve the event experience.
+                </p>
+              </div>
+
+              <RegistrationSurvey
+                surveyId={registration.survey_id}
+                userEmail={userEmail}
+                registrationName={registration.name}
+                onComplete={handleSurveyComplete}
+                onSkip={handleSurveySkip}
+              />
+            </div>
           </div>
         </div>
       )}

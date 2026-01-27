@@ -96,13 +96,13 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                 <img
                   src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
                   alt={`${getOrganizationName('short')} logo`}
-                  className="h-8 w-auto lg:hidden"
+                  className="h-10 w-auto lg:hidden"
                 />
                 {/* Desktop: square logo */}
                 <img
                   src="/images/logo.png"
                   alt={`${getOrganizationName('short')} logo`}
-                  className="h-10 w-auto hidden lg:block"
+                  className="h-12 w-auto hidden lg:block"
                 />
                 <span className="text-xl font-bold text-gray-900 hidden lg:inline">Admin</span>
               </Link>

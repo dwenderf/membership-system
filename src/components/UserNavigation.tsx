@@ -92,13 +92,13 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
                 <img
                   src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
                   alt={`${getOrganizationName('short')} logo`}
-                  className="h-8 w-auto sm:hidden"
+                  className="h-10 w-auto sm:hidden"
                 />
                 {/* Desktop: square logo */}
                 <img
                   src="/images/logo.png"
                   alt={`${getOrganizationName('short')} logo`}
-                  className="h-10 w-auto hidden sm:block"
+                  className="h-12 w-auto hidden sm:block"
                 />
               </Link>
             </div>

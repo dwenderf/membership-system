@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString, formatDate } from '@/lib/date-utils'
 import ClientTimestamp from '@/components/ClientTimestamp'
-import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDndList'
@@ -217,7 +216,7 @@ export default async function RegistrationDetailPage({
                         registrationId={id}
                         initialConfig={{
                           require_survey: registration.require_survey || false,
-                          survey_id: registration.survey_id
+                          action_key: registration.action_key
                         }}
                       />
                     </dd>

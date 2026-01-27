@@ -24,7 +24,7 @@ export default function NewRegistrationPage() {
     duration_minutes: '', // Duration in minutes instead of end_date
     required_membership_id: '', // Optional registration-level membership requirement
     require_survey: false,
-    survey_id: '',
+    action_key: '',
   })
 
   const [seasons, setSeasons] = useState<any[]>([])
@@ -145,7 +145,7 @@ export default function NewRegistrationPage() {
         end_date: endDateUTC,
         required_membership_id: formData.required_membership_id || null,
         require_survey: formData.require_survey,
-        survey_id: formData.require_survey ? formData.survey_id : null,
+        action_key: formData.require_survey ? formData.action_key : null,
       }
 
       const { error: insertError } = await supabase
@@ -202,7 +202,7 @@ export default function NewRegistrationPage() {
                                  formData.alternate_accounting_code.trim()
                                )) &&
                                (!requiresDates || (formData.start_date && formData.duration_minutes)) &&
-                               (!formData.require_survey || formData.survey_id.trim())
+                               (!formData.require_survey || formData.action_key.trim())
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -317,8 +317,8 @@ export default function NewRegistrationPage() {
                     onChange={(e) => setFormData(prev => ({
                       ...prev,
                       require_survey: e.target.checked,
-                      // Clear survey_id if unchecked
-                      survey_id: e.target.checked ? prev.survey_id : ''
+                      // Clear action_key if unchecked
+                      action_key: e.target.checked ? prev.action_key : ''
                     }))}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
@@ -334,20 +334,20 @@ export default function NewRegistrationPage() {
                     </div>
 
                     <div>
-                      <label htmlFor="survey_id" className="block text-sm font-medium text-gray-700">
-                        Survey ID
+                      <label htmlFor="action_key" className="block text-sm font-medium text-gray-700">
+                        Survey Action ID
                       </label>
                       <input
                         type="text"
-                        id="survey_id"
-                        value={formData.survey_id}
-                        onChange={(e) => setFormData(prev => ({ ...prev, survey_id: e.target.value }))}
+                        id="action_key"
+                        value={formData.action_key}
+                        onChange={(e) => setFormData(prev => ({ ...prev, action_key: e.target.value }))}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="e.g., cmkvdmu2804u4ad01o4ve1lj1"
+                        placeholder="e.g., cc_registration_survey"
                         required={formData.require_survey}
                       />
                       <p className="mt-1 text-sm text-gray-500">
-                        The unique identifier for your Formbricks survey
+                        The action trigger for your Formbricks survey
                       </p>
                     </div>
                   </div>
@@ -574,9 +574,9 @@ export default function NewRegistrationPage() {
                         {formData.require_survey ? (
                           <div className="space-y-1">
                             <div>Required</div>
-                            {formData.survey_id && (
+                            {formData.action_key && (
                               <div className="text-xs text-gray-600 font-mono">
-                                ID: {formData.survey_id}
+                                ID: {formData.action_key}
                               </div>
                             )}
                           </div>

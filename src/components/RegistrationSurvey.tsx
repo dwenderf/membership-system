@@ -20,7 +20,7 @@ declare global {
 }
 
 interface RegistrationSurveyProps {
-  actionKey: string // Changed from surveyId to actionKey
+  actionKey: string
   userEmail: string
   registrationName: string
   onComplete: (responses: Record<string, any>) => void
@@ -34,6 +34,7 @@ export default function RegistrationSurvey({
   onComplete,
   onSkip
 }: RegistrationSurveyProps) {
+  console.log('🔍 Survey trigger debug:', { actionKey })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -94,8 +95,11 @@ export default function RegistrationSurvey({
         const { default: formbricks } = await import('@formbricks/js')
         
         // Simply track the specific action - Formbricks will show the configured survey
-        // Action key comes from database (e.g. "cc26_tournament_survey")
         console.log('Tracking action to trigger survey:', actionKey)
+        
+        if (!actionKey) {
+          throw new Error('No action key provided')
+        }
         
         await formbricks.track(actionKey, {
           hiddenFields: {

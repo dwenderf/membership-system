@@ -7,7 +7,7 @@ interface EditableSurveyConfigurationProps {
   registrationId: string
   initialConfig: {
     require_survey: boolean
-    survey_id: string | null
+    action_key: string | null
   }
 }
 
@@ -17,7 +17,7 @@ export default function EditableSurveyConfiguration({
 }: EditableSurveyConfigurationProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [requireSurvey, setRequireSurvey] = useState(initialConfig.require_survey)
-  const [surveyId, setSurveyId] = useState(initialConfig.survey_id || '')
+  const [actionKey, setActionKey] = useState(initialConfig.action_key || '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
@@ -25,9 +25,9 @@ export default function EditableSurveyConfiguration({
   const handleSave = async () => {
     setError('')
 
-    // Validate survey_id when require_survey is true
-    if (requireSurvey && !surveyId.trim()) {
-      setError('Survey ID is required when survey is enabled')
+    // Validate action_key when require_survey is true
+    if (requireSurvey && !actionKey.trim()) {
+      setError('Survey Action ID is required when survey is enabled')
       return
     }
 
@@ -38,7 +38,7 @@ export default function EditableSurveyConfiguration({
         .from('registrations')
         .update({
           require_survey: requireSurvey,
-          survey_id: requireSurvey ? surveyId : null,
+          action_key: requireSurvey ? actionKey : null,
         })
         .eq('id', registrationId)
 
@@ -58,7 +58,7 @@ export default function EditableSurveyConfiguration({
 
   const handleCancel = () => {
     setRequireSurvey(initialConfig.require_survey)
-    setSurveyId(initialConfig.survey_id || '')
+    setActionKey(initialConfig.action_key || '')
     setError('')
     setIsEditing(false)
   }
@@ -74,9 +74,9 @@ export default function EditableSurveyConfiguration({
                   Required
                 </span>
               </div>
-              {surveyId && (
+              {actionKey && (
                 <div className="text-xs text-gray-600 font-mono bg-gray-50 p-2 rounded break-all">
-                  {surveyId}
+                  {actionKey}
                 </div>
               )}
             </div>
@@ -109,9 +109,9 @@ export default function EditableSurveyConfiguration({
           checked={requireSurvey}
           onChange={(e) => {
             setRequireSurvey(e.target.checked)
-            // Clear survey_id if unchecked
+            // Clear action_key if unchecked
             if (!e.target.checked) {
-              setSurveyId('')
+              setActionKey('')
             }
           }}
           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -123,15 +123,15 @@ export default function EditableSurveyConfiguration({
 
       {requireSurvey && (
         <div>
-          <label htmlFor="survey_id_edit" className="block text-xs font-medium text-gray-700 mb-1">
-            Survey ID (Formbricks)
+          <label htmlFor="action_key_edit" className="block text-xs font-medium text-gray-700 mb-1">
+            Survey Action ID
           </label>
           <input
-            id="survey_id_edit"
+            id="action_key_edit"
             type="text"
-            value={surveyId}
-            onChange={(e) => setSurveyId(e.target.value)}
-            placeholder="e.g., cmkvdmu2804u4ad01o4ve1lj1"
+            value={actionKey}
+            onChange={(e) => setActionKey(e.target.value)}
+            placeholder="e.g., cc_registration_survey"
             className="block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
           />
         </div>

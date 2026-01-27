@@ -58,7 +58,7 @@ interface Registration {
   presale_code?: string | null
   allow_discounts?: boolean
   require_survey?: boolean
-  survey_id?: string | null
+  action_key?: string | null
   season?: {
     name: string
     start_date: string
@@ -382,7 +382,7 @@ export default function RegistrationPurchase({
     }
 
     // Check if survey is required and hasn't been completed yet
-    if (registration.require_survey && registration.survey_id && !surveyResponses) {
+    if (registration.require_survey && registration.action_key && !surveyResponses) {
       setShowSurvey(true)
       return
     }
@@ -1539,7 +1539,7 @@ export default function RegistrationPurchase({
       )}
 
       {/* Survey Modal */}
-      {showSurvey && registration.survey_id && (
+      {showSurvey && registration.action_key && (
         <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => setShowSurvey(false)}
@@ -1573,7 +1573,7 @@ export default function RegistrationPurchase({
               </div>
 
               <RegistrationSurvey
-                surveyId={registration.survey_id}
+                actionKey={registration.action_key}
                 userEmail={userEmail}
                 registrationName={registration.name}
                 onComplete={handleSurveyComplete}

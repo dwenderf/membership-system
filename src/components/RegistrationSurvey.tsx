@@ -20,7 +20,7 @@ declare global {
 }
 
 interface RegistrationSurveyProps {
-  surveyId: string
+  actionKey: string // Changed from surveyId to actionKey
   userEmail: string
   registrationName: string
   onComplete: (responses: Record<string, any>) => void
@@ -28,7 +28,7 @@ interface RegistrationSurveyProps {
 }
 
 export default function RegistrationSurvey({
-  surveyId,
+  actionKey,
   userEmail,
   registrationName,
   onComplete,
@@ -93,66 +93,30 @@ export default function RegistrationSurvey({
       try {
         const { default: formbricks } = await import('@formbricks/js')
         
-        // Fetch the specific survey data via our proxy API
-        console.log('Fetching survey data for ID:', surveyId)
+        // Simply track the specific action - Formbricks will show the configured survey
+        // Action key comes from database (e.g. "cc26_tournament_survey")
+        console.log('Tracking action to trigger survey:', actionKey)
         
-        const response = await fetch(`/api/formbricks/survey/${surveyId}`)
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch survey data: ${response.status}`)
-        }
-
-        const surveyData = await response.json()
-        
-        // Load the surveys rendering package
-        const surveysScript = document.createElement('script')
-        surveysScript.src = `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/js/surveys.umd.cjs`
-        surveysScript.onload = () => {
-          // Once surveys package is loaded, render the survey
-          if ((window as any).formbricksSurveys) {
-            (window as any).formbricksSurveys.renderSurveyModal({
-              survey: surveyData.data,
-              appUrl: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
-              environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
-              userId: userEmail,
-              attributes: {
-                registrationName: registrationName
-              },
-              onClose: () => {
-                console.log('Survey closed')
-                if (onSkip) onSkip()
-              },
-              onFinished: (responses: Record<string, any>) => {
-                console.log('Survey completed:', responses)
-                onComplete(responses)
-              }
-            })
-            
-            console.log('Survey displayed successfully')
-            setIsLoading(false)
-          } else {
-            throw new Error('Surveys package failed to load')
+        await formbricks.track(actionKey, {
+          hiddenFields: {
+            registrationName: registrationName,
+            timestamp: new Date().toISOString(),
+            userEmail: userEmail
           }
-        }
-        surveysScript.onerror = () => {
-          throw new Error('Failed to load surveys package')
-        }
-        
-        document.head.appendChild(surveysScript)
+        })
+
+        console.log('Survey action tracked successfully')
+        setIsLoading(false)
 
       } catch (err) {
-        console.error('Failed to display survey:', err)
-        if (err instanceof Error && err.message.includes('fetch')) {
-          setError('Unable to load survey. Please check your internet connection and try again.')
-        } else {
-          setError('Failed to display survey. Please try again.')
-        }
+        console.error('Failed to track survey action:', err)
+        setError('Failed to load survey. Please try again.')
         setIsLoading(false)
       }
     }
 
     loadFormbricks()
-  }, [surveyId, userEmail, registrationName])
+  }, [actionKey, userEmail, registrationName])
 
   const handleComplete = (responses: Record<string, any>) => {
     onComplete(responses)

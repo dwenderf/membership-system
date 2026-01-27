@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { surveyId: string } }
 ) {
   console.log('🔍 API route called with surveyId:', params?.surveyId)
-  console.log('🔍 Environment check:', {
-    hasEnvId: !!process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
-    hasApiHost: !!process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
-    envId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID?.substring(0, 8) + '...',
-    apiHost: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
-  })
 
   try {
+    // 🛡️ SECURITY: Check user authentication
+    const supabase = createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.error('❌ Unauthorized access attempt')
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    console.log('✅ Authenticated user:', user.email)
+
     const { surveyId } = params
     
     if (!surveyId) {
@@ -31,13 +41,22 @@ export async function GET(
       )
     }
 
-    const formbricksUrl = `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/api/v1/client/${process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID}/surveys/${surveyId}`
-    console.log('🌐 Fetching from Formbricks:', formbricksUrl)
+    // Use Management API to fetch survey data (requires API key)
+    if (!process.env.FORMBRICKS_API_KEY) {
+      console.error('❌ FORMBRICKS_API_KEY not found')
+      return NextResponse.json(
+        { error: 'Formbricks API key not configured' },
+        { status: 500 }
+      )
+    }
 
-    // Fetch survey data from Formbricks API server-side
-    const response = await fetch(formbricksUrl, {
+    const managementUrl = `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/api/v1/management/surveys/${surveyId}`
+    console.log('🌐 Fetching from Management API:', managementUrl)
+
+    const response = await fetch(managementUrl, {
       headers: {
         'Content-Type': 'application/json',
+        'x-api-key': process.env.FORMBRICKS_API_KEY,
       },
     })
 

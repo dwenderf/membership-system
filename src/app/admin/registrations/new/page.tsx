@@ -108,7 +108,14 @@ export default function NewRegistrationPage() {
       let endDateUTC = null
 
       if ((formData.type === 'event' || formData.type === 'scrimmage' || formData.type === 'tournament') && formData.start_date && formData.duration_minutes) {
-        startDateUTC = convertToNYTimezone(formData.start_date)
+        // For tournaments, the date picker returns just a date (YYYY-MM-DD) without time
+        // We need to append midnight time for proper timezone conversion
+        let dateTimeString = formData.start_date
+        if (formData.type === 'tournament' && !formData.start_date.includes('T')) {
+          dateTimeString = formData.start_date + 'T00:00'
+        }
+
+        startDateUTC = convertToNYTimezone(dateTimeString)
 
         // Calculate end date by adding duration to start date
         const startDate = new Date(startDateUTC)

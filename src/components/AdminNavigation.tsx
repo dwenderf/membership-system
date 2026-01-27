@@ -92,12 +92,19 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/admin" className="flex items-center space-x-2">
-                {/* Mobile/tablet: horizontal wordmark logo */}
-                <img
-                  src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
-                  alt={`${getOrganizationName('short')} logo`}
-                  className="h-10 w-auto lg:hidden"
-                />
+                {/* Mobile/tablet: text wordmark with logo */}
+                <span
+                  className="lg:hidden flex items-center text-gray-900"
+                  style={{ fontFamily: "'Karben 105 Stencil', Impact, 'Arial Black', sans-serif" }}
+                >
+                  <span className="text-sm font-bold tracking-tight">NYC</span>
+                  <img
+                    src="/images/logo.png"
+                    alt=""
+                    className="h-8 w-auto mx-1"
+                  />
+                  <span className="text-sm font-bold tracking-tight">PRIDE HOCKEY ALLIANCE</span>
+                </span>
                 {/* Desktop: square logo */}
                 <img
                   src="/images/logo.png"

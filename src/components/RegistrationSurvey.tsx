@@ -60,20 +60,31 @@ export default function RegistrationSurvey({
 
     const initializeSurvey = async () => {
       try {
+        // Wait for Formbricks to be fully initialized on window object
+        let attempts = 0
+        const maxAttempts = 20
+
+        while (attempts < maxAttempts) {
+          if (typeof window !== 'undefined' && (window as any).formbricks) {
+            break
+          }
+          await new Promise(resolve => setTimeout(resolve, 100))
+          attempts++
+        }
+
         const formbricks = (window as any).formbricks
 
         if (!formbricks) {
-          throw new Error('Formbricks not initialized')
+          throw new Error('Formbricks not initialized after waiting')
         }
+
+        console.log('Formbricks initialized successfully')
 
         // Track survey display
         formbricks.track('registration_survey_shown', {
           registrationName,
           surveyId
         })
-
-        // Listen for survey completion
-        formbricks.registerRouteChange()
 
         setIsLoading(false)
       } catch (err) {

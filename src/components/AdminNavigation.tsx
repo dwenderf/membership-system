@@ -95,15 +95,15 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
                 {/* Mobile/tablet: text wordmark with logo */}
                 <span
                   className="lg:hidden flex items-center text-gray-900"
-                  style={{ fontFamily: "'Karben 105 Stencil', Impact, 'Arial Black', sans-serif" }}
+                  style={{ fontFamily: "'Karben 105 Stencil', Impact, 'Arial Black', sans-serif", fontSize: '20px' }}
                 >
-                  <span className="text-lg font-bold tracking-tight">NYC</span>
+                  <span className="font-bold tracking-tight">NYC</span>
                   <img
                     src="/images/logo.png"
                     alt=""
-                    className="h-10 w-auto mx-1"
+                    style={{ height: '48px', width: 'auto', margin: '0 4px' }}
                   />
-                  <span className="text-lg font-bold tracking-tight">PRIDE HOCKEY ALLIANCE</span>
+                  <span className="font-bold tracking-tight">PRIDE HOCKEY ALLIANCE</span>
                 </span>
                 {/* Desktop: square logo */}
                 <img

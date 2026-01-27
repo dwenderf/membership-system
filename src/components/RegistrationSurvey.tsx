@@ -60,9 +60,9 @@ export default function RegistrationSurvey({
 
     const initializeSurvey = async () => {
       try {
-        // Wait for Formbricks to be fully initialized on window object
+        // Wait briefly for Formbricks to be available on window
         let attempts = 0
-        const maxAttempts = 20
+        const maxAttempts = 10
 
         while (attempts < maxAttempts) {
           if (typeof window !== 'undefined' && (window as any).formbricks) {
@@ -80,11 +80,14 @@ export default function RegistrationSurvey({
 
         console.log('Formbricks initialized successfully')
 
-        // Track survey display
-        formbricks.track('registration_survey_shown', {
+        // Track the event that triggers the survey
+        // This matches the action key configured in Formbricks: "registration_survey"
+        formbricks.track('registration_survey', {
           registrationName,
           surveyId
         })
+
+        console.log('Survey event tracked: registration_survey')
 
         setIsLoading(false)
       } catch (err) {
@@ -141,15 +144,19 @@ export default function RegistrationSurvey({
 
   return (
     <div className="registration-survey-container">
-      {/* Formbricks survey will render here */}
-      <div id="formbricks-survey" data-survey-id={surveyId}>
-        {/* Survey loads here via Formbricks SDK */}
-      </div>
-
-      {/* Placeholder instructions */}
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <p className="text-sm text-blue-800">
-          <strong>Complete the survey above</strong> to proceed with your registration.
+      {/* Formbricks survey will appear as an overlay/popup automatically */}
+      <div className="p-6 text-center">
+        <div className="mb-4">
+          <svg className="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Survey Loading</h3>
+        <p className="text-sm text-gray-600">
+          The survey should appear in a moment. Please complete it to proceed with your registration.
+        </p>
+        <p className="text-xs text-gray-500 mt-4">
+          If the survey doesn't appear, please refresh the page and try again.
         </p>
       </div>
     </div>

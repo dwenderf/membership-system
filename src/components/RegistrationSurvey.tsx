@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from 'react'
 
+// Extend window interface for Formbricks surveys
+declare global {
+  interface Window {
+    formbricksSurveys?: {
+      renderSurveyModal: (props: {
+        survey: any
+        appUrl: string
+        environmentId: string
+        userId: string
+        attributes?: Record<string, any>
+        onClose?: () => void
+        onFinished?: (responses: Record<string, any>) => void
+      }) => void
+    }
+  }
+}
+
 interface RegistrationSurveyProps {
   surveyId: string
   userEmail: string
@@ -21,76 +38,119 @@ export default function RegistrationSurvey({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Load Formbricks SDK
+    // Load Formbricks SDK using the current v4+ API
     const loadFormbricks = async () => {
       try {
-        // Check if Formbricks is already loaded
+        // Check if Formbricks is already available
         if (typeof window !== 'undefined' && (window as any).formbricks) {
-          console.log('Formbricks already loaded')
-          initializeSurvey()
+          console.log('Formbricks already available')
+          showSurvey()
           return
         }
 
         // Dynamically import Formbricks
-        const formbricks = await import('@formbricks/js')
+        const { default: formbricks } = await import('@formbricks/js')
 
-        // Initialize Formbricks
-        if (process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID &&
-            process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST) {
-          await formbricks.default.init({
-            environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
-            apiHost: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
-            userId: userEmail,
-          })
-
-          initializeSurvey()
-        } else {
+        // Check for required environment variables
+        if (!process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID || 
+            !process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST) {
           console.error('Missing Formbricks config:', {
             hasEnvId: !!process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
             hasApiHost: !!process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
           })
           throw new Error('Formbricks configuration missing')
         }
+
+        // Initialize with the current v4+ API using setup
+        await formbricks.setup({
+          environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
+          appUrl: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
+        })
+
+        // Set user information
+        formbricks.setUserId(userEmail)
+        formbricks.setAttribute('registrationName', registrationName)
+
+        console.log('Formbricks initialized successfully')
+        showSurvey()
+
       } catch (err) {
         console.error('Failed to load Formbricks:', err)
-        setError('Failed to load survey. Please try again.')
+        
+        // Check if it's a content blocker issue
+        if (err instanceof Error && (err.message.includes('fetch') || err.message.includes('blocked'))) {
+          setError('Survey blocked by ad blocker or privacy extension. Please disable it for this site.')
+        } else if (err instanceof Error && err.message.includes('CORS')) {
+          setError('Survey configuration error. Please check your Formbricks setup.')
+        } else {
+          setError('Failed to load survey. Please try again.')
+        }
         setIsLoading(false)
       }
     }
 
-    const initializeSurvey = async () => {
+    const showSurvey = async () => {
       try {
-        // Wait briefly for Formbricks to be available on window
-        let attempts = 0
-        const maxAttempts = 10
-
-        while (attempts < maxAttempts) {
-          if (typeof window !== 'undefined' && (window as any).formbricks) {
-            break
+        const { default: formbricks } = await import('@formbricks/js')
+        
+        // Fetch the specific survey data by ID
+        console.log('Fetching survey data for ID:', surveyId)
+        
+        // Note: We need to use Formbricks' client API to fetch the survey
+        // and then render it directly using the surveys package
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/api/v1/client/${process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID}/surveys/${surveyId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
           }
-          await new Promise(resolve => setTimeout(resolve, 100))
-          attempts++
+        )
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch survey data')
         }
 
-        const formbricks = (window as any).formbricks
-
-        if (!formbricks) {
-          throw new Error('Formbricks not initialized after waiting')
+        const surveyData = await response.json()
+        
+        // Load the surveys rendering package
+        const surveysScript = document.createElement('script')
+        surveysScript.src = `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/js/surveys.umd.cjs`
+        surveysScript.onload = () => {
+          // Once surveys package is loaded, render the survey
+          if ((window as any).formbricksSurveys) {
+            (window as any).formbricksSurveys.renderSurveyModal({
+              survey: surveyData.data,
+              appUrl: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
+              environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
+              userId: userEmail,
+              attributes: {
+                registrationName: registrationName
+              },
+              onClose: () => {
+                if (onSkip) onSkip()
+              },
+              onFinished: (responses: Record<string, any>) => {
+                console.log('Survey completed:', responses)
+                onComplete(responses)
+              }
+            })
+            
+            console.log('Survey displayed successfully')
+            setIsLoading(false)
+          } else {
+            throw new Error('Surveys package failed to load')
+          }
         }
+        surveysScript.onerror = () => {
+          throw new Error('Failed to load surveys package')
+        }
+        
+        document.head.appendChild(surveysScript)
 
-        console.log('Formbricks initialized successfully')
-
-        // Display the specific survey by its ID
-        // This directly shows the survey configured for this registration
-        console.log('Displaying survey:', surveyId)
-        formbricks.display(surveyId)
-
-        console.log('Survey displayed successfully')
-
-        setIsLoading(false)
       } catch (err) {
-        console.error('Failed to initialize survey:', err)
-        setError('Failed to initialize survey.')
+        console.error('Failed to display survey:', err)
+        setError('Failed to display survey.')
         setIsLoading(false)
       }
     }

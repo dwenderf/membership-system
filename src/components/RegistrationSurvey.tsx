@@ -35,18 +35,20 @@ export default function RegistrationSurvey({
         const formbricks = await import('@formbricks/js')
 
         // Initialize Formbricks
-        const envId = process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID || process.env.NEXT_PUBLIC_FORMBRICKS_ENVIRONMENT_ID
-        const apiHost = process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
-
-        if (envId && apiHost) {
+        if (process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID &&
+            process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST) {
           await formbricks.default.init({
-            environmentId: envId,
-            apiHost: apiHost,
+            environmentId: process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
+            apiHost: process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST,
             userId: userEmail,
           })
 
           initializeSurvey()
         } else {
+          console.error('Missing Formbricks config:', {
+            hasEnvId: !!process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID,
+            hasApiHost: !!process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST
+          })
           throw new Error('Formbricks configuration missing')
         }
       } catch (err) {

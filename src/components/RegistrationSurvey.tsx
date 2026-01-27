@@ -80,14 +80,12 @@ export default function RegistrationSurvey({
 
         console.log('Formbricks initialized successfully')
 
-        // Track the event that triggers the survey
-        // This matches the action key configured in Formbricks: "registration_survey"
-        formbricks.track('registration_survey', {
-          registrationName,
-          surveyId
-        })
+        // Display the specific survey by its ID
+        // This directly shows the survey configured for this registration
+        console.log('Displaying survey:', surveyId)
+        formbricks.display(surveyId)
 
-        console.log('Survey event tracked: registration_survey')
+        console.log('Survey displayed successfully')
 
         setIsLoading(false)
       } catch (err) {

@@ -93,22 +93,13 @@ export default function RegistrationSurvey({
       try {
         const { default: formbricks } = await import('@formbricks/js')
         
-        // Fetch the specific survey data by ID
+        // Fetch the specific survey data via our proxy API
         console.log('Fetching survey data for ID:', surveyId)
         
-        // Note: We need to use Formbricks' client API to fetch the survey
-        // and then render it directly using the surveys package
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_FORMBRICKS_API_HOST}/api/v1/client/${process.env.NEXT_PUBLIC_FORMBRICKS_ENV_ID}/surveys/${surveyId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        )
+        const response = await fetch(`/api/formbricks/survey/${surveyId}`)
 
         if (!response.ok) {
-          throw new Error('Failed to fetch survey data')
+          throw new Error(`Failed to fetch survey data: ${response.status}`)
         }
 
         const surveyData = await response.json()
@@ -128,6 +119,7 @@ export default function RegistrationSurvey({
                 registrationName: registrationName
               },
               onClose: () => {
+                console.log('Survey closed')
                 if (onSkip) onSkip()
               },
               onFinished: (responses: Record<string, any>) => {
@@ -150,7 +142,11 @@ export default function RegistrationSurvey({
 
       } catch (err) {
         console.error('Failed to display survey:', err)
-        setError('Failed to display survey.')
+        if (err instanceof Error && err.message.includes('fetch')) {
+          setError('Unable to load survey. Please check your internet connection and try again.')
+        } else {
+          setError('Failed to display survey. Please try again.')
+        }
         setIsLoading(false)
       }
     }

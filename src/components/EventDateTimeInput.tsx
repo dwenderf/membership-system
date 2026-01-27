@@ -30,15 +30,21 @@ export default function EventDateTimeInput({
   // Check if the selected date is in the past
   useEffect(() => {
     if (startDate) {
+      // For tournaments, append time if not present
+      let dateTimeString = startDate
+      if (isTournament && !startDate.includes('T')) {
+        dateTimeString = startDate + 'T00:00'
+      }
+
       // Convert datetime-local to NY timezone before comparing
-      const selectedDateISO = convertToNYTimezone(startDate)
+      const selectedDateISO = convertToNYTimezone(dateTimeString)
       const selectedDate = new Date(selectedDateISO)
       const now = new Date()
       setIsPastDate(selectedDate < now)
     } else {
       setIsPastDate(false)
     }
-  }, [startDate])
+  }, [startDate, isTournament])
 
   // For tournaments, convert between days and minutes
   // 1 day = 1440 minutes (24 hours)

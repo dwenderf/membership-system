@@ -27,7 +27,7 @@ export default function TallySurveyEmbed({
 }: TallySurveyEmbedProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [embedElement, setEmbedElement] = useState<HTMLDivElement | null>(null)
+  const [iframeElement, setIframeElement] = useState<HTMLIFrameElement | null>(null)
 
   // Build survey URL with user context
   const buildSurveyUrl = () => {
@@ -51,17 +51,17 @@ export default function TallySurveyEmbed({
     return `${baseUrl}?${params.toString()}`
   }
 
-  // Callback ref to get notified when DOM element is available
-  const embedRefCallback = (node: HTMLDivElement | null) => {
-    console.log('Embed element callback called with:', !!node)
-    setEmbedElement(node)
+  // Callback ref to get notified when iframe element is available
+  const iframeRefCallback = (node: HTMLIFrameElement | null) => {
+    console.log('Iframe element callback called with:', !!node)
+    setIframeElement(node)
   }
 
   // Debug props and state
   console.log('TallySurveyEmbed render:', {
     surveyId,
     userEmail,
-    embedElement: !!embedElement,
+    iframeElement: !!iframeElement,
     isLoading,
     error
   })
@@ -113,11 +113,11 @@ export default function TallySurveyEmbed({
 
     const initializeSurvey = () => {
       console.log('Initializing survey for ID:', surveyId)
-      console.log('Embed element available:', !!embedElement)
+      console.log('Iframe element available:', !!iframeElement)
       console.log('Tally object available:', !!(window as any).Tally)
       
-      if (!embedElement) {
-        console.error('Embed element not available')
+      if (!iframeElement) {
+        console.error('Iframe element not available')
         setError('Survey container not ready')
         setIsLoading(false)
         return
@@ -127,30 +127,26 @@ export default function TallySurveyEmbed({
         const surveyUrl = buildSurveyUrl()
         console.log('Built survey URL:', surveyUrl)
         
-        // Clear any existing attributes first
-        embedElement.removeAttribute('data-tally-src')
-        embedElement.removeAttribute('data-tally-layout')
-        embedElement.removeAttribute('data-tally-width')
-        embedElement.removeAttribute('data-tally-emoji-text')
-        embedElement.removeAttribute('data-tally-emoji-animation')
-        
-        // Set up Tally embed attributes
-        embedElement.setAttribute('data-tally-src', surveyUrl)
-        embedElement.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
-        embedElement.setAttribute('data-tally-width', '100%')
-        embedElement.setAttribute('data-tally-emoji-text', '👋')
-        embedElement.setAttribute('data-tally-emoji-animation', 'wave')
+        // Set up the iframe with Tally's expected format
+        iframeElement.setAttribute('data-tally-src', surveyUrl)
+        iframeElement.setAttribute('loading', 'lazy')
+        iframeElement.setAttribute('width', '100%')
+        iframeElement.setAttribute('height', '746')
+        iframeElement.setAttribute('frameborder', '0')
+        iframeElement.setAttribute('marginheight', '0')
+        iframeElement.setAttribute('marginwidth', '0')
+        iframeElement.setAttribute('title', 'Survey')
 
-        console.log('Tally survey initialized with attributes')
-        console.log('Element attributes:', {
-          'data-tally-src': embedElement.getAttribute('data-tally-src'),
-          'data-tally-layout': embedElement.getAttribute('data-tally-layout')
-        })
+        console.log('Iframe configured with attributes')
+        console.log('Iframe data-tally-src:', iframeElement.getAttribute('data-tally-src'))
         
         // Force Tally to re-scan the DOM for new widgets
         if ((window as any).Tally && (window as any).Tally.loadEmbeds) {
+          console.log('Calling Tally.loadEmbeds()...')
           (window as any).Tally.loadEmbeds()
-          console.log('Called Tally.loadEmbeds()')
+          console.log('Tally.loadEmbeds() called successfully')
+        } else {
+          console.warn('Tally.loadEmbeds() not available')
         }
         
         // Set loading to false after a short delay to allow Tally to render
@@ -179,18 +175,18 @@ export default function TallySurveyEmbed({
     console.log('useEffect triggered with:', {
       surveyId,
       userEmail,
-      embedElement: !!embedElement,
-      condition: !!(surveyId && userEmail && embedElement)
+      iframeElement: !!iframeElement,
+      condition: !!(surveyId && userEmail && iframeElement)
     })
 
-    if (surveyId && userEmail && embedElement) {
+    if (surveyId && userEmail && iframeElement) {
       console.log('All conditions met, loading Tally embed...')
       loadTallyEmbed()
     } else {
       console.log('Conditions not met:', {
         hasSurveyId: !!surveyId,
         hasUserEmail: !!userEmail,
-        hasEmbedElement: !!embedElement
+        hasIframeElement: !!iframeElement
       })
     }
 
@@ -201,7 +197,7 @@ export default function TallySurveyEmbed({
         (window as any).Tally.off('form_submit')
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, embedElement, onComplete, onError])
+  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, iframeElement, onComplete, onError])
 
   if (error) {
     return (
@@ -227,28 +223,31 @@ export default function TallySurveyEmbed({
     )
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center justify-center">
-          <svg className="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span className="text-sm text-blue-800">Loading survey...</span>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="w-full">
-      {/* Tally embed container */}
-      <div 
-        ref={embedRefCallback}
+      {/* Always render iframe so callback ref can be called */}
+      <iframe 
+        ref={iframeRefCallback}
         className="tally-survey-embed"
-        style={{ minHeight: layout === 'inline' ? '400px' : 'auto' }}
+        style={{ 
+          minHeight: layout === 'inline' ? '400px' : 'auto',
+          width: '100%',
+          display: isLoading ? 'none' : 'block'
+        }}
       />
+      
+      {/* Show loading state while iframe is hidden */}
+      {isLoading && (
+        <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-center">
+            <svg className="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm text-blue-800">Loading survey...</span>
+          </div>
+        </div>
+      )}
       
       {/* Debug info (development only) */}
       {process.env.NODE_ENV === 'development' && (

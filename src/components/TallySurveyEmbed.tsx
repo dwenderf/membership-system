@@ -27,7 +27,7 @@ export default function TallySurveyEmbed({
 }: TallySurveyEmbedProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const embedRef = useRef<HTMLDivElement>(null)
+  const [embedElement, setEmbedElement] = useState<HTMLDivElement | null>(null)
 
   // Build survey URL with user context
   const buildSurveyUrl = () => {
@@ -51,6 +51,11 @@ export default function TallySurveyEmbed({
     return `${baseUrl}?${params.toString()}`
   }
 
+  // Callback ref to get notified when DOM element is available
+  const embedRefCallback = (node: HTMLDivElement | null) => {
+    setEmbedElement(node)
+  }
+
   useEffect(() => {
     const loadTallyEmbed = async () => {
       try {
@@ -71,16 +76,8 @@ export default function TallySurveyEmbed({
           script.async = true
           script.onload = () => {
             console.log('Tally embed script loaded successfully')
-            // Give more time for the DOM element to be ready and script to fully initialize
-            setTimeout(() => {
-              if (embedRef.current) {
-                initializeSurvey()
-              } else {
-                console.error('Embed ref still not available after script load')
-                setError('Survey container not ready after script load')
-                setIsLoading(false)
-              }
-            }, 500) // Increased delay
+            // Initialize immediately since we know the element is available
+            initializeSurvey()
           }
           script.onerror = () => {
             const errorMsg = 'Failed to load Tally embed script'
@@ -91,18 +88,9 @@ export default function TallySurveyEmbed({
           }
           document.body.appendChild(script)
         } else {
-          // Script already loaded
+          // Script already loaded, initialize immediately
           console.log('Tally script already loaded')
-          // Wait a bit longer to ensure DOM element is ready
-          setTimeout(() => {
-            if (embedRef.current) {
-              initializeSurvey()
-            } else {
-              console.error('Embed ref still not available with existing script')
-              setError('Survey container not ready')
-              setIsLoading(false)
-            }
-          }, 200)
+          initializeSurvey()
         }
       } catch (err) {
         console.error('Error in loadTallyEmbed:', err)
@@ -115,11 +103,11 @@ export default function TallySurveyEmbed({
 
     const initializeSurvey = () => {
       console.log('Initializing survey for ID:', surveyId)
-      console.log('Embed ref available:', !!embedRef.current)
+      console.log('Embed element available:', !!embedElement)
       console.log('Tally object available:', !!(window as any).Tally)
       
-      if (!embedRef.current) {
-        console.error('Embed ref not available')
+      if (!embedElement) {
+        console.error('Embed element not available')
         setError('Survey container not ready')
         setIsLoading(false)
         return
@@ -130,23 +118,23 @@ export default function TallySurveyEmbed({
         console.log('Built survey URL:', surveyUrl)
         
         // Clear any existing attributes first
-        embedRef.current.removeAttribute('data-tally-src')
-        embedRef.current.removeAttribute('data-tally-layout')
-        embedRef.current.removeAttribute('data-tally-width')
-        embedRef.current.removeAttribute('data-tally-emoji-text')
-        embedRef.current.removeAttribute('data-tally-emoji-animation')
+        embedElement.removeAttribute('data-tally-src')
+        embedElement.removeAttribute('data-tally-layout')
+        embedElement.removeAttribute('data-tally-width')
+        embedElement.removeAttribute('data-tally-emoji-text')
+        embedElement.removeAttribute('data-tally-emoji-animation')
         
         // Set up Tally embed attributes
-        embedRef.current.setAttribute('data-tally-src', surveyUrl)
-        embedRef.current.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
-        embedRef.current.setAttribute('data-tally-width', '100%')
-        embedRef.current.setAttribute('data-tally-emoji-text', '👋')
-        embedRef.current.setAttribute('data-tally-emoji-animation', 'wave')
+        embedElement.setAttribute('data-tally-src', surveyUrl)
+        embedElement.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
+        embedElement.setAttribute('data-tally-width', '100%')
+        embedElement.setAttribute('data-tally-emoji-text', '👋')
+        embedElement.setAttribute('data-tally-emoji-animation', 'wave')
 
         console.log('Tally survey initialized with attributes')
         console.log('Element attributes:', {
-          'data-tally-src': embedRef.current.getAttribute('data-tally-src'),
-          'data-tally-layout': embedRef.current.getAttribute('data-tally-layout')
+          'data-tally-src': embedElement.getAttribute('data-tally-src'),
+          'data-tally-layout': embedElement.getAttribute('data-tally-layout')
         })
         
         // Force Tally to re-scan the DOM for new widgets
@@ -178,7 +166,7 @@ export default function TallySurveyEmbed({
       }
     }
 
-    if (surveyId && userEmail) {
+    if (surveyId && userEmail && embedElement) {
       loadTallyEmbed()
     }
 
@@ -189,7 +177,7 @@ export default function TallySurveyEmbed({
         (window as any).Tally.off('form_submit')
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, onComplete, onError])
+  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, embedElement, onComplete, onError])
 
   if (error) {
     return (
@@ -233,7 +221,7 @@ export default function TallySurveyEmbed({
     <div className="w-full">
       {/* Tally embed container */}
       <div 
-        ref={embedRef}
+        ref={embedRefCallback}
         className="tally-survey-embed"
         style={{ minHeight: layout === 'inline' ? '400px' : 'auto' }}
       />

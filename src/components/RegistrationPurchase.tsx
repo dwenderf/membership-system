@@ -10,6 +10,7 @@ import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
 import PaymentConfirmationScreen from './PaymentConfirmationScreen'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
+import TallySurveyEmbed from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
@@ -56,6 +57,8 @@ interface Registration {
   allow_lgbtq_presale?: boolean
   presale_code?: string | null
   allow_discounts?: boolean
+  survey_id?: string | null
+  require_survey?: boolean
   season?: {
     name: string
     start_date: string
@@ -109,6 +112,8 @@ export default function RegistrationPurchase({
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
   const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
+  const [surveyResponses, setSurveyResponses] = useState<Record<string, any> | null>(null)
+  const [showSurvey, setShowSurvey] = useState(false)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method and payment plan eligibility
@@ -315,6 +320,31 @@ export default function RegistrationPurchase({
   const hasSeasonCoverage = membershipValidation.isValid
   const membershipWarning = formatMembershipWarning(membershipValidation)
   const shouldShowSeasonWarning = selectedCategory && !hasSeasonCoverage && membershipWarning
+
+  // Survey logic - check if survey is required and if user has completed it
+  useEffect(() => {
+    if (registration.require_survey && registration.survey_id && !surveyResponses) {
+      setShowSurvey(true)
+    } else {
+      setShowSurvey(false)
+    }
+  }, [registration.require_survey, registration.survey_id, surveyResponses])
+
+  // Handle survey completion
+  const handleSurveyComplete = (responseData: any) => {
+    console.log('Survey completed with data:', responseData)
+    setSurveyResponses(responseData)
+    setShowSurvey(false)
+  }
+
+  // Handle survey skip (if allowed)
+  const handleSurveySkip = () => {
+    // For now, don't allow skipping required surveys
+    if (registration.require_survey) {
+      return
+    }
+    setShowSurvey(false)
+  }
 
   // Validate discount code
   const validateDiscountCode = async (code: string) => {
@@ -1080,6 +1110,38 @@ export default function RegistrationPurchase({
               `This category is currently at capacity (${selectedCategory.current_count} spots filled). You can join the waitlist and we'll notify you if a spot becomes available.`
             )}
           </p>
+        </div>
+      )}
+
+      {/* Survey Section */}
+      {showSurvey && registration.survey_id && (
+        <div className="mb-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center mb-3">
+              <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="text-lg font-medium text-blue-800">Complete Survey</h3>
+              {registration.require_survey && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                  Required
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-blue-700 mt-1">
+              Please complete this survey to proceed with your registration. Your responses help us improve the event experience.
+            </p>
+          </div>
+
+          <TallySurveyEmbed 
+            surveyId={registration.survey_id}
+            userEmail={userEmail}
+            userId={userEmail} // Using email as userId for now
+            fullName={userEmail.split('@')[0]} // Simple fallback
+            layout="inline"
+            onComplete={handleSurveyComplete}
+            onError={(error) => setError(`Survey error: ${error}`)}
+          />
         </div>
       )}
 

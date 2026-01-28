@@ -335,7 +335,7 @@ export default async function BrowseRegistrationsPage() {
 
                   // For detailed validation result (used for messaging), check with first category
                   // This gives us a validation result we can use to show helpful messages
-                  const firstCategoryMembershipId = uniqueCategoryMembershipIds[0] || null
+                  const firstCategoryMembershipId: string | null = uniqueCategoryMembershipIds[0] ?? null
                   membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                     registrationMembershipId,
                     firstCategoryMembershipId,

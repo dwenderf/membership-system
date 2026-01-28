@@ -1316,7 +1316,7 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}
         className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
           (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
             ? 'bg-blue-500 cursor-default'

@@ -323,12 +323,12 @@ export default function RegistrationPurchase({
 
   // Survey logic - check if survey is required and if user has completed it
   useEffect(() => {
-    if (registration.require_survey && registration.survey_id && !surveyResponses) {
+    if (selectedCategoryId && registration.require_survey && registration.survey_id && !surveyResponses) {
       setShowSurvey(true)
     } else {
       setShowSurvey(false)
     }
-  }, [registration.require_survey, registration.survey_id, surveyResponses])
+  }, [selectedCategoryId, registration.require_survey, registration.survey_id, surveyResponses])
 
   // Handle survey completion
   const handleSurveyComplete = (responseData: any) => {
@@ -1114,7 +1114,7 @@ export default function RegistrationPurchase({
       )}
 
       {/* Survey Section */}
-      {showSurvey && registration.survey_id && (
+      {selectedCategory && showSurvey && registration.survey_id && (
         <div className="mb-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
             <div className="flex items-center mb-3">

@@ -57,66 +57,99 @@ export default function TallySurveyEmbed({
         setIsLoading(true)
         setError(null)
 
+        // Validate environment variable first
+        if (!process.env.NEXT_PUBLIC_TALLY_BASE_URL) {
+          throw new Error('NEXT_PUBLIC_TALLY_BASE_URL environment variable not set')
+        }
+
         // Check if Tally embed script is already loaded
         if (typeof window !== 'undefined' && !(window as any).Tally) {
+          console.log('Loading Tally embed script...')
           // Dynamically load Tally embed script
           const script = document.createElement('script')
           script.src = 'https://tally.so/widgets/embed.js'
           script.async = true
           script.onload = () => {
-            console.log('Tally embed script loaded')
-            initializeSurvey()
+            console.log('Tally embed script loaded successfully')
+            setTimeout(initializeSurvey, 100) // Small delay to ensure script is ready
           }
           script.onerror = () => {
             const errorMsg = 'Failed to load Tally embed script'
+            console.error(errorMsg)
             setError(errorMsg)
+            setIsLoading(false)
             onError?.(errorMsg)
           }
           document.body.appendChild(script)
         } else {
           // Script already loaded
-          initializeSurvey()
+          console.log('Tally script already loaded')
+          setTimeout(initializeSurvey, 100)
         }
       } catch (err) {
+        console.error('Error in loadTallyEmbed:', err)
         const errorMsg = err instanceof Error ? err.message : 'Unknown error loading survey'
         setError(errorMsg)
+        setIsLoading(false)
         onError?.(errorMsg)
       }
     }
 
     const initializeSurvey = () => {
-      if (embedRef.current) {
-        try {
-          const surveyUrl = buildSurveyUrl()
-          
-          // Set up Tally embed attributes
-          embedRef.current.setAttribute('data-tally-src', surveyUrl)
-          embedRef.current.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
-          embedRef.current.setAttribute('data-tally-width', '100%')
-          embedRef.current.setAttribute('data-tally-emoji-text', '👋')
-          embedRef.current.setAttribute('data-tally-emoji-animation', 'wave')
+      console.log('Initializing survey...', { surveyId, embedRef: !!embedRef.current })
+      
+      if (!embedRef.current) {
+        console.error('Embed ref not available')
+        setError('Survey container not ready')
+        setIsLoading(false)
+        return
+      }
 
-          console.log('Tally survey initialized:', { surveyId, surveyUrl, layout })
-          setIsLoading(false)
-          
-          // Listen for survey completion (if Tally provides events)
-          // Note: This may need to be adjusted based on Tally's actual event system
-          if ((window as any).Tally?.on) {
-            (window as any).Tally.on('form_submit', (data: any) => {
-              console.log('Survey completed:', data)
-              onComplete?.(data)
-            })
-          }
+      try {
+        const surveyUrl = buildSurveyUrl()
+        console.log('Built survey URL:', surveyUrl)
+        
+        // Set up Tally embed attributes
+        embedRef.current.setAttribute('data-tally-src', surveyUrl)
+        embedRef.current.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
+        embedRef.current.setAttribute('data-tally-width', '100%')
+        embedRef.current.setAttribute('data-tally-emoji-text', '👋')
+        embedRef.current.setAttribute('data-tally-emoji-animation', 'wave')
 
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to initialize survey'
-          setError(errorMsg)
-          onError?.(errorMsg)
+        console.log('Tally survey initialized with attributes')
+        
+        // Force Tally to re-scan the DOM for new widgets
+        if ((window as any).Tally && (window as any).Tally.loadEmbeds) {
+          (window as any).Tally.loadEmbeds()
+          console.log('Called Tally.loadEmbeds()')
         }
+        
+        // Set loading to false after a short delay to allow Tally to render
+        setTimeout(() => {
+          setIsLoading(false)
+          console.log('Survey loading complete')
+        }, 1000)
+        
+        // Listen for survey completion (if Tally provides events)
+        if ((window as any).Tally?.on) {
+          (window as any).Tally.on('form_submit', (data: any) => {
+            console.log('Survey completed:', data)
+            onComplete?.(data)
+          })
+        }
+
+      } catch (err) {
+        console.error('Error initializing survey:', err)
+        const errorMsg = err instanceof Error ? err.message : 'Failed to initialize survey'
+        setError(errorMsg)
+        setIsLoading(false)
+        onError?.(errorMsg)
       }
     }
 
-    loadTallyEmbed()
+    if (surveyId && userEmail) {
+      loadTallyEmbed()
+    }
 
     // Cleanup function
     return () => {

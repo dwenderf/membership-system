@@ -53,8 +53,18 @@ export default function TallySurveyEmbed({
 
   // Callback ref to get notified when DOM element is available
   const embedRefCallback = (node: HTMLDivElement | null) => {
+    console.log('Embed element callback called with:', !!node)
     setEmbedElement(node)
   }
+
+  // Debug props and state
+  console.log('TallySurveyEmbed render:', {
+    surveyId,
+    userEmail,
+    embedElement: !!embedElement,
+    isLoading,
+    error
+  })
 
   useEffect(() => {
     const loadTallyEmbed = async () => {
@@ -166,8 +176,22 @@ export default function TallySurveyEmbed({
       }
     }
 
+    console.log('useEffect triggered with:', {
+      surveyId,
+      userEmail,
+      embedElement: !!embedElement,
+      condition: !!(surveyId && userEmail && embedElement)
+    })
+
     if (surveyId && userEmail && embedElement) {
+      console.log('All conditions met, loading Tally embed...')
       loadTallyEmbed()
+    } else {
+      console.log('Conditions not met:', {
+        hasSurveyId: !!surveyId,
+        hasUserEmail: !!userEmail,
+        hasEmbedElement: !!embedElement
+      })
     }
 
     // Cleanup function

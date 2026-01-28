@@ -61,6 +61,8 @@ export default function TallySurveyEmbed({
   // Store survey response in database
   const storeSurveyResponse = async (responseData: any) => {
     try {
+      console.log('Storing survey response...', { surveyId, responseData })
+      
       const response = await fetch('/api/user-survey-responses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,9 +73,11 @@ export default function TallySurveyEmbed({
       })
       
       if (!response.ok) {
-        console.error('Failed to store survey response')
+        const errorData = await response.text()
+        console.error('Failed to store survey response:', response.status, errorData)
       } else {
-        console.log('Survey response stored successfully')
+        const result = await response.json()
+        console.log('Survey response stored successfully:', result)
       }
     } catch (err) {
       console.error('Error storing survey response:', err)

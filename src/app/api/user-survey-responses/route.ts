@@ -5,7 +5,10 @@ export async function POST(request: NextRequest) {
   try {
     const { survey_id, response_data } = await request.json()
     
+    console.log('Survey API called with:', { survey_id, response_data })
+    
     if (!survey_id || !response_data) {
+      console.error('Missing required fields:', { survey_id: !!survey_id, response_data: !!response_data })
       return NextResponse.json(
         { error: 'Survey ID and response data are required' },
         { status: 400 }
@@ -16,12 +19,17 @@ export async function POST(request: NextRequest) {
 
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+    console.log('Auth check:', { user: !!user, authError })
+    
     if (authError || !user) {
+      console.error('Authentication failed:', authError)
       return NextResponse.json(
         { error: 'User not authenticated' },
         { status: 401 }
       )
     }
+
+    console.log('Attempting to insert survey response for user:', user.id)
 
     // Insert the survey response
     const { data, error } = await supabase
@@ -36,13 +44,14 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Error storing survey response:', error)
+      console.error('Supabase error storing survey response:', error)
       return NextResponse.json(
-        { error: 'Failed to store survey response' },
+        { error: 'Failed to store survey response', details: error.message },
         { status: 500 }
       )
     }
 
+    console.log('Survey response stored successfully:', data)
     return NextResponse.json({ 
       success: true, 
       survey_response_id: data.id 

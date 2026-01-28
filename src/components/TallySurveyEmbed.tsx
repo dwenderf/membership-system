@@ -28,9 +28,68 @@ export default function TallySurveyEmbed({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [surveyOpened, setSurveyOpened] = useState(false)
+  const [surveyCompleted, setSurveyCompleted] = useState(false)
+  const [existingSurveyCompleted, setExistingSurveyCompleted] = useState(false)
+
+  // Check if user has already completed this survey
+  const checkExistingSurveyCompletion = async () => {
+    try {
+      const response = await fetch('/api/user-survey-responses/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          survey_id: surveyId,
+          user_email: userEmail 
+        })
+      })
+      
+      if (response.ok) {
+        const { completed } = await response.json()
+        if (completed) {
+          console.log('User has already completed this survey')
+          setExistingSurveyCompleted(true)
+          setIsLoading(false)
+          onComplete?.(null) // Notify parent that survey is complete
+          return true
+        }
+      }
+    } catch (err) {
+      console.error('Error checking existing survey completion:', err)
+    }
+    return false
+  }
+
+  // Store survey response in database
+  const storeSurveyResponse = async (responseData: any) => {
+    try {
+      const response = await fetch('/api/user-survey-responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          survey_id: surveyId,
+          user_email: userEmail,
+          user_id: userId,
+          response_data: responseData
+        })
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to store survey response')
+      } else {
+        console.log('Survey response stored successfully')
+      }
+    } catch (err) {
+      console.error('Error storing survey response:', err)
+    }
+  }
 
   useEffect(() => {
     const loadTallyAndOpenSurvey = async () => {
+      // First check if user has already completed the survey
+      const alreadyCompleted = await checkExistingSurveyCompletion()
+      if (alreadyCompleted) {
+        return
+      }
       try {
         setIsLoading(true)
         setError(null)
@@ -102,10 +161,16 @@ export default function TallySurveyEmbed({
           onClose: () => {
             console.log('Survey popup closed')
             setSurveyOpened(false)
+            // Don't change completion state on close
           },
-          onSubmit: (payload: any) => {
+          onSubmit: async (payload: any) => {
             console.log('Survey submitted:', payload)
+            setSurveyCompleted(true)
             setSurveyOpened(false)
+            
+            // Store the response in the database
+            await storeSurveyResponse(payload)
+            
             onComplete?.(payload)
           }
         })
@@ -170,45 +235,67 @@ export default function TallySurveyEmbed({
     )
   }
 
-  // Once popup is opened, show a message that survey is active
-  if (surveyOpened) {
+  // If user already completed the survey, show completion message
+  if (existingSurveyCompleted) {
     return (
       <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
         <div className="flex items-center">
           <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
-          <h3 className="text-sm font-medium text-green-800">Survey Active</h3>
+          <h3 className="text-sm font-medium text-green-800">Survey Already Completed</h3>
         </div>
         <div className="mt-2 text-sm text-green-700">
+          You have already completed this survey. You can proceed with registration.
+        </div>
+      </div>
+    )
+  }
+
+  // Survey just completed in this session
+  if (surveyCompleted) {
+    return (
+      <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center">
+          <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-sm font-medium text-green-800">Survey Completed</h3>
+        </div>
+        <div className="mt-2 text-sm text-green-700">
+          Thank you! You can now proceed with registration.
+        </div>
+
+        {/* Debug info (development only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-3 bg-gray-100 border rounded text-xs">
+            <strong>Debug Info:</strong>
+            <div>Survey ID: {surveyId}</div>
+            <div>User: {userEmail} ({userId})</div>
+            <div>Member Number: {memberNumber || 'N/A'}</div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Survey is active (popup open)
+  if (surveyOpened) {
+    return (
+      <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center">
+          <svg className="h-5 w-5 text-blue-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-sm font-medium text-blue-800">Survey Active</h3>
+        </div>
+        <div className="mt-2 text-sm text-blue-700">
           Please complete the survey to continue with registration.
         </div>
       </div>
     )
   }
 
-  // Survey completed successfully
-  return (
-    <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-      <div className="flex items-center">
-        <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-        </svg>
-        <h3 className="text-sm font-medium text-green-800">Survey Completed</h3>
-      </div>
-      <div className="mt-2 text-sm text-green-700">
-        Thank you! You can now proceed with registration.
-      </div>
-
-      {/* Debug info (development only) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-4 p-3 bg-gray-100 border rounded text-xs">
-          <strong>Debug Info:</strong>
-          <div>Survey ID: {surveyId}</div>
-          <div>User: {userEmail} ({userId})</div>
-          <div>Member Number: {memberNumber || 'N/A'}</div>
-        </div>
-      )}
-    </div>
-  )
+  // This should not happen - loading should be true if we get here
+  return null
 }

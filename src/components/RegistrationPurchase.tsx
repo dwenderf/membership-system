@@ -114,6 +114,7 @@ export default function RegistrationPurchase({
   const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
   const [surveyResponses, setSurveyResponses] = useState<Record<string, any> | null>(null)
   const [showSurvey, setShowSurvey] = useState(false)
+  const [surveyCompleted, setSurveyCompleted] = useState(false)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method and payment plan eligibility
@@ -334,6 +335,7 @@ export default function RegistrationPurchase({
   const handleSurveyComplete = (responseData: any) => {
     console.log('Survey completed with data:', responseData)
     setSurveyResponses(responseData)
+    setSurveyCompleted(true)
     setShowSurvey(false)
   }
 
@@ -1116,23 +1118,6 @@ export default function RegistrationPurchase({
       {/* Survey Section */}
       {selectedCategory && showSurvey && registration.survey_id && (
         <div className="mb-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center mb-3">
-              <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 className="text-lg font-medium text-blue-800">Complete Survey</h3>
-              {registration.require_survey && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                  Required
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-blue-700 mt-1">
-              Please complete this survey to proceed with your registration. Your responses help us improve the event experience.
-            </p>
-          </div>
-
           <TallySurveyEmbed 
             surveyId={registration.survey_id}
             userEmail={userEmail}
@@ -1331,7 +1316,7 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}}
         className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
           (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
             ? 'bg-blue-500 cursor-default'
@@ -1347,6 +1332,7 @@ export default function RegistrationPurchase({
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
+         (registration.require_survey && !surveyCompleted) ? 'Complete Survey to Continue' :
          (isCategoryAtCapacity && isUserOnWaitlist) ? 'On Waitlist' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}

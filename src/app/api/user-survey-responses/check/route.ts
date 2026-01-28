@@ -3,23 +3,32 @@ import { createServerClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { survey_id, user_email } = await request.json()
+    const { survey_id } = await request.json()
     
-    if (!survey_id || !user_email) {
+    if (!survey_id) {
       return NextResponse.json(
-        { error: 'Survey ID and user email are required' },
+        { error: 'Survey ID is required' },
         { status: 400 }
       )
     }
 
     const supabase = await createServerClient()
 
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'User not authenticated' },
+        { status: 401 }
+      )
+    }
+
     // Check if user has already completed this survey
     const { data: existing, error } = await supabase
       .from('user_survey_responses')
       .select('id')
       .eq('survey_id', survey_id)
-      .eq('user_email', user_email)
+      .eq('user_id', user.id)
       .single()
 
     if (error && error.code !== 'PGRST116') {

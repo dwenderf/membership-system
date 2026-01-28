@@ -38,8 +38,7 @@ export default function TallySurveyEmbed({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          survey_id: surveyId,
-          user_email: userEmail 
+          survey_id: surveyId
         })
       })
       
@@ -67,8 +66,6 @@ export default function TallySurveyEmbed({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           survey_id: surveyId,
-          user_email: userEmail,
-          user_id: userId,
           response_data: responseData
         })
       })

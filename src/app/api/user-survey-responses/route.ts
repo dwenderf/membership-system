@@ -3,24 +3,32 @@ import { createServerClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { survey_id, user_email, user_id, response_data } = await request.json()
+    const { survey_id, response_data } = await request.json()
     
-    if (!survey_id || !user_email || !response_data) {
+    if (!survey_id || !response_data) {
       return NextResponse.json(
-        { error: 'Survey ID, user email, and response data are required' },
+        { error: 'Survey ID and response data are required' },
         { status: 400 }
       )
     }
 
     const supabase = await createServerClient()
 
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'User not authenticated' },
+        { status: 401 }
+      )
+    }
+
     // Insert the survey response
     const { data, error } = await supabase
       .from('user_survey_responses')
       .insert({
         survey_id,
-        user_email,
-        user_id: user_id || null,
+        user_id: user.id,
         response_data,
         completed_at: new Date().toISOString()
       })

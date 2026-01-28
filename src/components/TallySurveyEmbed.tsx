@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface TallySurveyEmbedProps {
   surveyId: string                    // e.g., "VLzWBv"
@@ -27,57 +27,17 @@ export default function TallySurveyEmbed({
 }: TallySurveyEmbedProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [iframeElement, setIframeElement] = useState<HTMLIFrameElement | null>(null)
-
-  // Build survey URL with user context
-  const buildSurveyUrl = () => {
-    if (!process.env.NEXT_PUBLIC_TALLY_BASE_URL) {
-      throw new Error('NEXT_PUBLIC_TALLY_BASE_URL environment variable not set')
-    }
-
-    const params = new URLSearchParams({
-      // Pre-filled visible fields
-      email: userEmail,
-      name: fullName,
-      
-      // Hidden fields for context and analytics
-      hidden_user_id: userId,
-      hidden_email: userEmail,
-      hidden_full_name: fullName,
-      ...(memberNumber && { hidden_member_number: memberNumber })
-    })
-
-    const baseUrl = `${process.env.NEXT_PUBLIC_TALLY_BASE_URL}${surveyId}`
-    return `${baseUrl}?${params.toString()}`
-  }
-
-  // Callback ref to get notified when iframe element is available
-  const iframeRefCallback = (node: HTMLIFrameElement | null) => {
-    console.log('Iframe element callback called with:', !!node)
-    setIframeElement(node)
-  }
-
-  // Debug props and state
-  console.log('TallySurveyEmbed render:', {
-    surveyId,
-    userEmail,
-    iframeElement: !!iframeElement,
-    isLoading,
-    error
-  })
+  const [surveyOpened, setSurveyOpened] = useState(false)
 
   useEffect(() => {
-    const loadTallyEmbed = async () => {
+    const loadTallyAndOpenSurvey = async () => {
       try {
         setIsLoading(true)
         setError(null)
 
-        // Validate environment variable first
-        if (!process.env.NEXT_PUBLIC_TALLY_BASE_URL) {
-          throw new Error('NEXT_PUBLIC_TALLY_BASE_URL environment variable not set')
-        }
+        console.log('Loading Tally script for survey:', surveyId)
 
-        // Check if Tally embed script is already loaded
+        // Check if Tally script is already loaded
         if (typeof window !== 'undefined' && !(window as any).Tally) {
           console.log('Loading Tally embed script...')
           // Dynamically load Tally embed script
@@ -86,8 +46,7 @@ export default function TallySurveyEmbed({
           script.async = true
           script.onload = () => {
             console.log('Tally embed script loaded successfully')
-            // Initialize immediately since we know the element is available
-            initializeSurvey()
+            openSurveyPopup()
           }
           script.onerror = () => {
             const errorMsg = 'Failed to load Tally embed script'
@@ -98,12 +57,12 @@ export default function TallySurveyEmbed({
           }
           document.body.appendChild(script)
         } else {
-          // Script already loaded, initialize immediately
+          // Script already loaded
           console.log('Tally script already loaded')
-          initializeSurvey()
+          openSurveyPopup()
         }
       } catch (err) {
-        console.error('Error in loadTallyEmbed:', err)
+        console.error('Error in loadTallyAndOpenSurvey:', err)
         const errorMsg = err instanceof Error ? err.message : 'Unknown error loading survey'
         setError(errorMsg)
         setIsLoading(false)
@@ -111,93 +70,67 @@ export default function TallySurveyEmbed({
       }
     }
 
-    const initializeSurvey = () => {
-      console.log('Initializing survey for ID:', surveyId)
-      console.log('Iframe element available:', !!iframeElement)
-      console.log('Tally object available:', !!(window as any).Tally)
+    const openSurveyPopup = () => {
+      console.log('Opening Tally popup for survey ID:', surveyId)
       
-      if (!iframeElement) {
-        console.error('Iframe element not available')
-        setError('Survey container not ready')
-        setIsLoading(false)
-        return
-      }
-
       try {
-        const surveyUrl = buildSurveyUrl()
-        console.log('Built survey URL:', surveyUrl)
-        
-        // Set up the iframe with Tally's expected format
-        iframeElement.setAttribute('data-tally-src', surveyUrl)
-        iframeElement.setAttribute('loading', 'lazy')
-        iframeElement.setAttribute('width', '100%')
-        iframeElement.setAttribute('height', '746')
-        iframeElement.setAttribute('frameborder', '0')
-        iframeElement.setAttribute('marginheight', '0')
-        iframeElement.setAttribute('marginwidth', '0')
-        iframeElement.setAttribute('title', 'Survey')
+        const hiddenFields = {
+          hidden_user_id: userId,
+          hidden_email: userEmail,
+          hidden_full_name: fullName,
+          email: userEmail, // Pre-fill visible email field
+          name: fullName,   // Pre-fill visible name field
+          ...(memberNumber && { hidden_member_number: memberNumber })
+        }
 
-        console.log('Iframe configured with attributes')
-        console.log('Iframe data-tally-src:', iframeElement.getAttribute('data-tally-src'))
-        
-        // Force Tally to re-scan the DOM for new widgets
-        if ((window as any).Tally && (window as any).Tally.loadEmbeds) {
-          console.log('Calling Tally.loadEmbeds()...')
-          (window as any).Tally.loadEmbeds()
-          console.log('Tally.loadEmbeds() called successfully')
-        } else {
-          console.warn('Tally.loadEmbeds() not available')
-        }
-        
-        // Set loading to false after a short delay to allow Tally to render
-        setTimeout(() => {
-          setIsLoading(false)
-          console.log('Survey loading complete')
-        }, 1000)
-        
-        // Listen for survey completion (if Tally provides events)
-        if ((window as any).Tally?.on) {
-          (window as any).Tally.on('form_submit', (data: any) => {
-            console.log('Survey completed:', data)
-            onComplete?.(data)
-          })
-        }
+        console.log('Opening popup with hidden fields:', hiddenFields)
+
+        ;(window as any).Tally.openPopup(surveyId, {
+          layout: 'modal',
+          width: 700,
+          autoClose: 2000, // Close 2 seconds after submit
+          emoji: {
+            text: '🏳️‍🌈',
+            animation: 'wave'
+          },
+          hiddenFields,
+          onOpen: () => {
+            console.log('Survey popup opened')
+            setSurveyOpened(true)
+            setIsLoading(false)
+          },
+          onClose: () => {
+            console.log('Survey popup closed')
+            setSurveyOpened(false)
+          },
+          onSubmit: (payload: any) => {
+            console.log('Survey submitted:', payload)
+            setSurveyOpened(false)
+            onComplete?.(payload)
+          }
+        })
 
       } catch (err) {
-        console.error('Error initializing survey:', err)
-        const errorMsg = err instanceof Error ? err.message : 'Failed to initialize survey'
+        console.error('Error opening Tally popup:', err)
+        const errorMsg = err instanceof Error ? err.message : 'Failed to open survey'
         setError(errorMsg)
         setIsLoading(false)
         onError?.(errorMsg)
       }
     }
 
-    console.log('useEffect triggered with:', {
-      surveyId,
-      userEmail,
-      iframeElement: !!iframeElement,
-      condition: !!(surveyId && userEmail && iframeElement)
-    })
-
-    if (surveyId && userEmail && iframeElement) {
-      console.log('All conditions met, loading Tally embed...')
-      loadTallyEmbed()
-    } else {
-      console.log('Conditions not met:', {
-        hasSurveyId: !!surveyId,
-        hasUserEmail: !!userEmail,
-        hasIframeElement: !!iframeElement
-      })
+    if (surveyId && userEmail) {
+      loadTallyAndOpenSurvey()
     }
 
     // Cleanup function
     return () => {
-      // Remove event listeners if needed
-      if ((window as any).Tally?.off) {
-        (window as any).Tally.off('form_submit')
+      // Close popup if component unmounts
+      if (surveyOpened && (window as any).Tally?.closePopup) {
+        (window as any).Tally.closePopup(surveyId)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, iframeElement, onComplete, onError])
+  }, [surveyId, userEmail, userId, fullName, memberNumber, onComplete, onError])
 
   if (error) {
     return (
@@ -223,39 +156,56 @@ export default function TallySurveyEmbed({
     )
   }
 
-  return (
-    <div className="w-full">
-      {/* Always render iframe so callback ref can be called */}
-      <iframe 
-        ref={iframeRefCallback}
-        className="tally-survey-embed"
-        style={{ 
-          minHeight: layout === 'inline' ? '400px' : 'auto',
-          width: '100%',
-          display: isLoading ? 'none' : 'block'
-        }}
-      />
-      
-      {/* Show loading state while iframe is hidden */}
-      {isLoading && (
-        <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center justify-center">
-            <svg className="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="text-sm text-blue-800">Loading survey...</span>
-          </div>
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center justify-center">
+          <svg className="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-sm text-blue-800">Loading survey...</span>
         </div>
-      )}
-      
+      </div>
+    )
+  }
+
+  // Once popup is opened, show a message that survey is active
+  if (surveyOpened) {
+    return (
+      <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center">
+          <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-sm font-medium text-green-800">Survey Active</h3>
+        </div>
+        <div className="mt-2 text-sm text-green-700">
+          Please complete the survey to continue with registration.
+        </div>
+      </div>
+    )
+  }
+
+  // Survey completed successfully
+  return (
+    <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
+      <div className="flex items-center">
+        <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+        <h3 className="text-sm font-medium text-green-800">Survey Completed</h3>
+      </div>
+      <div className="mt-2 text-sm text-green-700">
+        Thank you! You can now proceed with registration.
+      </div>
+
       {/* Debug info (development only) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-4 p-3 bg-gray-100 border rounded text-xs">
           <strong>Debug Info:</strong>
           <div>Survey ID: {surveyId}</div>
           <div>User: {userEmail} ({userId})</div>
-          <div>Layout: {layout}</div>
           <div>Member Number: {memberNumber || 'N/A'}</div>
         </div>
       )}

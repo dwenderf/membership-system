@@ -1,0 +1,189 @@
+'use client'
+
+import React, { useEffect, useRef, useState } from 'react'
+
+interface TallySurveyEmbedProps {
+  surveyId: string                    // e.g., "VLzWBv"
+  userEmail: string                   // from users table
+  userId: string                      // users.id (UUID)
+  fullName: string                    // first_name + ' ' + last_name
+  memberNumber?: string               // member_id (e.g., "1002") - optional
+  
+  // Component behavior
+  layout?: 'inline' | 'modal'         // Default: 'inline'
+  onComplete?: (responseData: any) => void
+  onError?: (error: string) => void
+}
+
+export default function TallySurveyEmbed({
+  surveyId,
+  userEmail,
+  userId,
+  fullName,
+  memberNumber,
+  layout = 'inline',
+  onComplete,
+  onError
+}: TallySurveyEmbedProps) {
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const embedRef = useRef<HTMLDivElement>(null)
+
+  // Build survey URL with user context
+  const buildSurveyUrl = () => {
+    if (!process.env.NEXT_PUBLIC_TALLY_BASE_URL) {
+      throw new Error('NEXT_PUBLIC_TALLY_BASE_URL environment variable not set')
+    }
+
+    const params = new URLSearchParams({
+      // Pre-filled visible fields
+      email: userEmail,
+      name: fullName,
+      
+      // Hidden fields for context and analytics
+      hidden_user_id: userId,
+      hidden_email: userEmail,
+      hidden_full_name: fullName,
+      ...(memberNumber && { hidden_member_number: memberNumber })
+    })
+
+    const baseUrl = `${process.env.NEXT_PUBLIC_TALLY_BASE_URL}${surveyId}`
+    return `${baseUrl}?${params.toString()}`
+  }
+
+  useEffect(() => {
+    const loadTallyEmbed = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        // Check if Tally embed script is already loaded
+        if (typeof window !== 'undefined' && !(window as any).Tally) {
+          // Dynamically load Tally embed script
+          const script = document.createElement('script')
+          script.src = 'https://tally.so/widgets/embed.js'
+          script.async = true
+          script.onload = () => {
+            console.log('Tally embed script loaded')
+            initializeSurvey()
+          }
+          script.onerror = () => {
+            const errorMsg = 'Failed to load Tally embed script'
+            setError(errorMsg)
+            onError?.(errorMsg)
+          }
+          document.body.appendChild(script)
+        } else {
+          // Script already loaded
+          initializeSurvey()
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error loading survey'
+        setError(errorMsg)
+        onError?.(errorMsg)
+      }
+    }
+
+    const initializeSurvey = () => {
+      if (embedRef.current) {
+        try {
+          const surveyUrl = buildSurveyUrl()
+          
+          // Set up Tally embed attributes
+          embedRef.current.setAttribute('data-tally-src', surveyUrl)
+          embedRef.current.setAttribute('data-tally-layout', layout === 'modal' ? 'modal' : 'standard')
+          embedRef.current.setAttribute('data-tally-width', '100%')
+          embedRef.current.setAttribute('data-tally-emoji-text', '👋')
+          embedRef.current.setAttribute('data-tally-emoji-animation', 'wave')
+
+          console.log('Tally survey initialized:', { surveyId, surveyUrl, layout })
+          setIsLoading(false)
+          
+          // Listen for survey completion (if Tally provides events)
+          // Note: This may need to be adjusted based on Tally's actual event system
+          if ((window as any).Tally?.on) {
+            (window as any).Tally.on('form_submit', (data: any) => {
+              console.log('Survey completed:', data)
+              onComplete?.(data)
+            })
+          }
+
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Failed to initialize survey'
+          setError(errorMsg)
+          onError?.(errorMsg)
+        }
+      }
+    }
+
+    loadTallyEmbed()
+
+    // Cleanup function
+    return () => {
+      // Remove event listeners if needed
+      if ((window as any).Tally?.off) {
+        (window as any).Tally.off('form_submit')
+      }
+    }
+  }, [surveyId, userEmail, userId, fullName, memberNumber, layout, onComplete, onError])
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center">
+          <svg className="h-5 w-5 text-red-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-sm font-medium text-red-800">Survey Error</h3>
+        </div>
+        <div className="mt-2 text-sm text-red-700">
+          {error}
+        </div>
+        <div className="mt-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded border border-red-300"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center justify-center">
+          <svg className="animate-spin h-5 w-5 text-blue-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-sm text-blue-800">Loading survey...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full">
+      {/* Tally embed container */}
+      <div 
+        ref={embedRef}
+        className="tally-survey-embed"
+        style={{ minHeight: layout === 'inline' ? '400px' : 'auto' }}
+      />
+      
+      {/* Debug info (development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-3 bg-gray-100 border rounded text-xs">
+          <strong>Debug Info:</strong>
+          <div>Survey ID: {surveyId}</div>
+          <div>User: {userEmail} ({userId})</div>
+          <div>Layout: {layout}</div>
+          <div>Member Number: {memberNumber || 'N/A'}</div>
+        </div>
+      )}
+    </div>
+  )
+}

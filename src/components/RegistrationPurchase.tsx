@@ -1171,12 +1171,13 @@ export default function RegistrationPurchase({
             <TallySurveyEmbed 
               surveyId={registration.survey_id}
               userEmail={userEmail}
-            userId={userEmail} // Using email as userId for now
-            fullName={userEmail.split('@')[0]} // Simple fallback
-            layout="inline"
-            onComplete={handleSurveyComplete}
-            onError={(error) => setError(`Survey error: ${error}`)}
-          />
+              userId={userEmail} // Using email as userId for now
+              fullName={userEmail.split('@')[0]} // Simple fallback
+              layout="inline"
+              onComplete={handleSurveyComplete}
+              onError={(error) => setError(`Survey error: ${error}`)}
+            />
+          )}
         </div>
       )}
 

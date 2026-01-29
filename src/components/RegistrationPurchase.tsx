@@ -313,7 +313,7 @@ export default function RegistrationPurchase({
   // Check if selected category is eligible (basic membership check)
   const isCategoryEligible = selectedCategory ? 
     !selectedCategory.required_membership_id || 
-    activeMemberships.some(um => um.membership?.id === selectedCategory.required_membership_id)
+    activeMemberships.some(um => um.memberships?.id === selectedCategory.required_membership_id)
     : false
 
 

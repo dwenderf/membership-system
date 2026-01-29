@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert the survey response
+    // Insert the survey response (or update if already exists)
     const { data, error } = await supabase
       .from('user_survey_responses')
       .insert({
@@ -37,6 +37,36 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
+      // Check if it's a unique constraint violation (duplicate survey response)
+      if (error.code === '23505') {
+        // Handle duplicate by updating the existing response
+        const { data: updateData, error: updateError } = await supabase
+          .from('user_survey_responses')
+          .update({
+            response_data,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id)
+          .eq('survey_id', survey_id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Error updating survey response:', updateError)
+          return NextResponse.json(
+            { error: 'Failed to update survey response' },
+            { status: 500 }
+          )
+        }
+
+        return NextResponse.json({ 
+          success: true, 
+          survey_response_id: updateData.id,
+          updated: true
+        })
+      }
+
       console.error('Error storing survey response:', error)
       return NextResponse.json(
         { error: 'Failed to store survey response' },
@@ -46,7 +76,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      survey_response_id: data.id 
+      survey_response_id: data.id,
+      updated: false
     })
 
   } catch (error) {

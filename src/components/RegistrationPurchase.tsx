@@ -323,14 +323,58 @@ export default function RegistrationPurchase({
   const membershipWarning = formatMembershipWarning(membershipValidation)
   const shouldShowSeasonWarning = selectedCategory && !hasSeasonCoverage && membershipWarning
 
-  // Survey logic - check if survey is required and if user has completed it
+  // Check if user has already completed the survey when component loads or category changes
   useEffect(() => {
-    if (selectedCategoryId && registration.require_survey && registration.survey_id && !surveyResponses) {
+    const checkSurveyCompletion = async () => {
+      if (!selectedCategoryId || !registration.require_survey || !registration.survey_id) {
+        setShowSurvey(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/user-survey-responses/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            survey_id: registration.survey_id
+          })
+        })
+        
+        if (response.ok) {
+          const { completed } = await response.json()
+          if (completed) {
+            setSurveyCompleted(true)
+            setShowSurvey(false)
+            setSurveyStarted(false)
+          } else {
+            setSurveyCompleted(false)
+            setShowSurvey(true)
+            setSurveyStarted(false)
+          }
+        } else {
+          // If check fails, assume not completed and show survey
+          setSurveyCompleted(false)
+          setShowSurvey(true)
+        }
+      } catch (error) {
+        console.error('Error checking survey completion:', error)
+        // On error, assume not completed and show survey
+        setSurveyCompleted(false)
+        setShowSurvey(true)
+      }
+    }
+
+    checkSurveyCompletion()
+  }, [selectedCategoryId, registration.require_survey, registration.survey_id])
+
+  // Survey logic - show survey if required and not completed
+  useEffect(() => {
+    if (selectedCategoryId && registration.require_survey && registration.survey_id && !surveyCompleted) {
       setShowSurvey(true)
     } else {
       setShowSurvey(false)
     }
-  }, [selectedCategoryId, registration.require_survey, registration.survey_id, surveyResponses])
+  }, [selectedCategoryId, registration.require_survey, registration.survey_id, surveyCompleted])
 
   // Handle survey completion
   const handleSurveyComplete = (responseData: any) => {
@@ -339,6 +383,7 @@ export default function RegistrationPurchase({
     setSurveyCompleted(true)
     setSurveyStarted(false)
     setShowSurvey(false)
+    showSuccess('Survey Completed', 'Thank you for completing the survey! You can now proceed with registration.')
   }
 
   // Handle starting the survey
@@ -1143,11 +1188,8 @@ export default function RegistrationPurchase({
               </p>
               <button
                 onClick={handleStartSurvey}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8m-9-4h10a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2v-8a2 2 0 012-2z" />
-                </svg>
                 Start Survey
               </button>
             </div>

@@ -342,39 +342,21 @@ export default function RegistrationPurchase({
         
         if (response.ok) {
           const { completed } = await response.json()
-          if (completed) {
-            setSurveyCompleted(true)
-            setShowSurvey(false)
-            setSurveyStarted(false)
-          } else {
-            setSurveyCompleted(false)
-            setShowSurvey(true)
-            setSurveyStarted(false)
-          }
+          setSurveyCompleted(completed)
+          setSurveyStarted(false)
         } else {
-          // If check fails, assume not completed and show survey
+          // If check fails, assume not completed
           setSurveyCompleted(false)
-          setShowSurvey(true)
         }
       } catch (error) {
         console.error('Error checking survey completion:', error)
-        // On error, assume not completed and show survey
+        // On error, assume not completed
         setSurveyCompleted(false)
-        setShowSurvey(true)
       }
     }
 
     checkSurveyCompletion()
   }, [selectedCategoryId, registration.require_survey, registration.survey_id])
-
-  // Survey logic - show survey if required and not completed
-  useEffect(() => {
-    if (selectedCategoryId && registration.require_survey && registration.survey_id && !surveyCompleted) {
-      setShowSurvey(true)
-    } else {
-      setShowSurvey(false)
-    }
-  }, [selectedCategoryId, registration.require_survey, registration.survey_id, surveyCompleted])
 
   // Handle survey completion
   const handleSurveyComplete = (responseData: any) => {
@@ -382,13 +364,19 @@ export default function RegistrationPurchase({
     setSurveyResponses(responseData)
     setSurveyCompleted(true)
     setSurveyStarted(false)
-    setShowSurvey(false)
     showSuccess('Survey Completed', 'Thank you for completing the survey! You can now proceed with registration.')
   }
 
   // Handle starting the survey
   const handleStartSurvey = () => {
     setSurveyStarted(true)
+  }
+
+  // Handle survey being closed without completion
+  const handleSurveyClose = () => {
+    console.log('Survey closed without completion - resetting survey state')
+    setSurveyStarted(false)
+    // Keep showSurvey true so they can restart
   }
 
   // Handle survey skip (if allowed)
@@ -1168,7 +1156,7 @@ export default function RegistrationPurchase({
       )}
 
       {/* Survey Section */}
-      {selectedCategory && showSurvey && registration.survey_id && (
+      {selectedCategory && registration.require_survey && registration.survey_id && (
         <div className="mb-4">
           {!surveyCompleted && !surveyStarted && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -1217,6 +1205,7 @@ export default function RegistrationPurchase({
               fullName={userEmail.split('@')[0]} // Simple fallback
               layout="inline"
               onComplete={handleSurveyComplete}
+              onClose={handleSurveyClose}
               onError={(error) => setError(`Survey error: ${error}`)}
             />
           )}

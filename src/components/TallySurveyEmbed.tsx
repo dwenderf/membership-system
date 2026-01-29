@@ -12,6 +12,7 @@ interface TallySurveyEmbedProps {
   // Component behavior
   layout?: 'inline' | 'modal'         // Default: 'inline'
   onComplete?: (responseData: any) => void
+  onClose?: () => void
   onError?: (error: string) => void
 }
 
@@ -23,6 +24,7 @@ export default function TallySurveyEmbed({
   memberNumber,
   layout = 'inline',
   onComplete,
+  onClose,
   onError
 }: TallySurveyEmbedProps) {
   const [isLoading, setIsLoading] = useState(true)
@@ -158,7 +160,8 @@ export default function TallySurveyEmbed({
           onClose: () => {
             console.log('Survey popup closed')
             setSurveyOpened(false)
-            // Don't change completion state on close
+            // Call the parent close handler to reset survey state
+            onClose?.()
           },
           onSubmit: async (payload: any) => {
             console.log('Survey submitted:', payload)
@@ -192,7 +195,7 @@ export default function TallySurveyEmbed({
         (window as any).Tally.closePopup(surveyId)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber, onComplete, onError])
+  }, [surveyId, userEmail, userId, fullName, memberNumber, onComplete, onClose, onError])
 
   if (error) {
     return (

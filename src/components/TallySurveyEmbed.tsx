@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 interface TallySurveyEmbedProps {
   surveyId: string                    // e.g., "VLzWBv"
@@ -32,6 +32,18 @@ export default function TallySurveyEmbed({
   const [surveyOpened, setSurveyOpened] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [existingSurveyCompleted, setExistingSurveyCompleted] = useState(false)
+
+  // Use refs to store stable callback references
+  const onCompleteRef = useRef(onComplete)
+  const onCloseRef = useRef(onClose)
+  const onErrorRef = useRef(onError)
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+    onCloseRef.current = onClose
+    onErrorRef.current = onError
+  })
 
   // Check if user has already completed this survey
   const checkExistingSurveyCompletion = async () => {
@@ -111,7 +123,7 @@ export default function TallySurveyEmbed({
             console.error(errorMsg)
             setError(errorMsg)
             setIsLoading(false)
-            onError?.(errorMsg)
+            onErrorRef.current?.(errorMsg)
           }
           document.body.appendChild(script)
         } else {
@@ -124,7 +136,7 @@ export default function TallySurveyEmbed({
         const errorMsg = err instanceof Error ? err.message : 'Unknown error loading survey'
         setError(errorMsg)
         setIsLoading(false)
-        onError?.(errorMsg)
+        onErrorRef.current?.(errorMsg)
       }
     }
 
@@ -161,7 +173,7 @@ export default function TallySurveyEmbed({
             console.log('Survey popup closed')
             setSurveyOpened(false)
             // Call the parent close handler to reset survey state
-            onClose?.()
+            onCloseRef.current?.()
           },
           onSubmit: async (payload: any) => {
             console.log('Survey submitted:', payload)
@@ -171,7 +183,7 @@ export default function TallySurveyEmbed({
             // Store the response in the database
             await storeSurveyResponse(payload)
             
-            onComplete?.(payload)
+            onCompleteRef.current?.(payload)
           }
         })
 
@@ -180,7 +192,7 @@ export default function TallySurveyEmbed({
         const errorMsg = err instanceof Error ? err.message : 'Failed to open survey'
         setError(errorMsg)
         setIsLoading(false)
-        onError?.(errorMsg)
+        onErrorRef.current?.(errorMsg)
       }
     }
 
@@ -195,7 +207,7 @@ export default function TallySurveyEmbed({
         (window as any).Tally.closePopup(surveyId)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber, onComplete, onClose, onError])
+  }, [surveyId, userEmail, userId, fullName, memberNumber])
 
   if (error) {
     return (

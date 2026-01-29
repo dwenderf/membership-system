@@ -247,6 +247,7 @@ export default function RegistrationPurchase({
     max_capacity: null,
     current_count: 0,
     required_membership_id: null,
+    memberships: null,
     categories: { name: 'Alternate' }
   } : null
   
@@ -791,9 +792,15 @@ export default function RegistrationPurchase({
           <div className="grid grid-cols-1 gap-2">
             {categories.map((category) => {
               const categoryName = getCategoryDisplayName(category as any)
-              const requiresMembership = category.required_membership_id
-              const hasRequiredMembership = !requiresMembership || 
-                activeMemberships.some(um => um.membership?.id === category.required_membership_id)
+              const requiresMembership = registration.required_membership_id || category.required_membership_id
+              
+              // Use the proper validation service to check BOTH registration and category level memberships
+              const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
+                registration.required_membership_id || null,
+                category.required_membership_id || null,
+                activeMemberships
+              )
+              const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
               const categoryPrice = category.price ?? 0
               
               // Determine availability logic
@@ -926,8 +933,8 @@ export default function RegistrationPurchase({
               
               // Use the proper validation service to check BOTH registration and category level memberships
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
-                registration.required_membership_id,
-                category.required_membership_id,
+                registration.required_membership_id || null,
+                category.required_membership_id || null,
                 activeMemberships
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership

@@ -60,6 +60,11 @@ interface Registration {
   allow_discounts?: boolean
   survey_id?: string | null
   require_survey?: boolean
+  required_membership_id?: string | null
+  memberships?: {
+    id: string
+    name: string
+  } | null
   season?: {
     name: string
     start_date: string
@@ -917,9 +922,15 @@ export default function RegistrationPurchase({
           <div className="space-y-2">
             {categories.map((category) => {
               const categoryName = getCategoryDisplayName(category as any)
-              const requiresMembership = category.required_membership_id
-              const hasRequiredMembership = !requiresMembership || 
-                activeMemberships.some(um => um.membership?.id === category.required_membership_id)
+              const requiresMembership = registration.required_membership_id || category.required_membership_id
+              
+              // Use the proper validation service to check BOTH registration and category level memberships
+              const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
+                registration.required_membership_id,
+                category.required_membership_id,
+                activeMemberships
+              )
+              const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
               const categoryPrice = category.price ?? 0
               
               const isOnWaitlist = !!userWaitlistEntries[category.id]

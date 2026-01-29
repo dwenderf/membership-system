@@ -330,7 +330,7 @@ export default function NewRegistrationPage() {
                 {formData.require_survey && (
                   <div className="ml-6 space-y-2 p-4 bg-blue-50 border border-blue-200 rounded-md">
                     <div className="text-sm text-blue-800 mb-3">
-                      <strong>Survey Integration:</strong> Enter your Formbricks survey ID. Users will complete this survey before proceeding to payment.
+                      <strong>Survey Integration:</strong> Enter your Tally survey ID. Users will complete this survey before proceeding to payment.
                     </div>
 
                     <div>
@@ -343,11 +343,11 @@ export default function NewRegistrationPage() {
                         value={formData.survey_id}
                         onChange={(e) => setFormData(prev => ({ ...prev, survey_id: e.target.value }))}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="e.g., cmkvdmu2804u4ad01o4ve1lj1"
+                        placeholder="e.g., VLzWBv"
                         required={formData.require_survey}
                       />
                       <p className="mt-1 text-sm text-gray-500">
-                        The unique identifier for your Formbricks survey
+                        The unique identifier for your Tally survey
                       </p>
                     </div>
                   </div>

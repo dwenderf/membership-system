@@ -124,14 +124,14 @@ export default function EditableSurveyConfiguration({
       {requireSurvey && (
         <div>
           <label htmlFor="survey_id_edit" className="block text-xs font-medium text-gray-700 mb-1">
-            Survey ID (Formbricks)
+            Survey ID (Tally)
           </label>
           <input
             id="survey_id_edit"
             type="text"
             value={surveyId}
             onChange={(e) => setSurveyId(e.target.value)}
-            placeholder="e.g., cmkvdmu2804u4ad01o4ve1lj1"
+            placeholder="e.g., VLzWBv"
             className="block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
           />
         </div>

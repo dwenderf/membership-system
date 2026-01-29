@@ -129,6 +129,20 @@ export default async function BrowseRegistrationsPage() {
 
   const activeMemberships = userMemberships || []
   
+  // Transform memberships to the format expected by RegistrationValidationService
+  // The database query returns `membership` (singular) but the service expects `memberships` (plural)
+  const activeMembershipsForValidation = activeMemberships.map(um => ({
+    id: um.id,
+    membership_id: um.membership_id,
+    valid_from: um.valid_from,
+    valid_until: um.valid_until,
+    payment_status: um.payment_status as 'paid' | 'pending' | 'failed' | 'refunded',
+    memberships: um.membership ? {
+      id: um.membership.id,
+      name: um.membership.name
+    } : undefined
+  }))
+  
   // Consolidate memberships by type to show latest expiration (same logic as dashboard)
   const now = new Date()
   const consolidatedMemberships = activeMemberships.reduce((acc, um) => {
@@ -314,23 +328,10 @@ export default async function BrowseRegistrationsPage() {
                     ...uniqueCategoryMembershipIds
                   ].filter((id): id is string => id !== null)
 
-                  // Convert user memberships to the format expected by validation service
-                  const userMembershipsForValidation = activeMemberships.map(um => ({
-                    id: um.id,
-                    membership_id: um.membership_id,
-                    valid_from: um.valid_from,
-                    valid_until: um.valid_until,
-                    payment_status: um.payment_status as 'paid' | 'pending' | 'failed' | 'refunded',
-                    memberships: um.membership ? {
-                      id: um.membership.id,
-                      name: um.membership.name
-                    } : undefined
-                  }))
-
                   // For eligibility check, we consider user eligible if they have ANY qualifying membership
                   // (This is more permissive than the per-category check done later in RegistrationPurchase)
                   hasEligibleMembership = allQualifyingIds.some(qualifyingId =>
-                    userMembershipsForValidation.some(um => um.membership_id === qualifyingId)
+                    activeMembershipsForValidation.some(um => um.membership_id === qualifyingId)
                   )
 
                   // For detailed validation result (used for messaging), check with first category
@@ -342,7 +343,7 @@ export default async function BrowseRegistrationsPage() {
                   membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                     registrationMembershipId,
                     firstCategoryMembershipId,
-                    userMembershipsForValidation
+                    activeMembershipsForValidation
                   )
                 }
 
@@ -486,7 +487,7 @@ export default async function BrowseRegistrationsPage() {
                             userEmail={user.email || ''}
                             userId={user.id}
                             fullName={`${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim()}
-                            activeMemberships={activeMemberships}
+                            activeMemberships={activeMembershipsForValidation}
                             isEligible={hasEligibleMembership}
                             isLgbtq={userProfile?.is_lgbtq || false}
                             isAlreadyRegistered={isAlreadyRegistered}

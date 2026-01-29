@@ -76,6 +76,8 @@ interface Registration {
 interface RegistrationPurchaseProps {
   registration: Registration
   userEmail: string
+  userId: string
+  fullName: string
   activeMemberships?: UserMembership[]
   isEligible: boolean
   isLgbtq: boolean
@@ -86,6 +88,8 @@ interface RegistrationPurchaseProps {
 export default function RegistrationPurchase({ 
   registration, 
   userEmail, 
+  userId,
+  fullName,
   activeMemberships = [],
   isEligible,
   isLgbtq,
@@ -1238,8 +1242,8 @@ export default function RegistrationPurchase({
             <TallySurveyEmbed 
               surveyId={registration.survey_id}
               userEmail={userEmail}
-              userId={userEmail} // Using email as userId for now
-              fullName={userEmail.split('@')[0]} // Simple fallback
+              userId={userId}
+              fullName={fullName}
               layout="inline"
               onComplete={handleSurveyComplete}
               onClose={handleSurveyClose}

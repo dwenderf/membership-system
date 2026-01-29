@@ -329,7 +329,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
       )}
 
       {/* Registration Card */}
-      <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="bg-white overflow-hidden shadow rounded-lg max-w-2xl">
         <div className="p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -444,30 +444,6 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                 isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
               />
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Help Section */}
-      <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-blue-800">
-              How registration works
-            </h3>
-            <div className="mt-2 text-sm text-blue-700">
-              <p>
-                • Most registrations require an active membership<br/>
-                • Different categories may have different requirements<br/>
-                • Registration opens at different times throughout the season<br/>
-                • Some events have capacity limits and may fill up quickly
-              </p>
-            </div>
           </div>
         </div>
       </div>

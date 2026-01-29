@@ -149,7 +149,7 @@ export type Database = {
           id: string
           season_id: string
           name: string
-          type: 'team' | 'scrimmage' | 'event'
+          type: 'team' | 'scrimmage' | 'event' | 'tournament'
           allow_discounts: boolean
           is_active: boolean
           presale_start_at: string | null
@@ -160,6 +160,9 @@ export type Database = {
           allow_alternates: boolean
           alternate_price: number | null
           alternate_accounting_code: string | null
+          survey_id: string | null
+          require_survey: boolean
+          required_membership_id: string | null
           created_at: string
           updated_at: string
           updated_by: string | null
@@ -168,7 +171,7 @@ export type Database = {
           id?: string
           season_id: string
           name: string
-          type: 'team' | 'scrimmage' | 'event'
+          type: 'team' | 'scrimmage' | 'event' | 'tournament'
           allow_discounts?: boolean
           is_active?: boolean
           presale_start_at?: string | null
@@ -179,6 +182,9 @@ export type Database = {
           allow_alternates?: boolean
           alternate_price?: number | null
           alternate_accounting_code?: string | null
+          survey_id?: string | null
+          require_survey?: boolean
+          required_membership_id?: string | null
           created_at?: string
           updated_at?: string
           updated_by?: string | null
@@ -187,7 +193,7 @@ export type Database = {
           id?: string
           season_id?: string
           name?: string
-          type?: 'team' | 'scrimmage' | 'event'
+          type?: 'team' | 'scrimmage' | 'event' | 'tournament'
           allow_discounts?: boolean
           is_active?: boolean
           presale_start_at?: string | null
@@ -198,6 +204,9 @@ export type Database = {
           allow_alternates?: boolean
           alternate_price?: number | null
           alternate_accounting_code?: string | null
+          survey_id?: string | null
+          require_survey?: boolean
+          required_membership_id?: string | null
           created_at?: string
           updated_at?: string
           updated_by?: string | null

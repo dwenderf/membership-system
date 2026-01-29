@@ -541,4 +541,434 @@ describe('RegistrationValidationService', () => {
       expect(mockSupabase.from).toHaveBeenCalledWith('user_registrations')
     })
   })
+
+  describe('validateMembershipRequirement', () => {
+    const today = new Date().toISOString().split('T')[0]
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+    describe('No requirements (membership not required)', () => {
+      it('should allow registration when no membership requirements are set', () => {
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          null, // No registration-level requirement
+          null, // No category-level requirement
+          [] // User has no memberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: '',
+          name: 'No membership required',
+          source: 'none'
+        })
+        expect(result.error).toBeUndefined()
+      })
+    })
+
+    describe('Registration-level requirements only', () => {
+      it('should allow registration when user has registration-level membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard Adult
+          null, // No category requirement
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: 'standard-adult-id',
+          name: 'Standard Adult',
+          source: 'registration'
+        })
+        expect(result.error).toBeUndefined()
+      })
+
+      it('should deny registration when user lacks registration-level membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'social-membership-id', // User has Social, not Standard
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'social-membership-id',
+              name: 'Social'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard Adult
+          null,
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership')
+        expect(result.matchedMembership).toBeUndefined()
+      })
+    })
+
+    describe('Category-level requirements only', () => {
+      it('should allow registration when user has category-level membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'tournament-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'tournament-membership-id',
+              name: 'Tournament Membership'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          null, // No registration requirement
+          'tournament-membership-id', // Category requires Tournament
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: 'tournament-membership-id',
+          name: 'Tournament Membership',
+          source: 'category'
+        })
+        expect(result.error).toBeUndefined()
+      })
+    })
+
+    describe('Two-level requirements (hierarchical)', () => {
+      it('should allow registration with registration-level membership (higher tier)', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard Adult
+          'tournament-membership-id', // Category accepts Tournament
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: 'standard-adult-id',
+          name: 'Standard Adult',
+          source: 'registration'
+        })
+      })
+
+      it('should allow registration with category-level membership (alternative)', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'tournament-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'tournament-membership-id',
+              name: 'Tournament Membership'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard Adult
+          'tournament-membership-id', // Category accepts Tournament
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: 'tournament-membership-id',
+          name: 'Tournament Membership',
+          source: 'category'
+        })
+      })
+
+      it('should deny registration when user has neither qualifying membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'social-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'social-membership-id',
+              name: 'Social'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard Adult
+          'tournament-membership-id', // Category accepts Tournament
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership or category-level membership')
+        expect(result.matchedMembership).toBeUndefined()
+      })
+
+      it('should prefer registration-level membership when user has both', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          },
+          {
+            id: 'um-2',
+            membership_id: 'tournament-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'tournament-membership-id',
+              name: 'Tournament'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          'tournament-membership-id',
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership?.source).toBe('registration')
+      })
+    })
+
+    describe('Membership validation rules', () => {
+      it('should deny registration with expired membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: '2024-01-01',
+            valid_until: yesterday, // Expired
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership')
+      })
+
+      it('should deny registration with unpaid membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'pending' as const, // Not paid
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership')
+      })
+
+      it('should allow registration with membership valid today', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: today, // Expires today (should still be valid)
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership?.id).toBe('standard-adult-id')
+      })
+
+      it('should handle user with no memberships at all', () => {
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          [] // No memberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership')
+      })
+    })
+
+    describe('Real-world scenarios', () => {
+      it('Chelsea Challenge: free tournament membership for non-members', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'chelsea-challenge-2026-id',
+            valid_from: '2026-01-01',
+            valid_until: '2026-12-31',
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'chelsea-challenge-2026-id',
+              name: 'Chelsea Challenge 2026'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          null, // No registration-level requirement
+          'chelsea-challenge-2026-id', // Category requires tournament membership
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership).toEqual({
+          id: 'chelsea-challenge-2026-id',
+          name: 'Chelsea Challenge 2026',
+          source: 'category'
+        })
+      })
+
+      it('Chelsea Challenge: social category for non-skating guests', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'social-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'social-membership-id',
+              name: 'Social'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          null, // No registration requirement
+          'social-membership-id', // Social category requires Social membership
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership?.name).toBe('Social')
+      })
+
+      it('Standard registration: member can use standard membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration requires Standard
+          'tournament-membership-id', // But tournament membership also accepted
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership?.source).toBe('registration')
+      })
+
+      it('Tournament registration: non-member uses free tournament membership', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'tournament-membership-id',
+            valid_from: yesterday,
+            valid_until: tomorrow,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'tournament-membership-id',
+              name: 'Tournament Membership'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id', // Registration prefers Standard
+          'tournament-membership-id', // But tournament accepted
+          userMemberships
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+        expect(result.matchedMembership?.source).toBe('category')
+      })
+    })
+  })
 })

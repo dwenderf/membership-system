@@ -15,17 +15,21 @@ export default function NewRegistrationPage() {
   const [formData, setFormData] = useState({
     season_id: '',
     name: '',
-    type: 'team' as 'team' | 'scrimmage' | 'event',
+    type: 'team' as 'team' | 'scrimmage' | 'event' | 'tournament',
     allow_discounts: true,
     allow_alternates: false,
     alternate_price: '',
     alternate_accounting_code: '',
     start_date: '',
     duration_minutes: '', // Duration in minutes instead of end_date
+    required_membership_id: '', // Optional registration-level membership requirement
+    require_survey: false,
+    survey_id: '',
   })
-  
+
   const [seasons, setSeasons] = useState<any[]>([])
   const [existingRegistrations, setExistingRegistrations] = useState<any[]>([])
+  const [availableMemberships, setAvailableMemberships] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)
@@ -66,12 +70,22 @@ export default function NewRegistrationPage() {
       const { data: registrationsData, error: registrationsError } = await supabase
         .from('registrations')
         .select('name')
-      
+
       if (!registrationsError && registrationsData) {
         setExistingRegistrations(registrationsData)
       }
+
+      // Fetch available memberships
+      const { data: membershipsData, error: membershipsError } = await supabase
+        .from('memberships')
+        .select('id, name, price_monthly, price_annual')
+        .order('name')
+
+      if (!membershipsError && membershipsData) {
+        setAvailableMemberships(membershipsData)
+      }
     }
-    
+
     fetchData()
   }, [])
 
@@ -93,13 +107,30 @@ export default function NewRegistrationPage() {
       let startDateUTC = null
       let endDateUTC = null
 
-      if ((formData.type === 'event' || formData.type === 'scrimmage') && formData.start_date && formData.duration_minutes) {
-        startDateUTC = convertToNYTimezone(formData.start_date)
+      if ((formData.type === 'event' || formData.type === 'scrimmage' || formData.type === 'tournament') && formData.start_date && formData.duration_minutes) {
+        // For tournaments, the date picker returns just a date (YYYY-MM-DD) without time
+        // We need to append midnight time for proper timezone conversion
+        let dateTimeString = formData.start_date
+        if (formData.type === 'tournament' && !formData.start_date.includes('T')) {
+          dateTimeString = formData.start_date + 'T00:00'
+        }
+
+        startDateUTC = convertToNYTimezone(dateTimeString)
 
         // Calculate end date by adding duration to start date
         const startDate = new Date(startDateUTC)
-        const endDate = new Date(startDate.getTime() + parseInt(formData.duration_minutes) * 60 * 1000)
-        endDateUTC = endDate.toISOString()
+
+        if (formData.type === 'tournament') {
+          // For tournaments, ensure we end at the last minute of the final day
+          // Duration is in minutes (days * 1440), but we want the end to be 23:59:59
+          const durationMs = parseInt(formData.duration_minutes) * 60 * 1000
+          const endDate = new Date(startDate.getTime() + durationMs - 1000) // Subtract 1 second to end at 23:59:59
+          endDateUTC = endDate.toISOString()
+        } else {
+          // For events and scrimmages, add the exact duration
+          const endDate = new Date(startDate.getTime() + parseInt(formData.duration_minutes) * 60 * 1000)
+          endDateUTC = endDate.toISOString()
+        }
       }
 
       const registrationData = {
@@ -112,6 +143,9 @@ export default function NewRegistrationPage() {
         alternate_accounting_code: formData.allow_alternates ? formData.alternate_accounting_code : null,
         start_date: startDateUTC,
         end_date: endDateUTC,
+        required_membership_id: formData.required_membership_id || null,
+        require_survey: formData.require_survey,
+        survey_id: formData.require_survey ? formData.survey_id : null,
       }
 
       const { error: insertError } = await supabase
@@ -148,12 +182,13 @@ export default function NewRegistrationPage() {
     registration.name.toLowerCase() === formData.name.trim().toLowerCase()
   )
   
-  const requiresDates = formData.type === 'event' || formData.type === 'scrimmage'
+  const requiresDates = formData.type === 'event' || formData.type === 'scrimmage' || formData.type === 'tournament'
 
   // Set default duration when type changes
   const getDefaultDuration = (type: string) => {
     if (type === 'scrimmage') return '90' // 90 minutes
     if (type === 'event') return '180' // 3 hours
+    if (type === 'tournament') return '4320' // 3 days (3 * 24 * 60 = 4320 minutes)
     return ''
   }
 
@@ -166,7 +201,8 @@ export default function NewRegistrationPage() {
                                  parseFloat(formData.alternate_price) > 0 &&
                                  formData.alternate_accounting_code.trim()
                                )) &&
-                               (!requiresDates || (formData.start_date && formData.duration_minutes))
+                               (!requiresDates || (formData.start_date && formData.duration_minutes)) &&
+                               (!formData.require_survey || formData.survey_id.trim())
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -247,6 +283,77 @@ export default function NewRegistrationPage() {
 
               {/* Removed membership warning - no longer season-specific */}
 
+              {/* Required Membership (Optional) */}
+              <div>
+                <label htmlFor="required_membership_id" className="block text-sm font-medium text-gray-700">
+                  Required Membership (Optional)
+                </label>
+                <select
+                  id="required_membership_id"
+                  value={formData.required_membership_id}
+                  onChange={(e) => setFormData(prev => ({ ...prev, required_membership_id: e.target.value }))}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="">No registration-level requirement</option>
+                  {availableMemberships.map((membership) => (
+                    <option key={membership.id} value={membership.id}>
+                      {membership.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  Optional default membership requirement. Categories can offer alternative memberships.
+                  Users need EITHER this membership OR a category-specific membership to register.
+                </p>
+              </div>
+
+              {/* Survey Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    id="require_survey"
+                    type="checkbox"
+                    checked={formData.require_survey}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      require_survey: e.target.checked,
+                      // Clear survey_id if unchecked
+                      survey_id: e.target.checked ? prev.survey_id : ''
+                    }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="require_survey" className="ml-2 block text-sm text-gray-900">
+                    Require survey completion before payment
+                  </label>
+                </div>
+
+                {formData.require_survey && (
+                  <div className="ml-6 space-y-2 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="text-sm text-blue-800 mb-3">
+                      <strong>Survey Integration:</strong> Enter your Tally survey ID. Users will complete this survey before proceeding to payment.
+                    </div>
+
+                    <div>
+                      <label htmlFor="survey_id" className="block text-sm font-medium text-gray-700">
+                        Survey ID
+                      </label>
+                      <input
+                        type="text"
+                        id="survey_id"
+                        value={formData.survey_id}
+                        onChange={(e) => setFormData(prev => ({ ...prev, survey_id: e.target.value }))}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="e.g., VLzWBv"
+                        required={formData.require_survey}
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        The unique identifier for your Tally survey
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Registration Type */}
               <div>
                 <label htmlFor="type" className="block text-sm font-medium text-gray-700">
@@ -256,7 +363,7 @@ export default function NewRegistrationPage() {
                   id="type"
                   value={formData.type}
                   onChange={(e) => {
-                    const newType = e.target.value as 'team' | 'scrimmage' | 'event'
+                    const newType = e.target.value as 'team' | 'scrimmage' | 'event' | 'tournament'
                     setFormData(prev => ({
                       ...prev,
                       type: newType,
@@ -269,20 +376,21 @@ export default function NewRegistrationPage() {
                   <option value="team">Team</option>
                   <option value="scrimmage">Scrimmage</option>
                   <option value="event">Event</option>
+                  <option value="tournament">Tournament</option>
                 </select>
                 <p className="mt-1 text-sm text-gray-500">
-                  Type of registration (team, scrimmage, or event)
+                  Type of registration (team, scrimmage, event, or tournament)
                 </p>
               </div>
 
-              {/* Event/Scrimmage Date Fields - Only shown for events and scrimmages */}
+              {/* Event/Scrimmage/Tournament Date Fields - Only shown for events, scrimmages, and tournaments */}
               {requiresDates && (
                 <EventDateTimeInput
                   startDate={formData.start_date}
                   durationMinutes={formData.duration_minutes}
                   onStartDateChange={(value) => setFormData(prev => ({ ...prev, start_date: value }))}
                   onDurationChange={(value) => setFormData(prev => ({ ...prev, duration_minutes: value }))}
-                  registrationType={formData.type}
+                  registrationType={formData.type as 'event' | 'scrimmage' | 'tournament'}
                   required={requiresDates}
                 />
               )}
@@ -445,9 +553,36 @@ export default function NewRegistrationPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Membership Requirements</dt>
+                      <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
+                      <dd className="text-sm text-gray-900">
+                        {formData.required_membership_id ? (
+                          availableMemberships.find(m => m.id === formData.required_membership_id)?.name || 'Unknown'
+                        ) : (
+                          'None (optional)'
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Category Requirements</dt>
                       <dd className="text-sm text-gray-900">
                         Set per category
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Survey</dt>
+                      <dd className="text-sm text-gray-900">
+                        {formData.require_survey ? (
+                          <div className="space-y-1">
+                            <div>Required</div>
+                            {formData.survey_id && (
+                              <div className="text-xs text-gray-600 font-mono">
+                                ID: {formData.survey_id}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          'Not required'
+                        )}
                       </dd>
                     </div>
                     <div>

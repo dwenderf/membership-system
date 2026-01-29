@@ -796,8 +796,8 @@ export default function RegistrationPurchase({
               
               // Use the proper validation service to check BOTH registration and category level memberships
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
-                registration.required_membership_id || null,
-                category.required_membership_id || null,
+                registration.required_membership_id ?? null,
+                category.required_membership_id ?? null,
                 activeMemberships
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
@@ -933,8 +933,8 @@ export default function RegistrationPurchase({
               
               // Use the proper validation service to check BOTH registration and category level memberships
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
-                registration.required_membership_id || null,
-                category.required_membership_id || null,
+                registration.required_membership_id ?? null,
+                category.required_membership_id ?? null,
                 activeMemberships
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership

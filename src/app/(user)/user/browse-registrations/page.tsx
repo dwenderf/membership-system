@@ -1,8 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatEventDateTime } from '@/lib/date-utils'
-import { getRegistrationStatus } from '@/lib/registration-status'
+import { getRegistrationStatus, RegistrationWithTiming } from '@/lib/registration-status'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
+
+interface RegistrationListItem extends RegistrationWithTiming {
+  name: string
+  season: {
+    name: string
+    start_date: string
+    end_date: string
+  } | null
+}
 
 export default async function BrowseRegistrationsPage() {
   const supabase = await createClient()
@@ -46,11 +55,16 @@ export default async function BrowseRegistrationsPage() {
       name,
       type,
       start_date,
+      end_date,
+      is_active,
       presale_start_at,
       regular_start_at,
+      registration_end_at,
+      presale_code,
       season:seasons(name, start_date, end_date)
     `)
     .in('season_id', seasonIds)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   const activeMemberships = userMemberships || []
@@ -99,7 +113,8 @@ export default async function BrowseRegistrationsPage() {
   const hasExpiringSoonMemberships = expiringSoonMemberships.length > 0
 
   // Filter and categorize registrations
-  const filteredRegistrations = (availableRegistrations || []).filter(reg => {
+  const registrations = (availableRegistrations || []) as RegistrationListItem[]
+  const filteredRegistrations = registrations.filter(reg => {
     const isAlreadyRegistered = userRegistrationIds.includes(reg.id)
     const status = getRegistrationStatus(reg)
 

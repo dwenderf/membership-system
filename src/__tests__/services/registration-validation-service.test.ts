@@ -870,27 +870,27 @@ describe('RegistrationValidationService', () => {
         const userMemberships = [
           {
             id: 'um-1',
-            membership_id: 'chelsea-challenge-2025-id',
-            valid_from: '2025-01-01',
-            valid_until: '2025-12-31',
+            membership_id: 'chelsea-challenge-2026-id',
+            valid_from: '2026-01-01',
+            valid_until: '2026-12-31',
             payment_status: 'paid' as const,
             memberships: {
-              id: 'chelsea-challenge-2025-id',
-              name: 'Chelsea Challenge 2025'
+              id: 'chelsea-challenge-2026-id',
+              name: 'Chelsea Challenge 2026'
             }
           }
         ]
 
         const result = RegistrationValidationService.validateMembershipRequirement(
           null, // No registration-level requirement
-          'chelsea-challenge-2025-id', // Category requires tournament membership
+          'chelsea-challenge-2026-id', // Category requires tournament membership
           userMemberships
         )
 
         expect(result.hasRequiredMembership).toBe(true)
         expect(result.matchedMembership).toEqual({
-          id: 'chelsea-challenge-2025-id',
-          name: 'Chelsea Challenge 2025',
+          id: 'chelsea-challenge-2026-id',
+          name: 'Chelsea Challenge 2026',
           source: 'category'
         })
       })

@@ -14,6 +14,7 @@ import TallySurveyEmbed from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import WaitlistBadge from './WaitlistBadge'
 
@@ -847,7 +848,16 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {category.memberships?.name}
+                            Requires: {(() => {
+                              const requirements = []
+                              if (registration.required_membership_id && registration.memberships?.name) {
+                                requirements.push(registration.memberships.name)
+                              }
+                              if (category.memberships?.name) {
+                                requirements.push(category.memberships.name)
+                              }
+                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
+                            })()}
                           </div>
                         )}
                         {isAlternateCategory && (
@@ -951,7 +961,16 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {category.memberships?.name}
+                            Requires: {(() => {
+                              const requirements = []
+                              if (registration.required_membership_id && registration.memberships?.name) {
+                                requirements.push(registration.memberships.name)
+                              }
+                              if (category.memberships?.name) {
+                                requirements.push(category.memberships.name)
+                              }
+                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
+                            })()}
                           </div>
                         )}
                         {category.max_capacity && (

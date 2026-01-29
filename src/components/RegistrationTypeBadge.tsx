@@ -1,7 +1,7 @@
 'use client'
 
 interface RegistrationTypeBadgeProps {
-  type: 'team' | 'scrimmage' | 'event'
+  type: 'team' | 'scrimmage' | 'event' | 'tournament'
   className?: string
 }
 
@@ -12,6 +12,7 @@ interface RegistrationTypeBadgeProps {
  * - Team: Teal (bg-teal-100 text-teal-800)
  * - Scrimmage: Orange (bg-orange-100 text-orange-800)
  * - Event: Purple (bg-purple-100 text-purple-800)
+ * - Tournament: Indigo (bg-indigo-100 text-indigo-800)
  *
  * Note: Green is reserved for status indicators (Active, Open, Paid)
  * Note: Blue is reserved for category badges (Skater, Goalie, etc.)
@@ -20,6 +21,7 @@ interface RegistrationTypeBadgeProps {
  * ```tsx
  * <RegistrationTypeBadge type="team" />
  * <RegistrationTypeBadge type="scrimmage" className="ml-2" />
+ * <RegistrationTypeBadge type="tournament" />
  * ```
  */
 export default function RegistrationTypeBadge({ type, className = '' }: RegistrationTypeBadgeProps) {
@@ -31,6 +33,8 @@ export default function RegistrationTypeBadge({ type, className = '' }: Registra
         return 'bg-orange-100 text-orange-800'
       case 'event':
         return 'bg-purple-100 text-purple-800'
+      case 'tournament':
+        return 'bg-indigo-100 text-indigo-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }

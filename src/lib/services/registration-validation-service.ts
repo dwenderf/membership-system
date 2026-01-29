@@ -14,6 +14,28 @@ export interface PaymentMethodValidationResult {
   error?: string
 }
 
+export interface MembershipValidationResult {
+  hasRequiredMembership: boolean
+  error?: string
+  matchedMembership?: {
+    id: string
+    name: string
+    source: 'registration' | 'category' | 'none'
+  }
+}
+
+export interface UserMembership {
+  id: string
+  membership_id: string
+  valid_from: string
+  valid_until: string
+  payment_status: string
+  memberships?: {
+    id: string
+    name: string
+  }
+}
+
 /**
  * Service for common registration validation logic
  * Ensures consistent validation across different registration flows
@@ -159,5 +181,196 @@ export class RegistrationValidationService {
     }
 
     return { canRegister: true }
+  }
+
+  /**
+   * Check if user has required membership for registration category
+   *
+   * Implements hierarchical membership requirements:
+   * - Users can qualify with EITHER registration-level OR category-level membership
+   * - If no requirements are set at either level, membership is not required
+   * - Membership must be active (valid_until >= today) and paid
+   *
+   * @param registrationMembershipId - Required membership at registration level (optional)
+   * @param categoryMembershipId - Required membership at category level (optional)
+   * @param userMemberships - User's active memberships
+   * @returns Validation result with matched membership details
+   *
+   * @example
+   * // Chelsea Challenge scenario
+   * validateMembershipRequirement(
+   *   null, // No registration-level requirement
+   *   'tournament-membership-id', // Category requires tournament membership
+   *   userMemberships
+   * ) // Returns true if user has tournament membership
+   *
+   * @example
+   * // Standard registration with category alternative
+   * validateMembershipRequirement(
+   *   'standard-adult-id', // Registration requires Standard Adult
+   *   'social-membership-id', // Social category accepts Social membership
+   *   userMemberships
+   * ) // Returns true if user has EITHER Standard Adult OR Social membership
+   */
+  static validateMembershipRequirement(
+    registrationMembershipId: string | null,
+    categoryMembershipId: string | null,
+    userMemberships: UserMembership[]
+  ): MembershipValidationResult {
+    // Collect qualifying membership IDs from both levels
+    const qualifyingMembershipIds = [
+      registrationMembershipId,
+      categoryMembershipId
+    ].filter((id): id is string => id !== null && id !== undefined)
+
+    // If no requirements at all, membership is not required
+    if (qualifyingMembershipIds.length === 0) {
+      return {
+        hasRequiredMembership: true,
+        matchedMembership: {
+          id: '',
+          name: 'No membership required',
+          source: 'none'
+        }
+      }
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+
+    // Filter to active paid memberships
+    const activeMemberships = userMemberships.filter(m =>
+      m.payment_status === 'paid' &&
+      m.valid_until >= today
+    )
+
+    // Check if user has any of the qualifying memberships
+    for (const membership of activeMemberships) {
+      if (qualifyingMembershipIds.includes(membership.membership_id)) {
+        // Found a matching membership
+        const source = membership.membership_id === registrationMembershipId ? 'registration' : 'category'
+
+        return {
+          hasRequiredMembership: true,
+          matchedMembership: {
+            id: membership.membership_id,
+            name: membership.memberships?.name || 'Unknown',
+            source
+          }
+        }
+      }
+    }
+
+    // No matching membership found
+    const requirementNames: string[] = []
+
+    // We don't have membership names here, so we'll construct a generic message
+    // The caller can provide more specific names if needed
+    if (registrationMembershipId) {
+      requirementNames.push('registration-level membership')
+    }
+    if (categoryMembershipId) {
+      requirementNames.push('category-level membership')
+    }
+
+    const requirementText = requirementNames.join(' or ')
+
+    return {
+      hasRequiredMembership: false,
+      error: `You need ${requirementText} to register for this event`
+    }
+  }
+
+  /**
+   * Async version of validateMembershipRequirement that fetches membership details
+   *
+   * This version queries the database to get membership names for better error messages.
+   * Use this when you want user-friendly error messages with actual membership names.
+   *
+   * @param supabase - Supabase client
+   * @param registrationMembershipId - Required membership at registration level
+   * @param categoryMembershipId - Required membership at category level
+   * @param userId - User to check
+   * @returns Validation result with detailed membership information
+   */
+  static async validateMembershipRequirementAsync(
+    supabase: SupabaseClient,
+    registrationMembershipId: string | null,
+    categoryMembershipId: string | null,
+    userId: string
+  ): Promise<MembershipValidationResult> {
+    // Collect qualifying membership IDs
+    const qualifyingMembershipIds = [
+      registrationMembershipId,
+      categoryMembershipId
+    ].filter((id): id is string => id !== null && id !== undefined)
+
+    // If no requirements, membership is not required
+    if (qualifyingMembershipIds.length === 0) {
+      return {
+        hasRequiredMembership: true,
+        matchedMembership: {
+          id: '',
+          name: 'No membership required',
+          source: 'none'
+        }
+      }
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+
+    // Fetch user's memberships with membership details
+    const { data: userMemberships, error } = await supabase
+      .from('user_memberships')
+      .select(`
+        id,
+        membership_id,
+        valid_from,
+        valid_until,
+        payment_status,
+        memberships:memberships(id, name)
+      `)
+      .eq('user_id', userId)
+      .eq('payment_status', 'paid')
+      .gte('valid_until', today)
+
+    if (error) {
+      throw new Error(`Failed to fetch user memberships: ${error.message}`)
+    }
+
+    // Check if user has any qualifying membership
+    const matchingMembership = userMemberships?.find(m =>
+      qualifyingMembershipIds.includes(m.membership_id)
+    )
+
+    if (matchingMembership) {
+      const source = matchingMembership.membership_id === registrationMembershipId
+        ? 'registration'
+        : 'category'
+
+      return {
+        hasRequiredMembership: true,
+        matchedMembership: {
+          id: matchingMembership.membership_id,
+          name: matchingMembership.memberships?.name || 'Unknown',
+          source
+        }
+      }
+    }
+
+    // Fetch membership names for error message
+    const { data: membershipDetails } = await supabase
+      .from('memberships')
+      .select('id, name')
+      .in('id', qualifyingMembershipIds)
+
+    const membershipNames = membershipDetails?.map(m => m.name) || []
+    const requirementText = membershipNames.length > 1
+      ? `${membershipNames.slice(0, -1).join(', ')} or ${membershipNames.slice(-1)}`
+      : membershipNames[0] || 'required membership'
+
+    return {
+      hasRequiredMembership: false,
+      error: `You need a ${requirementText} membership to register for this event`
+    }
   }
 }

@@ -10,9 +10,11 @@ import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
 import PaymentConfirmationScreen from './PaymentConfirmationScreen'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
+import TallySurveyEmbed from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
-import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost, type UserMembership } from '@/lib/membership-validation'
+import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost } from '@/lib/membership-validation'
+import { RegistrationValidationService, type UserMembership } from '@/lib/services/registration-validation-service'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import WaitlistBadge from './WaitlistBadge'
 
@@ -56,6 +58,13 @@ interface Registration {
   allow_lgbtq_presale?: boolean
   presale_code?: string | null
   allow_discounts?: boolean
+  survey_id?: string | null
+  require_survey?: boolean
+  required_membership_id?: string | null
+  memberships?: {
+    id: string
+    name: string
+  } | null
   season?: {
     name: string
     start_date: string
@@ -67,6 +76,8 @@ interface Registration {
 interface RegistrationPurchaseProps {
   registration: Registration
   userEmail: string
+  userId: string
+  fullName: string
   activeMemberships?: UserMembership[]
   isEligible: boolean
   isLgbtq: boolean
@@ -77,6 +88,8 @@ interface RegistrationPurchaseProps {
 export default function RegistrationPurchase({ 
   registration, 
   userEmail, 
+  userId,
+  fullName,
   activeMemberships = [],
   isEligible,
   isLgbtq,
@@ -109,6 +122,10 @@ export default function RegistrationPurchase({
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
   const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
+  const [surveyResponses, setSurveyResponses] = useState<Record<string, any> | null>(null)
+  const [showSurvey, setShowSurvey] = useState(false)
+  const [surveyCompleted, setSurveyCompleted] = useState(false)
+  const [surveyStarted, setSurveyStarted] = useState(false)
   const { showSuccess, showError } = useToast()
 
   // Check if user has saved payment method and payment plan eligibility
@@ -234,6 +251,7 @@ export default function RegistrationPurchase({
     max_capacity: null,
     current_count: 0,
     required_membership_id: null,
+    memberships: null,
     categories: { name: 'Alternate' }
   } : null
   
@@ -299,7 +317,7 @@ export default function RegistrationPurchase({
   // Check if selected category is eligible (basic membership check)
   const isCategoryEligible = selectedCategory ? 
     !selectedCategory.required_membership_id || 
-    activeMemberships.some(um => um.membership?.id === selectedCategory.required_membership_id)
+    activeMemberships.some(um => um.memberships?.id === selectedCategory.required_membership_id)
     : false
 
 
@@ -315,6 +333,71 @@ export default function RegistrationPurchase({
   const hasSeasonCoverage = membershipValidation.isValid
   const membershipWarning = formatMembershipWarning(membershipValidation)
   const shouldShowSeasonWarning = selectedCategory && !hasSeasonCoverage && membershipWarning
+
+  // Check if user has already completed the survey when component loads or category changes
+  useEffect(() => {
+    const checkSurveyCompletion = async () => {
+      if (!selectedCategoryId || !registration.require_survey || !registration.survey_id) {
+        setShowSurvey(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/user-survey-responses/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            survey_id: registration.survey_id
+          })
+        })
+        
+        if (response.ok) {
+          const { completed } = await response.json()
+          setSurveyCompleted(completed)
+          setSurveyStarted(false)
+        } else {
+          // If check fails, assume not completed
+          setSurveyCompleted(false)
+        }
+      } catch (error) {
+        console.error('Error checking survey completion:', error)
+        // On error, assume not completed
+        setSurveyCompleted(false)
+      }
+    }
+
+    checkSurveyCompletion()
+  }, [selectedCategoryId, registration.require_survey, registration.survey_id])
+
+  // Handle survey completion
+  const handleSurveyComplete = (responseData: any) => {
+    console.log('Survey completed with data:', responseData)
+    setSurveyResponses(responseData)
+    setSurveyCompleted(true)
+    setSurveyStarted(false)
+    showSuccess('Survey Completed', 'Thank you for completing the survey! You can now proceed with registration.')
+  }
+
+  // Handle starting the survey
+  const handleStartSurvey = () => {
+    setSurveyStarted(true)
+  }
+
+  // Handle survey being closed without completion
+  const handleSurveyClose = () => {
+    console.log('Survey closed without completion - resetting survey state')
+    setSurveyStarted(false)
+    // Keep showSurvey true so they can restart
+  }
+
+  // Handle survey skip (if allowed)
+  const handleSurveySkip = () => {
+    // For now, don't allow skipping required surveys
+    if (registration.require_survey) {
+      return
+    }
+    setShowSurvey(false)
+  }
 
   // Validate discount code
   const validateDiscountCode = async (code: string) => {
@@ -713,9 +796,15 @@ export default function RegistrationPurchase({
           <div className="grid grid-cols-1 gap-2">
             {categories.map((category) => {
               const categoryName = getCategoryDisplayName(category as any)
-              const requiresMembership = category.required_membership_id
-              const hasRequiredMembership = !requiresMembership || 
-                activeMemberships.some(um => um.membership?.id === category.required_membership_id)
+              const requiresMembership = registration.required_membership_id || category.required_membership_id
+              
+              // Use the proper validation service to check BOTH registration and category level memberships
+              const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
+                registration.required_membership_id ?? null,
+                category.required_membership_id ?? null,
+                activeMemberships
+              )
+              const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
               const categoryPrice = category.price ?? 0
               
               // Determine availability logic
@@ -775,7 +864,16 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {category.memberships?.name}
+                            Requires: {(() => {
+                              const requirements = []
+                              if (registration.required_membership_id && registration.memberships?.name) {
+                                requirements.push(registration.memberships.name)
+                              }
+                              if (category.memberships?.name) {
+                                requirements.push(category.memberships.name)
+                              }
+                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
+                            })()}
                           </div>
                         )}
                         {isAlternateCategory && (
@@ -835,9 +933,15 @@ export default function RegistrationPurchase({
           <div className="space-y-2">
             {categories.map((category) => {
               const categoryName = getCategoryDisplayName(category as any)
-              const requiresMembership = category.required_membership_id
-              const hasRequiredMembership = !requiresMembership || 
-                activeMemberships.some(um => um.membership?.id === category.required_membership_id)
+              const requiresMembership = registration.required_membership_id || category.required_membership_id
+              
+              // Use the proper validation service to check BOTH registration and category level memberships
+              const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
+                registration.required_membership_id ?? null,
+                category.required_membership_id ?? null,
+                activeMemberships
+              )
+              const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
               const categoryPrice = category.price ?? 0
               
               const isOnWaitlist = !!userWaitlistEntries[category.id]
@@ -879,7 +983,16 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {category.memberships?.name}
+                            Requires: {(() => {
+                              const requirements = []
+                              if (registration.required_membership_id && registration.memberships?.name) {
+                                requirements.push(registration.memberships.name)
+                              }
+                              if (category.memberships?.name) {
+                                requirements.push(category.memberships.name)
+                              }
+                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
+                            })()}
                           </div>
                         )}
                         {category.max_capacity && (
@@ -1083,6 +1196,63 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Survey Section */}
+      {selectedCategory && registration.require_survey && registration.survey_id && (
+        <div className="mb-4">
+          {!surveyCompleted && !surveyStarted && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center mb-3">
+                <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 className="text-lg font-medium text-blue-800">Complete Survey</h3>
+                {registration.require_survey && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    Required
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-blue-700 mb-4">
+                Please complete this survey to proceed with your registration. Your responses help us improve the event experience.
+              </p>
+              <button
+                onClick={handleStartSurvey}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Start Survey
+              </button>
+            </div>
+          )}
+
+          {surveyCompleted && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+              <div className="flex items-center">
+                <svg className="h-5 w-5 text-green-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <h3 className="text-sm font-medium text-green-800">Survey Completed</h3>
+              </div>
+              <div className="mt-2 text-sm text-green-700">
+                Thank you for completing the survey! You can now proceed with registration.
+              </div>
+            </div>
+          )}
+
+          {surveyStarted && !surveyCompleted && (
+            <TallySurveyEmbed 
+              surveyId={registration.survey_id}
+              userEmail={userEmail}
+              userId={userId}
+              fullName={fullName}
+              layout="inline"
+              onComplete={handleSurveyComplete}
+              onClose={handleSurveyClose}
+              onError={(error) => setError(`Survey error: ${error}`)}
+            />
+          )}
+        </div>
+      )}
+
       {/* Discount Code Section */}
       {selectedCategory && isTimingAvailable && !isUserOnWaitlist && registration.allow_discounts !== false && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
@@ -1269,7 +1439,7 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))}
+        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}
         className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
           (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
             ? 'bg-blue-500 cursor-default'
@@ -1285,6 +1455,7 @@ export default function RegistrationPurchase({
          !isCategoryEligible ? 'Membership Required' :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
+         (registration.require_survey && !surveyCompleted) ? 'Complete Survey to Continue' :
          (isCategoryAtCapacity && isUserOnWaitlist) ? 'On Waitlist' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}

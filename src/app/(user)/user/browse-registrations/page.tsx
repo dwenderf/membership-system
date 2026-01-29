@@ -113,7 +113,7 @@ export default async function BrowseRegistrationsPage() {
   const hasExpiringSoonMemberships = expiringSoonMemberships.length > 0
 
   // Filter and categorize registrations
-  const registrations = (availableRegistrations || []) as RegistrationListItem[]
+  const registrations = (availableRegistrations || []) as unknown as RegistrationListItem[]
   const filteredRegistrations = registrations.filter(reg => {
     const isAlreadyRegistered = userRegistrationIds.includes(reg.id)
     const status = getRegistrationStatus(reg)

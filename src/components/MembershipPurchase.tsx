@@ -34,6 +34,7 @@ interface MembershipPurchaseProps {
       id: string
     }
   }>
+  from?: string
 }
 
 const DURATION_OPTIONS = [
@@ -42,7 +43,7 @@ const DURATION_OPTIONS = [
   { months: 12, label: '12 Months (Annual)', requiresMonthly: false },
 ]
 
-export default function MembershipPurchase({ membership, userEmail, userMemberships = [] }: MembershipPurchaseProps) {
+export default function MembershipPurchase({ membership, userEmail, userMemberships = [], from }: MembershipPurchaseProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null) // No default selection
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -353,10 +354,10 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           </p>
           <div className="space-y-3">
             <Link
-              href="/user/browse-registrations"
+              href={from || "/user/browse-registrations"}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
             >
-              Browse Available Registrations →
+              {from ? "Return to Registration" : "Browse Available Registrations"} →
             </Link>
             <div>
               <button

@@ -180,6 +180,7 @@ export default async function MembershipDetailPage({ params, searchParams }: Pag
               membership={membership}
               userEmail={user.email || ''}
               userMemberships={userMemberships || []}
+              from={from}
             />
           </div>
         </div>

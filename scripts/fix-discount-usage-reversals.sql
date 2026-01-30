@@ -1,20 +1,13 @@
--- Fix Script: Correct discount_usage records that were incorrectly recorded as positive for refunds
+-- Fix Script: Correct discount_usage records for refund credit notes
+-- This handles BOTH scenarios:
+-- 1. Zero-dollar refunds: Positive credit note amounts with WRONG positive discount_usage
+-- 2. Proportional refunds: Negative credit note amounts with NO discount_usage record
 --
--- IMPORTANT: Run the diagnostic script first (diagnose-discount-reversals.sql) to see what will be affected
---
--- This script identifies discount_usage records that were created from credit note processing
--- and should have been negative (reversals) but were recorded as positive.
-
--- The logic:
--- 1. Find credit notes (ACCRECCREDIT) with discount line items that have positive amounts
--- 2. These positive amounts in credit notes represent REVERSALS of original discounts
--- 3. The discount_usage records created from these should be negative, not positive
--- 4. We'll insert correcting negative records to offset the incorrect positive ones
+-- Run diagnose-discount-reversals.sql first to see what will be affected
 
 BEGIN;
 
--- First, let's see what we're about to fix (DRY RUN)
--- This shows the credit note discount line items and any matching discount_usage records
+-- PREVIEW: Show all affected credit notes and what needs to be fixed
 SELECT
     'PREVIEW' as action,
     xi.invoice_number as credit_note_number,
@@ -24,12 +17,21 @@ SELECT
     xil.discount_code_id,
     dc.code as discount_code,
     xil.line_amount as credit_note_line_amount,
-    du.id as discount_usage_id,
-    du.amount_saved as current_amount_saved,
-    -ABS(xil.line_amount) as should_be_amount,
+    du.id as existing_discount_usage_id,
+    du.amount_saved as existing_amount_saved,
+    -- What we need: always negative for reversals
     CASE
-        WHEN du.amount_saved > 0 AND xil.line_amount > 0 THEN 'NEEDS FIX: positive reversal should be negative'
-        WHEN du.amount_saved < 0 THEN 'OK: already negative'
+        WHEN xil.line_amount > 0 THEN -xil.line_amount  -- Positive in credit note → negate
+        ELSE xil.line_amount                              -- Negative in credit note → keep
+    END as correct_amount,
+    -- What action is needed
+    CASE
+        WHEN du.id IS NOT NULL AND du.amount_saved > 0
+            THEN 'NEEDS FIX: Update existing positive to negative OR insert offsetting negative'
+        WHEN du.id IS NULL
+            THEN 'NEEDS FIX: Insert missing negative discount_usage record'
+        WHEN du.amount_saved < 0
+            THEN 'OK: Already has negative discount_usage'
         ELSE 'UNKNOWN'
     END as status
 FROM xero_invoices xi
@@ -40,24 +42,24 @@ JOIN discount_codes dc ON xil.discount_code_id = dc.id
 LEFT JOIN discount_usage du ON (
     du.user_id = u.id
     AND du.discount_code_id = xil.discount_code_id
-    AND du.amount_saved > 0
-    AND du.used_at >= xi.created_at - INTERVAL '1 minute'
-    AND du.used_at <= xi.created_at + INTERVAL '1 minute'
+    -- Match by approximate time (within 5 minutes of credit note creation)
+    AND du.used_at >= xi.created_at - INTERVAL '5 minutes'
+    AND du.used_at <= xi.created_at + INTERVAL '5 minutes'
 )
 WHERE xi.invoice_type = 'ACCRECCREDIT'
   AND xi.sync_status = 'synced'
   AND xil.line_item_type = 'discount'
   AND xil.discount_code_id IS NOT NULL
-  AND xil.line_amount > 0  -- Positive discount in credit note = reversal
 ORDER BY xi.created_at DESC;
 
--- OPTION A: Insert correcting negative records
--- This adds a negative record to offset each incorrect positive record
--- Advantage: Maintains audit trail of what happened
---
--- Uncomment and run this section to apply the fix:
+-- =============================================================================
+-- FIX OPTION A: Insert negative records to offset incorrect positives
+--               AND insert missing records for proportional refunds
+-- =============================================================================
+-- This is the RECOMMENDED approach - maintains audit trail
 
 /*
+-- Insert correcting/missing negative discount_usage records
 INSERT INTO discount_usage (
     user_id,
     discount_code_id,
@@ -71,59 +73,89 @@ SELECT DISTINCT
     u.id as user_id,
     xil.discount_code_id,
     dc.discount_category_id,
-    ur.season_id,
-    -ABS(xil.line_amount) as amount_saved,  -- NEGATIVE to offset the incorrect positive
+    COALESCE(ur.season_id, s.id) as season_id,
+    -- Always insert negative amount to reverse/record the refund
+    CASE
+        WHEN xil.line_amount > 0 THEN -xil.line_amount  -- Positive → negate
+        ELSE xil.line_amount                              -- Negative → keep
+    END as amount_saved,
     ur.registration_id,
-    NOW() as used_at  -- Use current time for the correction
+    xi.created_at as used_at  -- Use credit note timestamp
 FROM xero_invoices xi
 JOIN xero_invoice_line_items xil ON xil.xero_invoice_id = xi.id
 JOIN payments p ON xi.payment_id = p.id
 JOIN users u ON p.user_id = u.id
 JOIN discount_codes dc ON xil.discount_code_id = dc.id
 LEFT JOIN user_registrations ur ON ur.payment_id = p.id
+LEFT JOIN registrations r ON ur.registration_id = r.id
+LEFT JOIN seasons s ON r.season_id = s.id
 WHERE xi.invoice_type = 'ACCRECCREDIT'
   AND xi.sync_status = 'synced'
   AND xil.line_item_type = 'discount'
   AND xil.discount_code_id IS NOT NULL
-  AND xil.line_amount > 0  -- Positive discount in credit note = reversal
-  -- Only fix records that don't already have a negative correction
+  -- Only fix records that need fixing:
+  -- 1. No existing discount_usage for this refund, OR
+  -- 2. Existing discount_usage has wrong positive amount
   AND NOT EXISTS (
-    SELECT 1 FROM discount_usage du_check
-    WHERE du_check.user_id = u.id
-      AND du_check.discount_code_id = xil.discount_code_id
-      AND du_check.amount_saved < 0
-      AND du_check.used_at >= xi.created_at - INTERVAL '1 day'
+    SELECT 1 FROM discount_usage du_existing
+    WHERE du_existing.user_id = u.id
+      AND du_existing.discount_code_id = xil.discount_code_id
+      AND du_existing.amount_saved < 0  -- Already has a negative correction
+      AND du_existing.used_at >= xi.created_at - INTERVAL '1 day'
+      AND du_existing.used_at <= xi.created_at + INTERVAL '1 day'
   );
 */
 
--- OPTION B: Update existing incorrect records to be negative
--- This directly changes the incorrect positive records to negative
--- Advantage: Cleaner data, but loses some audit trail
---
--- Uncomment and run this section to apply the fix:
+-- =============================================================================
+-- FIX OPTION B: Update existing incorrect positive records to be negative
+-- =============================================================================
+-- Only use this if you want to modify existing records instead of adding new ones
+-- Note: This won't help for proportional refunds that have NO discount_usage record
 
 /*
-UPDATE discount_usage du
-SET amount_saved = -ABS(du.amount_saved)
-WHERE du.id IN (
-    SELECT du_inner.id
-    FROM discount_usage du_inner
-    JOIN users u ON du_inner.user_id = u.id
-    JOIN payments p ON p.user_id = u.id
-    JOIN xero_invoices xi ON xi.payment_id = p.id
-    JOIN xero_invoice_line_items xil ON xil.xero_invoice_id = xi.id
-    WHERE xi.invoice_type = 'ACCRECCREDIT'
-      AND xi.sync_status = 'synced'
-      AND xil.line_item_type = 'discount'
-      AND xil.discount_code_id = du_inner.discount_code_id
-      AND xil.line_amount > 0  -- Positive discount in credit note = reversal
-      AND du_inner.amount_saved > 0  -- Currently incorrect positive
-      AND du_inner.used_at >= xi.created_at - INTERVAL '1 minute'
-      AND du_inner.used_at <= xi.created_at + INTERVAL '1 minute'
+UPDATE discount_usage
+SET amount_saved = -ABS(amount_saved)
+WHERE id IN (
+    SELECT du.id
+    FROM discount_usage du
+    JOIN users u ON du.user_id = u.id
+    JOIN discount_codes dc ON du.discount_code_id = dc.id
+    WHERE du.amount_saved > 0  -- Only fix positive records
+      AND EXISTS (
+        -- Verify this corresponds to a credit note (refund)
+        SELECT 1
+        FROM xero_invoices xi
+        JOIN xero_invoice_line_items xil ON xil.xero_invoice_id = xi.id
+        JOIN payments p ON xi.payment_id = p.id
+        WHERE p.user_id = du.user_id
+          AND xil.discount_code_id = du.discount_code_id
+          AND xi.invoice_type = 'ACCRECCREDIT'
+          AND xi.sync_status = 'synced'
+          AND du.used_at >= xi.created_at - INTERVAL '5 minutes'
+          AND du.used_at <= xi.created_at + INTERVAL '5 minutes'
+      )
 );
 */
 
--- After running the fix, verify with:
--- SELECT * FROM discount_usage WHERE amount_saved < 0 ORDER BY used_at DESC;
+-- =============================================================================
+-- VERIFICATION: Check discount usage totals by user after fix
+-- =============================================================================
+/*
+SELECT
+    u.first_name || ' ' || u.last_name as customer_name,
+    dc.code as discount_code,
+    dcat.name as category,
+    SUM(du.amount_saved) as total_usage,
+    COUNT(*) as record_count,
+    SUM(CASE WHEN du.amount_saved > 0 THEN du.amount_saved ELSE 0 END) as positive_sum,
+    SUM(CASE WHEN du.amount_saved < 0 THEN du.amount_saved ELSE 0 END) as negative_sum
+FROM discount_usage du
+JOIN users u ON du.user_id = u.id
+JOIN discount_codes dc ON du.discount_code_id = dc.id
+JOIN discount_categories dcat ON dc.discount_category_id = dcat.id
+GROUP BY u.id, u.first_name, u.last_name, dc.code, dcat.name
+HAVING COUNT(*) > 1
+ORDER BY u.last_name, u.first_name, dc.code;
+*/
 
-ROLLBACK;  -- Change to COMMIT after reviewing the preview and uncommenting your chosen fix option
+ROLLBACK;  -- Change to COMMIT after reviewing and uncommenting your chosen fix

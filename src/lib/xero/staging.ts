@@ -1154,14 +1154,19 @@ export class XeroStagingManager {
           }))
         } else {
           // Proportionally allocate refund across original line items
+          // Calculate what fraction of the original invoice is being refunded
+          const refundFraction = refundAmountCents / totalInvoiceAmount
+
           lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
-            // Calculate proportion maintaining the sign of the original line item
-            const proportion = item.line_amount / totalInvoiceAmount
-            const creditAmount = centsToCents(refundAmountCents * proportion)
+            // Apply refund fraction to each line item, then reverse the sign for credit note
+            // - Revenue items (positive) become negative (refund reduces revenue)
+            // - Discount items (negative) become positive (refund reverses discount)
+            const proportionalAmount = Math.round(item.line_amount * refundFraction)
+            const creditAmount = centsToCents(-proportionalAmount)
 
             return {
               description: `Credit: ${item.description}`,
-              line_amount: creditAmount, // Maintains sign: positive for revenue, negative for discounts
+              line_amount: creditAmount,
               account_code: item.account_code,
               tax_type: item.tax_type,
               line_item_type: item.line_item_type,
@@ -1171,10 +1176,18 @@ export class XeroStagingManager {
           })
 
           // Ensure total matches refund amount exactly (handle rounding)
+          // Credit note total should be negative of refund amount
           const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
-          const difference = refundAmountCents - calculatedTotal
+          const expectedTotal = centsToCents(-refundAmountCents)
+          const difference = expectedTotal - calculatedTotal
           if (difference !== 0 && lineItems.length > 0) {
-            lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
+            // Adjust the first revenue item (positive original = negative credit)
+            const revenueItem = lineItems.find((item: any) => item.line_amount < 0)
+            if (revenueItem) {
+              revenueItem.line_amount = centsToCents(revenueItem.line_amount + difference)
+            } else {
+              lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)
+            }
           }
         }
       } else {

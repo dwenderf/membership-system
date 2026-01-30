@@ -1116,7 +1116,7 @@ export default function RegistrationPurchase({
                 href={`/user/browse-memberships/${selectedCategory.required_membership_id}?from=/user/browse-registrations/${registration.id}`}
                 className="text-yellow-700 underline hover:text-yellow-900"
               >
-                Purchase or renew your {selectedCategory.memberships?.name || 'membership'} →
+                Purchase or renew your membership: {selectedCategory.memberships?.name || 'membership'} →
               </a>
             ) : (
               <a href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`} className="text-yellow-700 underline hover:text-yellow-900">

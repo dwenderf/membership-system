@@ -2,13 +2,19 @@
 
 export interface UserMembership {
   id: string
+  membership_id?: string
   valid_from: string
   valid_until: string
   membership?: {
     id: string
     name: string
-    price_monthly: number
-    price_annual: number
+    price_monthly?: number
+    price_annual?: number
+  }
+  // Also support 'memberships' (plural) for compatibility with registration-validation-service
+  memberships?: {
+    id: string
+    name: string
   }
 }
 
@@ -36,9 +42,11 @@ export function validateMembershipCoverage(
   season: Season
 ): MembershipValidationResult {
   // Find the matching membership type with the latest expiration date
-  const matchingMemberships = userMemberships.filter(
-    um => um.membership?.id === requiredMembershipId
-  )
+  // Support both 'membership' and 'memberships' field names, plus 'membership_id'
+  const matchingMemberships = userMemberships.filter(um => {
+    const membershipId = um.membership?.id || um.memberships?.id || um.membership_id
+    return membershipId === requiredMembershipId
+  })
   
   if (matchingMemberships.length === 0) {
     return {
@@ -59,10 +67,13 @@ export function validateMembershipCoverage(
   // Check if membership covers the entire season
   const isValid = validUntilDate >= seasonEndDate
   
+  // Get membership name from either field
+  const membershipName = relevantMembership.membership?.name || relevantMembership.memberships?.name
+
   if (isValid) {
     return {
       isValid: true,
-      membershipName: relevantMembership.membership?.name,
+      membershipName,
       validUntil: relevantMembership.valid_until
     }
   }
@@ -73,7 +84,7 @@ export function validateMembershipCoverage(
 
   return {
     isValid: false,
-    membershipName: relevantMembership.membership?.name,
+    membershipName,
     validUntil: relevantMembership.valid_until,
     seasonEndDate: season.end_date,
     monthsNeeded,

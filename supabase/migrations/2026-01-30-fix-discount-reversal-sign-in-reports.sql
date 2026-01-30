@@ -127,7 +127,7 @@ LEFT JOIN registrations r ON ur.registration_id = r.id
 LEFT JOIN registration_categories rc ON ur.registration_category_id = rc.id
 LEFT JOIN categories c ON rc.category_id = c.id
 LEFT JOIN seasons s ON r.season_id = s.id
-WHERE rfd.line_item_type IN ('registration', 'discount');
+WHERE rfd.line_item_type = 'registration';
 
 -- Set security invoker for RLS on all views
 ALTER VIEW membership_reports_data SET (security_invoker = true);

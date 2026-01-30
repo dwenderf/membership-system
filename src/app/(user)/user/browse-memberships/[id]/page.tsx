@@ -58,12 +58,14 @@ export default async function MembershipDetailPage({ params, searchParams }: Pag
     // Fetch registration name for better breadcrumb display
     const registrationId = from.split('/').pop()
     if (registrationId) {
-      const { data: registration } = await supabase
+      const { data: registration, error } = await supabase
         .from('registrations')
         .select('name')
         .eq('id', registrationId)
         .single()
-      registrationName = registration?.name || null
+      if (!error && registration) {
+        registrationName = registration.name || null
+      }
     }
   }
 

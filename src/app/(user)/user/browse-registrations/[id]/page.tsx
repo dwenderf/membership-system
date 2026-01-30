@@ -360,9 +360,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
               </div>
 
               {/* Membership requirement message */}
-              {!hasEligibleMembership &&
-               registrationMembershipId &&
-               uniqueCategoryMembershipIds.length > 0 && (
+              {!hasEligibleMembership && (registrationMembershipId || uniqueCategoryMembershipIds.length > 0) && (
                 <div className="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3">
                   <div className="flex items-start">
                     <svg className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -373,27 +371,41 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                         Membership Required
                       </p>
                       <p className="text-xs text-blue-700 mt-1">
-                        You need either <span className="font-semibold">{registration.memberships?.name || 'registration-level membership'}</span> or{' '}
-                        {uniqueCategoryMembershipIds.length === 1 ? (
-                          <span className="font-semibold">
-                            {registration.registration_categories?.find((cat: any) =>
-                              cat.required_membership_id === uniqueCategoryMembershipIds[0]
-                            )?.memberships?.name || 'category-level membership'}
-                          </span>
-                        ) : (
-                          <span className="font-semibold">a category-specific membership</span>
-                        )}{' '}
-                        to register for this event.
+                        You need one of the following memberships to register:
                       </p>
-                      <Link
-                        href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
-                        className="inline-flex items-center mt-2 text-xs font-medium text-blue-800 hover:text-blue-900"
-                      >
-                        View Available Memberships
-                        <svg className="ml-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </Link>
+                      <div className="mt-2 space-y-1">
+                        {registrationMembershipId && registration.memberships && (
+                          <Link
+                            href={`/user/browse-memberships/${registrationMembershipId}?from=/user/browse-registrations/${registration.id}`}
+                            className="flex items-center text-xs font-medium text-blue-800 hover:text-blue-900"
+                          >
+                            <svg className="mr-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                            Purchase {registration.memberships.name}
+                          </Link>
+                        )}
+                        {uniqueCategoryMembershipIds.map((membershipId) => {
+                          const category = registration.registration_categories?.find(
+                            (cat: any) => cat.required_membership_id === membershipId
+                          )
+                          const membershipName = category?.memberships?.name
+                          // Don't show duplicate if same as registration-level
+                          if (membershipId === registrationMembershipId) return null
+                          return (
+                            <Link
+                              key={membershipId}
+                              href={`/user/browse-memberships/${membershipId}?from=/user/browse-registrations/${registration.id}`}
+                              className="flex items-center text-xs font-medium text-blue-800 hover:text-blue-900"
+                            >
+                              <svg className="mr-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                              Purchase {membershipName || 'membership'}
+                            </Link>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>

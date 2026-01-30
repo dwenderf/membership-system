@@ -1103,17 +1103,26 @@ export default function RegistrationPurchase({
         </div>
       )}
 
-      
+
       {/* Season Coverage Warning */}
-      {shouldShowSeasonWarning && (
+      {shouldShowSeasonWarning && selectedCategory && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
           <div className="text-yellow-800 text-sm">
             <strong>Membership Extension Required:</strong> {membershipWarning}
           </div>
-          <div className="mt-2 text-sm text-yellow-700">
-            <a href="/user/browse-memberships" className="underline hover:text-yellow-900">
-              Browse memberships to extend your coverage →
-            </a>
+          <div className="mt-2 text-sm">
+            {selectedCategory.required_membership_id ? (
+              <a
+                href={`/user/browse-memberships/${selectedCategory.required_membership_id}?from=/user/browse-registrations/${registration.id}`}
+                className="text-yellow-700 underline hover:text-yellow-900"
+              >
+                Purchase or renew your membership: {selectedCategory.memberships?.name || 'membership'} →
+              </a>
+            ) : (
+              <a href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`} className="text-yellow-700 underline hover:text-yellow-900">
+                Browse memberships to extend your coverage →
+              </a>
+            )}
           </div>
         </div>
       )}

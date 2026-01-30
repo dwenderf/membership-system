@@ -289,7 +289,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
             })}
             <div className="mt-4">
               <Link
-                href="/user/browse-memberships"
+                href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
                 className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
               >
                 Extend Membership
@@ -316,7 +316,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
               You need an active membership to register for most teams and events.
             </p>
             <Link
-              href="/user/browse-memberships"
+              href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
               className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
             >
               Get Membership
@@ -386,7 +386,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                         to register for this event.
                       </p>
                       <Link
-                        href="/user/browse-memberships"
+                        href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
                         className="inline-flex items-center mt-2 text-xs font-medium text-blue-800 hover:text-blue-900"
                       >
                         View Available Memberships

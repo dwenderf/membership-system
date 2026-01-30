@@ -1138,14 +1138,14 @@ export class XeroStagingManager {
           (sum: number, item: any) => sum + item.line_amount, 0
         )
 
-        // For zero-dollar refunds, reverse the exact line items (can't use proportional allocation)
+        // For zero-dollar refunds, copy the exact line items (credit note type tells Xero it's a reversal)
         if (refundAmountCents === 0 && totalInvoiceAmount === 0) {
           lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => ({
             description: `Credit: ${item.description}`,
-            // Reverse the sign of each line item for credit note:
-            // - Revenue items (positive) become negative (refund reduces revenue)
-            // - Discount items (negative) become positive (refund gives back discount capacity)
-            line_amount: centsToCents(-item.line_amount),
+            // Keep the same signs as original invoice - Xero's credit note type handles the reversal
+            // - Revenue items stay positive (Xero credits this back)
+            // - Discount items stay negative (Xero reverses the discount)
+            line_amount: item.line_amount,
             account_code: item.account_code,
             tax_type: item.tax_type,
             line_item_type: item.line_item_type,
@@ -1158,15 +1158,15 @@ export class XeroStagingManager {
           const refundFraction = refundAmountCents / totalInvoiceAmount
 
           lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
-            // Apply refund fraction to each line item, then reverse the sign for credit note
-            // - Revenue items (positive) become negative (refund reduces revenue)
-            // - Discount items (negative) become positive (refund reverses discount)
+            // Apply refund fraction to each line item, keeping the same sign
+            // Xero's credit note type handles the reversal - we just need correct proportions
+            // - Revenue items stay positive
+            // - Discount items stay negative
             const proportionalAmount = Math.round(item.line_amount * refundFraction)
-            const creditAmount = centsToCents(-proportionalAmount)
 
             return {
               description: `Credit: ${item.description}`,
-              line_amount: creditAmount,
+              line_amount: centsToCents(proportionalAmount),
               account_code: item.account_code,
               tax_type: item.tax_type,
               line_item_type: item.line_item_type,
@@ -1176,13 +1176,13 @@ export class XeroStagingManager {
           })
 
           // Ensure total matches refund amount exactly (handle rounding)
-          // Credit note total should be negative of refund amount
+          // Credit note total should equal refund amount (positive, as Xero shows credits as positive)
           const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
-          const expectedTotal = centsToCents(-refundAmountCents)
+          const expectedTotal = refundAmountCents
           const difference = expectedTotal - calculatedTotal
           if (difference !== 0 && lineItems.length > 0) {
-            // Adjust the first revenue item (positive original = negative credit)
-            const revenueItem = lineItems.find((item: any) => item.line_amount < 0)
+            // Adjust the first revenue item (positive amount)
+            const revenueItem = lineItems.find((item: any) => item.line_amount > 0)
             if (revenueItem) {
               revenueItem.line_amount = centsToCents(revenueItem.line_amount + difference)
             } else {

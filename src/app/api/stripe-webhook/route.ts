@@ -884,7 +884,8 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
       // - Negative amounts: Proportional refund maintains original sign
       // In BOTH cases, we need to REDUCE the user's discount usage (insert negative amount)
       const lineAmount = lineItem.line_amount
-      const discountCategoryId = lineItem.discount_codes?.[0]?.discount_category_id
+      // Supabase join returns an object, not an array
+      const discountCategoryId = (lineItem.discount_codes as any)?.discount_category_id
 
       // For discount reversals, we always want to reduce usage (negative amount_saved)
       // If lineAmount is positive (reversed for credit note), negate it
@@ -896,6 +897,9 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
         continue
       }
 
+      // Get season_id - Supabase join returns an object, not an array
+      const seasonId = (registrationData.registrations as any)?.season_id
+
       // Insert a new discount_usage record with negative amount to offset the original
       const { error: insertError } = await supabase
         .from('discount_usage')
@@ -903,7 +907,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
           user_id: userId,
           discount_code_id: lineItem.discount_code_id,
           discount_category_id: discountCategoryId,
-          season_id: registrationData.registrations[0]?.season_id,
+          season_id: seasonId,
           amount_saved: amountSaved,
           registration_id: registrationData.registration_id,
           used_at: new Date().toISOString()
@@ -916,7 +920,7 @@ async function processRefundDiscountUsage(stagingId: string, refundId: string, p
           userId,
           discountCodeId: lineItem.discount_code_id,
           discountCategoryId,
-          seasonId: registrationData.registrations[0]?.season_id,
+          seasonId,
           amountSaved
         })
       }

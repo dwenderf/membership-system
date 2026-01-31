@@ -130,7 +130,8 @@ export class AlternatePaymentService {
           item_id: null,
           item_amount: centsToCents(-discountAmount),
           description: `Discount: ${discountCode.code} - ${gameDescription}`,
-          accounting_code: discountCode.category.accounting_code
+          accounting_code: discountCode.category.accounting_code,
+          discount_code_id: discountCode.id
         })
       }
 

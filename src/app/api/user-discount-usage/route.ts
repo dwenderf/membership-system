@@ -34,21 +34,10 @@ export async function GET(request: NextRequest) {
 
     // Get discount usage grouped by season and category for non-expired seasons
     const { data: discountUsage, error: usageError } = await supabase
-      .from('discount_usage')
-      .select(`
-        amount_saved,
-        seasons!inner (
-          id,
-          name,
-          end_date
-        ),
-        discount_categories!inner (
-          id,
-          name
-        )
-      `)
+      .from('discount_usage_computed')
+      .select('amount_saved, season_name, season_end_date, discount_category_id, discount_category_name')
       .eq('user_id', userId)
-      .gte('seasons.end_date', new Date().toISOString().split('T')[0])
+      .gte('season_end_date', new Date().toISOString().split('T')[0])
 
     if (usageError) {
       console.error('Error fetching discount usage:', usageError)
@@ -57,20 +46,20 @@ export async function GET(request: NextRequest) {
 
     // Group the data by season, then by category
     const groupedUsage: Record<string, Record<string, { amount: number, categoryId: string }>> = {}
-    
+
     discountUsage?.forEach((usage: any) => {
-      const seasonName = usage.seasons.name
-      const categoryName = usage.discount_categories.name
-      const categoryId = usage.discount_categories.id
-      
+      const seasonName = usage.season_name
+      const categoryName = usage.discount_category_name
+      const categoryId = usage.discount_category_id
+
       if (!groupedUsage[seasonName]) {
         groupedUsage[seasonName] = {}
       }
-      
+
       if (!groupedUsage[seasonName][categoryName]) {
         groupedUsage[seasonName][categoryName] = { amount: 0, categoryId }
       }
-      
+
       groupedUsage[seasonName][categoryName].amount += usage.amount_saved
     })
 

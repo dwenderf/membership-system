@@ -446,62 +446,8 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
     userRegistration = updatedRegistration
   }
 
-  // Record discount usage if discount was applied
-  const discountCode = paymentIntent.metadata.discountCode
-  const discountAmount = parseInt(paymentIntent.metadata.discountAmount || '0')
-  const discountCategoryId = paymentIntent.metadata.discountCategoryId
-
-  if (discountCode && discountAmount > 0 && discountCategoryId) {
-    // Get the discount code ID
-    const { data: discountCodeRecord } = await supabase
-      .from('discount_codes')
-      .select('id')
-      .eq('code', discountCode)
-      .single()
-
-    if (discountCodeRecord) {
-      // Get season ID from registration
-      const { data: registration } = await supabase
-        .from('registrations')
-        .select('season_id')
-        .eq('id', registrationId)
-        .single()
-
-      if (registration) {
-        // Check if discount usage already exists to prevent duplicates
-        const { data: existingUsage } = await supabase
-          .from('discount_usage')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('discount_code_id', discountCodeRecord.id)
-          .eq('registration_id', registrationId)
-          .single()
-
-        if (!existingUsage) {
-          // Record discount usage only if it doesn't already exist
-          const { error: usageError } = await supabase
-            .from('discount_usage')
-            .insert({
-              user_id: userId,
-              discount_code_id: discountCodeRecord.id,
-              discount_category_id: discountCategoryId,
-              season_id: registration.season_id,
-              amount_saved: discountAmount,
-              registration_id: registrationId,
-            })
-
-          if (usageError) {
-            console.error('Error recording discount usage:', usageError)
-            // Don't fail the payment - just log the error
-          } else {
-            console.log('✅ Recorded discount usage for payment intent:', paymentIntent.id)
-          }
-        } else {
-          console.log('ℹ️ Discount usage already recorded for payment intent:', paymentIntent.id)
-        }
-      }
-    }
-  }
+  // Note: Discount usage is now tracked via discount_usage_computed view
+  // which derives data from xero_invoice_line_items
 
   // Get actual Stripe fees and charge ID from the charge
   const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
@@ -734,8 +680,8 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
 
             console.log(`✅ Updated staging records ${stagingId} to pending status`)
 
-            // Process discount usage for refund line items
-            await processRefundDiscountUsage(stagingId, existingRefund.id, payment.id, payment.user_id)
+            // Note: Discount usage reversal is now tracked automatically via discount_usage_computed view
+            // which derives data from credit note line items in xero_invoice_line_items
 
             // Send refund notification email
             await stageRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
@@ -830,105 +776,6 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
 
   } catch (error) {
     console.error('❌ Error processing charge refunded event:', error)
-  }
-}
-
-// Helper function to process discount usage for refund line items
-async function processRefundDiscountUsage(stagingId: string, refundId: string, paymentId: string, userId: string) {
-  try {
-    const supabase = createAdminClient()
-
-    // Get refund line items with discount information
-    const { data: refundLineItems } = await supabase
-      .from('xero_invoice_line_items')
-      .select(`
-        line_amount,
-        line_item_type,
-        discount_code_id,
-        discount_codes (
-          id,
-          discount_category_id
-        )
-      `)
-      .eq('xero_invoice_id', stagingId)
-      .eq('line_item_type', 'discount')
-      .not('discount_code_id', 'is', null)
-
-    if (!refundLineItems || refundLineItems.length === 0) {
-      console.log(`No discount line items found for refund staging ${stagingId}`)
-      return
-    }
-
-    // Get registration data for season context
-    const { data: registrationData } = await supabase
-      .from('user_registrations')
-      .select(`
-        registration_id,
-        registrations!inner (
-          season_id
-        )
-      `)
-      .eq('payment_id', paymentId)
-      .limit(1)
-      .single()
-
-    if (!registrationData) {
-      console.log(`No registration found for payment ${paymentId}`)
-      return
-    }
-
-    // Process each discount line item
-    for (const lineItem of refundLineItems) {
-      // In credit notes, discount line items represent REVERSALS of original discounts:
-      // - Positive amounts: The original discount was negative, now reversed to positive for Xero accounting
-      // - Negative amounts: Proportional refund maintains original sign
-      // In BOTH cases, we need to REDUCE the user's discount usage (insert negative amount)
-      const lineAmount = lineItem.line_amount
-      // Supabase join returns an object, not an array
-      const discountCategoryId = (lineItem.discount_codes as any)?.discount_category_id
-
-      // For discount reversals, we always want to reduce usage (negative amount_saved)
-      // If lineAmount is positive (reversed for credit note), negate it
-      // If lineAmount is negative (proportional), it's already the right sign
-      const amountSaved = lineAmount > 0 ? -lineAmount : lineAmount
-
-      if (amountSaved === 0) {
-        console.log(`Skipping zero-amount discount line item for refund staging ${stagingId}`)
-        continue
-      }
-
-      // Get season_id - Supabase join returns an object, not an array
-      const seasonId = (registrationData.registrations as any)?.season_id
-
-      // Insert a new discount_usage record with negative amount to offset the original
-      const { error: insertError } = await supabase
-        .from('discount_usage')
-        .insert({
-          user_id: userId,
-          discount_code_id: lineItem.discount_code_id,
-          discount_category_id: discountCategoryId,
-          season_id: seasonId,
-          amount_saved: amountSaved,
-          registration_id: registrationData.registration_id,
-          used_at: new Date().toISOString()
-        })
-
-      if (insertError) {
-        console.error(`❌ Error inserting discount usage reversal for refund:`, insertError)
-      } else {
-        console.log(`✅ Inserted discount usage reversal for refund:`, {
-          userId,
-          discountCodeId: lineItem.discount_code_id,
-          discountCategoryId,
-          seasonId,
-          amountSaved
-        })
-      }
-    }
-
-  } catch (error) {
-    console.error('❌ Error processing refund discount usage:', error)
-    // Don't throw - we don't want to fail the entire webhook for this
   }
 }
 

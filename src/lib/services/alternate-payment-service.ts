@@ -226,10 +226,8 @@ export class AlternatePaymentService {
         .update({ payment_id: paymentRecord.id })
         .eq('id', stagingRecord.id)
 
-      // Record discount usage if applicable
-      if (discountCodeId && discountAmount > 0) {
-        await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
-      }
+      // Note: Discount usage is now tracked via discount_usage_computed view
+      // which derives data from xero_invoice_line_items
 
       logger.logPaymentProcessing(
         'alternate-charge-success',
@@ -313,7 +311,7 @@ export class AlternatePaymentService {
           // Check per-code usage limits
           if (discount.usage_limit && discount.usage_limit > 0) {
             const { data: usageCount } = await supabase
-              .from('discount_usage')
+              .from('discount_usage_computed')
               .select('id')
               .eq('user_id', userId)
               .eq('discount_code_id', discountCodeId)
@@ -422,17 +420,8 @@ export class AlternatePaymentService {
         .update({ payment_id: paymentRecord.id })
         .eq('id', stagingRecord.id)
 
-      // Record discount usage if applicable
-      if (discountCodeId) {
-        const { data: registration } = await adminSupabase
-          .from('registrations')
-          .select('alternate_price')
-          .eq('id', registrationId)
-          .single()
-
-        const discountAmount = registration?.alternate_price || 0
-        await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
-      }
+      // Note: Discount usage is now tracked via discount_usage_computed view
+      // which derives data from xero_invoice_line_items
 
       // Trigger post-payment processing (emails, Xero sync)
       try {
@@ -495,69 +484,6 @@ export class AlternatePaymentService {
         'error'
       )
       throw error
-    }
-  }
-
-  /**
-   * Record discount code usage
-   */
-  private static async recordDiscountUsage(
-    userId: string,
-    discountCodeId: string,
-    registrationId: string,
-    amountSaved: number
-  ): Promise<void> {
-    try {
-      const adminSupabase = createAdminClient()
-
-      // Get discount code and registration details - use admin client for alternate users
-      const [discountResult, registrationResult] = await Promise.all([
-        adminSupabase
-          .from('discount_codes')
-          .select('discount_category_id')
-          .eq('id', discountCodeId)
-          .single(),
-        adminSupabase
-          .from('registrations')
-          .select('season_id')
-          .eq('id', registrationId)
-          .single()
-      ])
-
-      if (discountResult.error || registrationResult.error) {
-        throw new Error('Failed to get discount or registration details')
-      }
-
-      // Record discount usage for this alternate purchase - use admin client for alternate users
-      // No duplicate check - each alternate purchase is unique even for same registration
-      const { error: insertError } = await adminSupabase
-        .from('discount_usage')
-        .insert({
-          user_id: userId,
-          discount_code_id: discountCodeId,
-          discount_category_id: discountResult.data.discount_category_id,
-          season_id: registrationResult.data.season_id,
-          amount_saved: amountSaved,
-          registration_id: registrationId
-        })
-
-      if (insertError) {
-        throw new Error(`Failed to record discount usage: ${insertError.message}`)
-      }
-    } catch (error) {
-      logger.logPaymentProcessing(
-        'discount-usage-recording-failed',
-        'Failed to record discount usage',
-        {
-          userId,
-          discountCodeId,
-          registrationId,
-          amountSaved,
-          error: error instanceof Error ? error.message : String(error)
-        },
-        'warn'
-      )
-      // Don't throw - this is not critical for the payment flow
     }
   }
 }

@@ -277,74 +277,8 @@ export async function POST(request: NextRequest) {
 
         console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
 
-        // Process discount usage reversal for zero-dollar refunds
-        // (Zero-dollar refunds don't trigger Stripe webhooks, so we must handle discount usage here)
-        try {
-          // Get discount line items from the credit note staging
-          const { data: discountLineItems } = await adminSupabase
-            .from('xero_invoice_line_items')
-            .select(`
-              line_amount,
-              discount_code_id,
-              discount_codes (
-                id,
-                discount_category_id
-              )
-            `)
-            .eq('xero_invoice_id', stagingId)
-            .eq('line_item_type', 'discount')
-            .not('discount_code_id', 'is', null)
-
-          if (discountLineItems && discountLineItems.length > 0) {
-            // Get registration data for season context
-            const { data: registrationData } = await adminSupabase
-              .from('user_registrations')
-              .select(`
-                registration_id,
-                registrations!inner (
-                  season_id
-                )
-              `)
-              .eq('payment_id', paymentId)
-              .limit(1)
-              .single()
-
-            for (const lineItem of discountLineItems) {
-              // In credit notes, discount line items are POSITIVE (reversed from original negative)
-              // We need to insert a NEGATIVE discount_usage to reverse the original usage
-              const lineAmount = lineItem.line_amount
-              const amountSaved = lineAmount > 0 ? -lineAmount : lineAmount
-              const discountCategoryId = (lineItem.discount_codes as any)?.discount_category_id
-
-              if (amountSaved === 0) continue
-
-              const { error: insertError } = await adminSupabase
-                .from('discount_usage')
-                .insert({
-                  user_id: payment.user_id,
-                  discount_code_id: lineItem.discount_code_id,
-                  discount_category_id: discountCategoryId,
-                  season_id: (registrationData?.registrations as any)?.[0]?.season_id || (registrationData?.registrations as any)?.season_id,
-                  amount_saved: amountSaved,
-                  registration_id: registrationData?.registration_id,
-                  used_at: new Date().toISOString()
-                })
-
-              if (insertError) {
-                console.error('[zero-dollar-refund] Error inserting discount usage reversal:', insertError)
-              } else {
-                console.log('[zero-dollar-refund] Inserted discount usage reversal:', {
-                  userId: payment.user_id,
-                  discountCodeId: lineItem.discount_code_id,
-                  amountSaved
-                })
-              }
-            }
-          }
-        } catch (discountError) {
-          // Don't fail the refund if discount usage tracking fails
-          console.error('[zero-dollar-refund] Error processing discount usage:', discountError)
-        }
+        // Note: Discount usage reversal is now tracked automatically via discount_usage_computed view
+        // which derives data from credit note line items in xero_invoice_line_items
 
         // Send refund notification email for zero-dollar refunds
         // (Zero-dollar refunds don't trigger Stripe webhooks, so we must send email here)

@@ -126,7 +126,7 @@ export async function GET(
     // Get discount usage for each user to check limits
     const userIds = alternates?.map(alt => alt.user_id) || []
     const { data: discountUsage } = await adminSupabase
-      .from('discount_usage')
+      .from('discount_usage_computed')
       .select('user_id, discount_category_id, amount_saved')
       .in('user_id', userIds)
 

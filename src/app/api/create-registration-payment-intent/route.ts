@@ -400,75 +400,8 @@ async function handleFreeRegistration({
 
     // Registration already created with correct status (paid), no update needed
 
-    // Record discount usage if applicable
-    if (discountCode) {
-      console.log('🔍 Free registration: Recording discount usage for:', {
-        discountCode,
-        originalPrice: selectedCategory.price || 0,
-        userId: user.id,
-        registrationId
-      })
-
-      // Note: In free registration case, the full amount was discounted
-      // We should still track this usage for limit enforcement
-      const discountValidation = await fetch(`${getBaseUrl()}/api/validate-discount-code`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Cookie': request.headers.get('cookie') || ''
-        },
-        body: JSON.stringify({
-          code: discountCode,
-          registrationId: registrationId,
-          amount: selectedCategory.price || 0 // Use original price for tracking
-        })
-      }).then(res => res.json()).catch((error) => {
-        console.error('❌ Free registration: Discount validation API error:', error)
-        return { isValid: false }
-      })
-
-      console.log('🔍 Free registration: Discount validation result:', discountValidation)
-
-      if (discountValidation?.isValid && discountValidation.discountCode) {
-        // Check if discount usage already exists to prevent duplicates
-        const { data: existingUsage, error: existingUsageError } = await supabase
-          .from('discount_usage')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('discount_code_id', discountValidation.discountCode.id)
-          .eq('registration_id', registrationId)
-          .single()
-
-        if (existingUsageError && existingUsageError.code !== 'PGRST116') {
-          console.error('❌ Free registration: Error checking existing usage:', existingUsageError)
-        }
-
-        if (!existingUsage) {
-          const { error: insertError } = await supabase
-            .from('discount_usage')
-            .insert({
-              user_id: user.id,
-              discount_code_id: discountValidation.discountCode.id,
-              discount_category_id: discountValidation.discountCode.category.id,
-              season_id: registration.season.id,
-              amount_saved: selectedCategory.price || 0, // Full price was saved
-              registration_id: registrationId,
-            })
-
-          if (insertError) {
-            console.error('❌ Free registration: Error inserting discount usage:', insertError)
-          } else {
-            console.log('✅ Free registration: Successfully recorded discount usage')
-          }
-        } else {
-          console.log('ℹ️ Free registration: Discount usage already exists')
-        }
-      } else {
-        console.log('⚠️ Free registration: Discount validation failed or invalid')
-      }
-    } else {
-      console.log('ℹ️ Free registration: No discount code provided')
-    }
+    // Note: Discount usage is now tracked via discount_usage_computed view
+    // which derives data from xero_invoice_line_items
 
     // Trigger payment completion processor for emails and post-processing
     try {

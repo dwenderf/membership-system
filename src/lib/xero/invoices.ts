@@ -47,6 +47,7 @@ export interface PaymentInvoiceData {
     amount_saved: number // in cents
     category_name: string
     accounting_code?: string
+    discount_code_id?: string // UUID reference to discount_codes.id
   }>
   stripe_payment_intent_id?: string
 }
@@ -68,6 +69,7 @@ export interface PrePaymentInvoiceData {
     amount_saved: number // in cents
     category_name: string
     accounting_code?: string
+    discount_code_id?: string // UUID reference to discount_codes.id
   }>
 }
 
@@ -126,7 +128,7 @@ export async function createXeroInvoiceBeforePayment(
         }
         
         lineItems.push({
-          description: `Discount - ${discount.code} (${discount.category_name})`,
+          description: `Discount: ${discount.code}`,
           unitAmount: -(discount.amount_saved / 100), // Negative amount for discount
           quantity: 1,
           accountCode: accountCode,
@@ -426,6 +428,12 @@ export async function createXeroInvoiceForPayment(
 
     // Build invoice line items
     const lineItems: LineItem[] = []
+    // Track metadata for each line item (discount_code_id, line_item_type, item_id)
+    const lineItemMetadata: Array<{
+      line_item_type: string
+      item_id: string | null
+      discount_code_id?: string
+    }> = []
 
     // Add payment items (memberships, registrations, donations)
     for (const item of paymentData.payment_items) {
@@ -435,6 +443,11 @@ export async function createXeroInvoiceForPayment(
         quantity: 1,
         accountCode: item.accounting_code || await getDefaultAccountCode(item.item_type),
         taxType: 'NONE' // Assuming no tax for now, can be configured
+      })
+      
+      lineItemMetadata.push({
+        line_item_type: item.item_type,
+        item_id: item.item_id
       })
     }
 
@@ -448,11 +461,17 @@ export async function createXeroInvoiceForPayment(
         }
         
         lineItems.push({
-          description: `Discount - ${discount.code} (${discount.category_name})`,
+          description: `Discount: ${discount.code}`,
           unitAmount: -(discount.amount_saved / 100), // Negative amount for discount
           quantity: 1,
           accountCode: accountCode,
           taxType: 'NONE'
+        })
+        
+        lineItemMetadata.push({
+          line_item_type: 'discount',
+          item_id: null,
+          discount_code_id: discount.discount_code_id
         })
       }
     }
@@ -537,17 +556,21 @@ export async function createXeroInvoiceForPayment(
     }
 
     // Store line items for detailed tracking
-    const lineItemRecords = lineItems.map((item, index) => ({
-      xero_invoice_id: xeroInvoiceId, // Will need to get the ID from our xero_invoices table
-      line_item_type: paymentData.payment_items[index]?.item_type || 'discount',
-      item_id: paymentData.payment_items[index]?.item_id,
-      description: item.description!,
-      quantity: item.quantity!,
-      unit_amount: Math.round((item.unitAmount! || 0) * 100), // Convert back to cents
-      account_code: item.accountCode,
-      tax_type: item.taxType,
-      line_amount: Math.round((item.unitAmount! || 0) * (item.quantity! || 1) * 100)
-    }))
+    const lineItemRecords = lineItems.map((item, index) => {
+      const metadata = lineItemMetadata[index]
+      return {
+        xero_invoice_id: xeroInvoiceId, // Will need to get the ID from our xero_invoices table
+        line_item_type: metadata.line_item_type,
+        item_id: metadata.item_id,
+        discount_code_id: metadata.discount_code_id,
+        description: item.description!,
+        quantity: item.quantity!,
+        unit_amount: Math.round((item.unitAmount! || 0) * 100), // Convert back to cents
+        account_code: item.accountCode,
+        tax_type: item.taxType,
+        line_amount: Math.round((item.unitAmount! || 0) * (item.quantity! || 1) * 100)
+      }
+    })
 
     // Get our internal invoice record ID for line items
     const { data: internalInvoice } = await supabase
@@ -566,6 +589,7 @@ export async function createXeroInvoiceForPayment(
             xero_invoice_id: internalInvoice.id,
             line_item_type: lineItem.line_item_type,
             item_id: lineItem.item_id,
+            discount_code_id: lineItem.discount_code_id,
             description: lineItem.description,
             quantity: lineItem.quantity,
             unit_amount: lineItem.unit_amount,
@@ -696,14 +720,15 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
     // Get discount codes used (if any)
     const { data: discountUsage } = await supabase
       .from('discount_usage_computed')
-      .select('amount_saved, discount_code, discount_category_name, discount_category_accounting_code')
+      .select('amount_saved, discount_code, discount_category_name, discount_category_accounting_code, discount_code_id')
       .eq('payment_id', paymentId)
 
     const discountCodesUsed = discountUsage?.map((usage: any) => ({
       code: usage.discount_code,
       amount_saved: usage.amount_saved,
       category_name: usage.discount_category_name,
-      accounting_code: usage.discount_category_accounting_code
+      accounting_code: usage.discount_category_accounting_code,
+      discount_code_id: usage.discount_code_id
     })) || []
 
     return {

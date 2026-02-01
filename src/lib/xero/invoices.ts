@@ -695,24 +695,15 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
 
     // Get discount codes used (if any)
     const { data: discountUsage } = await supabase
-      .from('discount_usage')
-      .select(`
-        amount_saved,
-        discount_codes (
-          code,
-          discount_categories (
-            name,
-            accounting_code
-          )
-        )
-      `)
-      .eq('registration_id', paymentId) // This might need adjustment based on schema
+      .from('discount_usage_computed')
+      .select('amount_saved, discount_code, discount_category_name, discount_category_accounting_code')
+      .eq('payment_id', paymentId)
 
     const discountCodesUsed = discountUsage?.map((usage: any) => ({
-      code: usage.discount_codes.code,
+      code: usage.discount_code,
       amount_saved: usage.amount_saved,
-      category_name: usage.discount_codes.discount_categories.name,
-      accounting_code: usage.discount_codes.discount_categories.accounting_code
+      category_name: usage.discount_category_name,
+      accounting_code: usage.discount_category_accounting_code
     })) || []
 
     return {

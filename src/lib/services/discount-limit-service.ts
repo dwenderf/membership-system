@@ -7,8 +7,8 @@ import { logger } from '@/lib/logging/logger'
  * This ensures consistent enforcement of max_discount_per_user_per_season
  * across regular registration, alternate selection, and waitlist payments.
  *
- * Note: Currently queries discount_usage table. In future refactor, this should
- * query xero_invoice_line_items as the single source of truth.
+ * Uses discount_usage_computed view which derives data from xero_invoice_line_items
+ * as the single source of truth.
  */
 
 export interface SeasonalDiscountUsage {
@@ -40,10 +40,8 @@ export async function calculateSeasonalDiscountUsage(
   categoryId: string,
   seasonId: string
 ): Promise<number> {
-  // TODO: Future refactor - query xero_invoice_line_items instead of discount_usage
-  // for single source of truth
   const { data: usageRecords, error } = await supabase
-    .from('discount_usage')
+    .from('discount_usage_computed')
     .select('amount_saved')
     .eq('user_id', userId)
     .eq('discount_category_id', categoryId)

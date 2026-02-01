@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     
     if (category?.max_discount_per_user_per_season) {
       const { data: usageData, error: usageError } = await supabase
-        .from('discount_usage')
+        .from('discount_usage_computed')
         .select('amount_saved')
         .eq('user_id', user.id)
         .eq('discount_category_id', category.id)

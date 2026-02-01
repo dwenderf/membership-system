@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
 
 import { Elements } from '@stripe/react-stripe-js'
@@ -62,6 +63,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   
   const { showSuccess, showError } = useToast()
+  const router = useRouter()
 
   // Check if user has saved payment method
   React.useEffect(() => {
@@ -178,7 +180,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       }
       
       const result = await handlePaymentFlow(paymentData)
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to process payment')
       }
@@ -190,9 +192,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           'Membership Activated!',
           result.message || 'Your free membership has been activated successfully.'
         )
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         return
       }
-      
+
       // Set payment intent details
       setClientSecret(result.clientSecret!)
       setPaymentIntentId(result.paymentIntentId!)
@@ -266,11 +270,14 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     setPurchaseCompleted(true)
     setError(null)
     setIsLoading(false)
-    
+
     showSuccess(
       'Membership Activated!',
       'Your membership has been activated successfully.'
     )
+
+    // Redirect to dashboard after success
+    setTimeout(() => router.push('/user'), 2000)
   }
 
   // Handle payment error (called from SavedPaymentConfirmation)
@@ -305,7 +312,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       }
 
       const result = await handlePaymentFlow(paymentData)
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to process payment')
       }
@@ -317,9 +324,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           'Membership Activated!',
           result.message || 'Your free membership has been activated successfully.'
         )
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         return
       }
-      
+
       // Paid membership - show payment form
       setShowPaymentForm(true)
       setClientSecret(result.clientSecret!)
@@ -361,10 +370,10 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             </Link>
             <div>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => router.push('/user')}
                 className="text-sm text-gray-600 hover:text-gray-800 underline"
               >
-                Refresh to see updated membership status
+                Go to Dashboard
               </button>
             </div>
           </div>
@@ -733,12 +742,12 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                     
                     // Show success notification
                     showSuccess(
-                      'Purchase Successful!', 
+                      'Purchase Successful!',
                       `Your ${membership.name} membership is now active for ${selectedDuration} months. You can now register for teams and events!`
                     )
-                    
-                    // Scroll to top to show success section
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
+
+                    // Redirect to dashboard after success
+                    setTimeout(() => router.push('/user'), 2000)
                   }}
                   onError={(error) => {
                     setError(error)

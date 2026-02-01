@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
 
 import { Elements } from '@stripe/react-stripe-js'
@@ -127,6 +128,7 @@ export default function RegistrationPurchase({
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [surveyStarted, setSurveyStarted] = useState(false)
   const { showSuccess, showError } = useToast()
+  const router = useRouter()
 
   // Check if user has saved payment method and payment plan eligibility
   useEffect(() => {
@@ -495,9 +497,9 @@ export default function RegistrationPurchase({
           'Alternate Registration Complete!',
           'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
         )
-        
-        // Refresh the page to show updated status
-        setTimeout(() => window.location.reload(), 2000)
+
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An error occurred'
@@ -620,8 +622,8 @@ export default function RegistrationPurchase({
           'Registration Complete!',
           'Your free registration has been completed successfully.'
         )
-        // Refresh the page to show updated registration status
-        setTimeout(() => window.location.reload(), 2000)
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         return
       }
 
@@ -713,14 +715,14 @@ export default function RegistrationPurchase({
     setDiscountValidation(null)
     setError(null)
     setIsLoading(false)
-    
+
     showSuccess(
       'Registration Complete!',
       'Your registration has been completed successfully.'
     )
-    
-    // Refresh the page to show updated registration status
-    setTimeout(() => window.location.reload(), 2000)
+
+    // Redirect to dashboard after success
+    setTimeout(() => router.push('/user'), 2000)
   }
 
   // Handle payment error (called from SavedPaymentConfirmation)
@@ -934,7 +936,7 @@ export default function RegistrationPurchase({
             {categories.map((category) => {
               const categoryName = getCategoryDisplayName(category as any)
               const requiresMembership = registration.required_membership_id || category.required_membership_id
-              
+
               // Use the proper validation service to check BOTH registration and category level memberships
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                 registration.required_membership_id ?? null,
@@ -943,22 +945,28 @@ export default function RegistrationPurchase({
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
               const categoryPrice = category.price ?? 0
-              
+
               const isOnWaitlist = !!userWaitlistEntries[category.id]
 
+              // Check if user is already registered for this category
+              const isAlternateCategory = category.id === 'alternate'
+              const isRegularCategoryUnavailable = !isAlternateCategory && isAlreadyRegistered
+              const isAlternateCategoryUnavailable = isAlternateCategory && isUserAlreadyAlternate
+              const isUnavailableDueToExistingRegistration = isRegularCategoryUnavailable || isAlternateCategoryUnavailable
+
               return (
-                <label key={category.id} className={isOnWaitlist ? 'cursor-default' : 'cursor-pointer'}>
+                <label key={category.id} className={isOnWaitlist || isUnavailableDueToExistingRegistration ? 'cursor-default' : 'cursor-pointer'}>
                   <input
                     type="radio"
                     name="registrationCategory"
                     value={category.id}
-                    checked={selectedCategoryId === category.id || isOnWaitlist}
-                    onChange={() => !isOnWaitlist && setSelectedCategoryId(category.id)}
-                    disabled={isOnWaitlist}
+                    checked={selectedCategoryId === category.id || isOnWaitlist || isUnavailableDueToExistingRegistration}
+                    onChange={() => !(isOnWaitlist || isUnavailableDueToExistingRegistration) && setSelectedCategoryId(category.id)}
+                    disabled={isOnWaitlist || isUnavailableDueToExistingRegistration}
                     className="sr-only"
                   />
                   <div className={`border rounded-lg p-3 transition-colors ${
-                    isOnWaitlist
+                    isOnWaitlist || isUnavailableDueToExistingRegistration
                       ? 'border-gray-300 bg-gray-50 opacity-60'
                       : selectedCategoryId === category.id
                       ? hasRequiredMembership
@@ -971,13 +979,18 @@ export default function RegistrationPurchase({
                     <div className="flex justify-between">
                       <div>
                         <div className={`font-medium text-sm ${
-                          isOnWaitlist ? 'text-gray-700' :
+                          isOnWaitlist || isUnavailableDueToExistingRegistration ? 'text-gray-700' :
                           selectedCategoryId === category.id
                             ? hasRequiredMembership ? 'text-blue-900' : 'text-yellow-800'
                             : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
-                          {userWaitlistEntries[category.id] && (
+                          {isUnavailableDueToExistingRegistration && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Registered
+                            </span>
+                          )}
+                          {!isUnavailableDueToExistingRegistration && userWaitlistEntries[category.id] && (
                             <WaitlistBadge className="ml-2" />
                           )}
                         </div>
@@ -1029,7 +1042,7 @@ export default function RegistrationPurchase({
                         )}
                       </div>
                       <div className={`text-sm font-medium ${
-                        isOnWaitlist ? 'text-gray-700' :
+                        isOnWaitlist || isUnavailableDueToExistingRegistration ? 'text-gray-700' :
                         selectedCategoryId === category.id ? 'text-blue-900' : 'text-gray-900'
                       }`}>
                         ${(categoryPrice / 100).toFixed(2)}
@@ -1522,8 +1535,8 @@ export default function RegistrationPurchase({
                       'Alternate Registration Complete!',
                       'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
                     )
-                    // Refresh the page to show updated status
-                    setTimeout(() => window.location.reload(), 2000)
+                    // Redirect to dashboard after success
+                    setTimeout(() => router.push('/user'), 2000)
                   } catch (err) {
                     const errorMessage = err instanceof Error ? err.message : 'An error occurred'
                     setError(errorMessage)
@@ -1642,14 +1655,12 @@ export default function RegistrationPurchase({
                     
                     // Show success notification
                     showSuccess(
-                      'Registration Successful!', 
+                      'Registration Successful!',
                       `You are now registered for ${registration.name}.`
                     )
-                    
-                    // Scroll to top to show updated registration status
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                    // Refresh the page to show updated registrations (delayed for user to see success)
-                    setTimeout(() => window.location.reload(), 2000)
+
+                    // Redirect to dashboard after success
+                    setTimeout(() => router.push('/user'), 2000)
                   }}
                   onError={(error) => {
                     setError(error)

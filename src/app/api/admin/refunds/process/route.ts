@@ -277,6 +277,9 @@ export async function POST(request: NextRequest) {
 
         console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
 
+        // Note: Discount usage reversal is now tracked automatically via discount_usage_computed view
+        // which derives data from credit note line items in xero_invoice_line_items
+
         // Send refund notification email for zero-dollar refunds
         // (Zero-dollar refunds don't trigger Stripe webhooks, so we must send email here)
         await stageRefundNotificationEmail(refund.id, payment.user_id, paymentId)

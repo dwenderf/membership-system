@@ -173,7 +173,7 @@ export async function DELETE(
 
     // Check if code has been used
     const { data: usage } = await supabase
-      .from('discount_usage')
+      .from('discount_usage_computed')
       .select('id')
       .eq('discount_code_id', params.id)
       .limit(1)

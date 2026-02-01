@@ -8,6 +8,7 @@ interface DiscountCodeUsage {
   codeId: string
   amount: number
   date: string
+  registrationName: string | null
 }
 
 interface UserUsage {
@@ -294,6 +295,9 @@ export default function DiscountUsageReportPage() {
                                               <div>
                                                 <div className="font-medium text-gray-900">{codeUsage.code}</div>
                                                 <div className="text-sm text-gray-500">{formatDate(codeUsage.date)}</div>
+                                                {codeUsage.registrationName && (
+                                                  <div className="text-sm text-gray-500">{codeUsage.registrationName}</div>
+                                                )}
                                               </div>
                                               <div className="text-right">
                                                 <div className="font-semibold text-green-600">

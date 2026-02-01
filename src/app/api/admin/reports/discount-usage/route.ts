@@ -23,36 +23,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 })
     }
 
-    // Get discount usage with all related data
+    // Get discount usage with all related data from computed view
     const { data: discountUsage, error: usageError } = await adminSupabase
-      .from('discount_usage')
+      .from('discount_usage_computed')
       .select(`
         id,
         user_id,
+        user_first_name,
+        user_last_name,
+        user_email,
+        user_member_id,
         amount_saved,
         used_at,
-        seasons!inner (
-          id,
-          name,
-          start_date,
-          end_date
-        ),
-        discount_categories!inner (
-          id,
-          name,
-          max_discount_per_user_per_season
-        ),
-        discount_codes!inner (
-          id,
-          code
-        ),
-        users!inner (
-          id,
-          first_name,
-          last_name,
-          email,
-          member_id
-        )
+        season_id,
+        season_name,
+        season_start_date,
+        season_end_date,
+        discount_category_id,
+        discount_category_name,
+        discount_category_max_per_season,
+        discount_code_id,
+        discount_code,
+        registration_name
       `)
       .order('used_at', { ascending: false })
 
@@ -67,6 +59,7 @@ export async function GET(request: NextRequest) {
       codeId: string
       amount: number
       date: string
+      registrationName: string | null
     }
 
     interface UserUsage {
@@ -100,21 +93,22 @@ export async function GET(request: NextRequest) {
     const seasonMap = new Map<string, SeasonUsage>()
 
     discountUsage?.forEach((usage: any) => {
-      const seasonId = usage.seasons.id
-      const seasonName = usage.seasons.name
-      const seasonStartDate = usage.seasons.start_date
-      const seasonEndDate = usage.seasons.end_date
-      const categoryId = usage.discount_categories.id
-      const categoryName = usage.discount_categories.name
-      const maxPerUser = usage.discount_categories.max_discount_per_user_per_season
-      const userId = usage.users.id
-      const userName = `${usage.users.first_name || ''} ${usage.users.last_name || ''}`.trim() || 'Unknown'
-      const userEmail = usage.users.email
-      const memberId = usage.users.member_id
-      const codeId = usage.discount_codes.id
-      const code = usage.discount_codes.code
+      const seasonId = usage.season_id
+      const seasonName = usage.season_name
+      const seasonStartDate = usage.season_start_date
+      const seasonEndDate = usage.season_end_date
+      const categoryId = usage.discount_category_id || 'other'
+      const categoryName = usage.discount_category_name || 'Other'
+      const maxPerUser = usage.discount_category_max_per_season
+      const userId = usage.user_id
+      const userName = `${usage.user_first_name || ''} ${usage.user_last_name || ''}`.trim() || 'Unknown'
+      const userEmail = usage.user_email
+      const memberId = usage.user_member_id
+      const codeId = usage.discount_code_id || 'unknown'
+      const code = usage.discount_code || 'Unknown Code'
       const amount = usage.amount_saved
       const date = usage.used_at
+      const registrationName = usage.registration_name
 
       // Get or create season
       if (!seasonMap.has(seasonId)) {
@@ -165,7 +159,8 @@ export async function GET(request: NextRequest) {
           code,
           codeId,
           amount: 0,
-          date
+          date,
+          registrationName
         }
         userUsage.discountCodes.push(codeUsage)
       }

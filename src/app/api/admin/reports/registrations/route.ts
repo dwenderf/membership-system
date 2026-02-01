@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
       }).filter(Boolean) || []
 
       const { data: discountUsageData } = await adminSupabase
-        .from('discount_usage')
+        .from('discount_usage_computed')
         .select('user_id, discount_category_id, amount_saved')
         .in('user_id', waitlistUserIds)
 

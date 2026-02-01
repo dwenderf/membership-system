@@ -218,7 +218,8 @@ export class WaitlistPaymentService {
           item_id: null,
           item_amount: centsToCents(-discountAmount),
           description: `Discount: ${discountCode.code} - ${categoryName}`,
-          accounting_code: discountCode.category.accounting_code
+          accounting_code: discountCode.category.accounting_code,
+          discount_code_id: discountCode.id
         })
       }
 
@@ -323,10 +324,8 @@ export class WaitlistPaymentService {
         .update({ payment_id: paymentRecord.id })
         .eq('id', stagingRecord.id)
 
-      // Record discount usage if applicable
-      if (discountCodeId && discountAmount > 0) {
-        await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
-      }
+      // Note: Discount usage is now tracked via discount_usage_computed view
+      // which derives data from xero_invoice_line_items
 
       logger.logPaymentProcessing(
         'waitlist-charge-success',
@@ -413,7 +412,7 @@ export class WaitlistPaymentService {
           // Check per-code usage limits
           if (discount.usage_limit && discount.usage_limit > 0) {
             const { data: usageCount } = await supabase
-              .from('discount_usage')
+              .from('discount_usage_computed')
               .select('id')
               .eq('user_id', userId)
               .eq('discount_code_id', discountCodeId)
@@ -523,18 +522,8 @@ export class WaitlistPaymentService {
         .update({ payment_id: paymentRecord.id })
         .eq('id', stagingRecord.id)
 
-      // Record discount usage if applicable
-      if (discountCodeId) {
-        // Get the base price to record the discount amount using the passed categoryId
-        const { data: category } = await supabase
-          .from('registration_categories')
-          .select('price')
-          .eq('id', categoryId)
-          .single()
-
-        const discountAmount = category?.price || 0
-        await this.recordDiscountUsage(userId, discountCodeId, registrationId, discountAmount)
-      }
+      // Note: Discount usage is now tracked via discount_usage_computed view
+      // which derives data from xero_invoice_line_items
 
       // Trigger post-payment processing (emails, Xero sync)
       try {
@@ -598,78 +587,6 @@ export class WaitlistPaymentService {
         'error'
       )
       throw error
-    }
-  }
-
-  /**
-   * Record discount code usage
-   */
-  private static async recordDiscountUsage(
-    userId: string,
-    discountCodeId: string,
-    registrationId: string,
-    amountSaved: number
-  ): Promise<void> {
-    try {
-      const supabase = await createClient()
-
-      // Get discount code and registration details
-      const [discountResult, registrationResult] = await Promise.all([
-        supabase
-          .from('discount_codes')
-          .select('discount_category_id')
-          .eq('id', discountCodeId)
-          .single(),
-        supabase
-          .from('registrations')
-          .select('season_id')
-          .eq('id', registrationId)
-          .single()
-      ])
-
-      if (discountResult.error || registrationResult.error) {
-        throw new Error('Failed to get discount or registration details')
-      }
-
-      // Check if usage already exists to prevent duplicates
-      const { data: existingUsage } = await supabase
-        .from('discount_usage')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('discount_code_id', discountCodeId)
-        .eq('registration_id', registrationId)
-        .single()
-
-      if (!existingUsage) {
-        const { error: insertError } = await supabase
-          .from('discount_usage')
-          .insert({
-            user_id: userId,
-            discount_code_id: discountCodeId,
-            discount_category_id: discountResult.data.discount_category_id,
-            season_id: registrationResult.data.season_id,
-            amount_saved: amountSaved,
-            registration_id: registrationId
-          })
-
-        if (insertError) {
-          throw new Error(`Failed to record discount usage: ${insertError.message}`)
-        }
-      }
-    } catch (error) {
-      logger.logPaymentProcessing(
-        'discount-usage-recording-failed',
-        'Failed to record discount usage',
-        {
-          userId,
-          discountCodeId,
-          registrationId,
-          amountSaved,
-          error: error instanceof Error ? error.message : String(error)
-        },
-        'warn'
-      )
-      // Don't throw - this is not critical for the payment flow
     }
   }
 }

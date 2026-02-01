@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
 
 import { Elements } from '@stripe/react-stripe-js'
@@ -127,6 +128,7 @@ export default function RegistrationPurchase({
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [surveyStarted, setSurveyStarted] = useState(false)
   const { showSuccess, showError } = useToast()
+  const router = useRouter()
 
   // Check if user has saved payment method and payment plan eligibility
   useEffect(() => {
@@ -495,9 +497,9 @@ export default function RegistrationPurchase({
           'Alternate Registration Complete!',
           'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
         )
-        
-        // Refresh the page to show updated status
-        setTimeout(() => window.location.reload(), 2000)
+
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An error occurred'
@@ -620,8 +622,8 @@ export default function RegistrationPurchase({
           'Registration Complete!',
           'Your free registration has been completed successfully.'
         )
-        // Refresh the page to show updated registration status
-        setTimeout(() => window.location.reload(), 2000)
+        // Redirect to dashboard after success
+        setTimeout(() => router.push('/user'), 2000)
         return
       }
 
@@ -713,14 +715,14 @@ export default function RegistrationPurchase({
     setDiscountValidation(null)
     setError(null)
     setIsLoading(false)
-    
+
     showSuccess(
       'Registration Complete!',
       'Your registration has been completed successfully.'
     )
-    
-    // Refresh the page to show updated registration status
-    setTimeout(() => window.location.reload(), 2000)
+
+    // Redirect to dashboard after success
+    setTimeout(() => router.push('/user'), 2000)
   }
 
   // Handle payment error (called from SavedPaymentConfirmation)
@@ -1522,8 +1524,8 @@ export default function RegistrationPurchase({
                       'Alternate Registration Complete!',
                       'You\'ve been registered as an alternate. You\'ll be notified if selected for games.'
                     )
-                    // Refresh the page to show updated status
-                    setTimeout(() => window.location.reload(), 2000)
+                    // Redirect to dashboard after success
+                    setTimeout(() => router.push('/user'), 2000)
                   } catch (err) {
                     const errorMessage = err instanceof Error ? err.message : 'An error occurred'
                     setError(errorMessage)
@@ -1642,14 +1644,12 @@ export default function RegistrationPurchase({
                     
                     // Show success notification
                     showSuccess(
-                      'Registration Successful!', 
+                      'Registration Successful!',
                       `You are now registered for ${registration.name}.`
                     )
-                    
-                    // Scroll to top to show updated registration status
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                    // Refresh the page to show updated registrations (delayed for user to see success)
-                    setTimeout(() => window.location.reload(), 2000)
+
+                    // Redirect to dashboard after success
+                    setTimeout(() => router.push('/user'), 2000)
                   }}
                   onError={(error) => {
                     setError(error)

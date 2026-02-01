@@ -95,15 +95,15 @@ export async function GET(request: NextRequest) {
       const seasonName = usage.season_name
       const seasonStartDate = usage.season_start_date
       const seasonEndDate = usage.season_end_date
-      const categoryId = usage.discount_category_id
-      const categoryName = usage.discount_category_name
+      const categoryId = usage.discount_category_id || 'other'
+      const categoryName = usage.discount_category_name || 'Other'
       const maxPerUser = usage.discount_category_max_per_season
       const userId = usage.user_id
       const userName = `${usage.user_first_name || ''} ${usage.user_last_name || ''}`.trim() || 'Unknown'
       const userEmail = usage.user_email
       const memberId = usage.user_member_id
-      const codeId = usage.discount_code_id
-      const code = usage.discount_code
+      const codeId = usage.discount_code_id || 'unknown'
+      const code = usage.discount_code || 'Unknown Code'
       const amount = usage.amount_saved
       const date = usage.used_at
 

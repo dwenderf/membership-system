@@ -170,8 +170,8 @@ export async function GET(request: NextRequest) {
     }>()
 
     discountUsage?.forEach(usage => {
-      const categoryId = usage.discount_category_id || 'unknown'
-      const categoryName = usage.discount_category_name || 'Unknown Category'
+      const categoryId = usage.discount_category_id || 'other'
+      const categoryName = usage.discount_category_name || 'Other'
       const discountCode = usage.discount_code || 'Unknown Code'
       const customerName = usage.customer_name || 'Unknown'
       const amountSaved = usage.absolute_amount || 0

@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
 
     discountUsage?.forEach((usage: any) => {
       const seasonName = usage.season_name
-      const categoryName = usage.discount_category_name
-      const categoryId = usage.discount_category_id
+      const categoryName = usage.discount_category_name || 'Other'
+      const categoryId = usage.discount_category_id || 'other'
 
       if (!groupedUsage[seasonName]) {
         groupedUsage[seasonName] = {}

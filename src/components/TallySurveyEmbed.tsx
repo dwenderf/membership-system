@@ -151,14 +151,13 @@ export default function TallySurveyEmbed({
       
       try {
         const hiddenFields = {
-          hidden_user_id: userId,
-          hidden_email: userEmail,
-          hidden_first_name: firstName,
-          hidden_last_name: lastName,
-          hidden_category: registrationCategory,
-          email: userEmail, // Pre-fill visible email field
-          name: fullName,   // Pre-fill visible name field
-          ...(memberNumber && { hidden_member_number: memberNumber })
+          user_id: userId,
+          email: userEmail,
+          first_name: firstName,
+          last_name: lastName,
+          category: registrationCategory,
+          full_name: fullName,   // Pre-fill visible name field
+          ...(memberNumber && { member_number: memberNumber })
         }
 
         console.log('Opening popup with hidden fields:', hiddenFields)

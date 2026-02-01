@@ -6,7 +6,10 @@ interface TallySurveyEmbedProps {
   surveyId: string                    // e.g., "VLzWBv"
   userEmail: string                   // from users table
   userId: string                      // users.id (UUID)
-  fullName: string                    // first_name + ' ' + last_name
+  fullName: string                    // first_name + ' ' + last_name (for display)
+  firstName: string                   // user's first name
+  lastName: string                    // user's last name
+  registrationCategory: string        // registration category name
   memberNumber?: string               // member_id (e.g., "1002") - optional
   
   // Component behavior
@@ -21,6 +24,9 @@ export default function TallySurveyEmbed({
   userEmail,
   userId,
   fullName,
+  firstName,
+  lastName,
+  registrationCategory,
   memberNumber,
   layout = 'inline',
   onComplete,
@@ -147,7 +153,9 @@ export default function TallySurveyEmbed({
         const hiddenFields = {
           hidden_user_id: userId,
           hidden_email: userEmail,
-          hidden_full_name: fullName,
+          hidden_first_name: firstName,
+          hidden_last_name: lastName,
+          hidden_category: registrationCategory,
           email: userEmail, // Pre-fill visible email field
           name: fullName,   // Pre-fill visible name field
           ...(memberNumber && { hidden_member_number: memberNumber })
@@ -207,7 +215,7 @@ export default function TallySurveyEmbed({
         (window as any).Tally.closePopup(surveyId)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber])
+  }, [surveyId, userEmail, userId, fullName, firstName, lastName, registrationCategory, memberNumber])
 
   if (error) {
     return (
@@ -284,6 +292,8 @@ export default function TallySurveyEmbed({
             <strong>Debug Info:</strong>
             <div>Survey ID: {surveyId}</div>
             <div>User: {userEmail} ({userId})</div>
+            <div>Name: {firstName} {lastName}</div>
+            <div>Category: {registrationCategory}</div>
             <div>Member Number: {memberNumber || 'N/A'}</div>
           </div>
         )}

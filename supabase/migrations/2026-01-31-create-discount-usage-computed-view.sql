@@ -26,6 +26,7 @@ SELECT
         WHEN xi.invoice_type = 'ACCRECCREDIT' THEN xil.line_amount
     END AS amount_saved,
     xi.created_at AS used_at,
+    xi.payment_id,
     r.id AS registration_id,
     r.name AS registration_name,
     dc.code AS discount_code,
@@ -70,6 +71,7 @@ SELECT
         WHEN xi.invoice_type = 'ACCRECCREDIT' THEN xil.line_amount
     END AS amount_saved,
     xi.created_at AS used_at,
+    xi.payment_id,
     r.id AS registration_id,
     r.name AS registration_name,
     dc.code AS discount_code,

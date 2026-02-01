@@ -697,7 +697,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
     const { data: discountUsage } = await supabase
       .from('discount_usage_computed')
       .select('amount_saved, discount_code, discount_category_name, discount_category_accounting_code')
-      .eq('registration_id', paymentId)
+      .eq('payment_id', paymentId)
 
     const discountCodesUsed = discountUsage?.map((usage: any) => ({
       code: usage.discount_code,

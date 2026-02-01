@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
         discount_category_name,
         discount_category_max_per_season,
         discount_code_id,
-        discount_code
+        discount_code,
+        registration_name
       `)
       .order('used_at', { ascending: false })
 
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
       codeId: string
       amount: number
       date: string
+      registrationName: string | null
     }
 
     interface UserUsage {
@@ -106,6 +108,7 @@ export async function GET(request: NextRequest) {
       const code = usage.discount_code || 'Unknown Code'
       const amount = usage.amount_saved
       const date = usage.used_at
+      const registrationName = usage.registration_name
 
       // Get or create season
       if (!seasonMap.has(seasonId)) {
@@ -156,7 +159,8 @@ export async function GET(request: NextRequest) {
           code,
           codeId,
           amount: 0,
-          date
+          date,
+          registrationName
         }
         userUsage.discountCodes.push(codeUsage)
       }

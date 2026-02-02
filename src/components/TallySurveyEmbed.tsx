@@ -18,81 +18,6 @@ interface TallySurveyEmbedProps {
   onError?: (error: string) => void
 }
 
-// Mobile detection utility
-const isMobileDevice = () => {
-  if (typeof window === 'undefined') return false
-  return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-}
-
-// Mobile fullscreen survey overlay component
-const TallySurveyOverlay = ({ 
-  isOpen, 
-  onClose, 
-  surveyUrl, 
-  registrationName 
-}: { 
-  isOpen: boolean
-  onClose: () => void
-  surveyUrl: string
-  registrationName: string
-}) => {
-  if (!isOpen) return null
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.6)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header with Close button */}
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: "1px solid #e5e7eb"
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: "16px" }}>{registrationName} Survey</span>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            border: "none",
-            background: "transparent",
-            fontSize: "18px",
-            cursor: "pointer",
-            padding: "4px",
-            borderRadius: "4px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          aria-label="Close survey"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Tally iframe fills the rest of the screen */}
-      <div style={{ flex: 1, backgroundColor: "#ffffff" }}>
-        <iframe
-          src={surveyUrl}
-          title={`${registrationName} survey`}
-          style={{ border: "none", width: "100%", height: "100%" }}
-        />
-      </div>
-    </div>
-  )
-}
-
 export default function TallySurveyEmbed({
   surveyId,
   userEmail,
@@ -111,7 +36,6 @@ export default function TallySurveyEmbed({
   const [surveyOpened, setSurveyOpened] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [existingSurveyCompleted, setExistingSurveyCompleted] = useState(false)
-  const [showMobileOverlay, setShowMobileOverlay] = useState(false)
 
   // Use refs to store stable callback references
   const onCompleteRef = useRef(onComplete)
@@ -124,25 +48,6 @@ export default function TallySurveyEmbed({
     onCloseRef.current = onClose
     onErrorRef.current = onError
   })
-
-  // Build survey URL with hidden fields for mobile iframe
-  const buildSurveyUrl = () => {
-    const baseUrl = `https://tally.so/r/${surveyId}`
-    const params = new URLSearchParams({
-      user_id: userId,
-      email: userEmail,
-      first_name: firstName,
-      last_name: lastName,
-      category: registrationCategory,
-      full_name: fullName
-    })
-    
-    if (memberNumber) {
-      params.set('member_number', memberNumber)
-    }
-    
-    return `${baseUrl}?${params.toString()}`
-  }
 
   // Check if user has already completed this survey
   const checkExistingSurveyCompletion = async () => {
@@ -201,44 +106,33 @@ export default function TallySurveyEmbed({
         return
       }
       
-      // Check if mobile at time of survey opening
-      const isMobileDevice = typeof window !== 'undefined' && 
-        (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
-      
       try {
         setIsLoading(true)
         setError(null)
 
-        console.log('Loading survey for:', isMobileDevice ? 'mobile' : 'desktop', 'survey:', surveyId)
+        console.log('Loading Tally script for survey:', surveyId)
 
-        if (isMobileDevice) {
-          // Mobile: Use fullscreen overlay with iframe
-          setShowMobileOverlay(true)
-          setSurveyOpened(true)
-          setIsLoading(false)
-        } else {
-          // Desktop: Use Tally popup API
-          if (typeof window !== 'undefined' && !(window as any).Tally) {
-            console.log('Loading Tally embed script...')
-            const script = document.createElement('script')
-            script.src = 'https://tally.so/widgets/embed.js'
-            script.async = true
-            script.onload = () => {
-              console.log('Tally embed script loaded successfully')
-              openDesktopSurveyPopup()
-            }
-            script.onerror = () => {
-              const errorMsg = 'Failed to load Tally embed script'
-              console.error(errorMsg)
-              setError(errorMsg)
-              setIsLoading(false)
-              onErrorRef.current?.(errorMsg)
-            }
-            document.body.appendChild(script)
-          } else {
-            console.log('Tally script already loaded')
-            openDesktopSurveyPopup()
+        // Both mobile and desktop use Tally popup API for consistent hidden field handling
+        if (typeof window !== 'undefined' && !(window as any).Tally) {
+          console.log('Loading Tally embed script...')
+          const script = document.createElement('script')
+          script.src = 'https://tally.so/widgets/embed.js'
+          script.async = true
+          script.onload = () => {
+            console.log('Tally embed script loaded successfully')
+            openSurveyPopup()
           }
+          script.onerror = () => {
+            const errorMsg = 'Failed to load Tally embed script'
+            console.error(errorMsg)
+            setError(errorMsg)
+            setIsLoading(false)
+            onErrorRef.current?.(errorMsg)
+          }
+          document.body.appendChild(script)
+        } else {
+          console.log('Tally script already loaded')
+          openSurveyPopup()
         }
       } catch (err) {
         console.error('Error in loadTallyAndOpenSurvey:', err)
@@ -249,8 +143,12 @@ export default function TallySurveyEmbed({
       }
     }
 
-    const openDesktopSurveyPopup = () => {
+    const openSurveyPopup = () => {
       console.log('Opening Tally popup for survey ID:', surveyId)
+      
+      // Check if mobile for styling
+      const isMobileDevice = typeof window !== 'undefined' && 
+        (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
       
       try {
         const hiddenFields = {
@@ -265,9 +163,11 @@ export default function TallySurveyEmbed({
 
         console.log('Opening popup with hidden fields:', hiddenFields)
 
-        ;(window as any).Tally.openPopup(surveyId, {
+        // Configure popup options based on device
+        const popupOptions = {
           layout: 'modal',
-          width: 700,
+          width: isMobileDevice ? window.innerWidth : 700,
+          height: isMobileDevice ? window.innerHeight : undefined,
           autoClose: 2000,
           emoji: {
             text: '🏳️‍🌈',
@@ -291,7 +191,9 @@ export default function TallySurveyEmbed({
             await storeSurveyResponse(payload)
             onCompleteRef.current?.(payload)
           }
-        })
+        }
+
+        ;(window as any).Tally.openPopup(surveyId, popupOptions)
 
       } catch (err) {
         console.error('Error opening Tally popup:', err)
@@ -302,14 +204,6 @@ export default function TallySurveyEmbed({
       }
     }
 
-    // Handle mobile survey close
-    const handleMobileClose = () => {
-      console.log('Mobile survey closed')
-      setShowMobileOverlay(false)
-      setSurveyOpened(false)
-      onCloseRef.current?.()
-    }
-
     if (surveyId && userEmail) {
       loadTallyAndOpenSurvey()
     }
@@ -318,9 +212,6 @@ export default function TallySurveyEmbed({
     return () => {
       if (surveyOpened && (window as any).Tally?.closePopup) {
         (window as any).Tally.closePopup(surveyId)
-      }
-      if (showMobileOverlay) {
-        setShowMobileOverlay(false)
       }
     }
   }, [surveyId, userEmail, userId, fullName, firstName, lastName, registrationCategory, memberNumber])
@@ -412,33 +303,17 @@ export default function TallySurveyEmbed({
   // Survey is active (popup open)
   if (surveyOpened) {
     return (
-      <>
-        <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center">
-            <svg className="h-5 w-5 text-blue-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-            <h3 className="text-sm font-medium text-blue-800">Survey Active</h3>
-          </div>
-          <div className="mt-2 text-sm text-blue-700">
-            Please complete the survey to continue with registration.
-          </div>
+      <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center">
+          <svg className="h-5 w-5 text-blue-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-sm font-medium text-blue-800">Survey Active</h3>
         </div>
-
-        {/* Mobile fullscreen overlay */}
-        {showMobileOverlay && (
-          <TallySurveyOverlay
-            isOpen={showMobileOverlay}
-            onClose={() => {
-              setShowMobileOverlay(false)
-              setSurveyOpened(false)
-              onCloseRef.current?.()
-            }}
-            surveyUrl={buildSurveyUrl()}
-            registrationName={registrationCategory}
-          />
-        )}
-      </>
+        <div className="mt-2 text-sm text-blue-700">
+          Please complete the survey to continue with registration.
+        </div>
+      </div>
     )
   }
 

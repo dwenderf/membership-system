@@ -1267,11 +1267,9 @@ export default function RegistrationPurchase({
               surveyId={registration.survey_id}
               userEmail={userEmail}
               userId={userId}
-              fullName={`${firstName} ${lastName}`.trim()}
               firstName={firstName}
               lastName={lastName}
               registrationCategory={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : 'Unknown'}
-              layout="inline"
               onComplete={handleSurveyComplete}
               onClose={handleSurveyClose}
               onError={(error) => setError(`Survey error: ${error}`)}

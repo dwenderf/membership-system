@@ -6,11 +6,12 @@ interface TallySurveyEmbedProps {
   surveyId: string                    // e.g., "VLzWBv"
   userEmail: string                   // from users table
   userId: string                      // users.id (UUID)
-  fullName: string                    // first_name + ' ' + last_name
+  firstName: string                   // user's first name
+  lastName: string                    // user's last name
+  registrationCategory: string        // registration category name
   memberNumber?: string               // member_id (e.g., "1002") - optional
   
   // Component behavior
-  layout?: 'inline' | 'modal'         // Default: 'inline'
   onComplete?: (responseData: any) => void
   onClose?: () => void
   onError?: (error: string) => void
@@ -20,9 +21,10 @@ export default function TallySurveyEmbed({
   surveyId,
   userEmail,
   userId,
-  fullName,
+  firstName,
+  lastName,
+  registrationCategory,
   memberNumber,
-  layout = 'inline',
   onComplete,
   onClose,
   onError
@@ -94,6 +96,103 @@ export default function TallySurveyEmbed({
     }
   }
 
+  // Mobile fullpage embed implementation
+  const openMobileFullpageSurvey = () => {
+    console.log('Opening mobile fullpage survey for survey ID:', surveyId)
+    
+    // Create URL with hidden field parameters
+    const params = new URLSearchParams({
+      user_id: userId,
+      email: userEmail,
+      first_name: firstName,
+      last_name: lastName,
+      category: registrationCategory,
+      ...(memberNumber && { member_number: memberNumber })
+    })
+    
+    // Create fullscreen overlay
+    const overlay = document.createElement('div')
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      z-index: 10000;
+      overflow: hidden;
+    `
+    
+    // Add close button
+    const closeButton = document.createElement('button')
+    closeButton.innerHTML = '✕'
+    closeButton.style.cssText = `
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: rgba(0, 0, 0, 0.1);
+      color: #666;
+      font-size: 20px;
+      font-weight: bold;
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    `
+    
+    closeButton.addEventListener('mouseenter', () => {
+      closeButton.style.background = 'rgba(0, 0, 0, 0.2)'
+    })
+    closeButton.addEventListener('mouseleave', () => {
+      closeButton.style.background = 'rgba(0, 0, 0, 0.1)'
+    })
+    
+    // Create iframe for fullpage survey
+    const iframe = document.createElement('iframe')
+    iframe.src = `https://tally.so/r/${surveyId}?${params.toString()}`
+    iframe.style.cssText = `
+      width: 100%;
+      height: 100%;
+      border: none;
+      padding-top: 60px;
+      box-sizing: border-box;
+    `
+    
+    const closeOverlay = () => {
+      document.body.removeChild(overlay)
+      setSurveyOpened(false)
+      onCloseRef.current?.()
+    }
+    
+    closeButton.onclick = closeOverlay
+    overlay.appendChild(closeButton)
+    overlay.appendChild(iframe)
+    document.body.appendChild(overlay)
+    
+    setSurveyOpened(true)
+    setIsLoading(false)
+    
+    // Listen for form submission via postMessage
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin === 'https://tally.so' && event.data?.type === 'TALLY_FORM_SUBMIT') {
+        console.log('Mobile survey submitted:', event.data)
+        window.removeEventListener('message', handleMessage)
+        setSurveyCompleted(true)
+        setSurveyOpened(false)
+        document.body.removeChild(overlay)
+        await storeSurveyResponse(event.data)
+        onCompleteRef.current?.(event.data)
+      }
+    }
+    window.addEventListener('message', handleMessage)
+  }
+
   useEffect(() => {
     const loadTallyAndOpenSurvey = async () => {
       // First check if user has already completed the survey
@@ -101,35 +200,44 @@ export default function TallySurveyEmbed({
       if (alreadyCompleted) {
         return
       }
+      
       try {
         setIsLoading(true)
         setError(null)
 
         console.log('Loading Tally script for survey:', surveyId)
 
-        // Check if Tally script is already loaded
-        if (typeof window !== 'undefined' && !(window as any).Tally) {
-          console.log('Loading Tally embed script...')
-          // Dynamically load Tally embed script
-          const script = document.createElement('script')
-          script.src = 'https://tally.so/widgets/embed.js'
-          script.async = true
-          script.onload = () => {
-            console.log('Tally embed script loaded successfully')
-            openSurveyPopup()
-          }
-          script.onerror = () => {
-            const errorMsg = 'Failed to load Tally embed script'
-            console.error(errorMsg)
-            setError(errorMsg)
-            setIsLoading(false)
-            onErrorRef.current?.(errorMsg)
-          }
-          document.body.appendChild(script)
+        // Check if mobile for implementation choice
+        const isMobileDevice = typeof window !== 'undefined' && 
+          (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
+        
+        if (isMobileDevice) {
+          // Mobile: Use fullpage embed for better UX
+          console.log('Using mobile fullpage implementation')
+          openMobileFullpageSurvey()
         } else {
-          // Script already loaded
-          console.log('Tally script already loaded')
-          openSurveyPopup()
+          // Desktop: Use popup API for consistent behavior
+          if (typeof window !== 'undefined' && !(window as any).Tally) {
+            console.log('Loading Tally embed script...')
+            const script = document.createElement('script')
+            script.src = 'https://tally.so/widgets/embed.js'
+            script.async = true
+            script.onload = () => {
+              console.log('Tally embed script loaded successfully')
+              openDesktopPopupSurvey()
+            }
+            script.onerror = () => {
+              const errorMsg = 'Failed to load Tally embed script'
+              console.error(errorMsg)
+              setError(errorMsg)
+              setIsLoading(false)
+              onErrorRef.current?.(errorMsg)
+            }
+            document.body.appendChild(script)
+          } else {
+            console.log('Tally script already loaded')
+            openDesktopPopupSurvey()
+          }
         }
       } catch (err) {
         console.error('Error in loadTallyAndOpenSurvey:', err)
@@ -140,25 +248,25 @@ export default function TallySurveyEmbed({
       }
     }
 
-    const openSurveyPopup = () => {
-      console.log('Opening Tally popup for survey ID:', surveyId)
+    const openDesktopPopupSurvey = () => {
+      console.log('Opening desktop popup for survey ID:', surveyId)
       
       try {
         const hiddenFields = {
-          hidden_user_id: userId,
-          hidden_email: userEmail,
-          hidden_full_name: fullName,
-          email: userEmail, // Pre-fill visible email field
-          name: fullName,   // Pre-fill visible name field
-          ...(memberNumber && { hidden_member_number: memberNumber })
+          user_id: userId,
+          email: userEmail,
+          first_name: firstName,
+          last_name: lastName,
+          category: registrationCategory,
+          ...(memberNumber && { member_number: memberNumber })
         }
 
         console.log('Opening popup with hidden fields:', hiddenFields)
 
-        ;(window as any).Tally.openPopup(surveyId, {
+        const popupOptions = {
           layout: 'modal',
           width: 700,
-          autoClose: 2000, // Close 2 seconds after submit
+          autoClose: 2000,
           emoji: {
             text: '🏳️‍🌈',
             animation: 'wave'
@@ -172,20 +280,18 @@ export default function TallySurveyEmbed({
           onClose: () => {
             console.log('Survey popup closed')
             setSurveyOpened(false)
-            // Call the parent close handler to reset survey state
             onCloseRef.current?.()
           },
           onSubmit: async (payload: any) => {
             console.log('Survey submitted:', payload)
             setSurveyCompleted(true)
             setSurveyOpened(false)
-            
-            // Store the response in the database
             await storeSurveyResponse(payload)
-            
             onCompleteRef.current?.(payload)
           }
-        })
+        }
+
+        ;(window as any).Tally.openPopup(surveyId, popupOptions)
 
       } catch (err) {
         console.error('Error opening Tally popup:', err)
@@ -202,12 +308,11 @@ export default function TallySurveyEmbed({
 
     // Cleanup function
     return () => {
-      // Close popup if component unmounts
       if (surveyOpened && (window as any).Tally?.closePopup) {
         (window as any).Tally.closePopup(surveyId)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, memberNumber])
+  }, [surveyId, userEmail, userId, firstName, lastName, registrationCategory, memberNumber])
 
   if (error) {
     return (
@@ -284,6 +389,8 @@ export default function TallySurveyEmbed({
             <strong>Debug Info:</strong>
             <div>Survey ID: {surveyId}</div>
             <div>User: {userEmail} ({userId})</div>
+            <div>Name: {firstName} {lastName}</div>
+            <div>Category: {registrationCategory}</div>
             <div>Member Number: {memberNumber || 'N/A'}</div>
           </div>
         )}

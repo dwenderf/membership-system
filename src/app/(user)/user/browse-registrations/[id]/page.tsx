@@ -277,7 +277,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
               const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
               return (
-                <div key={consolidatedMembership.membershipId} className="text-sm">
+                <div key={String(consolidatedMembership.membershipId)} className="text-sm">
                   <span className="font-medium text-yellow-900">
                     {consolidatedMembership.membership?.name}
                   </span>
@@ -448,7 +448,8 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                 }}
                 userEmail={user.email || ''}
                 userId={user.id}
-                fullName={`${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim()}
+                firstName={userProfile?.first_name || ''}
+                lastName={userProfile?.last_name || ''}
                 activeMemberships={activeMembershipsForValidation}
                 isEligible={hasEligibleMembership}
                 isLgbtq={userProfile?.is_lgbtq || false}

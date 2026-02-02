@@ -78,7 +78,8 @@ interface RegistrationPurchaseProps {
   registration: Registration
   userEmail: string
   userId: string
-  fullName: string
+  firstName: string
+  lastName: string
   activeMemberships?: UserMembership[]
   isEligible: boolean
   isLgbtq: boolean
@@ -90,7 +91,8 @@ export default function RegistrationPurchase({
   registration, 
   userEmail, 
   userId,
-  fullName,
+  firstName,
+  lastName,
   activeMemberships = [],
   isEligible,
   isLgbtq,
@@ -1265,8 +1267,9 @@ export default function RegistrationPurchase({
               surveyId={registration.survey_id}
               userEmail={userEmail}
               userId={userId}
-              fullName={fullName}
-              layout="inline"
+              firstName={firstName}
+              lastName={lastName}
+              registrationCategory={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : 'Unknown'}
               onComplete={handleSurveyComplete}
               onClose={handleSurveyClose}
               onError={(error) => setError(`Survey error: ${error}`)}

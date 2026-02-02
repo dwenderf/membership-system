@@ -77,6 +77,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch registration data' }, { status: 500 })
       }
 
+      // Get the registration's season_id first (needed for discount usage filtering)
+      const { data: registrationInfo } = await adminSupabase
+        .from('registrations')
+        .select('season_id')
+        .eq('id', registrationId)
+        .single()
+
+      const registrationSeasonId = registrationInfo?.season_id
+
       // Get waitlist details for this registration
       const { data: waitlistData, error: waitlistError } = await adminSupabase
         .from('waitlists')
@@ -166,15 +175,23 @@ export async function GET(request: NextRequest) {
       }
 
       // Get discount usage for waitlist users to check seasonal limits
+      // IMPORTANT: Filter by season_id to only count usage for THIS season
       const waitlistUserIds = waitlistData?.map(w => {
         const user = Array.isArray(w.users) ? w.users[0] : w.users
         return user?.id
       }).filter(Boolean) || []
 
-      const { data: discountUsageData } = await adminSupabase
+      let discountUsageQuery = adminSupabase
         .from('discount_usage_computed')
         .select('user_id, discount_category_id, amount_saved')
         .in('user_id', waitlistUserIds)
+
+      // Filter by the registration's season to get correct seasonal usage
+      if (registrationSeasonId) {
+        discountUsageQuery = discountUsageQuery.eq('season_id', registrationSeasonId)
+      }
+
+      const { data: discountUsageData } = await discountUsageQuery
 
       // Group usage by user and category
       const usageByUserAndCategory = new Map()

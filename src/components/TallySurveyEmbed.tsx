@@ -111,7 +111,6 @@ export default function TallySurveyEmbed({
   const [surveyOpened, setSurveyOpened] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [existingSurveyCompleted, setExistingSurveyCompleted] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [showMobileOverlay, setShowMobileOverlay] = useState(false)
 
   // Use refs to store stable callback references
@@ -125,11 +124,6 @@ export default function TallySurveyEmbed({
     onCloseRef.current = onClose
     onErrorRef.current = onError
   })
-
-  // Check mobile device on mount
-  useEffect(() => {
-    setIsMobile(isMobileDevice())
-  }, [])
 
   // Build survey URL with hidden fields for mobile iframe
   const buildSurveyUrl = () => {
@@ -207,13 +201,17 @@ export default function TallySurveyEmbed({
         return
       }
       
+      // Check if mobile at time of survey opening
+      const isMobileDevice = typeof window !== 'undefined' && 
+        (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
+      
       try {
         setIsLoading(true)
         setError(null)
 
-        console.log('Loading survey for:', isMobile ? 'mobile' : 'desktop', 'survey:', surveyId)
+        console.log('Loading survey for:', isMobileDevice ? 'mobile' : 'desktop', 'survey:', surveyId)
 
-        if (isMobile) {
+        if (isMobileDevice) {
           // Mobile: Use fullscreen overlay with iframe
           setShowMobileOverlay(true)
           setSurveyOpened(true)
@@ -312,20 +310,20 @@ export default function TallySurveyEmbed({
       onCloseRef.current?.()
     }
 
-    if (surveyId && userEmail && isMobile !== undefined) {
+    if (surveyId && userEmail) {
       loadTallyAndOpenSurvey()
     }
 
     // Cleanup function
     return () => {
-      if (surveyOpened && !isMobile && (window as any).Tally?.closePopup) {
+      if (surveyOpened && (window as any).Tally?.closePopup) {
         (window as any).Tally.closePopup(surveyId)
       }
       if (showMobileOverlay) {
         setShowMobileOverlay(false)
       }
     }
-  }, [surveyId, userEmail, userId, fullName, firstName, lastName, registrationCategory, memberNumber, isMobile])
+  }, [surveyId, userEmail, userId, fullName, firstName, lastName, registrationCategory, memberNumber])
 
   if (error) {
     return (
@@ -428,7 +426,7 @@ export default function TallySurveyEmbed({
         </div>
 
         {/* Mobile fullscreen overlay */}
-        {isMobile && (
+        {showMobileOverlay && (
           <TallySurveyOverlay
             isOpen={showMobileOverlay}
             onClose={() => {

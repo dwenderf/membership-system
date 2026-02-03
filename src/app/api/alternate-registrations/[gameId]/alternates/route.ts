@@ -32,7 +32,8 @@ export async function GET(
           name,
           alternate_price,
           alternate_accounting_code,
-          allow_alternates
+          allow_alternates,
+          season_id
         )
       `)
       .eq('id', gameId)
@@ -124,11 +125,21 @@ export async function GET(
     const selectedUserIds = new Set(existingSelections?.map(s => s.user_id) || [])
 
     // Get discount usage for each user to check limits
+    // IMPORTANT: Filter by season_id to only count usage for THIS season
     const userIds = alternates?.map(alt => alt.user_id) || []
-    const { data: discountUsage } = await adminSupabase
+    const registrationSeasonId = registration?.season_id
+
+    let discountUsageQuery = adminSupabase
       .from('discount_usage_computed')
       .select('user_id, discount_category_id, amount_saved')
       .in('user_id', userIds)
+
+    // Filter by the registration's season to get correct seasonal usage
+    if (registrationSeasonId) {
+      discountUsageQuery = discountUsageQuery.eq('season_id', registrationSeasonId)
+    }
+
+    const { data: discountUsage } = await discountUsageQuery
 
     // Group usage by user and category
     const usageByUserAndCategory = new Map()

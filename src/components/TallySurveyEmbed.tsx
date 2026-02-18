@@ -96,103 +96,6 @@ export default function TallySurveyEmbed({
     }
   }
 
-  // Mobile fullpage embed implementation
-  const openMobileFullpageSurvey = () => {
-    console.log('Opening mobile fullpage survey for survey ID:', surveyId)
-    
-    // Create URL with hidden field parameters
-    const params = new URLSearchParams({
-      user_id: userId,
-      email: userEmail,
-      first_name: firstName,
-      last_name: lastName,
-      category: registrationCategory,
-      ...(memberNumber && { member_number: memberNumber })
-    })
-    
-    // Create fullscreen overlay
-    const overlay = document.createElement('div')
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: white;
-      z-index: 10000;
-      overflow: hidden;
-    `
-    
-    // Add close button
-    const closeButton = document.createElement('button')
-    closeButton.innerHTML = '✕'
-    closeButton.style.cssText = `
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 40px;
-      height: 40px;
-      border: none;
-      background: rgba(0, 0, 0, 0.1);
-      color: #666;
-      font-size: 20px;
-      font-weight: bold;
-      border-radius: 50%;
-      cursor: pointer;
-      z-index: 10001;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s;
-    `
-    
-    closeButton.addEventListener('mouseenter', () => {
-      closeButton.style.background = 'rgba(0, 0, 0, 0.2)'
-    })
-    closeButton.addEventListener('mouseleave', () => {
-      closeButton.style.background = 'rgba(0, 0, 0, 0.1)'
-    })
-    
-    // Create iframe for fullpage survey
-    const iframe = document.createElement('iframe')
-    iframe.src = `https://tally.so/r/${surveyId}?${params.toString()}`
-    iframe.style.cssText = `
-      width: 100%;
-      height: 100%;
-      border: none;
-      padding-top: 60px;
-      box-sizing: border-box;
-    `
-    
-    const closeOverlay = () => {
-      document.body.removeChild(overlay)
-      setSurveyOpened(false)
-      onCloseRef.current?.()
-    }
-    
-    closeButton.onclick = closeOverlay
-    overlay.appendChild(closeButton)
-    overlay.appendChild(iframe)
-    document.body.appendChild(overlay)
-    
-    setSurveyOpened(true)
-    setIsLoading(false)
-    
-    // Listen for form submission via postMessage
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.origin === 'https://tally.so' && event.data?.type === 'TALLY_FORM_SUBMIT') {
-        console.log('Mobile survey submitted:', event.data)
-        window.removeEventListener('message', handleMessage)
-        setSurveyCompleted(true)
-        setSurveyOpened(false)
-        document.body.removeChild(overlay)
-        await storeSurveyResponse(event.data)
-        onCompleteRef.current?.(event.data)
-      }
-    }
-    window.addEventListener('message', handleMessage)
-  }
-
   useEffect(() => {
     const loadTallyAndOpenSurvey = async () => {
       // First check if user has already completed the survey
@@ -200,44 +103,35 @@ export default function TallySurveyEmbed({
       if (alreadyCompleted) {
         return
       }
-      
+
       try {
         setIsLoading(true)
         setError(null)
 
         console.log('Loading Tally script for survey:', surveyId)
 
-        // Check if mobile for implementation choice
-        const isMobileDevice = typeof window !== 'undefined' && 
-          (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
-        
-        if (isMobileDevice) {
-          // Mobile: Use fullpage embed for better UX
-          console.log('Using mobile fullpage implementation')
-          openMobileFullpageSurvey()
-        } else {
-          // Desktop: Use popup API for consistent behavior
-          if (typeof window !== 'undefined' && !(window as any).Tally) {
-            console.log('Loading Tally embed script...')
-            const script = document.createElement('script')
-            script.src = 'https://tally.so/widgets/embed.js'
-            script.async = true
-            script.onload = () => {
-              console.log('Tally embed script loaded successfully')
-              openDesktopPopupSurvey()
-            }
-            script.onerror = () => {
-              const errorMsg = 'Failed to load Tally embed script'
-              console.error(errorMsg)
-              setError(errorMsg)
-              setIsLoading(false)
-              onErrorRef.current?.(errorMsg)
-            }
-            document.body.appendChild(script)
-          } else {
-            console.log('Tally script already loaded')
-            openDesktopPopupSurvey()
+        // Use Tally popup API for both desktop and mobile
+        // Mobile gets full-screen appearance via CSS overrides in globals.css
+        if (typeof window !== 'undefined' && !(window as any).Tally) {
+          console.log('Loading Tally embed script...')
+          const script = document.createElement('script')
+          script.src = 'https://tally.so/widgets/embed.js'
+          script.async = true
+          script.onload = () => {
+            console.log('Tally embed script loaded successfully')
+            openPopupSurvey()
           }
+          script.onerror = () => {
+            const errorMsg = 'Failed to load Tally embed script'
+            console.error(errorMsg)
+            setError(errorMsg)
+            setIsLoading(false)
+            onErrorRef.current?.(errorMsg)
+          }
+          document.body.appendChild(script)
+        } else {
+          console.log('Tally script already loaded')
+          openPopupSurvey()
         }
       } catch (err) {
         console.error('Error in loadTallyAndOpenSurvey:', err)
@@ -248,8 +142,8 @@ export default function TallySurveyEmbed({
       }
     }
 
-    const openDesktopPopupSurvey = () => {
-      console.log('Opening desktop popup for survey ID:', surveyId)
+    const openPopupSurvey = () => {
+      console.log('Opening popup survey for survey ID:', surveyId)
       
       try {
         const hiddenFields = {

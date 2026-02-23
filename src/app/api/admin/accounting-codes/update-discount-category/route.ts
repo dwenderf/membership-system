@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
           .select()
 
         if (error) {
-          console.error(`Error updating category ${update.category_id}:`, error)
+          console.error('Error updating category:', update.category_id, error)
           errorCount++
           results.push({ 
             category_id: update.category_id, 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           })
         }
       } catch (error) {
-        console.error(`Error processing update for ${update.category_id}:`, error)
+        console.error('Error processing update for category:', update.category_id, error)
         errorCount++
         results.push({ 
           category_id: update.category_id, 

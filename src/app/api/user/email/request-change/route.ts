@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
  * Validate email format
  */
 function isValidEmail(email: string): boolean {
+  if (email.length > 254) return false
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }

@@ -190,7 +190,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
 
   // Check membership eligibility
   const registrationMembershipId = registration.required_membership_id || null
-  const categoryMembershipIds = registration.registration_categories
+  const categoryMembershipIds: string[] = registration.registration_categories
     ?.map((cat: any) => cat.required_membership_id)
     .filter((id: string | null): id is string => id !== null) || []
   const uniqueCategoryMembershipIds = [...new Set(categoryMembershipIds)]

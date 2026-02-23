@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
           .select()
 
         if (error) {
-          console.error(`Error updating membership ${update.membership_id}:`, error)
+          console.error('Error updating membership:', update.membership_id, error)
           errorCount++
           results.push({ 
             membership_id: update.membership_id, 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           })
         }
       } catch (error) {
-        console.error(`Error processing update for ${update.membership_id}:`, error)
+        console.error('Error processing update for membership:', update.membership_id, error)
         errorCount++
         results.push({ 
           membership_id: update.membership_id, 

@@ -50,8 +50,8 @@ export default async function UserDashboardPage() {
         const registration = reg.registration
         if (!registration) return false
 
-        // For events and scrimmages with dates set, use the event end_date
-        if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+        // For events, scrimmages, and tournaments with dates set, use the event end_date
+        if ((registration.type === 'event' || registration.type === 'scrimmage' || registration.type === 'tournament') && registration.end_date) {
           const eventEndDate = new Date(registration.end_date)
           return eventEndDate >= new Date()
         }
@@ -209,7 +209,7 @@ export default async function UserDashboardPage() {
   const eventRegistrations = userRegistrations.filter((reg: any) => {
     const registration = reg.registration
     if (!registration) return false
-    return registration.type === 'event' || registration.type === 'scrimmage'
+    return registration.type === 'event' || registration.type === 'scrimmage' || registration.type === 'tournament'
   })
 
   return (
@@ -438,11 +438,11 @@ export default async function UserDashboardPage() {
                userAlternateSelections?.some(sel => {
                  const reg = sel.alternate_registration?.registration
                  const gameDate = sel.alternate_registration?.game_date
-                 return reg && (reg.type === 'event' || reg.type === 'scrimmage') && gameDate && new Date(gameDate) >= now
+                 return reg && (reg.type === 'event' || reg.type === 'scrimmage' || reg.type === 'tournament') && gameDate && new Date(gameDate) >= now
                }) ||
                userWaitlistEntries?.some(w => {
                  const reg = w.registration
-                 return reg && (reg.type === 'event' || reg.type === 'scrimmage') && reg.end_date && new Date(reg.end_date) >= now
+                 return reg && (reg.type === 'event' || reg.type === 'scrimmage' || reg.type === 'tournament') && reg.end_date && new Date(reg.end_date) >= now
                }) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show event/scrimmage registrations */}
@@ -456,7 +456,7 @@ export default async function UserDashboardPage() {
                           {reg?.name}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          <RegistrationTypeBadge type={reg?.type as 'scrimmage' | 'event'} />
+                          <RegistrationTypeBadge type={reg?.type as 'scrimmage' | 'event' | 'tournament'} />
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(registration.registration_category)}
@@ -489,7 +489,7 @@ export default async function UserDashboardPage() {
                   {userAlternateSelections?.filter(sel => {
                     const altReg = sel.alternate_registration
                     const reg = altReg?.registration
-                    if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage')) return false
+                    if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage' && reg.type !== 'tournament')) return false
                     const gameDate = altReg?.game_date
                     if (!gameDate || new Date(gameDate) < now) return false
                     // Only show if not already in event registrations
@@ -533,7 +533,7 @@ export default async function UserDashboardPage() {
                     const alternateSelectionCount = userAlternateSelections?.filter(sel => {
                       const altReg = sel.alternate_registration
                       const reg = altReg?.registration
-                      if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage')) return false
+                      if (!reg || (reg.type !== 'event' && reg.type !== 'scrimmage' && reg.type !== 'tournament')) return false
                       const gameDate = altReg?.game_date
                       if (!gameDate || new Date(gameDate) < now) return false
                       return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
@@ -541,7 +541,7 @@ export default async function UserDashboardPage() {
 
                     return userWaitlistEntries?.filter(waitlist => {
                       const registration = waitlist.registration
-                      if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage')) return false
+                      if (!registration || (registration.type !== 'event' && registration.type !== 'scrimmage' && registration.type !== 'tournament')) return false
                       if (!registration.end_date || new Date(registration.end_date) < now) return false
                       // Only show if not already in event registrations
                       return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
@@ -557,7 +557,7 @@ export default async function UserDashboardPage() {
                             {registration.name}
                           </p>
                           <div className="flex flex-wrap gap-1 mt-1.5">
-                            <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event'} />
+                            <RegistrationTypeBadge type={registration.type as 'scrimmage' | 'event' | 'tournament'} />
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                               Waitlist
                             </span>
@@ -582,7 +582,7 @@ export default async function UserDashboardPage() {
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">
-                  No upcoming events or scrimmages.
+                  No upcoming events, scrimmages, or tournaments.
                 </p>
               )}
             </div>

@@ -9,9 +9,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // Helper function to safely parse date strings without timezone conversion

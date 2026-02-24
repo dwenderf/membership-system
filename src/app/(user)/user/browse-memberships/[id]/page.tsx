@@ -5,12 +5,12 @@ import { notFound } from 'next/navigation'
 import { getMembershipStatus } from '@/lib/membership-status'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
-  searchParams: {
+  }>
+  searchParams: Promise<{
     from?: string
-  }
+  }>
 }
 
 export default async function MembershipDetailPage({ params, searchParams }: PageProps) {

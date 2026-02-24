@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 // GET /api/admin/discount-categories/[id] - Get single discount category
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     
     const { data: { user } } = await supabase.auth.getUser()
@@ -30,7 +31,7 @@ export async function GET(
         *,
         discount_codes (count)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error) {
@@ -53,9 +54,10 @@ export async function GET(
 // PUT /api/admin/discount-categories/[id] - Update discount category
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     
     const { data: { user } } = await supabase.auth.getUser()
@@ -96,7 +98,7 @@ export async function PUT(
     const { data: existingCategories } = await supabase
       .from('discount_categories')
       .select('id, name, accounting_code')
-      .neq('id', params.id)
+      .neq('id', id)
 
     if (existingCategories) {
       const nameExists = existingCategories.some(cat => 
@@ -124,7 +126,7 @@ export async function PUT(
         max_discount_per_user_per_season: max_discount_per_user_per_season || null,
         is_active: is_active ?? true,
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -151,9 +153,10 @@ export async function PUT(
 // DELETE /api/admin/discount-categories/[id] - Delete discount category
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     
     const { data: { user } } = await supabase.auth.getUser()
@@ -175,7 +178,7 @@ export async function DELETE(
     const { data: codes } = await supabase
       .from('discount_codes')
       .select('id')
-      .eq('discount_category_id', params.id)
+      .eq('discount_category_id', id)
       .limit(1)
 
     if (codes && codes.length > 0) {
@@ -188,7 +191,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('discount_categories')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) {
       if (error.code === 'PGRST116') {

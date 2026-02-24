@@ -9,7 +9,7 @@ import { logger } from '@/lib/logging/logger'
 // POST /api/waitlists/[waitlistId]/select - Select a user from waitlist
 export async function POST(
   request: NextRequest,
-  { params }: { params: { waitlistId: string } }
+  { params }: { params: Promise<{ waitlistId: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -21,7 +21,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const waitlistId = params.waitlistId
+    const { waitlistId } = await params
 
     // Parse request body for optional price override
     const body = await request.json().catch(() => ({}))
@@ -231,7 +231,7 @@ export async function POST(
 
   } catch (error) {
     logger.logSystem('waitlist-selection-error', 'Unexpected error in waitlist selection', {
-      waitlistId: params.waitlistId,
+      waitlistId: 'unknown',
       error: error instanceof Error ? error.message : String(error)
     })
 

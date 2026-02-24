@@ -7,19 +7,19 @@ import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 // POST /api/alternate-registrations/[gameId]/select - Select alternates for a game
 export async function POST(
   request: NextRequest,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
     const supabase = await createClient()
     const adminSupabase = createAdminClient()
-    
+
     // Check authentication
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const gameId = params.gameId
+    const { gameId } = await params
     const body = await request.json()
     const { alternateIds } = body
 
@@ -248,7 +248,7 @@ export async function POST(
 
   } catch (error) {
     logger.logSystem('alternate-selection-error', 'Unexpected error in alternate selection', {
-      gameId: params.gameId,
+      gameId: 'unknown',
       error: error instanceof Error ? error.message : String(error)
     })
     

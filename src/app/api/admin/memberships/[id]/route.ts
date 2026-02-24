@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 // PUT /api/admin/memberships/[id] - Update a specific membership
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     
     // Get the authenticated user
@@ -73,7 +74,7 @@ export async function PUT(
         allow_discounts: allow_discounts || false,
         allow_monthly: allow_monthly !== undefined ? allow_monthly : true
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 

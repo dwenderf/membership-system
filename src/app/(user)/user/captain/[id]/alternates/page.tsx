@@ -5,13 +5,13 @@ import Link from 'next/link'
 import RegistrationAlternatesSection from '@/components/RegistrationAlternatesSection'
 
 interface CaptainAlternatesPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function CaptainAlternatesPage({ params }: CaptainAlternatesPageProps) {
-  const registrationId = params.id
+  const { id: registrationId } = await params
 
   // Check if user has captain access to this registration
   const access = await checkCaptainAccess(registrationId)

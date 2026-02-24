@@ -12,10 +12,10 @@ import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
-  searchParams: {
+  }>
+  searchParams: Promise<{
     from?: string
     back?: string
     backLabel?: string
@@ -24,10 +24,12 @@ interface PageProps {
     back3?: string
     backLabel3?: string
     [key: string]: string | string[] | undefined
-  }
+  }>
 }
 
-export default async function UserDetailPage({ params, searchParams }: PageProps) {
+export default async function UserDetailPage({ params, searchParams: searchParamsPromise }: PageProps) {
+  const { id } = await params
+  const searchParams = await searchParamsPromise
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
   const logger = Logger.getInstance()
@@ -43,25 +45,25 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
   const { data: user, error: userError } = await supabase
     .from('users')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (userError || !user) {
     logger.logSystem('user-detail-error', 'Error fetching user details', { 
-      userId: params.id,
+      userId: id,
       error: userError?.message 
     })
     redirect('/admin/reports/users')
   }
 
   // Check if current user is viewing their own profile
-  const isViewingOwnProfile = authUser.id === params.id
+  const isViewingOwnProfile = authUser.id === id
 
   // Fetch user's consolidated memberships (both active and expired)
   const { data: userMemberships } = await adminSupabase
     .from('user_memberships_consolidated')
     .select('*')
-    .eq('user_id', params.id)
+    .eq('user_id', id)
     .order('latest_expiration', { ascending: false })
 
   // Fetch user's active registrations
@@ -77,7 +79,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
         name
       )
     `)
-    .eq('user_id', params.id)
+    .eq('user_id', id)
     .eq('payment_status', 'paid')
     .order('created_at', { ascending: false })
 
@@ -113,7 +115,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
         status
       )
     `)
-    .eq('user_id', params.id)
+    .eq('user_id', id)
     .in('status', ['completed', 'refunded'])
     .order('created_at', { ascending: false })
 
@@ -229,7 +231,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
   const creditNoteInvoices = userCreditNotes?.filter(creditNote => {
     // Filter credit notes for this user by checking the staging metadata
     const metadata = creditNote.staging_metadata as any
-    return metadata?.customer?.id === params.id
+    return metadata?.customer?.id === id
   }).map(creditNote => {
     const metadata = creditNote.staging_metadata as any
     return {
@@ -592,9 +594,9 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
                             </div>
                             <Link
                               href={buildBreadcrumbUrl(
-                                `/admin/reports/users/${params.id}/invoices/${invoice.paymentId}`,
+                                `/admin/reports/users/${id}/invoices/${invoice.paymentId}`,
                                 breadcrumbs,
-                                { path: `/admin/reports/users/${params.id}`, label: `${user.first_name} ${user.last_name}` }
+                                { path: `/admin/reports/users/${id}`, label: `${user.first_name} ${user.last_name}` }
                               )}
                               prefetch={false}
                               className="text-xs text-blue-600 hover:text-blue-500"
@@ -626,7 +628,7 @@ export default async function UserDetailPage({ params, searchParams }: PageProps
             <div className="lg:col-span-1">
               {/* Discount Usage */}
               <div className="mb-6">
-                <DiscountUsage userId={params.id} />
+                <DiscountUsage userId={id} />
               </div>
 
               {/* Quick Stats */}

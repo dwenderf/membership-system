@@ -6,18 +6,18 @@ import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
   request: NextRequest,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
     const supabase = await createClient()
-    
+
     // Check authentication
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const gameId = params.gameId
+    const { gameId } = await params
 
     // Get game details to verify it exists and get registration info
     const { data: game, error: gameError } = await supabase
@@ -262,7 +262,7 @@ export async function GET(
 
   } catch (error) {
     logger.logSystem('get-game-alternates-error', 'Unexpected error fetching game alternates', {
-      gameId: params.gameId,
+      gameId: 'unknown',
       error: error instanceof Error ? error.message : String(error)
     })
     

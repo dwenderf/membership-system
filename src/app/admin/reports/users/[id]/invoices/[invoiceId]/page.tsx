@@ -9,11 +9,11 @@ import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs } from '@/lib/breadcrumb-utils'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
     invoiceId: string // This is actually a paymentId
-  }
-  searchParams: {
+  }>
+  searchParams: Promise<{
     openRefund?: string
     back?: string
     backLabel?: string
@@ -22,16 +22,18 @@ interface PageProps {
     back3?: string
     backLabel3?: string
     [key: string]: string | string[] | undefined
-  }
+  }>
 }
 
-export default async function AdminUserInvoiceDetailPage({ params, searchParams }: PageProps) {
+export default async function AdminUserInvoiceDetailPage({ params, searchParams: searchParamsPromise }: PageProps) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
+  const { id, invoiceId } = await params
+  const searchParams = await searchParamsPromise
 
   // Check if user is admin
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  
+
   if (!authUser) {
     redirect('/admin/reports/users')
   }
@@ -50,13 +52,13 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
   const { data: user, error: userError } = await supabase
     .from('users')
     .select('first_name, last_name, email')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (userError || !user) {
-    logger.logSystem('admin-invoice-user-error', 'Error fetching user for invoice detail', { 
-      userId: params.id,
-      error: userError?.message 
+    logger.logSystem('admin-invoice-user-error', 'Error fetching user for invoice detail', {
+      userId: id,
+      error: userError?.message
     })
     redirect('/admin/reports/users')
   }
@@ -83,17 +85,17 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams 
         )
       )
     `)
-    .eq('id', params.invoiceId)
-    .eq('user_id', params.id)
+    .eq('id', invoiceId)
+    .eq('user_id', id)
     .single()
 
   if (paymentError || !payment) {
-    logger.logSystem('admin-invoice-payment-error', 'Error fetching payment for invoice detail', { 
-      paymentId: params.invoiceId,
-      userId: params.id,
-      error: paymentError?.message 
+    logger.logSystem('admin-invoice-payment-error', 'Error fetching payment for invoice detail', {
+      paymentId: invoiceId,
+      userId: id,
+      error: paymentError?.message
     })
-    redirect(`/admin/reports/users/${params.id}`)
+    redirect(`/admin/reports/users/${id}`)
   }
 
   // Fetch refund history for this payment

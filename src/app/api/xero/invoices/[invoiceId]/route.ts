@@ -5,9 +5,10 @@ import { getActiveTenant, getAuthenticatedXeroClient } from '@/lib/xero/client';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { invoiceId: string } }
+  { params }: { params: Promise<{ invoiceId: string }> }
 ) {
   try {
+    const { invoiceId } = await params;
     const supabase = await createClient();
     
     // Get user from session
@@ -29,7 +30,7 @@ export async function GET(
     }
 
     // Fetch the specific invoice from Xero
-    const response = await xeroClient.accountingApi.getInvoice(activeTenant.tenant_id, params.invoiceId);
+    const response = await xeroClient.accountingApi.getInvoice(activeTenant.tenant_id, invoiceId);
     
     if (!response.body.invoices || response.body.invoices.length === 0) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -50,7 +51,7 @@ export async function GET(
     // Fetch the online invoice URL from the separate endpoint
     let publicUrl = undefined;
     try {
-      const onlineInvoiceResponse = await xeroClient.accountingApi.getOnlineInvoice(activeTenant.tenant_id, params.invoiceId);
+      const onlineInvoiceResponse = await xeroClient.accountingApi.getOnlineInvoice(activeTenant.tenant_id, invoiceId);
       console.log('Online invoice response:', JSON.stringify(onlineInvoiceResponse.body, null, 2));
       publicUrl = onlineInvoiceResponse.body.onlineInvoices?.[0]?.onlineInvoiceUrl || undefined;
     } catch (error) {

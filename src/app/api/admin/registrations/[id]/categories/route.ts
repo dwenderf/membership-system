@@ -9,11 +9,12 @@ import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
 
   try {
+    const { id } = await params
     // Check admin authorization
     const { data: { user: authUser } } = await supabase.auth.getUser()
 
@@ -44,7 +45,7 @@ export async function GET(
           name
         )
       `)
-      .eq('registration_id', params.id)
+      .eq('registration_id', id)
       .order('sort_order', { ascending: true })
 
     if (catError) {

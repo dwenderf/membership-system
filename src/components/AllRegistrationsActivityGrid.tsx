@@ -6,12 +6,12 @@ import { formatDate } from '@/lib/date-utils'
 
 interface Game {
   id: string
-  registration_id: string
-  game_description: string
-  game_date: string | null
-  created_at: string
-  selected_count?: number
-  available_count?: number
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
 }
 
 interface Registration {
@@ -97,9 +97,9 @@ export default function AllRegistrationsActivityGrid({
       const weekMap = new Map<string, { games: Game[], totalSelected: number }>()
 
       registration.games.forEach(game => {
-        if (!game.game_date) return
-        
-        const gameDate = new Date(game.game_date)
+        if (!game.gameDate) return
+
+        const gameDate = new Date(game.gameDate)
         
         // Get start of week (Sunday)
         const weekStart = new Date(gameDate)
@@ -114,7 +114,7 @@ export default function AllRegistrationsActivityGrid({
         
         const weekData = weekMap.get(weekKey)!
         weekData.games.push(game)
-        weekData.totalSelected += game.selected_count || 0
+        weekData.totalSelected += game.selectedCount || 0
       })
 
       // Generate all weeks in the season for this registration
@@ -179,8 +179,8 @@ No games scheduled`
 
     const gamesCount = week.games.length
     const firstGame = week.games[0]
-    const alternateText = firstGame?.selected_count === 1 ? 'alternate' : 'alternates'
-    const firstGameText = `${firstGame?.game_description || 'Game'}: ${firstGame?.selected_count || 0} ${alternateText}`
+    const alternateText = firstGame?.selectedCount === 1 ? 'alternate' : 'alternates'
+    const firstGameText = `${firstGame?.gameDescription || 'Game'}: ${firstGame?.selectedCount || 0} ${alternateText}`
     const moreText = gamesCount > 1 ? ` + ${gamesCount - 1} more` : ''
 
     return `${registration.name}

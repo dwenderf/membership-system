@@ -83,7 +83,7 @@ export async function GET(
 
   } catch (error) {
     logger.logSystem('refund-history-error', 'Unexpected error fetching refund history', { 
-      paymentId: paymentId,
+      paymentId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -81,7 +81,7 @@ export async function POST(
 
   } catch (error) {
     logger.logSystem('toggle-admin-error', 'Unexpected error toggling admin status', { 
-      targetUserId: id,
+      targetUserId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

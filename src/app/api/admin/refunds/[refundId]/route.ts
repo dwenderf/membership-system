@@ -91,7 +91,7 @@ export async function PUT(
 
   } catch (error) {
     logger.logSystem('refund-update-error', 'Unexpected error updating refund', { 
-      refundId: refundId,
+      refundId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

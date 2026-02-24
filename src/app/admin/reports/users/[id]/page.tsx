@@ -10,6 +10,7 @@ import DiscountUsage from '@/components/DiscountUsage'
 import PaymentPlanSection from './PaymentPlanSection'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 interface PageProps {
   params: Promise<{
@@ -714,11 +715,11 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-500">Saved Payment</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.stripe_payment_method_id
+                        userHasValidPaymentMethod(user)
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-600'
                       }`}>
-                        {user.stripe_payment_method_id ? 'Yes' : 'No'}
+                        {userHasValidPaymentMethod(user) ? 'Yes' : 'No'}
                       </span>
                     </div>
                   </div>

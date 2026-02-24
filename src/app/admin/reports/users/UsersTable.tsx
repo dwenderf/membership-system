@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { formatDate } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 interface User {
   id: string
@@ -64,8 +65,8 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
           bValue = b.is_admin ? 'admin' : 'member'
           break
         case 'payment':
-          aValue = a.stripe_payment_method_id ? 1 : 0
-          bValue = b.stripe_payment_method_id ? 1 : 0
+          aValue = userHasValidPaymentMethod(a) ? 1 : 0
+          bValue = userHasValidPaymentMethod(b) ? 1 : 0
           break
         case 'created_at':
           aValue = new Date(a.created_at).getTime()
@@ -239,11 +240,11 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.stripe_payment_method_id
+                        userHasValidPaymentMethod(user)
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-600'
                       }`}>
-                        {user.stripe_payment_method_id ? 'Yes' : 'No'}
+                        {userHasValidPaymentMethod(user) ? 'Yes' : 'No'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -155,7 +156,7 @@ export async function GET(
       const discountCode = Array.isArray(alternate.discount_codes) ? alternate.discount_codes[0] : alternate.discount_codes
       
       // Check if user has valid payment method
-      const hasValidPaymentMethod = user && user.stripe_payment_method_id && user.setup_intent_status === 'succeeded'
+      const hasValidPaymentMethod = userHasValidPaymentMethod(user)
       
       // Calculate discount amount and check usage limits
       let discountAmount = 0

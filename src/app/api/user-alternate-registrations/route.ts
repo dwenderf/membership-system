@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -76,9 +77,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
-    if (!userProfile?.stripe_payment_method_id || userProfile.setup_intent_status !== 'succeeded') {
-
-
+    if (!userHasValidPaymentMethod(userProfile)) {
       return NextResponse.json({
         error: 'You need to set up a payment method before registering as an alternate',
         requiresSetupIntent: true

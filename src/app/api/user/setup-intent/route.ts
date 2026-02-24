@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { SetupIntentService } from '@/lib/services/setup-intent-service'
 import { logger } from '@/lib/logging/logger'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 /**
  * Create or retrieve Setup Intent for user payment method
@@ -36,8 +37,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch user data' }, { status: 500 })
     }
 
-    // If user already has a succeeded Setup Intent with payment method, return existing info
-    if (userData.setup_intent_status === 'succeeded' && userData.stripe_payment_method_id) {
+    // If user already has a payment method saved, return existing info (no need for new setup intent)
+    if (userHasValidPaymentMethod(userData)) {
       const paymentMethod = await SetupIntentService.getUserPaymentMethod(user.id)
       if (paymentMethod) {
         return NextResponse.json({

@@ -188,14 +188,17 @@ describe('RegistrationValidationService', () => {
       expect(result.error).toBe('User does not have a valid payment method')
     })
 
-    it('should reject user with incomplete setup intent', async () => {
+    it('should accept user with payment method ID even if setup_intent_status is not succeeded', async () => {
+      // setup_intent_status is intentionally not checked — the PM ID alone is sufficient.
+      // PMs can be attached via Customer Portal or payment intent with setup_future_usage
+      // and will have a null/non-succeeded setup_intent_status.
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
             single: jest.fn().mockResolvedValue({
               data: {
                 stripe_payment_method_id: 'pm_123',
-                setup_intent_status: 'processing' // Not succeeded
+                setup_intent_status: 'processing' // Not succeeded, but PM ID is present
               },
               error: null
             })
@@ -208,8 +211,8 @@ describe('RegistrationValidationService', () => {
         'user-123'
       )
 
-      expect(result.isValid).toBe(false)
-      expect(result.error).toBe('User does not have a valid payment method')
+      expect(result.isValid).toBe(true)
+      expect(result.error).toBeUndefined()
     })
 
     it('should handle user not found error', async () => {

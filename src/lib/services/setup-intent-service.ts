@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -283,11 +284,7 @@ export class SetupIntentService {
         .eq('id', userId)
         .single()
 
-      if (userError || !user || !user.stripe_payment_method_id) {
-        return null
-      }
-
-      if (user.setup_intent_status !== 'succeeded') {
+      if (userError || !user || !userHasValidPaymentMethod(user)) {
         return null
       }
 

@@ -20,9 +20,6 @@ export async function getUserSavedPaymentMethodId(
     .eq('id', userId)
     .single()
 
-  // Payment method can be saved either via:
-  // 1. Setup intent (setup_intent_status = 'succeeded')
-  // 2. Payment intent with setup_future_usage (no setup_intent_status set)
   if (!userProfile?.stripe_payment_method_id) {
     return null
   }
@@ -80,11 +77,16 @@ export async function savePaymentMethodFromIntent(
         )
       }
 
-      // Save payment method ID to user profile
+      // Save payment method ID to user profile.
+      // Also mark setup_intent_status as 'succeeded' so this record is consistent
+      // with the SetupIntent flow, and clear stripe_setup_intent_id since the PM
+      // was captured via a PaymentIntent (not a SetupIntent).
       await adminSupabase
         .from('users')
         .update({
           stripe_payment_method_id: paymentIntent.payment_method as string,
+          stripe_setup_intent_id: null,
+          setup_intent_status: 'succeeded',
           payment_method_updated_at: new Date().toISOString()
         })
         .eq('id', userId)

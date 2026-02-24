@@ -15,6 +15,7 @@ interface User {
   is_lgbtq: boolean | null
   created_at: string
   tags: string[] | null
+  stripe_payment_method_id: string | null
 }
 
 export default function UsersPage() {
@@ -46,7 +47,8 @@ export default function UsersPage() {
             is_goalie,
             is_lgbtq,
             created_at,
-            tags
+            tags,
+            stripe_payment_method_id
           `)
           .is('deleted_at', null) // Only show active users
           .order('first_name', { ascending: true })

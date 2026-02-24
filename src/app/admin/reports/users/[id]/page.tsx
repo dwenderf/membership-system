@@ -704,11 +704,21 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-500">Onboarding</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.onboarding_completed_at 
-                          ? 'bg-green-100 text-green-800' 
+                        user.onboarding_completed_at
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
                         {user.onboarding_completed_at ? 'Completed' : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Saved Payment</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.stripe_payment_method_id
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {user.stripe_payment_method_id ? 'Yes' : 'No'}
                       </span>
                     </div>
                   </div>

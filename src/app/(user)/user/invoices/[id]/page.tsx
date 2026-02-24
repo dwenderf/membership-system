@@ -8,9 +8,9 @@ import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { logger } from '@/lib/logging/logger'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 interface UserInvoice {

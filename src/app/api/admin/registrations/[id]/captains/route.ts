@@ -5,11 +5,11 @@ import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
 // GET /api/admin/registrations/[id]/captains - List captains for a registration
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const registrationId = params.id
+    const { id: registrationId } = await params
 
     // Check if user is admin
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -75,11 +75,11 @@ export async function GET(
 // POST /api/admin/registrations/[id]/captains - Add a captain
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const registrationId = params.id
+    const { id: registrationId } = await params
     const body = await request.json()
     const { userId, registrationName, seasonName } = body
 

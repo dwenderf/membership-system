@@ -5,12 +5,13 @@ import { Logger } from '@/lib/logging/logger'
 // GET /api/admin/refunds/payment/[paymentId] - Get refund history for payment
 export async function GET(
   request: NextRequest,
-  { params }: { params: { paymentId: string } }
+  { params }: { params: Promise<{ paymentId: string }> }
 ) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
 
   try {
+    const { paymentId } = await params
     // Check if current user is admin
     const { data: { user: authUser } } = await supabase.auth.getUser()
     
@@ -32,12 +33,12 @@ export async function GET(
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .select('id, final_amount, user_id')
-      .eq('id', params.paymentId)
+      .eq('id', paymentId)
       .single()
 
     if (paymentError || !payment) {
       logger.logSystem('refund-history-error', 'Payment not found', { 
-        paymentId: params.paymentId,
+        paymentId: paymentId,
         error: paymentError?.message 
       })
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
@@ -50,12 +51,12 @@ export async function GET(
         *,
         processed_by_user:processed_by(first_name, last_name, email)
       `)
-      .eq('payment_id', params.paymentId)
+      .eq('payment_id', paymentId)
       .order('created_at', { ascending: false })
 
     if (refundsError) {
       logger.logSystem('refund-history-error', 'Failed to fetch refunds', { 
-        paymentId: params.paymentId,
+        paymentId: paymentId,
         error: refundsError.message 
       })
       return NextResponse.json({ error: 'Failed to fetch refunds' }, { status: 500 })
@@ -82,7 +83,7 @@ export async function GET(
 
   } catch (error) {
     logger.logSystem('refund-history-error', 'Unexpected error fetching refund history', { 
-      paymentId: params.paymentId,
+      paymentId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

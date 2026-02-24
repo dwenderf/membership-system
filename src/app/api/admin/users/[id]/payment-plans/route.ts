@@ -8,9 +8,10 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
 
     // Check if user is admin
@@ -37,14 +38,14 @@ export async function GET(
     const { data: plans, error } = await adminSupabase
       .from('payment_plan_summary')
       .select('*')
-      .eq('contact_id', params.id)
+      .eq('contact_id', id)
 
     if (error) {
       logger.logAdminAction(
         'get-user-payment-plans-error',
         'Error fetching user payment plans',
         {
-          userId: params.id,
+          userId: id,
           error: error.message
         },
         'error'
@@ -78,7 +79,7 @@ export async function GET(
     })
 
     return NextResponse.json({
-      userId: params.id,
+      userId: id,
       plans: formattedPlans
     })
   } catch (error) {
@@ -86,7 +87,7 @@ export async function GET(
       'get-user-payment-plans-exception',
       'Exception fetching user payment plans',
       {
-        userId: params.id,
+        userId: 'unknown',
         error: error instanceof Error ? error.message : String(error)
       },
       'error'

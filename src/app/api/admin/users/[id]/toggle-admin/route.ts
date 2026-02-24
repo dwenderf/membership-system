@@ -4,12 +4,13 @@ import { Logger } from '@/lib/logging/logger'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
 
   try {
+    const { id } = await params
     // Check if current user is admin
     const { data: { user: authUser } } = await supabase.auth.getUser()
     
@@ -31,19 +32,19 @@ export async function POST(
     const { data: targetUser, error: userError } = await supabase
       .from('users')
       .select('is_admin, first_name, last_name, email')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (userError || !targetUser) {
       logger.logSystem('toggle-admin-error', 'User not found', { 
-        targetUserId: params.id,
+        targetUserId: id,
         error: userError?.message 
       })
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Prevent admin from removing their own admin access
-    if (params.id === authUser.id) {
+    if (id === authUser.id) {
       return NextResponse.json({ error: 'Cannot modify your own admin status' }, { status: 400 })
     }
 
@@ -53,11 +54,11 @@ export async function POST(
     const { error: updateError } = await supabase
       .from('users')
       .update({ is_admin: newAdminStatus })
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (updateError) {
       logger.logSystem('toggle-admin-error', 'Failed to update admin status', { 
-        targetUserId: params.id,
+        targetUserId: id,
         error: updateError.message 
       })
       return NextResponse.json({ error: 'Failed to update admin status' }, { status: 500 })
@@ -65,7 +66,7 @@ export async function POST(
 
     // Log the action
     logger.logSystem('admin-status-changed', 'Admin status changed', {
-      targetUserId: params.id,
+      targetUserId: id,
       targetUserName: `${targetUser.first_name} ${targetUser.last_name}`,
       targetUserEmail: targetUser.email,
       newAdminStatus,
@@ -80,7 +81,7 @@ export async function POST(
 
   } catch (error) {
     logger.logSystem('toggle-admin-error', 'Unexpected error toggling admin status', { 
-      targetUserId: params.id,
+      targetUserId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

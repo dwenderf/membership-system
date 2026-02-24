@@ -3,11 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: registrationId } = await params
     const supabase = await createClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -24,8 +25,6 @@ export async function PATCH(
     if (userError || !userData?.is_admin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
-
-    const { id: registrationId } = params
     const body = await request.json()
     const { name } = body
     

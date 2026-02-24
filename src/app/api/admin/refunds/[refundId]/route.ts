@@ -8,12 +8,13 @@ import { centsToCents } from '@/types/currency'
 // PUT /api/admin/refunds/[refundId] - Update refund status or sync to Xero
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { refundId: string } }
+  { params }: { params: Promise<{ refundId: string }> }
 ) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
 
   try {
+    const { refundId } = await params
     // Check if current user is admin
     const { data: { user: authUser } } = await supabase.auth.getUser()
     
@@ -39,12 +40,12 @@ export async function PUT(
     const { data: refund, error: refundError } = await supabase
       .from('refunds')
       .select('*')
-      .eq('id', params.refundId)
+      .eq('id', refundId)
       .single()
 
     if (refundError || !refund) {
       logger.logSystem('refund-update-error', 'Refund not found', { 
-        refundId: params.refundId,
+        refundId: refundId,
         error: refundError?.message 
       })
       return NextResponse.json({ error: 'Refund not found' }, { status: 404 })
@@ -54,14 +55,14 @@ export async function PUT(
       // Manually trigger staging for this refund's credit note
       try {
         const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
-          params.refundId,
+          refundId,
           refund.payment_id,
           centsToCents(refund.amount)
         )
         
         if (stagingSuccess) {
           logger.logSystem('refund-xero-staging-manual', 'Manual credit note staging completed', {
-            refundId: params.refundId,
+            refundId: refundId,
             triggeredBy: authUser.id
           })
 
@@ -75,7 +76,7 @@ export async function PUT(
 
       } catch (stagingError) {
         logger.logSystem('refund-xero-staging-manual-error', 'Manual credit note staging failed', {
-          refundId: params.refundId,
+          refundId: refundId,
           triggeredBy: authUser.id,
           error: stagingError instanceof Error ? stagingError.message : 'Unknown error'
         })
@@ -90,7 +91,7 @@ export async function PUT(
 
   } catch (error) {
     logger.logSystem('refund-update-error', 'Unexpected error updating refund', { 
-      refundId: params.refundId,
+      refundId: 'unknown',
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

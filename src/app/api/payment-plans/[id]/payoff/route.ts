@@ -6,7 +6,7 @@ import { emailService } from '@/lib/email/service'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -18,7 +18,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const paymentPlanId = params.id
+    const { id: paymentPlanId } = await params
 
     // Verify the payment plan belongs to this user
     const { data: paymentPlan, error: planError } = await supabase

@@ -8,9 +8,10 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
 
     // Check if user is admin
@@ -33,7 +34,7 @@ export async function GET(
     const { data: user, error } = await supabase
       .from('users')
       .select('payment_plan_enabled')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error || !user) {
@@ -41,7 +42,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      userId: params.id,
+      userId: id,
       paymentPlanEnabled: user.payment_plan_enabled
     })
   } catch (error) {
@@ -49,7 +50,7 @@ export async function GET(
       'get-payment-plan-eligibility-error',
       'Error getting payment plan eligibility',
       {
-        userId: params.id,
+        userId: 'unknown',
         error: error instanceof Error ? error.message : String(error)
       },
       'error'
@@ -64,9 +65,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const adminSupabase = createAdminClient()
 
@@ -98,7 +100,7 @@ export async function PUT(
     const { data: updatedUser, error: updateError } = await adminSupabase
       .from('users')
       .update({ payment_plan_enabled: enabled })
-      .eq('id', params.id)
+      .eq('id', id)
       .select('id, email, first_name, last_name, payment_plan_enabled')
       .single()
 
@@ -107,7 +109,7 @@ export async function PUT(
         'update-payment-plan-eligibility-error',
         'Error updating payment plan eligibility',
         {
-          userId: params.id,
+          userId: id,
           enabled,
           error: updateError.message
         },
@@ -120,7 +122,7 @@ export async function PUT(
       'payment-plan-eligibility-updated',
       `Payment plan eligibility ${enabled ? 'enabled' : 'disabled'} for user`,
       {
-        userId: params.id,
+        userId: id,
         adminUserId: currentUser.id,
         enabled
       },
@@ -136,7 +138,7 @@ export async function PUT(
       'update-payment-plan-eligibility-exception',
       'Exception updating payment plan eligibility',
       {
-        userId: params.id,
+        userId: 'unknown',
         error: error instanceof Error ? error.message : String(error)
       },
       'error'

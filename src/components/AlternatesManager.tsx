@@ -28,12 +28,12 @@ interface AlternatesManagerProps {
 interface RegistrationWithGames extends Registration {
   games: Array<{
     id: string
-    registration_id: string
-    game_description: string
-    game_date: string | null
-    created_at: string
-    selected_count?: number
-    available_count?: number
+    registrationId: string
+    gameDescription: string
+    gameDate: string | null
+    createdAt: string
+    selectedCount?: number
+    availableCount?: number
   }>
 }
 

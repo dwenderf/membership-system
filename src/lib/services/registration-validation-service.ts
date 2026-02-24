@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 export interface RegistrationValidationResult {
   canRegister: boolean

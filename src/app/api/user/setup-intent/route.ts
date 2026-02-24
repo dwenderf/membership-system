@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { SetupIntentService } from '@/lib/services/setup-intent-service'
 import { logger } from '@/lib/logging/logger'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 /**
  * Create or retrieve Setup Intent for user payment method

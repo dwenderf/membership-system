@@ -5,7 +5,7 @@ import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

@@ -4,7 +4,7 @@ import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 import { toDateString } from '@/lib/date-utils'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,

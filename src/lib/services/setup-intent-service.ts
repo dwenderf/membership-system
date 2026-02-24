@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AlternatePaymentService } from '@/lib/services/alternate-payment-service'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 // POST /api/alternate-registrations/[gameId]/select - Select alternates for a game
 export async function POST(

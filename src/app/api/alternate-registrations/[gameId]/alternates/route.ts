@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(

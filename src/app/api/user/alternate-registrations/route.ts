@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
-import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 // GET /api/user/alternate-registrations - Get user's alternate registrations with selection history
 export async function GET(request: NextRequest) {

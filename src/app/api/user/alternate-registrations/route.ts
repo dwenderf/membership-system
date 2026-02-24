@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       .eq('id', authUser.id)
       .single()
 
-    const hasValidPaymentMethod = user?.stripe_payment_method_id && user?.setup_intent_status === 'succeeded'
+    const hasValidPaymentMethod = !!user?.stripe_payment_method_id
 
     // Calculate statistics
     const totalGamesPlayed = alternateSelections?.filter(s => s.payment_status === 'paid').length || 0

@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch user data' }, { status: 500 })
     }
 
-    // If user already has a succeeded Setup Intent with payment method, return existing info
-    if (userData.setup_intent_status === 'succeeded' && userData.stripe_payment_method_id) {
+    // If user already has a payment method saved, return existing info (no need for new setup intent)
+    if (userData.stripe_payment_method_id) {
       const paymentMethod = await SetupIntentService.getUserPaymentMethod(user.id)
       if (paymentMethod) {
         return NextResponse.json({

@@ -257,7 +257,7 @@ export class WaitlistPaymentService {
       }
 
       // Validate payment method (only required for paid charges)
-      if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
+      if (!user.stripe_payment_method_id) {
         throw new Error('User does not have a valid payment method')
       }
 

@@ -287,10 +287,6 @@ export class SetupIntentService {
         return null
       }
 
-      if (user.setup_intent_status !== 'succeeded') {
-        return null
-      }
-
       // Get payment method from Stripe
       const paymentMethod = await stripe.paymentMethods.retrieve(user.stripe_payment_method_id)
       

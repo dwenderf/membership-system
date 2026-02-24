@@ -43,7 +43,7 @@ export class AlternatePaymentService {
         throw new Error('User not found')
       }
 
-      if (!user.stripe_payment_method_id || user.setup_intent_status !== 'succeeded') {
+      if (!user.stripe_payment_method_id) {
         throw new Error('User does not have a valid payment method')
       }
 

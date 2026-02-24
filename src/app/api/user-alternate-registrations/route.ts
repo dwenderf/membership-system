@@ -76,9 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
-    if (!userProfile?.stripe_payment_method_id || userProfile.setup_intent_status !== 'succeeded') {
-
-
+    if (!userProfile?.stripe_payment_method_id) {
       return NextResponse.json({
         error: 'You need to set up a payment method before registering as an alternate',
         requiresSetupIntent: true

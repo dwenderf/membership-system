@@ -129,8 +129,8 @@ export async function POST(
     for (const alternate of availableAlternates) {
       const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
       try {
-        // Validate payment method
-        if (!user?.stripe_payment_method_id || user?.setup_intent_status !== 'succeeded') {
+        // Validate payment method (presence of stripe_payment_method_id is sufficient)
+        if (!user?.stripe_payment_method_id) {
           results.push({
             userId: alternate.user_id,
             userName: `${user?.first_name} ${user?.last_name}`,

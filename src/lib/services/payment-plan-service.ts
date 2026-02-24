@@ -55,8 +55,7 @@ export class PaymentPlanService {
       // User must be admin-approved AND have a valid saved payment method
       return (
         user.payment_plan_enabled === true &&
-        !!user.stripe_payment_method_id &&
-        user.setup_intent_status === 'succeeded'
+        !!user.stripe_payment_method_id
       )
     } catch (error) {
       logger.logPaymentProcessing(

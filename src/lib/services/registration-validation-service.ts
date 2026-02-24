@@ -107,11 +107,8 @@ export class RegistrationValidationService {
         throw new Error('User not found')
       }
 
-      // Check if payment method is valid
-      const hasValidPaymentMethod =
-        user.stripe_payment_method_id && user.setup_intent_status === 'succeeded'
-
-      if (!hasValidPaymentMethod) {
+      // Check if payment method is valid (presence of stripe_payment_method_id is sufficient)
+      if (!user.stripe_payment_method_id) {
         return {
           isValid: false,
           error: 'User does not have a valid payment method'

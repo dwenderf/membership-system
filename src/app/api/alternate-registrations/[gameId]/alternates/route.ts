@@ -154,8 +154,8 @@ export async function GET(
       const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
       const discountCode = Array.isArray(alternate.discount_codes) ? alternate.discount_codes[0] : alternate.discount_codes
       
-      // Check if user has valid payment method
-      const hasValidPaymentMethod = user && user.stripe_payment_method_id && user.setup_intent_status === 'succeeded'
+      // Check if user has valid payment method (presence of stripe_payment_method_id is sufficient)
+      const hasValidPaymentMethod = !!(user && user.stripe_payment_method_id)
       
       // Calculate discount amount and check usage limits
       let discountAmount = 0

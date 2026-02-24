@@ -5,6 +5,7 @@ import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 import { SupabaseClient } from '@supabase/supabase-js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -257,7 +258,7 @@ export class WaitlistPaymentService {
       }
 
       // Validate payment method (only required for paid charges)
-      if (!user.stripe_payment_method_id) {
+      if (!userHasValidPaymentMethod(user)) {
         throw new Error('User does not have a valid payment method')
       }
 

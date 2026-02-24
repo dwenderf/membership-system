@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 
 export async function GET(request: NextRequest) {
   try {
@@ -274,8 +275,8 @@ export async function GET(request: NextRequest) {
 
         const finalAmount = Math.max(0, basePrice - discountAmount)
 
-        // Check payment method status (presence of stripe_payment_method_id is sufficient)
-        const hasValidPaymentMethod = !!user?.stripe_payment_method_id
+        // Check payment method status
+        const hasValidPaymentMethod = userHasValidPaymentMethod(user)
 
         return {
           id: item.id,

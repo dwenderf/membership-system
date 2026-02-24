@@ -7,6 +7,20 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 /**
+ * Returns true if the user has a valid saved payment method.
+ *
+ * Having a stripe_payment_method_id is the sole requirement. setup_intent_status
+ * is intentionally NOT checked — payment methods can be attached via SetupIntent,
+ * via payment intent with setup_future_usage, or via the Stripe Customer Portal.
+ * In all cases the PM ID is the authoritative signal that a method is ready to charge.
+ */
+export function userHasValidPaymentMethod(
+  user: { stripe_payment_method_id?: string | null } | null | undefined
+): boolean {
+  return !!user?.stripe_payment_method_id
+}
+
+/**
  * Check if a user has a valid saved payment method
  * Payment methods can be saved via setup intent OR via payment intent with setup_future_usage
  */

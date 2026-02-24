@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AlternatePaymentService } from '@/lib/services/alternate-payment-service'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 
 // POST /api/alternate-registrations/[gameId]/select - Select alternates for a game
 export async function POST(
@@ -129,8 +130,8 @@ export async function POST(
     for (const alternate of availableAlternates) {
       const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
       try {
-        // Validate payment method (presence of stripe_payment_method_id is sufficient)
-        if (!user?.stripe_payment_method_id) {
+        // Validate payment method
+        if (!userHasValidPaymentMethod(user)) {
           results.push({
             userId: alternate.user_id,
             userName: `${user?.first_name} ${user?.last_name}`,

@@ -4,6 +4,7 @@ import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 import { toDateString } from '@/lib/date-utils'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: process.env.STRIPE_API_VERSION as any,
@@ -55,7 +56,7 @@ export class PaymentPlanService {
       // User must be admin-approved AND have a valid saved payment method
       return (
         user.payment_plan_enabled === true &&
-        !!user.stripe_payment_method_id
+        userHasValidPaymentMethod(user)
       )
     } catch (error) {
       logger.logPaymentProcessing(

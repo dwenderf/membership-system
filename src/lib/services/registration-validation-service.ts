@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 
 export interface RegistrationValidationResult {
   canRegister: boolean
@@ -107,8 +108,8 @@ export class RegistrationValidationService {
         throw new Error('User not found')
       }
 
-      // Check if payment method is valid (presence of stripe_payment_method_id is sufficient)
-      if (!user.stripe_payment_method_id) {
+      // Check if payment method is valid
+      if (!userHasValidPaymentMethod(user)) {
         return {
           isValid: false,
           error: 'User does not have a valid payment method'

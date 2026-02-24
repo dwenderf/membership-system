@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
+import { userHasValidPaymentMethod } from '@/lib/services/payment-method-service'
 
 // GET /api/user/alternate-registrations - Get user's alternate registrations with selection history
 export async function GET(request: NextRequest) {
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
       .eq('id', authUser.id)
       .single()
 
-    const hasValidPaymentMethod = !!user?.stripe_payment_method_id
+    const hasValidPaymentMethod = userHasValidPaymentMethod(user)
 
     // Calculate statistics
     const totalGamesPlayed = alternateSelections?.filter(s => s.payment_status === 'paid').length || 0

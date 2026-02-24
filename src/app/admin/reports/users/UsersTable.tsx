@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { formatDate } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 interface User {
   id: string
@@ -15,6 +16,7 @@ interface User {
   is_lgbtq: boolean | null
   created_at: string
   tags: string[] | null
+  stripe_payment_method_id: string | null
 }
 
 interface UsersTableProps {
@@ -23,7 +25,7 @@ interface UsersTableProps {
   searchTerm?: string
 }
 
-type SortField = 'name' | 'email' | 'member_id' | 'account_type' | 'created_at'
+type SortField = 'name' | 'email' | 'member_id' | 'account_type' | 'payment' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 export default function UsersTable({ users, currentUserId, searchTerm = '' }: UsersTableProps) {
@@ -61,6 +63,10 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
         case 'account_type':
           aValue = a.is_admin ? 'admin' : 'member'
           bValue = b.is_admin ? 'admin' : 'member'
+          break
+        case 'payment':
+          aValue = userHasValidPaymentMethod(a) ? 1 : 0
+          bValue = userHasValidPaymentMethod(b) ? 1 : 0
           break
         case 'created_at':
           aValue = new Date(a.created_at).getTime()
@@ -145,6 +151,15 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               </th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('payment')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Saved Payment</span>
+                  <SortIcon field="payment" />
+                </div>
+              </th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                 onClick={() => handleSort('created_at')}
               >
                 <div className="flex items-center space-x-1">
@@ -223,6 +238,15 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                         ))}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        userHasValidPaymentMethod(user)
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {userHasValidPaymentMethod(user) ? 'Yes' : 'No'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {user.created_at
                         ? formatDate(new Date(user.created_at))
@@ -234,7 +258,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               })
             ) : (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>

@@ -154,7 +154,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                 onClick={() => handleSort('payment')}
               >
                 <div className="flex items-center space-x-1">
-                  <span>Payment</span>
+                  <span>Saved Payment</span>
                   <SortIcon field="payment" />
                 </div>
               </th>

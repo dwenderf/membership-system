@@ -627,6 +627,56 @@ export default async function UserDetailPage({ params, searchParams: searchParam
 
             {/* Sidebar */}
             <div className="lg:col-span-1">
+              {/* Account Status */}
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">Account Status</h3>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Account Type</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.is_admin
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {user.is_admin ? 'Administrator' : 'Member'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Member Since</span>
+                      <span className="text-sm text-gray-900">
+                        {user.created_at
+                          ? formatDate(user.created_at)
+                          : 'Unknown'
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Onboarding</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.onboarding_completed_at
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {user.onboarding_completed_at ? 'Completed' : 'Pending'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Saved Payment</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        userHasValidPaymentMethod(user)
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {userHasValidPaymentMethod(user) ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Discount Usage */}
               <div className="mb-6">
                 <DiscountUsage userId={id} />
@@ -675,56 +725,6 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                 initialPaymentPlanEnabled={user.payment_plan_enabled || false}
                 userName={`${user.first_name} ${user.last_name}`}
               />
-
-              {/* Account Status */}
-              <div className="bg-white shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900">Account Status</h3>
-                </div>
-                <div className="px-6 py-4">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-500">Account Type</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.is_admin 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {user.is_admin ? 'Administrator' : 'Member'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-500">Member Since</span>
-                      <span className="text-sm text-gray-900">
-                        {user.created_at
-                          ? formatDate(user.created_at)
-                          : 'Unknown'
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-500">Onboarding</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.onboarding_completed_at
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {user.onboarding_completed_at ? 'Completed' : 'Pending'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-500">Saved Payment</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        userHasValidPaymentMethod(user)
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {userHasValidPaymentMethod(user) ? 'Yes' : 'No'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 

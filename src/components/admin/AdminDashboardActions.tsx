@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   DndContext,
   closestCenter,
@@ -128,6 +129,7 @@ function SortableFavoriteItem({
 
 export default function AdminDashboardActions({ initialFavorites }: AdminDashboardActionsProps) {
   const [favorites, setFavorites] = useState<string[]>(initialFavorites)
+  const router = useRouter()
 
   const savePreferences = useCallback(async (newFavorites: string[]) => {
     try {
@@ -136,10 +138,13 @@ export default function AdminDashboardActions({ initialFavorites }: AdminDashboa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminFavorites: newFavorites }),
       })
+      // Invalidate the Next.js router cache so back-navigation re-fetches
+      // fresh server data rather than restoring a stale cached render
+      router.refresh()
     } catch (err) {
       console.error('Failed to save preferences:', err)
     }
-  }, [])
+  }, [router])
 
   const toggleFavorite = (id: string) => {
     const newFavorites = favorites.includes(id)

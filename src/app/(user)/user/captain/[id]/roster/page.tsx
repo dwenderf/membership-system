@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
+import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
 
 interface RegistrationData {
   id: string
@@ -57,6 +57,9 @@ interface AlternateData {
   }>
 }
 
+type LgbtqFilter = 'lgbtq' | 'ally' | 'no_response'
+type GoalieFilter = 'goalie' | 'non_goalie'
+
 export default function CaptainRosterPage() {
   const params = useParams()
   const registrationId = params.id as string
@@ -73,6 +76,11 @@ export default function CaptainRosterPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [alternatesSortField, setAlternatesSortField] = useState<keyof AlternateData>('first_name')
   const [alternatesSortDirection, setAlternatesSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  // Filter state
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [lgbtqFilter, setLgbtqFilter] = useState<LgbtqFilter | null>(null)
+  const [goalieFilter, setGoalieFilter] = useState<GoalieFilter | null>(null)
 
   useEffect(() => {
     if (registrationId) {
@@ -128,37 +136,55 @@ export default function CaptainRosterPage() {
     }
   }
 
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ Paid</span>
-      case 'awaiting_payment':
-      case 'processing':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">⏳ Pending</span>
-      case 'failed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">✗ Failed</span>
-      case 'refunded':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">↩ Refunded</span>
-      default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{status}</span>
-    }
+  // All active members (unfiltered, used for summary counts)
+  const allActiveMembers = registrationData.filter(r => r.payment_status !== 'refunded')
+  const refundedMembers = registrationData.filter(r => r.payment_status === 'refunded')
+
+  // Unique categories with counts (from all active members)
+  const categoryCountsMap = new Map<string, number>()
+  allActiveMembers.forEach(m => {
+    categoryCountsMap.set(m.category_name, (categoryCountsMap.get(m.category_name) || 0) + 1)
+  })
+  const categoryCounts = Array.from(categoryCountsMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  // LGBTQ counts
+  const lgbtqCounts = {
+    lgbtq: allActiveMembers.filter(m => m.is_lgbtq === true).length,
+    ally: allActiveMembers.filter(m => m.is_lgbtq === false).length,
+    no_response: allActiveMembers.filter(m => m.is_lgbtq === null).length,
   }
 
-  const filteredRegistrations = registrationData.filter(registration => {
-    const fullName = `${registration.first_name} ${registration.last_name}`.toLowerCase()
-    const email = registration.email?.toLowerCase() || ''
+  // Goalie counts
+  const goalieCounts = {
+    goalie: allActiveMembers.filter(m => m.is_goalie === true).length,
+    non_goalie: allActiveMembers.filter(m => m.is_goalie === false).length,
+  }
+
+  // Apply search + dimension filters to active members
+  const filteredActiveMembers = allActiveMembers.filter(member => {
+    const fullName = `${member.first_name} ${member.last_name}`.toLowerCase()
+    const email = member.email?.toLowerCase() || ''
     const search = searchTerm.toLowerCase()
-    return fullName.includes(search) || email.includes(search)
+    if (!fullName.includes(search) && !email.includes(search)) return false
+
+    if (categoryFilter && member.category_name !== categoryFilter) return false
+
+    if (lgbtqFilter === 'lgbtq' && member.is_lgbtq !== true) return false
+    if (lgbtqFilter === 'ally' && member.is_lgbtq !== false) return false
+    if (lgbtqFilter === 'no_response' && member.is_lgbtq !== null) return false
+
+    if (goalieFilter === 'goalie' && member.is_goalie !== true) return false
+    if (goalieFilter === 'non_goalie' && member.is_goalie !== false) return false
+
+    return true
   })
 
-  // Separate refunded and active members
-  const activeMembers = filteredRegistrations.filter(r => r.payment_status !== 'refunded')
-  const refundedMembers = filteredRegistrations.filter(r => r.payment_status === 'refunded')
-
-  // Sort active members
-  const sortedMembers = [...activeMembers].sort((a, b) => {
-    let aValue = a[sortField]
-    let bValue = b[sortField]
+  // Sort filtered active members
+  const sortedMembers = [...filteredActiveMembers].sort((a, b) => {
+    let aValue: string | number | boolean | null = a[sortField]
+    let bValue: string | number | boolean | null = b[sortField]
 
     if (sortField === 'is_lgbtq') {
       aValue = getLgbtqStatusLabel(a.is_lgbtq)
@@ -181,11 +207,17 @@ export default function CaptainRosterPage() {
     return 0
   })
 
-  // Payment status summary
-  const paidCount = registrationData.filter(r => r.payment_status === 'paid').length
-  const pendingCount = registrationData.filter(r => r.payment_status === 'awaiting_payment' || r.payment_status === 'processing').length
-  const failedCount = registrationData.filter(r => r.payment_status === 'failed').length
-  const refundedCount = refundedMembers.length
+  const hasActiveFilters = categoryFilter !== null || lgbtqFilter !== null || goalieFilter !== null
+
+  const toggleCategoryFilter = (name: string) =>
+    setCategoryFilter(prev => (prev === name ? null : name))
+  const toggleLgbtqFilter = (value: LgbtqFilter) =>
+    setLgbtqFilter(prev => (prev === value ? null : value))
+  const toggleGoalieFilter = (value: GoalieFilter) =>
+    setGoalieFilter(prev => (prev === value ? null : value))
+
+  const sortIndicator = (field: keyof RegistrationData) =>
+    sortField === field ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -232,32 +264,116 @@ export default function CaptainRosterPage() {
 
       {!loading && !error && (
         <>
-          {/* Payment Status Summary */}
-          <div className="mb-6 bg-white shadow rounded-lg p-4">
-            <h2 className="text-sm font-semibold text-gray-700 mb-2">Payment Status Summary</h2>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-2">✓ Paid</span>
-                <span className="font-semibold">{paidCount} members</span>
+          {/* Summary & Filters */}
+          <div className="mb-6 bg-white shadow rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700">Roster Summary</h2>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => { setCategoryFilter(null); setLgbtqFilter(null); setGoalieFilter(null) }}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider w-20 shrink-0">Category</span>
+              <div className="flex flex-wrap gap-2">
+                {categoryCounts.map(({ name, count }) => (
+                  <button
+                    key={name}
+                    onClick={() => toggleCategoryFilter(name)}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      categoryFilter === name
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {name}
+                    <span className={`font-normal ${categoryFilter === name ? 'opacity-80' : 'opacity-60'}`}>({count})</span>
+                  </button>
+                ))}
               </div>
-              {pendingCount > 0 && (
-                <div className="flex items-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">⏳ Pending</span>
-                  <span className="font-semibold">{pendingCount}</span>
-                </div>
-              )}
-              {failedCount > 0 && (
-                <div className="flex items-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 mr-2">✗ Failed</span>
-                  <span className="font-semibold">{failedCount}</span>
-                </div>
-              )}
-              {refundedCount > 0 && (
-                <div className="flex items-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 mr-2">↩ Refunded</span>
-                  <span className="font-semibold">{refundedCount}</span>
-                </div>
-              )}
+            </div>
+
+            {/* LGBTQ */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider w-20 shrink-0">LGBTQ+</span>
+              <div className="flex flex-wrap gap-2">
+                {lgbtqCounts.lgbtq > 0 && (
+                  <button
+                    onClick={() => toggleLgbtqFilter('lgbtq')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      lgbtqFilter === 'lgbtq'
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+                    }`}
+                  >
+                    LGBTQ+
+                    <span className={`font-normal ${lgbtqFilter === 'lgbtq' ? 'opacity-80' : 'opacity-60'}`}>({lgbtqCounts.lgbtq})</span>
+                  </button>
+                )}
+                {lgbtqCounts.ally > 0 && (
+                  <button
+                    onClick={() => toggleLgbtqFilter('ally')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      lgbtqFilter === 'ally'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                    }`}
+                  >
+                    Ally
+                    <span className={`font-normal ${lgbtqFilter === 'ally' ? 'opacity-80' : 'opacity-60'}`}>({lgbtqCounts.ally})</span>
+                  </button>
+                )}
+                {lgbtqCounts.no_response > 0 && (
+                  <button
+                    onClick={() => toggleLgbtqFilter('no_response')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      lgbtqFilter === 'no_response'
+                        ? 'bg-gray-500 text-white border-gray-500'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    No Response
+                    <span className={`font-normal ${lgbtqFilter === 'no_response' ? 'opacity-80' : 'opacity-60'}`}>({lgbtqCounts.no_response})</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Goalie */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider w-20 shrink-0">Goalie</span>
+              <div className="flex flex-wrap gap-2">
+                {goalieCounts.goalie > 0 && (
+                  <button
+                    onClick={() => toggleGoalieFilter('goalie')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      goalieFilter === 'goalie'
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'bg-green-50 text-green-800 border-green-200 hover:bg-green-100'
+                    }`}
+                  >
+                    Goalie
+                    <span className={`font-normal ${goalieFilter === 'goalie' ? 'opacity-80' : 'opacity-60'}`}>({goalieCounts.goalie})</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => toggleGoalieFilter('non_goalie')}
+                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    goalieFilter === 'non_goalie'
+                      ? 'bg-gray-500 text-white border-gray-500'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  Non-Goalie
+                  <span className={`font-normal ${goalieFilter === 'non_goalie' ? 'opacity-80' : 'opacity-60'}`}>({goalieCounts.non_goalie})</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -276,7 +392,10 @@ export default function CaptainRosterPage() {
           <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">
-                Roster ({activeMembers.length} active members)
+                Roster{' '}
+                {hasActiveFilters || searchTerm
+                  ? `(${sortedMembers.length} of ${allActiveMembers.length} active members)`
+                  : `(${allActiveMembers.length} active members)`}
               </h2>
             </div>
             <div className="overflow-x-auto">
@@ -288,30 +407,31 @@ export default function CaptainRosterPage() {
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('first_name')}
                     >
-                      Name {sortField === 'first_name' && (sortDirection === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Member ID
+                      Name{sortIndicator('first_name')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Email
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('category_name')}
+                    >
+                      Category{sortIndicator('category_name')}
                     </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('is_lgbtq')}
                     >
-                      LGBTQ {sortField === 'is_lgbtq' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      LGBTQ+{sortIndicator('is_lgbtq')}
                     </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('is_goalie')}
                     >
-                      Goalie {sortField === 'is_goalie' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      Goalie{sortIndicator('is_goalie')}
                     </th>
                   </tr>
                 </thead>
@@ -322,13 +442,12 @@ export default function CaptainRosterPage() {
                         {member.first_name} {member.last_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        #{member.member_id || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {member.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {getPaymentStatusBadge(member.payment_status)}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
+                          {member.category_name}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLgbtqStatusStyles(member.is_lgbtq)}`}>
@@ -342,6 +461,13 @@ export default function CaptainRosterPage() {
                       </td>
                     </tr>
                   ))}
+                  {sortedMembers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                        No members match the current filters.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -355,7 +481,7 @@ export default function CaptainRosterPage() {
                     <div key={member.id} className="text-sm text-gray-500 opacity-60">
                       <span className="line-through">{member.first_name} {member.last_name}</span>
                       <span className="ml-2">({member.email})</span>
-                      <span className="ml-2">{getPaymentStatusBadge(member.payment_status)}</span>
+                      <span className="ml-2">{member.category_name}</span>
                     </div>
                   ))}
                 </div>
@@ -385,7 +511,10 @@ export default function CaptainRosterPage() {
                         Email
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        LGBTQ
+                        Category
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        LGBTQ+
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Goalie
@@ -403,6 +532,11 @@ export default function CaptainRosterPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {waitlist.email}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
+                            {waitlist.category_name}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLgbtqStatusStyles(waitlist.is_lgbtq)}`}>
@@ -434,8 +568,8 @@ export default function CaptainRosterPage() {
 
             // Sort alternates data
             const sortedAlternatesData = [...filteredAlternatesData].sort((a, b) => {
-              let aValue = a[alternatesSortField]
-              let bValue = b[alternatesSortField]
+              let aValue: string | number | boolean | null = a[alternatesSortField]
+              let bValue: string | number | boolean | null = b[alternatesSortField]
 
               if (alternatesSortField === 'is_lgbtq') {
                 aValue = getLgbtqStatusLabel(a.is_lgbtq)

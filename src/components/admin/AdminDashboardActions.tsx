@@ -217,7 +217,7 @@ export default function AdminDashboardActions({ initialFavorites }: AdminDashboa
           <div className="space-y-6">
             {GROUPS.map(group => (
               <div key={group}>
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{group}</h4>
+                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-2 mb-3">{group}</h4>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {QUICK_ACTIONS.filter(a => a.group === group).map(action => {
                     const isFavorited = favorites.includes(action.id)

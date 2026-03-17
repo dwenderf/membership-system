@@ -360,6 +360,7 @@ export async function GET(request: NextRequest) {
             is_goalie: false,
             times_played: 0,
             total_paid: 0,
+            registered_at: '',
             selections: []
           })
         }

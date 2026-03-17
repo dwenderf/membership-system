@@ -14,6 +14,7 @@ interface UserLinkProps {
   showAvatar?: boolean
   showEmail?: boolean
   useXeroName?: boolean
+  disableLink?: boolean
   className?: string
   fromPath?: string
   fromLabel?: string
@@ -92,6 +93,7 @@ export default function UserLink({
   showAvatar = true,
   showEmail = true,
   useXeroName = false,
+  disableLink = false,
   className = '',
   fromPath,
   fromLabel
@@ -112,18 +114,15 @@ export default function UserLink({
     ? buildBreadcrumbUrl(basePath, [], { path: fromPath, label: fromLabel })
     : basePath
 
-  return (
-    <Link
-      href={href}
-      className={`inline-flex items-center gap-2 hover:opacity-75 transition-opacity ${className}`}
-    >
+  const innerContent = (
+    <>
       {showAvatar && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-semibold">
           {initials}
         </div>
       )}
       <div className="flex flex-col">
-        <span className="text-indigo-600 hover:text-indigo-800 font-medium">
+        <span className={`font-medium ${disableLink ? 'text-gray-900' : 'text-indigo-600 hover:text-indigo-800'}`}>
           {displayName}
         </span>
         {showEmail && email && (
@@ -132,6 +131,23 @@ export default function UserLink({
           </span>
         )}
       </div>
+    </>
+  )
+
+  if (disableLink) {
+    return (
+      <div className={`inline-flex items-center gap-2 ${className}`}>
+        {innerContent}
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center gap-2 hover:opacity-75 transition-opacity ${className}`}
+    >
+      {innerContent}
     </Link>
   )
 }

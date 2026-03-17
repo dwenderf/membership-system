@@ -53,6 +53,7 @@ interface AlternateData {
   is_goalie: boolean
   times_played: number
   total_paid: number
+  registered_at: string
   selections: Array<{
     game_description: string
     game_date: string
@@ -640,6 +641,12 @@ export default function CaptainRosterPage() {
                 return alternatesSortDirection === 'asc' ? aNum - bNum : bNum - aNum
               }
 
+              if (alternatesSortField === 'registered_at') {
+                return alternatesSortDirection === 'asc'
+                  ? new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
+                  : new Date(b.registered_at).getTime() - new Date(a.registered_at).getTime()
+              }
+
               if (typeof aValue === 'string' && typeof bValue === 'string') {
                 return alternatesSortDirection === 'asc'
                   ? aValue.localeCompare(bValue)
@@ -666,6 +673,7 @@ export default function CaptainRosterPage() {
                           { key: 'is_goalie', label: 'Goalie' },
                           { key: 'times_played', label: 'Times Played' },
                           { key: 'total_paid', label: 'Total Paid' },
+                          { key: 'registered_at', label: 'Registered' },
                         ].map(({ key, label }) => (
                           <th
                             key={key}
@@ -715,6 +723,18 @@ export default function CaptainRosterPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                             {formatCurrency(alternate.total_paid)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {alternate.registered_at ? (
+                              <div>
+                                <div>{formatDateTime(alternate.registered_at).date}</div>
+                                {formatDateTime(alternate.registered_at).time && (
+                                  <div className="text-xs text-gray-500">{formatDateTime(alternate.registered_at).time}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
+import UserLink from '@/components/UserLink'
+import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 
 interface RegistrationData {
   id: string
@@ -20,6 +22,8 @@ interface RegistrationData {
   category_name: string
   category_id: string
   payment_status: string
+  amount_paid: number
+  payment_id: string | null
   registered_at: string
   is_lgbtq: boolean | null
   is_goalie: boolean
@@ -69,6 +73,7 @@ export default function CaptainRosterPage() {
   const [alternatesData, setAlternatesData] = useState<AlternateData[]>([])
   const [registrationName, setRegistrationName] = useState('')
   const [seasonName, setSeasonName] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -105,6 +110,7 @@ export default function CaptainRosterPage() {
       setRegistrationData(result.data || [])
       setWaitlistData(result.waitlistData || [])
       setAlternatesData(result.alternatesData || [])
+      setIsAdmin(result.isAdmin || false)
 
       // Set title information from first registration record
       if (result.data && result.data.length > 0) {
@@ -115,6 +121,16 @@ export default function CaptainRosterPage() {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const formatCurrency = (amount: number) => `$${(amount / 100).toFixed(2)}`
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return {
+      date: formatDateUtil(date),
+      time: formatTimeUtil(date),
     }
   }
 
@@ -192,6 +208,12 @@ export default function CaptainRosterPage() {
     } else if (sortField === 'is_goalie') {
       aValue = getGoalieStatusLabel(a.is_goalie)
       bValue = getGoalieStatusLabel(b.is_goalie)
+    }
+
+    if (sortField === 'amount_paid') {
+      const aNum = typeof aValue === 'number' ? aValue : 0
+      const bNum = typeof bValue === 'number' ? bValue : 0
+      return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
     }
 
     if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -409,9 +431,6 @@ export default function CaptainRosterPage() {
                     >
                       Name{sortIndicator('first_name')}
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
                     <th
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -433,16 +452,37 @@ export default function CaptainRosterPage() {
                     >
                       Goalie{sortIndicator('is_goalie')}
                     </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('amount_paid')}
+                    >
+                      Amount Paid{sortIndicator('amount_paid')}
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('registered_at')}
+                    >
+                      Registered{sortIndicator('registered_at')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedMembers.map((member) => (
                     <tr key={member.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {member.first_name} {member.last_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {member.email}
+                      <td className="px-6 py-4 text-sm">
+                        <UserLink
+                          userId={member.user_id}
+                          firstName={member.first_name}
+                          lastName={member.last_name}
+                          email={member.email}
+                          showMembershipNumber={false}
+                          showEmail={true}
+                          disableLink={!isAdmin}
+                          fromPath={`/user/captain/${registrationId}/roster`}
+                          fromLabel={registrationName || 'Captain Roster'}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
@@ -459,11 +499,22 @@ export default function CaptainRosterPage() {
                           {getGoalieStatusLabel(member.is_goalie)}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        {formatCurrency(member.amount_paid)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div>
+                          <div>{formatDateTime(member.registered_at).date}</div>
+                          {formatDateTime(member.registered_at).time && (
+                            <div className="text-xs text-gray-500">{formatDateTime(member.registered_at).time}</div>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {sortedMembers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
                         No members match the current filters.
                       </td>
                     </tr>
@@ -508,9 +559,6 @@ export default function CaptainRosterPage() {
                         Name
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Category
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -527,11 +575,18 @@ export default function CaptainRosterPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {waitlist.position}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {waitlist.first_name} {waitlist.last_name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {waitlist.email}
+                        <td className="px-6 py-4 text-sm">
+                          <UserLink
+                            userId={waitlist.user_id}
+                            firstName={waitlist.first_name}
+                            lastName={waitlist.last_name}
+                            email={waitlist.email}
+                            showMembershipNumber={false}
+                            showEmail={true}
+                            disableLink={!isAdmin}
+                            fromPath={`/user/captain/${registrationId}/roster`}
+                            fromLabel={registrationName || 'Captain Roster'}
+                          />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
@@ -579,7 +634,7 @@ export default function CaptainRosterPage() {
                 bValue = getGoalieStatusLabel(b.is_goalie)
               }
 
-              if (alternatesSortField === 'times_played') {
+              if (alternatesSortField === 'times_played' || alternatesSortField === 'total_paid') {
                 const aNum = typeof aValue === 'number' ? aValue : 0
                 const bNum = typeof bValue === 'number' ? bValue : 0
                 return alternatesSortDirection === 'asc' ? aNum - bNum : bNum - aNum
@@ -607,10 +662,10 @@ export default function CaptainRosterPage() {
                       <tr>
                         {[
                           { key: 'first_name', label: 'Name' },
-                          { key: 'email', label: 'Email' },
                           { key: 'is_lgbtq', label: 'LGBTQ+' },
                           { key: 'is_goalie', label: 'Goalie' },
-                          { key: 'times_played', label: 'Times Played' }
+                          { key: 'times_played', label: 'Times Played' },
+                          { key: 'total_paid', label: 'Total Paid' },
                         ].map(({ key, label }) => (
                           <th
                             key={key}
@@ -632,11 +687,18 @@ export default function CaptainRosterPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {sortedAlternatesData.map((alternate) => (
                         <tr key={alternate.user_id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {alternate.first_name} {alternate.last_name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {alternate.email}
+                          <td className="px-6 py-4 text-sm">
+                            <UserLink
+                              userId={alternate.user_id}
+                              firstName={alternate.first_name}
+                              lastName={alternate.last_name}
+                              email={alternate.email}
+                              showMembershipNumber={false}
+                              showEmail={true}
+                              disableLink={!isAdmin}
+                              fromPath={`/user/captain/${registrationId}/roster`}
+                              fromLabel={registrationName || 'Captain Roster'}
+                            />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getLgbtqStatusStyles(alternate.is_lgbtq)}`}>
@@ -650,6 +712,9 @@ export default function CaptainRosterPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                             {alternate.times_played}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                            {formatCurrency(alternate.total_paid)}
                           </td>
                         </tr>
                       ))}

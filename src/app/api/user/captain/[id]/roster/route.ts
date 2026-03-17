@@ -30,6 +30,14 @@ export async function GET(
       )
     }
 
+    // Check if this user is an admin
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    const isAdmin = userProfile?.is_admin || false
+
     // Captain is verified - use admin client to bypass RLS for data queries
     const adminSupabase = createAdminClient()
 
@@ -174,6 +182,8 @@ export async function GET(
         category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
         category_id: item.registration_category_id || 'unknown',
         payment_status: item.payment_status || 'Unknown',
+        amount_paid: item.amount_paid || 0,
+        payment_id: item.payment_id || null,
         registered_at: item.registered_at,
         is_lgbtq: user?.is_lgbtq,
         is_goalie: user?.is_goalie || false,
@@ -282,6 +292,7 @@ export async function GET(
       data: processedData,
       waitlistData: processedWaitlistData,
       alternatesData: processedAlternatesData,
+      isAdmin,
     })
   } catch (error) {
     console.error('Error in captain roster API:', error)

@@ -272,6 +272,7 @@ export async function GET(
           is_goalie: false,
           times_played: 0,
           total_paid: 0,
+          registered_at: '',
           selections: []
         })
       }

@@ -310,6 +310,7 @@ export async function GET(request: NextRequest) {
         is_goalie: boolean
         times_played: number
         total_paid: number
+        registered_at: string
         selections: Array<{
           game_description: string
           game_date: string
@@ -334,6 +335,7 @@ export async function GET(request: NextRequest) {
             is_goalie: user.is_goalie || false,
             times_played: 0,
             total_paid: 0,
+            registered_at: altReg.created_at || '',
             selections: []
           })
         }
@@ -358,6 +360,7 @@ export async function GET(request: NextRequest) {
             is_goalie: false,
             times_played: 0,
             total_paid: 0,
+            registered_at: '',
             selections: []
           })
         }

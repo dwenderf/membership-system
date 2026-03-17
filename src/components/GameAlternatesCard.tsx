@@ -56,10 +56,10 @@ interface GameAlternatesCardProps {
   onCountsUpdated?: (gameId: string, selectedCount: number, availableCount: number) => void
 }
 
-export default function GameAlternatesCard({ 
-  game, 
-  registration, 
-  dateTag, 
+export default function GameAlternatesCard({
+  game,
+  registration,
+  dateTag,
   userAccess,
   onCountsUpdated
 }: GameAlternatesCardProps) {
@@ -69,7 +69,58 @@ export default function GameAlternatesCard({
   const [error, setError] = useState('')
   const [selecting, setSelecting] = useState(false)
   const [selectedAlternates, setSelectedAlternates] = useState<Set<string>>(new Set())
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
+  const [displayDescription, setDisplayDescription] = useState(game.gameDescription)
+  const [editDescription, setEditDescription] = useState(game.gameDescription)
+  const [savingDescription, setSavingDescription] = useState(false)
+  const [descriptionError, setDescriptionError] = useState('')
   const { showSuccess, showError } = useToast()
+
+  const handleDescriptionSave = async () => {
+    if (editDescription.trim() === displayDescription) {
+      setIsEditingDescription(false)
+      return
+    }
+
+    if (!editDescription.trim()) {
+      setDescriptionError('Game description cannot be empty')
+      return
+    }
+
+    setSavingDescription(true)
+    setDescriptionError('')
+
+    try {
+      const response = await fetch(`/api/alternate-registrations/${game.id}/description`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameDescription: editDescription.trim() })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update game description')
+      }
+
+      setDisplayDescription(editDescription.trim())
+      setIsEditingDescription(false)
+    } catch (err) {
+      setDescriptionError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      setSavingDescription(false)
+    }
+  }
+
+  const handleDescriptionCancel = () => {
+    setEditDescription(displayDescription)
+    setIsEditingDescription(false)
+    setDescriptionError('')
+  }
+
+  const handleDescriptionKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleDescriptionSave()
+    else if (e.key === 'Escape') handleDescriptionCancel()
+  }
 
   // Fetch alternates when expanded
   useEffect(() => {
@@ -195,19 +246,71 @@ export default function GameAlternatesCard({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center space-x-3">
-              <h4 className="text-lg font-medium text-gray-900">
-                {game.gameDescription || 'Untitled Game'}
-              </h4>
-              {dateTag && (
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  dateTag.isUrgent ? 'bg-green-100 text-green-800' :
-                  dateTag.text.includes('ago') ? 'bg-gray-100 text-gray-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>
-                  {dateTag.text}
-                </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-2">
+              {isEditingDescription ? (
+                <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      onKeyDown={handleDescriptionKeyDown}
+                      className="flex-1 text-lg font-medium text-gray-900 bg-transparent border-b-2 border-blue-500 focus:outline-none focus:border-blue-600"
+                      autoFocus
+                      disabled={savingDescription}
+                    />
+                    <button
+                      onClick={handleDescriptionSave}
+                      disabled={savingDescription || !editDescription.trim()}
+                      className="p-2 text-green-600 hover:text-green-700 disabled:opacity-50 shrink-0"
+                      title="Save"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleDescriptionCancel}
+                      disabled={savingDescription}
+                      className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 shrink-0"
+                      title="Cancel"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {descriptionError && (
+                    <p className="mt-1 text-xs text-red-600">{descriptionError}</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <h4 className="text-lg font-medium text-gray-900">
+                    {displayDescription || 'Untitled Game'}
+                  </h4>
+                  {(userAccess.isAdmin || userAccess.isCaptain) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setIsEditingDescription(true) }}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                      title="Edit game name"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
+                  {dateTag && (
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                      dateTag.isUrgent ? 'bg-green-100 text-green-800' :
+                      dateTag.text.includes('ago') ? 'bg-gray-100 text-gray-800' :
+                      'bg-blue-100 text-blue-800'
+                    }`}>
+                      {dateTag.text}
+                    </span>
+                  )}
+                </>
               )}
             </div>
             {game.gameDate ? (

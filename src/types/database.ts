@@ -277,7 +277,7 @@ export type Database = {
           user_membership_id: string | null
           payment_id: string | null
           xero_invoice_id: string | null
-          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded' | 'expired'
           registration_fee: number | null
           amount_paid: number | null
           presale_code_used: string | null
@@ -294,7 +294,7 @@ export type Database = {
           user_membership_id?: string | null
           payment_id?: string | null
           xero_invoice_id?: string | null
-          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_status: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded' | 'expired'
           registration_fee?: number | null
           amount_paid?: number | null
           presale_code_used?: string | null
@@ -311,7 +311,7 @@ export type Database = {
           user_membership_id?: string | null
           payment_id?: string | null
           xero_invoice_id?: string | null
-          payment_status?: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded'
+          payment_status?: 'awaiting_payment' | 'processing' | 'paid' | 'failed' | 'refunded' | 'expired'
           registration_fee?: number | null
           amount_paid?: number | null
           presale_code_used?: string | null

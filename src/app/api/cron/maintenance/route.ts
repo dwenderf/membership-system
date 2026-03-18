@@ -43,57 +43,69 @@ export async function GET(request: NextRequest) {
         'info'
       )
 
-      // Clean up expired reservations (older than 1 hour)
+      // Clean up abandoned registrations older than 1 hour.
+      //
+      // The safe signal for "never completed" is registered_at IS NULL —
+      // that field is only written at payment completion, so it is null for
+      // any awaiting_payment row that was abandoned before checkout finished.
+      // This correctly excludes 'refunded' records (which have registered_at
+      // set because they were once paid) and any other terminal statuses.
+      //
+      // We do NOT filter on reservation_expires_at because unlimited-capacity
+      // categories never set that field, yet they can still be abandoned.
       const oneHourAgo = new Date()
       oneHourAgo.setHours(oneHourAgo.getHours() - 1)
 
-      const { data: expiredReservations, error: cleanupError } = await supabase
+      const { data: abandonedRegistrations, error: cleanupError } = await supabase
         .from('user_registrations')
         .select('id')
         .eq('payment_status', 'awaiting_payment')
-        .lt('reservation_expires_at', oneHourAgo.toISOString())
+        .is('registered_at', null)
+        .lt('created_at', oneHourAgo.toISOString())
 
       if (cleanupError) {
         results.cleanup.error = cleanupError.message
         logger.logPaymentProcessing(
           'cron-cleanup-error',
-          'Failed to fetch expired reservations',
+          'Failed to fetch abandoned registrations',
           { error: results.cleanup.error },
           'error'
         )
       } else {
-        results.cleanup.cleaned = expiredReservations?.length || 0
+        results.cleanup.cleaned = abandonedRegistrations?.length || 0
 
-        if (expiredReservations && expiredReservations.length > 0) {
+        if (abandonedRegistrations && abandonedRegistrations.length > 0) {
           logger.logPaymentProcessing(
             'cron-cleanup-found',
-            `Found ${expiredReservations.length} expired reservations to clean up`,
-            { count: expiredReservations.length },
+            `Found ${abandonedRegistrations.length} abandoned registrations to mark as expired`,
+            { count: abandonedRegistrations.length },
             'info'
           )
 
-          // Update expired reservations to failed status
+          // Mark as 'expired' — distinct from 'failed' (which means Stripe
+          // rejected an active payment attempt). 'expired' means the user
+          // started checkout but never submitted payment.
           const { error: updateError } = await supabase
             .from('user_registrations')
-            .update({ 
-              payment_status: 'failed',
+            .update({
+              payment_status: 'expired',
               reservation_expires_at: null
             })
-            .in('id', expiredReservations.map(r => r.id))
+            .in('id', abandonedRegistrations.map(r => r.id))
 
           if (updateError) {
             results.cleanup.error = updateError.message
             logger.logPaymentProcessing(
               'cron-cleanup-update-error',
-              'Failed to update expired reservations',
+              'Failed to mark abandoned registrations as expired',
               { error: results.cleanup.error },
               'error'
             )
           } else {
             logger.logPaymentProcessing(
               'cron-cleanup-update-success',
-              'Successfully updated expired reservations to failed status',
-              { updated: expiredReservations.length },
+              'Successfully marked abandoned registrations as expired',
+              { updated: abandonedRegistrations.length },
               'info'
             )
           }

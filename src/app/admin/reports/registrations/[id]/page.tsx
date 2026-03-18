@@ -134,8 +134,10 @@ export default function RegistrationDetailPage() {
 
   const formatCurrency = (amount: number) => `$${(amount / 100).toFixed(2)}`
 
-  const formatDateTime = (dateString: string) => {
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return { date: 'N/A', time: '' }
     const date = new Date(dateString)
+    if (isNaN(date.getTime())) return { date: 'N/A', time: '' }
     return {
       date: formatDateUtil(date),
       time: formatTimeUtil(date),
@@ -169,8 +171,8 @@ export default function RegistrationDetailPage() {
     }
   }
 
-  // Split active vs refunded
-  const allActiveMembers = registrationData.filter(r => r.payment_status !== 'refunded')
+  // Split by payment status — only paid records belong on the active roster
+  const allActiveMembers = registrationData.filter(r => r.payment_status === 'paid')
   const refundedMembers = registrationData.filter(r => r.payment_status === 'refunded')
 
   // Category counts (from all active members, for filter chips)

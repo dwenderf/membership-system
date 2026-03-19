@@ -153,8 +153,8 @@ export default function CaptainRosterPage() {
     }
   }
 
-  // All active members (unfiltered, used for summary counts)
-  const allActiveMembers = registrationData.filter(r => r.payment_status !== 'refunded')
+  // Only paid members belong on the active roster
+  const allActiveMembers = registrationData.filter(r => r.payment_status === 'paid')
   const refundedMembers = registrationData.filter(r => r.payment_status === 'refunded')
 
   // Unique categories with counts (from all active members)

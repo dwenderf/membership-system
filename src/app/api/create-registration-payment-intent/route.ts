@@ -692,7 +692,7 @@ export async function POST(request: NextRequest) {
       // Separate records by status
       const awaitingPaymentRecords = existingRecords?.filter(r => r.payment_status === 'awaiting_payment') || []
       const processingRecords = existingRecords?.filter(r => r.payment_status === 'processing') || []
-      const failedRecords = existingRecords?.filter(r => r.payment_status === 'failed') || []
+      const failedRecords = existingRecords?.filter(r => r.payment_status === 'failed' || r.payment_status === 'expired') || []
       
       // Handle 'processing' records - check Stripe status before blocking
       if (processingRecords.length > 0) {

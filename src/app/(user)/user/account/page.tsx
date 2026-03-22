@@ -20,6 +20,13 @@ export default function AccountPage() {
   const [hasEmailAuth, setHasEmailAuth] = useState(false)
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
+  const [isCaptain, setIsCaptain] = useState(false)
+
+  // Email notification preferences (absent key = opted in)
+  const [notifRosterChanges, setNotifRosterChanges] = useState(true)
+  const [notifNewRegistrations, setNotifNewRegistrations] = useState(true)
+  const [notifRefunds, setNotifRefunds] = useState(true)
+  const [savingNotifs, setSavingNotifs] = useState(false)
 
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -55,6 +62,20 @@ export default function AccountPage() {
       // Note: Supabase requires at least 2 identities to unlink one
       const emailIdentity = identities.find(id => id.provider === 'email')
       setHasEmailAuth(!!emailIdentity)
+
+      // Load email notification preferences from stored preferences
+      const prefs = profile?.preferences?.emailNotifications ?? {}
+      if (prefs.rosterChanges === false) setNotifRosterChanges(false)
+      if (prefs.newRegistrations === false) setNotifNewRegistrations(false)
+      if (prefs.refunds === false) setNotifRefunds(false)
+
+      // Check if this user is a captain for any registration
+      const { data: captainRows } = await supabase
+        .from('registration_captains')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+      setIsCaptain((captainRows?.length ?? 0) > 0)
 
       setUser(user)
       setUserProfile(profile)
@@ -106,6 +127,29 @@ export default function AccountPage() {
       showError('Failed to Unlink', errorMessage)
     } finally {
       setUnlinking(false)
+    }
+  }
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifs(true)
+    try {
+      const res = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailNotifications: {
+            rosterChanges: notifRosterChanges,
+            newRegistrations: notifNewRegistrations,
+            refunds: notifRefunds,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save preferences')
+      showSuccess('Preferences Saved', 'Your email notification preferences have been updated.')
+    } catch (error) {
+      showError('Save Failed', 'Could not save your preferences. Please try again.')
+    } finally {
+      setSavingNotifs(false)
     }
   }
 
@@ -276,6 +320,114 @@ export default function AccountPage() {
 
       {/* Payment Plans */}
       <UserPaymentPlansSection />
+
+      {/* Email Notifications */}
+      {(userProfile?.is_admin || isCaptain) && (
+        <div className="bg-white shadow rounded-lg mb-6">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">Email Notifications</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Choose which automated emails you receive. You can opt back in at any time.
+            </p>
+          </div>
+          <div className="px-6 py-4 space-y-5">
+            {/* Captain: roster change toggle */}
+            {isCaptain && (
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Roster changes</p>
+                  <p className="text-sm text-gray-500">
+                    Notify me when players join or leave a team I captain
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notifRosterChanges}
+                  onClick={() => setNotifRosterChanges((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    notifRosterChanges ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      notifRosterChanges ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Admin: new registration toggle */}
+            {userProfile?.is_admin && (
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">New registrations</p>
+                  <p className="text-sm text-gray-500">
+                    Notify me when a member completes a new registration or signs up as an alternate
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notifNewRegistrations}
+                  onClick={() => setNotifNewRegistrations((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    notifNewRegistrations ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      notifNewRegistrations ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Admin: refunds toggle */}
+            {userProfile?.is_admin && (
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Refunds</p>
+                  <p className="text-sm text-gray-500">
+                    Notify me when a refund is processed
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notifRefunds}
+                  onClick={() => setNotifRefunds((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    notifRefunds ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      notifRefunds ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSaveNotifications}
+                disabled={savingNotifs}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingNotifs ? 'Saving…' : 'Save Preferences'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Account Actions */}
       <div className="bg-white shadow rounded-lg">

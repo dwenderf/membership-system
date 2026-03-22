@@ -16,6 +16,8 @@ import { emailStagingManager } from '@/lib/email/staging'
 import { Logger } from '@/lib/logging/logger'
 import { centsToDollars } from '@/types/currency'
 import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
+import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -436,11 +438,31 @@ export class EmailProcessor {
         payment_id: event.payment_id || undefined
       })
 
-      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Email staging result', { 
+      this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Email staging result', {
         success: stagingResult,
         email: user.email
       })
-      
+
+      // Notify opted-in admins and captains of the new registration (fire-and-forget)
+      stageAdminNewRegistrationNotification(
+        registration.registration.id,
+        event.user_id,
+        event.payment_id,
+        registration.registration_category_id ?? null,
+        false, // not an alternate
+        registration.registered_at || registration.created_at || new Date().toISOString(),
+        registration.amount_paid ?? 0
+      ).catch((err) => this.logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Admin notification failed (non-fatal)', { error: err?.message }, 'warn'))
+
+      stageCaptainRosterChangeNotification(
+        registration.registration.id,
+        event.user_id,
+        'joined',
+        categoryName,
+        registration.registered_at || registration.created_at || new Date().toISOString(),
+        registration.amount_paid ?? 0
+      ).catch((err) => this.logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Captain notification failed (non-fatal)', { error: err?.message }, 'warn'))
+
     } catch (error) {
       this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Failed to stage registration email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')
     }

@@ -1,6 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,6 +101,27 @@ export async function POST(request: NextRequest) {
       console.error('Error creating alternate registration:', insertError)
       return NextResponse.json({ error: 'Failed to register as alternate' }, { status: 500 })
     }
+
+    // Notify opted-in captains and admins of the new alternate sign-up (fire-and-forget)
+    const now = alternateRegistration.created_at ?? new Date().toISOString()
+    stageCaptainRosterChangeNotification(
+      registration_id,
+      user.id,
+      'alternate joined',
+      'Alternate',
+      now,
+      0 // no upfront payment for alternates
+    ).catch((err) => console.warn('user-alternate-registrations: captain notification failed (non-fatal)', err))
+
+    stageAdminNewRegistrationNotification(
+      registration_id,
+      user.id,
+      null, // no payment ID for alternate sign-ups
+      null, // no category for alternate sign-ups
+      true, // isAlternate
+      now,
+      0
+    ).catch((err) => console.warn('user-alternate-registrations: admin notification failed (non-fatal)', err))
 
     return NextResponse.json({
       success: true,

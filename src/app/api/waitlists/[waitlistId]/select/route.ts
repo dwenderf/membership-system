@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { logger } from '@/lib/logging/logger'
+import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 
 // POST /api/waitlists/[waitlistId]/select - Select a user from waitlist
 export async function POST(
@@ -192,6 +194,27 @@ export async function POST(
           error: updateError.message
         })
       }
+
+      // Notify opted-in admins and captain(s) about the roster addition (fire-and-forget)
+      const now = new Date().toISOString()
+      stageCaptainRosterChangeNotification(
+        waitlistEntry.registration_id,
+        waitlistEntry.user_id,
+        'selected from waitlist',
+        categoryName,
+        now,
+        chargeResult.amountCharged
+      ).catch((err) => logger.logSystem('waitlist-selection-captain-notify', 'Captain notification failed (non-fatal)', { error: err?.message }))
+
+      stageAdminNewRegistrationNotification(
+        waitlistEntry.registration_id,
+        waitlistEntry.user_id,
+        chargeResult.paymentId ?? null,
+        waitlistEntry.registration_category_id,
+        false,
+        now,
+        chargeResult.amountCharged
+      ).catch((err) => logger.logSystem('waitlist-selection-admin-notify', 'Admin notification failed (non-fatal)', { error: err?.message }))
 
       // Email confirmation will be sent via webhook after payment is confirmed
       // This ensures emails are only sent if payment succeeds

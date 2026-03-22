@@ -9,7 +9,7 @@ interface RoleBadgeProps {
 
 const roleStyles: Record<Role, string> = {
   Administrator: 'bg-purple-100 text-purple-800',
-  Captain: 'bg-indigo-100 text-indigo-800',
+  Captain: 'bg-amber-100 text-amber-800',
   Member: 'bg-blue-100 text-blue-800',
 }
 
@@ -18,7 +18,7 @@ const roleStyles: Record<Role, string> = {
  *
  * Provides consistent colors across the application:
  * - Administrator: Purple (bg-purple-100 text-purple-800)
- * - Captain: Indigo (bg-indigo-100 text-indigo-800)
+ * - Captain: Amber (bg-amber-100 text-amber-800)
  * - Member: Blue (bg-blue-100 text-blue-800)
  *
  * @example

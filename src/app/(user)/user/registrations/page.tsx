@@ -9,6 +9,7 @@ import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import WaitlistBadge from '@/components/WaitlistBadge'
+import RoleBadge from '@/components/RoleBadge'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -171,6 +172,13 @@ export default async function UserRegistrationsPage() {
     console.error('Error fetching alternate selections:', alternateSelectionsError)
   }
 
+  // Get the registration IDs for which this user is a captain
+  const { data: captainRows } = await supabase
+    .from('registration_captains')
+    .select('registration_id')
+    .eq('user_id', user.id)
+  const captainRegistrationIds = new Set((captainRows ?? []).map((r: any) => r.registration_id))
+
   const activeMemberships = userMemberships || []
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
@@ -229,6 +237,7 @@ export default async function UserRegistrationsPage() {
                               {getCategoryDisplayName(userRegistration.registration_category)}
                             </span>
                           )}
+                          {captainRegistrationIds.has(userRegistration.registration_id) && <RoleBadge role="Captain" />}
                         </div>
 
                         {/* Date/Season */}
@@ -516,6 +525,7 @@ export default async function UserRegistrationsPage() {
                               {getCategoryDisplayName(userRegistration.registration_category)}
                             </span>
                           )}
+                          {captainRegistrationIds.has(userRegistration.registration_id) && <RoleBadge role="Captain" />}
                         </div>
 
                         {/* Date/Season */}

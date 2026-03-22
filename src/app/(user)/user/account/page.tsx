@@ -26,7 +26,7 @@ export default function AccountPage() {
   const [notifRosterChanges, setNotifRosterChanges] = useState(true)
   const [notifNewRegistrations, setNotifNewRegistrations] = useState(true)
   const [notifRefunds, setNotifRefunds] = useState(true)
-  const [savingNotifs, setSavingNotifs] = useState(false)
+  const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null)
 
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -130,26 +130,31 @@ export default function AccountPage() {
     }
   }
 
-  const handleSaveNotifications = async () => {
-    setSavingNotifs(true)
+  const handleToggleNotif = async (
+    key: 'rosterChanges' | 'newRegistrations' | 'refunds',
+    newValue: boolean
+  ) => {
+    // Optimistic update
+    if (key === 'rosterChanges') setNotifRosterChanges(newValue)
+    if (key === 'newRegistrations') setNotifNewRegistrations(newValue)
+    if (key === 'refunds') setNotifRefunds(newValue)
+
+    setSavingNotifKey(key)
     try {
       const res = await fetch('/api/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emailNotifications: {
-            rosterChanges: notifRosterChanges,
-            newRegistrations: notifNewRegistrations,
-            refunds: notifRefunds,
-          },
-        }),
+        body: JSON.stringify({ emailNotifications: { [key]: newValue } }),
       })
-      if (!res.ok) throw new Error('Failed to save preferences')
-      showSuccess('Preferences Saved', 'Your email notification preferences have been updated.')
-    } catch (error) {
-      showError('Save Failed', 'Could not save your preferences. Please try again.')
+      if (!res.ok) throw new Error('Failed to save preference')
+    } catch {
+      // Revert on failure
+      if (key === 'rosterChanges') setNotifRosterChanges(!newValue)
+      if (key === 'newRegistrations') setNotifNewRegistrations(!newValue)
+      if (key === 'refunds') setNotifRefunds(!newValue)
+      showError('Save Failed', 'Could not update your preference. Please try again.')
     } finally {
-      setSavingNotifs(false)
+      setSavingNotifKey(null)
     }
   }
 
@@ -335,27 +340,38 @@ export default function AccountPage() {
             {isCaptain && (
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Roster changes</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900">Roster changes</p>
+                    {userProfile?.is_admin && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Captain</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
                     Notify me when players join or leave a team I captain
                   </p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={notifRosterChanges}
-                  onClick={() => setNotifRosterChanges((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    notifRosterChanges ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      notifRosterChanges ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {savingNotifKey === 'rosterChanges' && (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  )}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={notifRosterChanges}
+                    disabled={savingNotifKey === 'rosterChanges'}
+                    onClick={() => handleToggleNotif('rosterChanges', !notifRosterChanges)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      notifRosterChanges ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        notifRosterChanges ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -363,27 +379,38 @@ export default function AccountPage() {
             {userProfile?.is_admin && (
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">New registrations</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900">New registrations</p>
+                    {isCaptain && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Admin</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
                     Notify me when a member completes a new registration or signs up as an alternate
                   </p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={notifNewRegistrations}
-                  onClick={() => setNotifNewRegistrations((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    notifNewRegistrations ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      notifNewRegistrations ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {savingNotifKey === 'newRegistrations' && (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  )}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={notifNewRegistrations}
+                    disabled={savingNotifKey === 'newRegistrations'}
+                    onClick={() => handleToggleNotif('newRegistrations', !notifNewRegistrations)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      notifNewRegistrations ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        notifNewRegistrations ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -391,40 +418,40 @@ export default function AccountPage() {
             {userProfile?.is_admin && (
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Refunds</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900">Refunds</p>
+                    {isCaptain && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Admin</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
                     Notify me when a refund is processed
                   </p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={notifRefunds}
-                  onClick={() => setNotifRefunds((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    notifRefunds ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      notifRefunds ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {savingNotifKey === 'refunds' && (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  )}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={notifRefunds}
+                    disabled={savingNotifKey === 'refunds'}
+                    onClick={() => handleToggleNotif('refunds', !notifRefunds)}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      notifRefunds ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        notifRefunds ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             )}
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleSaveNotifications}
-                disabled={savingNotifs}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingNotifs ? 'Saving…' : 'Save Preferences'}
-              </button>
-            </div>
           </div>
         </div>
       )}

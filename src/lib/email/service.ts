@@ -691,6 +691,7 @@ class EmailService {
     adminName: string
     playerName: string
     registrationName: string
+    seasonName: string
     refundAmount: string
     originalAmount: string
     invoiceUrl: string
@@ -706,6 +707,7 @@ class EmailService {
         adminName: options.adminName,
         playerName: options.playerName,
         registrationName: options.registrationName,
+        seasonName: options.seasonName,
         refundAmount: options.refundAmount,
         originalAmount: options.originalAmount,
         invoiceUrl: options.invoiceUrl,

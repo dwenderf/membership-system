@@ -190,7 +190,7 @@ export async function stageAdminRefundNotification(
     // Resolve the registration name from the refunded payment
     const { data: userReg } = await supabase
       .from('user_registrations')
-      .select('registration:registrations(name)')
+      .select('registration:registrations(name, season:seasons(name))')
       .eq('payment_id', paymentId)
       .eq('user_id', playerUserId)
       .single()
@@ -199,6 +199,8 @@ export async function stageAdminRefundNotification(
       ? (Array.isArray(userReg.registration) ? userReg.registration[0] : userReg.registration)
       : null
     const registrationName = reg?.name ?? 'Registration'
+    const regSeason = reg?.season ? (Array.isArray(reg.season) ? reg.season[0] : reg.season) : null
+    const seasonName = regSeason?.name ?? ''
 
     const refundAmount = (refundAmountCents / 100).toFixed(2)
     const originalAmount = (originalAmountCents / 100).toFixed(2)
@@ -214,6 +216,7 @@ export async function stageAdminRefundNotification(
           adminName: `${admin.first_name} ${admin.last_name}`,
           playerName,
           registrationName,
+          seasonName,
           refundAmount,
           originalAmount,
           invoiceUrl,

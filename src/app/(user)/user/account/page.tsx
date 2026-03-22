@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
+import RoleBadge from '@/components/RoleBadge'
 import dynamic from 'next/dynamic'
 
 const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
@@ -215,13 +216,7 @@ export default function AccountPage() {
             <div>
               <dt className="text-sm font-medium text-gray-500">Account Type</dt>
               <dd className="mt-1">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  userProfile?.is_admin 
-                    ? 'bg-purple-100 text-purple-800' 
-                    : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {userProfile?.is_admin ? 'Administrator' : 'Member'}
-                </span>
+                <RoleBadge role={userProfile?.is_admin ? 'Administrator' : 'Member'} />
               </dd>
             </div>
             <div>
@@ -342,9 +337,7 @@ export default function AccountPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900">Roster changes</p>
-                    {userProfile?.is_admin && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Captain</span>
-                    )}
+                    {userProfile?.is_admin && <RoleBadge role="Captain" />}
                   </div>
                   <p className="text-sm text-gray-500">
                     Notify me when players join or leave a team I captain
@@ -381,9 +374,7 @@ export default function AccountPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900">New registrations</p>
-                    {isCaptain && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Admin</span>
-                    )}
+                    {isCaptain && <RoleBadge role="Administrator" />}
                   </div>
                   <p className="text-sm text-gray-500">
                     Notify me when a member completes a new registration or signs up as an alternate
@@ -420,9 +411,7 @@ export default function AccountPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900">Refunds</p>
-                    {isCaptain && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Admin</span>
-                    )}
+                    {isCaptain && <RoleBadge role="Administrator" />}
                   </div>
                   <p className="text-sm text-gray-500">
                     Notify me when a refund is processed

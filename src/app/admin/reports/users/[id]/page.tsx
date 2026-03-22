@@ -7,6 +7,7 @@ import { Logger } from '@/lib/logging/logger'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
 import DiscountUsage from '@/components/DiscountUsage'
+import RoleBadge from '@/components/RoleBadge'
 import PaymentPlanSection from './PaymentPlanSection'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
@@ -323,13 +324,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Account Type</dt>
                       <dd className="mt-1">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          user.is_admin 
-                            ? 'bg-purple-100 text-purple-800' 
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {user.is_admin ? 'Administrator' : 'Member'}
-                        </span>
+                        <RoleBadge role={user.is_admin ? 'Administrator' : 'Member'} />
                       </dd>
                     </div>
                     <div>

@@ -13,6 +13,7 @@ import { emailService } from '@/lib/email/service'
 export type RosterChangeType =
   | 'joined'
   | 'left'
+  | 'added to waitlist'
   | 'selected from waitlist'
   | 'alternate joined'
 

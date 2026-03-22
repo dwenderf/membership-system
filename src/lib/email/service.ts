@@ -639,6 +639,7 @@ class EmailService {
         registrationDateTime: options.registrationDateTime,
         paidAmount: options.paidAmount,
         rosterUrl: options.rosterUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })
   }
@@ -676,6 +677,7 @@ class EmailService {
         paidAmount: options.paidAmount,
         invoiceUrl: options.invoiceUrl,
         adminRosterUrl: options.adminRosterUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })
   }
@@ -707,6 +709,7 @@ class EmailService {
         refundAmount: options.refundAmount,
         originalAmount: options.originalAmount,
         invoiceUrl: options.invoiceUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })
   }

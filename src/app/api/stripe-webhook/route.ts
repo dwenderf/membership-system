@@ -1022,7 +1022,8 @@ export async function POST(request: NextRequest) {
               template_id: process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID,
               email_data: {
                 userName: `${user.first_name} ${user.last_name}`,
-                paymentMethod: `****${lastFourDigits}`
+                paymentMethod: `****${lastFourDigits}`,
+                dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
               }
             })
           }

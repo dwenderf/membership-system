@@ -225,7 +225,7 @@ export class EmailProcessingManager {
           .from('email_logs')
           .update({
             loops_event_id: (loopsResponse as any).id || 'sent',
-            status: 'delivered',
+            status: 'sent',
             delivered_at: new Date().toISOString()
           })
           .eq('id', emailLog.id)

@@ -22,6 +22,9 @@ export const EMAIL_EVENTS = {
   PAYMENT_PLAN_COMPLETED: 'payment_plan.completed',
   CAPTAIN_ASSIGNED: 'captain.assigned',
   CAPTAIN_REMOVED: 'captain.removed',
+  CAPTAIN_ROSTER_CHANGE: 'captain.roster_change',
+  ADMIN_NEW_REGISTRATION: 'admin.new_registration',
+  ADMIN_REFUND_NOTIFICATION: 'admin.refund_notification',
 } as const
 
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]
@@ -599,6 +602,116 @@ class EmailService {
         amount_paid: `$${(options.amountPaid / 100).toFixed(2)}`,
         remaining_balance: `$${(options.remainingBalance / 100).toFixed(2)}`,
         account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+      }
+    })
+  }
+
+  /**
+   * Send captain roster change notification immediately (bypasses queue)
+   */
+  async sendCaptainRosterChangeNotification(options: {
+    captainUserId: string
+    captainEmail: string
+    captainName: string
+    playerName: string
+    registrationName: string
+    seasonName: string
+    categoryName: string
+    changeType: string
+    registrationDateTime: string
+    paidAmount: string
+    rosterUrl: string
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.captainUserId,
+      email: options.captainEmail,
+      eventType: EMAIL_EVENTS.CAPTAIN_ROSTER_CHANGE,
+      subject: `Roster Update: ${options.playerName} ${options.changeType} – ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID,
+      data: {
+        captainName: options.captainName,
+        playerName: options.playerName,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        categoryName: options.categoryName,
+        changeType: options.changeType,
+        registrationDateTime: options.registrationDateTime,
+        paidAmount: options.paidAmount,
+        rosterUrl: options.rosterUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+      }
+    })
+  }
+
+  /**
+   * Send admin new registration notification immediately (bypasses queue)
+   */
+  async sendAdminNewRegistrationNotification(options: {
+    adminUserId: string
+    adminEmail: string
+    adminName: string
+    playerName: string
+    registrationName: string
+    seasonName: string
+    categoryName: string
+    registrationDateTime: string
+    paidAmount: string
+    invoiceUrl: string
+    adminRosterUrl: string
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.adminUserId,
+      email: options.adminEmail,
+      eventType: EMAIL_EVENTS.ADMIN_NEW_REGISTRATION,
+      subject: `New Registration: ${options.playerName} – ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID,
+      data: {
+        adminName: options.adminName,
+        playerName: options.playerName,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        categoryName: options.categoryName,
+        registrationDateTime: options.registrationDateTime,
+        paidAmount: options.paidAmount,
+        invoiceUrl: options.invoiceUrl,
+        adminRosterUrl: options.adminRosterUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+      }
+    })
+  }
+
+  /**
+   * Send admin refund notification immediately (bypasses queue)
+   */
+  async sendAdminRefundNotification(options: {
+    adminUserId: string
+    adminEmail: string
+    adminName: string
+    playerName: string
+    registrationName: string
+    seasonName: string
+    refundAmount: string
+    originalAmount: string
+    invoiceUrl: string
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.adminUserId,
+      email: options.adminEmail,
+      eventType: EMAIL_EVENTS.ADMIN_REFUND_NOTIFICATION,
+      subject: `Refund Processed: ${options.playerName} – ${options.registrationName} ($${options.refundAmount})`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_ADMIN_REFUND_TEMPLATE_ID,
+      data: {
+        adminName: options.adminName,
+        playerName: options.playerName,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        refundAmount: options.refundAmount,
+        originalAmount: options.originalAmount,
+        invoiceUrl: options.invoiceUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })
   }

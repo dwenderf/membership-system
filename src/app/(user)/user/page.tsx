@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
+import RoleBadge from '@/components/RoleBadge'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import { formatEventDateTime } from '@/lib/date-utils'
 
@@ -136,6 +137,13 @@ export default async function UserDashboardPage() {
     .is('removed_at', null)
     .order('joined_at', { ascending: false })
     .limit(5)
+
+  // Get the registration IDs for which this user is a captain
+  const { data: captainRows } = await supabase
+    .from('registration_captains')
+    .select('registration_id')
+    .eq('user_id', user.id)
+  const captainRegistrationIds = new Set((captainRows ?? []).map((r: any) => r.registration_id))
 
   const now = new Date()
   
@@ -332,6 +340,7 @@ export default async function UserDashboardPage() {
                               Waitlist
                             </span>
                           )}
+                          {captainRegistrationIds.has(reg?.id) && <RoleBadge role="Captain" />}
                         </div>
                         <p className="text-sm text-gray-500 mt-1.5">
                           {reg?.season?.name}
@@ -369,6 +378,7 @@ export default async function UserDashboardPage() {
                               Waitlist
                             </span>
                           )}
+                          {captainRegistrationIds.has(registration.id) && <RoleBadge role="Captain" />}
                         </div>
                         <p className="text-sm text-gray-500 mt-1.5">
                           {registration.season?.name}
@@ -413,6 +423,7 @@ export default async function UserDashboardPage() {
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                               Waitlist
                             </span>
+                            {captainRegistrationIds.has(registration.id) && <RoleBadge role="Captain" />}
                           </div>
                           <p className="text-sm text-gray-500 mt-1.5">
                             {registration.season?.name}

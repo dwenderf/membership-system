@@ -6,6 +6,8 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { formatDate } from '@/lib/date-utils'
 import { emailStagingManager } from '@/lib/email/staging'
+import { stageAdminRefundNotification } from '@/lib/email/admin-notifications'
+import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 
 /**
  * Stage a refund notification email for batch processing
@@ -102,6 +104,42 @@ export async function stageRefundNotificationEmail(
     })
 
     console.log(`Staged refund notification email for ${user.email} for refund ${refundId}`)
+
+    // Notify opted-in admins of the refund (fire-and-forget)
+    stageAdminRefundNotification(
+      userId,
+      paymentId,
+      refund.amount,
+      payment.final_amount
+    ).catch((err) => console.warn('stageRefundNotificationEmail: admin notification failed (non-fatal)', err))
+
+    // Notify captain(s) that the player has left (fire-and-forget)
+    // Resolve the registrationId from the refunded user_registration record
+    const { data: userReg } = await supabase
+      .from('user_registrations')
+      .select('registration_id, registration_category_id, registration_category:registration_categories(custom_name, category:categories(name))')
+      .eq('payment_id', paymentId)
+      .eq('user_id', userId)
+      .single()
+
+    if (userReg?.registration_id) {
+      const category = userReg.registration_category
+        ? (Array.isArray(userReg.registration_category) ? userReg.registration_category[0] : userReg.registration_category)
+        : null
+      const masterCategory = category?.category
+        ? (Array.isArray(category.category) ? category.category[0] : category.category)
+        : null
+      const categoryName = category?.custom_name || masterCategory?.name || 'Standard'
+
+      stageCaptainRosterChangeNotification(
+        userReg.registration_id,
+        userId,
+        'left',
+        categoryName,
+        refund.created_at,
+        refund.amount
+      ).catch((err) => console.warn('stageRefundNotificationEmail: captain notification failed (non-fatal)', err))
+    }
 
   } catch (error) {
     console.error('Error staging refund notification email:', error)

@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { formatDate } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
+import RoleBadge from '@/components/RoleBadge'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
 interface User {
@@ -203,13 +204,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.is_admin 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {user.is_admin ? 'Administrator' : 'Member'}
-                      </span>
+                      <RoleBadge role={user.is_admin ? 'Administrator' : 'Member'} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex flex-wrap gap-1">

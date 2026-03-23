@@ -76,7 +76,7 @@ export async function stageCaptainRosterChangeNotification(
     // Fetch all captains for this registration
     const { data: captainRows, error: captainError } = await supabase
       .from('registration_captains')
-      .select('user_id, users(id, first_name, last_name, email, preferences)')
+      .select('user_id, users!registration_captains_user_id_fkey(id, first_name, last_name, email, preferences)')
       .eq('registration_id', registrationId)
 
     if (captainError) {

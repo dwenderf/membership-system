@@ -256,13 +256,15 @@ export class EmailProcessingManager {
       }
 
     } catch (error) {
-      // Update email log status to failed
+      // Keep as pending on transient network/socket errors so the next cron
+      // run retries automatically. Only hard failures (Loops API errors) are
+      // marked failed in the success:false branch above.
       try {
         const supabase = createAdminClient()
         await supabase
           .from('email_logs')
-          .update({ 
-            status: 'failed',
+          .update({
+            status: 'pending',
             bounce_reason: error instanceof Error ? error.message : String(error)
           })
           .eq('id', emailLog.id)

@@ -16,6 +16,13 @@ import { emailService } from '@/lib/email/service'
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
+/** Delay between sends — reuses the same env var as the batch cron (default 150ms) */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const getEmailDelayMs = () => {
+  const val = parseInt(process.env.LOOPS_EMAIL_BATCH_DELAY_MS ?? '', 10)
+  return isNaN(val) ? 150 : val
+}
+
 /** Returns all admins who have not opted out of a given notification key */
 async function getOptedInAdmins(
   prefKey: 'newRegistrations' | 'refunds'
@@ -123,24 +130,25 @@ export async function stageAdminNewRegistrationNotification(
       : adminRosterUrl // Fall back to roster when there's no payment (free alternate)
 
     const admins = await getOptedInAdmins('newRegistrations')
+    const delayMs = getEmailDelayMs()
 
-    await Promise.allSettled(
-      admins.map((admin) =>
-        emailService.sendAdminNewRegistrationNotification({
-          adminUserId: admin.id,
-          adminEmail: admin.email,
-          adminName: `${admin.first_name} ${admin.last_name}`,
-          playerName,
-          registrationName,
-          seasonName,
-          categoryName,
-          registrationDateTime,
-          paidAmount,
-          invoiceUrl,
-          adminRosterUrl,
-        })
-      )
-    )
+    for (let i = 0; i < admins.length; i++) {
+      const admin = admins[i]
+      await emailService.sendAdminNewRegistrationNotification({
+        adminUserId: admin.id,
+        adminEmail: admin.email,
+        adminName: `${admin.first_name} ${admin.last_name}`,
+        playerName,
+        registrationName,
+        seasonName,
+        categoryName,
+        registrationDateTime,
+        paidAmount,
+        invoiceUrl,
+        adminRosterUrl,
+      })
+      if (i < admins.length - 1) await delay(delayMs)
+    }
 
   } catch (error) {
     console.error('stageAdminNewRegistrationNotification: unexpected error', error)
@@ -207,22 +215,23 @@ export async function stageAdminRefundNotification(
     const invoiceUrl = `${siteUrl}/admin/reports/users/${playerUserId}/invoices/${paymentId}`
 
     const admins = await getOptedInAdmins('refunds')
+    const delayMs = getEmailDelayMs()
 
-    await Promise.allSettled(
-      admins.map((admin) =>
-        emailService.sendAdminRefundNotification({
-          adminUserId: admin.id,
-          adminEmail: admin.email,
-          adminName: `${admin.first_name} ${admin.last_name}`,
-          playerName,
-          registrationName,
-          seasonName,
-          refundAmount,
-          originalAmount,
-          invoiceUrl,
-        })
-      )
-    )
+    for (let i = 0; i < admins.length; i++) {
+      const admin = admins[i]
+      await emailService.sendAdminRefundNotification({
+        adminUserId: admin.id,
+        adminEmail: admin.email,
+        adminName: `${admin.first_name} ${admin.last_name}`,
+        playerName,
+        registrationName,
+        seasonName,
+        refundAmount,
+        originalAmount,
+        invoiceUrl,
+      })
+      if (i < admins.length - 1) await delay(delayMs)
+    }
 
   } catch (error) {
     console.error('stageAdminRefundNotification: unexpected error', error)

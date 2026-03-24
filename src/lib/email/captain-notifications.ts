@@ -10,6 +10,13 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
 
+/** Delay between sends — reuses the same env var as the batch cron (default 150ms) */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const getEmailDelayMs = () => {
+  const val = parseInt(process.env.LOOPS_EMAIL_BATCH_DELAY_MS ?? '', 10)
+  return isNaN(val) ? 150 : val
+}
+
 export type RosterChangeType =
   | 'joined'
   | 'left'
@@ -94,19 +101,20 @@ export async function stageCaptainRosterChangeNotification(
     const registrationDateTime = formatDateTime(registeredAt)
     const paidAmount = `$${(amountPaid / 100).toFixed(2)}`
 
-    // Notify each opted-in captain
-    for (const row of captainRows) {
-      const captain = Array.isArray(row.users) ? row.users[0] : row.users
-      if (!captain) continue
+    // Notify each opted-in captain sequentially with a delay between sends
+    const eligibleCaptains = captainRows
+      .map(row => (Array.isArray(row.users) ? row.users[0] : row.users))
+      .filter(captain => {
+        if (!captain) return false
+        if (captain.id === playerUserId) return false // skip self-notification
+        const prefs = (captain as any).preferences ?? {}
+        return prefs?.emailNotifications?.rosterChanges !== false
+      })
 
-      // Check opt-out preference (absent = opted in)
-      const prefs = (captain as any).preferences ?? {}
-      const rosterChangePref = prefs?.emailNotifications?.rosterChanges
-      if (rosterChangePref === false) continue
+    const delayMs = getEmailDelayMs()
 
-      // Skip notifying a captain about their own roster action
-      if (captain.id === playerUserId) continue
-
+    for (let i = 0; i < eligibleCaptains.length; i++) {
+      const captain = eligibleCaptains[i]
       await emailService.sendCaptainRosterChangeNotification({
         captainUserId: captain.id,
         captainEmail: captain.email,
@@ -120,6 +128,7 @@ export async function stageCaptainRosterChangeNotification(
         paidAmount,
         rosterUrl,
       })
+      if (i < eligibleCaptains.length - 1) await delay(delayMs)
     }
 
   } catch (error) {

@@ -178,7 +178,8 @@ class EmailService {
         console.error('Loops.so API error details:', (error as any).json)
       }
 
-      // Try to log the failure
+      // Queue as pending so the cron retries it — transient failures (network,
+      // socket closed) should recover on the next run without losing the email.
       // Fire-and-forget to avoid blocking the response
       this.logEmailToDatabase({
         userId,
@@ -186,7 +187,7 @@ class EmailService {
         eventType,
         subject,
         templateId,
-        status: 'failed',
+        status: 'pending',
         triggeredBy,
         triggeredByUserId,
         data,
@@ -212,7 +213,7 @@ class EmailService {
     eventType: EmailEventType
     subject: string
     templateId?: string
-    status: 'sent' | 'failed'
+    status: 'sent' | 'failed' | 'pending'
     triggeredBy?: 'user_action' | 'admin_send' | 'automated'
     triggeredByUserId?: string
     data?: EmailData
@@ -235,7 +236,7 @@ class EmailService {
           email_data: params.data,
           loops_event_id: params.loopsEventId || null,
           bounce_reason: params.bounceReason || null,
-          sent_at: new Date().toISOString()
+          sent_at: params.status === 'pending' ? null : new Date().toISOString()
         })
     } catch (logError) {
       console.error('Failed to log email to database:', logError)

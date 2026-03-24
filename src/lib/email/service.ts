@@ -659,7 +659,7 @@ class EmailService {
     registrationDateTime: string
     paidAmount: string
     invoiceUrl: string
-    adminRosterUrl: string
+    rosterUrl: string
   }) {
     return this.sendEmailImmediately({
       userId: options.adminUserId,
@@ -677,7 +677,7 @@ class EmailService {
         registrationDateTime: options.registrationDateTime,
         paidAmount: options.paidAmount,
         invoiceUrl: options.invoiceUrl,
-        adminRosterUrl: options.adminRosterUrl,
+        rosterUrl: options.rosterUrl,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })

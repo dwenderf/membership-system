@@ -122,12 +122,12 @@ export async function stageAdminNewRegistrationNotification(
     const playerName = `${player.first_name} ${player.last_name}`
     const registrationDateTime = formatDateTime(registeredAt)
     const paidAmount = `$${(amountPaid / 100).toFixed(2)}`
-    const adminRosterUrl = `${siteUrl}/admin/reports/registrations/${registrationId}`
+    const rosterUrl = `${siteUrl}/admin/reports/registrations/${registrationId}`
 
     // Construct invoice URL — only meaningful when we have a payment
     const invoiceUrl = paymentId
       ? `${siteUrl}/admin/reports/users/${playerUserId}/invoices/${paymentId}`
-      : adminRosterUrl // Fall back to roster when there's no payment (free alternate)
+      : rosterUrl // Fall back to roster when there's no payment (free alternate)
 
     const admins = await getOptedInAdmins('newRegistrations')
     const delayMs = getEmailDelayMs()
@@ -145,7 +145,7 @@ export async function stageAdminNewRegistrationNotification(
         registrationDateTime,
         paidAmount,
         invoiceUrl,
-        adminRosterUrl,
+        rosterUrl,
       })
       if (i < admins.length - 1) await delay(delayMs)
     }

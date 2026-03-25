@@ -124,10 +124,12 @@ export async function stageAdminNewRegistrationNotification(
     const paidAmount = `$${(amountPaid / 100).toFixed(2)}`
     const rosterUrl = `${siteUrl}/admin/reports/registrations/${registrationId}`
 
-    // Construct invoice URL — only meaningful when we have a payment
+    // For paid registrations, link directly to the invoice.
+    // For alternates (no upfront payment), fall back to the user's admin
+    // profile page — the admin can navigate to invoices from there.
     const invoiceUrl = paymentId
       ? `${siteUrl}/admin/reports/users/${playerUserId}/invoices/${paymentId}`
-      : rosterUrl // Fall back to roster when there's no payment (free alternate)
+      : `${siteUrl}/admin/reports/users/${playerUserId}`
 
     const admins = await getOptedInAdmins('newRegistrations')
     const delayMs = getEmailDelayMs()

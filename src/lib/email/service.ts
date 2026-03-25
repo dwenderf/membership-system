@@ -236,7 +236,9 @@ class EmailService {
           email_data: params.data,
           loops_event_id: params.loopsEventId || null,
           bounce_reason: params.bounceReason || null,
-          sent_at: params.status === 'pending' ? null : new Date().toISOString()
+          // Omit sent_at for pending rows so the DB DEFAULT NOW() applies —
+          // explicitly passing null would violate the NOT NULL constraint.
+          ...(params.status !== 'pending' && { sent_at: new Date().toISOString() })
         })
     } catch (logError) {
       console.error('Failed to log email to database:', logError)

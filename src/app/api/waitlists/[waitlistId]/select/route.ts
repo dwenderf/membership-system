@@ -7,6 +7,7 @@ import { RegistrationValidationService } from '@/lib/services/registration-valid
 import { logger } from '@/lib/logging/logger'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { stageWaitlistSelectedEmail } from '@/lib/email/waitlist-notifications'
 
 // POST /api/waitlists/[waitlistId]/select - Select a user from waitlist
 export async function POST(
@@ -216,8 +217,13 @@ export async function POST(
         chargeResult.amountCharged
       ).catch((err) => logger.logSystem('waitlist-selection-admin-notify', 'Admin notification failed (non-fatal)', { error: err?.message }))
 
-      // Email confirmation will be sent via webhook after payment is confirmed
-      // This ensures emails are only sent if payment succeeds
+      stageWaitlistSelectedEmail(
+        waitlistEntry.registration_id,
+        waitlistEntry.user_id,
+        chargeResult.paymentId ?? null,
+        waitlistEntry.registration_category_id,
+        chargeResult.amountCharged
+      ).catch((err) => logger.logSystem('waitlist-selection-member-notify', 'Member notification failed (non-fatal)', { error: err?.message }))
       logger.logSystem('waitlist-selection-success', 'Successfully selected user from waitlist', {
         waitlistId,
         userId: waitlistEntry.user_id,

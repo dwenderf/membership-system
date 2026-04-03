@@ -102,7 +102,7 @@ export class EmailProcessor {
         await this.stageMembershipConfirmationEmail(event, user)
       }
       // Handle registration emails (including waitlist selections)
-      else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration' || event.trigger_source === 'free_registration' || event.trigger_source === 'stripe_webhook_waitlist') {
+      else if (event.trigger_source === 'user_registrations' || event.trigger_source === 'stripe_webhook_registration' || event.trigger_source === 'free_registration') {
         this.logger.logPaymentProcessing('process-confirmation-emails', '📧 Triggering registration email staging', {
           triggerSource: event.trigger_source,
           amount: event.amount,
@@ -117,6 +117,12 @@ export class EmailProcessor {
           amount: event.amount
         })
         await this.stageAlternateSelectionConfirmationEmail(event, user)
+      }
+      // Waitlist selection emails are sent directly from the select route (not via webhook)
+      else if (event.trigger_source === 'stripe_webhook_waitlist') {
+        this.logger.logPaymentProcessing('process-confirmation-emails', 'ℹ️ Waitlist selection emails handled by select route, skipping webhook staging', {
+          triggerSource: event.trigger_source
+        })
       }
       // Unknown trigger source
       else {

@@ -118,11 +118,17 @@ export class EmailProcessor {
         })
         await this.stageAlternateSelectionConfirmationEmail(event, user)
       }
+      // Waitlist selection emails are sent directly from the select route (not via webhook)
+      else if (event.trigger_source === 'stripe_webhook_waitlist') {
+        this.logger.logPaymentProcessing('process-confirmation-emails', 'ℹ️ Waitlist selection emails handled by select route, skipping webhook staging', {
+          triggerSource: event.trigger_source
+        })
+      }
       // Unknown trigger source
       else {
         this.logger.logPaymentProcessing('process-confirmation-emails', '⚠️ Unknown trigger source, no email staged', {
           triggerSource: event.trigger_source,
-          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration', 'stripe_webhook_alternate']
+          supportedSources: ['user_memberships', 'stripe_webhook_membership', 'free_membership', 'user_registrations', 'stripe_webhook_registration', 'free_registration', 'stripe_webhook_waitlist', 'stripe_webhook_alternate']
         }, 'warn')
       }
 

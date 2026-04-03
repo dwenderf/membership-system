@@ -70,7 +70,7 @@ export class WaitlistPaymentService {
         throw new Error('Registration category not found')
       }
 
-      if (!category.price || !category.accounting_code) {
+      if (category.price == null || !category.accounting_code) {
         throw new Error('Registration category does not have pricing configured')
       }
 

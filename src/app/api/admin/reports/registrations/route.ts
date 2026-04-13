@@ -464,6 +464,11 @@ export async function GET(request: NextRequest) {
       // (same name, new UUID) — which would cause UUID-based lookups to silently miss members.
       const registrationIds = registrationsList?.map(r => r.id) || []
 
+      // Fetch all user_registrations for counting and financials.
+      // No payment_status filter here so the count matches what the detail page shows.
+      // We apply a payment_status filter only when computing financial totals (see below).
+      // The .limit(50000) prevents Supabase's default 1000-row cap from silently truncating
+      // results when the total number of registrations across active registrations is large.
       const { data: registrationCounts, error: countsError } = await adminSupabase
         .from('user_registrations')
         .select(`
@@ -480,7 +485,7 @@ export async function GET(request: NextRequest) {
           )
         `)
         .in('registration_id', registrationIds)
-        .in('payment_status', ['paid', 'processing', 'awaiting_payment'])
+        .limit(50000)
 
       if (countsError) {
         logger.logSystem('registration-reports-api', 'Error fetching registration counts', { error: countsError }, 'error')
@@ -501,6 +506,7 @@ export async function GET(request: NextRequest) {
         `)
         .in('registration_id', registrationIds)
         .is('removed_at', null)
+        .limit(50000)
 
       if (waitlistError) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
@@ -511,6 +517,7 @@ export async function GET(request: NextRequest) {
         .from('user_alternate_registrations')
         .select('user_id, registration_id')
         .in('registration_id', registrationIds)
+        .limit(50000)
 
       if (alternatesError) {
         logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
@@ -595,11 +602,13 @@ export async function GET(request: NextRequest) {
         const regMap = countsMap.get(regId)!
         regMap.set(catName, (regMap.get(catName) || 0) + 1)
 
-        // Accumulate financial totals
-        const fin = financialMap.get(regId) || { roster_gross: 0, roster_net: 0 }
-        fin.roster_gross += count.registration_fee || 0
-        fin.roster_net += count.amount_paid || 0
-        financialMap.set(regId, fin)
+        // Accumulate financial totals for paid members only — matches detail page paidRoster logic
+        if (count.payment_status === 'paid') {
+          const fin = financialMap.get(regId) || { roster_gross: 0, roster_net: 0 }
+          fin.roster_gross += count.registration_fee || 0
+          fin.roster_net += count.amount_paid || 0
+          financialMap.set(regId, fin)
+        }
       })
 
       // Create a map of waitlist counts by registration_id and category_name

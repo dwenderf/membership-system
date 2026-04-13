@@ -71,7 +71,9 @@ export default function FinancialSummary({ data, mode, showAlternates = true }: 
         </thead>
         <tbody>
           <tr>
-            <td className="pr-12 py-1 text-xs text-gray-500 uppercase tracking-wide font-medium">Roster</td>
+            <td className="pr-12 py-1 text-xs text-gray-500 uppercase tracking-wide font-medium">
+              {showAlternates ? 'Roster' : ''}
+            </td>
             <td className="pr-10 py-1 font-semibold text-gray-900">{formatCents(data.roster_gross)}</td>
             <td className="pr-10 py-1 font-semibold text-red-600">
               {data.roster_discounts > 0 ? `−${formatCents(data.roster_discounts)}` : '—'}

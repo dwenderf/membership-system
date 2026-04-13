@@ -2,6 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import FinancialSummary from '@/components/FinancialSummary'
+
+interface FinancialSummaryData {
+  roster_gross: number
+  roster_discounts: number
+  roster_net: number
+  alt_gross: number
+  alt_discounts: number
+  alt_net: number
+  total_net: number
+}
 
 interface Registration {
   id: string
@@ -30,6 +41,7 @@ interface Registration {
     first_name: string
     last_name: string
   }>
+  financial_summary?: FinancialSummaryData
 }
 
 export default function RegistrationReportsPage() {
@@ -288,6 +300,15 @@ export default function RegistrationReportsPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Financial summary footer */}
+                {registration.financial_summary && (
+                  <FinancialSummary
+                    data={registration.financial_summary}
+                    mode="compact"
+                    showAlternates={registration.alternates_enabled}
+                  />
+                )}
               </button>
             ))}
           </div>

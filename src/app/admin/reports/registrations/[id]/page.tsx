@@ -8,6 +8,17 @@ import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
 import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
+import FinancialSummary from '@/components/FinancialSummary'
+
+interface FinancialSummaryData {
+  roster_gross: number
+  roster_discounts: number
+  roster_net: number
+  alt_gross: number
+  alt_discounts: number
+  alt_net: number
+  total_net: number
+}
 
 interface RegistrationData {
   id: string
@@ -32,6 +43,8 @@ interface RegistrationData {
   is_goalie: boolean
   payment_id: string | null
   invoice_number: string | null
+  discount_code: string | null
+  discount_amount_saved: number
 }
 
 interface WaitlistData {
@@ -83,6 +96,7 @@ export default function RegistrationDetailPage() {
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
   const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
   const [alternatesData, setAlternatesData] = useState<AlternateData[]>([])
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummaryData | null>(null)
   const [registrationName, setRegistrationName] = useState('')
   const [seasonName, setSeasonName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -120,6 +134,7 @@ export default function RegistrationDetailPage() {
       setRegistrationData(result.data || [])
       setWaitlistData(result.waitlistData || [])
       setAlternatesData(result.alternatesData || [])
+      setFinancialSummary(result.financialSummary || null)
 
       if (result.data && result.data.length > 0) {
         setRegistrationName(result.data[0].registration_name)
@@ -463,6 +478,15 @@ export default function RegistrationDetailPage() {
             </div>
           </div>
 
+          {/* Financial Summary */}
+          {financialSummary && (
+            <FinancialSummary
+              data={financialSummary}
+              mode="full"
+              showAlternates={alternatesData.length > 0}
+            />
+          )}
+
           {/* Search */}
           <div className="mb-6">
             <input
@@ -525,6 +549,12 @@ export default function RegistrationDetailPage() {
                     </th>
                     <th
                       scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Discount
+                    </th>
+                    <th
+                      scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('registered_at')}
                     >
@@ -579,6 +609,18 @@ export default function RegistrationDetailPage() {
                           <span className="text-gray-900">{formatCurrency(registration.amount_paid)}</span>
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {registration.discount_code ? (
+                          <div>
+                            <span className="font-medium text-gray-900">{registration.discount_code}</span>
+                            {registration.discount_amount_saved > 0 && (
+                              <div className="text-xs text-red-600">-{formatCurrency(registration.discount_amount_saved)}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
                           <div>{formatDateTime(registration.registered_at).date}</div>
@@ -591,7 +633,7 @@ export default function RegistrationDetailPage() {
                   ))}
                   {sortedMembers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
                         No members match the current filters.
                       </td>
                     </tr>

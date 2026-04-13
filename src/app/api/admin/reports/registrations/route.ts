@@ -202,6 +202,26 @@ export async function GET(request: NextRequest) {
         usageByUserAndCategory.set(key, current + usage.amount_saved)
       })
 
+      // Fetch discount usage for main roster members to populate the discount column.
+      // Filter by registration_id and exclude credit note reversals (invoice_type = 'ACCREC' only).
+      const { data: rosterDiscountData } = await adminSupabase
+        .from('discount_usage_computed')
+        .select('user_id, discount_code, amount_saved, invoice_type')
+        .eq('registration_id', registrationId)
+        .eq('invoice_type', 'ACCREC')
+
+      // Build map: user_id → { discount_code, amount_saved } (take first/largest discount per user)
+      const rosterDiscountMap = new Map<string, { discount_code: string; amount_saved: number }>()
+      rosterDiscountData?.forEach(usage => {
+        const existing = rosterDiscountMap.get(usage.user_id)
+        if (!existing || usage.amount_saved > existing.amount_saved) {
+          rosterDiscountMap.set(usage.user_id, {
+            discount_code: usage.discount_code || '',
+            amount_saved: usage.amount_saved || 0
+          })
+        }
+      })
+
       // Process the data to flatten the structure for the frontend
       const processedData = registrationData?.map(item => {
         const user = Array.isArray(item.users) ? item.users[0] : item.users
@@ -211,6 +231,8 @@ export async function GET(request: NextRequest) {
         const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
         const payment = Array.isArray(item.payments) ? item.payments[0] : item.payments
         const xeroInvoice = payment?.xero_invoices ? (Array.isArray(payment.xero_invoices) ? payment.xero_invoices[0] : payment.xero_invoices) : null
+        const userId = user?.id || ''
+        const discountInfo = rosterDiscountMap.get(userId)
 
         return {
           id: item.id,
@@ -218,7 +240,7 @@ export async function GET(request: NextRequest) {
           registration_name: registration?.name || 'Unknown Registration',
           season_name: season?.name || 'Unknown Season',
           registration_type: registration?.type || 'Unknown',
-          user_id: user?.id || 'Unknown',
+          user_id: userId || 'Unknown',
           first_name: user?.first_name || '',
           last_name: user?.last_name || '',
           member_id: user?.member_id || null,
@@ -234,7 +256,9 @@ export async function GET(request: NextRequest) {
           is_lgbtq: user?.is_lgbtq,
           is_goalie: user?.is_goalie || false,
           payment_id: item.payment_id || null,
-          invoice_number: xeroInvoice?.invoice_number || null
+          invoice_number: xeroInvoice?.invoice_number || null,
+          discount_code: discountInfo?.discount_code || null,
+          discount_amount_saved: discountInfo?.amount_saved || 0
         }
       }) || []
 
@@ -379,10 +403,26 @@ export async function GET(request: NextRequest) {
       // Convert map to array
       const processedAlternatesData = Array.from(alternatesMap.values())
 
+      // Compute financial summary for the detail page
+      const paidRoster = processedData.filter(m => m.payment_status === 'paid')
+      const rosterGross = paidRoster.reduce((sum, m) => sum + m.registration_fee, 0)
+      const rosterNet = paidRoster.reduce((sum, m) => sum + m.amount_paid, 0)
+      const altNet = processedAlternatesData.reduce((sum, a) => sum + a.total_paid, 0)
+      const financialSummary = {
+        roster_gross: rosterGross,
+        roster_discounts: rosterGross - rosterNet,
+        roster_net: rosterNet,
+        alt_gross: altNet, // gross not available without additional payment join; use net
+        alt_discounts: 0,
+        alt_net: altNet,
+        total_net: rosterNet + altNet
+      }
+
       return NextResponse.json({
         data: processedData,
         waitlistData: processedWaitlistData,
-        alternatesData: processedAlternatesData
+        alternatesData: processedAlternatesData,
+        financialSummary
       })
     } else {
       // Get all registrations for selection with category counts
@@ -419,11 +459,26 @@ export async function GET(request: NextRequest) {
       }
 
       // Get registration counts for each registration/category combination
+      // Join registration_categories so we can group by category name, not UUID.
+      // This ensures counts are correct even if category records were ever recreated
+      // (same name, new UUID) — which would cause UUID-based lookups to silently miss members.
       const registrationIds = registrationsList?.map(r => r.id) || []
-      
+
       const { data: registrationCounts, error: countsError } = await adminSupabase
         .from('user_registrations')
-        .select('registration_id, registration_category_id, payment_status')
+        .select(`
+          registration_id,
+          registration_category_id,
+          payment_status,
+          amount_paid,
+          registration_fee,
+          registration_categories (
+            custom_name,
+            categories (
+              name
+            )
+          )
+        `)
         .in('registration_id', registrationIds)
         .in('payment_status', ['paid', 'processing', 'awaiting_payment'])
 
@@ -434,7 +489,16 @@ export async function GET(request: NextRequest) {
       // Get waitlist counts for each registration
       const { data: waitlistCounts, error: waitlistError } = await adminSupabase
         .from('waitlists')
-        .select('registration_id, registration_category_id')
+        .select(`
+          registration_id,
+          registration_category_id,
+          registration_categories (
+            custom_name,
+            categories (
+              name
+            )
+          )
+        `)
         .in('registration_id', registrationIds)
         .is('removed_at', null)
 
@@ -452,6 +516,44 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
       }
 
+      // Get alternate selection financial data (revenue charged per game appearance).
+      // Join to payments for status and gross amount; discount = total_amount - final_amount.
+      const { data: alternateSelectionsFinancial, error: altFinancialError } = await adminSupabase
+        .from('alternate_selections')
+        .select(`
+          amount_charged,
+          discount_code_id,
+          alternate_registrations!inner (
+            registration_id
+          ),
+          payments (
+            total_amount,
+            final_amount,
+            status
+          )
+        `)
+        .in('alternate_registrations.registration_id', registrationIds)
+
+      if (altFinancialError) {
+        logger.logSystem('registration-reports-api', 'Error fetching alternate selections financial data', { error: altFinancialError }, 'error')
+      }
+
+      // Build alternate financial map keyed by registration_id.
+      // Only include paid/processing alternates; gross = payments.total_amount, net = amount_charged.
+      const altFinancialMap = new Map<string, { alt_gross: number; alt_net: number }>()
+      alternateSelectionsFinancial?.forEach(sel => {
+        const altReg = Array.isArray(sel.alternate_registrations) ? sel.alternate_registrations[0] : sel.alternate_registrations
+        const payment = Array.isArray(sel.payments) ? sel.payments[0] : sel.payments
+        const regId = altReg?.registration_id
+        if (!regId) return
+        // Only count if payment exists and is paid/processing
+        if (payment && !['completed', 'pending', 'processing'].includes(payment.status)) return
+        const fin = altFinancialMap.get(regId) || { alt_gross: 0, alt_net: 0 }
+        fin.alt_gross += payment?.total_amount || sel.amount_charged
+        fin.alt_net += payment?.final_amount || sel.amount_charged
+        altFinancialMap.set(regId, fin)
+      })
+
       // Get captains for each registration
       const { data: captainsData, error: captainsError } = await adminSupabase
         .from('registration_captains')
@@ -468,32 +570,50 @@ export async function GET(request: NextRequest) {
         logger.logSystem('registration-reports-api', 'Error fetching captains', { error: captainsError }, 'error')
       }
 
-      // Create a map of registration counts by registration_id and category_id
+      // Helper to resolve a category name from a joined registration_categories record
+      const resolveCatName = (regCat: { custom_name?: string | null; categories?: { name?: string } | { name?: string }[] | null } | null | undefined): string => {
+        if (!regCat) return 'Unknown Category'
+        const cat = Array.isArray(regCat.categories) ? regCat.categories[0] : regCat.categories
+        return cat?.name || regCat.custom_name || 'Unknown Category'
+      }
+
+      // Build counts map keyed by registration_id → category_name → count.
+      // Using category name (not UUID) so counts accumulate correctly even when category
+      // UUIDs differ between what users registered under and the current categories list.
       const countsMap = new Map<string, Map<string, number>>()
+      // Also track financial totals per registration for the financial summary
+      const financialMap = new Map<string, { roster_gross: number; roster_net: number }>()
+
       registrationCounts?.forEach(count => {
         const regId = count.registration_id
-        const catId = count.registration_category_id || 'no-category'
-        
+        const regCat = Array.isArray(count.registration_categories) ? count.registration_categories[0] : count.registration_categories
+        const catName = resolveCatName(regCat)
+
         if (!countsMap.has(regId)) {
           countsMap.set(regId, new Map())
         }
-        
         const regMap = countsMap.get(regId)!
-        regMap.set(catId, (regMap.get(catId) || 0) + 1)
+        regMap.set(catName, (regMap.get(catName) || 0) + 1)
+
+        // Accumulate financial totals
+        const fin = financialMap.get(regId) || { roster_gross: 0, roster_net: 0 }
+        fin.roster_gross += count.registration_fee || 0
+        fin.roster_net += count.amount_paid || 0
+        financialMap.set(regId, fin)
       })
 
-      // Create a map of waitlist counts by registration_id and category_id
+      // Create a map of waitlist counts by registration_id and category_name
       const waitlistMap = new Map<string, Map<string, number>>()
       waitlistCounts?.forEach(count => {
         const regId = count.registration_id
-        const catId = count.registration_category_id || 'no-category'
+        const regCat = Array.isArray(count.registration_categories) ? count.registration_categories[0] : count.registration_categories
+        const catName = resolveCatName(regCat)
 
         if (!waitlistMap.has(regId)) {
           waitlistMap.set(regId, new Map())
         }
-
         const regMap = waitlistMap.get(regId)!
-        regMap.set(catId, (regMap.get(catId) || 0) + 1)
+        regMap.set(catName, (regMap.get(catName) || 0) + 1)
       })
 
       // Create a map of unique alternates count by registration_id
@@ -534,18 +654,20 @@ export async function GET(request: NextRequest) {
         const season = Array.isArray(item.seasons) ? item.seasons[0] : item.seasons
         const categories = Array.isArray(item.registration_categories) ? item.registration_categories : (item.registration_categories ? [item.registration_categories] : [])
         
-        // Calculate category breakdown with counts and waitlist counts
+        // Calculate category breakdown with counts and waitlist counts.
+        // Look up by category name so counts are correct even if category UUIDs changed.
+        const registrationCountsForReg = countsMap.get(item.id)
+        const waitlistCountsForReg = waitlistMap.get(item.id)
+
         const categoryBreakdown = categories.map(cat => {
           const category = Array.isArray(cat.categories) ? cat.categories[0] : cat.categories
-          const categoryId = cat.id
-          const registrationCounts = countsMap.get(item.id)
-          const waitlistCounts = waitlistMap.get(item.id)
-          const count = registrationCounts?.get(categoryId) || 0
-          const waitlistCount = waitlistCounts?.get(categoryId) || 0
-          
+          const catName = category?.name || cat.custom_name || 'Unknown Category'
+          const count = registrationCountsForReg?.get(catName) || 0
+          const waitlistCount = waitlistCountsForReg?.get(catName) || 0
+
           return {
-            id: categoryId,
-            name: category?.name || cat.custom_name || 'Unknown Category',
+            id: cat.id,
+            name: catName,
             count: count,
             waitlist_count: waitlistCount,
             max_capacity: cat.max_capacity,
@@ -553,16 +675,30 @@ export async function GET(request: NextRequest) {
           }
         })
 
-        // Calculate total count and waitlist count across all categories
-        const totalCount = categoryBreakdown.reduce((sum, cat) => sum + cat.count, 0)
+        // Total count = sum of ALL active members from the counts map (includes any whose
+        // category UUID doesn't match a current category, e.g. legacy registrations)
+        const totalCount = Array.from(registrationCountsForReg?.values() || []).reduce((sum, c) => sum + c, 0)
         const totalCapacity = categoryBreakdown.reduce((sum, cat) => sum + (cat.max_capacity || 0), 0)
-        const totalWaitlistCount = categoryBreakdown.reduce((sum, cat) => sum + cat.waitlist_count, 0)
+        const totalWaitlistCount = Array.from(waitlistCountsForReg?.values() || []).reduce((sum, c) => sum + c, 0)
 
         // Get alternates count (unique users who have selected alternates for this registration)
         const alternatesCount = alternatesCountMap.get(item.id)?.size || 0
 
         // Get captains for this registration
         const captains = captainsMap.get(item.id) || []
+
+        // Build financial summary
+        const rosterFin = financialMap.get(item.id) || { roster_gross: 0, roster_net: 0 }
+        const altFin = altFinancialMap.get(item.id) || { alt_gross: 0, alt_net: 0 }
+        const financialSummary = {
+          roster_gross: rosterFin.roster_gross,
+          roster_discounts: rosterFin.roster_gross - rosterFin.roster_net,
+          roster_net: rosterFin.roster_net,
+          alt_gross: altFin.alt_gross,
+          alt_discounts: altFin.alt_gross - altFin.alt_net,
+          alt_net: altFin.alt_net,
+          total_net: rosterFin.roster_net + altFin.alt_net
+        }
 
         return {
           id: item.id,
@@ -580,7 +716,8 @@ export async function GET(request: NextRequest) {
           alternates_count: alternatesCount,
           alternates_enabled: item.allow_alternates || false,
           category_breakdown: categoryBreakdown,
-          captains: captains
+          captains: captains,
+          financial_summary: financialSummary
         }
       }) || []
 

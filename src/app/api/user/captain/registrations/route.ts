@@ -79,40 +79,110 @@ export async function GET(request: NextRequest) {
           `)
           .eq('registration_id', registration.id)
 
-        // Get all user registrations with their categories (excluding refunded)
+        // Get all user registrations with their categories and financial data (excluding refunded).
+        // Join registration_categories so we can group by name, not UUID — ensures counts are
+        // correct even if category records were ever recreated with new UUIDs.
         const { data: userRegistrations } = await supabase
           .from('user_registrations')
-          .select('registration_category_id, payment_status')
+          .select(`
+            registration_category_id,
+            payment_status,
+            amount_paid,
+            registration_fee,
+            registration_categories (
+              custom_name,
+              categories (
+                name
+              )
+            )
+          `)
           .eq('registration_id', registration.id)
           .neq('payment_status', 'refunded')
 
-        // Build category breakdown with counts
+        // Helper to resolve category name from joined record
+        const resolveName = (regCat: { custom_name?: string | null; categories?: { name?: string } | { name?: string }[] | null } | null | undefined): string => {
+          if (!regCat) return 'Unknown Category'
+          const cat = Array.isArray(regCat.categories) ? regCat.categories[0] : regCat.categories
+          return cat?.name || regCat.custom_name || 'Unknown Category'
+        }
+
+        // Accumulate counts and financial totals by category name
+        const catNameCountMap = new Map<string, number>()
+        let rosterGross = 0
+        let rosterNet = 0
+        userRegistrations?.forEach(ur => {
+          const regCat = Array.isArray(ur.registration_categories) ? ur.registration_categories[0] : ur.registration_categories
+          const catName = resolveName(regCat)
+          catNameCountMap.set(catName, (catNameCountMap.get(catName) || 0) + 1)
+          // Only include paid/processing in financial totals
+          if (['paid', 'processing', 'awaiting_payment'].includes(ur.payment_status)) {
+            rosterGross += ur.registration_fee || 0
+            rosterNet += ur.amount_paid || 0
+          }
+        })
+
+        // Build category breakdown using name-based counts
         const categoryBreakdown = (categories || []).map(cat => {
           const category = Array.isArray(cat.categories) ? cat.categories[0] : cat.categories
-          const count = userRegistrations?.filter(ur => ur.registration_category_id === cat.id).length || 0
+          const catName = category?.name || cat.custom_name || 'Unknown Category'
+          const count = catNameCountMap.get(catName) || 0
 
           return {
             id: cat.id,
-            name: category?.name || cat.custom_name || 'Unknown Category',
+            name: catName,
             count: count,
             max_capacity: cat.max_capacity
           }
         })
 
-        // Calculate total count
-        const totalCount = categoryBreakdown.reduce((sum, cat) => sum + cat.count, 0)
+        // Total count = all non-refunded members regardless of category match
+        const totalCount = Array.from(catNameCountMap.values()).reduce((sum, c) => sum + c, 0)
 
-        // Get unique alternates count if alternates are enabled (all registered alternates)
+        // Get unique alternates count and financial data if alternates are enabled
         let alternateCount = 0
+        let altGross = 0
+        let altNet = 0
         if (registration.allow_alternates) {
           const { data: userAlternateRegistrations } = await supabase
             .from('user_alternate_registrations')
             .select('user_id')
             .eq('registration_id', registration.id)
 
-          // Count unique user_ids
           const uniqueUserIds = new Set(userAlternateRegistrations?.map(r => r.user_id) || [])
           alternateCount = uniqueUserIds.size
+
+          // Fetch alternate selection financial data
+          const { data: altSelections } = await supabase
+            .from('alternate_selections')
+            .select(`
+              amount_charged,
+              alternate_registrations!inner (
+                registration_id
+              ),
+              payments (
+                total_amount,
+                final_amount,
+                status
+              )
+            `)
+            .eq('alternate_registrations.registration_id', registration.id)
+
+          altSelections?.forEach(sel => {
+            const payment = Array.isArray(sel.payments) ? sel.payments[0] : sel.payments
+            if (payment && !['completed', 'pending', 'processing'].includes(payment.status)) return
+            altGross += payment?.total_amount || sel.amount_charged
+            altNet += payment?.final_amount || sel.amount_charged
+          })
+        }
+
+        const financialSummary = {
+          roster_gross: rosterGross,
+          roster_discounts: rosterGross - rosterNet,
+          roster_net: rosterNet,
+          alt_gross: altGross,
+          alt_discounts: altGross - altNet,
+          alt_net: altNet,
+          total_net: rosterNet + altNet
         }
 
         return {
@@ -128,7 +198,8 @@ export async function GET(request: NextRequest) {
           total_count: totalCount,
           category_breakdown: categoryBreakdown,
           alternates_enabled: registration.allow_alternates || false,
-          alternates_count: alternateCount
+          alternates_count: alternateCount,
+          financial_summary: financialSummary
         }
       })
     )

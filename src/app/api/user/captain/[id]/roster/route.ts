@@ -159,6 +159,24 @@ export async function GET(
       console.error('Error fetching alternates selections:', alternatesError)
     }
 
+    // Fetch discount usage for roster members to populate the discount column
+    const { data: rosterDiscountData } = await adminSupabase
+      .from('discount_usage_computed')
+      .select('user_id, discount_code, amount_saved, invoice_type')
+      .eq('registration_id', registrationId)
+      .eq('invoice_type', 'ACCREC')
+
+    const rosterDiscountMap = new Map<string, { discount_code: string; amount_saved: number }>()
+    rosterDiscountData?.forEach(usage => {
+      const existing = rosterDiscountMap.get(usage.user_id)
+      if (!existing || usage.amount_saved > existing.amount_saved) {
+        rosterDiscountMap.set(usage.user_id, {
+          discount_code: usage.discount_code || '',
+          amount_saved: usage.amount_saved || 0
+        })
+      }
+    })
+
     // Process the registration data to flatten structure
     const processedData = registrationData?.map(item => {
       const user = Array.isArray(item.users) ? item.users[0] : item.users
@@ -166,6 +184,8 @@ export async function GET(
       const registrationCategory = Array.isArray(item.registration_categories) ? item.registration_categories[0] : item.registration_categories
       const season = registration?.seasons ? (Array.isArray(registration.seasons) ? registration.seasons[0] : registration.seasons) : null
       const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
+      const userId = user?.id || ''
+      const discountInfo = rosterDiscountMap.get(userId)
 
       return {
         id: item.id,
@@ -173,7 +193,7 @@ export async function GET(
         registration_name: registration?.name || 'Unknown Registration',
         season_name: season?.name || 'Unknown Season',
         registration_type: registration?.type || 'Unknown',
-        user_id: user?.id || 'Unknown',
+        user_id: userId || 'Unknown',
         first_name: user?.first_name || '',
         last_name: user?.last_name || '',
         member_id: user?.member_id || null,
@@ -183,10 +203,13 @@ export async function GET(
         category_id: item.registration_category_id || 'unknown',
         payment_status: item.payment_status || 'Unknown',
         amount_paid: item.amount_paid || 0,
+        registration_fee: item.registration_fee || 0,
         payment_id: item.payment_id || null,
         registered_at: item.registered_at,
         is_lgbtq: user?.is_lgbtq,
         is_goalie: user?.is_goalie || false,
+        discount_code: discountInfo?.discount_code || null,
+        discount_amount_saved: discountInfo?.amount_saved || 0
       }
     }) || []
 
@@ -291,10 +314,26 @@ export async function GET(
     // Convert map to array
     const processedAlternatesData = Array.from(alternatesMap.values())
 
+    // Compute financial summary
+    const paidRoster = processedData.filter(m => m.payment_status === 'paid')
+    const rosterGross = paidRoster.reduce((sum, m) => sum + m.registration_fee, 0)
+    const rosterNet = paidRoster.reduce((sum, m) => sum + m.amount_paid, 0)
+    const altNet = processedAlternatesData.reduce((sum, a) => sum + a.total_paid, 0)
+    const financialSummary = {
+      roster_gross: rosterGross,
+      roster_discounts: rosterGross - rosterNet,
+      roster_net: rosterNet,
+      alt_gross: altNet,
+      alt_discounts: 0,
+      alt_net: altNet,
+      total_net: rosterNet + altNet
+    }
+
     return NextResponse.json({
       data: processedData,
       waitlistData: processedWaitlistData,
       alternatesData: processedAlternatesData,
+      financialSummary,
       isAdmin,
     })
   } catch (error) {

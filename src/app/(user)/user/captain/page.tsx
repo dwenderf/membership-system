@@ -3,6 +3,17 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import FinancialSummary from '@/components/FinancialSummary'
+
+interface FinancialSummaryData {
+  roster_gross: number
+  roster_discounts: number
+  roster_net: number
+  alt_gross: number
+  alt_discounts: number
+  alt_net: number
+  total_net: number
+}
 
 interface CaptainRegistration {
   id: string
@@ -23,6 +34,7 @@ interface CaptainRegistration {
   }>
   alternates_enabled: boolean
   alternates_count: number
+  financial_summary?: FinancialSummaryData
 }
 
 export default function CaptainDashboardPage() {
@@ -249,6 +261,15 @@ export default function CaptainDashboardPage() {
                   </div>
                 )}
 
+                {/* Financial summary footer */}
+                {registration.financial_summary && (
+                  <FinancialSummary
+                    data={registration.financial_summary}
+                    mode="compact"
+                    showAlternates={registration.alternates_enabled}
+                  />
+                )}
+
                 {/* Action buttons */}
                 <div className="flex gap-2 mt-4">
                   <Link
@@ -338,6 +359,15 @@ export default function CaptainDashboardPage() {
                       <span className="font-bold text-gray-700">{registration.alternates_count}</span>
                     </div>
                   </div>
+                )}
+
+                {/* Financial summary footer */}
+                {registration.financial_summary && (
+                  <FinancialSummary
+                    data={registration.financial_summary}
+                    mode="compact"
+                    showAlternates={registration.alternates_enabled}
+                  />
                 )}
 
                 {/* Action buttons */}

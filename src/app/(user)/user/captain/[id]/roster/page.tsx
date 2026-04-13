@@ -6,6 +6,17 @@ import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
 import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
+import FinancialSummary from '@/components/FinancialSummary'
+
+interface FinancialSummaryData {
+  roster_gross: number
+  roster_discounts: number
+  roster_net: number
+  alt_gross: number
+  alt_discounts: number
+  alt_net: number
+  total_net: number
+}
 
 interface RegistrationData {
   id: string
@@ -23,10 +34,13 @@ interface RegistrationData {
   category_id: string
   payment_status: string
   amount_paid: number
+  registration_fee: number
   payment_id: string | null
   registered_at: string
   is_lgbtq: boolean | null
   is_goalie: boolean
+  discount_code: string | null
+  discount_amount_saved: number
 }
 
 interface WaitlistData {
@@ -72,6 +86,7 @@ export default function CaptainRosterPage() {
   const [registrationData, setRegistrationData] = useState<RegistrationData[]>([])
   const [waitlistData, setWaitlistData] = useState<WaitlistData[]>([])
   const [alternatesData, setAlternatesData] = useState<AlternateData[]>([])
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummaryData | null>(null)
   const [registrationName, setRegistrationName] = useState('')
   const [seasonName, setSeasonName] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -111,6 +126,7 @@ export default function CaptainRosterPage() {
       setRegistrationData(result.data || [])
       setWaitlistData(result.waitlistData || [])
       setAlternatesData(result.alternatesData || [])
+      setFinancialSummary(result.financialSummary || null)
       setIsAdmin(result.isAdmin || false)
 
       // Set title information from first registration record
@@ -400,6 +416,15 @@ export default function CaptainRosterPage() {
             </div>
           </div>
 
+          {/* Financial Summary */}
+          {financialSummary && (
+            <FinancialSummary
+              data={financialSummary}
+              mode="full"
+              showAlternates={alternatesData.length > 0}
+            />
+          )}
+
           {/* Search */}
           <div className="mb-6">
             <input
@@ -462,6 +487,12 @@ export default function CaptainRosterPage() {
                     </th>
                     <th
                       scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Discount
+                    </th>
+                    <th
+                      scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('registered_at')}
                     >
@@ -503,6 +534,18 @@ export default function CaptainRosterPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         {formatCurrency(member.amount_paid)}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {member.discount_code ? (
+                          <div>
+                            <span className="font-medium text-gray-900">{member.discount_code}</span>
+                            {member.discount_amount_saved > 0 && (
+                              <div className="text-xs text-red-600">-{formatCurrency(member.discount_amount_saved)}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
                           <div>{formatDateTime(member.registered_at).date}</div>
@@ -515,7 +558,7 @@ export default function CaptainRosterPage() {
                   ))}
                   {sortedMembers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
                         No members match the current filters.
                       </td>
                     </tr>

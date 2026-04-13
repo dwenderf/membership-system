@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { captureMessage } from '@sentry/nextjs'
+
+// Mirrors the Supabase "Max Rows" API setting (Settings → API → Max Rows).
+// If a query returns exactly this many rows it was likely truncated — Sentry will alert.
+// Update SUPABASE_MAX_ROWS in your .env / Vercel env vars whenever you change the Supabase setting.
+const SUPABASE_MAX_ROWS = parseInt(process.env.SUPABASE_MAX_ROWS ?? '1000', 10)
+
+function warnIfTruncated(queryName: string, data: unknown[] | null | undefined) {
+  if (data && data.length >= SUPABASE_MAX_ROWS) {
+    const message = `Query "${queryName}" returned exactly ${data.length} rows — Supabase result may be truncated. Raise SUPABASE_MAX_ROWS and the Supabase API Max Rows setting.`
+    logger.logSystem(queryName, message, { count: data.length, limit: SUPABASE_MAX_ROWS }, 'warn')
+    captureMessage(message, { level: 'warning', extra: { count: data.length, limit: SUPABASE_MAX_ROWS } })
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -466,9 +480,7 @@ export async function GET(request: NextRequest) {
 
       // Fetch all user_registrations for counting and financials.
       // No payment_status filter here so the count matches what the detail page shows.
-      // We apply a payment_status filter only when computing financial totals (see below).
-      // The .limit(50000) prevents Supabase's default 1000-row cap from silently truncating
-      // results when the total number of registrations across active registrations is large.
+      // Financial totals are accumulated only for payment_status='paid' rows (see below).
       const { data: registrationCounts, error: countsError } = await adminSupabase
         .from('user_registrations')
         .select(`
@@ -485,11 +497,11 @@ export async function GET(request: NextRequest) {
           )
         `)
         .in('registration_id', registrationIds)
-        .limit(50000)
 
       if (countsError) {
         logger.logSystem('registration-reports-api', 'Error fetching registration counts', { error: countsError }, 'error')
       }
+      warnIfTruncated('registration-counts', registrationCounts)
 
       // Get waitlist counts for each registration
       const { data: waitlistCounts, error: waitlistError } = await adminSupabase
@@ -506,22 +518,22 @@ export async function GET(request: NextRequest) {
         `)
         .in('registration_id', registrationIds)
         .is('removed_at', null)
-        .limit(50000)
-
+        
       if (waitlistError) {
         logger.logSystem('registration-reports-api', 'Error fetching waitlist counts', { error: waitlistError }, 'error')
       }
+      warnIfTruncated('registration-waitlist-counts', waitlistCounts)
 
       // Get alternates counts for each registration (all registered alternates, not just those who played)
       const { data: alternatesCounts, error: alternatesError} = await adminSupabase
         .from('user_alternate_registrations')
         .select('user_id, registration_id')
         .in('registration_id', registrationIds)
-        .limit(50000)
-
+        
       if (alternatesError) {
         logger.logSystem('registration-reports-api', 'Error fetching alternates counts', { error: alternatesError }, 'error')
       }
+      warnIfTruncated('registration-alternates-counts', alternatesCounts)
 
       // Get alternate selection financial data (revenue charged per game appearance).
       // Join to payments for status and gross amount; discount = total_amount - final_amount.
@@ -540,10 +552,11 @@ export async function GET(request: NextRequest) {
           )
         `)
         .in('alternate_registrations.registration_id', registrationIds)
-
+        
       if (altFinancialError) {
         logger.logSystem('registration-reports-api', 'Error fetching alternate selections financial data', { error: altFinancialError }, 'error')
       }
+      warnIfTruncated('registration-alternate-selections-financial', alternateSelectionsFinancial)
 
       // Build alternate financial map keyed by registration_id.
       // Only include paid/processing alternates; gross = payments.total_amount, net = amount_charged.

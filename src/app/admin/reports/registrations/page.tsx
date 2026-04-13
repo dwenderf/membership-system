@@ -251,15 +251,17 @@ export default function RegistrationReportsPage() {
                   {/* Season */}
                   <span className="hidden sm:inline text-xs text-gray-500 mr-2">{registration.season_name}</span>
 
-                  {/* Type badge */}
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${getRegistrationTypeColor(registration.type)}`}>
-                    {registration.type}
-                  </span>
-
                   {/* Member count */}
-                  <span className="ml-3 text-sm font-medium text-gray-700 whitespace-nowrap">
+                  <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
                     {registration.total_count} members
                   </span>
+
+                  {/* Net revenue */}
+                  {registration.financial_summary && (
+                    <span className="ml-3 text-sm font-semibold text-green-700 whitespace-nowrap">
+                      ${Math.round(registration.financial_summary.total_net / 100).toLocaleString('en-US')} net
+                    </span>
+                  )}
                 </button>
 
                 {/* Expanded content */}

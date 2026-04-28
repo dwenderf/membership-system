@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -20,33 +19,27 @@ export async function GET(request: Request) {
   })
 
   if (code) {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    const user = data?.user
-    
-    if (!error && user) {
-      // Note: We no longer auto-create user records here.
-      // The onboarding page will handle user record creation after collecting required info.
+    // Redirect to a confirmation page rather than exchanging the code immediately.
+    // This prevents Microsoft Defender (and similar link-scanning tools) from consuming
+    // the auth token by auto-visiting the magic link URL, which would invalidate the
+    // OTP as well. The token is only exchanged when the real user clicks the button.
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const isLocalEnv = process.env.NODE_ENV === 'development'
 
-      const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      
-      let redirectUrl = ''
-      
-      if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        redirectUrl = `${origin}${next}`
-      } else if (forwardedHost) {
-        redirectUrl = `https://${forwardedHost}${next}`
-      } else {
-        redirectUrl = `${origin}${next}`
-      }
-      
-      console.log('✅ Auth success, redirecting to:', redirectUrl)
-      return NextResponse.redirect(redirectUrl)
+    let baseUrl = ''
+    if (isLocalEnv) {
+      baseUrl = origin
+    } else if (forwardedHost) {
+      baseUrl = `https://${forwardedHost}`
     } else {
-      console.log('❌ Auth error:', error)
+      baseUrl = origin
     }
+
+    const confirmUrl = new URL(`${baseUrl}/auth/confirm`)
+    confirmUrl.searchParams.set('code', code)
+    confirmUrl.searchParams.set('next', next)
+    console.log('🔗 Redirecting to confirmation page:', confirmUrl.toString())
+    return NextResponse.redirect(confirmUrl.toString())
   } else {
     console.log('❌ No auth code provided')
   }

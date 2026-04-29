@@ -16,7 +16,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@hookform/resolvers": "^5.1.1",
-    "@sentry/nextjs": "^10.39.0",
+    "@sentry/nextjs": "^10.50.0",
     "@stripe/react-stripe-js": "^3.7.0",
     "@stripe/stripe-js": "^7.3.1",
     "@supabase/ssr": "^0.6.1",

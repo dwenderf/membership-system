@@ -2,28 +2,26 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { cookies, headers } from 'next/headers'
+import { headers } from 'next/headers'
 
-async function completeSignIn() {
+async function completeSignIn(formData: FormData) {
   'use server'
-  const cookieStore = await cookies()
-  const code = cookieStore.get('auth_code_pending')?.value
-  const next = cookieStore.get('auth_next_pending')?.value || '/dashboard'
+  const tokenHash = formData.get('token_hash') as string
+  const type = (formData.get('type') as string) || 'magiclink'
 
-  if (!code) {
+  if (!tokenHash) {
     redirect('/auth/auth-code-error')
   }
 
   const supabase = await createClient()
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: type as 'magiclink' | 'email',
+  })
 
-  if (error || !data?.user) {
+  if (error) {
     redirect('/auth/auth-code-error')
   }
-
-  // Clear the pending cookies
-  cookieStore.delete('auth_code_pending')
-  cookieStore.delete('auth_next_pending')
 
   const headersList = await headers()
   const forwardedHost = headersList.get('x-forwarded-host')
@@ -39,14 +37,17 @@ async function completeSignIn() {
     baseUrl = `https://${host}`
   }
 
-  redirect(`${baseUrl}${next}`)
+  redirect(`${baseUrl}/dashboard`)
 }
 
-export default async function ConfirmPage() {
-  const cookieStore = await cookies()
-  const hasCode = !!cookieStore.get('auth_code_pending')?.value
+export default async function MagicConfirmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token_hash?: string; type?: string }>
+}) {
+  const { token_hash, type } = await searchParams
 
-  if (!hasCode) {
+  if (!token_hash) {
     redirect('/auth/auth-code-error')
   }
 
@@ -64,6 +65,8 @@ export default async function ConfirmPage() {
 
         <div className="bg-white shadow rounded-lg p-6">
           <form action={completeSignIn}>
+            <input type="hidden" name="token_hash" value={token_hash} />
+            <input type="hidden" name="type" value={type ?? 'magiclink'} />
             <button
               type="submit"
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

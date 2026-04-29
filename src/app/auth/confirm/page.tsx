@@ -2,12 +2,13 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
-async function completeSignIn(formData: FormData) {
+async function completeSignIn() {
   'use server'
-  const code = formData.get('code') as string
-  const next = (formData.get('next') as string) || '/dashboard'
+  const cookieStore = await cookies()
+  const code = cookieStore.get('auth_code_pending')?.value
+  const next = cookieStore.get('auth_next_pending')?.value || '/dashboard'
 
   if (!code) {
     redirect('/auth/auth-code-error')
@@ -20,7 +21,10 @@ async function completeSignIn(formData: FormData) {
     redirect('/auth/auth-code-error')
   }
 
-  // Mirror the host logic from the callback route
+  // Clear the pending cookies
+  cookieStore.delete('auth_code_pending')
+  cookieStore.delete('auth_next_pending')
+
   const headersList = await headers()
   const forwardedHost = headersList.get('x-forwarded-host')
   const host = headersList.get('host') ?? ''
@@ -38,14 +42,11 @@ async function completeSignIn(formData: FormData) {
   redirect(`${baseUrl}${next}`)
 }
 
-export default async function ConfirmPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ code?: string; next?: string }>
-}) {
-  const { code, next } = await searchParams
+export default async function ConfirmPage() {
+  const cookieStore = await cookies()
+  const hasCode = !!cookieStore.get('auth_code_pending')?.value
 
-  if (!code) {
+  if (!hasCode) {
     redirect('/auth/auth-code-error')
   }
 
@@ -63,8 +64,6 @@ export default async function ConfirmPage({
 
         <div className="bg-white shadow rounded-lg p-6">
           <form action={completeSignIn}>
-            <input type="hidden" name="code" value={code} />
-            <input type="hidden" name="next" value={next ?? '/dashboard'} />
             <button
               type="submit"
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

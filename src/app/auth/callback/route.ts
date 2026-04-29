@@ -19,10 +19,11 @@ export async function GET(request: Request) {
   })
 
   if (code) {
-    // Redirect to a confirmation page rather than exchanging the code immediately.
-    // This prevents Microsoft Defender (and similar link-scanning tools) from consuming
-    // the auth token by auto-visiting the magic link URL, which would invalidate the
-    // OTP as well. The token is only exchanged when the real user clicks the button.
+    // Store the auth code in an httpOnly cookie and redirect to the confirmation page
+    // WITHOUT the code in the URL. This prevents the Supabase browser client's
+    // detectSessionInUrl from auto-exchanging the code, and prevents Microsoft Defender
+    // (and similar link scanners) from consuming the token by visiting the magic link.
+    // The token is only exchanged when the real user clicks the button on the confirm page.
     const forwardedHost = request.headers.get('x-forwarded-host')
     const isLocalEnv = process.env.NODE_ENV === 'development'
 
@@ -35,11 +36,24 @@ export async function GET(request: Request) {
       baseUrl = origin
     }
 
-    const confirmUrl = new URL(`${baseUrl}/auth/confirm`)
-    confirmUrl.searchParams.set('code', code)
-    confirmUrl.searchParams.set('next', next)
-    console.log('🔗 Redirecting to confirmation page:', confirmUrl.toString())
-    return NextResponse.redirect(confirmUrl.toString())
+    const confirmUrl = `${baseUrl}/auth/confirm`
+    console.log('🔗 Redirecting to confirmation page:', confirmUrl)
+    const response = NextResponse.redirect(confirmUrl)
+    response.cookies.set('auth_code_pending', code, {
+      httpOnly: true,
+      secure: !isLocalEnv,
+      sameSite: 'lax',
+      maxAge: 300, // 5 minutes, matching Supabase token expiry
+      path: '/auth/confirm',
+    })
+    response.cookies.set('auth_next_pending', next, {
+      httpOnly: true,
+      secure: !isLocalEnv,
+      sameSite: 'lax',
+      maxAge: 300,
+      path: '/auth/confirm',
+    })
+    return response
   } else {
     console.log('❌ No auth code provided')
   }

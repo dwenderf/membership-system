@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     paymentId: string
-  }
+  }>
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const { paymentId } = await params
     const supabase = await createClient()
     const adminSupabase = createAdminClient()
 
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           )
         )
       `)
-      .eq('payment_id', params.paymentId)
+      .eq('payment_id', paymentId)
 
     if (registrationsError) {
       console.error('Error fetching registrations for payment:', registrationsError)

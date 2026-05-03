@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 interface RouteParams {
   params: {
@@ -10,7 +10,8 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = await createClient()
-    
+    const adminSupabase = createAdminClient()
+
     // Check if user is authenticated and is admin
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -28,8 +29,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Get registrations associated with this payment
-    const { data: registrations, error: registrationsError } = await supabase
+    // Get registrations associated with this payment (admin client bypasses RLS)
+    const { data: registrations, error: registrationsError } = await adminSupabase
       .from('user_registrations')
       .select(`
         registration_id,

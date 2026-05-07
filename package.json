@@ -58,5 +58,6 @@
   "overrides": {
     "qs": "^6.14.2",
     "postcss": "^8.5.10"
-  }
+  },
+  "//overrides": "Temporary overrides to force patched versions of transitive deps with security vulnerabilities. Remove each entry once the upstream package has updated. See remove-tar-override-issue.md for the pattern."
 }

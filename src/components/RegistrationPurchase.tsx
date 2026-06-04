@@ -283,8 +283,8 @@ export default function RegistrationPurchase({
   const isTimingAvailable = isRegistrationAvailable(registration as any, hasValidPresaleCode || isLgbtqPresaleEligible)
   
   // Check if selected category is at capacity
-  const isCategoryAtCapacity = selectedCategory?.max_capacity ? 
-    (selectedCategory.current_count || 0) >= selectedCategory.max_capacity 
+  const isCategoryAtCapacity = selectedCategory?.max_capacity !== null && selectedCategory?.max_capacity !== undefined
+    ? (selectedCategory.current_count || 0) >= selectedCategory.max_capacity
     : false
   
   // Check if user is already on waitlist for selected category

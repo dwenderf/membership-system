@@ -166,7 +166,7 @@ export default function NewRegistrationCategoryPage() {
         category_id: isCustom ? null : (formData.category_id || null),
         custom_name: isCustom ? (formData.custom_name || null) : null,
         price: parseInt(formData.price),
-        max_capacity: formData.max_capacity ? parseInt(formData.max_capacity) : null,
+        max_capacity: formData.max_capacity !== '' ? parseInt(formData.max_capacity) : null,
         accounting_code: formData.accounting_code.trim(),
         required_membership_id: formData.required_membership_id === 'none' ? null : (formData.required_membership_id || null),
         sort_order: parseInt(formData.sort_order) || 0,

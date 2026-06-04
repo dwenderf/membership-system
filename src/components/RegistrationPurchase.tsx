@@ -1216,9 +1216,9 @@ export default function RegistrationPurchase({
             {isUserOnWaitlist ? (
               `You're on the waitlist. If you're selected, you'll be charged at that time.`
             ) : selectedCategory.max_capacity === 0 ? (
-              `This category is waitlist only — no spots are available for direct registration. Join the waitlist and you'll be charged if you're selected.`
+              `This category is waitlist only — no spots are available for direct registration. Join the waitlist and you'll be charged only if you're selected.`
             ) : (
-              `This category is currently full (${selectedCategory.current_count} spots filled). Join the waitlist and you'll be charged if you're selected.`
+              `This category is currently full (${selectedCategory.current_count} spots filled). Join the waitlist and you'll be charged only if you're selected.`
             )}
           </p>
         </div>

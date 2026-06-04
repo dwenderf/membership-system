@@ -577,7 +577,7 @@ export default function RegistrationPurchase({
         // Show success message
         showSuccess(
           'Waitlist Joined!',
-          `You've been added to the waitlist. We'll notify you if a spot opens up.`
+          `You've been added to the waitlist. If you're selected, you'll be charged at that time.`
         )
 
       } catch (err) {
@@ -885,7 +885,7 @@ export default function RegistrationPurchase({
                             No cost to register as alternate. You agree to pay ${(categoryPrice / 100).toFixed(2)} if selected for games.
                           </div>
                         )}
-                        {category.max_capacity && (
+                        {(category.max_capacity !== null && category.max_capacity !== undefined) && (
                           <div className={`text-xs ${
                             (() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
@@ -901,12 +901,13 @@ export default function RegistrationPurchase({
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
 
-                              // Don't show capacity text if user is on waitlist
                               if (categoryWaitlistEntry) {
                                 return null
                               }
 
-                              if (remaining <= 0) {
+                              if (category.max_capacity === 0) {
+                                return 'Waitlist only'
+                              } else if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
@@ -1010,12 +1011,12 @@ export default function RegistrationPurchase({
                             })()}
                           </div>
                         )}
-                        {category.max_capacity && (
+                        {(category.max_capacity !== null && category.max_capacity !== undefined) && (
                           <div className={`text-xs ${
                             (() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              
+
                               if (remaining <= 0) {
                                 return categoryWaitlistEntry ? 'text-blue-500' : 'text-red-500'
                               } else {
@@ -1027,12 +1028,13 @@ export default function RegistrationPurchase({
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
 
-                              // Don't show capacity text if user is on waitlist
                               if (categoryWaitlistEntry) {
                                 return null
                               }
 
-                              if (remaining <= 0) {
+                              if (category.max_capacity === 0) {
+                                return 'Waitlist only'
+                              } else if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
                                 return '1 spot remaining'
@@ -1212,9 +1214,11 @@ export default function RegistrationPurchase({
             isUserOnWaitlist ? 'text-blue-700' : 'text-red-700'
           }`}>
             {isUserOnWaitlist ? (
-              `We'll notify you if a spot becomes available.`
+              `You're on the waitlist. If you're selected, you'll be charged at that time.`
+            ) : selectedCategory.max_capacity === 0 ? (
+              `This category is waitlist only — no spots are available for direct registration. Join the waitlist and you'll be charged if you're selected.`
             ) : (
-              `This category is currently at capacity (${selectedCategory.current_count} spots filled). You can join the waitlist and we'll notify you if a spot becomes available.`
+              `This category is currently full (${selectedCategory.current_count} spots filled). Join the waitlist and you'll be charged if you're selected.`
             )}
           </p>
         </div>
@@ -1290,6 +1294,11 @@ export default function RegistrationPurchase({
               <div className="text-sm text-green-700 mt-1">
                 Have a discount code? Enter it here to apply your discount:
               </div>
+              {isCategoryAtCapacity && (
+                <div className="text-xs text-green-600 mt-1 italic">
+                  Your discount code will be applied automatically if you are selected from the waitlist.
+                </div>
+              )}
               <input
                 type="text"
                 value={discountCode}
@@ -1576,7 +1585,7 @@ export default function RegistrationPurchase({
                     }
                     showSuccess(
                       'Waitlist Joined!',
-                      `You've been added to the waitlist. We'll notify you if a spot opens up.`
+                      `You've been added to the waitlist. If you're selected, you'll be charged at that time.`
                     )
                   } catch (err) {
                     const errorMessage = err instanceof Error ? err.message : 'An error occurred'

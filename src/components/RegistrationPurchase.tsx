@@ -890,8 +890,8 @@ export default function RegistrationPurchase({
                             (() => {
                               const remaining = category.max_capacity - (category.current_count || 0)
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
-                              if (remaining <= 0 && selectedCategoryId === category.id) {
-                                return categoryWaitlistEntry ? 'text-blue-700' : 'text-red-700'
+                              if (remaining <= 0) {
+                                return categoryWaitlistEntry ? 'text-blue-700' : 'text-amber-600'
                               } else {
                                 return 'text-gray-500'
                               }
@@ -1018,7 +1018,7 @@ export default function RegistrationPurchase({
                               const categoryWaitlistEntry = userWaitlistEntries[category.id]
 
                               if (remaining <= 0) {
-                                return categoryWaitlistEntry ? 'text-blue-500' : 'text-red-500'
+                                return categoryWaitlistEntry ? 'text-blue-500' : 'text-amber-600'
                               } else {
                                 return 'text-gray-500'
                               }

@@ -766,7 +766,7 @@ class EmailService {
     }
   ): Promise<void> {
     const { emailStagingManager } = await import('@/lib/email/staging')
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/user`
     await Promise.all(
       recipients.map(recipient =>
         emailStagingManager.stageEmail({
@@ -782,7 +782,7 @@ class EmailService {
             senderRole: templateVars.senderRole,
             messageSubject: templateVars.messageSubject,
             messageBody: templateVars.messageBody,
-            dashboardUrl: `${siteUrl}/user/dashboard`,
+            dashboardUrl,
           },
         })
       )

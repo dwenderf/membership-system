@@ -273,7 +273,7 @@ export default function NewRegistrationCategoryPage() {
   ) && 
   formData.price !== undefined && formData.price !== '' && parseInt(formData.price) >= 0 &&
   formData.accounting_code.trim() &&
-  (!formData.max_capacity || parseInt(formData.max_capacity) > 0) &&
+  (formData.max_capacity === '' || formData.max_capacity === undefined || parseInt(formData.max_capacity) >= 0) &&
   !categoryAlreadyExists
 
   const availablePresets = registration 
@@ -422,11 +422,11 @@ export default function NewRegistrationCategoryPage() {
                 <input
                   type="number"
                   id="max_capacity"
-                  min="1"
+                  min="0"
                   value={formData.max_capacity}
                   onChange={(e) => setFormData(prev => ({ ...prev, max_capacity: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., 20"
+                  placeholder="e.g., 20 (use 0 for waitlist-only)"
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   Leave empty for unlimited capacity

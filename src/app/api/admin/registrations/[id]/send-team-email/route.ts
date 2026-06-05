@@ -18,7 +18,7 @@ export async function POST(
     // Verify admin
     const { data: userProfile } = await supabase
       .from('users')
-      .select('is_admin, first_name, last_name')
+      .select('is_admin, email, first_name, last_name')
       .eq('id', user.id)
       .single()
 
@@ -74,6 +74,15 @@ export async function POST(
         name: `${u.first_name} ${u.last_name}`.trim(),
       }
     })
+
+    // Always CC the sender
+    if (userProfile.email && !recipients.some(r => r.userId === user.id)) {
+      recipients.push({
+        userId: user.id,
+        email: userProfile.email,
+        name: `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim(),
+      })
+    }
 
     await emailService.stageTeamMessageEmail(recipients, {
       senderName,

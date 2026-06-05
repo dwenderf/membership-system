@@ -45,7 +45,7 @@ export async function POST(
     // Fetch sender profile
     const { data: senderProfile } = await adminSupabase
       .from('users')
-      .select('first_name, last_name')
+      .select('email, first_name, last_name')
       .eq('id', user.id)
       .single()
 
@@ -82,6 +82,15 @@ export async function POST(
         name: `${u.first_name} ${u.last_name}`.trim(),
       }
     })
+
+    // Always CC the sender
+    if (senderProfile?.email && !recipients.some(r => r.userId === user.id)) {
+      recipients.push({
+        userId: user.id,
+        email: senderProfile.email,
+        name: `${senderProfile.first_name || ''} ${senderProfile.last_name || ''}`.trim(),
+      })
+    }
 
     await emailService.stageTeamMessageEmail(recipients, {
       senderName,

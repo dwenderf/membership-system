@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
+import EmailComposerModal from '@/components/EmailComposerModal'
+
+interface EmailRecipient {
+  userId: string
+  email: string
+  name: string
+}
 
 interface FinancialSummaryData {
   roster_gross: number
@@ -42,7 +49,37 @@ export default function CaptainDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showPastTeams, setShowPastTeams] = useState(false)
+  const [emailTargetId, setEmailTargetId] = useState<string | null>(null)
+  const [emailRecipients, setEmailRecipients] = useState<EmailRecipient[]>([])
+  const [emailLoading, setEmailLoading] = useState(false)
   const router = useRouter()
+
+  const handleEmailClick = async (registrationId: string) => {
+    setEmailLoading(true)
+    setEmailTargetId(registrationId)
+    try {
+      const res = await fetch(`/api/user/captain/${registrationId}/roster`)
+      if (!res.ok) throw new Error('Failed to load roster')
+      const result = await res.json()
+      const paid = (result.data || [])
+        .filter((m: { payment_status: string }) => m.payment_status === 'paid')
+        .map((m: { user_id: string; email: string; first_name: string; last_name: string }) => ({
+          userId: m.user_id,
+          email: m.email,
+          name: `${m.first_name} ${m.last_name}`.trim(),
+        }))
+      setEmailRecipients(paid)
+    } catch {
+      setEmailTargetId(null)
+    } finally {
+      setEmailLoading(false)
+    }
+  }
+
+  const handleEmailClose = () => {
+    setEmailTargetId(null)
+    setEmailRecipients([])
+  }
 
   useEffect(() => {
     fetchRegistrations(showPastTeams)
@@ -205,7 +242,26 @@ export default function CaptainDashboardPage() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{registration.name}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{registration.name}</h3>
+                      <button
+                        onClick={() => handleEmailClick(registration.id)}
+                        title="Email Team"
+                        disabled={emailLoading && emailTargetId === registration.id}
+                        className="text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
+                      >
+                        {emailLoading && emailTargetId === registration.id ? (
+                          <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-600">{registration.season_name}</p>
                   </div>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRegistrationTypeColor(registration.type)}`}>
@@ -383,6 +439,13 @@ export default function CaptainDashboardPage() {
             ))}
           </div>
         </div>
+      )}
+      {emailTargetId && emailRecipients.length > 0 && (
+        <EmailComposerModal
+          recipients={emailRecipients}
+          apiEndpoint={`/api/captain/registrations/${emailTargetId}/send-team-email`}
+          onClose={handleEmailClose}
+        />
       )}
     </div>
   )

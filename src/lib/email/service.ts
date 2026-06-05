@@ -25,6 +25,7 @@ export const EMAIL_EVENTS = {
   CAPTAIN_ROSTER_CHANGE: 'captain.roster_change',
   ADMIN_NEW_REGISTRATION: 'admin.new_registration',
   ADMIN_REFUND_NOTIFICATION: 'admin.refund_notification',
+  TEAM_MESSAGE: 'team.message',
 } as const
 
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]
@@ -749,6 +750,43 @@ class EmailService {
         dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
       }
     })
+  }
+
+  /**
+   * Stage ad-hoc team message emails for batch delivery via cron.
+   * All recipients receive the same subject/body; one email_logs row is inserted per recipient.
+   */
+  async stageTeamMessageEmail(
+    recipients: { userId: string; email: string; name: string }[],
+    templateVars: {
+      senderName: string
+      senderRole: string
+      messageSubject: string
+      messageBody: string
+    }
+  ): Promise<void> {
+    const { emailStagingManager } = await import('@/lib/email/staging')
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/user`
+    await Promise.all(
+      recipients.map(recipient =>
+        emailStagingManager.stageEmail({
+          user_id: recipient.userId,
+          email_address: recipient.email,
+          event_type: EMAIL_EVENTS.TEAM_MESSAGE,
+          subject: templateVars.messageSubject,
+          template_id: process.env.LOOPS_TEAM_MESSAGE_TEMPLATE_ID,
+          triggered_by: 'admin_send',
+          email_data: {
+            recipientName: recipient.name,
+            senderName: templateVars.senderName,
+            senderRole: templateVars.senderRole,
+            messageSubject: templateVars.messageSubject,
+            messageBody: templateVars.messageBody,
+            dashboardUrl,
+          },
+        })
+      )
+    )
   }
 }
 

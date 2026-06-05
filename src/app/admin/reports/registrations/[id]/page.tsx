@@ -112,6 +112,7 @@ export default function RegistrationDetailPage() {
   const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
   const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
   const [showEmailComposer, setShowEmailComposer] = useState(false)
+  const [emailAllMembers, setEmailAllMembers] = useState(false)
 
   // Filter state
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
@@ -340,7 +341,7 @@ export default function RegistrationDetailPage() {
           <h1 className="text-3xl font-bold text-gray-900">{registrationName}</h1>
           {allActiveMembers.length > 0 && (
             <button
-              onClick={() => setShowEmailComposer(true)}
+              onClick={() => { setEmailAllMembers(true); setShowEmailComposer(true) }}
               title="Email Team"
               className="text-gray-400 hover:text-indigo-600 transition-colors mt-1"
             >
@@ -395,7 +396,7 @@ export default function RegistrationDetailPage() {
                 )}
                 {filteredActiveMembers.length > 0 && (
                   <button
-                    onClick={() => setShowEmailComposer(true)}
+                    onClick={() => { setEmailAllMembers(false); setShowEmailComposer(true) }}
                     className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition-colors"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -990,7 +991,7 @@ export default function RegistrationDetailPage() {
 
       {showEmailComposer && (
         <EmailComposerModal
-          recipients={filteredActiveMembers.map(m => ({
+          recipients={(emailAllMembers ? allActiveMembers : filteredActiveMembers).map(m => ({
             userId: m.user_id,
             email: m.email,
             name: `${m.first_name} ${m.last_name}`.trim(),

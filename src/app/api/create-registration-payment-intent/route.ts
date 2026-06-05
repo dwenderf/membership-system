@@ -942,7 +942,8 @@ export async function POST(request: NextRequest) {
     }
 
     // STEP 2: Check capacity FIRST if applicable (before creating record)
-    if (selectedCategory.max_capacity) {
+    // max_capacity === 0 means waitlist-only, so we check for null/undefined (truly unlimited)
+    if (selectedCategory.max_capacity !== null && selectedCategory.max_capacity !== undefined) {
       // Get current count including active reservations
       const currentCount = await getSingleCategoryRegistrationCount(categoryId)
 
@@ -1027,7 +1028,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Could be a race condition - check capacity again if applicable
-        if (selectedCategory.max_capacity) {
+        if (selectedCategory.max_capacity !== null && selectedCategory.max_capacity !== undefined) {
           const recheckedCount = await getSingleCategoryRegistrationCount(categoryId)
           if (recheckedCount >= selectedCategory.max_capacity) {
             return NextResponse.json({

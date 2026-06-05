@@ -97,7 +97,7 @@ export default function EditRegistrationCategoryPage() {
           category_id: categoryData.category_id || '',
           custom_name: categoryData.custom_name || '',
           price: categoryData.price !== null && categoryData.price !== undefined ? categoryData.price.toString() : '',
-          max_capacity: categoryData.max_capacity ? categoryData.max_capacity.toString() : '',
+          max_capacity: categoryData.max_capacity !== null && categoryData.max_capacity !== undefined ? categoryData.max_capacity.toString() : '',
           accounting_code: categoryData.accounting_code || '',
           required_membership_id: categoryData.required_membership_id || '',
           sort_order: categoryData.sort_order ? categoryData.sort_order.toString() : '',
@@ -148,7 +148,7 @@ export default function EditRegistrationCategoryPage() {
         category_id: isCustom ? null : (formData.category_id || null),
         custom_name: isCustom ? (formData.custom_name || null) : null,
         price: parseInt(formData.price),
-        max_capacity: formData.max_capacity ? parseInt(formData.max_capacity) : null,
+        max_capacity: formData.max_capacity !== '' ? parseInt(formData.max_capacity) : null,
         accounting_code: formData.accounting_code.trim(),
         required_membership_id: formData.required_membership_id === 'none' ? null : (formData.required_membership_id || null),
         sort_order: parseInt(formData.sort_order) || 0,
@@ -344,11 +344,11 @@ export default function EditRegistrationCategoryPage() {
                 <input
                   type="number"
                   id="max_capacity"
-                  min="1"
+                  min="0"
                   value={formData.max_capacity}
                   onChange={(e) => setFormData(prev => ({ ...prev, max_capacity: e.target.value }))}
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., 20"
+                  placeholder="e.g., 20 (use 0 for waitlist-only)"
                 />
                 <p className="mt-1 text-sm text-gray-500">
                   Leave empty for unlimited capacity

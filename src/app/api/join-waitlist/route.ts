@@ -105,10 +105,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
-    // Check if category has capacity limits
-    if (!category.max_capacity) {
-      return NextResponse.json({ 
-        error: 'This category does not have capacity limits and does not require a waitlist' 
+    // Check if category has capacity limits (null/undefined = unlimited; 0 = waitlist-only)
+    if (category.max_capacity === null || category.max_capacity === undefined) {
+      return NextResponse.json({
+        error: 'This category does not have capacity limits and does not require a waitlist'
       }, { status: 400 })
     }
 
@@ -124,10 +124,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to check category capacity' }, { status: 500 })
     }
 
-    // Verify category is actually at capacity
-    if (!currentCount || currentCount < category.max_capacity) {
-      return NextResponse.json({ 
-        error: 'This category is not at capacity. You can register normally.' 
+    // Verify category is actually at capacity (currentCount < max_capacity means space remains)
+    if (currentCount !== null && currentCount < category.max_capacity) {
+      return NextResponse.json({
+        error: 'This category is not at capacity. You can register normally.'
       }, { status: 400 })
     }
 

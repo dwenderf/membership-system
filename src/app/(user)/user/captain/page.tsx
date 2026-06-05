@@ -68,7 +68,14 @@ export default function CaptainDashboardPage() {
           email: m.email,
           name: `${m.first_name} ${m.last_name}`.trim(),
         }))
-      setEmailRecipients(paid)
+      const alts = (result.alternatesData || []).map(
+        (m: { user_id: string; email: string; first_name: string; last_name: string }) => ({
+          userId: m.user_id,
+          email: m.email,
+          name: `${m.first_name} ${m.last_name}`.trim(),
+        })
+      )
+      setEmailRecipients([...paid, ...alts])
     } catch {
       setEmailTargetId(null)
     } finally {

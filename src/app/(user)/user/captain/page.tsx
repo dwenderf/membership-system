@@ -68,7 +68,14 @@ export default function CaptainDashboardPage() {
           email: m.email,
           name: `${m.first_name} ${m.last_name}`.trim(),
         }))
-      setEmailRecipients(paid)
+      const alts = (result.alternatesData || []).map(
+        (m: { user_id: string; email: string; first_name: string; last_name: string }) => ({
+          userId: m.user_id,
+          email: m.email,
+          name: `${m.first_name} ${m.last_name}`.trim(),
+        })
+      )
+      setEmailRecipients([...paid, ...alts])
     } catch {
       setEmailTargetId(null)
     } finally {
@@ -244,23 +251,6 @@ export default function CaptainDashboardPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-lg font-semibold text-gray-900">{registration.name}</h3>
-                      <button
-                        onClick={() => handleEmailClick(registration.id)}
-                        title="Email Team"
-                        disabled={emailLoading && emailTargetId === registration.id}
-                        className="text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50"
-                      >
-                        {emailLoading && emailTargetId === registration.id ? (
-                          <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                        ) : (
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        )}
-                      </button>
                     </div>
                     <p className="text-sm text-gray-600">{registration.season_name}</p>
                   </div>
@@ -327,7 +317,7 @@ export default function CaptainDashboardPage() {
                 )}
 
                 {/* Action buttons */}
-                <div className="flex gap-2 mt-4">
+                <div className="flex flex-col sm:flex-row gap-2 mt-4">
                   <Link
                     href={`/user/captain/${registration.id}/roster`}
                     className="flex-1 text-center px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 rounded-md hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -342,6 +332,13 @@ export default function CaptainDashboardPage() {
                       Manage Alternates
                     </Link>
                   )}
+                  <button
+                    onClick={() => handleEmailClick(registration.id)}
+                    disabled={emailLoading && emailTargetId === registration.id}
+                    className="flex-1 text-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 disabled:opacity-50"
+                  >
+                    {emailLoading && emailTargetId === registration.id ? 'Loading...' : 'Email Team'}
+                  </button>
                 </div>
               </div>
             ))}

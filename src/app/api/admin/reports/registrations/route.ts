@@ -479,8 +479,7 @@ export async function GET(request: NextRequest) {
       const registrationIds = registrationsList?.map(r => r.id) || []
 
       // Fetch all user_registrations for counting and financials.
-      // No payment_status filter here so the count matches what the detail page shows.
-      // Financial totals are accumulated only for payment_status='paid' rows (see below).
+      // Refunded members are excluded from counts (see forEach below); paid-only for financials.
       const { data: registrationCounts, error: countsError } = await adminSupabase
         .from('user_registrations')
         .select(`
@@ -612,8 +611,12 @@ export async function GET(request: NextRequest) {
         if (!countsMap.has(regId)) {
           countsMap.set(regId, new Map())
         }
-        const regMap = countsMap.get(regId)!
-        regMap.set(catName, (regMap.get(catName) || 0) + 1)
+
+        // Only count active (non-refunded) members — matches email recipient logic
+        if (count.payment_status !== 'refunded') {
+          const regMap = countsMap.get(regId)!
+          regMap.set(catName, (regMap.get(catName) || 0) + 1)
+        }
 
         // Accumulate financial totals for paid members only — matches detail page paidRoster logic
         if (count.payment_status === 'paid') {

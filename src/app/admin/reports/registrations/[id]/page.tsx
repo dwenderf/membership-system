@@ -112,11 +112,13 @@ export default function RegistrationDetailPage() {
   const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
   const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
   const [showEmailComposer, setShowEmailComposer] = useState(false)
+  const [emailAllMembers, setEmailAllMembers] = useState(false)
 
   // Filter state
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const [lgbtqFilter, setLgbtqFilter] = useState<LgbtqFilter | null>(null)
   const [goalieFilter, setGoalieFilter] = useState<GoalieFilter | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'roster' | 'alternate' | null>(null)
 
   useEffect(() => {
     if (registrationId) {
@@ -262,7 +264,23 @@ export default function RegistrationDetailPage() {
     return 0
   })
 
-  const hasActiveFilters = categoryFilter !== null || lgbtqFilter !== null || goalieFilter !== null
+  const hasActiveFilters = categoryFilter !== null || lgbtqFilter !== null || goalieFilter !== null || statusFilter !== null
+
+  const rosterRecipients = filteredActiveMembers.map(m => ({
+    userId: m.user_id, email: m.email, name: `${m.first_name} ${m.last_name}`.trim(),
+  }))
+  const alternateRecipients = alternatesData.map(m => ({
+    userId: m.user_id, email: m.email, name: `${m.first_name} ${m.last_name}`.trim(),
+  }))
+  const filteredEmailRecipients =
+    statusFilter === 'roster' ? rosterRecipients
+    : statusFilter === 'alternate' ? alternateRecipients
+    : [...rosterRecipients, ...alternateRecipients]
+
+  const allEmailRecipients = [
+    ...allActiveMembers.map(m => ({ userId: m.user_id, email: m.email, name: `${m.first_name} ${m.last_name}`.trim() })),
+    ...alternatesData.map(m => ({ userId: m.user_id, email: m.email, name: `${m.first_name} ${m.last_name}`.trim() })),
+  ]
 
   const toggleCategoryFilter = (name: string) =>
     setCategoryFilter(prev => (prev === name ? null : name))
@@ -336,7 +354,20 @@ export default function RegistrationDetailPage() {
 
       {/* Page Title */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">{registrationName}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-gray-900">{registrationName}</h1>
+          {allActiveMembers.length > 0 && (
+            <button
+              onClick={() => { setEmailAllMembers(true); setShowEmailComposer(true) }}
+              title="Email Team"
+              className="text-gray-400 hover:text-indigo-600 transition-colors mt-1"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </button>
+          )}
+        </div>
         <p className="mt-2 text-lg text-gray-600">{seasonName}</p>
       </div>
 
@@ -374,21 +405,21 @@ export default function RegistrationDetailPage() {
               <div className="flex items-center gap-3">
                 {hasActiveFilters && (
                   <button
-                    onClick={() => { setCategoryFilter(null); setLgbtqFilter(null); setGoalieFilter(null) }}
+                    onClick={() => { setCategoryFilter(null); setLgbtqFilter(null); setGoalieFilter(null); setStatusFilter(null) }}
                     className="text-xs text-gray-500 hover:text-gray-700 underline"
                   >
                     Clear filters
                   </button>
                 )}
-                {filteredActiveMembers.length > 0 && (
+                {filteredEmailRecipients.length > 0 && (
                   <button
-                    onClick={() => setShowEmailComposer(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                    onClick={() => { setEmailAllMembers(false); setShowEmailComposer(true) }}
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition-colors"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                    Email Team
+                    Email selected ({filteredEmailRecipients.length})
                   </button>
                 )}
               </div>
@@ -491,6 +522,37 @@ export default function RegistrationDetailPage() {
                 </button>
               </div>
             </div>
+
+            {/* Status */}
+            {alternatesData.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider w-20 shrink-0">Status</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setStatusFilter(statusFilter === 'roster' ? null : 'roster')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      statusFilter === 'roster'
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    Roster
+                    <span className={`font-normal ${statusFilter === 'roster' ? 'opacity-80' : 'opacity-60'}`}>({allActiveMembers.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter(statusFilter === 'alternate' ? null : 'alternate')}
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      statusFilter === 'alternate'
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    Alternate
+                    <span className={`font-normal ${statusFilter === 'alternate' ? 'opacity-80' : 'opacity-60'}`}>({alternatesData.length})</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Financial Summary */}
@@ -977,11 +1039,7 @@ export default function RegistrationDetailPage() {
 
       {showEmailComposer && (
         <EmailComposerModal
-          recipients={filteredActiveMembers.map(m => ({
-            userId: m.user_id,
-            email: m.email,
-            name: `${m.first_name} ${m.last_name}`.trim(),
-          }))}
+          recipients={emailAllMembers ? allEmailRecipients : filteredEmailRecipients}
           apiEndpoint={`/api/admin/registrations/${registrationId}/send-team-email`}
           onClose={() => setShowEmailComposer(false)}
         />

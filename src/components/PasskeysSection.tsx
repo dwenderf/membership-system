@@ -25,6 +25,7 @@ interface PasskeyItem {
 export default function PasskeysSection() {
   const [passkeys, setPasskeys] = useState<PasskeyItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [supported, setSupported] = useState(false)
   const [adding, setAdding] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -43,11 +44,14 @@ export default function PasskeysSection() {
   }, [])
 
   const loadPasskeys = async () => {
+    setLoading(true)
     const { data, error } = await supabase.auth.passkey.list()
     if (error) {
       console.error('Error loading passkeys:', error)
+      setLoadError(true)
     } else {
       setPasskeys(data ?? [])
+      setLoadError(false)
     }
     setLoading(false)
   }
@@ -162,6 +166,17 @@ export default function PasskeysSection() {
 
         {loading ? (
           <p className="text-sm text-gray-500">Loading passkeys...</p>
+        ) : loadError ? (
+          <p className="text-sm text-gray-600">
+            We couldn&apos;t load your passkeys.{' '}
+            <button
+              type="button"
+              onClick={loadPasskeys}
+              className="text-blue-600 hover:text-blue-800 underline font-medium"
+            >
+              Try again
+            </button>
+          </p>
         ) : passkeys.length === 0 ? (
           supported ? (
             <div className="flex items-start">

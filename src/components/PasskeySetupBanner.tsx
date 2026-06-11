@@ -120,9 +120,9 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
           <KeyRound className="h-5 w-5 text-blue-500" />
         </div>
         <div className="ml-3 flex-1">
-          <h3 className="text-sm font-medium text-blue-800">Sign in faster with a passkey</h3>
+          <h3 className="text-sm font-medium text-blue-800">Sign in faster — and more securely — with a passkey</h3>
           <div className="mt-1 text-sm text-blue-700">
-            Skip the email codes — use your fingerprint, face, or device PIN to sign in securely with one tap.
+            Use your fingerprint, face, or device PIN instead of email codes. Passkeys can&apos;t be phished or intercepted.
           </div>
           <div className="mt-3 flex items-center space-x-4">
             <button

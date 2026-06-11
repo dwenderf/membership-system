@@ -64,6 +64,21 @@ export function isUnsupportedOriginError(error: unknown): boolean {
   return getErrorName(error) === 'SecurityError' || getErrorName(getErrorCause(error)) === 'SecurityError'
 }
 
+/**
+ * Best-effort guess at where a passkey is stored, from its auto-derived
+ * friendly name (AAGUID-based, e.g. "Apple Passwords"). Renamed passkeys
+ * fall through to the generic hint.
+ */
+export function getPasskeyStorageHint(friendlyName: string | undefined | null): string {
+  const name = (friendlyName || '').toLowerCase()
+  if (name.includes('apple') || name.includes('icloud')) return 'the Apple Passwords app on your iPhone or Mac'
+  if (name.includes('google') || name.includes('chrome')) return 'Google Password Manager'
+  if (name.includes('1password')) return '1Password'
+  if (name.includes('bitwarden')) return 'Bitwarden'
+  if (name.includes('windows') || name.includes('microsoft')) return 'Windows Hello'
+  return 'your password manager'
+}
+
 /** Days until the next banner prompt after the (dismissCount + 1)th dismissal */
 export function getNextSnoozeDays(dismissCount: number): number {
   const index = Math.min(Math.max(dismissCount, 0), SNOOZE_LADDER_DAYS.length - 1)

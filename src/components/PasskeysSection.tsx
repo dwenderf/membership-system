@@ -5,12 +5,14 @@ import { KeyRound, Pencil, Trash2, Check, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 import { formatDate } from '@/lib/date-utils'
 import {
   isWebAuthnSupported,
   isUserCancelledError,
   isDuplicateRegistrationError,
   isUnsupportedOriginError,
+  getPasskeyStorageHint,
 } from '@/lib/passkeys'
 
 interface PasskeyItem {
@@ -30,6 +32,7 @@ export default function PasskeysSection() {
   const [savingRename, setSavingRename] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PasskeyItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showRemovalHelp, setShowRemovalHelp] = useState(false)
 
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -256,13 +259,20 @@ export default function PasskeysSection() {
               able to sign in with it anymore.
             </p>
             <p className="mt-2">
-              Your device&apos;s password manager (e.g. iCloud Keychain) will still show this
-              passkey until you remove it there too — but it will no longer work after you delete
-              it here.
-            </p>
-            <p className="mt-2">
               You can still sign in with email or Google, so you won&apos;t be locked out of your
               account.
+            </p>
+            <p className="mt-2">
+              ⚠️ Your device will still list this passkey after you delete it here, but it will no
+              longer work. We recommend removing it right away from{' '}
+              {getPasskeyStorageHint(deleteTarget?.friendly_name)}{' '}
+              <button
+                type="button"
+                onClick={() => setShowRemovalHelp(true)}
+                className="underline text-blue-600 hover:text-blue-800"
+              >
+                (details)
+              </button>
             </p>
           </>
         }
@@ -271,6 +281,11 @@ export default function PasskeysSection() {
         isLoading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <PasskeyRemovalHelpDialog
+        isOpen={showRemovalHelp}
+        onClose={() => setShowRemovalHelp(false)}
       />
     </div>
   )

@@ -6,6 +6,7 @@ import {
   getNextSnoozeDays,
   getNextSnoozeDate,
   isPasskeyPromptEligible,
+  getPasskeyStorageHint,
 } from '@/lib/passkeys'
 
 describe('isWebAuthnSupported', () => {
@@ -107,6 +108,30 @@ describe('getNextSnoozeDate', () => {
     expect(getNextSnoozeDate(0, from)).toBe('2026-06-18T12:00:00.000Z')
     expect(getNextSnoozeDate(1, from)).toBe('2026-07-11T12:00:00.000Z')
     expect(getNextSnoozeDate(2, from)).toBe('2026-09-09T12:00:00.000Z')
+  })
+})
+
+describe('getPasskeyStorageHint', () => {
+  it('recognizes Apple authenticators', () => {
+    expect(getPasskeyStorageHint('Apple Passwords')).toContain('Apple Passwords app')
+    expect(getPasskeyStorageHint('iCloud Keychain')).toContain('Apple Passwords app')
+  })
+
+  it('recognizes Google and Chrome authenticators', () => {
+    expect(getPasskeyStorageHint('Google Password Manager')).toBe('Google Password Manager')
+    expect(getPasskeyStorageHint('Chrome on Mac')).toBe('Google Password Manager')
+  })
+
+  it('recognizes third-party password managers', () => {
+    expect(getPasskeyStorageHint('1Password')).toBe('1Password')
+    expect(getPasskeyStorageHint('Bitwarden')).toBe('Bitwarden')
+    expect(getPasskeyStorageHint('Windows Hello')).toBe('Windows Hello')
+  })
+
+  it('falls back to a generic hint for renamed or missing names', () => {
+    expect(getPasskeyStorageHint('My hockey laptop')).toBe('your password manager')
+    expect(getPasskeyStorageHint(undefined)).toBe('your password manager')
+    expect(getPasskeyStorageHint(null)).toBe('your password manager')
   })
 })
 

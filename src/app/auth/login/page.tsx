@@ -145,7 +145,7 @@ export default function LoginPage() {
         if (isUnsupportedOriginError(error)) {
           showError('Passkeys unavailable', 'Passkey sign-in isn\'t available on this site. Please use email or Google instead.')
         } else {
-          showError('Passkey sign-in failed', 'We couldn\'t sign you in with a passkey. Please use email or Google instead.')
+          showError('Passkey sign-in failed', 'Don\'t have a passkey yet? Sign in with email or Google first, then add one from your Account page.')
         }
         setPasskeyLoading(false)
         return
@@ -156,7 +156,7 @@ export default function LoginPage() {
         router.push('/user')
         // Keep loading state while redirecting
       } else {
-        showError('Passkey sign-in failed', 'We couldn\'t sign you in with a passkey. Please use email or Google instead.')
+        showError('Passkey sign-in failed', 'Don\'t have a passkey yet? Sign in with email or Google first, then add one from your Account page.')
         setPasskeyLoading(false)
       }
     } catch (error: any) {

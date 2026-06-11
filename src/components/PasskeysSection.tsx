@@ -256,6 +256,11 @@ export default function PasskeysSection() {
               able to sign in with it anymore.
             </p>
             <p className="mt-2">
+              Your device&apos;s password manager (e.g. iCloud Keychain) will still show this
+              passkey until you remove it there too — but it will no longer work after you delete
+              it here.
+            </p>
+            <p className="mt-2">
               You can still sign in with email or Google, so you won&apos;t be locked out of your
               account.
             </p>

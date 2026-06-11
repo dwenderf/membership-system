@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [authMethod, setAuthMethod] = useState<'magic' | 'otp'>('magic')
   const [showMagicLinkWarning, setShowMagicLinkWarning] = useState(false)
   const [webauthnSupported, setWebauthnSupported] = useState(false)
+  const [showPasskeyHelp, setShowPasskeyHelp] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -132,6 +133,7 @@ export default function LoginPage() {
   const handlePasskeyLogin = async () => {
     setPasskeyLoading(true)
     setMessage('')
+    setShowPasskeyHelp(false)
 
     try {
       const { data, error } = await supabase.auth.signInWithPasskey()
@@ -143,10 +145,11 @@ export default function LoginPage() {
           return
         }
         if (isUnsupportedOriginError(error)) {
-          showError('Passkeys unavailable', 'Passkey sign-in isn\'t available on this site. Please use email or Google instead.')
+          showError('Passkeys unavailable', 'Passkey sign-in isn\'t available on this site.')
         } else {
-          showError('Passkey sign-in failed', 'Don\'t have a passkey yet? Sign in with email or Google first, then add one from your Account page.')
+          showError('Passkey sign-in failed', 'Your passkey didn\'t work.')
         }
+        setShowPasskeyHelp(true)
         setPasskeyLoading(false)
         return
       }
@@ -156,7 +159,8 @@ export default function LoginPage() {
         router.push('/user')
         // Keep loading state while redirecting
       } else {
-        showError('Passkey sign-in failed', 'Don\'t have a passkey yet? Sign in with email or Google first, then add one from your Account page.')
+        showError('Passkey sign-in failed', 'Your passkey didn\'t work.')
+        setShowPasskeyHelp(true)
         setPasskeyLoading(false)
       }
     } catch (error: any) {
@@ -178,6 +182,7 @@ export default function LoginPage() {
 
       setMessage(errorMessage)
       showError('Passkey sign-in failed', errorMessage)
+      setShowPasskeyHelp(true)
       setPasskeyLoading(false)
     }
   }
@@ -353,6 +358,17 @@ export default function LoginPage() {
                     </>
                   )}
                 </button>
+
+                {showPasskeyHelp && (
+                  <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
+                    <p className="font-medium">Passkey sign-in didn&apos;t work. This usually happens when:</p>
+                    <ul className="mt-1 list-disc list-inside space-y-1">
+                      <li>You haven&apos;t created a passkey yet — sign in with email or Google, then add one from your Account page</li>
+                      <li>Your passkey was created on a different device</li>
+                      <li>The passkey was removed from your account</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>

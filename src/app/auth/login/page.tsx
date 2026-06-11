@@ -364,8 +364,8 @@ export default function LoginPage() {
                     <p className="font-medium">Passkey sign-in didn&apos;t work. This usually happens when:</p>
                     <ul className="mt-1 list-disc list-inside space-y-1">
                       <li>You haven&apos;t created a passkey yet — sign in with email or Google, then add one from your Account page</li>
-                      <li>Your passkey was created on a different device</li>
-                      <li>The passkey was removed from your account</li>
+                      <li>You created your passkey on a different device</li>
+                      <li>You deleted this passkey from your account</li>
                     </ul>
                   </div>
                 )}

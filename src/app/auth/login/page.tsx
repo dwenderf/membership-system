@@ -1,20 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
 import { getSystemTitle } from '@/lib/organization'
+import { isWebAuthnSupported, isUserCancelledError, isUnsupportedOriginError } from '@/lib/passkeys'
+import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [authMethod, setAuthMethod] = useState<'magic' | 'otp'>('magic')
   const [showMagicLinkWarning, setShowMagicLinkWarning] = useState(false)
+  const [webauthnSupported, setWebauthnSupported] = useState(false)
+  const [showPasskeyHelp, setShowPasskeyHelp] = useState(false)
+  const [showRemovalHelp, setShowRemovalHelp] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
+
+  // Set in an effect to avoid a hydration mismatch on the SSR'd page
+  useEffect(() => {
+    setWebauthnSupported(isWebAuthnSupported())
+  }, [])
 
   // Email validation function
   const isValidEmail = (email: string) => {
@@ -120,6 +132,62 @@ export default function LoginPage() {
     }
   }
 
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true)
+    setMessage('')
+    setShowPasskeyHelp(false)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPasskey()
+
+      if (error) {
+        if (isUserCancelledError(error)) {
+          // User dismissed the OS passkey dialog — not an error
+          setPasskeyLoading(false)
+          return
+        }
+        if (isUnsupportedOriginError(error)) {
+          showError('Passkeys unavailable', 'Passkey sign-in isn\'t available on this site.')
+        } else {
+          showError('Passkey sign-in failed', 'Your passkey didn\'t work.')
+        }
+        setShowPasskeyHelp(true)
+        setPasskeyLoading(false)
+        return
+      }
+
+      if (data?.session) {
+        showSuccess('Welcome back!', 'You have been signed in successfully.')
+        router.push('/user')
+        // Keep loading state while redirecting
+      } else {
+        showError('Passkey sign-in failed', 'Your passkey didn\'t work.')
+        setShowPasskeyHelp(true)
+        setPasskeyLoading(false)
+      }
+    } catch (error: any) {
+      console.error('Passkey login error:', error)
+
+      if (isUserCancelledError(error)) {
+        setPasskeyLoading(false)
+        return
+      }
+
+      let errorMessage = 'An error occurred. Please try again.'
+      if (error?.message) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+
+      setMessage(errorMessage)
+      showError('Passkey sign-in failed', errorMessage)
+      setShowPasskeyHelp(true)
+      setPasskeyLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -231,7 +299,7 @@ export default function LoginPage() {
             <div>
               <button
                 type="submit"
-                disabled={loading || !isValidEmail(email)}
+                disabled={loading || passkeyLoading || !isValidEmail(email)}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading 
@@ -257,7 +325,7 @@ export default function LoginPage() {
             <div className="mt-6">
               <button
                 onClick={handleGoogleLogin}
-                disabled={loading}
+                disabled={loading || passkeyLoading}
                 className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
@@ -275,6 +343,50 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+
+            {webauthnSupported && (
+              <div className="mt-3">
+                <button
+                  onClick={handlePasskeyLogin}
+                  disabled={loading || passkeyLoading}
+                  className="w-full inline-flex justify-center items-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {passkeyLoading ? (
+                    'Waiting for passkey...'
+                  ) : (
+                    <>
+                      <KeyRound className="w-5 h-5" />
+                      <span className="ml-2">Sign in with a passkey</span>
+                    </>
+                  )}
+                </button>
+
+                {showPasskeyHelp && (
+                  <div className="mt-3 p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-800">
+                    <p className="font-medium">Passkey sign-in didn&apos;t work. This usually happens when:</p>
+                    <ul className="mt-1 list-disc list-inside space-y-1">
+                      <li>You haven&apos;t created a passkey yet — sign in with email or Google, then add one from your Account page</li>
+                      <li>You created your passkey on a different device</li>
+                      <li>
+                        You deleted this passkey from your account{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowRemovalHelp(true)}
+                          className="underline hover:text-red-900"
+                        >
+                          (details)
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+
+                <PasskeyRemovalHelpDialog
+                  isOpen={showRemovalHelp}
+                  onClose={() => setShowRemovalHelp(false)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

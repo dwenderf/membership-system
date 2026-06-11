@@ -3,6 +3,7 @@ import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
+import PasskeySetupBanner from '@/components/PasskeySetupBanner'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
 import EventCalendarButton from '@/components/EventCalendarButton'
@@ -226,6 +227,7 @@ export default async function UserDashboardPage() {
 
   return (
     <div className="px-4 py-3 sm:px-0">
+      <PasskeySetupBanner promptPrefs={userProfile?.preferences?.passkeyPrompt ?? null} />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">
           Welcome back, {userProfile?.first_name}!

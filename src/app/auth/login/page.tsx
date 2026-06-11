@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
 import { getSystemTitle } from '@/lib/organization'
 import { isWebAuthnSupported, isUserCancelledError, isUnsupportedOriginError } from '@/lib/passkeys'
+import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [showMagicLinkWarning, setShowMagicLinkWarning] = useState(false)
   const [webauthnSupported, setWebauthnSupported] = useState(false)
   const [showPasskeyHelp, setShowPasskeyHelp] = useState(false)
+  const [showRemovalHelp, setShowRemovalHelp] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
@@ -365,10 +367,24 @@ export default function LoginPage() {
                     <ul className="mt-1 list-disc list-inside space-y-1">
                       <li>You haven&apos;t created a passkey yet — sign in with email or Google, then add one from your Account page</li>
                       <li>You created your passkey on a different device</li>
-                      <li>You deleted this passkey from your account</li>
+                      <li>
+                        You deleted this passkey from your account{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowRemovalHelp(true)}
+                          className="underline hover:text-red-900"
+                        >
+                          (details)
+                        </button>
+                      </li>
                     </ul>
                   </div>
                 )}
+
+                <PasskeyRemovalHelpDialog
+                  isOpen={showRemovalHelp}
+                  onClose={() => setShowRemovalHelp(false)}
+                />
               </div>
             )}
           </div>

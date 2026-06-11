@@ -33,18 +33,20 @@ export default function PasskeyRemovalHelpDialog({ isOpen, onClose }: PasskeyRem
           </p>
           <ul className="list-disc list-inside space-y-2">
             <li>
-              <strong>iPhone / iPad:</strong> open the <strong>Passwords</strong> app (or
-              Settings → Passwords on older iOS), search for the site, and delete the passkey.
+              <strong>iPhone / iPad:</strong>{' '}
+              open the <strong>Passwords</strong>{' '}
+              app (or Settings → Passwords on older iOS), search for the site, and delete the passkey.
             </li>
             <li>
-              <strong>Mac:</strong> open the <strong>Passwords</strong> app (press ⌘ Space and
-              type &quot;Passwords&quot;), search for the site, and delete it. It won&apos;t
-              appear in the older Keychain Access app.
+              <strong>Mac:</strong>{' '}
+              open the <strong>Passwords</strong>{' '}
+              app (press ⌘ Space and type &quot;Passwords&quot;), search for the site, and delete it.
+              It won&apos;t appear in the older Keychain Access app.
             </li>
             <li>
-              <strong>Other password managers:</strong> if you saved it with Chrome (Google
-              Password Manager), 1Password, Bitwarden, or similar, open that app and search for
-              the site there.
+              <strong>Other password managers:</strong>{' '}
+              if you saved it with Chrome (Google Password Manager), 1Password, Bitwarden, or
+              similar, open that app and search for the site there.
             </li>
           </ul>
           <p>

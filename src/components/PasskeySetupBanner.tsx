@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 import {
   isWebAuthnSupported,
   isUserCancelledError,
@@ -11,6 +12,7 @@ import {
   isUnsupportedOriginError,
   isPasskeyPromptEligible,
   getNextSnoozeDate,
+  getNextSnoozeDays,
   type PasskeyPromptPrefs,
 } from '@/lib/passkeys'
 
@@ -21,6 +23,7 @@ interface PasskeySetupBannerProps {
 export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerProps) {
   const [visible, setVisible] = useState(false)
   const [registering, setRegistering] = useState(false)
+  const [showSnoozeNotice, setShowSnoozeNotice] = useState(false)
   const supabase = createClient()
   const { showSuccess, showError } = useToast()
 
@@ -95,6 +98,7 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
 
   const handleRemindLater = () => {
     setVisible(false)
+    setShowSnoozeNotice(true)
     savePromptPrefs({
       snoozedUntil: getNextSnoozeDate(dismissCount),
       dismissCount: dismissCount + 1,
@@ -109,8 +113,42 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
     })
   }
 
+  const snoozeNoticeDialog = (
+    <ConfirmationDialog
+      isOpen={showSnoozeNotice}
+      title="We'll remind you later"
+      variant="info"
+      hideButtons
+      onConfirm={() => setShowSnoozeNotice(false)}
+      onCancel={() => setShowSnoozeNotice(false)}
+      message={
+        <div className="space-y-3">
+          <p>
+            We&apos;ll show this reminder again in about {getNextSnoozeDays(dismissCount)} days.
+          </p>
+          <p>
+            You can also set up a passkey anytime from the <strong>Passkeys</strong> section of
+            your{' '}
+            <a href="/user/account" className="text-blue-600 hover:text-blue-800 underline">
+              Account page
+            </a>
+            .
+          </p>
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowSnoozeNotice(false)}
+              className="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      }
+    />
+  )
+
   if (!visible) {
-    return null
+    return snoozeNoticeDialog
   }
 
   return (

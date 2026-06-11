@@ -7,6 +7,7 @@ import { useToast } from '@/contexts/ToastContext'
 import SignOutButton from '@/components/SignOutButton'
 import DeleteAccountSection from '@/components/DeleteAccountSection'
 import RoleBadge from '@/components/RoleBadge'
+import PasskeysSection from '@/components/PasskeysSection'
 import dynamic from 'next/dynamic'
 
 const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
@@ -445,6 +446,9 @@ export default function AccountPage() {
         </div>
       )}
 
+      {/* Passkeys */}
+      <PasskeysSection />
+
       {/* Account Actions */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -484,7 +488,7 @@ export default function AccountPage() {
             <div className="mt-2 text-sm text-blue-700">
               <p>
                 Your account is secured with passwordless authentication.
-                You sign in using magic links or OAuth providers like Google.
+                You sign in using magic links, passkeys, or OAuth providers like Google.
               </p>
 
               {/* Google OAuth Status - Can Unlink (has 2+ identities) */}

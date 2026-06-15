@@ -197,9 +197,13 @@ export default function GameAlternatesCard({
         const failed = data.results.filter((r: any) => !r.success).length
         
         if (failed > 0) {
+          const failureDetails = data.results
+            .filter((r: any) => !r.success && r.error)
+            .map((r: any) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
+            .join('\n')
           showError(
-            'Some Alternates Failed', 
-            `${successful} alternates charged successfully, ${failed} failed`
+            `${successful} charged successfully, ${failed} failed`,
+            failureDetails || undefined
           )
         } else if (successful > 0) {
           showSuccess(

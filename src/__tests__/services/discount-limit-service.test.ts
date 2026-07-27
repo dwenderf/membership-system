@@ -5,6 +5,8 @@
 
 import {
   calculateSeasonalDiscountUsage,
+  calculateSeasonalDiscountUsageBatch,
+  evaluateSeasonalDiscountLimit,
   checkSeasonalDiscountLimit,
   getSeasonalDiscountUsageSummary
 } from '@/lib/services/discount-limit-service'
@@ -589,6 +591,205 @@ describe('DiscountLimitService', () => {
       )
 
       expect(result).toBeNull()
+    })
+  })
+
+  describe('Phase 1 Refactor Extensions', () => {
+    it('should bypass seasonal cap when isRefund is true', async () => {
+      const result = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-id',
+        'code-id',
+        'season-id',
+        2500,
+        { isRefund: true }
+      )
+
+      expect(result).toEqual({
+        originalAmount: 2500,
+        finalAmount: 2500,
+        isPartialDiscount: false,
+        isAtLimit: false
+      })
+      // Supabase should not be queried when isRefund is true
+      expect(mockSupabase.from).not.toHaveBeenCalled()
+    })
+
+    it('should set isAtLimit: true when user is at or over cap', async () => {
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: {
+                id: 'code-1',
+                code: 'SUMMER20',
+                percentage: 20,
+                category: {
+                  id: 'cat-1',
+                  name: 'Summer',
+                  max_discount_per_user_per_season: 5000
+                }
+              },
+              error: null
+            })
+          })
+        })
+      })
+
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: [{ amount_saved: 5000 }],
+                error: null
+              })
+            })
+          })
+        })
+      })
+
+      const result = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-1',
+        'code-1',
+        'season-1',
+        1000
+      )
+
+      expect(result.finalAmount).toBe(0)
+      expect(result.isAtLimit).toBe(true)
+      expect(result.isPartialDiscount).toBe(false)
+    })
+
+    it('should set isAtLimit: false when maxAllowed is null or 0', async () => {
+      const preFetchedCode = {
+        id: 'code-1',
+        code: 'NOCAP',
+        percentage: 10,
+        category: {
+          id: 'cat-nocap',
+          name: 'No Cap',
+          max_discount_per_user_per_season: null
+        }
+      }
+
+      const result = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-1',
+        'code-1',
+        'season-1',
+        2000,
+        { discountCode: preFetchedCode }
+      )
+
+      expect(result).toEqual({
+        originalAmount: 2000,
+        finalAmount: 2000,
+        isPartialDiscount: false,
+        isAtLimit: false
+      })
+      expect(mockSupabase.from).not.toHaveBeenCalled()
+    })
+
+    it('should use pre-fetched discountCode with category: null as uncapped discount', async () => {
+      const preFetchedCodeNullCat = {
+        id: 'code-1',
+        code: 'UNCATEGORIZED',
+        percentage: 15,
+        category: null
+      }
+
+      const result = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-1',
+        'code-1',
+        'season-1',
+        1500,
+        { discountCode: preFetchedCodeNullCat }
+      )
+
+      expect(result).toEqual({
+        originalAmount: 1500,
+        finalAmount: 1500,
+        isPartialDiscount: false,
+        isAtLimit: false
+      })
+      expect(mockSupabase.from).not.toHaveBeenCalled()
+    })
+
+    it('calculateSeasonalDiscountUsageBatch should key usage map with colon separator (userId:categoryId)', async () => {
+      mockSupabase.from.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          in: jest.fn().mockReturnValue({
+            eq: jest.fn().mockResolvedValue({
+              data: [
+                { user_id: 'u1', discount_category_id: 'c1', amount_saved: 1000 },
+                { user_id: 'u1', discount_category_id: 'c1', amount_saved: 500 },
+                { user_id: 'u2', discount_category_id: 'c2', amount_saved: 2000 }
+              ],
+              error: null
+            })
+          })
+        })
+      })
+
+      const map = await calculateSeasonalDiscountUsageBatch(
+        mockSupabase,
+        ['u1', 'u2'],
+        'season-1'
+      )
+
+      expect(map.get('u1:c1')).toBe(1500)
+      expect(map.get('u2:c2')).toBe(2000)
+      expect(map.get('u1:c2')).toBeUndefined()
+    })
+
+    it('calculateSeasonalDiscountUsageBatch should throw if seasonId is missing', async () => {
+      await expect(
+        calculateSeasonalDiscountUsageBatch(mockSupabase, ['u1'], '')
+      ).rejects.toThrow('Season ID is required for batch seasonal discount usage calculation')
+    })
+
+    it('evaluateSeasonalDiscountLimit should return exact 6-field usageStatus shape', () => {
+      const category = {
+        id: 'cat-1',
+        name: 'Test Category',
+        max_discount_per_user_per_season: 5000
+      }
+
+      const result = evaluateSeasonalDiscountLimit(category, 4000, 2000)
+
+      expect(result.isOverLimit).toBe(true)
+      expect(result.discountAmount).toBe(1000) // Capped at remaining 1000
+      expect(result.usageStatus).toEqual({
+        currentUsage: 4000,
+        limit: 5000,
+        wouldExceed: true,
+        remainingAmount: 1000,
+        requestedAmount: 2000,
+        appliedAmount: 1000
+      })
+    })
+
+    it('evaluateSeasonalDiscountLimit should handle null/unlimited category cleanly', () => {
+      const resultNull = evaluateSeasonalDiscountLimit(null, 1000, 2000)
+      expect(resultNull).toEqual({
+        isOverLimit: false,
+        discountAmount: 2000,
+        usageStatus: null
+      })
+
+      const resultUnlimited = evaluateSeasonalDiscountLimit(
+        { id: 'c1', name: 'Free', max_discount_per_user_per_season: null },
+        1000,
+        2000
+      )
+      expect(resultUnlimited).toEqual({
+        isOverLimit: false,
+        discountAmount: 2000,
+        usageStatus: null
+      })
     })
   })
 })

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
-import { calculateSeasonalDiscountUsageBatch, evaluateSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { calculateSeasonalDiscountUsageBatch, evaluateSeasonalDiscountLimit, resolveEffectiveDiscountLimitsBatch } from '@/lib/services/discount-limit-service'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -136,6 +136,12 @@ export async function GET(
       registrationSeasonId
     )
 
+    const effectiveLimitsByUserAndCategory = await resolveEffectiveDiscountLimitsBatch(
+      adminSupabase,
+      userIds,
+      registrationSeasonId
+    )
+
     // Format alternates data with payment status and discount info
     const formattedAlternates = (alternates || []).map(alternate => {
       const user = Array.isArray(alternate.users) ? alternate.users[0] : alternate.users
@@ -151,22 +157,36 @@ export async function GET(
       let category = null
 
       if (discountCode && registration) {
-        const basePrice = registration.alternate_price || 0
-        const requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
         category = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
-
         const usageKey = `${alternate.user_id}:${category?.id}`
-        const currentUsage = usageByUserAndCategory.get(usageKey) || 0
+        const effectiveLimit = effectiveLimitsByUserAndCategory.get(usageKey)
 
-        const evalResult = evaluateSeasonalDiscountLimit(
-          category,
-          currentUsage,
-          requestedDiscountAmount
-        )
+        const effectivePercentage = effectiveLimit?.percentage ?? (discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null)
+        const isEligible = effectiveLimit?.isEligible ?? true
 
-        isOverLimit = evalResult.isOverLimit
-        discountAmount = evalResult.discountAmount
-        usageStatus = evalResult.usageStatus
+        if (!isEligible || effectivePercentage === null || isNaN(effectivePercentage)) {
+          discountAmount = 0
+          isOverLimit = true
+        } else {
+          const basePrice = registration.alternate_price || 0
+          const requestedDiscountAmount = Math.round((basePrice * effectivePercentage) / 100)
+          const currentUsage = usageByUserAndCategory.get(usageKey) || 0
+
+          const effectiveCategory = category ? {
+            ...category,
+            max_discount_per_user_per_season: effectiveLimit?.maxAllowed ?? category.max_discount_per_user_per_season
+          } : null
+
+          const evalResult = evaluateSeasonalDiscountLimit(
+            effectiveCategory,
+            currentUsage,
+            requestedDiscountAmount
+          )
+
+          isOverLimit = evalResult.isOverLimit
+          discountAmount = evalResult.discountAmount
+          usageStatus = evalResult.usageStatus
+        }
       }
 
       const finalAmount = Math.max(0, (registration?.alternate_price || 0) - discountAmount)

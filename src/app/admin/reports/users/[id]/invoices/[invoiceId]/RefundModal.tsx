@@ -157,6 +157,7 @@ export default function RefundModal({
         body: JSON.stringify({
           code: code.trim(),
           registrationId: registrationId,
+          paymentId: paymentId,
           amount: paymentAmount, // Original payment amount
           isRefund: true // Flag to indicate this is a refund validation
         })

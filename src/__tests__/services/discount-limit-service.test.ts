@@ -8,7 +8,9 @@ import {
   calculateSeasonalDiscountUsageBatch,
   evaluateSeasonalDiscountLimit,
   checkSeasonalDiscountLimit,
-  getSeasonalDiscountUsageSummary
+  getSeasonalDiscountUsageSummary,
+  resolveEffectiveDiscountLimits,
+  resolveEffectiveDiscountLimitsBatch
 } from '@/lib/services/discount-limit-service'
 
 // Mock dependencies
@@ -24,9 +26,21 @@ describe('DiscountLimitService', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
-    // Create a mock Supabase client
     mockSupabase = {
-      from: jest.fn()
+      from: jest.fn((table: string) => {
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
     }
   })
 
@@ -139,24 +153,40 @@ describe('DiscountLimitService', () => {
   describe('checkSeasonalDiscountLimit', () => {
     it('should allow full discount when no seasonal limit is set', async () => {
       // Mock discount code query - no max_discount_per_user_per_season
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TEST50',
-                percentage: 50,
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category',
-                  max_discount_per_user_per_season: null
-                }
-              },
-              error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-id',
+                    code: 'TEST50',
+                    percentage: 50,
+                    category: {
+                      id: 'category-id',
+                      name: 'Test Category',
+                      max_discount_per_user_per_season: null
+                    }
+                  },
+                  error: null
+                })
+              })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -174,42 +204,57 @@ describe('DiscountLimitService', () => {
     })
 
     it('should allow full discount when under seasonal cap', async () => {
-      // Mock discount code query - has seasonal limit of $50
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TEST50',
-                percentage: 50,
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category',
-                  max_discount_per_user_per_season: 5000 // $50 cap
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - user has used $20 so far
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [
-                  { amount_saved: 1000 },
-                  { amount_saved: 1000 }
-                ],
-                error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-id',
+                    code: 'TEST50',
+                    percentage: 50,
+                    category: {
+                      id: 'category-id',
+                      name: 'Test Category',
+                      max_discount_per_user_per_season: 5000 // $50 cap
+                    }
+                  },
+                  error: null
+                })
               })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [
+                      { amount_saved: 1000 },
+                      { amount_saved: 1000 }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -231,42 +276,57 @@ describe('DiscountLimitService', () => {
     })
 
     it('should apply partial discount when approaching seasonal cap', async () => {
-      // Mock discount code query - has seasonal limit of $50
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TEST50',
-                percentage: 50,
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category',
-                  max_discount_per_user_per_season: 5000 // $50 cap
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - user has used $40 so far
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [
-                  { amount_saved: 2000 },
-                  { amount_saved: 2000 }
-                ],
-                error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-id',
+                    code: 'TEST50',
+                    percentage: 50,
+                    category: {
+                      id: 'category-id',
+                      name: 'Test Category',
+                      max_discount_per_user_per_season: 5000 // $50 cap
+                    }
+                  },
+                  error: null
+                })
               })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [
+                      { amount_saved: 2000 },
+                      { amount_saved: 2000 }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -291,42 +351,57 @@ describe('DiscountLimitService', () => {
     })
 
     it('should apply no discount when seasonal cap is already reached', async () => {
-      // Mock discount code query - has seasonal limit of $50
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TEST50',
-                percentage: 50,
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category',
-                  max_discount_per_user_per_season: 5000 // $50 cap
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - user has already used $50
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [
-                  { amount_saved: 2500 },
-                  { amount_saved: 2500 }
-                ],
-                error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-id',
+                    code: 'TEST50',
+                    percentage: 50,
+                    category: {
+                      id: 'category-id',
+                      name: 'Test Category',
+                      max_discount_per_user_per_season: 5000 // $50 cap
+                    }
+                  },
+                  error: null
+                })
               })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [
+                      { amount_saved: 2500 },
+                      { amount_saved: 2500 }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -349,42 +424,57 @@ describe('DiscountLimitService', () => {
     })
 
     it('should apply no discount when seasonal cap is exceeded', async () => {
-      // Mock discount code query - has seasonal limit of $50
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TEST50',
-                percentage: 50,
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category',
-                  max_discount_per_user_per_season: 5000 // $50 cap
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - user has used $60 (somehow exceeded)
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [
-                  { amount_saved: 3000 },
-                  { amount_saved: 3000 }
-                ],
-                error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-id',
+                    code: 'TEST50',
+                    percentage: 50,
+                    category: {
+                      id: 'category-id',
+                      name: 'Test Category',
+                      max_discount_per_user_per_season: 5000 // $50 cap
+                    }
+                  },
+                  error: null
+                })
               })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [
+                      { amount_saved: 3000 },
+                      { amount_saved: 3000 }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -616,37 +706,54 @@ describe('DiscountLimitService', () => {
     })
 
     it('should set isAtLimit: true when user is at or over cap', async () => {
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-1',
-                code: 'SUMMER20',
-                percentage: 20,
-                category: {
-                  id: 'cat-1',
-                  name: 'Summer',
-                  max_discount_per_user_per_season: 5000
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              eq: jest.fn().mockResolvedValue({
-                data: [{ amount_saved: 5000 }],
-                error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-1',
+                    code: 'SUMMER20',
+                    percentage: 20,
+                    category: {
+                      id: 'cat-1',
+                      name: 'Summer',
+                      max_discount_per_user_per_season: 5000
+                    }
+                  },
+                  error: null
+                })
               })
             })
-          })
-        })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [{ amount_saved: 5000 }],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await checkSeasonalDiscountLimit(
@@ -689,7 +796,7 @@ describe('DiscountLimitService', () => {
         isPartialDiscount: false,
         isAtLimit: false
       })
-      expect(mockSupabase.from).not.toHaveBeenCalled()
+      expect(mockSupabase.from).toHaveBeenCalledWith('user_discount_allowances')
     })
 
     it('should use pre-fetched discountCode with category: null as uncapped discount', async () => {
@@ -790,6 +897,376 @@ describe('DiscountLimitService', () => {
         discountAmount: 2000,
         usageStatus: null
       })
+    })
+  })
+
+  describe('Phase 2 Allowance Resolver (resolveEffectiveDiscountLimits)', () => {
+    it('ungated category, no allowance -> returns category_default', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'cat-1',
+                    name: 'Ungated Category',
+                    requires_user_allowance: false,
+                    max_discount_per_user_per_season: 5000,
+                    default_percentage: '25.00'
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      expect(res).toEqual({
+        maxAllowed: 5000,
+        percentage: 25,
+        isEligible: true,
+        source: 'category_default'
+      })
+    })
+
+    it('ungated category, allowance present -> user_allowance wins', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'cat-1',
+                    name: 'Ungated Category',
+                    requires_user_allowance: false,
+                    max_discount_per_user_per_season: 5000,
+                    default_percentage: 25
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: {
+                      discount_percentage: '50.00',
+                      max_discount_amount: 10000
+                    },
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      expect(res).toEqual({
+        maxAllowed: 10000,
+        percentage: 50,
+        isEligible: true,
+        source: 'user_allowance'
+      })
+    })
+
+    it('gated category, no allowance -> isEligible: false, source: denied', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'cat-gated',
+                    name: 'Financial Aid',
+                    requires_user_allowance: true,
+                    max_discount_per_user_per_season: null,
+                    default_percentage: null
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: null, error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-gated', 'season-1')
+      expect(res).toEqual({
+        maxAllowed: null,
+        percentage: null,
+        isEligible: false,
+        source: 'denied'
+      })
+    })
+
+    it('gated category, allowance with NULL discount_percentage -> inherits category default_percentage without NaN', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'cat-gated',
+                    name: 'Financial Aid',
+                    requires_user_allowance: true,
+                    max_discount_per_user_per_season: 8000,
+                    default_percentage: '30.00'
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: {
+                      discount_percentage: null,
+                      max_discount_amount: null
+                    },
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-gated', 'season-1')
+      expect(res).toEqual({
+        maxAllowed: 8000,
+        percentage: 30,
+        isEligible: true,
+        source: 'user_allowance'
+      })
+    })
+
+    it('max_discount_amount = 0 on allowance -> isEligible: false, source: denied (NOT unlimited)', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'cat-1',
+                    name: 'Category',
+                    requires_user_allowance: false,
+                    max_discount_per_user_per_season: 5000,
+                    default_percentage: 20
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: {
+                      discount_percentage: 20,
+                      max_discount_amount: 0
+                    },
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      expect(res).toEqual({
+        maxAllowed: 0,
+        percentage: 20,
+        isEligible: false,
+        source: 'denied'
+      })
+    })
+
+    it('resolveEffectiveDiscountLimitsBatch returns entries for all user/category pairs and handles cache misses', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: [
+                { id: 'cat-1', name: 'Ungated', requires_user_allowance: false, max_discount_per_user_per_season: 5000, default_percentage: '25.00' },
+                { id: 'cat-gated', name: 'Gated', requires_user_allowance: true, max_discount_per_user_per_season: 10000, default_percentage: '50.00' }
+              ],
+              error: null
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              in: jest.fn().mockReturnValue({
+                eq: jest.fn().mockResolvedValue({
+                  data: [
+                    { user_id: 'u1', discount_category_id: 'cat-gated', discount_percentage: '75.00', max_discount_amount: 15000 }
+                  ],
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const batchMap = await resolveEffectiveDiscountLimitsBatch(mockSupabase, ['u1', 'u2'], 'season-1')
+
+      // u1 on cat-gated -> user_allowance
+      expect(batchMap.get('u1:cat-gated')).toEqual({
+        maxAllowed: 15000,
+        percentage: 75,
+        isEligible: true,
+        source: 'user_allowance'
+      })
+
+      // u1 on cat-1 (miss) -> category_default
+      expect(batchMap.get('u1:cat-1')).toEqual({
+        maxAllowed: 5000,
+        percentage: 25,
+        isEligible: true,
+        source: 'category_default'
+      })
+
+      // u2 on cat-gated (miss on gated) -> denied
+      expect(batchMap.get('u2:cat-gated')).toEqual({
+        maxAllowed: 10000,
+        percentage: 50,
+        isEligible: false,
+        source: 'denied'
+      })
+    })
+
+    it('isRefund: true bypasses eligibility check and cap for revoked allowances', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'dc-1',
+                    code: 'PRIDE',
+                    percentage: null,
+                    uses_user_allowance: true,
+                    category: {
+                      id: 'cat-gated',
+                      name: 'Financial Aid',
+                      requires_user_allowance: true,
+                      default_percentage: 50,
+                      max_discount_per_user_per_season: null
+                    }
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      const res = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-revoked',
+        'dc-1',
+        'season-1',
+        5000,
+        { isRefund: true }
+      )
+
+      expect(res.finalAmount).toBe(5000)
+      expect(res.isPartialDiscount).toBe(false)
+    })
+
+    it('infrastructure query errors in resolveEffectiveDiscountLimits throw rather than returning denied', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'discount_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: { id: 'cat-1', name: 'Category', requires_user_allowance: false, max_discount_per_user_per_season: 5000, default_percentage: 20 },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: 'Database connection failed' }
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      await expect(
+        resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      ).rejects.toThrow('Database connection failed')
     })
   })
 })

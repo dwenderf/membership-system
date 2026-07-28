@@ -307,7 +307,9 @@ export class AlternatePaymentService {
           discountCode = discount
 
           // Calculate initial discount amount (all discounts are percentage-based)
-          let requestedDiscountAmount = Math.round((basePrice * discount.percentage) / 100)
+          const rawPct = discount.percentage ?? discount.category?.default_percentage
+          const pct = rawPct != null ? parseFloat(String(rawPct)) : 0
+          let requestedDiscountAmount = Math.round((basePrice * pct) / 100)
 
           // Check per-code usage limits
           if (discount.usage_limit && discount.usage_limit > 0) {

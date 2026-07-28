@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkSeasonalDiscountLimit, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 
 interface DiscountValidationResult {
   isValid: boolean
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, registrationId, amount, isRefund = false } = body
+    const { code, registrationId, paymentId, amount, isRefund = false } = body
     
     if (!code || !registrationId || !amount) {
       return NextResponse.json({ 
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         id,
         code,
         percentage,
+        uses_user_allowance,
         is_active,
         valid_from,
         valid_until,
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
           name,
           accounting_code,
           max_discount_per_user_per_season,
+          requires_user_allowance,
+          default_percentage,
           is_active
         )
       `)
@@ -111,51 +114,144 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
-    // Calculate discount amount
-    let discountAmount = Math.round((amount * discountCode.percentage) / 100)
-
-    // Check category usage limits using discount-limit-service
-    let isPartialDiscount = false
-    let partialDiscountMessage = ''
-    
     const category = discountCategory as any
     const codeWithCategory: DiscountCodeWithCategory = {
       id: discountCode.id,
       code: discountCode.code,
-      percentage: discountCode.percentage,
+      percentage: discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null,
+      uses_user_allowance: discountCode.uses_user_allowance,
       category: category ? {
         id: category.id,
         name: category.name,
-        max_discount_per_user_per_season: category.max_discount_per_user_per_season
+        max_discount_per_user_per_season: category.max_discount_per_user_per_season,
+        requires_user_allowance: category.requires_user_allowance,
+        default_percentage: category.default_percentage != null ? parseFloat(String(category.default_percentage)) : null
       } : null
     }
 
-    const limitResult = await checkSeasonalDiscountLimit(
-      supabase,
-      user.id,
-      discountCode.id,
-      registration.season_id,
-      discountAmount,
-      {
-        isRefund,
-        discountCode: codeWithCategory
-      }
-    )
+    let discountAmount = 0
+    let isPartialDiscount = false
+    let partialDiscountMessage = ''
+    let effectivePct: number | null = discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null
 
-    if (limitResult.isAtLimit && !isRefund) {
-      const maxAllowed = category?.max_discount_per_user_per_season || 0
-      const result: DiscountValidationResult = {
-        isValid: false,
-        error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}. No additional discount can be applied.`
-      }
-      return NextResponse.json(result)
-    }
+    if (isRefund) {
+      let originalDiscountAmount: number | null = null
 
-    if (limitResult.isPartialDiscount) {
-      discountAmount = limitResult.finalAmount
-      isPartialDiscount = true
-      const maxAllowed = category?.max_discount_per_user_per_season || 0
-      partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}.`
+      if (paymentId) {
+        // Query xero_invoices filtering strictly by payment_id, invoice_type = 'ACCREC', and sync_status IN ('synced', 'pending')
+        const { data: originalInvoices, error: invoiceError } = await supabase
+          .from('xero_invoices')
+          .select('id')
+          .eq('payment_id', paymentId)
+          .eq('invoice_type', 'ACCREC')
+          .in('sync_status', ['synced', 'pending'])
+
+        if (invoiceError) {
+          console.error('[validate-discount-code] Error querying original invoice:', invoiceError)
+        }
+
+        if (originalInvoices && originalInvoices.length > 1) {
+          console.error('[validate-discount-code] Multiple synced/pending ACCREC invoices found for payment:', paymentId)
+          return NextResponse.json({ isValid: false, error: 'Multiple original invoices found for payment' })
+        }
+
+        if (originalInvoices && originalInvoices.length === 1) {
+          const xeroInvoiceId = originalInvoices[0].id
+          const { data: lineItems, error: lineError } = await supabase
+            .from('xero_invoice_line_items')
+            .select('id, line_amount')
+            .eq('xero_invoice_id', xeroInvoiceId)
+            .eq('discount_code_id', discountCode.id)
+            .eq('line_item_type', 'discount')
+
+          if (lineError) {
+            console.error('[validate-discount-code] Error querying discount line item:', lineError)
+          }
+
+          if (lineItems && lineItems.length > 1) {
+            console.error('[validate-discount-code] Multiple discount line items found on original invoice:', xeroInvoiceId)
+            return NextResponse.json({ isValid: false, error: 'Multiple discount line items found on original invoice' })
+          }
+
+          if (lineItems && lineItems.length === 1) {
+            originalDiscountAmount = Math.abs(lineItems[0].line_amount)
+          }
+        }
+      }
+
+      if (originalDiscountAmount !== null) {
+        discountAmount = originalDiscountAmount
+      } else {
+        // Split fallback strategy for 0 invoices / 0 line items found
+        if (discountCode.uses_user_allowance) {
+          console.error('[validate-discount-code] Original discount line item not found for refund of allowance-driven code:', { code: discountCode.code, paymentId })
+          return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
+        } else {
+          console.warn('[validate-discount-code] Original discount line item not found for refund of fixed-percentage code; using percentage fallback:', { code: discountCode.code, paymentId })
+          const fallbackPct = parseFloat(String(discountCode.percentage)) || 0
+          discountAmount = Math.round((amount * fallbackPct) / 100)
+        }
+      }
+    } else {
+      // Non-refund validation: resolve effective limit first to determine real percentage
+      const effectiveLimit = await resolveEffectiveDiscountLimits(
+        supabase,
+        user.id,
+        category.id,
+        registration.season_id,
+        codeWithCategory.category
+      )
+
+      if (!effectiveLimit.isEligible) {
+        return NextResponse.json({
+          isValid: false,
+          error: "This code isn't available to your account."
+        })
+      }
+
+      const pct = discountCode.uses_user_allowance
+        ? effectiveLimit.percentage
+        : (discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null)
+
+      if (pct == null || isNaN(pct)) {
+        console.error('[validate-discount-code] Percentage unresolvable:', { code: discountCode.code, uses_user_allowance: discountCode.uses_user_allowance })
+        return NextResponse.json({
+          isValid: false,
+          error: "This code isn't available to your account."
+        })
+      }
+
+      effectivePct = pct
+      const requestedDiscountAmount = Math.round((amount * pct) / 100)
+
+      const limitResult = await checkSeasonalDiscountLimit(
+        supabase,
+        user.id,
+        discountCode.id,
+        registration.season_id,
+        requestedDiscountAmount,
+        {
+          isRefund: false,
+          discountCode: codeWithCategory
+        }
+      )
+
+      const maxAllowed = effectiveLimit.maxAllowed ?? category?.max_discount_per_user_per_season ?? 0
+
+      if (limitResult.isAtLimit) {
+        return NextResponse.json({
+          isValid: false,
+          error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}. No additional discount can be applied.`
+        })
+      }
+
+      if (limitResult.isPartialDiscount) {
+        discountAmount = limitResult.finalAmount
+        isPartialDiscount = true
+        partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}.`
+      } else {
+        discountAmount = requestedDiscountAmount
+      }
     }
 
     // Valid discount code
@@ -165,7 +261,7 @@ export async function POST(request: NextRequest) {
       discountCode: {
         id: discountCode.id,
         code: discountCode.code,
-        percentage: discountCode.percentage,
+        percentage: effectivePct ?? 0,
         category: {
           id: category.id,
           name: category.name,

@@ -2,7 +2,20 @@
  * Tests for Waitlist Payment Service - Seasonal Discount Cap Enforcement
  */
 
+// Set mock env vars before imports
+process.env.STRIPE_SECRET_KEY = 'sk_test_mock_123'
+process.env.STRIPE_API_VERSION = '2023-10-16'
+
 // Mock dependencies BEFORE imports
+jest.mock('stripe', () => {
+  class MockStripe {
+    paymentIntents = {
+      create: jest.fn().mockResolvedValue({ id: 'pi_test_123', status: 'succeeded' })
+    }
+  }
+  return Object.assign(MockStripe, { default: MockStripe, __esModule: true })
+})
+
 jest.mock('@/lib/logging/logger', () => ({
   logger: {
     logPaymentProcessing: jest.fn()
@@ -17,12 +30,18 @@ jest.mock('@/lib/logging/logger', () => ({
   }
 }))
 
-jest.mock('@/lib/services/discount-limit-service', () => ({
-  checkSeasonalDiscountLimit: jest.fn()
-}))
+jest.mock('@/lib/services/discount-limit-service', () => {
+  const actual = jest.requireActual('@/lib/services/discount-limit-service')
+  return {
+    ...actual,
+    checkSeasonalDiscountLimit: jest.fn()
+  }
+})
 
 jest.mock('@/lib/xero/staging', () => ({
-  xeroStagingManager: {},
+  xeroStagingManager: {
+    createImmediateStaging: jest.fn().mockResolvedValue({ id: 'staging-1' })
+  },
   StagingPaymentData: {}
 }))
 
@@ -30,9 +49,7 @@ jest.mock('@/lib/payment-completion-processor', () => ({
   PaymentCompletionProcessor: jest.fn()
 }))
 
-jest.mock('stripe', () => {
-  return jest.fn().mockImplementation(() => ({}))
-})
+
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -41,6 +58,7 @@ jest.mock('@/lib/supabase/server', () => ({
 
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
 import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
   let mockSupabase: any
@@ -48,10 +66,26 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
-    // Create a mock Supabase client
+    // Create a mock Supabase client with default fallback for user_discount_allowances
     mockSupabase = {
-      from: jest.fn()
+      from: jest.fn((table?: string) => {
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
     }
+
+    ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(createAdminClient as jest.Mock).mockReturnValue(mockSupabase)
   })
 
   describe('calculateChargeAmount - Normal Flow', () => {
@@ -121,7 +155,8 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
         'user-id',
         'code-id',
         'season-id',
-        5000
+        5000,
+        { effectiveLimit: expect.anything() }
       )
     })
 
@@ -286,15 +321,31 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       // Mock discount usage query - already used twice
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({
-              data: [{ id: 'usage-1' }, { id: 'usage-2' }], // Already used 2 times
-              error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
             })
-          })
-        })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockResolvedValue({
+                  data: [{ id: 'usage-1' }, { id: 'usage-2' }], // Already used 2 times
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
@@ -482,6 +533,353 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
 
       expect(result.finalAmount).toBe(90) // $1.00 - $0.10 = $0.90
       expect(result.discountAmount).toBe(10)
+    })
+  })
+
+  describe('Percentage Resolution & Allowance Extensions', () => {
+    it('override price with an allowance row computes discount against the override price, not category price', async () => {
+      // Mock Supabase queries by table name
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'registrations') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'registration-id',
+                    user_id: 'user-id',
+                    registration_category_id: 'cat-id',
+                    season_id: 'season-id',
+                    discount_code_id: 'code-pride',
+                    status: 'waitlisted',
+                    payment_status: 'unpaid',
+                    registration_categories: {
+                      id: 'cat-id',
+                      price: 10000 // Category price = $100.00
+                    }
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'registration_categories') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: { id: 'cat-id', price: 10000, accounting_code: 'ACC100' },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'users') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'user-id',
+                    stripe_customer_id: 'cus_123',
+                    stripe_payment_method_id: 'pm_123',
+                    setup_intent_status: 'succeeded'
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'discount_codes') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: {
+                    id: 'code-pride',
+                    code: 'PRIDE',
+                    percentage: null,
+                    uses_user_allowance: true,
+                    usage_limit: null,
+                    category: {
+                      id: 'cat-id',
+                      name: 'Financial Aid',
+                      requires_user_allowance: false,
+                      default_percentage: 20,
+                      accounting_code: 'DISC200'
+                    }
+                  },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'xero_invoices') {
+          return {
+            update: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({ data: null, error: null })
+            })
+          }
+        }
+        if (table === 'payments') {
+          return {
+            insert: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnValue({
+                single: jest.fn().mockResolvedValue({
+                  data: { id: 'payment-1' },
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({
+                    data: [
+                      {
+                        user_id: 'user-id',
+                        discount_category_id: 'cat-id',
+                        season_id: 'season-id',
+                        discount_percentage: 50,
+                        max_discount_amount: null
+                      }
+                    ],
+                    error: null
+                  })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
+
+      // Mock seasonal limit check - allow full discount
+      ;(checkSeasonalDiscountLimit as jest.Mock).mockResolvedValue({
+        originalAmount: 4000,
+        finalAmount: 4000,
+        isPartialDiscount: false
+      })
+
+      // Charge waitlist user with override price of $80.00 (8000 cents)
+      const res = await WaitlistPaymentService.chargeWaitlistUser(
+        'user-id',
+        'registration-id',
+        'cat-id',
+        'Financial Aid',
+        'code-pride',
+        8000
+      )
+
+      expect(res.success).toBe(true)
+      // Base price was $80 (8000), 50% allowance discount = $40 (4000), NOT 50% of category price $100 (5000)
+      expect(res.amountCharged).toBe(4000)
+    })
+
+    it('allowance-driven code resolves percentage from allowance row', async () => {
+      // Mock category query
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { id: 'cat-id', price: 10000 },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock discount code query
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: {
+                id: 'code-pride',
+                code: 'PRIDE',
+                percentage: null,
+                uses_user_allowance: true,
+                usage_limit: null,
+                category: {
+                  id: 'cat-id',
+                  name: 'Financial Aid',
+                  requires_user_allowance: false,
+                  default_percentage: 20
+                }
+              },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock allowance query (50% allowance)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: [{ discount_percentage: 50, max_discount_amount: null }],
+                error: null
+              })
+            })
+          })
+        })
+      })
+
+      ;(checkSeasonalDiscountLimit as jest.Mock).mockResolvedValue({
+        originalAmount: 5000,
+        finalAmount: 5000,
+        isPartialDiscount: false
+      })
+
+      const result = await WaitlistPaymentService.calculateChargeAmount(
+        mockSupabase,
+        'cat-id',
+        'season-id',
+        'code-pride',
+        'user-id'
+      )
+
+      expect(result.discountAmount).toBe(5000) // 50% of $100.00
+    })
+
+    it('D5 fixed code with allowance preserves fixed code percentage', async () => {
+      // Mock category query
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { id: 'cat-id', price: 10000 },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock discount code query (fixed 75%)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: {
+                id: 'code-fixed75',
+                code: 'FIXED75',
+                percentage: 75,
+                uses_user_allowance: false,
+                usage_limit: null,
+                category: {
+                  id: 'cat-id',
+                  name: 'Financial Aid',
+                  requires_user_allowance: false,
+                  default_percentage: 50
+                }
+              },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock allowance query (50% allowance)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: [{ discount_percentage: 50, max_discount_amount: null }],
+                error: null
+              })
+            })
+          })
+        })
+      })
+
+      ;(checkSeasonalDiscountLimit as jest.Mock).mockResolvedValue({
+        originalAmount: 7500,
+        finalAmount: 7500,
+        isPartialDiscount: false
+      })
+
+      const result = await WaitlistPaymentService.calculateChargeAmount(
+        mockSupabase,
+        'cat-id',
+        'season-id',
+        'code-fixed75',
+        'user-id'
+      )
+
+      expect(result.discountAmount).toBe(7500) // 75% of $100.00 (code percentage preserved per D5)
+    })
+
+    it('ineligible user for gated category gets zero discount and logs warning', async () => {
+      // Mock category query
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: { id: 'cat-gated', price: 10000 },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock discount code query on gated category
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: {
+                id: 'code-gated',
+                code: 'GATED',
+                percentage: null,
+                uses_user_allowance: true,
+                usage_limit: null,
+                category: {
+                  id: 'cat-gated',
+                  name: 'Gated Category',
+                  requires_user_allowance: true,
+                  default_percentage: 50
+                }
+              },
+              error: null
+            })
+          })
+        })
+      })
+
+      // Mock allowance query (no allowance row)
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({
+                data: [],
+                error: null
+              })
+            })
+          })
+        })
+      })
+
+      const result = await WaitlistPaymentService.calculateChargeAmount(
+        mockSupabase,
+        'cat-gated',
+        'season-id',
+        'code-gated',
+        'user-ineligible'
+      )
+
+      expect(result.discountAmount).toBe(0)
     })
   })
 })

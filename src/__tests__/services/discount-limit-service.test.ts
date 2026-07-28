@@ -10,7 +10,8 @@ import {
   checkSeasonalDiscountLimit,
   getSeasonalDiscountUsageSummary,
   resolveEffectiveDiscountLimits,
-  resolveEffectiveDiscountLimitsBatch
+  resolveEffectiveDiscountLimitsBatch,
+  resolveDiscountPercentage
 } from '@/lib/services/discount-limit-service'
 
 // Mock dependencies
@@ -1267,6 +1268,70 @@ describe('DiscountLimitService', () => {
       await expect(
         resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
       ).rejects.toThrow('Database connection failed')
+    })
+  })
+
+  describe('resolveDiscountPercentage', () => {
+    it('returns effectiveLimit.percentage for allowance-driven codes', () => {
+      const discountCode = { percentage: null, uses_user_allowance: true }
+      const effectiveLimit = { maxAllowed: 25000, percentage: 50, isEligible: true, source: 'user_allowance' as const }
+      expect(resolveDiscountPercentage(discountCode, effectiveLimit)).toBe(50)
+    })
+
+    it('returns fixed code percentage for non-allowance codes even when allowance is present (D5)', () => {
+      const discountCode = { percentage: 75, uses_user_allowance: false }
+      const effectiveLimit = { maxAllowed: 25000, percentage: 50, isEligible: true, source: 'user_allowance' as const }
+      expect(resolveDiscountPercentage(discountCode, effectiveLimit)).toBe(75)
+    })
+
+    it('returns 0 for resolved 0% codes quietly', () => {
+      const discountCode = { percentage: 0, uses_user_allowance: false }
+      const effectiveLimit = { maxAllowed: 25000, percentage: 50, isEligible: true, source: 'user_allowance' as const }
+      expect(resolveDiscountPercentage(discountCode, effectiveLimit)).toBe(0)
+    })
+
+    it('returns null when percentage is unresolvable', () => {
+      const discountCode = { percentage: null, uses_user_allowance: true }
+      const effectiveLimit = { maxAllowed: null, percentage: null, isEligible: false, source: 'denied' as const }
+      expect(resolveDiscountPercentage(discountCode, effectiveLimit)).toBeNull()
+    })
+  })
+
+  describe('checkSeasonalDiscountLimit with pre-resolved options.effectiveLimit', () => {
+    it('honors isEligible: false from pre-resolved effectiveLimit option', async () => {
+      const preFetchedCode = {
+        id: 'code-gated',
+        code: 'PRIDE',
+        percentage: null,
+        uses_user_allowance: true,
+        category: {
+          id: 'cat-gated',
+          name: 'Gated Category',
+          max_discount_per_user_per_season: 5000,
+          requires_user_allowance: true,
+          default_percentage: 50
+        }
+      }
+
+      const res = await checkSeasonalDiscountLimit(
+        mockSupabase,
+        'user-ineligible',
+        'code-gated',
+        'season-1',
+        2500,
+        {
+          discountCode: preFetchedCode,
+          effectiveLimit: {
+            maxAllowed: 5000,
+            percentage: 50,
+            isEligible: false,
+            source: 'denied'
+          }
+        }
+      )
+
+      expect(res.isEligible).toBe(false)
+      expect(res.finalAmount).toBe(0)
     })
   })
 })

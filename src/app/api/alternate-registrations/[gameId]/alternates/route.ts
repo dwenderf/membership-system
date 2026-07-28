@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
-import { calculateSeasonalDiscountUsageBatch, evaluateSeasonalDiscountLimit, resolveEffectiveDiscountLimitsBatch } from '@/lib/services/discount-limit-service'
+import { calculateSeasonalDiscountUsageBatch, evaluateSeasonalDiscountLimit, resolveEffectiveDiscountLimitsBatch, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -155,13 +155,14 @@ export async function GET(
       let isOverLimit = false
       let usageStatus = null
       let category = null
+      let effectivePercentage: number | null = null
 
       if (discountCode && registration) {
         category = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
         const usageKey = `${alternate.user_id}:${category?.id}`
         const effectiveLimit = effectiveLimitsByUserAndCategory.get(usageKey)
 
-        const effectivePercentage = effectiveLimit?.percentage ?? (discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null)
+        effectivePercentage = resolveDiscountPercentage(discountCode, effectiveLimit)
         const isEligible = effectiveLimit?.isEligible ?? true
 
         if (!isEligible || effectivePercentage === null || isNaN(effectivePercentage)) {
@@ -203,7 +204,7 @@ export async function GET(
         discountCode: discountCode ? {
           id: discountCode.id,
           code: discountCode.code,
-          percentage: discountCode.percentage,
+          percentage: effectivePercentage,
           discountAmount,
           categoryName: category?.name,
           isOverLimit,
@@ -256,7 +257,7 @@ export async function GET(
     })
     
     return NextResponse.json({ 
-      error: 'Internal server error' 
+      error: error instanceof Error ? error.stack : String(error) 
     }, { status: 500 })
   }
 }

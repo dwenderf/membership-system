@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 
 interface DiscountValidationResult {
   isValid: boolean
@@ -209,9 +209,7 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      const pct = discountCode.uses_user_allowance
-        ? effectiveLimit.percentage
-        : (discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null)
+      const pct = resolveDiscountPercentage(discountCode, effectiveLimit)
 
       if (pct == null || isNaN(pct)) {
         console.error('[validate-discount-code] Percentage unresolvable:', { code: discountCode.code, uses_user_allowance: discountCode.uses_user_allowance })
@@ -232,7 +230,8 @@ export async function POST(request: NextRequest) {
         requestedDiscountAmount,
         {
           isRefund: false,
-          discountCode: codeWithCategory
+          discountCode: codeWithCategory,
+          effectiveLimit
         }
       )
 

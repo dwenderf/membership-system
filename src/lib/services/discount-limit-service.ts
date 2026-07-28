@@ -17,10 +17,38 @@ export interface SeasonalDiscountUsage {
   maxAllowed: number
 }
 
+export interface DiscountCategoryInfo {
+  id: string
+  name: string
+  max_discount_per_user_per_season?: number | null
+}
+
+export interface DiscountCodeWithCategory {
+  id: string
+  code: string
+  percentage: number
+  category: DiscountCategoryInfo | null
+}
+
+export interface CheckSeasonalDiscountLimitOptions {
+  isRefund?: boolean
+  discountCode?: DiscountCodeWithCategory
+}
+
+export interface SeasonalDiscountUsageStatus {
+  currentUsage: number
+  limit: number
+  wouldExceed: boolean
+  remainingAmount: number
+  requestedAmount: number
+  appliedAmount: number
+}
+
 export interface DiscountLimitResult {
   originalAmount: number
   finalAmount: number
   isPartialDiscount: boolean
+  isAtLimit?: boolean
   partialDiscountMessage?: string
   seasonalUsage?: SeasonalDiscountUsage
 }
@@ -66,6 +94,106 @@ export async function calculateSeasonalDiscountUsage(
 }
 
 /**
+ * Calculate seasonal discount usage in batch for multiple users within a season
+ *
+ * @param supabase - Supabase client
+ * @param userIds - Array of user IDs
+ * @param seasonId - Season ID
+ * @returns Map of `${userId}:${categoryId}` to total discount amount used
+ */
+export async function calculateSeasonalDiscountUsageBatch(
+  supabase: SupabaseClient,
+  userIds: string[],
+  seasonId: string
+): Promise<Map<string, number>> {
+  const usageMap = new Map<string, number>()
+
+  if (!userIds || userIds.length === 0) {
+    return usageMap
+  }
+
+  if (!seasonId) {
+    throw new Error('Season ID is required for batch seasonal discount usage calculation')
+  }
+
+  const { data: discountUsage, error } = await supabase
+    .from('discount_usage_computed')
+    .select('user_id, discount_category_id, amount_saved')
+    .in('user_id', userIds)
+    .eq('season_id', seasonId)
+
+  if (error) {
+    logger.logPaymentProcessing(
+      'seasonal-discount-usage-batch-query-failed',
+      'Failed to query batch seasonal discount usage',
+      {
+        userIdCount: userIds.length,
+        seasonId,
+        error: error.message
+      },
+      'error'
+    )
+    throw new Error(`Failed to query batch seasonal discount usage: ${error.message}`)
+  }
+
+  discountUsage?.forEach(usage => {
+    const key = `${usage.user_id}:${usage.discount_category_id}`
+    const current = usageMap.get(key) || 0
+    usageMap.set(key, current + (usage.amount_saved || 0))
+  })
+
+  return usageMap
+}
+
+/**
+ * Evaluate seasonal discount limit for a category and given usage
+ * Helper function for list displays (e.g. Site C alternates) to avoid inline cap arithmetic
+ *
+ * @param category - Category metadata
+ * @param currentUsage - Current usage amount (in cents)
+ * @param requestedDiscountAmount - Requested discount amount (in cents)
+ * @returns Calculation result with isOverLimit, discountAmount, and usageStatus
+ */
+export function evaluateSeasonalDiscountLimit(
+  category: DiscountCategoryInfo | null | undefined,
+  currentUsage: number,
+  requestedDiscountAmount: number
+): {
+  isOverLimit: boolean
+  discountAmount: number
+  usageStatus: SeasonalDiscountUsageStatus | null
+} {
+  // 0 means unlimited here, preserving legacy category semantics. This is NOT the allowance convention — see Phase 2, where 0 means ineligible. Do not reuse this check for allowance resolution.
+  const limit = category?.max_discount_per_user_per_season
+  if (!limit || limit <= 0) {
+    return {
+      isOverLimit: false,
+      discountAmount: requestedDiscountAmount,
+      usageStatus: null
+    }
+  }
+
+  const remainingAmount = Math.max(0, limit - currentUsage)
+  const isOverLimit = (currentUsage + requestedDiscountAmount) > limit
+  const discountAmount = isOverLimit ? remainingAmount : requestedDiscountAmount
+
+  const usageStatus: SeasonalDiscountUsageStatus = {
+    currentUsage,
+    limit,
+    wouldExceed: isOverLimit,
+    remainingAmount,
+    requestedAmount: requestedDiscountAmount,
+    appliedAmount: discountAmount
+  }
+
+  return {
+    isOverLimit,
+    discountAmount,
+    usageStatus
+  }
+}
+
+/**
  * Check seasonal discount limit and apply partial discount if needed
  *
  * This is the core function that enforces max_discount_per_user_per_season.
@@ -77,6 +205,7 @@ export async function calculateSeasonalDiscountUsage(
  * @param discountCodeId - Discount code ID
  * @param seasonId - Season ID
  * @param requestedDiscountAmount - The discount amount being requested (in cents)
+ * @param options - Optional refund flag or pre-fetched discount code
  * @returns Result with final discount amount and partial discount info
  */
 export async function checkSeasonalDiscountLimit(
@@ -84,34 +213,61 @@ export async function checkSeasonalDiscountLimit(
   userId: string,
   discountCodeId: string,
   seasonId: string,
-  requestedDiscountAmount: number
+  requestedDiscountAmount: number,
+  options?: CheckSeasonalDiscountLimitOptions
 ): Promise<DiscountLimitResult> {
   try {
-    // Get discount code and category with seasonal limit
-    const { data: discountCode, error: discountError } = await supabase
-      .from('discount_codes')
-      .select(`
-        *,
-        category:discount_categories(
-          id,
-          name,
-          max_discount_per_user_per_season
-        )
-      `)
-      .eq('id', discountCodeId)
-      .single()
-
-    if (discountError || !discountCode) {
-      throw new Error('Discount code not found')
-    }
-
-    // If no seasonal limit is set, allow full discount
-    const maxAllowed = discountCode.category?.max_discount_per_user_per_season
-    if (!maxAllowed || maxAllowed <= 0) {
+    // If refund flow, bypass cap enforcement entirely
+    if (options?.isRefund) {
       return {
         originalAmount: requestedDiscountAmount,
         finalAmount: requestedDiscountAmount,
-        isPartialDiscount: false
+        isPartialDiscount: false,
+        isAtLimit: false
+      }
+    }
+
+    let discountCode = options?.discountCode
+    let category: DiscountCategoryInfo | null | undefined = discountCode?.category
+
+    // If pre-fetched code wasn't supplied, fetch discount code and category from DB
+    if (!discountCode) {
+      const { data: fetchedCode, error: discountError } = await supabase
+        .from('discount_codes')
+        .select(`
+          id,
+          code,
+          percentage,
+          category:discount_categories(
+            id,
+            name,
+            max_discount_per_user_per_season
+          )
+        `)
+        .eq('id', discountCodeId)
+        .single()
+
+      if (discountError || !fetchedCode) {
+        throw new Error('Discount code not found')
+      }
+
+      discountCode = {
+        id: fetchedCode.id,
+        code: fetchedCode.code,
+        percentage: fetchedCode.percentage,
+        category: Array.isArray(fetchedCode.category) ? fetchedCode.category[0] : fetchedCode.category
+      }
+      category = discountCode.category
+    }
+
+    // 0 means unlimited here, preserving legacy category semantics. This is NOT the allowance convention — see Phase 2, where 0 means ineligible. Do not reuse this check for allowance resolution.
+    const maxAllowed = category?.max_discount_per_user_per_season
+    if (!category || !category.id || !maxAllowed || maxAllowed <= 0) {
+      return {
+        originalAmount: requestedDiscountAmount,
+        finalAmount: requestedDiscountAmount,
+        isPartialDiscount: false,
+        isAtLimit: false
       }
     }
 
@@ -119,7 +275,7 @@ export async function checkSeasonalDiscountLimit(
     const totalUsed = await calculateSeasonalDiscountUsage(
       supabase,
       userId,
-      discountCode.category.id,
+      category.id,
       seasonId
     )
 
@@ -133,8 +289,8 @@ export async function checkSeasonalDiscountLimit(
         {
           userId,
           discountCodeId,
-          categoryId: discountCode.category.id,
-          categoryName: discountCode.category.name,
+          categoryId: category.id,
+          categoryName: category.name,
           seasonId,
           totalUsed,
           maxAllowed,
@@ -147,7 +303,8 @@ export async function checkSeasonalDiscountLimit(
         originalAmount: requestedDiscountAmount,
         finalAmount: 0,
         isPartialDiscount: false,
-        partialDiscountMessage: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${discountCode.category.name} discounts.`,
+        isAtLimit: true,
+        partialDiscountMessage: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name} discounts.`,
         seasonalUsage: {
           totalUsed,
           remaining: 0,
@@ -164,8 +321,8 @@ export async function checkSeasonalDiscountLimit(
         {
           userId,
           discountCodeId,
-          categoryId: discountCode.category.id,
-          categoryName: discountCode.category.name,
+          categoryId: category.id,
+          categoryName: category.name,
           seasonId,
           totalUsed,
           maxAllowed,
@@ -180,7 +337,9 @@ export async function checkSeasonalDiscountLimit(
         originalAmount: requestedDiscountAmount,
         finalAmount: remaining,
         isPartialDiscount: true,
-        partialDiscountMessage: `Applied $${(remaining / 100).toFixed(2)} discount (you have $${(remaining / 100).toFixed(2)} remaining of your $${(maxAllowed / 100).toFixed(2)} ${discountCode.category.name} season limit). You have already used $${(totalUsed / 100).toFixed(2)} in discounts this season.`,
+        isAtLimit: false,
+        // Note: Site B (validate-discount-code route) constructs its own UX message for checkout. Changes to this string will not alter Site B's response.
+        partialDiscountMessage: `Applied $${(remaining / 100).toFixed(2)} discount (you have $${(remaining / 100).toFixed(2)} remaining of your $${(maxAllowed / 100).toFixed(2)} ${category.name} season limit). You have already used $${(totalUsed / 100).toFixed(2)} in discounts this season.`,
         seasonalUsage: {
           totalUsed,
           remaining,
@@ -194,6 +353,7 @@ export async function checkSeasonalDiscountLimit(
       originalAmount: requestedDiscountAmount,
       finalAmount: requestedDiscountAmount,
       isPartialDiscount: false,
+      isAtLimit: false,
       seasonalUsage: {
         totalUsed,
         remaining,

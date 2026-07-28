@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkSeasonalDiscountLimit, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 
 interface DiscountValidationResult {
   isValid: boolean
@@ -113,56 +114,48 @@ export async function POST(request: NextRequest) {
     // Calculate discount amount
     let discountAmount = Math.round((amount * discountCode.percentage) / 100)
 
-    // Check category usage limits if applicable
+    // Check category usage limits using discount-limit-service
     let isPartialDiscount = false
     let partialDiscountMessage = ''
     
     const category = discountCategory as any
-    
-    if (category?.max_discount_per_user_per_season) {
-      const { data: usageData, error: usageError } = await supabase
-        .from('discount_usage_computed')
-        .select('amount_saved')
-        .eq('user_id', user.id)
-        .eq('discount_category_id', category.id)
-        .eq('season_id', registration.season_id)
+    const codeWithCategory: DiscountCodeWithCategory = {
+      id: discountCode.id,
+      code: discountCode.code,
+      percentage: discountCode.percentage,
+      category: category ? {
+        id: category.id,
+        name: category.name,
+        max_discount_per_user_per_season: category.max_discount_per_user_per_season
+      } : null
+    }
 
-      if (usageError) {
-        console.error('Error checking discount usage:', usageError)
-        return NextResponse.json({ error: 'Error validating discount limits' }, { status: 500 })
+    const limitResult = await checkSeasonalDiscountLimit(
+      supabase,
+      user.id,
+      discountCode.id,
+      registration.season_id,
+      discountAmount,
+      {
+        isRefund,
+        discountCode: codeWithCategory
       }
+    )
 
-      const totalUsed = usageData?.reduce((sum, usage) => sum + usage.amount_saved, 0) || 0
-      const maxAllowed = category.max_discount_per_user_per_season
-      
-      if (isRefund) {
-        // For refunds, we're giving back usage - check if adding this refund would exceed the original limit
-        // But we don't need to prevent it since it's already been used before
-        // Just validate that the discount code and amount are reasonable
-        console.log(`Refund validation: User has used $${(totalUsed / 100).toFixed(2)} of $${(maxAllowed / 100).toFixed(2)} limit. Adding $${(discountAmount / 100).toFixed(2)} back.`)
-        
-        // For refunds, we allow the full discount amount as long as it doesn't exceed what they could have originally used
-        // This handles the case where someone got a partial discount originally and now wants a refund
-      } else {
-        // Original logic for purchases
-        const remaining = Math.max(0, maxAllowed - totalUsed)
-        
-        if (totalUsed >= maxAllowed) {
-          // User has already reached their limit
-          const result: DiscountValidationResult = {
-            isValid: false,
-            error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}. No additional discount can be applied.`
-          }
-          return NextResponse.json(result)
-        }
-        
-        if (totalUsed + discountAmount > maxAllowed) {
-          // Apply partial discount up to the remaining limit
-          discountAmount = remaining
-          isPartialDiscount = true
-          partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category.name}.`
-        }
+    if (limitResult.isAtLimit && !isRefund) {
+      const maxAllowed = category?.max_discount_per_user_per_season || 0
+      const result: DiscountValidationResult = {
+        isValid: false,
+        error: `You have already reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}. No additional discount can be applied.`
       }
+      return NextResponse.json(result)
+    }
+
+    if (limitResult.isPartialDiscount) {
+      discountAmount = limitResult.finalAmount
+      isPartialDiscount = true
+      const maxAllowed = category?.max_discount_per_user_per_season || 0
+      partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). You've reached your $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}.`
     }
 
     // Valid discount code

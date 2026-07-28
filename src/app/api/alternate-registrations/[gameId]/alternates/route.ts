@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { canAccessRegistrationAlternates } from '@/lib/utils/alternates-access'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { calculateSeasonalDiscountUsageBatch, evaluateSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
 
 // GET /api/alternate-registrations/[gameId]/alternates - Get available alternates for a game
 export async function GET(
@@ -125,30 +126,15 @@ export async function GET(
 
     const selectedUserIds = new Set(existingSelections?.map(s => s.user_id) || [])
 
-    // Get discount usage for each user to check limits
-    // IMPORTANT: Filter by season_id to only count usage for THIS season
+    // Get discount usage for each user to check limits via discount-limit-service
     const userIds = alternates?.map(alt => alt.user_id) || []
     const registrationSeasonId = registration?.season_id
 
-    let discountUsageQuery = adminSupabase
-      .from('discount_usage_computed')
-      .select('user_id, discount_category_id, amount_saved')
-      .in('user_id', userIds)
-
-    // Filter by the registration's season to get correct seasonal usage
-    if (registrationSeasonId) {
-      discountUsageQuery = discountUsageQuery.eq('season_id', registrationSeasonId)
-    }
-
-    const { data: discountUsage } = await discountUsageQuery
-
-    // Group usage by user and category
-    const usageByUserAndCategory = new Map()
-    discountUsage?.forEach(usage => {
-      const key = `${usage.user_id}-${usage.discount_category_id}`
-      const current = usageByUserAndCategory.get(key) || 0
-      usageByUserAndCategory.set(key, current + usage.amount_saved)
-    })
+    const usageByUserAndCategory = await calculateSeasonalDiscountUsageBatch(
+      adminSupabase,
+      userIds,
+      registrationSeasonId
+    )
 
     // Format alternates data with payment status and discount info
     const formattedAlternates = (alternates || []).map(alternate => {
@@ -158,7 +144,7 @@ export async function GET(
       // Check if user has valid payment method
       const hasValidPaymentMethod = userHasValidPaymentMethod(user)
       
-      // Calculate discount amount and check usage limits
+      // Calculate discount amount and check usage limits using discount-limit-service
       let discountAmount = 0
       let isOverLimit = false
       let usageStatus = null
@@ -166,39 +152,21 @@ export async function GET(
 
       if (discountCode && registration) {
         const basePrice = registration.alternate_price || 0
-
-        // Calculate discount amount (discount codes are always percentage-based)
-        let requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
-
-        // Check usage limits and apply seasonal cap
+        const requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
         category = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category
-        if (category && category.max_discount_per_user_per_season) {
-          const usageKey = `${user?.id}-${category.id}`
-          const currentUsage = usageByUserAndCategory.get(usageKey) || 0
-          const limit = category.max_discount_per_user_per_season
-          const remainingAmount = Math.max(0, limit - currentUsage)
 
-          isOverLimit = (currentUsage + requestedDiscountAmount) > limit
+        const usageKey = `${alternate.user_id}:${category?.id}`
+        const currentUsage = usageByUserAndCategory.get(usageKey) || 0
 
-          // Apply seasonal cap - use remaining amount if would exceed
-          if (isOverLimit) {
-            discountAmount = remainingAmount
-          } else {
-            discountAmount = requestedDiscountAmount
-          }
+        const evalResult = evaluateSeasonalDiscountLimit(
+          category,
+          currentUsage,
+          requestedDiscountAmount
+        )
 
-          usageStatus = {
-            currentUsage,
-            limit,
-            wouldExceed: isOverLimit,
-            remainingAmount,
-            requestedAmount: requestedDiscountAmount,
-            appliedAmount: discountAmount
-          }
-        } else {
-          // No seasonal cap - use full discount
-          discountAmount = requestedDiscountAmount
-        }
+        isOverLimit = evalResult.isOverLimit
+        discountAmount = evalResult.discountAmount
+        usageStatus = evalResult.usageStatus
       }
 
       const finalAmount = Math.max(0, (registration?.alternate_price || 0) - discountAmount)

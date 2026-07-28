@@ -88,12 +88,16 @@ export default function RegistrationGamesPage() {
     
     // Show appropriate toast notifications
     const { summary } = results
+    const failureDetails = (results.results || [])
+      .filter((r: any) => !r.success && r.error)
+      .map((r: any) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
+      .join('\n') || undefined
     if (summary.failedSelections > 0 && summary.successfulSelections === 0) {
       // All selections failed
-      showError(`All ${summary.failedSelections} alternate selections failed. Check payment methods and try again.`)
+      showError(`All ${summary.failedSelections} alternate selections failed.`, failureDetails)
     } else if (summary.failedSelections > 0) {
-      // Some succeeded, some failed  
-      showError(`${summary.failedSelections} of ${summary.totalProcessed} selections failed. ${summary.successfulSelections} were successful.`)
+      // Some succeeded, some failed
+      showError(`${summary.failedSelections} of ${summary.totalProcessed} selections failed. ${summary.successfulSelections} were successful.`, failureDetails)
     } else {
       // All succeeded
       showSuccess(`Successfully selected ${summary.successfulSelections} alternates. Total charged: $${(summary.totalAmountCharged / 100).toFixed(2)}`)

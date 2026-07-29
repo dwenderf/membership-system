@@ -256,8 +256,6 @@ export async function GET(
       error: error instanceof Error ? error.message : String(error)
     })
     
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.stack : String(error) 
-    }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

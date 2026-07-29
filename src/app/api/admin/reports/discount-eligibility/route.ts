@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   resolveEffectiveDiscountLimitsBatch,
@@ -12,6 +12,7 @@ import {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
 
     // 1. Authenticate & Admin Check
     const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     const nowIso = new Date().toISOString()
 
     // Fetch all active & upcoming seasons for dropdown
-    const { data: seasons } = await supabase
+    const { data: seasons } = await adminSupabase
       .from('seasons')
       .select('id, name, start_date, end_date')
       .order('start_date', { ascending: false })
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Query user_discount_allowances joined with users and categories for season
-    const { data: allowances, error: allowancesError } = await supabase
+    const { data: allowances, error: allowancesError } = await adminSupabase
       .from('user_discount_allowances')
       .select(`
         id,
@@ -69,12 +70,13 @@ export async function GET(request: NextRequest) {
         notes,
         created_at,
         updated_at,
-        user:users(id, first_name, last_name, email, member_id),
+        user:users!user_discount_allowances_user_id_fkey(id, first_name, last_name, email, member_id),
         category:discount_categories(id, name, requires_user_allowance)
       `)
       .eq('season_id', seasonId)
 
     if (allowancesError) {
+      console.error('Error fetching discount allowances:', allowancesError)
       return NextResponse.json({ error: 'Failed to fetch discount allowances' }, { status: 500 })
     }
 
@@ -82,8 +84,8 @@ export async function GET(request: NextRequest) {
     const userIds = Array.from(new Set(allowanceRows.map(a => a.user_id)))
 
     // 4. Batch resolve effective limits & usage
-    const effectiveLimitsMap = await resolveEffectiveDiscountLimitsBatch(supabase, userIds, seasonId)
-    const usageMap = await calculateSeasonalDiscountUsageBatch(supabase, userIds, seasonId)
+    const effectiveLimitsMap = await resolveEffectiveDiscountLimitsBatch(adminSupabase, userIds, seasonId)
+    const usageMap = await calculateSeasonalDiscountUsageBatch(adminSupabase, userIds, seasonId)
 
     // 5. Format report rows (including users with 0 usage)
     const eligibility = allowanceRows.map(allowance => {

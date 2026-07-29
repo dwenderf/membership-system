@@ -721,21 +721,12 @@ export async function getSeasonalDiscountUsageSummary(
   seasonId: string
 ): Promise<SeasonalDiscountUsage | null> {
   try {
-    // Get category with seasonal limit
-    const { data: category, error: categoryError } = await supabase
-      .from('discount_categories')
-      .select('max_discount_per_user_per_season')
-      .eq('id', categoryId)
-      .single()
-
-    if (categoryError || !category) {
-      return null
-    }
-
-    const maxAllowed = category.max_discount_per_user_per_season || 0
-    if (maxAllowed <= 0) {
-      return null // No seasonal limit set
-    }
+    const effectiveLimit = await resolveEffectiveDiscountLimits(
+      supabase,
+      userId,
+      categoryId,
+      seasonId
+    )
 
     const totalUsed = await calculateSeasonalDiscountUsage(
       supabase,
@@ -744,6 +735,21 @@ export async function getSeasonalDiscountUsageSummary(
       seasonId
     )
 
+    // 1. Check ineligibility FIRST (e.g. revoked allowance or gated category without allowance)
+    if (!effectiveLimit.isEligible) {
+      return {
+        totalUsed,
+        remaining: 0,
+        maxAllowed: 0
+      }
+    }
+
+    // 2. Check uncapped SECOND (e.g. maxAllowed is null)
+    if (effectiveLimit.maxAllowed === null) {
+      return null // No seasonal cap set / unlimited
+    }
+
+    const maxAllowed = effectiveLimit.maxAllowed
     const remaining = Math.max(0, maxAllowed - totalUsed)
 
     return {

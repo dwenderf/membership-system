@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, accounting_code, max_discount_per_user_per_season, description } = body
+    const { name, accounting_code, max_discount_per_user_per_season, description, requires_user_allowance } = body
     
     // Validate required fields
     if (!name || !accounting_code) {
@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         accounting_code: accounting_code.trim().toUpperCase(),
         max_discount_per_user_per_season,
-        description: description?.trim() || null
+        description: description?.trim() || null,
+        requires_user_allowance: Boolean(requires_user_allowance)
       })
       .select()
       .single()

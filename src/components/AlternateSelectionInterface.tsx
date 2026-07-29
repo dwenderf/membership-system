@@ -20,6 +20,7 @@ interface Alternate {
     discountValue: number
     discountAmount: number
     categoryName: string
+    isIneligible?: boolean
     isOverLimit: boolean
     usageStatus?: {
       currentUsage: number
@@ -322,12 +323,18 @@ export default function AlternateSelectionInterface({
                         
                         {alternate.discountCode && (
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            alternate.discountCode.isOverLimit 
+                            alternate.discountCode.isIneligible
+                              ? 'bg-red-100 text-red-800'
+                              : alternate.discountCode.isOverLimit 
                               ? 'bg-orange-100 text-orange-800' 
                               : 'bg-purple-100 text-purple-800'
                           }`}>
                             {alternate.discountCode.code}
-                            {alternate.discountCode.isOverLimit && ' ⚠️'}
+                            {alternate.discountCode.isIneligible
+                              ? ' (Ineligible)'
+                              : alternate.discountCode.isOverLimit
+                              ? ' ⚠️'
+                              : ''}
                           </span>
                         )}
                       </div>
@@ -335,6 +342,12 @@ export default function AlternateSelectionInterface({
                       <div className="text-sm text-gray-500">
                         {alternate.email} • Registered {formatDate(alternate.registeredAt)}
                       </div>
+                      
+                      {alternate.discountCode?.isIneligible && (
+                        <div className="text-xs text-red-600 mt-1">
+                          User is ineligible for this discount category.
+                        </div>
+                      )}
                       
                       {alternate.discountCode?.isOverLimit && alternate.discountCode.usageStatus && (
                         <div className="text-xs text-orange-600 mt-1">

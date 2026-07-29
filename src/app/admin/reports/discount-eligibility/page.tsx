@@ -83,7 +83,10 @@ export default function DiscountEligibilityReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
+      <AdminHeader
+        title="Discount Eligibility"
+        description="Per-user discount allowances, limits, and remaining balances by season"
+      />
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">

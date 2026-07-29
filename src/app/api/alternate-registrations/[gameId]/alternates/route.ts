@@ -90,6 +90,7 @@ export async function GET(
           id,
           code,
           percentage,
+          uses_user_allowance,
           category:discount_categories (
             id,
             name,
@@ -256,11 +257,9 @@ export async function GET(
   } catch (error) {
     logger.logSystem('get-game-alternates-error', 'Unexpected error fetching game alternates', {
       gameId: 'unknown',
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.stack : String(error)
     })
     
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.stack : String(error) 
-    }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

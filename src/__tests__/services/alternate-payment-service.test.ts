@@ -17,9 +17,13 @@ jest.mock('@/lib/logging/logger', () => ({
   }
 }))
 
-jest.mock('@/lib/services/discount-limit-service', () => ({
-  checkSeasonalDiscountLimit: jest.fn()
-}))
+jest.mock('@/lib/services/discount-limit-service', () => {
+  const actual = jest.requireActual('@/lib/services/discount-limit-service')
+  return {
+    ...actual,
+    checkSeasonalDiscountLimit: jest.fn()
+  }
+})
 
 jest.mock('@/lib/xero/staging', () => ({
   xeroStagingManager: {},
@@ -48,9 +52,22 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
-    // Create a mock Supabase client
+    // Create a mock Supabase client with default fallback for user_discount_allowances
     mockSupabase = {
-      from: jest.fn()
+      from: jest.fn((table?: string) => {
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
+            })
+          }
+        }
+        return {}
+      })
     }
   })
 
@@ -121,7 +138,8 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
         'user-id',
         'code-id',
         'season-id',
-        2500
+        2500,
+        { effectiveLimit: expect.anything() }
       )
     })
 
@@ -191,7 +209,8 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
         'user-id',
         'code-id',
         'season-id',
-        2500
+        2500,
+        { effectiveLimit: expect.anything() }
       )
     })
 
@@ -294,15 +313,31 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       // Mock discount usage query - already used once
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockResolvedValue({
-              data: [{ id: 'usage-1' }], // Already used 1 time
-              error: null
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'user_discount_allowances') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
+                })
+              })
             })
-          })
-        })
+          }
+        }
+        if (table === 'discount_usage_computed') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: jest.fn().mockReturnValue({
+                eq: jest.fn().mockResolvedValue({
+                  data: [{ id: 'usage-1' }], // Already used 1 time
+                  error: null
+                })
+              })
+            })
+          }
+        }
+        return {}
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(

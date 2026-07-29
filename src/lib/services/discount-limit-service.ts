@@ -43,6 +43,32 @@ export interface DiscountCodeWithCategory {
 export interface CheckSeasonalDiscountLimitOptions {
   isRefund?: boolean
   discountCode?: DiscountCodeWithCategory
+  effectiveLimit?: EffectiveLimit
+}
+
+/**
+ * Resolve effective discount percentage for a discount code and user's effective limit.
+ *
+ * - Allowance-driven codes (uses_user_allowance = true): returns effectiveLimit.percentage.
+ * - Fixed-percentage codes (uses_user_allowance = false/nullish): returns parsed discountCode.percentage.
+ * - Unresolvable percentages return null.
+ *
+ * @param discountCode - Discount code details
+ * @param effectiveLimit - Resolved effective limit for user/category/season
+ * @returns Effective percentage as a number or null if unresolvable
+ */
+export function resolveDiscountPercentage(
+  discountCode: { percentage?: number | string | null; uses_user_allowance?: boolean | null },
+  effectiveLimit: EffectiveLimit | undefined | null
+): number | null {
+  if (discountCode.uses_user_allowance) {
+    return effectiveLimit?.percentage ?? null
+  }
+  if (discountCode.percentage == null) {
+    return null
+  }
+  const parsed = parseFloat(String(discountCode.percentage))
+  return !isNaN(parsed) ? parsed : null
 }
 
 export interface SeasonalDiscountUsageStatus {
@@ -524,8 +550,8 @@ export async function checkSeasonalDiscountLimit(
       }
     }
 
-    // Resolve effective limit by delegating directly to resolveEffectiveDiscountLimits
-    const effectiveLimit = await resolveEffectiveDiscountLimits(
+    // Resolve effective limit by delegating directly to resolveEffectiveDiscountLimits (or using options.effectiveLimit if pre-resolved)
+    const effectiveLimit = options?.effectiveLimit ?? await resolveEffectiveDiscountLimits(
       supabase,
       userId,
       category.id,

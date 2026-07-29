@@ -4,7 +4,7 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
-import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
 
@@ -306,13 +306,40 @@ export class AlternatePaymentService {
         if (!discountError && discount) {
           discountCode = discount
 
-          // Calculate initial discount amount (all discounts are percentage-based)
-          const rawPct = discount.percentage ?? discount.category?.default_percentage
-          const pct = rawPct != null ? parseFloat(String(rawPct)) : 0
-          let requestedDiscountAmount = Math.round((basePrice * pct) / 100)
+          const category = Array.isArray(discount.category) ? discount.category[0] : discount.category
+          const categoryId = category?.id
+
+          let effectiveLimit = null
+          if (categoryId && seasonId) {
+            effectiveLimit = await resolveEffectiveDiscountLimits(supabase, userId, categoryId, seasonId, category)
+          }
+
+          if (effectiveLimit && !effectiveLimit.isEligible) {
+            logger.logPaymentProcessing(
+              'alternate-discount-user-ineligible',
+              'User is ineligible for discount during alternate charge',
+              { userId, registrationId, discountCodeId, categoryId, seasonId },
+              'warn'
+            )
+          }
+
+          const pct = resolveDiscountPercentage(discount, effectiveLimit)
+          if (pct == null || isNaN(pct)) {
+            logger.logPaymentProcessing(
+              'alternate-discount-percentage-unresolvable',
+              'Percentage could not be resolved during alternate charge',
+              { userId, registrationId, discountCodeId, uses_user_allowance: discount.uses_user_allowance },
+              'warn'
+            )
+          }
+
+          const isEligible = effectiveLimit?.isEligible ?? true
+          let requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
+            ? Math.round((basePrice * pct) / 100)
+            : 0
 
           // Check per-code usage limits
-          if (discount.usage_limit && discount.usage_limit > 0) {
+          if (requestedDiscountAmount > 0 && discount.usage_limit && discount.usage_limit > 0) {
             const { data: usageCount } = await supabase
               .from('discount_usage_computed')
               .select('id')
@@ -334,7 +361,8 @@ export class AlternatePaymentService {
               userId,
               discountCodeId,
               seasonId,
-              requestedDiscountAmount
+              requestedDiscountAmount,
+              { effectiveLimit: effectiveLimit ?? undefined }
             )
 
             discountAmount = limitResult.finalAmount

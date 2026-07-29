@@ -4,13 +4,15 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
-import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: process.env.STRIPE_API_VERSION as any,
+  })
+}
 
 export interface WaitlistChargeResult {
   paymentId: string
@@ -98,55 +100,12 @@ export class WaitlistPaymentService {
             categoryId,
             registration.season_id,
             discountCodeId,
-            userId
+            userId,
+            effectiveBasePrice
           )
           discountCode = calculated.discountCode
-
-          if (discountCode) {
-            // Apply the same discount percentage to the new base price
-            const rawPct = discountCode.percentage ?? discountCode.category?.default_percentage
-            const pct = rawPct != null ? parseFloat(String(rawPct)) : 0
-            let requestedDiscountAmount = Math.round((effectiveBasePrice * pct) / 100)
-
-            // Enforce seasonal discount cap
-            if (requestedDiscountAmount > 0) {
-              const limitResult = await checkSeasonalDiscountLimit(
-                adminSupabase,
-                userId!,
-                discountCodeId,
-                registration.season_id,
-                requestedDiscountAmount
-              )
-
-              discountAmount = limitResult.finalAmount
-
-              // Log if partial discount was applied
-              if (limitResult.isPartialDiscount) {
-                logger.logPaymentProcessing(
-                  'waitlist-override-partial-discount-applied',
-                  'Applied partial discount due to seasonal limit (override price flow)',
-                  {
-                    userId,
-                    registrationId,
-                    categoryId,
-                    discountCodeId,
-                    overridePrice,
-                    requestedAmount: requestedDiscountAmount,
-                    appliedAmount: discountAmount,
-                    seasonalUsage: limitResult.seasonalUsage
-                  },
-                  'info'
-                )
-              }
-            } else {
-              discountAmount = requestedDiscountAmount
-            }
-
-            finalAmount = effectiveBasePrice - discountAmount
-          } else {
-            discountAmount = 0
-            finalAmount = effectiveBasePrice
-          }
+          discountAmount = calculated.discountAmount
+          finalAmount = calculated.finalAmount
         } else {
           discountAmount = 0
           finalAmount = effectiveBasePrice
@@ -269,7 +228,7 @@ export class WaitlistPaymentService {
       }
 
       // Create Payment Intent for the charge
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: centsToCents(finalAmount),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,
@@ -377,21 +336,28 @@ export class WaitlistPaymentService {
     categoryId: string,
     seasonId: string,
     discountCodeId?: string,
-    userId?: string
+    userId?: string,
+    basePriceOverride?: number
   ): Promise<{ finalAmount: number; discountAmount: number; discountCode?: any }> {
     try {
-      // Get category pricing
-      const { data: category, error: categoryError } = await supabase
-        .from('registration_categories')
-        .select('price')
-        .eq('id', categoryId)
-        .single()
+      let basePrice = 0
+      if (basePriceOverride !== undefined) {
+        basePrice = basePriceOverride
+      } else {
+        // Get category pricing
+        const { data: category, error: categoryError } = await supabase
+          .from('registration_categories')
+          .select('price')
+          .eq('id', categoryId)
+          .single()
 
-      if (categoryError || !category) {
-        throw new Error('Registration category not found')
+        if (categoryError || !category) {
+          throw new Error('Registration category not found')
+        }
+
+        basePrice = category.price || 0
       }
 
-      const basePrice = category.price || 0
       let discountAmount = 0
       let discountCode = null
 
@@ -409,13 +375,40 @@ export class WaitlistPaymentService {
         if (!discountError && discount) {
           discountCode = discount
 
-          // Calculate initial discount amount (all discounts are percentage-based)
-          const rawPct = discount.percentage ?? discount.category?.default_percentage
-          const pct = rawPct != null ? parseFloat(String(rawPct)) : 0
-          let requestedDiscountAmount = Math.round((basePrice * pct) / 100)
+          const category = Array.isArray(discount.category) ? discount.category[0] : discount.category
+          const discountCategoryId = category?.id
+
+          let effectiveLimit = null
+          if (discountCategoryId && seasonId) {
+            effectiveLimit = await resolveEffectiveDiscountLimits(supabase, userId, discountCategoryId, seasonId, category)
+          }
+
+          if (effectiveLimit && !effectiveLimit.isEligible) {
+            logger.logPaymentProcessing(
+              'waitlist-discount-user-ineligible',
+              'User is ineligible for discount during waitlist charge',
+              { userId, categoryId, discountCodeId, seasonId },
+              'warn'
+            )
+          }
+
+          const pct = resolveDiscountPercentage(discount, effectiveLimit)
+          if (pct == null || isNaN(pct)) {
+            logger.logPaymentProcessing(
+              'waitlist-discount-percentage-unresolvable',
+              'Percentage could not be resolved during waitlist charge',
+              { userId, categoryId, discountCodeId, uses_user_allowance: discount.uses_user_allowance },
+              'warn'
+            )
+          }
+
+          const isEligible = effectiveLimit?.isEligible ?? true
+          let requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
+            ? Math.round((basePrice * pct) / 100)
+            : 0
 
           // Check per-code usage limits
-          if (discount.usage_limit && discount.usage_limit > 0) {
+          if (requestedDiscountAmount > 0 && discount.usage_limit && discount.usage_limit > 0) {
             const { data: usageCount } = await supabase
               .from('discount_usage_computed')
               .select('id')
@@ -437,7 +430,8 @@ export class WaitlistPaymentService {
               userId,
               discountCodeId,
               seasonId,
-              requestedDiscountAmount
+              requestedDiscountAmount,
+              { effectiveLimit: effectiveLimit ?? undefined }
             )
 
             discountAmount = limitResult.finalAmount

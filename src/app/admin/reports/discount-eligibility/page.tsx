@@ -77,9 +77,8 @@ export default function DiscountEligibilityReportPage() {
   const totalUsedCents = eligibility.reduce((sum, r) => sum + r.totalUsed, 0)
 
   const breadcrumbs = [
-    { label: 'Admin Dashboard', href: '/admin' },
-    { label: 'Reports', href: '/admin/reports' },
-    { label: 'Discount Eligibility', href: '/admin/reports/discount-eligibility' }
+    { label: 'Admin Dashboard', path: '/admin' },
+    { label: 'Discount Eligibility', path: '/admin/reports/discount-eligibility' }
   ]
 
   return (

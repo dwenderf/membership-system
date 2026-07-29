@@ -109,8 +109,10 @@ export default function EditDiscountCodePage() {
         setError(errorData.error || 'Failed to update discount code')
       } else {
         // Navigate back to codes list, filtered by category if we came from there
-        const returnUrl = code?.discount_categories?.[0]?.id 
-          ? `/admin/discount-codes?category=${code.discount_categories[0].id}`
+        // Navigate back to codes list, filtered by category if we came from there
+        const category = Array.isArray(code?.discount_categories) ? code?.discount_categories[0] : code?.discount_categories
+        const returnUrl = category?.id 
+          ? `/admin/discount-codes?category=${category.id}`
           : '/admin/discount-codes'
         router.push(returnUrl)
       }
@@ -121,15 +123,16 @@ export default function EditDiscountCodePage() {
     }
   }
 
+  const category = Array.isArray(code?.discount_categories) ? code?.discount_categories[0] : code?.discount_categories
+  const isAllowanceDriven = Boolean(code?.uses_user_allowance)
+
   // Check for duplicate code
   const codeExists = existingCodes.some(existingCode => 
     existingCode.code.toLowerCase() === formData.code.trim().toLowerCase()
   )
   
   const canUpdateCode = formData.code.trim() &&
-                       formData.percentage &&
-                       parseFloat(formData.percentage) >= 1 &&
-                       parseFloat(formData.percentage) <= 100 &&
+                       (isAllowanceDriven || (formData.percentage && parseFloat(formData.percentage) >= 1 && parseFloat(formData.percentage) <= 100)) &&
                        !codeExists
 
   if (!code) {
@@ -149,7 +152,7 @@ export default function EditDiscountCodePage() {
           {/* Navigation - Top */}
           <div className="mb-4">
             <Link
-              href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
+              href={category?.id ? `/admin/discount-codes?category=${category.id}` : '/admin/discount-codes'}
               className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               ← Back to Category Codes
@@ -160,7 +163,7 @@ export default function EditDiscountCodePage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Edit Discount Code</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Update discount code for {code.discount_categories?.[0]?.name}
+              Update discount code {code.code} for {category?.name || 'category'}
             </p>
           </div>
 
@@ -168,16 +171,16 @@ export default function EditDiscountCodePage() {
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-blue-800">Category: {code.discount_categories?.[0]?.name}</h3>
+                <h3 className="text-sm font-medium text-blue-800">Category: {category?.name || 'Unassigned'}</h3>
                 <p className="mt-1 text-sm text-blue-700">
-                  Accounting Code: {code.discount_categories?.[0]?.accounting_code}
-                  {code.discount_categories?.[0]?.max_discount_per_user_per_season && (
-                    <span> • Limit: ${(code.discount_categories[0].max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
+                  Accounting Code: {category?.accounting_code || 'None'}
+                  {category?.max_discount_per_user_per_season && (
+                    <span> • Limit: ${(category.max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
                   )}
                 </p>
               </div>
               <Link
-                href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
+                href={category?.id ? `/admin/discount-codes?category=${category.id}` : '/admin/discount-codes'}
                 className="inline-flex items-center px-3 py-2 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50"
               >
                 Back to Category Codes
@@ -218,28 +221,35 @@ export default function EditDiscountCodePage() {
                 <label htmlFor="percentage" className="block text-sm font-medium text-gray-700">
                   Discount Percentage
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <input
-                    type="number"
-                    id="percentage"
-                    step="0.01"
-                    min="1"
-                    max="100"
-                    value={formData.percentage}
-                    onChange={(e) => setFormData(prev => ({ ...prev, percentage: e.target.value }))}
-                    className="block w-full pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="1.00"
-                    required
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">%</span>
+                {isAllowanceDriven ? (
+                  <div className="mt-1 bg-indigo-50 border border-indigo-200 text-indigo-800 p-3 rounded-md text-sm font-medium">
+                    Percentage is set per user via discount allowances
                   </div>
-                </div>
-                <p className="mt-1 text-sm text-gray-500">
-                  Percentage discount to apply (1-100%)
-                </p>
+                ) : (
+                  <>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <input
+                        type="number"
+                        id="percentage"
+                        step="0.01"
+                        min="1"
+                        max="100"
+                        value={formData.percentage}
+                        onChange={(e) => setFormData(prev => ({ ...prev, percentage: e.target.value }))}
+                        className="block w-full pr-12 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="1.00"
+                        required
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">%</span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Percentage discount to apply (1-100%)
+                    </p>
+                  </>
+                )}
               </div>
-
 
               {/* Is Active */}
               <div className="flex items-center">
@@ -283,11 +293,13 @@ export default function EditDiscountCodePage() {
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Discount</dt>
-                      <dd className="text-sm text-gray-900">{formData.percentage}% off</dd>
+                      <dd className="text-sm text-gray-900 font-medium">
+                        {isAllowanceDriven ? 'Per-user allowance' : `${formData.percentage}% off`}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Category</dt>
-                      <dd className="text-sm text-gray-900">{code.discount_categories?.[0]?.name}</dd>
+                      <dd className="text-sm text-gray-900">{category?.name || '-'}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Status</dt>
@@ -300,8 +312,8 @@ export default function EditDiscountCodePage() {
               {/* Submit Buttons */}
               <div className="flex justify-end space-x-3">
                 <Link
-                  href={code?.discount_categories?.[0]?.id 
-                    ? `/admin/discount-codes?category=${code.discount_categories[0].id}`
+                  href={category?.id 
+                    ? `/admin/discount-codes?category=${category.id}`
                     : '/admin/discount-codes'
                   }
                   className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -332,7 +344,7 @@ export default function EditDiscountCodePage() {
           {/* Navigation - Bottom */}
           <div className="mt-6">
             <Link
-              href={`/admin/discount-codes?category=${code.discount_categories?.[0]?.id}`}
+              href={category?.id ? `/admin/discount-codes?category=${category.id}` : '/admin/discount-codes'}
               className="text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               ← Back to Category Codes

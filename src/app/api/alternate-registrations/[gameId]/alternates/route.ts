@@ -153,6 +153,7 @@ export async function GET(
       
       // Calculate discount amount and check usage limits using discount-limit-service
       let discountAmount = 0
+      let isIneligible = false
       let isOverLimit = false
       let usageStatus = null
       let category = null
@@ -168,7 +169,8 @@ export async function GET(
 
         if (!isEligible || effectivePercentage === null || isNaN(effectivePercentage)) {
           discountAmount = 0
-          isOverLimit = true
+          isIneligible = true
+          isOverLimit = false
         } else {
           const basePrice = registration.alternate_price || 0
           const requestedDiscountAmount = Math.round((basePrice * effectivePercentage) / 100)
@@ -208,6 +210,7 @@ export async function GET(
           percentage: effectivePercentage,
           discountAmount,
           categoryName: category?.name,
+          isIneligible,
           isOverLimit,
           usageStatus
         } : null,

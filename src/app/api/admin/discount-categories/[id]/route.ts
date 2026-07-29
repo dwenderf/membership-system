@@ -76,7 +76,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, description, accounting_code, max_discount_per_user_per_season, is_active } = body
+    const { name, description, accounting_code, max_discount_per_user_per_season, is_active, requires_user_allowance } = body
 
     // Validation
     if (!name?.trim()) {
@@ -125,6 +125,7 @@ export async function PUT(
         accounting_code: accounting_code.trim().toUpperCase(),
         max_discount_per_user_per_season: max_discount_per_user_per_season || null,
         is_active: is_active ?? true,
+        ...(requires_user_allowance !== undefined && { requires_user_allowance: Boolean(requires_user_allowance) })
       })
       .eq('id', id)
       .select()

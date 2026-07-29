@@ -39,6 +39,7 @@ interface Alternate {
     percentage: number
     discountAmount: number
     categoryName?: string
+    isIneligible?: boolean
     isOverLimit: boolean
   } | null
   pricing: {

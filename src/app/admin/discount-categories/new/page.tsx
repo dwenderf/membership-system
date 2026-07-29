@@ -16,6 +16,7 @@ export default function NewDiscountCategoryPage() {
     accounting_code: '',
     max_discount_per_user_per_season: '', // in dollars, will convert to cents
     is_active: true,
+    requires_user_allowance: false,
   })
   
   const [existingCategories, setExistingCategories] = useState<any[]>([])
@@ -66,6 +67,7 @@ export default function NewDiscountCategoryPage() {
         accounting_code: formData.accounting_code.trim().toUpperCase(),
         max_discount_per_user_per_season: maxDiscountInCents,
         is_active: formData.is_active,
+        requires_user_allowance: formData.requires_user_allowance,
       }
 
       const response = await fetch('/api/admin/discount-categories', {
@@ -225,6 +227,29 @@ export default function NewDiscountCategoryPage() {
                 <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
                   Category is active (discount codes in this category can be used)
                 </label>
+              </div>
+
+              {/* Require User Allowance Checkbox */}
+              <div className="border border-amber-200 bg-amber-50 rounded-md p-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="requires_user_allowance"
+                      type="checkbox"
+                      checked={formData.requires_user_allowance}
+                      onChange={(e) => setFormData({ ...formData, requires_user_allowance: e.target.checked })}
+                      className="focus:ring-amber-500 h-4 w-4 text-amber-600 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="requires_user_allowance" className="font-medium text-amber-900">
+                      Require User Allowance (Gated Category)
+                    </label>
+                    <p className="text-amber-800 text-xs mt-1">
+                      ⚠️ <strong>Warning:</strong> Enabling this denies every user without an explicit allowance for this category immediately.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Duplicate Warnings */}

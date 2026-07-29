@@ -9,6 +9,7 @@ import AdminToggleSection from './AdminToggleSection'
 import DiscountUsage from '@/components/DiscountUsage'
 import RoleBadge from '@/components/RoleBadge'
 import PaymentPlanSection from './PaymentPlanSection'
+import DiscountAllowanceSection from './DiscountAllowanceSection'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
@@ -711,6 +712,12 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                 userId={user.id}
                 isAdmin={user.is_admin}
                 isViewingOwnProfile={isViewingOwnProfile}
+                userName={`${user.first_name} ${user.last_name}`}
+              />
+
+              {/* Discount Allowances */}
+              <DiscountAllowanceSection
+                userId={user.id}
                 userName={`${user.first_name} ${user.last_name}`}
               />
 

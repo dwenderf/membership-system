@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveEffectiveDiscountLimitsBatch } from '@/lib/services/discount-limit-service'
 
 export async function GET(request: NextRequest) {
   try {
@@ -172,26 +173,46 @@ export async function GET(request: NextRequest) {
       season.totalAmount += amount
     })
 
-    // Calculate remaining amounts and fully utilized status
-    seasonMap.forEach(season => {
-      season.categories.forEach(category => {
-        category.users.forEach(user => {
-          if (category.maxPerUser !== null) {
-            user.remaining = Math.max(0, category.maxPerUser - user.totalAmount)
-            user.isFullyUtilized = user.totalAmount >= category.maxPerUser
+    // Calculate remaining amounts and fully utilized status using resolveEffectiveDiscountLimitsBatch per user
+    for (const season of Array.from(seasonMap.values())) {
+      const seasonUserIds = Array.from(new Set(
+        season.categories.flatMap(cat => cat.users.map(u => u.userId))
+      ))
+
+      const effectiveLimitsMap = await resolveEffectiveDiscountLimitsBatch(
+        adminSupabase,
+        seasonUserIds,
+        season.seasonId
+      )
+
+      for (const category of season.categories) {
+        for (const user of category.users) {
+          const key = `${user.userId}:${category.categoryId}`
+          const effectiveLimit = effectiveLimitsMap.get(key)
+          const maxAllowed = effectiveLimit?.maxAllowed ?? category.maxPerUser
+
+          if (effectiveLimit?.isEligible === false) {
+            user.remaining = 0
+            user.isFullyUtilized = true
+          } else if (maxAllowed !== null) {
+            user.remaining = Math.max(0, maxAllowed - user.totalAmount)
+            user.isFullyUtilized = user.totalAmount >= maxAllowed
+          } else {
+            user.remaining = null
+            user.isFullyUtilized = false
           }
 
           // Sort discount codes by date (most recent first)
           user.discountCodes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        })
+        }
 
         // Sort users by total amount (highest first)
         category.users.sort((a, b) => b.totalAmount - a.totalAmount)
-      })
+      }
 
       // Sort categories by total amount (highest first)
       season.categories.sort((a, b) => b.totalAmount - a.totalAmount)
-    })
+    }
 
     // Convert map to array and sort by season (most recent first)
     const seasons = Array.from(seasonMap.values())

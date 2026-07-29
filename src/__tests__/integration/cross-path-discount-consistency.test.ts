@@ -785,7 +785,8 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
 
     expect(response.status).toBe(200)
     const listAlternate = listData.alternates[0]
-    expect(listAlternate.discountCode.isOverLimit).toBe(true)
+    expect(listAlternate.discountCode.isIneligible).toBe(true)
+    expect(listAlternate.discountCode.isOverLimit).toBe(false)
     expect(listAlternate.pricing.discountAmount).toBe(0)
 
     // Path B: AlternatePaymentService charge calculation

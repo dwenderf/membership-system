@@ -49,6 +49,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: 'membership-reports', label: 'Membership Reports', description: 'Analyze membership trends and data', href: '/admin/reports/memberships', group: 'Reports' },
   { id: 'registration-reports', label: 'Registration Reports', description: 'View registration statistics', href: '/admin/reports/registrations', group: 'Reports' },
   { id: 'discount-usage', label: 'Discount Usage', description: 'Track discount code usage', href: '/admin/reports/discount-usage', group: 'Reports' },
+  { id: 'discount-eligibility', label: 'Discount Eligibility', description: 'View per-user discount allowances and eligibility', href: '/admin/reports/discount-eligibility', group: 'Reports' },
   { id: 'payment-plans', label: 'Payment Plans', description: 'Review active payment plans', href: '/admin/reports/payment-plans', group: 'Reports' },
   { id: 'user-reports', label: 'User Reports', description: 'View and manage user accounts and permissions', href: '/admin/reports/users', group: 'Reports' },
 ]

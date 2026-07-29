@@ -46,6 +46,7 @@ export default function DiscountAllowanceSection({
   const [allowances, setAllowances] = useState<Allowance[]>([])
   const [availableOptions, setAvailableOptions] = useState<AvailableOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Modal State
@@ -74,11 +75,16 @@ export default function DiscountAllowanceSection({
       if (res.ok) {
         setAllowances(data.allowances || [])
         setAvailableOptions(data.availableOptions || [])
+        setLoadError(false)
       } else {
         console.error('Error fetching discount allowances:', data.error)
+        setLoadError(true)
+        showError(data.error || 'Failed to load discount allowances')
       }
     } catch (err) {
       console.error('Error fetching discount allowances:', err)
+      setLoadError(true)
+      showError('Failed to load discount allowances')
     } finally {
       setLoading(false)
     }
@@ -248,6 +254,19 @@ export default function DiscountAllowanceSection({
 
         {loading ? (
           <div className="text-sm text-gray-500 py-4">Loading discount allowances...</div>
+        ) : loadError ? (
+          <div className="text-sm text-red-600 py-4 text-center border-2 border-dashed border-red-200 rounded-lg space-y-2">
+            <p>Failed to load discount allowances.</p>
+            <button
+              onClick={() => {
+                setLoading(true)
+                fetchAllowances()
+              }}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : allowances.length === 0 ? (
           <div className="text-sm text-gray-500 py-4 text-center border-2 border-dashed border-gray-200 rounded-lg">
             No active or upcoming discount allowances for this user.

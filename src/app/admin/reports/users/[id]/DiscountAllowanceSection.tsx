@@ -337,7 +337,15 @@ export default function DiscountAllowanceSection({
                   </div>
                   <div>
                     <span className="text-gray-500 block">Remaining</span>
-                    <span className="font-medium text-green-600">
+                    <span
+                      className={`font-medium ${
+                        allowance.isRevoked
+                          ? 'text-red-600'
+                          : allowance.remaining === null
+                          ? 'text-purple-600'
+                          : 'text-green-600'
+                      }`}
+                    >
                       {allowance.isRevoked
                         ? 'Not eligible'
                         : allowance.remaining === null

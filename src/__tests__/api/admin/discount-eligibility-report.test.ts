@@ -3,7 +3,8 @@
  */
 
 jest.mock('@/lib/supabase/server', () => ({
-  createClient: jest.fn()
+  createClient: jest.fn(),
+  createAdminClient: jest.fn()
 }))
 
 jest.mock('@/lib/services/discount-limit-service', () => ({
@@ -12,7 +13,7 @@ jest.mock('@/lib/services/discount-limit-service', () => ({
 }))
 
 import { GET } from '@/app/api/admin/reports/discount-eligibility/route'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import {
   resolveEffectiveDiscountLimitsBatch,
   calculateSeasonalDiscountUsageBatch
@@ -36,6 +37,7 @@ describe('/api/admin/reports/discount-eligibility', () => {
     }
 
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(createAdminClient as jest.Mock).mockReturnValue(mockSupabase)
   })
 
   it('returns 401 when unauthenticated', async () => {

@@ -227,17 +227,15 @@ export default function DiscountAllowanceSection({
 
   return (
     <div className="bg-white shadow rounded-lg mb-6">
-      <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-medium text-gray-900">Per-User Discount Allowances</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Grant, edit, and revoke custom seasonal discount percentages and caps
-          </p>
-        </div>
+      <div className="px-6 py-4 border-b border-gray-200">
+        <h2 className="text-lg font-medium text-gray-900">Per-User Discount Allowances</h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Grant, edit, and revoke custom seasonal discount percentages and caps
+        </p>
         {availableOptions.length > 0 && (
           <button
             onClick={openAddModal}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors"
+            className="mt-3 w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors whitespace-nowrap"
           >
             + Add Allowance
           </button>
@@ -280,15 +278,11 @@ export default function DiscountAllowanceSection({
                   allowance.isRevoked ? 'bg-red-50/50 border-red-200' : 'bg-gray-50 border-gray-200'
                 }`}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h4 className="text-sm font-semibold text-gray-900">{allowance.categoryName}</h4>
-                      <span className="text-xs text-gray-500">({allowance.seasonName})</span>
-                    </div>
-                  </div>
+                <div className="mb-2">
+                  <h4 className="text-sm font-semibold text-gray-900">{allowance.categoryName}</h4>
+                  <span className="text-xs text-gray-500">{allowance.seasonName}</span>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     {allowance.isRevoked ? (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         Revoked
@@ -322,7 +316,7 @@ export default function DiscountAllowanceSection({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mt-3 bg-white p-3 rounded border border-gray-100">
+                <div className="grid grid-cols-2 gap-3 text-xs mt-3 bg-white p-3 rounded border border-gray-100">
                   <div>
                     <span className="text-gray-500 block">Percentage</span>
                     <span className="font-medium text-gray-900">{allowance.discountPercentage}%</span>
@@ -343,7 +337,15 @@ export default function DiscountAllowanceSection({
                   </div>
                   <div>
                     <span className="text-gray-500 block">Remaining</span>
-                    <span className="font-medium text-green-600">
+                    <span
+                      className={`font-medium ${
+                        allowance.isRevoked
+                          ? 'text-red-600'
+                          : allowance.remaining === null
+                          ? 'text-purple-600'
+                          : 'text-green-600'
+                      }`}
+                    >
                       {allowance.isRevoked
                         ? 'Not eligible'
                         : allowance.remaining === null

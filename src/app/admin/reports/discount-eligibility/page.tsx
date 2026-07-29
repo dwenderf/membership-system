@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import AdminHeader from '@/components/AdminHeader'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
@@ -77,15 +76,12 @@ export default function DiscountEligibilityReportPage() {
   const totalUsedCents = eligibility.reduce((sum, r) => sum + r.totalUsed, 0)
 
   const breadcrumbs = [
-    { label: 'Admin Dashboard', href: '/admin' },
-    { label: 'Reports', href: '/admin/reports' },
-    { label: 'Discount Eligibility', href: '/admin/reports/discount-eligibility' }
+    { label: 'Admin Dashboard', path: '/admin' },
+    { label: 'Discount Eligibility', path: '/admin/reports/discount-eligibility' }
   ]
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AdminHeader />
-
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <BreadcrumbNav breadcrumbs={breadcrumbs} position="top" />

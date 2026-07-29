@@ -80,12 +80,16 @@ export default function EditDiscountCodePage() {
     setError('')
 
     try {
-      const percentage = parseFloat(formData.percentage)
-      
-      if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
-        setError('Please enter a valid percentage between 1 and 100')
-        setLoading(false)
-        return
+      let percentage: number | null = null
+
+      if (!isAllowanceDriven) {
+        percentage = parseFloat(formData.percentage)
+
+        if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
+          setError('Please enter a valid percentage between 1 and 100')
+          setLoading(false)
+          return
+        }
       }
 
       const codeData = {

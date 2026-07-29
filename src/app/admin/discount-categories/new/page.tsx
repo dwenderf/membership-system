@@ -227,6 +227,8 @@ export default function NewDiscountCategoryPage() {
                 <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
                   Category is active (discount codes in this category can be used)
                 </label>
+              </div>
+
               {/* Require User Allowance Checkbox */}
               <div className="border border-amber-200 bg-amber-50 rounded-md p-4">
                 <div className="flex items-start">

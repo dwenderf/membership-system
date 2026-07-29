@@ -145,6 +145,8 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
                 {codes.map((code: any) => {
                   const isExpired = code.valid_until && new Date(code.valid_until) < new Date()
                   const isNotYetValid = code.valid_from && new Date(code.valid_from) > new Date()
+                  const category = Array.isArray(code.discount_categories) ? code.discount_categories[0] : code.discount_categories
+                  const isAllowanceDriven = Boolean(code.uses_user_allowance)
                   
                   return (
                     <li key={code.id}>
@@ -155,12 +157,20 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
                               <p className="text-lg font-medium text-gray-900 font-mono">
                                 {code.code}
                               </p>
-                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                {code.percentage}% off
-                              </span>
-                              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                {code.discount_categories?.[0]?.name}
-                              </span>
+                              {isAllowanceDriven ? (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                  Allowance-Driven
+                                </span>
+                              ) : (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  {code.percentage}% off
+                                </span>
+                              )}
+                              {category?.name && (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  {category.name}
+                                </span>
+                              )}
                               {!code.is_active && (
                                 <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                   Inactive
@@ -178,11 +188,11 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
                               )}
                             </div>
                             <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span>Code: {code.discount_categories?.[0]?.accounting_code}</span>
-                              {code.discount_categories?.[0]?.max_discount_per_user_per_season && (
+                              <span>Code: {category?.accounting_code || 'None'}</span>
+                              {category?.max_discount_per_user_per_season && (
                                 <>
                                   <span className="mx-2">•</span>
-                                  <span>Limit: ${(code.discount_categories[0].max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
+                                  <span>Limit: ${(category.max_discount_per_user_per_season / 100).toFixed(2)}/season</span>
                                 </>
                               )}
                               {code.valid_from && (

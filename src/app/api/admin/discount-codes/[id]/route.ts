@@ -88,8 +88,23 @@ export async function PUT(
       return NextResponse.json({ error: 'Code is required' }, { status: 400 })
     }
 
-    if (!percentage || isNaN(parseFloat(percentage)) || parseFloat(percentage) <= 0 || parseFloat(percentage) > 100) {
-      return NextResponse.json({ error: 'Valid percentage between 1-100 is required' }, { status: 400 })
+    // Query target code to check if allowance-driven
+    const { data: targetCode, error: targetError } = await supabase
+      .from('discount_codes')
+      .select('id, code, uses_user_allowance')
+      .eq('id', id)
+      .single()
+
+    if (targetError || !targetCode) {
+      return NextResponse.json({ error: 'Discount code not found' }, { status: 404 })
+    }
+
+    const isAllowanceDriven = Boolean(targetCode.uses_user_allowance)
+
+    if (!isAllowanceDriven) {
+      if (!percentage || isNaN(parseFloat(percentage)) || parseFloat(percentage) <= 0 || parseFloat(percentage) > 100) {
+        return NextResponse.json({ error: 'Valid percentage between 1-100 is required' }, { status: 400 })
+      }
     }
 
     // Validate dates if provided
@@ -121,7 +136,7 @@ export async function PUT(
       .from('discount_codes')
       .update({
         code: code.trim().toUpperCase(),
-        percentage: parseFloat(percentage),
+        percentage: isAllowanceDriven ? null : parseFloat(percentage),
         valid_from: valid_from || null,
         valid_until: valid_until || null,
         is_active: is_active ?? true,

@@ -639,6 +639,98 @@ describe('/api/validate-discount-code POST', () => {
     )
   })
 
+  it('should cap retroactive refund application at the customer\'s remaining season limit', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
+
+    // 1. registrations query
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1', user_id: 'customer-1' }, error: null })
+        })
+      })
+    })
+
+    // 2. discount_codes query (100% allowance code, e.g. would normally discount the full $100 payment)
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            single: jest.fn().mockResolvedValue({
+              data: {
+                id: 'code-pride',
+                code: 'PRIDEAID',
+                percentage: null,
+                uses_user_allowance: true,
+                is_active: true,
+                discount_categories: {
+                  id: 'cat-financial-aid',
+                  name: 'Financial Aid',
+                  accounting_code: 'ACC400',
+                  max_discount_per_user_per_season: 2500,
+                  requires_user_allowance: true,
+                  default_percentage: null,
+                  is_active: true
+                }
+              },
+              error: null
+            })
+          })
+        })
+      })
+    })
+
+    // 3. xero_invoices returns no invoice (code was never applied at checkout)
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            in: jest.fn().mockResolvedValue({
+              data: [],
+              error: null
+            })
+          })
+        })
+      })
+    })
+
+    // 4. user_discount_allowances query - customer has a 100% allowance, capped at $25 for the season
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockResolvedValue({
+              data: [{ discount_percentage: 100, max_discount_amount: 2500 }],
+              error: null
+            })
+          })
+        })
+      })
+    })
+
+    // Customer has already used $0 of their $25 cap this season, but the requested $100 discount exceeds it
+    ;(checkSeasonalDiscountLimit as jest.Mock).mockResolvedValue({
+      originalAmount: 10000,
+      finalAmount: 2500,
+      isPartialDiscount: true,
+      isAtLimit: false
+    })
+
+    const request = new NextRequest('http://localhost/api/validate-discount-code', {
+      method: 'POST',
+      body: JSON.stringify({ code: 'PRIDEAID', registrationId: 'reg-1', paymentId: 'pay-missing', amount: 10000, isRefund: true })
+    })
+
+    const response = await POST(request)
+    const data = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(data.isValid).toBe(true)
+    expect(data.discountAmount).toBe(2500) // capped at remaining $25, not the full $100 discount
+    expect(data.isPartialDiscount).toBe(true)
+    expect(data.partialDiscountMessage).toBeTruthy()
+  })
+
   it('should resolve percentage from allowance for allowance-driven code and calculate requested amount before cap check', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-allowance' } }, error: null })
 

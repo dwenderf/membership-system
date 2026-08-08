@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get the registration to determine the season and owning customer
+    // Get the registration to determine the season
     const { data: registration, error: regError } = await supabase
       .from('registrations')
-      .select('season_id, user_id')
+      .select('season_id')
       .eq('id', registrationId)
       .single()
 
@@ -186,11 +186,29 @@ export async function POST(request: NextRequest) {
         if (discountCode.uses_user_allowance) {
           // The customer never actually applied this gated code at checkout (e.g. they forgot to
           // enter it). An admin can retroactively apply it during a refund, but only if the
-          // registration's owner actually has an allowance for it - so resolve eligibility against
-          // the customer, not the admin performing the refund.
+          // paying customer actually has an allowance for it - so resolve eligibility against the
+          // customer who made the payment, not the admin performing the refund. The registrations
+          // table has no user_id (it's the season/event template), so look up the customer via the
+          // payment being refunded.
+          if (!paymentId) {
+            console.error('[validate-discount-code] Missing paymentId for allowance-driven refund resolution:', { code: discountCode.code })
+            return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
+          }
+
+          const { data: payment, error: paymentError } = await supabase
+            .from('payments')
+            .select('user_id')
+            .eq('id', paymentId)
+            .single()
+
+          if (paymentError || !payment) {
+            console.error('[validate-discount-code] Payment not found for allowance-driven refund resolution:', { code: discountCode.code, paymentId, error: paymentError })
+            return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
+          }
+
           const effectiveLimit = await resolveEffectiveDiscountLimits(
             supabase,
-            registration.user_id,
+            payment.user_id,
             category.id,
             registration.season_id,
             codeWithCategory.category
@@ -213,7 +231,7 @@ export async function POST(request: NextRequest) {
 
           const limitResult = await checkSeasonalDiscountLimit(
             supabase,
-            registration.user_id,
+            payment.user_id,
             discountCode.id,
             registration.season_id,
             requestedDiscountAmount,

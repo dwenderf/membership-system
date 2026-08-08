@@ -478,14 +478,16 @@ describe('/api/validate-discount-code POST', () => {
   it('should deny retroactive refund application for allowance-driven code when customer has no allowance', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
 
+    // 1. registrations query (no user_id column - registrations is the season/event template)
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
-          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1', user_id: 'customer-1' }, error: null })
+          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1' }, error: null })
         })
       })
     })
 
+    // 2. discount_codes query
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
@@ -513,7 +515,7 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // xero_invoices returns no invoice
+    // 3. xero_invoices returns no invoice
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
@@ -527,7 +529,16 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // user_discount_allowances lookup for the customer returns no row (falls back to beforeEach default: [])
+    // 4. payments query resolves the paying customer
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { user_id: 'customer-1' }, error: null })
+        })
+      })
+    })
+
+    // 5. user_discount_allowances lookup for the customer returns no row (falls back to beforeEach default: [])
 
     const request = new NextRequest('http://localhost/api/validate-discount-code', {
       method: 'POST',
@@ -545,11 +556,11 @@ describe('/api/validate-discount-code POST', () => {
   it('should retroactively apply allowance-driven code during refund when customer has an eligible allowance', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
 
-    // 1. registrations query
+    // 1. registrations query (no user_id column - registrations is the season/event template)
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
-          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1', user_id: 'customer-1' }, error: null })
+          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1' }, error: null })
         })
       })
     })
@@ -597,7 +608,16 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // 4. user_discount_allowances query - customer has a 60% allowance
+    // 4. payments query resolves the paying customer
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { user_id: 'customer-1' }, error: null })
+        })
+      })
+    })
+
+    // 5. user_discount_allowances query - customer has a 60% allowance
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
@@ -631,7 +651,7 @@ describe('/api/validate-discount-code POST', () => {
     expect(data.discountAmount).toBe(6000) // 60% of $100.00 payment
     expect(checkSeasonalDiscountLimit).toHaveBeenCalledWith(
       expect.anything(),
-      'customer-1', // eligibility resolved for the registration owner, not the admin
+      'customer-1', // eligibility resolved for the paying customer, not the admin
       'code-pride',
       'season-1',
       6000,
@@ -642,11 +662,11 @@ describe('/api/validate-discount-code POST', () => {
   it('should cap retroactive refund application at the customer\'s remaining season limit', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null })
 
-    // 1. registrations query
+    // 1. registrations query (no user_id column - registrations is the season/event template)
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
-          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1', user_id: 'customer-1' }, error: null })
+          single: jest.fn().mockResolvedValue({ data: { season_id: 'season-1' }, error: null })
         })
       })
     })
@@ -694,7 +714,16 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // 4. user_discount_allowances query - customer has a 100% allowance, capped at $25 for the season
+    // 4. payments query resolves the paying customer
+    mockSupabase.from.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { user_id: 'customer-1' }, error: null })
+        })
+      })
+    })
+
+    // 5. user_discount_allowances query - customer has a 100% allowance, capped at $25 for the season
     mockSupabase.from.mockReturnValueOnce({
       select: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({

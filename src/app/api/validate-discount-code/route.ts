@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get the registration to determine the season
+    // Get the registration to determine the season and owning customer
     const { data: registration, error: regError } = await supabase
       .from('registrations')
-      .select('season_id')
+      .select('season_id, user_id')
       .eq('id', registrationId)
       .single()
 
@@ -184,8 +184,64 @@ export async function POST(request: NextRequest) {
       } else {
         // Split fallback strategy for 0 invoices / 0 line items found
         if (discountCode.uses_user_allowance) {
-          console.error('[validate-discount-code] Original discount line item not found for refund of allowance-driven code:', { code: discountCode.code, paymentId })
-          return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
+          // The customer never actually applied this gated code at checkout (e.g. they forgot to
+          // enter it). An admin can retroactively apply it during a refund, but only if the
+          // registration's owner actually has an allowance for it - so resolve eligibility against
+          // the customer, not the admin performing the refund.
+          const effectiveLimit = await resolveEffectiveDiscountLimits(
+            supabase,
+            registration.user_id,
+            category.id,
+            registration.season_id,
+            codeWithCategory.category
+          )
+
+          if (!effectiveLimit.isEligible) {
+            console.warn('[validate-discount-code] Refund requested for allowance-driven code the customer is not eligible for:', { code: discountCode.code, paymentId, registrationId })
+            return NextResponse.json({ isValid: false, error: "This code isn't available to this customer's account." })
+          }
+
+          const pct = resolveDiscountPercentage(discountCode, effectiveLimit)
+
+          if (pct == null || isNaN(pct)) {
+            console.error('[validate-discount-code] Percentage unresolvable for retroactive refund application:', { code: discountCode.code, paymentId, registrationId })
+            return NextResponse.json({ isValid: false, error: "This code isn't available to this customer's account." })
+          }
+
+          effectivePct = pct
+          const requestedDiscountAmount = Math.round((amount * pct) / 100)
+
+          const limitResult = await checkSeasonalDiscountLimit(
+            supabase,
+            registration.user_id,
+            discountCode.id,
+            registration.season_id,
+            requestedDiscountAmount,
+            {
+              isRefund: false,
+              discountCode: codeWithCategory,
+              effectiveLimit
+            }
+          )
+
+          const maxAllowed = effectiveLimit.maxAllowed ?? category?.max_discount_per_user_per_season ?? 0
+
+          if (limitResult.isAtLimit) {
+            return NextResponse.json({
+              isValid: false,
+              error: `This customer has already reached their $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}. No additional discount can be applied.`
+            })
+          }
+
+          if (limitResult.isPartialDiscount) {
+            discountAmount = limitResult.finalAmount
+            isPartialDiscount = true
+            partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). Customer has already used part of their $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}.`
+          } else {
+            discountAmount = requestedDiscountAmount
+          }
+
+          console.warn('[validate-discount-code] Retroactively applying allowance-driven code during refund (no original line item found):', { code: discountCode.code, paymentId, registrationId, discountAmount })
         } else {
           console.warn('[validate-discount-code] Original discount line item not found for refund of fixed-percentage code; using percentage fallback:', { code: discountCode.code, paymentId })
           const fallbackPct = parseFloat(String(discountCode.percentage)) || 0

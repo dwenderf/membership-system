@@ -58,37 +58,34 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
   const fetchAllRegistrationsGames = async () => {
     try {
       setOverviewLoading(true)
-      
-      // Fetch games for each registration
-      const registrationsWithGamesData = await Promise.all(
-        registrations.map(async (registration) => {
-          try {
-            const response = await fetch(`/api/alternate-registrations?registrationId=${registration.id}`)
-            if (response.ok) {
-              const data = await response.json()
-              return {
-                ...registration,
-                games: data.games || []
-              }
-            } else {
-              return {
-                ...registration,
-                games: []
-              }
-            }
-          } catch (error) {
-            console.error(`Error fetching games for ${registration.name}:`, error)
-            return {
-              ...registration,
-              games: []
-            }
-          }
-        })
-      )
-      
+
+      if (registrations.length === 0) {
+        setRegistrationsWithGames([])
+        return
+      }
+
+      // Fetch games for all registrations in a single batched request
+      const registrationIds = registrations.map(r => encodeURIComponent(r.id)).join(',')
+      const response = await fetch(`/api/alternate-registrations/batch?registrationIds=${registrationIds}`)
+
+      let gamesByRegistration: Record<string, RegistrationWithGames['games']> = {}
+      if (response.ok) {
+        const data = await response.json()
+        gamesByRegistration = data.games || {}
+      }
+
+      const registrationsWithGamesData = registrations.map(registration => ({
+        ...registration,
+        games: gamesByRegistration[registration.id] || []
+      }))
+
       setRegistrationsWithGames(registrationsWithGamesData)
     } catch (error) {
       console.error('Error fetching all registrations games:', error)
+      setRegistrationsWithGames(registrations.map(registration => ({
+        ...registration,
+        games: []
+      })))
     } finally {
       setOverviewLoading(false)
     }

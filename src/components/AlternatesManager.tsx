@@ -42,6 +42,7 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
   const [loading, setLoading] = useState(false)
   const [registrationsWithGames, setRegistrationsWithGames] = useState<RegistrationWithGames[]>([])
   const [overviewLoading, setOverviewLoading] = useState(true)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
 
   // Get the selected registration object
   const selectedRegistrationData = selectedRegistration 
@@ -58,6 +59,7 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
   const fetchAllRegistrationsGames = async () => {
     try {
       setOverviewLoading(true)
+      setOverviewError(null)
 
       if (registrations.length === 0) {
         setRegistrationsWithGames([])
@@ -68,11 +70,12 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
       const registrationIds = registrations.map(r => encodeURIComponent(r.id)).join(',')
       const response = await fetch(`/api/alternate-registrations/batch?registrationIds=${registrationIds}`)
 
-      let gamesByRegistration: Record<string, RegistrationWithGames['games']> = {}
-      if (response.ok) {
-        const data = await response.json()
-        gamesByRegistration = data.games || {}
+      if (!response.ok) {
+        throw new Error(`Batch request failed with status ${response.status}`)
       }
+
+      const data = await response.json()
+      const gamesByRegistration: Record<string, RegistrationWithGames['games']> = data.games || {}
 
       const registrationsWithGamesData = registrations.map(registration => ({
         ...registration,
@@ -82,10 +85,8 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
       setRegistrationsWithGames(registrationsWithGamesData)
     } catch (error) {
       console.error('Error fetching all registrations games:', error)
-      setRegistrationsWithGames(registrations.map(registration => ({
-        ...registration,
-        games: []
-      })))
+      setRegistrationsWithGames([])
+      setOverviewError('Couldn\'t load the activity overview. Please try refreshing the page.')
     } finally {
       setOverviewLoading(false)
     }
@@ -124,7 +125,13 @@ export default function AlternatesManager({ registrations, userAccess }: Alterna
       </div>
 
       {/* All Registrations Overview */}
-      {!overviewLoading && registrationsWithGames.length > 0 && (
+      {!overviewLoading && overviewError && (
+        <div className="bg-red-50 border border-red-200 shadow rounded-lg p-6">
+          <div className="text-center text-red-700 text-sm">{overviewError}</div>
+        </div>
+      )}
+
+      {!overviewLoading && !overviewError && registrationsWithGames.length > 0 && (
         <AllRegistrationsActivityGrid
           registrations={registrationsWithGames}
           onRegistrationWeekClick={(registrationId, weekStart) => {

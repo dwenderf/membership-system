@@ -5,7 +5,8 @@ import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
 import SeasonSelector from '@/components/SeasonSelector'
-import { SeasonSummary } from '@/lib/utils/season-utils'
+import { createClient } from '@/lib/supabase/client'
+import { getDefaultSeasonId, SeasonSummary } from '@/lib/utils/season-utils'
 
 interface EmailRecipient {
   userId: string
@@ -96,7 +97,8 @@ export default function RegistrationReportsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSeason, setSelectedSeason] = useState<string>('all')
+  const [seasons, setSeasons] = useState<SeasonSummary[]>([])
+  const [selectedSeason, setSelectedSeason] = useState<string>('')
   const [showPastEvents, setShowPastEvents] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name-asc')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -136,6 +138,7 @@ export default function RegistrationReportsPage() {
 
   useEffect(() => {
     fetchRegistrations()
+    fetchSeasons()
   }, [])
 
   const fetchRegistrations = async () => {
@@ -152,6 +155,24 @@ export default function RegistrationReportsPage() {
     }
   }
 
+  const fetchSeasons = async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('seasons')
+      .select('id, name, start_date, end_date')
+      .order('start_date', { ascending: false })
+
+    const seasonSummaries: SeasonSummary[] = (data || []).map(s => ({
+      id: s.id,
+      name: s.name,
+      startDate: s.start_date,
+      endDate: s.end_date
+    }))
+
+    setSeasons(seasonSummaries)
+    setSelectedSeason(prev => prev || getDefaultSeasonId(seasonSummaries) || '')
+  }
+
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev)
@@ -163,23 +184,9 @@ export default function RegistrationReportsPage() {
 
   const todayDateString = new Date().toISOString().split('T')[0]
 
-  const seasons: SeasonSummary[] = Array.from(
-    registrations.reduce((map, r) => {
-      if (r.season_id && !map.has(r.season_id)) {
-        map.set(r.season_id, {
-          id: r.season_id,
-          name: r.season_name,
-          startDate: r.season_start_date || '',
-          endDate: r.season_end_date || ''
-        })
-      }
-      return map
-    }, new Map<string, SeasonSummary>()).values()
-  )
-
   const filteredRegistrations = sortRegistrations(
     registrations.filter(r => {
-      if (selectedSeason !== 'all' && r.season_id !== selectedSeason) return false
+      if (selectedSeason && r.season_id !== selectedSeason) return false
       if (!showPastEvents && !isRegistrationActive(r, todayDateString)) return false
       return true
     }),
@@ -201,7 +208,6 @@ export default function RegistrationReportsPage() {
               seasons={seasons}
               selectedSeasonId={selectedSeason}
               onSelect={setSelectedSeason}
-              allowAllOption
             />
           </div>
 

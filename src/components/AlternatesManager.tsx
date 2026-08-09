@@ -25,6 +25,7 @@ interface Registration {
 
 interface AlternatesManagerProps {
   registrations: Registration[]
+  seasons: { id: string, name: string, start_date: string, end_date: string }[]
   userAccess: AlternatesAccessResult
 }
 
@@ -40,19 +41,11 @@ interface RegistrationWithGames extends Registration {
   }>
 }
 
-function toSeasonSummaries(registrations: Registration[]): SeasonSummary[] {
-  const byId = new Map<string, SeasonSummary>()
-  for (const registration of registrations) {
-    const season = registration.seasons
-    if (season && !byId.has(season.id)) {
-      byId.set(season.id, { id: season.id, name: season.name, startDate: season.start_date, endDate: season.end_date })
-    }
-  }
-  return Array.from(byId.values()).sort((a, b) => a.startDate.localeCompare(b.startDate))
-}
-
-export default function AlternatesManager({ registrations, userAccess }: AlternatesManagerProps) {
-  const seasons = useMemo(() => toSeasonSummaries(registrations), [registrations])
+export default function AlternatesManager({ registrations, seasons: rawSeasons, userAccess }: AlternatesManagerProps) {
+  const seasons = useMemo<SeasonSummary[]>(
+    () => rawSeasons.map(s => ({ id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date })),
+    [rawSeasons]
+  )
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>(() => getDefaultSeasonId(seasons) ?? '')
   const [selectedRegistration, setSelectedRegistration] = useState<string>('')
   const [loading, setLoading] = useState(false)

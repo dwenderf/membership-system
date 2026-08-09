@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
+import SeasonSelector from '@/components/SeasonSelector'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 
@@ -70,6 +71,11 @@ export default function DiscountEligibilityReportPage() {
     }
   }
 
+  const seasonSummaries = useMemo(
+    () => seasons.map(s => ({ id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date })),
+    [seasons]
+  )
+
   // Summary Metrics
   const activeRows = eligibility.filter(r => !r.isRevoked)
   const totalEligibleUsers = activeRows.length
@@ -95,25 +101,13 @@ export default function DiscountEligibilityReportPage() {
               </p>
             </div>
 
-            {/* Season Filter Dropdown */}
+            {/* Season Filter */}
             {seasons.length > 0 && (
-              <div className="flex items-center space-x-2">
-                <label htmlFor="season-select" className="text-sm font-medium text-gray-700">
-                  Season:
-                </label>
-                <select
-                  id="season-select"
-                  value={selectedSeasonId}
-                  onChange={(e) => setSelectedSeasonId(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  {seasons.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SeasonSelector
+                seasons={seasonSummaries}
+                selectedSeasonId={selectedSeasonId}
+                onSelect={setSelectedSeasonId}
+              />
             )}
           </div>
 

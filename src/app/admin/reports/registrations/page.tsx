@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
+import SeasonSelector from '@/components/SeasonSelector'
+import { SeasonSummary } from '@/lib/utils/season-utils'
 
 interface EmailRecipient {
   userId: string
@@ -161,9 +163,19 @@ export default function RegistrationReportsPage() {
 
   const todayDateString = new Date().toISOString().split('T')[0]
 
-  const seasons = Array.from(new Set(registrations.map(r => JSON.stringify({ id: r.season_id, name: r.season_name }))))
-    .map(s => JSON.parse(s))
-    .sort((a, b) => b.name.localeCompare(a.name))
+  const seasons: SeasonSummary[] = Array.from(
+    registrations.reduce((map, r) => {
+      if (r.season_id && !map.has(r.season_id)) {
+        map.set(r.season_id, {
+          id: r.season_id,
+          name: r.season_name,
+          startDate: r.season_start_date || '',
+          endDate: r.season_end_date || ''
+        })
+      }
+      return map
+    }, new Map<string, SeasonSummary>()).values()
+  )
 
   const filteredRegistrations = sortRegistrations(
     registrations.filter(r => {
@@ -182,20 +194,15 @@ export default function RegistrationReportsPage() {
       <div className="mb-6 bg-white shadow rounded-lg p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[180px]">
-            <label htmlFor="season-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Filter by Season
             </label>
-            <select
-              id="season-filter"
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(e.target.value)}
-              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            >
-              <option value="all">All Seasons</option>
-              {seasons.map((season) => (
-                <option key={season.id} value={season.id}>{season.name}</option>
-              ))}
-            </select>
+            <SeasonSelector
+              seasons={seasons}
+              selectedSeasonId={selectedSeason}
+              onSelect={setSelectedSeason}
+              allowAllOption
+            />
           </div>
 
           <div className="flex-1 min-w-[180px]">

@@ -25,6 +25,7 @@ interface Registration {
   seasons: {
     id: string
     name: string
+    start_date: string
     end_date: string
   } | null
 }
@@ -35,6 +36,10 @@ interface RegistrationWithGames extends Registration {
 
 interface AllRegistrationsActivityGridProps {
   registrations: RegistrationWithGames[]
+  // ISO date strings (YYYY-MM-DD) bounding the currently selected season.
+  // The weekly axis is built from these, not inferred from registration data.
+  seasonStart: string
+  seasonEnd: string
   onRegistrationWeekClick?: (registrationId: string, weekStart: string) => void
 }
 
@@ -51,45 +56,22 @@ interface RegistrationWeeklyData {
   weeks: WeekData[]
 }
 
-export default function AllRegistrationsActivityGrid({ 
-  registrations, 
-  onRegistrationWeekClick 
+export default function AllRegistrationsActivityGrid({
+  registrations,
+  seasonStart,
+  seasonEnd,
+  onRegistrationWeekClick
 }: AllRegistrationsActivityGridProps) {
-  const { seasonStart, seasonEnd, registrationData } = useMemo(() => {
+  const { registrationData } = useMemo(() => {
     // Safety check
     if (!Array.isArray(registrations) || registrations.length === 0) {
       return {
-        seasonStart: new Date(),
-        seasonEnd: new Date(),
         registrationData: []
       }
     }
 
-    // Find the overall season bounds from all registrations
-    let earliestStart: Date | null = null
-    let latestEnd: Date | null = null
-
-    registrations.forEach(reg => {
-      if (reg.seasons) {
-        const seasonEnd = new Date(reg.seasons.end_date)
-        const seasonStart = new Date(seasonEnd.getTime() - (6 * 30 * 24 * 60 * 60 * 1000)) // 6 months before end
-        
-        if (!earliestStart || seasonStart < earliestStart) {
-          earliestStart = seasonStart
-        }
-        if (!latestEnd || seasonEnd > latestEnd) {
-          latestEnd = seasonEnd
-        }
-      }
-    })
-
-    // Fallback to current date +/- 3 months if no season data
-    const today = new Date()
-    const fallbackStart = new Date(today.getTime() - (3 * 30 * 24 * 60 * 60 * 1000))
-    const fallbackEnd = new Date(today.getTime() + (3 * 30 * 24 * 60 * 60 * 1000))
-    
-    const finalStart = earliestStart || fallbackStart
-    const finalEnd = latestEnd || fallbackEnd
+    const finalStart = new Date(seasonStart)
+    const finalEnd = new Date(seasonEnd)
 
     // Process each registration's games into weekly data
     const regData: RegistrationWeeklyData[] = registrations.map(registration => {
@@ -153,11 +135,9 @@ export default function AllRegistrationsActivityGrid({
     })
 
     return {
-      seasonStart: finalStart,
-      seasonEnd: finalEnd,
       registrationData: regData
     }
-  }, [registrations])
+  }, [registrations, seasonStart, seasonEnd])
 
   const getColorClass = (count: number) => {
     if (count === 0) return 'bg-gray-100'

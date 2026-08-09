@@ -32,6 +32,7 @@ export default async function AlternatesPage() {
       seasons (
         id,
         name,
+        start_date,
         end_date
       )
     `)

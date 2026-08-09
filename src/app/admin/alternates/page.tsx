@@ -18,6 +18,13 @@ export default async function AlternatesPage() {
 
   const supabase = await createClient()
 
+  // Get all seasons so the season selector can offer Current/Next/Past
+  // regardless of whether a season has any alternate-enabled registrations yet
+  const { data: seasons } = await supabase
+    .from('seasons')
+    .select('id, name, start_date, end_date')
+    .order('start_date', { ascending: false })
+
   // Get all non-expired registrations that allow alternates
   const { data: registrations, error } = await supabase
     .from('registrations')
@@ -32,6 +39,7 @@ export default async function AlternatesPage() {
       seasons (
         id,
         name,
+        start_date,
         end_date
       )
     `)
@@ -87,8 +95,9 @@ export default async function AlternatesPage() {
               </Link>
             </div>
           ) : (
-            <AlternatesManager 
+            <AlternatesManager
               registrations={activeRegistrations}
+              seasons={seasons || []}
               userAccess={access}
             />
           )}

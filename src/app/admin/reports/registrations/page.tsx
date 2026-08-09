@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
+import SeasonSelector from '@/components/SeasonSelector'
+import { createClient } from '@/lib/supabase/client'
+import { getDefaultSeasonId, SeasonSummary } from '@/lib/utils/season-utils'
 
 interface EmailRecipient {
   userId: string
@@ -94,7 +97,8 @@ export default function RegistrationReportsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSeason, setSelectedSeason] = useState<string>('all')
+  const [seasons, setSeasons] = useState<SeasonSummary[]>([])
+  const [selectedSeason, setSelectedSeason] = useState<string>('')
   const [showPastEvents, setShowPastEvents] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name-asc')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -134,6 +138,7 @@ export default function RegistrationReportsPage() {
 
   useEffect(() => {
     fetchRegistrations()
+    fetchSeasons()
   }, [])
 
   const fetchRegistrations = async () => {
@@ -150,6 +155,24 @@ export default function RegistrationReportsPage() {
     }
   }
 
+  const fetchSeasons = async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('seasons')
+      .select('id, name, start_date, end_date')
+      .order('start_date', { ascending: false })
+
+    const seasonSummaries: SeasonSummary[] = (data || []).map(s => ({
+      id: s.id,
+      name: s.name,
+      startDate: s.start_date,
+      endDate: s.end_date
+    }))
+
+    setSeasons(seasonSummaries)
+    setSelectedSeason(prev => prev || getDefaultSeasonId(seasonSummaries) || '')
+  }
+
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev)
@@ -161,13 +184,9 @@ export default function RegistrationReportsPage() {
 
   const todayDateString = new Date().toISOString().split('T')[0]
 
-  const seasons = Array.from(new Set(registrations.map(r => JSON.stringify({ id: r.season_id, name: r.season_name }))))
-    .map(s => JSON.parse(s))
-    .sort((a, b) => b.name.localeCompare(a.name))
-
   const filteredRegistrations = sortRegistrations(
     registrations.filter(r => {
-      if (selectedSeason !== 'all' && r.season_id !== selectedSeason) return false
+      if (selectedSeason && r.season_id !== selectedSeason) return false
       if (!showPastEvents && !isRegistrationActive(r, todayDateString)) return false
       return true
     }),
@@ -182,20 +201,14 @@ export default function RegistrationReportsPage() {
       <div className="mb-6 bg-white shadow rounded-lg p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[180px]">
-            <label htmlFor="season-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Filter by Season
             </label>
-            <select
-              id="season-filter"
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(e.target.value)}
-              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            >
-              <option value="all">All Seasons</option>
-              {seasons.map((season) => (
-                <option key={season.id} value={season.id}>{season.name}</option>
-              ))}
-            </select>
+            <SeasonSelector
+              seasons={seasons}
+              selectedSeasonId={selectedSeason}
+              onSelect={setSelectedSeason}
+            />
           </div>
 
           <div className="flex-1 min-w-[180px]">

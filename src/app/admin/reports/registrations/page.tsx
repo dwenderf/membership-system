@@ -7,6 +7,7 @@ import EmailComposerModal from '@/components/EmailComposerModal'
 import SeasonSelector from '@/components/SeasonSelector'
 import { createClient } from '@/lib/supabase/client'
 import { getDefaultSeasonId, SeasonSummary } from '@/lib/utils/season-utils'
+import { formatEventDateTime } from '@/lib/date-utils'
 
 interface EmailRecipient {
   userId: string
@@ -34,6 +35,7 @@ interface Registration {
   type: string
   start_date: string | null
   end_date: string | null
+  registration_end_at: string | null
   total_count: number
   total_capacity: number | null
   total_waitlist_count: number
@@ -54,7 +56,7 @@ interface Registration {
   financial_summary?: FinancialSummaryData
 }
 
-type SortOption = 'name-asc' | 'name-desc' | 'season' | 'date'
+type SortOption = 'name-asc' | 'name-desc' | 'date'
 
 function getRegistrationTypeColor(type: string) {
   switch (type) {
@@ -65,8 +67,25 @@ function getRegistrationTypeColor(type: string) {
   }
 }
 
+function isEventLikeType(type: string): boolean {
+  return type === 'event' || type === 'scrimmage' || type === 'tournament'
+}
+
+// Returns the label shown under the registration name: an event/scrimmage/tournament's
+// specific date, or the season name for everything else (e.g. team registrations).
+function getRegistrationDateLabel(registration: Registration): string {
+  if (isEventLikeType(registration.type) && registration.start_date) {
+    return formatEventDateTime(registration.start_date)
+  }
+  return registration.season_name || 'No season'
+}
+
 function isRegistrationActive(registration: Registration, today: string): boolean {
-  if ((registration.type === 'event' || registration.type === 'scrimmage') && registration.end_date) {
+  // Closed for further registration, regardless of type or event date
+  if (registration.registration_end_at && registration.registration_end_at.split('T')[0] < today) {
+    return false
+  }
+  if (isEventLikeType(registration.type) && registration.end_date) {
     return registration.end_date.split('T')[0] >= today
   }
   if (!registration.season_end_date) return false
@@ -78,11 +97,6 @@ function sortRegistrations(list: Registration[], sort: SortOption): Registration
     switch (sort) {
       case 'name-asc': return a.name.localeCompare(b.name)
       case 'name-desc': return b.name.localeCompare(a.name)
-      case 'season': {
-        const seasonCmp = (b.season_name || '').localeCompare(a.season_name || '')
-        if (seasonCmp !== 0) return seasonCmp
-        return a.name.localeCompare(b.name)
-      }
       case 'date': {
         const aDate = a.start_date || a.season_start_date || ''
         const bDate = b.start_date || b.season_start_date || ''
@@ -99,7 +113,7 @@ export default function RegistrationReportsPage() {
   const [error, setError] = useState<string | null>(null)
   const [seasons, setSeasons] = useState<SeasonSummary[]>([])
   const [selectedSeason, setSelectedSeason] = useState<string>('')
-  const [showPastEvents, setShowPastEvents] = useState(false)
+  const [showPastClosed, setShowPastClosed] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('name-asc')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [emailTargetId, setEmailTargetId] = useState<string | null>(null)
@@ -187,7 +201,7 @@ export default function RegistrationReportsPage() {
   const filteredRegistrations = sortRegistrations(
     registrations.filter(r => {
       if (selectedSeason && r.season_id !== selectedSeason) return false
-      if (!showPastEvents && !isRegistrationActive(r, todayDateString)) return false
+      if (!showPastClosed && !isRegistrationActive(r, todayDateString)) return false
       return true
     }),
     sortBy
@@ -198,20 +212,20 @@ export default function RegistrationReportsPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Registration Reports</h1>
 
       {/* Controls */}
-      <div className="mb-6 bg-white shadow rounded-lg p-4">
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Filter by Season
-            </label>
-            <SeasonSelector
-              seasons={seasons}
-              selectedSeasonId={selectedSeason}
-              onSelect={setSelectedSeason}
-            />
-          </div>
+      <div className="mb-6 bg-white shadow rounded-lg p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Filter by Season
+          </label>
+          <SeasonSelector
+            seasons={seasons}
+            selectedSeasonId={selectedSeason}
+            onSelect={setSelectedSeason}
+          />
+        </div>
 
-          <div className="flex-1 min-w-[180px]">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="sm:w-56">
             <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 mb-1">
               Sort by
             </label>
@@ -223,26 +237,21 @@ export default function RegistrationReportsPage() {
             >
               <option value="name-asc">Name A–Z</option>
               <option value="name-desc">Name Z–A</option>
-              <option value="season">Season</option>
               <option value="date">Date</option>
             </select>
           </div>
 
-          <div className="flex items-center pb-0.5">
+          <div className="flex items-center sm:pb-2">
             <input
-              id="show-past-events"
+              id="show-past-closed"
               type="checkbox"
-              checked={showPastEvents}
-              onChange={(e) => setShowPastEvents(e.target.checked)}
+              checked={showPastClosed}
+              onChange={(e) => setShowPastClosed(e.target.checked)}
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
-            <label htmlFor="show-past-events" className="ml-2 text-sm text-gray-900">
-              Show past events/scrimmages
+            <label htmlFor="show-past-closed" className="ml-2 text-sm text-gray-900">
+              Show past/closed registrations
             </label>
-          </div>
-
-          <div className="ml-auto text-sm text-gray-500 pb-0.5">
-            {filteredRegistrations.length} of {registrations.length} registrations
           </div>
         </div>
       </div>
@@ -272,8 +281,8 @@ export default function RegistrationReportsPage() {
       ) : filteredRegistrations.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-gray-500">No registrations found matching your filters.</p>
-          {!showPastEvents && (
-            <p className="text-sm text-gray-400 mt-2">Try enabling "Show past events/scrimmages" to see more results.</p>
+          {!showPastClosed && (
+            <p className="text-sm text-gray-400 mt-2">Try enabling "Show past/closed registrations" to see more results.</p>
           )}
         </div>
       ) : (
@@ -298,23 +307,23 @@ export default function RegistrationReportsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
 
-                  {/* Name */}
-                  <span className="flex-1 font-semibold text-gray-900 text-sm">{registration.name}</span>
+                  {/* Name + date/season */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{registration.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{getRegistrationDateLabel(registration)}</p>
+                  </div>
 
-                  {/* Season */}
-                  <span className="hidden sm:inline text-xs text-gray-500 mr-2">{registration.season_name}</span>
-
-                  {/* Member count */}
-                  <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
-                    {registration.total_count} members
-                  </span>
-
-                  {/* Net revenue */}
-                  {registration.financial_summary && (
-                    <span className="ml-3 text-sm font-semibold text-green-700 whitespace-nowrap">
-                      ${Math.round(registration.financial_summary.total_net / 100).toLocaleString('en-US')} net
+                  {/* Net revenue + member count, stacked */}
+                  <div className="flex flex-col items-end gap-0.5 whitespace-nowrap">
+                    {registration.financial_summary && (
+                      <span className="text-sm font-semibold text-green-700">
+                        ${Math.round(registration.financial_summary.total_net / 100).toLocaleString('en-US')} net
+                      </span>
+                    )}
+                    <span className="text-xs font-medium text-gray-600">
+                      {registration.total_count} members
                     </span>
-                  )}
+                  </div>
                 </button>
 
                 {/* Expanded content */}
@@ -323,9 +332,6 @@ export default function RegistrationReportsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                       {/* Left column */}
                       <div>
-                        {/* Season (mobile) */}
-                        <p className="text-sm text-gray-500 mb-4 sm:hidden">{registration.season_name}</p>
-
                         {/* Category breakdown */}
                         {registration.category_breakdown.length > 0 && (
                           <div className="mb-4">

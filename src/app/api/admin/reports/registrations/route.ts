@@ -448,6 +448,7 @@ export async function GET(request: NextRequest) {
           type,
           start_date,
           end_date,
+          registration_end_at,
           allow_alternates,
           seasons (
             id,
@@ -731,6 +732,7 @@ export async function GET(request: NextRequest) {
           type: item.type,
           start_date: item.start_date,
           end_date: item.end_date,
+          registration_end_at: item.registration_end_at,
           season_id: season?.id || null,
           season_name: season?.name || 'Unknown Season',
           season_start_date: season?.start_date || null,

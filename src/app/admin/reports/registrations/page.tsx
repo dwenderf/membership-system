@@ -224,37 +224,42 @@ export default function RegistrationReportsPage() {
       </div>
 
       {/* Sort + visibility toolbar */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className={pillGroupClasses}>
-          <button
-            type="button"
-            onClick={() => setShowPastClosed(false)}
-            title="Hide past and closed registrations"
-            className={`${pillBaseClasses} ${!showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowPastClosed(true)}
-            title="Show past and closed registrations too"
-            className={`${pillBaseClasses} ${showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
-          >
-            All
-          </button>
-        </div>
+      <div className="mb-6 bg-white shadow rounded-lg p-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Display Options
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={pillGroupClasses}>
+            <button
+              type="button"
+              onClick={() => setShowPastClosed(false)}
+              title="Hide past and closed registrations"
+              className={`${pillBaseClasses} ${!showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPastClosed(true)}
+              title="Show past and closed registrations too"
+              className={`${pillBaseClasses} ${showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
+            >
+              All
+            </button>
+          </div>
 
-        <select
-          id="sort-by"
-          aria-label="Sort by"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortOption)}
-          className="border-gray-300 rounded-md shadow-sm text-sm py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
-        >
-          <option value="name-asc">Sort: Name A–Z</option>
-          <option value="name-desc">Sort: Name Z–A</option>
-          <option value="date">Sort: Date</option>
-        </select>
+          <select
+            id="sort-by"
+            aria-label="Sort by"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="border-gray-300 rounded-md shadow-sm text-sm py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="name-asc">Sort: Name A–Z</option>
+            <option value="name-desc">Sort: Name Z–A</option>
+            <option value="date">Sort: Date</option>
+          </select>
+        </div>
       </div>
 
       {/* Error */}

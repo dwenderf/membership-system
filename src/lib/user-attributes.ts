@@ -33,10 +33,3 @@ export function getGoalieStatusLabel(isGoalie: boolean): string {
 export function getGoalieStatusStyles(isGoalie: boolean): string {
   return isGoalie ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
 }
-
-/**
- * Get CSS classes for category pill styling
- */
-export function getCategoryPillStyles(): string {
-  return 'bg-indigo-100 text-indigo-800'
-}

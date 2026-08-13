@@ -30,6 +30,15 @@ export default function EmailComposerModal({
   const bodyTrimmed = body.trim()
   const isValid = subjectTrimmed.length > 0 && bodyTrimmed.length > 0
 
+  const handleCopyEmails = async () => {
+    try {
+      await navigator.clipboard.writeText(recipients.map(r => r.email).join(', '))
+      showSuccess(`Copied ${recipients.length} email address${recipients.length !== 1 ? 'es' : ''}`)
+    } catch {
+      showError('Failed to copy emails')
+    }
+  }
+
   const handleSend = async () => {
     if (!isValid || isSending) return
     setIsSending(true)
@@ -68,14 +77,26 @@ export default function EmailComposerModal({
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
           {/* Recipients */}
           <div>
-            <button
-              type="button"
-              onClick={() => setShowRecipients(v => !v)}
-              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-            >
-              Sending to {recipients.length} player{recipients.length !== 1 ? 's' : ''}{' '}
-              {showRecipients ? '▲' : '▼'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRecipients(v => !v)}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                Sending to {recipients.length} player{recipients.length !== 1 ? 's' : ''}{' '}
+                {showRecipients ? '▲' : '▼'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyEmails}
+                title="Copy email addresses"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
             {showRecipients && (
               <ul className="mt-2 text-sm text-gray-700 max-h-32 overflow-y-auto border border-gray-200 rounded p-2 space-y-0.5">
                 {recipients.map(r => (

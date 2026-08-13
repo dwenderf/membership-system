@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import { formatEventDateTime } from '@/lib/date-utils'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 
 interface Registration {
   id: string
   name: string
   type: string
   is_active: boolean
+  published_at?: string | null
   allow_discounts: boolean
   presale_code: string | null
   presale_start_at?: string | null
@@ -82,9 +84,15 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true, ba
   )
 }
 
-function RegistrationItem({ registration }: { registration: Registration }) {
+function RegistrationItem({
+  registration,
+  onDeleteClick
+}: {
+  registration: Registration
+  onDeleteClick: (id: string, name: string) => void
+}) {
   const status = getRegistrationStatus(registration as any)
-  
+
   return (
     <li>
       <div className="px-4 py-4 flex items-center justify-between">
@@ -129,6 +137,14 @@ function RegistrationItem({ registration }: { registration: Registration }) {
           >
             Edit
           </Link>
+          {!registration.published_at && (
+            <button
+              onClick={() => onDeleteClick(registration.id, registration.name)}
+              className="text-red-600 hover:text-red-500 text-sm font-medium"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </li>
@@ -136,23 +152,67 @@ function RegistrationItem({ registration }: { registration: Registration }) {
 }
 
 export default function RegistrationsList({ registrations }: RegistrationsListProps) {
+  const [regs, setRegs] = useState(registrations)
+  const [registrationToDelete, setRegistrationToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Group registrations by status
-  const activeRegistrations = registrations.filter(reg => {
+  const activeRegistrations = regs.filter(reg => {
     const status = getRegistrationStatus(reg as any)
     return status === 'open' || status === 'presale'
   })
-  
-  const comingSoonRegistrations = registrations.filter(reg => {
+
+  const comingSoonRegistrations = regs.filter(reg => {
     const status = getRegistrationStatus(reg as any)
     return status === 'coming_soon'
   })
-  
-  const draftRegistrations = registrations.filter(reg => !reg.is_active)
-  
-  const closedRegistrations = registrations.filter(reg => {
+
+  const draftRegistrations = regs.filter(reg => !reg.is_active)
+
+  const closedRegistrations = regs.filter(reg => {
     const status = getRegistrationStatus(reg as any)
     return status === 'expired' || status === 'past'
   })
+
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteError(null)
+    setRegistrationToDelete({ id, name })
+    setDeleteDialogOpen(true)
+  }
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false)
+    setRegistrationToDelete(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!registrationToDelete) return
+
+    try {
+      setDeleting(true)
+      setDeleteError(null)
+
+      const response = await fetch(`/api/admin/registrations/${registrationToDelete.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete registration')
+      }
+
+      setRegs(prev => prev.filter(r => r.id !== registrationToDelete.id))
+      setDeleteDialogOpen(false)
+      setRegistrationToDelete(null)
+    } catch (err) {
+      console.error('Error deleting registration:', err)
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete registration')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -163,7 +223,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
         defaultExpanded={true}
       >
         {draftRegistrations.map(registration => (
-          <RegistrationItem key={registration.id} registration={registration} />
+          <RegistrationItem key={registration.id} registration={registration} onDeleteClick={handleDeleteClick} />
         ))}
       </CollapsibleSection>
 
@@ -174,7 +234,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
         defaultExpanded={true}
       >
         {activeRegistrations.map(registration => (
-          <RegistrationItem key={registration.id} registration={registration} />
+          <RegistrationItem key={registration.id} registration={registration} onDeleteClick={handleDeleteClick} />
         ))}
       </CollapsibleSection>
 
@@ -185,7 +245,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
         defaultExpanded={true}
       >
         {comingSoonRegistrations.map(registration => (
-          <RegistrationItem key={registration.id} registration={registration} />
+          <RegistrationItem key={registration.id} registration={registration} onDeleteClick={handleDeleteClick} />
         ))}
       </CollapsibleSection>
 
@@ -196,9 +256,29 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
         defaultExpanded={false}
       >
         {closedRegistrations.map(registration => (
-          <RegistrationItem key={registration.id} registration={registration} />
+          <RegistrationItem key={registration.id} registration={registration} onDeleteClick={handleDeleteClick} />
         ))}
       </CollapsibleSection>
+
+      <ConfirmationDialog
+        isOpen={deleteDialogOpen}
+        title="Delete Registration"
+        message={
+          <div>
+            <p>Are you sure you want to delete <strong>{registrationToDelete?.name}</strong>?</p>
+            <p className="mt-2 text-sm text-gray-600">This will permanently delete the registration and all its categories. This cannot be undone.</p>
+            {deleteError && (
+              <p className="mt-2 text-sm text-red-600">{deleteError}</p>
+            )}
+          </div>
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        isLoading={deleting}
+        variant="danger"
+      />
     </div>
   )
 }

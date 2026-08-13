@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
-import SeasonSelector from '@/components/SeasonSelector'
+import SeasonSelector, { pillGroupClasses, pillBaseClasses, pillActiveClasses, pillInactiveClasses } from '@/components/SeasonSelector'
 import { createClient } from '@/lib/supabase/client'
 import { getDefaultSeasonId, SeasonSummary } from '@/lib/utils/season-utils'
 import { formatEventDateTime } from '@/lib/date-utils'
@@ -211,48 +211,49 @@ export default function RegistrationReportsPage() {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Registration Reports</h1>
 
-      {/* Controls */}
-      <div className="mb-6 bg-white shadow rounded-lg p-4 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Filter by Season
-          </label>
-          <SeasonSelector
-            seasons={seasons}
-            selectedSeasonId={selectedSeason}
-            onSelect={setSelectedSeason}
-          />
-        </div>
+      {/* Season filter */}
+      <div className="mb-4 bg-white shadow rounded-lg p-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Filter by Season
+        </label>
+        <SeasonSelector
+          seasons={seasons}
+          selectedSeasonId={selectedSeason}
+          onSelect={setSelectedSeason}
+        />
+      </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-          <div className="sm:w-56">
-            <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 mb-1">
-              Sort by
-            </label>
-            <select
-              id="sort-by"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            >
-              <option value="name-asc">Name A–Z</option>
-              <option value="name-desc">Name Z–A</option>
-              <option value="date">Date</option>
-            </select>
-          </div>
+      {/* Sort + visibility toolbar */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <select
+          id="sort-by"
+          aria-label="Sort by"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          className="border-gray-300 rounded-md shadow-sm text-sm py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="name-asc">Sort: Name A–Z</option>
+          <option value="name-desc">Sort: Name Z–A</option>
+          <option value="date">Sort: Date</option>
+        </select>
 
-          <div className="flex items-center sm:pb-2">
-            <input
-              id="show-past-closed"
-              type="checkbox"
-              checked={showPastClosed}
-              onChange={(e) => setShowPastClosed(e.target.checked)}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-            />
-            <label htmlFor="show-past-closed" className="ml-2 text-sm text-gray-900">
-              Show past/closed registrations
-            </label>
-          </div>
+        <div className={`${pillGroupClasses} ml-auto`}>
+          <button
+            type="button"
+            onClick={() => setShowPastClosed(false)}
+            title="Hide past and closed registrations"
+            className={`${pillBaseClasses} ${!showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPastClosed(true)}
+            title="Show past and closed registrations too"
+            className={`${pillBaseClasses} ${showPastClosed ? pillActiveClasses : pillInactiveClasses}`}
+          >
+            All
+          </button>
         </div>
       </div>
 
@@ -282,7 +283,7 @@ export default function RegistrationReportsPage() {
         <div className="py-12 text-center">
           <p className="text-gray-500">No registrations found matching your filters.</p>
           {!showPastClosed && (
-            <p className="text-sm text-gray-400 mt-2">Try enabling "Show past/closed registrations" to see more results.</p>
+            <p className="text-sm text-gray-400 mt-2">Try switching to "All" to see more results.</p>
           )}
         </div>
       ) : (

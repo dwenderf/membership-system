@@ -8,9 +8,10 @@ interface SeasonSelectorProps {
   onSelect: (seasonId: string) => void
 }
 
-const pillBaseClasses = 'px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors'
-const pillActiveClasses = 'bg-blue-600 text-white'
-const pillInactiveClasses = 'text-gray-600 hover:bg-white hover:text-gray-800'
+export const pillGroupClasses = 'flex items-center space-x-1 bg-gray-100 rounded-md p-1'
+export const pillBaseClasses = 'px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors'
+export const pillActiveClasses = 'bg-blue-600 text-white'
+export const pillInactiveClasses = 'text-gray-600 hover:bg-white hover:text-gray-800'
 
 export default function SeasonSelector({ seasons, selectedSeasonId, onSelect }: SeasonSelectorProps) {
   const { current, next, other } = classifySeasons(seasons)
@@ -18,7 +19,7 @@ export default function SeasonSelector({ seasons, selectedSeasonId, onSelect }: 
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
+      <div className={pillGroupClasses}>
         {current && (
           <button
             type="button"

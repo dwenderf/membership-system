@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles, getCategoryPillStyles } from '@/lib/user-attributes'
+import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
+import { getCategoryColors } from '@/lib/badge-colors'
 import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 import FinancialSummary from '@/components/FinancialSummary'
@@ -369,8 +370,8 @@ export default function CaptainRosterPage() {
                     onClick={() => toggleCategoryFilter(name)}
                     className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                       categoryFilter === name
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                        ? getCategoryColors(name).chipActive
+                        : getCategoryColors(name).chipInactive
                     }`}
                   >
                     {name}
@@ -590,7 +591,7 @@ export default function CaptainRosterPage() {
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryColors(member.category_name).pill}`}>
                           {member.category_name}
                         </span>
                       </td>
@@ -706,7 +707,7 @@ export default function CaptainRosterPage() {
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryPillStyles()}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryColors(waitlist.category_name).pill}`}>
                             {waitlist.category_name}
                           </span>
                         </td>

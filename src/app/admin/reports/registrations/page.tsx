@@ -225,19 +225,7 @@ export default function RegistrationReportsPage() {
 
       {/* Sort + visibility toolbar */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <select
-          id="sort-by"
-          aria-label="Sort by"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortOption)}
-          className="border-gray-300 rounded-md shadow-sm text-sm py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
-        >
-          <option value="name-asc">Sort: Name A–Z</option>
-          <option value="name-desc">Sort: Name Z–A</option>
-          <option value="date">Sort: Date</option>
-        </select>
-
-        <div className={`${pillGroupClasses} ml-auto`}>
+        <div className={pillGroupClasses}>
           <button
             type="button"
             onClick={() => setShowPastClosed(false)}
@@ -255,6 +243,18 @@ export default function RegistrationReportsPage() {
             All
           </button>
         </div>
+
+        <select
+          id="sort-by"
+          aria-label="Sort by"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          className="border-gray-300 rounded-md shadow-sm text-sm py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="name-asc">Sort: Name A–Z</option>
+          <option value="name-desc">Sort: Name Z–A</option>
+          <option value="date">Sort: Date</option>
+        </select>
       </div>
 
       {/* Error */}

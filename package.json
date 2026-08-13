@@ -56,8 +56,7 @@
     "lightningcss-linux-x64-gnu": "1.30.1"
   },
   "overrides": {
-    "qs": "^6.14.2",
-    "postcss": "^8.5.10"
+    "js-yaml": "^5.2.3"
   },
   "//overrides": "Temporary overrides to force patched versions of transitive deps with security vulnerabilities. Remove each entry once the upstream package has updated. See dependency-overrides.md for details."
 }

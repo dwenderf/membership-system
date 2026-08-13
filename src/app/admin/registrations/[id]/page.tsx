@@ -15,6 +15,7 @@ import EditableRegistrationMembership from '@/components/EditableRegistrationMem
 import EditableSurveyConfiguration from '@/components/EditableSurveyConfiguration'
 import GamesPreview from '@/components/GamesPreview'
 import CaptainManager from '@/components/CaptainManager'
+import DeleteRegistrationButton from '@/components/DeleteRegistrationButton'
 
 export default async function RegistrationDetailPage({
   params,
@@ -121,6 +122,12 @@ export default async function RegistrationDetailPage({
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                       Not Published
                     </span>
+                  )}
+                  {!registration.published_at && (
+                    <DeleteRegistrationButton
+                      registrationId={id}
+                      registrationName={registration.name}
+                    />
                   )}
                 </div>
                 <p className="mt-1 text-sm text-gray-600">

@@ -238,6 +238,11 @@ export default function EditRegistrationTimingPage() {
                     : "Registration is in draft mode and hidden from all users."
                   }
                 </p>
+                {!formData.is_active && (
+                  <p className="mt-2 text-sm text-yellow-700">
+                    Once published, this registration can no longer be deleted — only closed by ending its registration window.
+                  </p>
+                )}
               </div>
 
               {/* Info Section */}

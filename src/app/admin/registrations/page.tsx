@@ -32,6 +32,7 @@ export default async function RegistrationsPage() {
       name,
       type,
       is_active,
+      published_at,
       allow_discounts,
       presale_code,
       presale_start_at,

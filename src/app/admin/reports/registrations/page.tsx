@@ -214,7 +214,7 @@ export default function RegistrationReportsPage() {
       {/* Season filter */}
       <div className="mb-4 bg-white shadow rounded-lg p-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Filter by Season
+          Season
         </label>
         <SeasonSelector
           seasons={seasons}

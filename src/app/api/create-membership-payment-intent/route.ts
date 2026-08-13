@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
@@ -11,10 +11,6 @@ import { centsToCents } from '@/types/currency'
 // Force import server config
 
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 // Handle free membership purchases (amount = 0)
 async function handleFreeMembership({
@@ -88,7 +84,6 @@ async function handleFreeMembership({
 
     const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
     
-
 
     
     // Get accounting codes from system_accounting_codes (only needed if applying discount)
@@ -257,7 +252,6 @@ async function handleFreeMembership({
 
     // Payment items are now tracked in xero_invoice_line_items via the staging system
     // No need to create separate payment_items records
-
 
     // Use provided dates directly if available, otherwise calculate them
     let startDate: Date, endDate: Date
@@ -718,7 +712,7 @@ export async function POST(request: NextRequest) {
       paymentIntentParams.customer = userProfile.stripe_customer_id
     }
     
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await getStripe().paymentIntents.create({
       ...paymentIntentParams,
       shipping: {
         name: `${userProfile.first_name} ${userProfile.last_name}`,
@@ -814,7 +808,6 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
-
 
     if (paymentError) {
       logger.logPaymentProcessing(

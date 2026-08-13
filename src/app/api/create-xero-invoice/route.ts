@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the payment intent from Stripe to access metadata
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId)
 
     // Verify this payment intent belongs to the authenticated user
     if (paymentIntent.metadata.userId !== user.id) {

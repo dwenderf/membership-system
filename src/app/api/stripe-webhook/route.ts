@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { formatDate } from '@/lib/date-utils'
 
 import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createAdminClient } from '@/lib/supabase/server'
 import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/membership-utils'
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
@@ -73,7 +74,7 @@ import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {
   try {
     // Retrieve the payment intent with expanded charge and balance transaction to get actual fees
-    const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+    const expandedPaymentIntent = await getStripe().paymentIntents.retrieve(paymentIntent.id, {
       expand: ['latest_charge', 'latest_charge.balance_transaction']
     })
 
@@ -105,7 +106,7 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
 
       // Fallback: retrieve the charge directly to get the fee
       console.log(`🔍 Balance transaction not available, retrieving charge directly...`)
-      const charge = await stripe.charges.retrieve(chargeId as string, {
+      const charge = await getStripe().charges.retrieve(chargeId as string, {
         expand: ['balance_transaction']
       })
 
@@ -141,10 +142,6 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
     return { fee: 0, chargeId: null }
   }
 }
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
@@ -564,7 +561,7 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
     }
 
     // Get the balance transaction to retrieve the fee
-    const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction as string)
+    const balanceTransaction = await getStripe().balanceTransactions.retrieve(charge.balance_transaction as string)
 
     if (!balanceTransaction || !balanceTransaction.fee) {
       console.log('⚠️ No fee found in balance transaction:', charge.balance_transaction)
@@ -595,7 +592,6 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
     console.error('❌ Error processing charge updated event:', error)
   }
 }
-
 
 // Handle charge refunded events
 async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
@@ -793,7 +789,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, endpointSecret)
+    event = getStripe().webhooks.constructEvent(body, signature, endpointSecret)
 
     // Log webhook event immediately after signature verification
     console.log('🔄 Webhook event received:', {
@@ -818,10 +814,7 @@ export async function POST(request: NextRequest) {
 
   try {
 
-
-
     switch (event.type) {
-
 
       case 'charge.updated': {
         const charge = event.data.object as Stripe.Charge
@@ -846,12 +839,10 @@ export async function POST(request: NextRequest) {
         break
       }
 
-
-
       case 'charge.refunded': {
         // Retrieve the charge with expanded refunds data
         const chargeId = (event.data.object as Stripe.Charge).id
-        const charge = await stripe.charges.retrieve(chargeId, {
+        const charge = await getStripe().charges.retrieve(chargeId, {
           expand: ['refunds']
         })
 
@@ -1437,7 +1428,6 @@ export async function POST(request: NextRequest) {
               }
               console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
             }
-
 
             // Create payment plan (with idempotency - may already exist if webhook retried)
             const totalAmount = parseInt(paymentIntent.metadata.paymentPlanTotalAmount || '0')

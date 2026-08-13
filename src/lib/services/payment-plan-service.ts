@@ -1,14 +1,10 @@
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 import { toDateString } from '@/lib/date-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export interface PaymentPlanCreationData {
   userRegistrationId: string
@@ -269,7 +265,7 @@ export class PaymentPlanService {
       const registrationName = userReg.registration?.name || 'Registration'
       const seasonName = userReg.registration?.season?.name || ''
 
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: centsToCents(xeroPayment.amount_paid),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,
@@ -589,7 +585,7 @@ export class PaymentPlanService {
       }
 
       // Step 4: Charge Stripe (webhook will handle completion)
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: centsToCents(remainingBalance),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,

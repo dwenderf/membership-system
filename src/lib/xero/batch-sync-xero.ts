@@ -32,14 +32,17 @@ type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & 
 type XeroPaymentRecord = Database['public']['Tables']['xero_payments']['Row']
 
 export class XeroBatchSyncManager {
-  private supabase: ReturnType<typeof createAdminClient>
+  private _supabase: ReturnType<typeof createAdminClient> | null = null
   private isRunning: boolean = false
   private lastRunTime: Date | null = null
   private currentRunPromise: Promise<any> | null = null
   private readonly MIN_DELAY_BETWEEN_SYNCS = 2000 // 2 seconds minimum delay between syncs
 
-  constructor() {
-    this.supabase = createAdminClient()
+  private get supabase(): ReturnType<typeof createAdminClient> {
+    if (!this._supabase) {
+      this._supabase = createAdminClient()
+    }
+    return this._supabase
   }
 
   /**

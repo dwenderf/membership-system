@@ -28,6 +28,28 @@ jobs:
     - name: Run tests
       run: npm test -- --passWithNoTests
 
+    - name: Run lint
+      run: npm run lint
+
+    - name: Run build
+      run: npm run build
+      env:
+        NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_anon_key
+        SUPABASE_SERVICE_ROLE_KEY: placeholder_service_role_key
+        STRIPE_SECRET_KEY: sk_test_placeholder
+        STRIPE_API_VERSION: "2025-01-01"
+        STRIPE_WEBHOOK_SECRET: whsec_placeholder
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+        XERO_CLIENT_ID: placeholder_xero_client_id
+        XERO_CLIENT_SECRET: placeholder_xero_client_secret
+        XERO_REDIRECT_URI: https://placeholder.example.com/xero/callback
+        XERO_SCOPES: placeholder_scopes
+        ADMIN_SECRET: placeholder_admin_secret
+        CRON_SECRET: placeholder_cron_secret
+        NEXT_PUBLIC_SITE_URL: https://placeholder.example.com
+        NEXT_PUBLIC_APP_TIMEZONE: America/New_York
+
     - name: Upload coverage reports (optional)
       if: always()
       uses: actions/upload-artifact@v4

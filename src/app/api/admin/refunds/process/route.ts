@@ -2,11 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
+import { getStripe } from '@/lib/stripe/server-client'
 
 /**
  * Helper function to update user registrations to refunded status
@@ -317,7 +313,7 @@ export async function POST(request: NextRequest) {
         .eq('id', refund.id)
 
       // Submit to Stripe with staging ID in metadata for webhook matching
-      const stripeRefund = await stripe.refunds.create({
+      const stripeRefund = await getStripe().refunds.create({
         payment_intent: payment.stripe_payment_intent_id,
         amount: refund.amount,
         reason: 'requested_by_customer',

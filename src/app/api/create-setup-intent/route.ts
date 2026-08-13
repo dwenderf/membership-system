@@ -1,10 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as Stripe.LatestApiVersion,
-})
+import { getStripe } from '@/lib/stripe/server-client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +29,7 @@ export async function POST(request: NextRequest) {
     // If updating and customer exists, use existing customer
     // Otherwise create new customer
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: user.email || '',
         metadata: {
           supabase_user_id: user.id,
@@ -55,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Setup Intent (only 'card' payment method type - no Link)
-    const setupIntent = await stripe.setupIntents.create({
+    const setupIntent = await getStripe().setupIntents.create({
       customer: customerId,
       payment_method_types: ['card'],
       usage: 'off_session', // For future payments

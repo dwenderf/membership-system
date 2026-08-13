@@ -1,4 +1,3 @@
-import Stripe from 'stripe'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
@@ -7,12 +6,7 @@ import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: process.env.STRIPE_API_VERSION as any,
-  })
-}
+import { getStripe } from '@/lib/stripe/server-client'
 
 export interface WaitlistChargeResult {
   paymentId: string

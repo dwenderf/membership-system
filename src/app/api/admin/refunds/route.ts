@@ -5,11 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 // Removed old direct Xero API call - using staging workflow instead
 import { emailService } from '@/lib/email/service'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
+import { getStripe } from '@/lib/stripe/server-client'
 
 // POST /api/admin/refunds - Process new refunds
 export async function POST(request: NextRequest) {
@@ -130,7 +126,7 @@ export async function POST(request: NextRequest) {
         .update({ status: 'processing' })
         .eq('id', refundRecord.id)
 
-      const stripeRefund = await stripe.refunds.create({
+      const stripeRefund = await getStripe().refunds.create({
         payment_intent: payment.stripe_payment_intent_id,
         amount: amount,
         reason: 'requested_by_customer',

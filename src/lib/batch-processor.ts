@@ -30,7 +30,14 @@ export interface RetryStrategy {
 }
 
 export class BatchProcessor {
-  private supabase: ReturnType<typeof createAdminClient>
+  private _supabase: ReturnType<typeof createAdminClient> | null = null
+
+  private get supabase(): ReturnType<typeof createAdminClient> {
+    if (!this._supabase) {
+      this._supabase = createAdminClient()
+    }
+    return this._supabase
+  }
 
   // Default retry strategies for different operation types
   private readonly retryStrategies: Record<string, RetryStrategy> = {
@@ -55,10 +62,6 @@ export class BatchProcessor {
       backoffMultiplier: 4,   // Quadruple each time
       jitterMs: 500
     }
-  }
-
-  constructor() {
-    this.supabase = createAdminClient()
   }
 
   /**

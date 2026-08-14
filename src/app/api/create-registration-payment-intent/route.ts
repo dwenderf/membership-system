@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
@@ -14,10 +14,6 @@ import { RegistrationValidationService } from '@/lib/services/registration-valid
 // Force import server config
 
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 // Handle free registration purchases (amount = 0)
 async function handleFreeRegistration({
@@ -397,7 +393,6 @@ async function handleFreeRegistration({
     // Payment items are now tracked in xero_invoice_line_items via the staging system
     // No need to create separate payment_items records
 
-
     // Registration already created with correct status (paid), no update needed
 
     // Note: Discount usage is now tracked via discount_usage_computed view
@@ -711,7 +706,7 @@ export async function POST(request: NextRequest) {
               },
               'info'
             )
-            const paymentIntent = await stripe.paymentIntents.retrieve(processingRecord.stripe_payment_intent_id)
+            const paymentIntent = await getStripe().paymentIntents.retrieve(processingRecord.stripe_payment_intent_id)
             
             if (paymentIntent.status === 'succeeded') {
               // Payment succeeded but our DB wasn't updated - fix it
@@ -1270,7 +1265,7 @@ export async function POST(request: NextRequest) {
       paymentIntentParams.customer = userProfile.stripe_customer_id
     }
     
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await getStripe().paymentIntents.create({
       ...paymentIntentParams,
       shipping: {
         name: `${userProfile.first_name} ${userProfile.last_name}`,
@@ -1365,7 +1360,6 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single()
-
 
     if (paymentError) {
       logger.logPaymentProcessing(
@@ -1470,8 +1464,6 @@ export async function POST(request: NextRequest) {
           // Payment items are now tracked in xero_invoice_line_items via the staging system
     // No need to create separate payment_items records
     }
-
-
 
     // Log successful operation
     capturePaymentSuccess('registration_payment_intent_creation', paymentContext, Date.now() - startTime)

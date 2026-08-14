@@ -1,11 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as Stripe.LatestApiVersion,
-})
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get payment method details from Stripe
-    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId)
+    const paymentMethod = await getStripe().paymentMethods.retrieve(paymentMethodId)
 
     return NextResponse.json({
       paymentMethod: {

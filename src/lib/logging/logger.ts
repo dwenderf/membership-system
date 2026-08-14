@@ -29,14 +29,16 @@
 
 import { formatTime } from '@/lib/date-utils'
 
-// Only import fs on server side
+// Only import fs on server side, and only lazily so Next's build-time
+// output-file tracing doesn't treat this module as an unconditional fs
+// dependency for every route that imports the logger.
 let fs: any = null
 let path: any = null
 
-if (typeof window === 'undefined') {
-  // Server-side only
-  fs = require('fs')
-  path = require('path')
+function ensureFsModules(): void {
+  if (typeof window !== 'undefined') return
+  if (!fs) fs = require('fs')
+  if (!path) path = require('path')
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -73,6 +75,7 @@ export class Logger {
   }
 
   constructor() {
+    ensureFsModules()
     if (typeof window === 'undefined' && path) {
       this.logDir = path.join(process.cwd(), 'logs')
       
@@ -105,10 +108,11 @@ export class Logger {
    * Ensure log directory exists
    */
   private ensureLogDirectory(): void {
+    ensureFsModules()
     if (!fs || !path) return // Client-side or no fs available
     
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true })
+    if (!fs.existsSync(/* turbopackIgnore: true */ this.logDir)) {
+      fs.mkdirSync(/* turbopackIgnore: true */ this.logDir, { recursive: true })
     }
   }
 
@@ -116,6 +120,7 @@ export class Logger {
    * Get current log file path
    */
   private getLogFilePath(category: LogCategory): string {
+    ensureFsModules()
     if (!fs || !path) return '' // Client-side or no fs available
     const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
     return path.join(this.logDir, `${category}-${date}.log`)
@@ -154,20 +159,21 @@ export class Logger {
       return
     }
 
+    ensureFsModules()
     try {
       const filePath = this.getLogFilePath(entry.category)
       const logLine = JSON.stringify(entry) + '\n'
       
       // Check if file needs rotation
-      if (fs && fs.existsSync(filePath)) {
-        const stats = fs.statSync(filePath)
+      if (fs && fs.existsSync(/* turbopackIgnore: true */ filePath)) {
+        const stats = fs.statSync(/* turbopackIgnore: true */ filePath)
         if (stats.size > this.maxFileSize) {
           this.rotateLogFile(entry.category)
         }
       }
-      
+
       if (fs) {
-        fs.appendFileSync(filePath, logLine, 'utf8')
+        fs.appendFileSync(/* turbopackIgnore: true */ filePath, logLine, 'utf8')
       }
     } catch (error) {
       console.error('Failed to write to log file:', error)
@@ -178,6 +184,7 @@ export class Logger {
    * Rotate log file when it gets too large
    */
   private rotateLogFile(category: LogCategory): void {
+    ensureFsModules()
     if (!fs || !path) return // Client-side or no fs available
     
     try {
@@ -186,9 +193,9 @@ export class Logger {
       const currentFile = path.join(this.logDir, `${category}-${date}.log`)
       const rotatedFile = path.join(this.logDir, `${category}-${date}-${timestamp}.log`)
       
-      if (fs.existsSync(currentFile)) {
+      if (fs.existsSync(/* turbopackIgnore: true */ currentFile)) {
         // Rename current file
-        fs.renameSync(currentFile, rotatedFile)
+        fs.renameSync(/* turbopackIgnore: true */ currentFile, rotatedFile)
       }
       
       // Clean up old log files
@@ -202,23 +209,24 @@ export class Logger {
    * Clean up old log files
    */
   private cleanupOldLogs(category: LogCategory): void {
+    ensureFsModules()
     if (!fs || !path) return // Client-side or no fs available
     
     try {
-      const files = fs.readdirSync(this.logDir)
+      const files = fs.readdirSync(/* turbopackIgnore: true */ this.logDir)
         .filter((file: string) => file.startsWith(`${category}-`) && file.endsWith('.log'))
         .map((file: string) => ({
           name: file,
           path: path.join(this.logDir, file),
-          mtime: fs.statSync(path.join(this.logDir, file)).mtime
+          mtime: fs.statSync(/* turbopackIgnore: true */ path.join(this.logDir, file)).mtime
         }))
         .sort((a: any, b: any) => b.mtime.getTime() - a.mtime.getTime())
 
       // Keep only the most recent files
       const filesToDelete = files.slice(this.maxFiles)
-      
+
       for (const file of filesToDelete) {
-        fs.unlinkSync(file.path)
+        fs.unlinkSync(/* turbopackIgnore: true */ file.path)
         console.log(`🗑️ Cleaned up old log file: ${file.name}`)
       }
     } catch (error) {
@@ -612,11 +620,12 @@ export class Logger {
       return []
     }
 
+    ensureFsModules()
     if (!fs || !path) return [] // Client-side or no fs available
-    
+
     try {
       const logs: LogEntry[] = []
-      const files = fs.readdirSync(this.logDir)
+      const files = fs.readdirSync(/* turbopackIgnore: true */ this.logDir)
         .filter((file: string) => {
           if (!file.endsWith('.log')) return false
           if (category && !file.startsWith(`${category}-`)) return false
@@ -626,7 +635,7 @@ export class Logger {
 
       for (const file of files) {
         const filePath = path.join(this.logDir, file)
-        const content = fs.readFileSync(filePath, 'utf8')
+        const content = fs.readFileSync(/* turbopackIgnore: true */ filePath, 'utf8')
         
         const lines = content.trim().split('\n').filter((line: string) => line.trim())
         

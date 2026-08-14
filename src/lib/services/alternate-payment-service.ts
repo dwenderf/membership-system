@@ -1,4 +1,4 @@
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
@@ -7,10 +7,6 @@ import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export interface AlternateChargeResult {
   paymentId: string
@@ -169,7 +165,7 @@ export class AlternatePaymentService {
       }
 
       // Create Payment Intent for the charge
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: centsToCents(finalAmount),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,

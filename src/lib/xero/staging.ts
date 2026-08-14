@@ -110,10 +110,13 @@ export type StagingPaymentData = {
 }
 
 export class XeroStagingManager {
-  private supabase: ReturnType<typeof createAdminClient>
+  private _supabase: ReturnType<typeof createAdminClient> | null = null
 
-  constructor() {
-    this.supabase = createAdminClient()
+  private get supabase(): ReturnType<typeof createAdminClient> {
+    if (!this._supabase) {
+      this._supabase = createAdminClient()
+    }
+    return this._supabase
   }
 
   /**

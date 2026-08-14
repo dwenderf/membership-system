@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-service'
@@ -8,10 +8,6 @@ import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-servi
 
 import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -53,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Retrieve the payment intent from Stripe
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId)
 
     // Update context with payment details
     paymentContext.amountCents = paymentIntent.amount

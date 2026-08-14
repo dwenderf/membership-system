@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Verify the payment method still exists and is usable
     try {
-      await stripe.paymentMethods.retrieve(paymentMethodId)
+      await getStripe().paymentMethods.retrieve(paymentMethodId)
     } catch (error) {
       console.error('Saved payment method no longer valid:', error)
       return NextResponse.json({ error: 'Saved payment method is no longer valid' }, { status: 400 })

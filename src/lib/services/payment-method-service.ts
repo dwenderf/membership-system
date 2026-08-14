@@ -1,10 +1,7 @@
 import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 /**
  * Check if a user has a valid saved payment method
@@ -66,12 +63,12 @@ export async function savePaymentMethodFromIntent(
 
     if (customerId) {
       // Attach payment method to customer if not already attached
-      const paymentMethod = await stripe.paymentMethods.retrieve(
+      const paymentMethod = await getStripe().paymentMethods.retrieve(
         paymentIntent.payment_method as string
       )
 
       if (paymentMethod.customer !== customerId) {
-        await stripe.paymentMethods.attach(
+        await getStripe().paymentMethods.attach(
           paymentIntent.payment_method as string,
           { customer: customerId }
         )

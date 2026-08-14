@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as Stripe.LatestApiVersion,
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Retrieve the setup intent from Stripe to validate
-    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+    const setupIntent = await getStripe().setupIntents.retrieve(setupIntentId)
 
     if (setupIntent.status !== 'succeeded') {
       return NextResponse.json({ error: `Setup intent not succeeded (status: ${setupIntent.status})` }, { status: 400 })

@@ -1,12 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { logger } from '@/lib/logging/logger'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as Stripe.LatestApiVersion,
-})
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -55,7 +51,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Detach payment method from Stripe
-    await stripe.paymentMethods.detach(userProfile.stripe_payment_method_id)
+    await getStripe().paymentMethods.detach(userProfile.stripe_payment_method_id)
 
     logger.logPaymentProcessing(
       'payment-method-removed',

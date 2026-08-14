@@ -1,11 +1,8 @@
 import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: process.env.STRIPE_API_VERSION as any,
-})
 
 export interface SetupIntentResult {
   setupIntent: Stripe.SetupIntent
@@ -40,7 +37,7 @@ export class SetupIntentService {
       }
 
       // Create Setup Intent
-      const setupIntent = await stripe.setupIntents.create({
+      const setupIntent = await getStripe().setupIntents.create({
         customer: undefined, // We'll create customer on confirmation if needed
         payment_method_types: ['card'],
         usage: 'off_session', // For future payments
@@ -111,7 +108,7 @@ export class SetupIntentService {
    */
   static async confirmSetupIntent(setupIntentId: string): Promise<PaymentMethodInfo> {
     try {
-      const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+      const setupIntent = await getStripe().setupIntents.retrieve(setupIntentId)
       
       if (setupIntent.status !== 'succeeded') {
         throw new Error(`Setup Intent not succeeded: ${setupIntent.status}`)
@@ -122,7 +119,7 @@ export class SetupIntentService {
       }
 
       // Get payment method details
-      const paymentMethod = await stripe.paymentMethods.retrieve(
+      const paymentMethod = await getStripe().paymentMethods.retrieve(
         setupIntent.payment_method as string
       )
 
@@ -199,7 +196,7 @@ export class SetupIntentService {
   static async detachPaymentMethod(paymentMethodId: string, userId: string): Promise<void> {
     try {
       // Detach from Stripe
-      await stripe.paymentMethods.detach(paymentMethodId)
+      await getStripe().paymentMethods.detach(paymentMethodId)
 
       // Update user record
       const adminSupabase = createAdminClient()
@@ -289,7 +286,7 @@ export class SetupIntentService {
       }
 
       // Get payment method from Stripe
-      const paymentMethod = await stripe.paymentMethods.retrieve(user.stripe_payment_method_id)
+      const paymentMethod = await getStripe().paymentMethods.retrieve(user.stripe_payment_method_id)
       
       if (!paymentMethod.card) {
         return null

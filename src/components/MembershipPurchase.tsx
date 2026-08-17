@@ -163,16 +163,25 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
+    if (paymentOption === 'assistance') {
+      const trimmed = requestedPurchaseAmount.trim()
+      const parsed = parseFloat(trimmed)
+      if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
+        setError(`Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`)
+        return
+      }
+    }
+
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const paymentData: PaymentFlowData = {
         amount: finalAmount,
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined, // Positive assistance amount (amount being discounted)
+        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - (parseFloat(requestedPurchaseAmount) || 0) * 100) : undefined, // Positive assistance amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],
@@ -293,10 +302,19 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const handleUseDifferentMethod = async () => {
     if (!selectedDuration || !paymentOption) return
 
+    if (paymentOption === 'assistance') {
+      const trimmed = requestedPurchaseAmount.trim()
+      const parsed = parseFloat(trimmed)
+      if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
+        setError(`Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`)
+        return
+      }
+    }
+
     setShowConfirmationScreen(false)
     setIsLoading(true)
     setError(null)
-    
+
     // Continue with regular payment flow (bypass saved method check)
     try {
       const paymentData: PaymentFlowData = {
@@ -304,7 +322,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
+        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - (parseFloat(requestedPurchaseAmount) || 0) * 100) : undefined,
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],

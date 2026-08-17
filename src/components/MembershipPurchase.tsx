@@ -124,6 +124,19 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
   
   const finalAmount = getFinalPaymentAmount()
+
+  // Validate the "how much can you pay" field for the assistance option.
+  // Returns an error message when the field is blank, non-numeric, negative,
+  // or exceeds the membership price; null when it's a valid amount.
+  const getAssistanceValidationError = (): string | null => {
+    if (paymentOption !== 'assistance') return null
+    const trimmed = requestedPurchaseAmount.trim()
+    const parsed = parseFloat(trimmed)
+    if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
+      return `Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`
+    }
+    return null
+  }
   
   // Set default assistance amount when duration changes
   React.useEffect(() => {
@@ -163,13 +176,10 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
-    if (paymentOption === 'assistance') {
-      const trimmed = requestedPurchaseAmount.trim()
-      const parsed = parseFloat(trimmed)
-      if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
-        setError(`Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`)
-        return
-      }
+    const assistanceError = getAssistanceValidationError()
+    if (assistanceError) {
+      setError(assistanceError)
+      return
     }
 
     setIsLoading(true)
@@ -302,13 +312,10 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const handleUseDifferentMethod = async () => {
     if (!selectedDuration || !paymentOption) return
 
-    if (paymentOption === 'assistance') {
-      const trimmed = requestedPurchaseAmount.trim()
-      const parsed = parseFloat(trimmed)
-      if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
-        setError(`Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`)
-        return
-      }
+    const assistanceError = getAssistanceValidationError()
+    if (assistanceError) {
+      setError(assistanceError)
+      return
     }
 
     setShowConfirmationScreen(false)
@@ -646,24 +653,32 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                     <span className="text-gray-900">${(selectedPrice / 100).toFixed(2)}</span>
                   </div>
                   
-                  {paymentOption === 'assistance' && (
+                  {paymentOption === 'assistance' && getAssistanceValidationError() && (
+                    <div className="text-orange-600 text-sm mt-1">
+                      Enter a valid amount above to see your total
+                    </div>
+                  )}
+
+                  {paymentOption === 'assistance' && !getAssistanceValidationError() && (
                     <div className="flex justify-between text-orange-600">
                       <span>Assistance Discount:</span>
                       <span>-${((selectedPrice - finalAmount) / 100).toFixed(2)}</span>
                     </div>
                   )}
-                  
+
                   {paymentOption === 'donation' && (
                     <div className="flex justify-between text-blue-600">
                       <span>Additional Donation:</span>
                       <span>+${((finalAmount - selectedPrice) / 100).toFixed(2)}</span>
                     </div>
                   )}
-                  
-                  <div className="flex justify-between font-medium text-lg mt-2 pt-2 border-t">
-                    <span className="text-gray-900">Total:</span>
-                    <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
-                  </div>
+
+                  {!(paymentOption === 'assistance' && getAssistanceValidationError()) && (
+                    <div className="flex justify-between font-medium text-lg mt-2 pt-2 border-t">
+                      <span className="text-gray-900">Total:</span>
+                      <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -705,16 +720,18 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       {/* Purchase Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedDuration || !paymentOption}
+        disabled={isLoading || !selectedDuration || !paymentOption || !!getAssistanceValidationError()}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
-        {isLoading 
-          ? 'Processing...' 
-          : !selectedDuration 
+        {isLoading
+          ? 'Processing...'
+          : !selectedDuration
             ? 'Select Duration to Continue'
             : !paymentOption
               ? 'Select Payment Option to Continue'
-              : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
+              : getAssistanceValidationError()
+                ? 'Enter a Valid Amount to Continue'
+                : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
         }
       </button>
 

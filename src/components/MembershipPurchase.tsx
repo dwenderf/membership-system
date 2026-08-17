@@ -516,7 +516,6 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                               ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
                               : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                           }`}
-                          placeholder="0.00"
                         />
                       </div>
                       {getAssistanceValidationError() ? (

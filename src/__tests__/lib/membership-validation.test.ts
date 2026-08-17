@@ -5,6 +5,7 @@
 import {
   validateMembershipCoverage,
   formatMembershipWarning,
+  validateAssistanceAmount,
   UserMembership,
   Season,
 } from '@/lib/membership-validation'
@@ -250,6 +251,56 @@ describe('Membership Validation Functions', () => {
       expect(result).toContain('1 month')
       expect(result).not.toContain('days')
       expect(result).not.toContain('months')
+    })
+  })
+
+  describe('validateAssistanceAmount', () => {
+    const priceCents = 3000 // $30.00
+
+    it('rejects a blank amount', () => {
+      expect(validateAssistanceAmount('', priceCents)).not.toBeNull()
+    })
+
+    it('rejects a whitespace-only amount', () => {
+      expect(validateAssistanceAmount('   ', priceCents)).not.toBeNull()
+    })
+
+    it('rejects a bare "-"', () => {
+      expect(validateAssistanceAmount('-', priceCents)).not.toBeNull()
+    })
+
+    it('rejects a bare "+"', () => {
+      expect(validateAssistanceAmount('+', priceCents)).not.toBeNull()
+    })
+
+    it('rejects non-numeric text', () => {
+      expect(validateAssistanceAmount('abc', priceCents)).not.toBeNull()
+    })
+
+    it('rejects a negative amount', () => {
+      expect(validateAssistanceAmount('-5', priceCents)).not.toBeNull()
+    })
+
+    it('rejects an amount over the membership price', () => {
+      expect(validateAssistanceAmount('31', priceCents)).not.toBeNull()
+    })
+
+    it('accepts an explicit $0', () => {
+      expect(validateAssistanceAmount('0', priceCents)).toBeNull()
+    })
+
+    it('accepts a mid-range amount', () => {
+      expect(validateAssistanceAmount('15', priceCents)).toBeNull()
+    })
+
+    it('accepts an amount exactly equal to the membership price', () => {
+      expect(validateAssistanceAmount('30', priceCents)).toBeNull()
+    })
+
+    it('includes the dollar bounds in the error message', () => {
+      const error = validateAssistanceAmount('', priceCents)
+      expect(error).toContain('$0')
+      expect(error).toContain('$30.00')
     })
   })
 })

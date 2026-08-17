@@ -13,6 +13,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 import { calculateMembershipDates, isMembershipExtension } from '@/lib/membership-utils'
+import { validateAssistanceAmount } from '@/lib/membership-validation'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -125,17 +126,9 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   
   const finalAmount = getFinalPaymentAmount()
 
-  // Validate the "how much can you pay" field for the assistance option.
-  // Returns an error message when the field is blank, non-numeric, negative,
-  // or exceeds the membership price; null when it's a valid amount.
   const getAssistanceValidationError = (): string | null => {
     if (paymentOption !== 'assistance') return null
-    const trimmed = requestedPurchaseAmount.trim()
-    const parsed = parseFloat(trimmed)
-    if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > selectedPrice) {
-      return `Please enter a valid amount between $0 and $${(selectedPrice / 100).toFixed(2)}`
-    }
-    return null
+    return validateAssistanceAmount(requestedPurchaseAmount, selectedPrice)
   }
   
   // Set default assistance amount when duration changes
@@ -518,13 +511,23 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                           step="0.01"
                           value={requestedPurchaseAmount}
                           onChange={(e) => setAssistanceAmount(e.target.value)}
-                          className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
+                          className={`block w-full pl-7 pr-3 py-2 rounded-md text-sm text-gray-900 ${
+                            getAssistanceValidationError()
+                              ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                          }`}
                           placeholder="0.00"
                         />
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Maximum: ${(selectedPrice / 100).toFixed(2)}
-                      </div>
+                      {getAssistanceValidationError() ? (
+                        <div className="text-xs text-red-600 mt-1">
+                          {getAssistanceValidationError()}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Maximum: ${(selectedPrice / 100).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -655,7 +658,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                   
                   {paymentOption === 'assistance' && getAssistanceValidationError() && (
                     <div className="text-orange-600 text-sm mt-1">
-                      Enter a valid amount above to see your total
+                      Fix the amount above to see your total
                     </div>
                   )}
 

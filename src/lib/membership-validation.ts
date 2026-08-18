@@ -116,7 +116,27 @@ export function calculateExtensionCost(
   monthsNeeded: number
 ): number {
   if (!membership.membership) return 0
-  
+
   const monthlyPrice = membership.membership.price_monthly
   return monthsNeeded * monthlyPrice
+}
+
+/**
+ * Validate the "how much are you able to pay?" field on an assistance
+ * purchase. Returns an error message when the value is blank, non-numeric,
+ * negative, or exceeds the membership price; null when it's a valid amount.
+ *
+ * requestedAmount is the raw string from the input field (dollars).
+ * priceCents is the full membership price in cents.
+ */
+export function validateAssistanceAmount(
+  requestedAmount: string,
+  priceCents: number
+): string | null {
+  const trimmed = requestedAmount.trim()
+  const parsed = parseFloat(trimmed)
+  if (trimmed === '' || isNaN(parsed) || parsed < 0 || parsed * 100 > priceCents) {
+    return `Please enter a valid amount between $0 and $${(priceCents / 100).toFixed(2)}`
+  }
+  return null
 }

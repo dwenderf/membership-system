@@ -13,6 +13,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 import { calculateMembershipDates, isMembershipExtension } from '@/lib/membership-utils'
+import { validateAssistanceAmount } from '@/lib/membership-validation'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -124,6 +125,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   }
   
   const finalAmount = getFinalPaymentAmount()
+
+  const getAssistanceValidationError = (): string | null => {
+    if (paymentOption !== 'assistance') return null
+    return validateAssistanceAmount(requestedPurchaseAmount, selectedPrice)
+  }
   
   // Set default assistance amount when duration changes
   React.useEffect(() => {
@@ -163,16 +169,22 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
+    const assistanceError = getAssistanceValidationError()
+    if (assistanceError) {
+      setError(assistanceError)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const paymentData: PaymentFlowData = {
         amount: finalAmount,
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined, // Positive assistance amount (amount being discounted)
+        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - (parseFloat(requestedPurchaseAmount) || 0) * 100) : undefined, // Positive assistance amount (amount being discounted)
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],
@@ -293,10 +305,16 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const handleUseDifferentMethod = async () => {
     if (!selectedDuration || !paymentOption) return
 
+    const assistanceError = getAssistanceValidationError()
+    if (assistanceError) {
+      setError(assistanceError)
+      return
+    }
+
     setShowConfirmationScreen(false)
     setIsLoading(true)
     setError(null)
-    
+
     // Continue with regular payment flow (bypass saved method check)
     try {
       const paymentData: PaymentFlowData = {
@@ -304,7 +322,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         membershipId: membership.id,
         durationMonths: selectedDuration,
         paymentOption: paymentOption,
-        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - parseFloat(requestedPurchaseAmount) * 100) : undefined,
+        assistanceAmount: paymentOption === 'assistance' ? (selectedPrice - (parseFloat(requestedPurchaseAmount) || 0) * 100) : undefined,
         donationAmount: paymentOption === 'donation' ? parseFloat(donationAmount) * 100 : undefined,
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],
@@ -493,13 +511,22 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                           step="0.01"
                           value={requestedPurchaseAmount}
                           onChange={(e) => setAssistanceAmount(e.target.value)}
-                          className="block w-full pl-7 pr-3 py-2 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-900"
-                          placeholder="0.00"
+                          className={`block w-full pl-7 pr-3 py-2 rounded-md text-sm text-gray-900 ${
+                            getAssistanceValidationError()
+                              ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                          }`}
                         />
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Maximum: ${(selectedPrice / 100).toFixed(2)}
-                      </div>
+                      {getAssistanceValidationError() ? (
+                        <div className="text-xs text-red-600 mt-1">
+                          {getAssistanceValidationError()}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Maximum: ${(selectedPrice / 100).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -628,24 +655,32 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                     <span className="text-gray-900">${(selectedPrice / 100).toFixed(2)}</span>
                   </div>
                   
-                  {paymentOption === 'assistance' && (
+                  {paymentOption === 'assistance' && getAssistanceValidationError() && (
+                    <div className="text-orange-600 text-sm mt-1">
+                      Fix the amount above to see your total
+                    </div>
+                  )}
+
+                  {paymentOption === 'assistance' && !getAssistanceValidationError() && (
                     <div className="flex justify-between text-orange-600">
                       <span>Assistance Discount:</span>
                       <span>-${((selectedPrice - finalAmount) / 100).toFixed(2)}</span>
                     </div>
                   )}
-                  
+
                   {paymentOption === 'donation' && (
                     <div className="flex justify-between text-blue-600">
                       <span>Additional Donation:</span>
                       <span>+${((finalAmount - selectedPrice) / 100).toFixed(2)}</span>
                     </div>
                   )}
-                  
-                  <div className="flex justify-between font-medium text-lg mt-2 pt-2 border-t">
-                    <span className="text-gray-900">Total:</span>
-                    <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
-                  </div>
+
+                  {!(paymentOption === 'assistance' && getAssistanceValidationError()) && (
+                    <div className="flex justify-between font-medium text-lg mt-2 pt-2 border-t">
+                      <span className="text-gray-900">Total:</span>
+                      <span className="text-gray-900">${(finalAmount / 100).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -687,16 +722,18 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       {/* Purchase Button */}
       <button
         onClick={handlePurchase}
-        disabled={isLoading || !selectedDuration || !paymentOption}
+        disabled={isLoading || !selectedDuration || !paymentOption || !!getAssistanceValidationError()}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
-        {isLoading 
-          ? 'Processing...' 
-          : !selectedDuration 
+        {isLoading
+          ? 'Processing...'
+          : !selectedDuration
             ? 'Select Duration to Continue'
             : !paymentOption
               ? 'Select Payment Option to Continue'
-              : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
+              : getAssistanceValidationError()
+                ? 'Enter a Valid Amount to Continue'
+                : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
         }
       </button>
 

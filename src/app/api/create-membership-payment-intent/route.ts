@@ -20,6 +20,7 @@ async function handleFreeMembership({
   membership,
   membershipId,
   durationMonths,
+  paymentOption,
   assistanceAmount,
   paymentContext,
   startTime,
@@ -32,6 +33,7 @@ async function handleFreeMembership({
   membership: any
   membershipId: string
   durationMonths: number
+  paymentOption?: string
   assistanceAmount?: number
   paymentContext: any
   startTime: number
@@ -83,9 +85,20 @@ async function handleFreeMembership({
     )
 
     const membershipAmount = durationMonths === 12 ? membership.price_annual : membership.price_monthly * durationMonths
-    
 
-    
+    // Boundary validation: an "assistance" purchase must send a valid assistance
+    // amount that reconciles with the membership price (amountToCharge is 0 here)
+    if (paymentOption === 'assistance') {
+      if (typeof assistanceAmount !== 'number' || !Number.isFinite(assistanceAmount)) {
+        capturePaymentError(new Error('Invalid assistance amount for free membership'), paymentContext, 'warning')
+        return NextResponse.json({ error: 'Invalid assistance amount' }, { status: 400 })
+      }
+      if (Math.round(assistanceAmount) !== Math.round(membershipAmount)) {
+        capturePaymentError(new Error('Assistance amount does not reconcile with membership price'), paymentContext, 'warning')
+        return NextResponse.json({ error: 'Assistance amount does not match membership price' }, { status: 400 })
+      }
+    }
+
     // Get accounting codes from system_accounting_codes (only needed if applying discount)
     const { data: accountingCodes } = await supabase
       .from('system_accounting_codes')
@@ -437,6 +450,7 @@ export async function POST(request: NextRequest) {
         membership: null, // Will fetch in function
         membershipId,
         durationMonths,
+        paymentOption,
         assistanceAmount,
         paymentContext,
         startTime,
@@ -484,8 +498,20 @@ export async function POST(request: NextRequest) {
     }
 
     const membershipAmount = getMembershipAmount()
-    
-    
+
+    // Boundary validation: an "assistance" purchase must send a valid assistance
+    // amount that reconciles with the membership price and the charged amount
+    if (paymentOption === 'assistance') {
+      if (typeof assistanceAmount !== 'number' || !Number.isFinite(assistanceAmount)) {
+        capturePaymentError(new Error('Invalid assistance amount for paid membership'), paymentContext, 'warning')
+        return NextResponse.json({ error: 'Invalid assistance amount' }, { status: 400 })
+      }
+      if (Math.round(amountToCharge + assistanceAmount) !== Math.round(membershipAmount)) {
+        capturePaymentError(new Error('Assistance amount does not reconcile with membership price'), paymentContext, 'warning')
+        return NextResponse.json({ error: 'Assistance amount does not match membership price' }, { status: 400 })
+      }
+    }
+
     // Get accounting codes from system_accounting_codes
     const { data: accountingCodes, error: accountingError } = await supabase
       .from('system_accounting_codes')

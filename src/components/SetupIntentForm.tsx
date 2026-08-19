@@ -10,6 +10,7 @@ interface SetupIntentFormProps {
   registrationName: string
   alternatePrice: number | null
   buttonText?: string
+  buttonClassName?: string
   isUpdate?: boolean
 }
 
@@ -19,6 +20,7 @@ export default function SetupIntentForm({
   registrationName,
   alternatePrice,
   buttonText = "Save Payment Method",
+  buttonClassName = "w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition-colors",
   isUpdate = false
 }: SetupIntentFormProps) {
   const stripe = useStripe()
@@ -213,7 +215,7 @@ export default function SetupIntentForm({
       <button
         type="submit"
         disabled={!stripe || isProcessing || !cardNumberComplete || !cardExpiryComplete || !cardCvcComplete || postalCode.trim().length === 0}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-md transition-colors"
+        className={buttonClassName}
       >
         {isProcessing ? 'Saving Payment Method...' : buttonText}
       </button>

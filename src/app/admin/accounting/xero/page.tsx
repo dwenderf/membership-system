@@ -133,6 +133,10 @@ function XeroIntegrationContent() {
         return 'Failed to store Xero tokens. Please check your database connection.'
       case 'callback_failed':
         return 'OAuth callback failed. Please try again.'
+      case 'missing_state':
+        return 'Your session expired before Xero redirected back. Please try connecting again.'
+      case 'state_mismatch':
+        return 'Security check failed for this connection attempt. Please try connecting again.'
       default:
         return `Connection failed: ${errorCode}. Please try again.`
     }

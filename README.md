@@ -1406,6 +1406,9 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 3. Create the matching test user(s) in the **preview** Supabase project's Auth (confirm you're targeting the preview project, not production — they're separate projects): Dashboard → Authentication → Users → Add user, with "Auto Confirm User" on and a password matching `PREVIEW_TEST_USER_PASSWORD`.
 4. Create the matching row in the app `users` table (preview project), with `onboarding_completed_at` and `terms_accepted_at` set and `is_admin` set appropriately. Simplest way: log in once as the test user through the real magic-link UI and complete onboarding normally.
 5. Rotate `PREVIEW_AUTH_SECRET` (regenerate, update the Preview-scoped env var, redeploy) any time it might have leaked.
+6. **Redeploy** the preview after adding/changing these — Vercel doesn't retroactively apply new env vars to a deployment that's already running.
+
+**Never commit the real secret or test-user password anywhere** — `.env.example` only lists the variable names with blank/placeholder values. The real values live in Vercel's Preview-scoped env vars (encrypted at rest). To let someone else (a teammate, or the automation/LLM they're running) use the bypass: either they pull it themselves via `vercel env pull .env.local` (requires Vercel project access), read it from the Vercel dashboard directly, or you hand it to them through a password manager — never through chat, README, or git.
 
 **Usage:** navigate to `https://<preview-url>/api/preview-auth?secret=<PREVIEW_AUTH_SECRET>&role=member` (or `role=admin`) — it sets session cookies and redirects to `/dashboard` (or `/admin`). No changes are needed to the normal login flow, and `src/middleware.ts` is untouched.
 

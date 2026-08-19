@@ -248,7 +248,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
                       <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
-                        <li>A membership with the name "{formData.name}" already exists</li>
+                        <li>A membership with the name &quot;{formData.name}&quot; already exists</li>
                       </ul>
                     </div>
                   </div>

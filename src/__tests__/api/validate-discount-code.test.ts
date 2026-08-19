@@ -24,7 +24,7 @@ const mockSupabase: any = {
   from: jest.fn()
 }
 
-require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
+jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
 
 describe('/api/validate-discount-code POST', () => {
   beforeEach(() => {

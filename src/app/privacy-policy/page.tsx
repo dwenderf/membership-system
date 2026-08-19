@@ -13,7 +13,7 @@ export default function PrivacyPolicyPage() {
             <section className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Introduction</h2>
               <p className="text-gray-700 mb-4">
-                This Privacy Policy describes how our hockey association ("we," "us," or "our") collects, uses, and protects your personal information when you use our membership system and services. We are committed to protecting your privacy and handling your data responsibly.
+                This Privacy Policy describes how our hockey association (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) collects, uses, and protects your personal information when you use our membership system and services. We are committed to protecting your privacy and handling your data responsibly.
               </p>
             </section>
 

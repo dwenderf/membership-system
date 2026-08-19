@@ -117,7 +117,7 @@ export default function EmailChangeModal({
         {step === 'request' && (
           <div className="mb-6">
             <p className="text-sm text-gray-700 mb-4">
-              Enter your new email address. We'll send confirmation links to both your current and new email addresses to verify the change.
+              Enter your new email address. We&apos;ll send confirmation links to both your current and new email addresses to verify the change.
             </p>
 
             <div className="mb-4">
@@ -183,7 +183,7 @@ export default function EmailChangeModal({
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-blue-800">Confirmation emails sent!</h3>
                   <div className="mt-2 text-sm text-blue-700">
-                    <p className="mb-2">We've sent confirmation links to:</p>
+                    <p className="mb-2">We&apos;ve sent confirmation links to:</p>
                     <ul className="list-disc list-inside space-y-1">
                       <li><strong>{currentEmail}</strong> (current email)</li>
                       <li><strong>{newEmail}</strong> (new email)</li>
@@ -205,7 +205,7 @@ export default function EmailChangeModal({
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-yellow-700">
-                    Check your spam folders if you don't see the emails within a few minutes.
+                    Check your spam folders if you don&apos;t see the emails within a few minutes.
                   </p>
                 </div>
               </div>

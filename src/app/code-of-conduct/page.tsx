@@ -12,10 +12,10 @@ export default function CodeOfConductPage() {
 
             <section className="mb-8">
               <p className="text-gray-700 mb-6">
-                The Hockey Association Code of Conduct is the organization's statement of expected behavioral standards that all players are required to read, understand, and follow. The Code of Conduct reflects the association's goals, clarifying player responsibilities for actions on and off the ice, while traveling, and through social media. It ensures a fair process for holding members accountable for standards violations.
+                The Hockey Association Code of Conduct is the organization&apos;s statement of expected behavioral standards that all players are required to read, understand, and follow. The Code of Conduct reflects the association&apos;s goals, clarifying player responsibilities for actions on and off the ice, while traveling, and through social media. It ensures a fair process for holding members accountable for standards violations.
               </p>
               <p className="text-gray-700 mb-6">
-                The Code of Conduct was adopted by the association's leadership and applies to all members, who agree to abide by it when joining and participating in association activities.
+                The Code of Conduct was adopted by the association&apos;s leadership and applies to all members, who agree to abide by it when joining and participating in association activities.
               </p>
             </section>
 
@@ -36,7 +36,7 @@ export default function CodeOfConductPage() {
             <section className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Sportsmanship</h2>
               <p className="text-gray-700 mb-4">
-                Sportsmanship is defined as fairness and respect for one's opponent, and graciousness in winning or losing.
+                Sportsmanship is defined as fairness and respect for one&apos;s opponent, and graciousness in winning or losing.
               </p>
               <p className="text-gray-700 mb-4">
                 Players must conduct themselves with the highest level of sportsmanship. Any player who deliberately tries to harm or intimidate another player through threatening, aggressive, or demeaning actions and/or language will face consequences.
@@ -73,7 +73,7 @@ export default function CodeOfConductPage() {
                 <li>Expulsion from the association</li>
               </ul>
               <p className="text-gray-700 mb-4">
-                Leadership considers the member's overall conduct and past violations when determining sanctions. Decisions are not appealable and typically require leadership consensus.
+                Leadership considers the member&apos;s overall conduct and past violations when determining sanctions. Decisions are not appealable and typically require leadership consensus.
               </p>
             </section>
 

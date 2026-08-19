@@ -518,7 +518,7 @@ export default function AccountPage() {
                     <strong>Connected Google Account:</strong> {googleOAuth.email}
                   </p>
                   <p className="text-sm text-blue-700">
-                    You currently sign in with Google only. To unlink your Google account, you must first set up email authentication by signing out and using the "Sign in with Email" option to create a magic link login.
+                    You currently sign in with Google only. To unlink your Google account, you must first set up email authentication by signing out and using the &quot;Sign in with Email&quot; option to create a magic link login.
                   </p>
                 </div>
               )}

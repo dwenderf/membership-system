@@ -149,7 +149,7 @@ export default function EmailChangedPage() {
 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
             <p className="text-sm text-blue-900 mb-3">
-              You've successfully verified one email address. To complete your email change, you need to verify the other email address.
+              You&apos;ve successfully verified one email address. To complete your email change, you need to verify the other email address.
             </p>
             <p className="text-sm text-blue-900 font-medium mb-2">
               Please check <strong>both</strong> of these inboxes for confirmation emails:
@@ -159,7 +159,7 @@ export default function EmailChangedPage() {
               <li><strong>{newEmail}</strong> (new email)</li>
             </ul>
             <p className="text-sm text-blue-900 mt-3">
-              Click the confirmation link in whichever email you haven't verified yet.
+              Click the confirmation link in whichever email you haven&apos;t verified yet.
             </p>
           </div>
 
@@ -172,7 +172,7 @@ export default function EmailChangedPage() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  Don't see the email? Check your spam folder. The confirmation links expire in 24 hours.
+                  Don&apos;t see the email? Check your spam folder. The confirmation links expire in 24 hours.
                 </p>
               </div>
             </div>

@@ -280,7 +280,7 @@ export default function EditDiscountCodePage() {
                     </div>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-                      <p className="text-sm text-yellow-700">A discount code "{formData.code.toUpperCase()}" already exists</p>
+                      <p className="text-sm text-yellow-700">A discount code &quot;{formData.code.toUpperCase()}&quot; already exists</p>
                     </div>
                   </div>
                 </div>

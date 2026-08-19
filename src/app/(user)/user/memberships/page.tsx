@@ -89,7 +89,7 @@ export default async function UserMembershipsPage() {
               <div className="ml-4">
                 <h3 className="text-sm font-medium text-gray-900">No active memberships</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  You don't have any active memberships. Purchase a membership to access teams and events.
+                  You don&apos;t have any active memberships. Purchase a membership to access teams and events.
                 </p>
                 <div className="mt-4">
                   <Link

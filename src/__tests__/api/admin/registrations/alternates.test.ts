@@ -37,8 +37,8 @@ const mockLogger = {
 }
 
 // Mock the modules
-require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
-require('@/lib/logging/logger').logger = mockLogger
+jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
+jest.requireMock('@/lib/logging/logger').logger = mockLogger
 
 describe('/api/admin/registrations/[id]/alternates', () => {
   beforeEach(() => {

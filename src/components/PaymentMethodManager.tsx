@@ -128,7 +128,7 @@ export default function PaymentMethodManager() {
               </svg>
               <div className="text-sm text-blue-700">
                 <p className="font-medium mb-1">Payment Authorization Active</p>
-                <p>This payment method is authorized for alternate registration charges. You'll be notified by email when charged.</p>
+                <p>This payment method is authorized for alternate registration charges. You&apos;ll be notified by email when charged.</p>
               </div>
             </div>
           </div>

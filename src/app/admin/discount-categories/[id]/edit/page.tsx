@@ -320,7 +320,7 @@ export default function EditDiscountCategoryPage() {
                     </div>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-                      <p className="text-sm text-yellow-700">A category with the name "{formData.name}" already exists</p>
+                      <p className="text-sm text-yellow-700">A category with the name &quot;{formData.name}&quot; already exists</p>
                     </div>
                   </div>
                 </div>
@@ -336,7 +336,7 @@ export default function EditDiscountCategoryPage() {
                     </div>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-                      <p className="text-sm text-yellow-700">A category with the accounting code "{formData.accounting_code}" already exists</p>
+                      <p className="text-sm text-yellow-700">A category with the accounting code &quot;{formData.accounting_code}&quot; already exists</p>
                     </div>
                   </div>
                 </div>

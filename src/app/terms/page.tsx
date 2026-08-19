@@ -15,7 +15,7 @@ export default function TermsPage() {
             <section className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Acceptance of Terms</h2>
               <p className="text-gray-700 mb-4">
-                By accessing and using this hockey association membership system ("Service"), you accept and agree to be bound by the terms and provision of this agreement.
+                By accessing and using this hockey association membership system (&quot;Service&quot;), you accept and agree to be bound by the terms and provision of this agreement.
               </p>
             </section>
 

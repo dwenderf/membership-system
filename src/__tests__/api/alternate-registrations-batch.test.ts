@@ -23,10 +23,10 @@ const mockLogger = {
 }
 
 // Mock the imports
-require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
-require('@/lib/logging/logger').logger = mockLogger
+jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
+jest.requireMock('@/lib/logging/logger').logger = mockLogger
 
-const { checkAlternatesAccess } = require('@/lib/utils/alternates-access')
+const { checkAlternatesAccess } = jest.requireMock('@/lib/utils/alternates-access')
 
 describe('/api/alternate-registrations/batch', () => {
   beforeEach(() => {

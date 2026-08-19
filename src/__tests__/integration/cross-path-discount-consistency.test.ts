@@ -10,7 +10,7 @@ import { AlternatePaymentService } from '@/lib/services/alternate-payment-servic
 import { NextRequest } from 'next/server'
 
 // Mock Supabase Server Clients
-var mockSupabase: any = {
+const mockSupabase: any = {
   auth: {
     getUser: jest.fn()
   },

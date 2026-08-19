@@ -193,7 +193,7 @@ export default function EditRegistrationTimingPage() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Edit Registration Timing</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Configure when registration opens and closes for "{registration?.name}"
+              Configure when registration opens and closes for &quot;{registration?.name}&quot;
             </p>
           </div>
 

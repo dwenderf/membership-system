@@ -301,7 +301,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h2 className="text-lg font-medium text-gray-900">Profile Information</h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    User's personal details and contact information
+                    User&apos;s personal details and contact information
                   </p>
                 </div>
                 <div className="px-6 py-4">
@@ -613,7 +613,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                       </div>
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No Invoices Found</h3>
                       <p className="text-gray-600">
-                        This user doesn't have any invoices yet.
+                        This user doesn&apos;t have any invoices yet.
                       </p>
                     </div>
                   )}

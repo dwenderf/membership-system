@@ -60,7 +60,7 @@ export default function UserNavigation({ user, useToggle = false }: UserNavigati
   ]
 
   // Build navigation array with conditional tabs
-  let navigation = [...baseNavigation]
+  const navigation = [...baseNavigation]
 
   // Add Captain tab if user is a captain
   if (isCaptain) {

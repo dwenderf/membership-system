@@ -45,10 +45,10 @@ const mockLogger = {
 }
 
 // Mock the modules
-require('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
-require('@/lib/supabase/server').createAdminClient = jest.fn(() => mockSupabase)
-require('@/lib/services/setup-intent-service').setupIntentService = mockSetupIntentService
-require('@/lib/logging/logger').logger = mockLogger
+jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
+jest.requireMock('@/lib/supabase/server').createAdminClient = jest.fn(() => mockSupabase)
+jest.requireMock('@/lib/services/setup-intent-service').setupIntentService = mockSetupIntentService
+jest.requireMock('@/lib/logging/logger').logger = mockLogger
 
 describe('/api/user-alternate-registrations', () => {
   beforeEach(() => {

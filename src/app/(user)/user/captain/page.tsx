@@ -205,7 +205,7 @@ export default function CaptainDashboardPage() {
         <div className="bg-white rounded-lg border-2 border-gray-200 p-12 text-center">
           <div className="text-4xl mb-4">⚠️</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            You're not assigned as a captain for any teams.
+            You&apos;re not assigned as a captain for any teams.
           </h2>
           <p className="text-gray-600 mb-6">
             If you believe this is an error, please contact your league administrator.
@@ -224,10 +224,10 @@ export default function CaptainDashboardPage() {
         <div className="bg-blue-50 rounded-lg border-2 border-blue-200 p-12 text-center">
           <div className="text-4xl mb-4">ℹ️</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            You're not assigned as captain of any active teams.
+            You&apos;re not assigned as captain of any active teams.
           </h2>
           <p className="text-gray-600 mb-6">
-            Click the "Show past teams" checkbox above to view teams from previous seasons.
+            Click the &quot;Show past teams&quot; checkbox above to view teams from previous seasons.
           </p>
           <Link
             href="/user"

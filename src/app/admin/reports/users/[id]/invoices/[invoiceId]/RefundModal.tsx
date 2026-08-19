@@ -205,7 +205,7 @@ export default function RefundModal({
     setIsStaging(true)
 
     try {
-      let requestData: any = {
+      const requestData: any = {
         paymentId,
         refundType
       }

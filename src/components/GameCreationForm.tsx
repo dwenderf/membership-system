@@ -138,7 +138,7 @@ export default function GameCreationForm({
           {showDescriptionWarning && (
             <div className="mt-2 p-3 bg-orange-50 border border-orange-300 rounded-md">
               <p className="text-orange-800 text-sm font-medium">
-                ⚠️ Don't forget to enter a game description!
+                ⚠️ Don&apos;t forget to enter a game description!
               </p>
             </div>
           )}

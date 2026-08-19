@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
@@ -239,9 +240,9 @@ export default async function UserDashboardPage() {
             // No active or recently expired memberships
             <p className="text-gray-600">
               You do not have any active memberships.{' '}
-              <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+              <Link href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
                 Click here to purchase
-              </a>
+              </Link>
             </p>
           ) : (
             <>
@@ -253,9 +254,9 @@ export default async function UserDashboardPage() {
                 return (
                   <p key={`expiring-${consolidatedMembership.membershipId}`} className="text-amber-600">
                     ⚠️ Your {consolidatedMembership.membership?.name} expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}.{' '}
-                    <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                    <Link href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
                       Click here to extend
-                    </a>
+                    </Link>
                   </p>
                 )
               })}
@@ -264,9 +265,9 @@ export default async function UserDashboardPage() {
               {recentlyExpired.map((expiredMembership: any) => (
                 <p key={`expired-${expiredMembership.membership?.id}`} className="text-red-600">
                   Your {expiredMembership.membership?.name} has expired!{' '}
-                  <a href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
+                  <Link href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
                     Click here to renew
-                  </a>
+                  </Link>
                 </p>
               ))}
             </>
@@ -275,7 +276,7 @@ export default async function UserDashboardPage() {
 
         {/* Action Tiles - constrained to grid width */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
-          <a
+          <Link
             href="/user/browse-registrations"
             className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
@@ -286,8 +287,8 @@ export default async function UserDashboardPage() {
             <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/user/browse-memberships"
             className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
           >
@@ -298,7 +299,7 @@ export default async function UserDashboardPage() {
             <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </a>
+          </Link>
         </div>
       </div>
 

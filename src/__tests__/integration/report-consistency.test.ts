@@ -16,7 +16,7 @@ import { GET as getEligibilityReport } from '@/app/api/admin/reports/discount-el
 import { NextRequest } from 'next/server'
 
 // Mock Supabase Server Clients - Real discount-limit-service runs against this mocked client
-var mockSupabase: any = {
+const mockSupabase: any = {
   auth: {
     getUser: jest.fn()
   },

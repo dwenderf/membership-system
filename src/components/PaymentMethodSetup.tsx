@@ -28,6 +28,7 @@ export default function PaymentMethodSetup({
   alternatePrice,
   showModal = true,
   buttonText = "Save Payment Method",
+  buttonClassName,
   isUpdate = false
 }: PaymentMethodSetupProps) {
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null)
@@ -114,6 +115,7 @@ export default function PaymentMethodSetup({
               onSuccess={handleSuccess}
               onError={handleError}
               buttonText={buttonText}
+              buttonClassName={buttonClassName}
               isUpdate={isUpdate}
             />
           </Elements>
@@ -176,6 +178,7 @@ export default function PaymentMethodSetup({
               onSuccess={handleSuccess}
               onError={handleError}
               buttonText={buttonText}
+              buttonClassName={buttonClassName}
               isUpdate={isUpdate}
             />
           </Elements>

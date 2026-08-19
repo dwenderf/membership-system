@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { xero, logXeroSync, revokeXeroTokens } from '@/lib/xero/client'
+import { createXeroOAuthClient, logXeroSync, revokeXeroTokens } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
+import { readXeroOAuthStateCookie, clearXeroOAuthStateCookie } from '@/lib/xero/oauth-state'
+
+function redirectAndClearState(request: NextRequest, pathAndQuery: string) {
+  const response = NextResponse.redirect(new URL(pathAndQuery, request.url))
+  clearXeroOAuthStateCookie(response)
+  return response
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,40 +15,46 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
     const error = searchParams.get('error')
+    const returnedState = searchParams.get('state')
 
     // Handle OAuth errors
     if (error) {
       console.error('Xero OAuth error:', error)
-      return NextResponse.redirect(
-        new URL('/admin/accounting/xero?xero_error=' + encodeURIComponent(error), request.url)
-      )
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=' + encodeURIComponent(error))
+    }
+
+    // Validate the CSRF state token before touching the code or calling Xero
+    const expectedState = readXeroOAuthStateCookie(request)
+    if (!expectedState) {
+      console.error('Xero OAuth callback missing state cookie (expired or direct navigation)')
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=missing_state')
+    }
+    if (!returnedState || returnedState !== expectedState) {
+      console.error('Xero OAuth callback state mismatch — possible CSRF attempt')
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=state_mismatch')
     }
 
     if (!code) {
       console.error('No authorization code received from Xero')
-      return NextResponse.redirect(
-        new URL('/admin/accounting/xero?xero_error=no_code', request.url)
-      )
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=no_code')
     }
 
-    // Exchange code for tokens
-    const tokenSet = await xero.apiCallback(request.url)
-    
+    // Exchange code for tokens using a request-scoped client seeded with the
+    // already-validated state, so the library's own internal check also passes
+    const oauthClient = createXeroOAuthClient(expectedState)
+    const tokenSet = await oauthClient.apiCallback(request.url)
+
     if (!tokenSet || !tokenSet.access_token) {
       console.error('Failed to exchange code for tokens')
-      return NextResponse.redirect(
-        new URL('/admin/accounting/xero?xero_error=token_exchange_failed', request.url)
-      )
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=token_exchange_failed')
     }
 
     // Get tenant connections
-    const tenantConnections = await xero.updateTenants(true)
-    
+    const tenantConnections = await oauthClient.updateTenants(true)
+
     if (!tenantConnections || tenantConnections.length === 0) {
       console.error('No tenant connections found')
-      return NextResponse.redirect(
-        new URL('/admin/accounting/xero?xero_error=no_tenants', request.url)
-      )
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=no_tenants')
     }
 
     // First, revoke existing OAuth connections on Xero's side (single tenant model)
@@ -149,20 +162,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (storedTenants.length === 0) {
-      return NextResponse.redirect(
-        new URL('/admin/accounting/xero?xero_error=token_storage_failed', request.url)
-      )
+      return redirectAndClearState(request, '/admin/accounting/xero?xero_error=token_storage_failed')
     }
 
     // Success redirect
-    return NextResponse.redirect(
-      new URL('/admin/accounting/xero?xero_success=connected&tenants=' + encodeURIComponent(storedTenants.join(',')), request.url)
+    return redirectAndClearState(
+      request,
+      '/admin/accounting/xero?xero_success=connected&tenants=' + encodeURIComponent(storedTenants.join(','))
     )
 
   } catch (error) {
     console.error('Error in Xero OAuth callback:', error)
-    return NextResponse.redirect(
-      new URL('/admin/accounting/xero?xero_error=callback_failed', request.url)
-    )
+    return redirectAndClearState(request, '/admin/accounting/xero?xero_error=callback_failed')
   }
 }

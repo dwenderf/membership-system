@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import Toast from '@/components/Toast'
 
 export interface ToastData {
@@ -37,30 +37,30 @@ export function ToastProvider({ children }: ToastProviderProps) {
 
   const generateId = () => Math.random().toString(36).substr(2, 9)
 
-  const showToast = (toast: ToastData) => {
+  const showToast = useCallback((toast: ToastData) => {
     const id = generateId()
     setToasts(prev => [...prev, { ...toast, id }])
-  }
+  }, [])
 
-  const showSuccess = (title: string, message?: string) => {
+  const showSuccess = useCallback((title: string, message?: string) => {
     showToast({ title, message, type: 'success' })
-  }
+  }, [showToast])
 
-  const showError = (title: string, message?: string) => {
+  const showError = useCallback((title: string, message?: string) => {
     showToast({ title, message, type: 'error' })
-  }
+  }, [showToast])
 
-  const showWarning = (title: string, message?: string) => {
+  const showWarning = useCallback((title: string, message?: string) => {
     showToast({ title, message, type: 'warning' })
-  }
+  }, [showToast])
 
-  const showInfo = (title: string, message?: string) => {
+  const showInfo = useCallback((title: string, message?: string) => {
     showToast({ title, message, type: 'info' })
-  }
+  }, [showToast])
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id))
-  }
+  }, [])
 
   return (
     <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo }}>

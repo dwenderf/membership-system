@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { xero } from '@/lib/xero/client'
+import { createXeroOAuthClient } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
+import { generateXeroOAuthState, setXeroOAuthStateCookie } from '@/lib/xero/oauth-state'
 
 export async function GET() {
   try {
@@ -23,18 +24,22 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Generate OAuth URL
-    const consentUrl = await xero.buildConsentUrl()
-    
+    // Generate OAuth URL with a CSRF state token bound to this request
+    const state = generateXeroOAuthState()
+    const oauthClient = createXeroOAuthClient(state)
+    const consentUrl = await oauthClient.buildConsentUrl()
+
     if (!consentUrl) {
       return NextResponse.json({ error: 'Failed to generate consent URL' }, { status: 500 })
     }
 
     // Return the consent URL for the frontend to redirect to
-    return NextResponse.json({ 
+    const response = NextResponse.json({
       consentUrl,
-      message: 'Redirect to this URL to authorize Xero integration' 
+      message: 'Redirect to this URL to authorize Xero integration'
     })
+    setXeroOAuthStateCookie(response, state)
+    return response
 
   } catch (error) {
     console.error('Error initiating Xero OAuth:', error)

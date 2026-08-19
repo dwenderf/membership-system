@@ -39,6 +39,25 @@ const xero = new XeroClient({
 
 export { xero }
 
+// Request-scoped XeroClient used only for the OAuth handshake (buildConsentUrl /
+// apiCallback). A fresh instance per request avoids racing/mutating the shared
+// `xero` singleton's config.state across concurrent invocations on the same
+// warm serverless instance.
+export function createXeroOAuthClient(state?: string): XeroClient {
+  return new XeroClient({
+    clientId: process.env.XERO_CLIENT_ID!,
+    clientSecret: process.env.XERO_CLIENT_SECRET!,
+    redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
+    scopes: process.env.XERO_SCOPES?.split(' ') || [
+      'accounting.transactions',
+      'accounting.contacts',
+      'accounting.settings',
+      'offline_access'
+    ],
+    state
+  })
+}
+
 // Wrapper function for single-tenant operations
 export async function withActiveTenant<T>(
   operation: (tenantId: string) => Promise<T>

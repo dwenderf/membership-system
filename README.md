@@ -146,6 +146,9 @@ LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
+# Auth token for uploading source maps at build time (readable stack traces in Sentry).
+# Requires "Source Map Upload" + "Release Creation" scopes. Not needed for local dev.
+SENTRY_AUTH_TOKEN=your_sentry_auth_token_here
 
 # Xero Integration Configuration
 # Recommendation: Create separate Xero apps for development/preview/production environments
@@ -849,6 +852,14 @@ SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
 ```
 
+**Production/CI only** (used at build time to upload source maps for readable stack traces; not needed for local dev):
+
+```bash
+SENTRY_AUTH_TOKEN=your_sentry_auth_token_here
+```
+
+Generate this token from Sentry's Settings → Auth Tokens with the **Source Map Upload** and **Release Creation** scopes. Without it, builds still succeed, but Sentry stack traces show minified code instead of your original source.
+
 The system automatically uses `NODE_ENV` to separate development and production events into different environments within the same project.
 
 ### 3. Critical Error Scenarios Monitored
@@ -1341,6 +1352,7 @@ LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
+SENTRY_AUTH_TOKEN=your_sentry_auth_token_here
 ```
 
 **Xero Integration:**

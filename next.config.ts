@@ -39,9 +39,9 @@ export default withSentryConfig(nextConfig, {
   
   // Automatically tree-shake Sentry logger statements for a smaller bundle
   disableLogger: true,
-  
-  // Hides source maps from generated client bundles
-  sourcemaps: {
-    disable: true
-  },
+
+  // Uploads source maps to Sentry for readable stack traces (requires
+  // SENTRY_AUTH_TOKEN; falls back to no-op with a warning if it's unset).
+  // Uploaded maps are deleted from the build output afterward by default,
+  // so they are never served publicly.
 });

@@ -15,7 +15,7 @@ interface DeleteAccountSectionProps {
   user: User
 }
 
-export default function DeleteAccountSection({ user }: DeleteAccountSectionProps) {
+export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
   const [showInitialWarning, setShowInitialWarning] = useState(false)
   const [showFinalConfirmation, setShowFinalConfirmation] = useState(false)
   const [confirmationText, setConfirmationText] = useState('')

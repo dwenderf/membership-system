@@ -1,10 +1,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { logger } from '@/lib/logging/logger'
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
     const supabase = await createClient()
     const adminSupabase = createAdminClient()

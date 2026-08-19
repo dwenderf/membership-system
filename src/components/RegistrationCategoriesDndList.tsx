@@ -25,10 +25,11 @@ export interface RegistrationCategory {
 interface Props {
   categories: RegistrationCategory[]
   registrationId: string
+  registrationCounts?: Record<string, number>
   onReorder?: (newOrder: RegistrationCategory[]) => void
 }
 
-export default function RegistrationCategoriesDndList({ categories, registrationId, onReorder }: Props) {
+export default function RegistrationCategoriesDndList({ categories, registrationId, registrationCounts, onReorder }: Props) {
   const [items, setItems] = useState(categories.sort((a, b) => a.sort_order - b.sort_order))
   const sensors = useSensors(
     useSensor(PointerSensor)
@@ -96,6 +97,9 @@ export default function RegistrationCategoriesDndList({ categories, registration
                       )}
                       {category.max_capacity !== undefined && (
                         <span>Capacity: {capacityDisplay}</span>
+                      )}
+                      {registrationCounts !== undefined && (
+                        <span>Registered: {registrationCounts[category.id] ?? 0}</span>
                       )}
                     </div>
                   </div>

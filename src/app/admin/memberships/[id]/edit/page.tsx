@@ -35,7 +35,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
   })
   
   const [existingMemberships, setExistingMemberships] = useState<any[]>([])
-  const [currentMembership, setCurrentMembership] = useState<Membership | null>(null)
+  const [, setCurrentMembership] = useState<Membership | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
 
@@ -154,7 +154,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
         showSuccess('Membership updated successfully')
         router.push('/admin/memberships')
       }
-    } catch (err) {
+    } catch {
       showError('An unexpected error occurred')
     } finally {
       setUpdating(false)

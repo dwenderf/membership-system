@@ -576,7 +576,8 @@ export class XeroBatchSyncManager {
         .eq('id', metadata.user_id)
         .single()
       
-      const contactName = userData 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- computed for enhanced logging (per comment above) but never consumed; flagged, not removed, since this may indicate a missing log/usage rather than genuinely dead code
+      const contactName = userData
         ? generateContactName(userData.first_name, userData.last_name, userData.member_id)
         : 'Unknown Contact'
 
@@ -739,7 +740,7 @@ export class XeroBatchSyncManager {
           if (originalInvoice?.invoice_number) {
             originalInvoiceNumber = originalInvoice.invoice_number
           }
-        } catch (error) {
+        } catch {
           console.log('⚠️ Could not find original invoice number, using fallback')
         }
       }
@@ -928,7 +929,7 @@ export class XeroBatchSyncManager {
       if (typeof error === 'string') {
         try {
           parsedError = JSON.parse(error)
-        } catch (e) {
+        } catch {
           // If parsing fails, use original error
           parsedError = error
         }
@@ -1170,7 +1171,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       if (typeof error === 'string') {
         try {
           parsedError = JSON.parse(error)
-        } catch (e) {
+        } catch {
           // If parsing fails, use original error
           parsedError = error
         }
@@ -1391,7 +1392,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       if (typeof error === 'string') {
         try {
           parsedError = JSON.parse(error)
-        } catch (e) {
+        } catch {
           // If parsing fails, use original error
           parsedError = error
         }

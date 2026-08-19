@@ -183,7 +183,7 @@ export default function DiscountAllowanceSection({
       } else {
         showError(data.error || 'Failed to save discount allowance')
       }
-    } catch (err) {
+    } catch {
       showError('An unexpected error occurred')
     } finally {
       setIsSubmitting(false)
@@ -218,7 +218,7 @@ export default function DiscountAllowanceSection({
       } else {
         showError(data.error || 'Failed to revoke allowance')
       }
-    } catch (err) {
+    } catch {
       showError('An unexpected error occurred')
     } finally {
       setIsSubmitting(false)

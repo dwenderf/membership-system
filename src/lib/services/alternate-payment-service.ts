@@ -1,5 +1,5 @@
 import { getStripe } from '@/lib/stripe/server-client'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
@@ -26,7 +26,6 @@ export class AlternatePaymentService {
     discountCodeId?: string
   ): Promise<AlternateChargeResult> {
     try {
-      const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
       // Get user's payment method and customer - use admin client to bypass RLS
@@ -159,8 +158,7 @@ export class AlternatePaymentService {
           userId,
           registrationId,
           gameDescription,
-          stagingRecord,
-          discountCodeId
+          stagingRecord
         )
       }
 
@@ -415,11 +413,9 @@ export class AlternatePaymentService {
     userId: string,
     registrationId: string,
     gameDescription: string,
-    stagingRecord: any,
-    discountCodeId?: string
+    stagingRecord: any
   ): Promise<AlternateChargeResult> {
     try {
-      const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
       // Create payment record with $0 amount - use admin client for alternate user

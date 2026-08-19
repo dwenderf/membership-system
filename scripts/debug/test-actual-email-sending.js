@@ -70,9 +70,6 @@ async function testActualEmailSending() {
     const startTime = Date.now()
     
     try {
-      // Extract email data
-      const emailData = email.email_data || {}
-      
       // Simulate the email sending process
       console.log('📧 Attempting to send email via Loops.so...')
       

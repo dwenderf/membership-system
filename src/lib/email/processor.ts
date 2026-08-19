@@ -214,7 +214,7 @@ export class EmailProcessor {
         .single()
 
       return existingEmail
-    } catch (error) {
+    } catch {
       // No existing email found (this is expected)
       return null
     }
@@ -541,11 +541,6 @@ export class EmailProcessor {
       // Format game date for display
       // Note: Database stores TIMESTAMP WITH TIME ZONE, so we should preserve the original timezone
       const gameDate = new Date(alternateSelection.alternate_registration.game_date)
-
-      // Use game_end_time if available, otherwise calculate as 90 minutes after start (default game duration)
-      const gameEndDate = alternateSelection.alternate_registration.game_end_time
-        ? new Date(alternateSelection.alternate_registration.game_end_time)
-        : new Date(gameDate.getTime() + 90 * 60 * 1000) // Add 90 minutes as fallback
 
       // Format date and time in Eastern Time (the timezone for NYCGHA events)
       const formattedDate = formatDate(gameDate)

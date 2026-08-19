@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatTime, formatEventDateTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import { getRegistrationStatus } from '@/lib/registration-status'
-import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
@@ -12,17 +11,6 @@ interface PageProps {
   params: Promise<{
     id: string
   }>
-}
-
-// Helper function to safely parse date strings without timezone conversion
-function formatDateString(dateString: string): string {
-  if (!dateString) return 'N/A'
-
-  // Parse the date components manually to avoid timezone issues
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day) // month is 0-indexed
-
-  return formatDate(date)
 }
 
 // Helper function to get timing message for coming soon registrations

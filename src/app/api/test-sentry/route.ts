@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setupSentryUserContext, captureSentryError, captureSentryMessage } from '@/lib/sentry-helpers'
-import { extractRequestInfo, getSimpleRequestInfo } from '@/lib/request-info'
+import { getSimpleRequestInfo } from '@/lib/request-info'
 
 export async function POST(request: NextRequest) {
   try {
     // Extract comprehensive request information
-    const requestInfo = extractRequestInfo(request)
     const simpleInfo = getSimpleRequestInfo(request)
     
     console.log('📊 Request Information:', simpleInfo)

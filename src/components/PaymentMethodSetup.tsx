@@ -28,7 +28,6 @@ export default function PaymentMethodSetup({
   alternatePrice,
   showModal = true,
   buttonText = "Save Payment Method",
-  buttonClassName = "w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors",
   isUpdate = false
 }: PaymentMethodSetupProps) {
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null)

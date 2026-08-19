@@ -2,17 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-interface Membership {
-  id: string
-  name: string
-  description: string | null
-  accounting_code: string | null
-  price_monthly: number
-  price_annual: number
-  allow_discounts: boolean
-  created_at: string
-}
-
 function formatCurrency(cents: number) {
   return `$${(cents / 100).toFixed(2)}`
 }

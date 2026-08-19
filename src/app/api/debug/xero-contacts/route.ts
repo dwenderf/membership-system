@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthenticatedXeroClient, getActiveTenant } from '@/lib/xero/client'
 
 export async function GET(request: NextRequest) {

@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
-import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import { getRegistrationStatus } from '@/lib/registration-status'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import RegistrationsList from '@/components/RegistrationsList'

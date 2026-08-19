@@ -1,7 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
@@ -236,7 +235,6 @@ export default async function UserDetailPage({ params, searchParams: searchParam
     const metadata = creditNote.staging_metadata as any
     return metadata?.customer?.id === id
   }).map(creditNote => {
-    const metadata = creditNote.staging_metadata as any
     return {
       id: creditNote.id,
       paymentId: creditNote.payment_id,

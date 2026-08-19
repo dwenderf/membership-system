@@ -187,42 +187,6 @@ export default function EditProfilePage() {
     setShowEmailChangeModal(true)
   }
 
-  const handleEmailChangeSuccess = async () => {
-    // Refresh user data from auth
-    const { data: { user: updatedUser } } = await supabase.auth.getUser()
-
-    if (!updatedUser) {
-      console.error('Failed to get updated user after email change')
-      return
-    }
-
-    setUser(updatedUser)
-
-    // Get updated profile data
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', updatedUser.id)
-      .single()
-
-    if (userProfile) {
-      setFormData({
-        firstName: userProfile.first_name || '',
-        lastName: userProfile.last_name || '',
-        isGoalie: userProfile.is_goalie,
-        isLgbtq: userProfile.is_lgbtq,
-      })
-      setOriginalFormData({
-        firstName: userProfile.first_name || '',
-        lastName: userProfile.last_name || '',
-        email: userProfile.email || '',
-      })
-    }
-
-    // Refresh server components without full page reload
-    router.refresh()
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -424,7 +388,6 @@ export default function EditProfilePage() {
         isOpen={showEmailChangeModal}
         onClose={() => setShowEmailChangeModal(false)}
         currentEmail={user?.email || ''}
-        onSuccess={handleEmailChangeSuccess}
       />
     </div>
   )

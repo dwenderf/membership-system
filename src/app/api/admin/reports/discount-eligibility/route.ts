@@ -34,8 +34,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     let seasonId = searchParams.get('seasonId')
 
-    const nowIso = new Date().toISOString()
-
     // Fetch all active & upcoming seasons for dropdown
     const { data: seasons } = await adminSupabase
       .from('seasons')

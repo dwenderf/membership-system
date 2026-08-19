@@ -49,7 +49,6 @@ export default function PaymentForm({
   reservationExpiresAt,
   onTimerExpired,
   paymentIntentId,
-  shouldSavePaymentMethod = false
 }: PaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()

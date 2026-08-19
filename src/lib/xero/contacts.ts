@@ -249,7 +249,7 @@ export async function syncUserToXeroContact(
             contactName = `${userData.first_name} ${userData.last_name} (${emailPart})`
             console.log(`⚠️ Creating contact with unique name: ${contactName}`)
           }
-        } catch (duplicateCheckError) {
+        } catch {
           // If check fails, proceed with original name
           console.log('Duplicate name check failed, proceeding with original name')
         }
@@ -357,7 +357,7 @@ export async function syncUserToXeroContact(
                 return { success: true, xeroContactId: nonArchivedContact.contactID }
               }
             }
-          } catch (emailSearchError) {
+          } catch {
             console.log('Error searching for non-archived contacts with same email, proceeding to create new contact')
           }
           
@@ -388,7 +388,7 @@ export async function syncUserToXeroContact(
               }
               console.log(`⚠️ Name conflict detected, using timestamped name: ${contactData.name}`)
             }
-          } catch (nameCheckError) {
+          } catch {
             console.log('Name uniqueness check failed, proceeding with generated name')
           }
           

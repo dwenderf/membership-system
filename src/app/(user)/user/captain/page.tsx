@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
@@ -52,7 +51,6 @@ export default function CaptainDashboardPage() {
   const [emailTargetId, setEmailTargetId] = useState<string | null>(null)
   const [emailRecipients, setEmailRecipients] = useState<EmailRecipient[]>([])
   const [emailLoading, setEmailLoading] = useState(false)
-  const router = useRouter()
 
   const handleEmailClick = async (registrationId: string) => {
     setEmailLoading(true)

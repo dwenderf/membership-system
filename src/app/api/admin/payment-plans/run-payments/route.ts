@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { processDuePayments, sendPreNotifications } from '@/lib/services/payment-plan-processor'
@@ -16,7 +16,7 @@ import { processDuePayments, sendPreNotifications } from '@/lib/services/payment
  * This processes all payments that are due today (or overdue) based on their
  * planned_payment_date in the xero_payments table.
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Check authentication and admin status
     const supabase = await createClient()

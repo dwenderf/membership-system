@@ -136,8 +136,6 @@ export default function AlternateSelectionInterface({
     setError('')
 
     try {
-      const selectedAlternatesList = alternates.filter(alt => selectedAlternates.has(alt.id))
-      
       const response = await fetch(`/api/alternate-registrations/${gameId}/select`, {
         method: 'POST',
         headers: {

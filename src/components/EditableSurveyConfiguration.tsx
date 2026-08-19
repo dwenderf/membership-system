@@ -49,7 +49,7 @@ export default function EditableSurveyConfiguration({
         // Refresh the page to show updated data
         window.location.reload()
       }
-    } catch (err) {
+    } catch {
       setError('Failed to update survey configuration')
     } finally {
       setIsSaving(false)

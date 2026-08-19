@@ -513,7 +513,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get accounting codes from system_accounting_codes
-    const { data: accountingCodes, error: accountingError } = await supabase
+    const { data: accountingCodes } = await supabase
       .from('system_accounting_codes')
       .select('code_type, accounting_code')
       .in('code_type', ['donation_received_default', 'donation_given_default'])

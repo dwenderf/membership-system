@@ -5,7 +5,6 @@ import { KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
-import { getSystemTitle } from '@/lib/organization'
 import { isWebAuthnSupported, isUserCancelledError, isUnsupportedOriginError } from '@/lib/passkeys'
 import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 

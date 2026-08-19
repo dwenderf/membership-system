@@ -31,7 +31,6 @@ interface PaymentConfirmationScreenProps {
 }
 
 export default function PaymentConfirmationScreen({
-  userEmail,
   amount,
   onConfirmSavedMethod,
   onUseDifferentMethod,
@@ -102,7 +101,7 @@ export default function PaymentConfirmationScreen({
     setIsProcessing(true)
     try {
       await onConfirmSavedMethod()
-    } catch (error) {
+    } catch {
       setIsProcessing(false)
       // Error handling will be done by parent component
     }

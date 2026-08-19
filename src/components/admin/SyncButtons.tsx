@@ -169,7 +169,7 @@ export default function SyncButtons() {
         const errorData = await response.json()
         showError(errorData.message || errorData.error || 'Failed to trigger manual sync')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to trigger manual sync')
     } finally {
       setLoading(prev => ({ ...prev, accounting: false }))
@@ -198,7 +198,7 @@ export default function SyncButtons() {
         const errorData = await response.json()
         showError(errorData.error || 'Failed to sync accounting codes')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to sync accounting codes')
     } finally {
       setLoading(prev => ({ ...prev, accountingCodes: false }))

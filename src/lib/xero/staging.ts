@@ -9,7 +9,7 @@
 
 import { createAdminClient } from '../supabase/server'
 import { logger } from '../logging/logger'
-import { Cents, centsToCents, negativeCents, centsToDollars } from '../../types/currency'
+import { Cents, centsToCents, negativeCents } from '../../types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../services/payment-plan-config'
 import { toDateString } from '../date-utils'
 
@@ -1241,7 +1241,7 @@ export class XeroStagingManager {
         const { error: lineItemsError } = await this.supabase
           .from('xero_invoice_line_items')
           .insert(
-            lineItems.map((item: any, index: number) => ({
+            lineItems.map((item: any) => ({
               xero_invoice_id: stagingRecord.id,
               description: item.description,
               quantity: 1,

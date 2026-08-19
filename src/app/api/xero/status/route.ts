@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Get sync statistics
-    const { data: syncStats, error: syncStatsError } = await supabase
+    const { data: syncStats } = await supabase
       .from('xero_sync_logs')
       .select('id, status, operation_type, entity_type, created_at, response_data, request_data, error_message')
       .gte('created_at', new Date(Date.now() - timeRange).toISOString())

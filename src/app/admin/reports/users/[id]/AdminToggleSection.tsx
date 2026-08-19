@@ -11,11 +11,10 @@ interface AdminToggleSectionProps {
   userName: string
 }
 
-export default function AdminToggleSection({ 
-  userId, 
-  isAdmin, 
-  isViewingOwnProfile, 
-  userName 
+export default function AdminToggleSection({
+  userId,
+  isAdmin,
+  isViewingOwnProfile
 }: AdminToggleSectionProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { showSuccess, showError } = useToast()

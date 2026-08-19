@@ -207,8 +207,7 @@ export class WaitlistPaymentService {
           registrationId,
           categoryId,
           categoryName,
-          stagingRecord,
-          discountCodeId
+          stagingRecord
         )
       }
 
@@ -483,8 +482,7 @@ export class WaitlistPaymentService {
     registrationId: string,
     categoryId: string,
     categoryName: string,
-    stagingRecord: any,
-    discountCodeId?: string
+    stagingRecord: any
   ): Promise<WaitlistChargeResult> {
     try {
       const supabase = await createClient()

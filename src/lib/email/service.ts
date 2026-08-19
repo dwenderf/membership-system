@@ -119,7 +119,7 @@ class EmailService {
         // Send using a template
         // Clean data to ensure no undefined values
         const cleanData = Object.fromEntries(
-          Object.entries(data).filter(([_, value]) => value !== undefined)
+          Object.entries(data).filter(([, value]) => value !== undefined)
         )
 
         loopsResponse = await this.loops.sendTransactionalEmail({

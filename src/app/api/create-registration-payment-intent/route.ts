@@ -3,7 +3,6 @@ import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
 import { getBaseUrl } from '@/lib/url-utils'
-import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { logger } from '@/lib/logging/logger'
 import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
@@ -828,7 +827,7 @@ export async function POST(request: NextRequest) {
           'info'
         )
         
-        const { data: updatedRecord, error: updateError } = await adminSupabase
+        const { error: updateError } = await adminSupabase
           .from('user_registrations')
           .update({
             reservation_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Fresh 5-minute timer
@@ -882,7 +881,7 @@ export async function POST(request: NextRequest) {
           'info'
         )
         
-        const { data: updatedRecord, error: updateError } = await adminSupabase
+        const { error: updateError } = await adminSupabase
           .from('user_registrations')
           .update({
             payment_status: 'awaiting_payment',

@@ -48,7 +48,6 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
   )
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>(() => getDefaultSeasonId(seasons) ?? '')
   const [selectedRegistration, setSelectedRegistration] = useState<string>('')
-  const [loading, setLoading] = useState(false)
   const [registrationsWithGames, setRegistrationsWithGames] = useState<RegistrationWithGames[]>([])
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [overviewError, setOverviewError] = useState<string | null>(null)

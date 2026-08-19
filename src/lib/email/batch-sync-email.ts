@@ -268,7 +268,7 @@ export class EmailProcessingManager {
             bounce_reason: error instanceof Error ? error.message : String(error)
           })
           .eq('id', emailLog.id)
-      } catch (updateError) {
+      } catch {
         // Ignore update errors
       }
 

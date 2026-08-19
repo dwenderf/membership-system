@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import { getCopyrightText } from '@/lib/organization'
 
 export default function Footer() {
-  const currentYear = new Date().getFullYear()
   const pathname = usePathname()
   const [canAccessDashboard, setCanAccessDashboard] = useState(false)
   

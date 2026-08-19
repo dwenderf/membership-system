@@ -58,15 +58,6 @@ interface Registration {
 
 type SortOption = 'name-asc' | 'name-desc' | 'date'
 
-function getRegistrationTypeColor(type: string) {
-  switch (type) {
-    case 'team': return 'text-purple-600 bg-purple-100'
-    case 'scrimmage': return 'text-orange-600 bg-orange-100'
-    case 'event': return 'text-indigo-600 bg-indigo-100'
-    default: return 'text-gray-600 bg-gray-100'
-  }
-}
-
 function isEventLikeType(type: string): boolean {
   return type === 'event' || type === 'scrimmage' || type === 'tournament'
 }

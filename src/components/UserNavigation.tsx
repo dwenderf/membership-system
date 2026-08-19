@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import AdminToggle from './AdminToggle'
 import { getOrganizationName } from '@/lib/organization'
 
 interface User {
@@ -21,7 +20,7 @@ interface UserNavigationProps {
   useToggle?: boolean
 }
 
-export default function UserNavigation({ user, useToggle = false }: UserNavigationProps) {
+export default function UserNavigation({ user }: UserNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [hasUnpaid, setHasUnpaid] = useState(false)
   const [isCaptain, setIsCaptain] = useState(false)

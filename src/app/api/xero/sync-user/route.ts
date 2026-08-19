@@ -12,8 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { userData } = body
+    await request.json()
 
     // Get complete user data from database instead of relying on passed data
     const { data: completeUserData, error: userDataError } = await supabase

@@ -87,9 +87,6 @@ describe('/api/alternate-registrations/batch', () => {
       isCaptain: false
     })
 
-    const gamesFromMock = jest.fn()
-    const alternatesFromMock = jest.fn()
-
     mockSupabase.from.mockImplementationOnce(() => ({
       select: jest.fn(() => ({
         in: jest.fn(() => ({

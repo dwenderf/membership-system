@@ -35,7 +35,6 @@ interface SavedPaymentConfirmationProps {
 }
 
 export default function SavedPaymentConfirmation({
-  userEmail,
   amount,
   clientSecret,
   paymentMethodId,

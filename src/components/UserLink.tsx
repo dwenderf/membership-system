@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { buildBreadcrumbUrl, type Breadcrumb } from '@/lib/breadcrumb-utils'
+import { buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 
 interface UserLinkProps {
   userId: string

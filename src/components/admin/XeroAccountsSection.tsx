@@ -120,7 +120,7 @@ export default function XeroAccountsSection() {
         setSyncError(errorData.error || 'Sync failed')
         showError(errorData.error || 'Failed to sync accounting codes')
       }
-    } catch (error) {
+    } catch {
       setSyncError('Sync failed')
       showError('Failed to sync accounting codes')
     } finally {

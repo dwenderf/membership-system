@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { syncXeroAccounts } from '@/lib/xero/accounts-sync'
 import { logger } from '@/lib/logging/logger'
@@ -10,7 +10,7 @@ import { logger } from '@/lib/logging/logger'
  * Triggers immediate sync of Xero chart of accounts to local database
  * Requires admin authentication
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Authenticate user
     const supabase = await createClient()

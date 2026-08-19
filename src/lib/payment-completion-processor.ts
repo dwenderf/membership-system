@@ -451,7 +451,7 @@ export class PaymentCompletionProcessor {
         this.logger.logPaymentProcessing('create-xero-staging-records', '⚠️ Unexpected: Creating staging for paid purchase in createXeroStagingRecords', undefined, 'warn')
         const paymentData = await this.getPaymentData(event)
         if (paymentData) {
-          await this.createPaidXeroStaging(event, paymentData)
+          await this.createPaidXeroStaging(event)
         }
       }
       
@@ -494,7 +494,7 @@ export class PaymentCompletionProcessor {
   /**
    * Create Xero staging for paid purchases
    */
-  private async createPaidXeroStaging(event: PaymentCompletionEvent, paymentData: any) {
+  private async createPaidXeroStaging(event: PaymentCompletionEvent) {
     this.logger.logPaymentProcessing('create-paid-xero-staging', '💰 Creating Xero staging for paid purchase...')
     
     try {

@@ -69,7 +69,7 @@ export default function DateTimePicker({
       minDate,
       maxDate,
       mode,
-      onChange: (selectedDates, dateStr) => {
+      onChange: (selectedDates) => {
         // Convert to datetime-local format (YYYY-MM-DDTHH:MM)
         if (selectedDates.length > 0) {
           const date = selectedDates[0]

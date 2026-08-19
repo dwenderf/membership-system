@@ -27,7 +27,7 @@ export default function XeroConnectPage() {
           setAccountingCodesValid(false)
           setAccountingCodesError('Failed to validate accounting codes')
         }
-      } catch (error) {
+      } catch {
         setAccountingCodesValid(false)
         setAccountingCodesError('Failed to validate accounting codes')
       }

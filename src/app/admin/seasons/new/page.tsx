@@ -76,7 +76,7 @@ export default function NewSeasonPage() {
       } else {
         router.push('/admin/seasons')
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

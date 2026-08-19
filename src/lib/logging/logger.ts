@@ -651,7 +651,7 @@ export class Logger {
             if (endDate && entry.timestamp > endDate) continue
             
             logs.push(entry)
-          } catch (parseError) {
+          } catch {
             console.warn('Failed to parse log line:', line)
           }
         }

@@ -59,7 +59,6 @@ interface GameAlternatesCardProps {
 
 export default function GameAlternatesCard({
   game,
-  registration,
   dateTag,
   userAccess,
   onCountsUpdated

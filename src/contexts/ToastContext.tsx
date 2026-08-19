@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
-import Toast, { ToastProps } from '@/components/Toast'
+import Toast from '@/components/Toast'
 
 export interface ToastData {
   title: string

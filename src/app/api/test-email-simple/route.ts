@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { emailService } from '@/lib/email'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Simple test email without authentication
     const result = await emailService.sendWelcomeEmail({

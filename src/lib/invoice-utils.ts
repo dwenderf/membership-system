@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatAmount, getDaysUntilDue, getInvoiceDueDate, isInvoiceOverdue } from '@/lib/format-utils'
+import { formatAmount, getDaysUntilDue } from '@/lib/format-utils'
 
 export interface UnpaidInvoiceInfo {
   count: number

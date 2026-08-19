@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
 
@@ -61,7 +61,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [showConfirmationScreen, setShowConfirmationScreen] = useState(false)
   const [userHasSavedPaymentMethod, setUserHasSavedPaymentMethod] = useState<boolean | null>(null)
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
+  const [, setPaymentIntentId] = useState<string | null>(null)
   
   const { showSuccess, showError } = useToast()
   const router = useRouter()
@@ -477,7 +477,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                   name="paymentOption"
                   value="assistance"
                   checked={paymentOption === 'assistance'}
-                  onChange={(e) => {
+                  onChange={() => {
                     setPaymentOption('assistance')
                     if (selectedPrice) {
                       const defaultAssistance = (selectedPrice / 100 * 0.5).toFixed(2)
@@ -544,7 +544,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                 name="paymentOption"
                 value="donation"
                 checked={paymentOption === 'donation'}
-                onChange={(e) => setPaymentOption('donation')}
+                onChange={() => setPaymentOption('donation')}
                 className="sr-only"
               />
               <div className="w-full">
@@ -595,7 +595,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                 name="paymentOption"
                 value="standard"
                 checked={paymentOption === 'standard'}
-                onChange={(e) => setPaymentOption('standard')}
+                onChange={() => setPaymentOption('standard')}
                 className="sr-only"
               />
               <div className="w-full">

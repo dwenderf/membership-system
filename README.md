@@ -103,21 +103,14 @@ npm install
 
 ### 2. Environment Setup
 
-Create a `.env.local` file with the following variables:
+Copy [`.env.example`](.env.example) to `.env.local` and fill in real values (Google OAuth is configured in the Supabase dashboard, not via app env vars):
 
 ```bash
-# Application Configuration
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_nextauth_secret
-
 # Database
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# Authentication
-GOOGLE_CLIENT_ID=your_google_oauth_client_id
-GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+SUPABASE_MAX_ROWS=1000
 
 # Payments
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
@@ -127,20 +120,27 @@ STRIPE_API_VERSION=2025-07-30.basil
 
 # Email Integration
 LOOPS_API_KEY=your_loops_api_key
-LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_EMAIL_BATCH_DELAY_MS=1000
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
-LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
+LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
-LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
-LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
-LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
-LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
 LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID=your_payment_plan_payment_processed_template_id
 LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID=your_payment_plan_payment_failed_template_id
 LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
+LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
+LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
+LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
+LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
+LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id
+LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID=your_captain_assignment_template_id
+LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID=your_captain_removal_template_id
+LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID=your_captain_roster_change_template_id
+LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID=your_admin_new_registration_template_id
+LOOPS_ADMIN_REFUND_TEMPLATE_ID=your_admin_refund_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -157,11 +157,22 @@ XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
 XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 
+# Admin / Cron
+ADMIN_SECRET=your_random_admin_secret
+CRON_SECRET=your_random_cron_secret_for_cron_jobs
+
+# Application Configuration
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ORGANIZATION_NAME=Your Organization Name
+SUPPORT_EMAIL=support@example.com
+
 # Timezone Configuration
 # IANA timezone identifier for date/time display throughout the application
 # Examples: America/New_York, America/Los_Angeles, Europe/London, UTC
 NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 ```
+
+> Automated preview testing (e.g. an AI agent driving a browser against a preview URL) needs a few additional Preview-scoped-only vars — see [Preview auth bypass for automated testing](#preview-auth-bypass-for-automated-testing).
 
 ### 3. Database Setup
 
@@ -1306,8 +1317,8 @@ Replace your-domain with:
 **Application Configuration:**
 
 ```bash
-NEXTAUTH_URL=https://your-domain.vercel.app
-NEXTAUTH_SECRET=your_nextauth_secret
+NEXT_PUBLIC_SITE_URL=https://your-domain.vercel.app
+ADMIN_SECRET=your_random_admin_secret
 CRON_SECRET=your_random_cron_secret_for_cron_jobs
 ```
 
@@ -1317,9 +1328,9 @@ CRON_SECRET=your_random_cron_secret_for_cron_jobs
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-GOOGLE_CLIENT_ID=your_google_oauth_client_id
-GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ```
+
+Google OAuth is configured in the Supabase Dashboard (Authentication → Providers), not via app environment variables.
 
 **Note:** For Supabase API keys, use the **new API keys** (not legacy) from your **production Supabase project** (not development). Go to Settings → API → "API Keys" tab and create new keys if needed.
 
@@ -1336,19 +1347,27 @@ STRIPE_API_VERSION=2025-07-30.basil
 
 ```bash
 LOOPS_API_KEY=your_loops_api_key
-LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_EMAIL_BATCH_DELAY_MS=1000
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
-LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_expiring_template_id
+LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
-LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
-LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
-LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
-LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
 LOOPS_PAYMENT_PLAN_PAYMENT_PROCESSED_TEMPLATE_ID=your_payment_plan_payment_processed_template_id
 LOOPS_PAYMENT_PLAN_PAYMENT_FAILED_TEMPLATE_ID=your_payment_plan_payment_failed_template_id
 LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID=your_payment_plan_completed_template_id
+LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
+LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
+LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
+LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
+LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
+LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id
+LOOPS_CAPTAIN_ASSIGNMENT_NOTIFICATION_TEMPLATE_ID=your_captain_assignment_template_id
+LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID=your_captain_removal_template_id
+LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID=your_captain_roster_change_template_id
+LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID=your_admin_new_registration_template_id
+LOOPS_ADMIN_REFUND_TEMPLATE_ID=your_admin_refund_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system
@@ -1375,6 +1394,32 @@ XERO_CLIENT_SECRET=your_production_xero_client_secret_here
 XERO_REDIRECT_URI=https://your-domain.com/api/xero/callback
 XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 ```
+
+#### Preview auth bypass for automated testing
+
+The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be driven by automated testing tools — none of those methods are automatable, and passkeys are broken on preview URLs entirely (RP ID mismatch). `GET /api/preview-auth` lets an automated tester (e.g. an AI agent driving a browser) obtain a real, valid session on **preview deployments only**, by signing in as a dedicated test user with `signInWithPassword`. It 404s immediately (never 401/403/redirects, so it can't be fingerprinted) unless `VERCEL_ENV === 'preview'` and a matching secret is supplied — it can never activate in production.
+
+**Setup (one-time, manual):**
+
+1. Generate a secret: `openssl rand -hex 32` — this becomes `PREVIEW_AUTH_SECRET`.
+2. In the Vercel dashboard: **Project Settings → Environment Variables** → add `PREVIEW_AUTH_SECRET`, `PREVIEW_TEST_USER_EMAIL`, `PREVIEW_TEST_USER_PASSWORD` (and optionally `PREVIEW_TEST_ADMIN_EMAIL`/`PREVIEW_TEST_ADMIN_PASSWORD` for admin-page testing), checking **only the "Preview" environment box**. Leave Production unchecked — double-check by filtering the env var list to Production and confirming these keys are absent.
+3. Create the matching test user(s) in the **preview** Supabase project's Auth (confirm you're targeting the preview project, not production — they're separate projects): Dashboard → Authentication → Users → Add user, with "Auto Confirm User" on and a password matching `PREVIEW_TEST_USER_PASSWORD`.
+4. Create the matching row in the app `users` table (preview project), with `onboarding_completed_at` and `terms_accepted_at` set and `is_admin` set appropriately. Simplest way: log in once as the test user through the real magic-link UI and complete onboarding normally.
+5. Rotate `PREVIEW_AUTH_SECRET` (regenerate, update the Preview-scoped env var, redeploy) any time it might have leaked.
+6. **Redeploy** the preview after adding/changing these — Vercel doesn't retroactively apply new env vars to a deployment that's already running.
+
+**Never commit the real secret or test-user password anywhere** — `.env.example` only lists the variable names with blank/placeholder values. The real values live in Vercel's Preview-scoped env vars (encrypted at rest). To let someone else (a teammate, or the automation/LLM they're running) use the bypass, they should pull it themselves rather than have it pasted into chat/Slack/etc.:
+
+1. Get added to the **nycpha** team on Vercel (Team Settings → Members → Invite) with at least the **Developer** role — Developers can manage environment variables for Preview/Development, they're just locked out of Production env vars, which is exactly the right level of access for this secret. (Member also works and is broader, but Developer is the minimum needed.)
+2. From their own machine: `vercel login`, then `vercel link` inside the repo to connect it to `nycpha/membership-system`, then `vercel env pull --environment=preview` to write the current values (including `PREVIEW_AUTH_SECRET`) to a local `.env` file — never manually retype or forward the value.
+
+**Sensitive flag — these vars split into two different tiers:**
+
+- `PREVIEW_AUTH_SECRET` must stay **non-Sensitive**. Devs/LLMs need to know its value to call the endpoint at all, so it has to remain pull-able via `vercel env pull` / visible in the dashboard.
+- `PREVIEW_TEST_USER_PASSWORD` and `PREVIEW_TEST_ADMIN_PASSWORD` should be marked **Sensitive**. Nobody needs to read these back out — the route reads them server-side and calls `signInWithPassword` internally, the caller never sees or needs the password itself. They're also real Supabase credentials that could authenticate directly against the Supabase API, not just through this route, so there's no reason to leave them human-readable. Marking a var Sensitive doesn't stop the deployed app from using it, it only stops anyone (including you) from reading the value back out afterward — set it once, and if you ever need to change it, overwrite it blind rather than editing it.
+- `PREVIEW_TEST_USER_EMAIL` / `PREVIEW_TEST_ADMIN_EMAIL` aren't secrets (they're fake addresses that never receive mail — see setup step 3) and don't need the Sensitive flag either way.
+
+**Usage:** navigate to `https://<preview-url>/api/preview-auth?secret=<PREVIEW_AUTH_SECRET>&role=member` (or `role=admin`) — it sets session cookies and redirects to `/dashboard` (or `/admin`). No changes are needed to the normal login flow, and `src/middleware.ts` is untouched.
 
 #### Step 5: Update Service Configurations
 

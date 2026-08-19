@@ -14,8 +14,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteTitle = process.env.VERCEL_ENV === 'preview' ? "Preview - My NYCPHA" : "My NYCPHA"
+
 export const metadata: Metadata = {
-  title: "Membership System",
+  title: siteTitle,
   description: "Manage your memberships and registrations",
   icons: {
     icon: [

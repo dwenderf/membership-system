@@ -1408,7 +1408,12 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 5. Rotate `PREVIEW_AUTH_SECRET` (regenerate, update the Preview-scoped env var, redeploy) any time it might have leaked.
 6. **Redeploy** the preview after adding/changing these — Vercel doesn't retroactively apply new env vars to a deployment that's already running.
 
-**Never commit the real secret or test-user password anywhere** — `.env.example` only lists the variable names with blank/placeholder values. The real values live in Vercel's Preview-scoped env vars (encrypted at rest). To let someone else (a teammate, or the automation/LLM they're running) use the bypass: either they pull it themselves via `vercel env pull .env.local` (requires Vercel project access), read it from the Vercel dashboard directly, or you hand it to them through a password manager — never through chat, README, or git.
+**Never commit the real secret or test-user password anywhere** — `.env.example` only lists the variable names with blank/placeholder values. The real values live in Vercel's Preview-scoped env vars (encrypted at rest). To let someone else (a teammate, or the automation/LLM they're running) use the bypass, they should pull it themselves rather than have it pasted into chat/Slack/etc.:
+
+1. Get added to the **nycpha** team on Vercel (Team Settings → Members → Invite) with at least the **Developer** role — Developers can manage environment variables for Preview/Development, they're just locked out of Production env vars, which is exactly the right level of access for this secret. (Member also works and is broader, but Developer is the minimum needed.)
+2. From their own machine: `vercel login`, then `vercel link` inside the repo to connect it to `nycpha/membership-system`, then `vercel env pull --environment=preview` to write the current values (including `PREVIEW_AUTH_SECRET`) to a local `.env` file — never manually retype or forward the value.
+
+One setting to leave alone: don't mark `PREVIEW_AUTH_SECRET` as a **Sensitive** environment variable in Vercel. Sensitive vars are usable by the deployed app at runtime but their value becomes invisible in the dashboard and can't be retrieved via `vercel env pull` — which would break this exact pull-it-yourself workflow. Since this is a shared test credential meant to be distributed this way (not a personal secret), keep it non-Sensitive.
 
 **Usage:** navigate to `https://<preview-url>/api/preview-auth?secret=<PREVIEW_AUTH_SECRET>&role=member` (or `role=admin`) — it sets session cookies and redirects to `/dashboard` (or `/admin`). No changes are needed to the normal login flow, and `src/middleware.ts` is untouched.
 

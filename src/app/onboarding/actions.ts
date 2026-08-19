@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { getActiveTenant } from '@/lib/xero/client'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 
 export async function completeOnboarding(formData: FormData) {
   try {

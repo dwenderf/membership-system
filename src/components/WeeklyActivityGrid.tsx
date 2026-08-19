@@ -152,20 +152,6 @@ export default function WeeklyActivityGrid({ games, registration, onWeekClick }:
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2 text-xs text-gray-500">
-          <span>Less</span>
-          <div className="flex space-x-1">
-            <div className="w-3 h-3 bg-gray-100 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-200 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-400 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-600 rounded-sm"></div>
-            <div className="w-3 h-3 bg-green-800 rounded-sm"></div>
-          </div>
-          <span>More</span>
-        </div>
-      </div>
-
       <div className="flex flex-wrap gap-1 mb-3">
         {weeklyData.map(week => (
           <div

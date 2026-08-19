@@ -2,7 +2,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import SystemCategoriesDndList, { Category } from '@/components/SystemCategoriesDndList'
 import { formatDate } from '@/lib/date-utils'
 
 export default async function RegistrationCategoriesPage() {

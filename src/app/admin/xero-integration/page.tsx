@@ -34,7 +34,7 @@ export default function XeroIntegrationPage() {
   const [status, setStatus] = useState<XeroStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const { showToast, showSuccess, showError } = useToast()
+  const { showSuccess, showError } = useToast()
 
   useEffect(() => {
     fetchStatus()

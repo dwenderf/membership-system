@@ -1,5 +1,4 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { formatDate } from '@/lib/date-utils'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
@@ -97,7 +96,6 @@ export async function POST(
     const user = Array.isArray(waitlistEntry.users) ? waitlistEntry.users[0] : waitlistEntry.users
     const registration = Array.isArray(waitlistEntry.registrations) ? waitlistEntry.registrations[0] : waitlistEntry.registrations
     const category = Array.isArray(waitlistEntry.registration_categories) ? waitlistEntry.registration_categories[0] : waitlistEntry.registration_categories
-    const season = registration?.seasons ? (Array.isArray(registration.seasons) ? registration.seasons[0] : registration.seasons) : null
     const masterCategory = category?.categories ? (Array.isArray(category.categories) ? category.categories[0] : category.categories) : null
 
     const categoryName = masterCategory?.name || category?.custom_name || 'Unknown Category'

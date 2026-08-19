@@ -15,7 +15,7 @@ async function testPaymentProcessor() {
   try {
     // Import the processor and staging manager
     const { paymentProcessor } = await import('./src/lib/payment-completion-processor.ts')
-    const { xeroStagingManager } = await import('./src/lib/xero-staging.ts')
+    await import('./src/lib/xero-staging.ts')
     const { xeroBatchSyncManager } = await import('./src/lib/xero-batch-sync.ts')
     const { batchProcessor } = await import('./src/lib/batch-processor.ts')
     

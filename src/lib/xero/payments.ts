@@ -130,9 +130,7 @@ export async function recordStripePaymentInXero(
       await recordStripeFeeExpense(
         tenantId,
         stripePaymentData.stripe_fee_amount,
-        stripePaymentData.stripe_payment_intent_id,
-        stripePaymentData.payment_date,
-        xeroApi
+        stripePaymentData.stripe_payment_intent_id
       )
     }
 
@@ -181,7 +179,6 @@ export async function recordStripePaymentInXero(
     console.error('Error recording Stripe payment in Xero:', error)
     
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'payment_recording_failed'
 
     await logXeroSync({
       tenant_id: tenantId,
@@ -201,33 +198,9 @@ export async function recordStripePaymentInXero(
 async function recordStripeFeeExpense(
   tenantId: string,
   feeAmount: number, // in cents
-  paymentIntentId: string,
-  paymentDate: string,
-  xeroApi: any
+  paymentIntentId: string
 ): Promise<void> {
   try {
-    // Create a simple expense claim for Stripe fees
-    // In practice, you might want to batch these or handle them differently
-    const expenseData = {
-      date: paymentDate,
-      user: {
-        userID: process.env.XERO_DEFAULT_USER_ID // You'd need to configure this
-      },
-      receipts: [{
-        receiptDate: paymentDate,
-        contact: {
-          name: 'Stripe Inc.'
-        },
-        total: feeAmount / 100, // Convert to dollars
-        lineItems: [{
-          description: `Stripe processing fee - ${paymentIntentId}`,
-          unitAmount: feeAmount / 100,
-          taxType: 'NONE',
-          accountCode: 'STRIPE_FEES' // Account code for Stripe fees
-        }]
-      }]
-    }
-
     // Note: This is a simplified approach. In practice, you might:
     // 1. Create a separate bank transaction for fees
     // 2. Use a different expense tracking method

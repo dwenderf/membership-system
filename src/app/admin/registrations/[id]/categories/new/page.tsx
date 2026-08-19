@@ -7,27 +7,6 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
-// Common category presets for different registration types
-const CATEGORY_PRESETS = {
-  team: [
-    { name: 'Player', suggested_capacity: 20 },
-    { name: 'Goalie', suggested_capacity: 2 },
-    { name: 'Alternate', suggested_capacity: 5 },
-  ],
-  tournament: [
-    { name: 'Player', suggested_capacity: 18 },
-    { name: 'Goalie', suggested_capacity: 2 },
-    { name: 'Guest', suggested_capacity: 10 },
-  ],
-  scrimmage: [
-    { name: 'Player', suggested_capacity: 20 },
-    { name: 'Goalie', suggested_capacity: 2 },
-  ],
-  event: [
-    { name: 'Participant', suggested_capacity: 50 },
-  ],
-}
-
 export default function NewRegistrationCategoryPage() {
   const router = useRouter()
   const params = useParams()
@@ -189,75 +168,6 @@ export default function NewRegistrationCategoryPage() {
     }
   }
 
-  const handlePresetClick = (preset: { name: string; suggested_capacity: number }) => {
-    // Look for a matching system category
-    const matchingCategory = availableCategories.find(cat => 
-      cat.category_type === 'system' && cat.name.toLowerCase() === preset.name.toLowerCase()
-    )
-    
-    if (matchingCategory) {
-      setFormData(prev => ({
-        ...prev,
-        category_id: matchingCategory.id,
-        custom_name: '',
-        max_capacity: preset.suggested_capacity.toString(),
-        accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}` || '',
-      }))
-      setIsCustom(false)
-    } else {
-      // Fallback to custom if no system category found
-      setFormData(prev => ({
-        ...prev,
-        category_id: '',
-        custom_name: preset.name,
-        max_capacity: preset.suggested_capacity.toString(),
-        accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}` || '',
-      }))
-      setIsCustom(true)
-    }
-  }
-
-  const handleAddAllPresets = async () => {
-    if (!registration) return
-    
-    setLoading(true)
-    setError('')
-
-    try {
-      const presets = CATEGORY_PRESETS[registration.type as keyof typeof CATEGORY_PRESETS] || []
-      const categoriesToAdd = presets.map((preset, index) => {
-        const matchingCategory = availableCategories.find(cat => 
-          cat.category_type === 'system' && cat.name.toLowerCase() === preset.name.toLowerCase()
-        )
-        
-        return {
-          registration_id: registrationId,
-          category_id: matchingCategory?.id || null,
-          custom_name: matchingCategory ? null : preset.name,
-          price: 0, // Default to $0, admin can update prices individually after creation
-          max_capacity: preset.suggested_capacity,
-          accounting_code: `${registration?.type?.toUpperCase()}-${preset.name?.toUpperCase()}`,
-          sort_order: existingCategories.length + index,
-        }
-      })
-
-      const { error: insertError } = await supabase
-        .from('registration_categories')
-        .insert(categoriesToAdd)
-
-      if (insertError) {
-        setError(insertError.message)
-      } else {
-        router.push(`/admin/registrations/${registrationId}`)
-        router.refresh()
-      }
-    } catch {
-      setError('An unexpected error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Check for duplicate category
   const categoryAlreadyExists = existingCategories.some(category => {
     if (isCustom) {
@@ -275,17 +185,6 @@ export default function NewRegistrationCategoryPage() {
   formData.accounting_code.trim() &&
   (formData.max_capacity === '' || formData.max_capacity === undefined || parseInt(formData.max_capacity) >= 0) &&
   !categoryAlreadyExists
-
-  const availablePresets = registration 
-    ? CATEGORY_PRESETS[registration.type as keyof typeof CATEGORY_PRESETS] || []
-    : []
-
-  const unusedPresets = availablePresets.filter(preset =>
-    !existingCategories.some(cat => {
-      const categoryName = cat.categories?.name || cat.custom_name || ''
-      return categoryName.toLowerCase() === preset.name.toLowerCase()
-    })
-  )
 
   return (
     <div className="min-h-screen bg-gray-50">

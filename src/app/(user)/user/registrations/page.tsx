@@ -11,17 +11,6 @@ import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import WaitlistBadge from '@/components/WaitlistBadge'
 import RoleBadge from '@/components/RoleBadge'
 
-// Helper function to safely parse date strings without timezone conversion
-function formatDateString(dateString: string): string {
-  if (!dateString) return 'N/A'
-
-  // Parse the date components manually to avoid timezone issues
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month -1, day) // month is 0-indexed
-
-  return formatDate(date)
-}
-
 // Helper function to check if a registration is currently active
 function isRegistrationActive(registration: any, today: string): boolean {
   if (!registration) return false
@@ -68,40 +57,6 @@ export default async function UserRegistrationsPage() {
   } catch (error) {
     console.error('Error fetching user registrations:', error)
   }
-
-  // Get user's active memberships to check eligibility
-  const { data: userMemberships } = await supabase
-    .from('user_memberships')
-    .select(`
-      *,
-      membership:memberships(*)
-    `)
-    .eq('user_id', user.id)
-    .eq('payment_status', 'paid')
-    .gte('valid_until', new Date().toISOString().split('T')[0])
-
-  // Get available registrations for current/future seasons
-  // First get current/future seasons
-  const { data: currentSeasons } = await supabase
-    .from('seasons')
-    .select('id')
-    .gte('end_date', new Date().toISOString().split('T')[0])
-
-  const seasonIds = currentSeasons?.map(s => s.id) || []
-
-  const { data: availableRegistrations } = await supabase
-    .from('registrations')
-    .select(`
-      *,
-      season:seasons(*),
-      registration_categories(
-        *,
-        categories:category_id(name),
-        memberships:required_membership_id(name)
-      )
-    `)
-    .in('season_id', seasonIds)
-    .order('created_at', { ascending: false })
 
   // Get user's current waitlist entries
   const { data: userWaitlistEntries } = await supabase
@@ -178,9 +133,6 @@ export default async function UserRegistrationsPage() {
     .select('registration_id')
     .eq('user_id', user.id)
   const captainRegistrationIds = new Set((captainRows ?? []).map((r: any) => r.registration_id))
-
-  const activeMemberships = userMemberships || []
-  const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
   const currentRegistrations = userRegistrations?.filter(ur =>
     isRegistrationActive(ur.registration, todayDateString)

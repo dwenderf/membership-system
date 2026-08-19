@@ -59,7 +59,7 @@ async function testTableAccess() {
     
     try {
       // Test with service role (should work)
-      const { data: serviceData, error: serviceError, count: serviceCount } = await supabaseService
+      const { error: serviceError, count: serviceCount } = await supabaseService
         .from(tableName)
         .select('*', { count: 'exact', head: true })
         .limit(1)
@@ -71,7 +71,7 @@ async function testTableAccess() {
       }
       
       // Test with anon key (should fail for admin-only tables)
-      const { data: anonData, error: anonError, count: anonCount } = await supabaseAnon
+      const { error: anonError, count: anonCount } = await supabaseAnon
         .from(tableName)
         .select('*', { count: 'exact', head: true })
         .limit(1)

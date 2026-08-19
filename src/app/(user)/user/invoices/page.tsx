@@ -16,12 +16,6 @@ export default async function UserInvoicesPage() {
     return null // Layout will handle redirect
   }
 
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
   // Check if Xero is connected
   const { data: xeroStatus } = await supabase
     .from('xero_oauth_tokens')

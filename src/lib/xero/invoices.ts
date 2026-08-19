@@ -1,6 +1,6 @@
-import { Invoice, LineItem, CurrencyCode, Contact, ContactPerson } from 'xero-node'
+import { Invoice, LineItem, CurrencyCode } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
-import { getOrCreateXeroContact, syncUserToXeroContact, generateContactName } from './contacts'
+import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 
@@ -620,7 +620,6 @@ export async function createXeroInvoiceForPayment(
     console.error('Error creating Xero invoice:', error)
     
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorCode = (error as any)?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || 'invoice_creation_failed'
 
     // Update sync status
     const supabase = await createClient()

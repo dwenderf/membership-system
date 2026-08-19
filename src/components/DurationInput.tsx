@@ -39,7 +39,6 @@ export default function DurationInput({
   disabled = false,
   className = '',
   minMinutes = 1,
-  roundToNearest = 5,
 }: DurationInputProps) {
   const [localValue, setLocalValue] = useState(value)
   const [error, setError] = useState<string | null>(null)

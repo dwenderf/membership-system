@@ -7,9 +7,6 @@
  * that could cause the webhook to fail in production but work in preview.
  */
 
-const fs = require('fs');
-const path = require('path');
-
 console.log('🌍 Environment Comparison Tool\n');
 
 console.log('🔍 Key Differences to Check Between Preview and Production:\n');

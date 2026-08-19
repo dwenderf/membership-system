@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // Verify admin access (you might want to add more robust auth here)
     const supabase = createAdminClient()
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = createAdminClient()
     

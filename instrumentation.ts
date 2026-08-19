@@ -25,7 +25,7 @@ export async function register() {
         tracesSampleRate: 1.0,
         
         // Enhanced error context and user information
-        beforeSend(event, hint) {
+        beforeSend(event) {
           // Add server environment context
           event.extra = {
             ...event.extra,
@@ -107,7 +107,7 @@ export async function register() {
 }
 
 // Add Sentry request error handler
-export function onRequestError(error: Error, request: Request, response: Response) {
+export function onRequestError(error: Error, request: Request) {
   const requestInfo = {
     path: request.url,
     method: request.method,

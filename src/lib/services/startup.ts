@@ -11,7 +11,6 @@
  * - Xero keep-alive: /api/cron/xero-keep-alive (daily at midnight)
  */
 
-import { paymentProcessor } from '../payment-completion-processor'
 import { logger } from '../logging/logger'
 
 export class ServiceManager {

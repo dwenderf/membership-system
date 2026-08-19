@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
-import { getSystemTitle } from '@/lib/organization'
 import Link from 'next/link'
 
 export default function VerifyOTPPage() {

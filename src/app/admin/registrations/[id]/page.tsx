@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDateString, formatDate } from '@/lib/date-utils'
 import ClientTimestamp from '@/components/ClientTimestamp'
-import { getCategoryDisplayName, isCategoryCustom } from '@/lib/registration-utils'
 import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
 import RegistrationCategoriesDndList from '@/components/RegistrationCategoriesDndList'
@@ -344,7 +343,7 @@ export default async function RegistrationDetailPage({
                 ) : (
                   <div className="p-4">
                     {/* Drag-and-drop list for registration categories */}
-                    <RegistrationCategoriesDndList categories={categories} registrationId={id} />
+                    <RegistrationCategoriesDndList categories={categories} registrationId={id} registrationCounts={categoryRegistrationCounts} />
                   </div>
                 )}
               </div>

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import SeasonSelector from '@/components/SeasonSelector'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate } from '@/lib/date-utils'
 
 interface Season {
   id: string

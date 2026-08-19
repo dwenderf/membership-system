@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs'
 import { createClient } from './supabase/server'
-import { extractRequestInfo, getSimpleRequestInfo } from './request-info'
+import { extractRequestInfo } from './request-info'
 
 /**
  * Enhanced Sentry error capture with automatic user context
@@ -89,6 +89,7 @@ export async function captureSentryError(
  */
 export async function captureSentryMessage(
   message: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted for API compatibility; not currently forwarded to Sentry.captureMessage (see capturePaymentError's `severity` for the same gap)
   level: Sentry.SeverityLevel = 'info',
   context?: {
     user?: any
@@ -260,6 +261,7 @@ export async function captureCriticalPaymentError(
 export async function capturePaymentError(
   error: Error | any,
   context: PaymentContext,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted by ~30 call sites to signal severity, but not currently forwarded to captureSentryError/Sentry; flagged for follow-up, not fixed here
   severity: 'error' | 'warning' | 'info' = 'error'
 ) {
   await captureSentryError(error instanceof Error ? error : new Error(String(error)), {

@@ -112,7 +112,7 @@ function XeroIntegrationContent() {
         const errorData = await response.json()
         showError(errorData.error || 'Failed to disconnect from Xero')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to disconnect from Xero')
     } finally {
       setDisconnecting(false)

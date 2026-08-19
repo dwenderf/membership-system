@@ -83,7 +83,7 @@ async function testRealEmailBatch() {
        if (email.event_type === 'membership.purchased') {
          // Clean data to ensure no undefined values
          const cleanData = Object.fromEntries(
-           Object.entries(emailData).filter(([_, value]) => value !== undefined)
+           Object.entries(emailData).filter(([, value]) => value !== undefined)
          )
          
          // Add missing required fields for the template
@@ -153,7 +153,6 @@ async function testRealEmailBatch() {
       }
       
     } catch (error) {
-      const processingTime = Date.now() - startTime
       console.error('❌ Email processing failed:', error)
       
       // Update status to bounced

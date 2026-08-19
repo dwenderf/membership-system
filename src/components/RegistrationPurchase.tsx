@@ -9,19 +9,17 @@ import { stripePromise } from '@/lib/stripe-client'
 import PaymentForm from './PaymentForm'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
-import PaymentConfirmationScreen from './PaymentConfirmationScreen'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
 import TallySurveyEmbed from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
-import { validateMembershipCoverage, formatMembershipWarning, calculateExtensionCost } from '@/lib/membership-validation'
+import { validateMembershipCoverage, formatMembershipWarning } from '@/lib/membership-validation'
 import { RegistrationValidationService, type UserMembership } from '@/lib/services/registration-validation-service'
 import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
 import WaitlistBadge from './WaitlistBadge'
 
 // Force import client config
 import '../../instrumentation-client'
-import * as Sentry from '@sentry/nextjs'
 
 // Helper function to safely parse date strings without timezone conversion
 function formatDateString(dateString: string): string {
@@ -125,8 +123,8 @@ export default function RegistrationPurchase({
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
   const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
-  const [surveyResponses, setSurveyResponses] = useState<Record<string, any> | null>(null)
-  const [showSurvey, setShowSurvey] = useState(false)
+  const [, setSurveyResponses] = useState<Record<string, any> | null>(null)
+  const [, setShowSurvey] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [surveyStarted, setSurveyStarted] = useState(false)
   const { showSuccess, showError } = useToast()
@@ -394,15 +392,6 @@ export default function RegistrationPurchase({
     // Keep showSurvey true so they can restart
   }
 
-  // Handle survey skip (if allowed)
-  const handleSurveySkip = () => {
-    // For now, don't allow skipping required surveys
-    if (registration.require_survey) {
-      return
-    }
-    setShowSurvey(false)
-  }
-
   // Validate discount code
   const validateDiscountCode = async (code: string) => {
     if (!code.trim() || !selectedCategoryId) {
@@ -434,10 +423,10 @@ export default function RegistrationPurchase({
           error: errorData.error || 'Invalid discount code' 
         })
       }
-    } catch (err) {
-      setDiscountValidation({ 
-        isValid: false, 
-        error: 'Failed to validate discount code' 
+    } catch {
+      setDiscountValidation({
+        isValid: false,
+        error: 'Failed to validate discount code'
       })
     } finally {
       setIsValidatingDiscount(false)

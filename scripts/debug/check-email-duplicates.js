@@ -40,7 +40,7 @@ async function checkEmailDuplicates() {
     
     // Find groups with more than 1 email
     const duplicates = Object.entries(grouped)
-      .filter(([key, emails]) => emails.length > 1)
+      .filter(([, emails]) => emails.length > 1)
     
     console.log(`\n🔍 Found ${duplicates.length} sets of duplicate emails:`)
     

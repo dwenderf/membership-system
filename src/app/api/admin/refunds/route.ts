@@ -1,10 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatDate } from '@/lib/date-utils'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 // Removed old direct Xero API call - using staging workflow instead
-import { emailService } from '@/lib/email/service'
 import { getStripe } from '@/lib/stripe/server-client'
 
 // POST /api/admin/refunds - Process new refunds

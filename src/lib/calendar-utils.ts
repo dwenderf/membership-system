@@ -99,7 +99,7 @@ function generateVTimezone(): string[] {
 
     // If it's already an array, return as-is
     return Array.isArray(vtimezoneBlock) ? vtimezoneBlock : [vtimezoneBlock]
-  } catch (error) {
+  } catch {
     // Fallback: If library is not available (shouldn't happen in production)
     console.warn(
       `Warning: timezones-ical-library not available for timezone ${APP_TIMEZONE}. ` +

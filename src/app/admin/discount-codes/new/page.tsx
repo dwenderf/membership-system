@@ -94,7 +94,7 @@ function NewDiscountCodeForm() {
           : '/admin/discount-codes'
         router.push(returnUrl)
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

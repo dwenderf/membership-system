@@ -45,7 +45,7 @@ export default function AccountingCodesPage() {
     donation_given_default: '',
     stripe_bank_account: ''
   })
-  const [systemCodes, setSystemCodes] = useState<SystemAccountingCode[]>([])
+  const [, setSystemCodes] = useState<SystemAccountingCode[]>([])
   const [originalCodes, setOriginalCodes] = useState<AccountingCodes>({
     donation_received_default: '',
     donation_given_default: '',

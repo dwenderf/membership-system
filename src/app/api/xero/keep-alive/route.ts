@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getAuthenticatedXeroClient, withActiveTenant } from '@/lib/xero/client'
+import { NextResponse } from 'next/server'
+import { getAuthenticatedXeroClient } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('🏓 Xero keep-alive ping started')
     
@@ -105,6 +105,6 @@ export async function POST(request: NextRequest) {
 }
 
 // Also allow GET for manual testing
-export async function GET(request: NextRequest) {
-  return POST(request)
+export async function GET() {
+  return POST()
 }

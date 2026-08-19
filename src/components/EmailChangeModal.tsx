@@ -7,14 +7,12 @@ interface EmailChangeModalProps {
   isOpen: boolean
   onClose: () => void
   currentEmail: string
-  onSuccess: () => void
 }
 
 export default function EmailChangeModal({
   isOpen,
   onClose,
-  currentEmail,
-  onSuccess
+  currentEmail
 }: EmailChangeModalProps) {
   const [step, setStep] = useState<'request' | 'confirmation'>('request')
   const [newEmail, setNewEmail] = useState('')
@@ -172,6 +170,10 @@ export default function EmailChangeModal({
 
         {step === 'confirmation' && (
           <div className="mb-6">
+            <p className="text-sm text-gray-700 mb-4">
+              Check your email to confirm the change.
+            </p>
+
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
               <div className="flex">
                 <div className="flex-shrink-0">

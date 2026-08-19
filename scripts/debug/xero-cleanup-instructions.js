@@ -80,7 +80,7 @@ async function generateCleanupInstructions(userId) {
     console.log('📝 STEP-BY-STEP CLEANUP INSTRUCTIONS:')
     console.log('')
     console.log('1. 🗑️  IN XERO - Remove payments from wrong invoices:')
-    problematicInvoices.forEach((invoice, i) => {
+    problematicInvoices.forEach((invoice) => {
       console.log(`   • Go to ${invoice.invoice_number} (${invoice.xero_invoice_id})`)
       console.log(`   • Remove any payments attached to this invoice`)
       console.log(`   • Note: These payments are invalid anyway (wrong amounts)`)
@@ -88,7 +88,7 @@ async function generateCleanupInstructions(userId) {
     console.log('')
     
     console.log('2. ❌ IN XERO - Void the wrong invoices:')
-    problematicInvoices.forEach((invoice, i) => {
+    problematicInvoices.forEach((invoice) => {
       console.log(`   • Void ${invoice.invoice_number} (${invoice.xero_invoice_id})`)
       console.log(`   • This will remove it from financial reporting`)
     })

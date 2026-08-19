@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { SetupIntentService } from '@/lib/services/setup-intent-service'
 import { logger } from '@/lib/logging/logger'
@@ -7,7 +7,7 @@ import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 /**
  * Create or retrieve Setup Intent for user payment method
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const supabase = await createClient()
     
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 /**
  * Get user's current payment method info
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient()
     
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
 /**
  * Remove user's payment method authorization
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
     const supabase = await createClient()
     

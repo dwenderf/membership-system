@@ -117,7 +117,6 @@ export async function POST(request: NextRequest) {
     // Extract metadata
     const registrationId = paymentIntent.metadata.registrationId
     const reservationId = paymentIntent.metadata.reservationId
-    const userMembershipId = null // For now, we won't require linking to specific membership
 
     // Get user's active membership for eligibility (if any)
     const { data: activeMembership } = await supabase
@@ -304,26 +303,6 @@ export async function POST(request: NextRequest) {
     } else {
       console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
     }
-
-    // Get user and registration details for email
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('first_name, last_name, email')
-      .eq('id', user.id)
-      .single()
-
-    const { data: registrationDetails } = await supabase
-      .from('registrations')
-      .select(`
-        *,
-        season:seasons(*),
-        registration_categories(
-          *,
-          category:categories(name)
-        )
-      `)
-      .eq('id', registrationId)
-      .single()
 
     // Note: Discount usage is now tracked via discount_usage_computed view
     // which derives data from xero_invoice_line_items

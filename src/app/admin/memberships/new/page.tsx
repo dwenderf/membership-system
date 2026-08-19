@@ -43,7 +43,7 @@ export default function NewMembershipPage() {
           setAccountingCodesValid(false)
           setAccountingCodesError('Failed to validate accounting codes')
         }
-      } catch (error) {
+      } catch {
         setAccountingCodesValid(false)
         setAccountingCodesError('Failed to validate accounting codes')
       }
@@ -129,7 +129,7 @@ export default function NewMembershipPage() {
       } else {
         router.push('/admin/memberships')
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

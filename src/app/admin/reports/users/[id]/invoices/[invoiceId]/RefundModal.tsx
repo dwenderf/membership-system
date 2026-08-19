@@ -167,7 +167,7 @@ export default function RefundModal({
       setDiscountValidation(result)
       
       // Don't set main error for validation - let inline validation handle it
-    } catch (err) {
+    } catch {
       setDiscountValidation({
         isValid: false,
         error: 'Failed to validate discount code'
@@ -341,14 +341,6 @@ export default function RefundModal({
   // Validate that reason is provided
   const isValidReason = () => {
     return reason.trim().length > 0
-  }
-
-  // Get effective refund amount based on type
-  const getEffectiveRefundAmount = () => {
-    if (refundType === 'discount_code' && discountValidation?.isValid) {
-      return discountValidation.discountAmount || 0
-    }
-    return Math.round(parseFloat(refundAmount) * 100)
   }
 
   // Check if form is valid for submission

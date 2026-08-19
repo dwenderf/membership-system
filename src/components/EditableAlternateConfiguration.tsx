@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
 
 interface EditableAlternateConfigurationProps {
@@ -25,8 +24,6 @@ export default function EditableAlternateConfiguration({
     alternate_price: initialConfig.alternate_price ? (initialConfig.alternate_price / 100).toString() : '',
     alternate_accounting_code: initialConfig.alternate_accounting_code || ''
   })
-
-  const supabase = createClient()
 
   const handleSave = async () => {
     setLoading(true)

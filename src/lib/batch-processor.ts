@@ -226,7 +226,6 @@ export class BatchProcessor {
       batchSize = 10,
       concurrency = 3,
       delayBetweenBatches = 100,
-      retryFailures = true,
       operationType = 'xero_api',
       priorityField,
       sortOrder = 'asc',

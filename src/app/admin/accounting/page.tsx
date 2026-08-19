@@ -425,7 +425,7 @@ export default function AccountingIntegrationPage() {
         const errorData = await response.json()
         showError(errorData.message || errorData.error || 'Failed to trigger manual sync')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to trigger manual sync')
     } finally {
       setSyncing(false)
@@ -471,7 +471,7 @@ export default function AccountingIntegrationPage() {
         const errorData = await response.json()
         showError(errorData.error || 'Failed to retry failed items')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to retry failed items')
     } finally {
       setRetrying(false)
@@ -494,7 +494,6 @@ export default function AccountingIntegrationPage() {
 
       if (response.ok) {
         const data = await response.json()
-        const ignoredCount = data.ignore_results.invoices + data.ignore_results.payments
         showSuccess(`Ignored ${data.ignore_results.invoices} invoices and ${data.ignore_results.payments} payments`)
         
         // Clear selections
@@ -506,7 +505,7 @@ export default function AccountingIntegrationPage() {
         const errorData = await response.json()
         showError(errorData.error || 'Failed to ignore items')
       }
-    } catch (error) {
+    } catch {
       showError('Failed to ignore items')
     } finally {
       setRetrying(false)

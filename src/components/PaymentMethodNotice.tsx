@@ -13,7 +13,6 @@ interface PaymentMethodNoticeProps {
 // PaymentMethodInfo is now imported from utils
 
 export default function PaymentMethodNotice({
-  userEmail,
   onSavePaymentChange,
   showForAlternate = false,
   paymentPlanEnabled = false

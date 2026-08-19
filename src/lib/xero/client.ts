@@ -1,4 +1,4 @@
-import { XeroClient, AccountingApi } from 'xero-node'
+import { XeroClient } from 'xero-node'
 import { Logger } from '@/lib/logging/logger'
 
 const logger = Logger.getInstance()
@@ -22,99 +22,8 @@ export function isRefreshTokenExpired(updatedAt: string): boolean {
 // Run startup connection test when this module is first imported
 // DISABLED: This was causing infinite loops and rate limiting when multiple
 // instances of the module were imported simultaneously
-let hasRunStartupTest = false
-
-async function runXeroStartupTest() {
-  if (hasRunStartupTest) return
-  hasRunStartupTest = true
-
-  // Only run on server side
-  if (typeof window !== 'undefined') return
-
-  const { logger } = await import('../logging/logger')
-  logger.logXeroSync(
-    'startup-test-initiated',
-    'Xero startup connection test initiated',
-    { delay: '2 seconds' }
-  )
-  
-  try {
-    // Small delay to ensure app is ready
-    setTimeout(async () => {
-      try {
-        const activeXeroTenants = await getActiveXeroTenants()
-        
-        if (activeXeroTenants.length > 0) {
-          const { logger } = await import('../logging/logger')
-          logger.logXeroSync(
-            'startup-connection-test',
-            `Found ${activeXeroTenants.length} active Xero tenant(s), testing connection`,
-            { tenantCount: activeXeroTenants.length, tenants: activeXeroTenants }
-          )
-          
-          // Test connection to first active tenant
-          logger.logXeroSync(
-            'startup-connection-test-begin',
-            `Testing connection to tenant: ${activeXeroTenants[0].tenant_name}`,
-            { 
-              tenantId: activeXeroTenants[0].tenant_id,
-              tenantName: activeXeroTenants[0].tenant_name,
-              tenantExpiresAt: activeXeroTenants[0].expires_at
-            },
-            'info'
-          )
-          
-          const isConnected = await validateXeroConnection(activeXeroTenants[0].tenant_id)
-          
-          if (isConnected) {
-            const { logger } = await import('../logging/logger')
-            logger.logXeroSync(
-              'startup-connection-success',
-              `Xero connection verified for: ${activeXeroTenants[0].tenant_name}`,
-              { tenantName: activeXeroTenants[0].tenant_name, tenantId: activeXeroTenants[0].tenant_id }
-            )
-          } else {
-            const { logger } = await import('../logging/logger')
-            logger.logXeroSync(
-              'startup-connection-failed',
-              `Xero connection test failed for: ${activeXeroTenants[0].tenant_name}`,
-              { tenantName: activeXeroTenants[0].tenant_name, tenantId: activeXeroTenants[0].tenant_id },
-              'warn'
-            )
-          }
-        } else {
-          const { logger } = await import('../logging/logger')
-          logger.logXeroSync(
-            'startup-no-tenants',
-            'No active Xero tenants found at startup',
-            { tenantCount: 0 },
-            'warn'
-          )
-        }
-      } catch (error) {
-        const { logger } = await import('../logging/logger')
-        logger.logXeroSync(
-          'startup-test-error',
-          'Xero startup test error',
-          { error: error instanceof Error ? error.message : 'Unknown error' },
-          'warn'
-        )
-      }
-    }, 2000) // 2 second delay to ensure everything is initialized
-    
-  } catch (error) {
-    const { logger } = await import('../logging/logger')
-    logger.logXeroSync(
-      'startup-test-outer-error',
-      'Error during Xero startup test',
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      'warn'
-    )
-  }
-}
-
-// Trigger startup test - DISABLED due to potential infinite loop causing rate limiting
-// runXeroStartupTest()
+// (runXeroStartupTest() was previously defined here to test the Xero connection
+// on module load; removed as dead code since it was never actually invoked.)
 
 const xero = new XeroClient({
   clientId: process.env.XERO_CLIENT_ID,

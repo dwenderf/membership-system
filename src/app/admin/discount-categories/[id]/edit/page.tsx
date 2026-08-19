@@ -108,7 +108,7 @@ export default function EditDiscountCategoryPage() {
       } else {
         router.push('/admin/discount-categories')
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

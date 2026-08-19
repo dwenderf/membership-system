@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { formatDate } from '@/lib/date-utils'
 
 import Stripe from 'stripe'
 import { getStripe } from '@/lib/stripe/server-client'
@@ -8,9 +7,6 @@ import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
-import { xeroStagingManager } from '@/lib/xero/staging'
-import { centsToCents } from '@/types/currency'
-import { emailService } from '@/lib/email/service'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 
 // Force import server config

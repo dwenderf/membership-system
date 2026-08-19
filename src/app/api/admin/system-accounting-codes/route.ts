@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest) {
           })
           successCount++
         }
-      } catch (err) {
+      } catch {
         results.push({
           code_type,
           success: false,

@@ -1,5 +1,5 @@
-import { CreditNote, LineItem, CurrencyCode, Contact, LineAmountTypes } from 'xero-node'
-import { getAuthenticatedXeroClient, getActiveTenant } from './client'
+import { CreditNote, LineItem, CurrencyCode, LineAmountTypes } from 'xero-node'
+import { getAuthenticatedXeroClient } from './client'
 import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
 import { Logger } from '@/lib/logging/logger'

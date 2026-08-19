@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config) => {
     // Suppress Supabase realtime warnings
     config.ignoreWarnings = [
       {

@@ -293,7 +293,7 @@ export default async function UserRegistrationsPage() {
               <div className="ml-4">
                 <h3 className="text-sm font-medium text-gray-900">No active registrations</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  You haven't registered for any active teams or events. Browse available options to get started.
+                  You haven&apos;t registered for any active teams or events. Browse available options to get started.
                 </p>
                 <div className="mt-4">
                   <Link

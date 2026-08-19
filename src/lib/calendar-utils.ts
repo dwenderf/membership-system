@@ -88,6 +88,7 @@ function generateVTimezone(): string[] {
   try {
     // Dynamic import for Node.js/SSR context only
     // This library provides VTIMEZONE data for 597+ IANA timezones
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy load with try/catch fallback if unavailable
     const { tzlib_get_ical_block } = require('timezones-ical-library')
     const vtimezoneBlock = tzlib_get_ical_block(APP_TIMEZONE)
 

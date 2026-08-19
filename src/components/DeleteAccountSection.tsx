@@ -94,7 +94,7 @@ export default function DeleteAccountSection({ user }: DeleteAccountSectionProps
               
               <div className="mb-4">
                 <label htmlFor="confirmation" className="block text-sm font-medium text-red-800 mb-2">
-                  Type <strong>"DELETE MY ACCOUNT"</strong> to confirm:
+                  Type <strong>&quot;DELETE MY ACCOUNT&quot;</strong> to confirm:
                 </label>
                 <input
                   type="text"
@@ -160,7 +160,7 @@ export default function DeleteAccountSection({ user }: DeleteAccountSectionProps
 
               <p className="text-sm text-yellow-700 mb-6">
                 <strong>This action cannot be undone.</strong> If you want to use this system again in the future, 
-                you'll need to create a completely new account.
+                you&apos;ll need to create a completely new account.
               </p>
 
               <div className="flex space-x-3">

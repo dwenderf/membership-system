@@ -186,7 +186,7 @@ export default function NewDiscountCategoryPage() {
                   placeholder="e.g., Need-based scholarships for community members"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Optional description of this discount category's purpose
+                  Optional description of this discount category&apos;s purpose
                 </p>
               </div>
 
@@ -263,7 +263,7 @@ export default function NewDiscountCategoryPage() {
                     </div>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-                      <p className="text-sm text-yellow-700">A category with the name "{formData.name}" already exists</p>
+                      <p className="text-sm text-yellow-700">A category with the name &quot;{formData.name}&quot; already exists</p>
                     </div>
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export default function NewDiscountCategoryPage() {
                     </div>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
-                      <p className="text-sm text-yellow-700">A category with the accounting code "{formData.accounting_code.toUpperCase()}" already exists</p>
+                      <p className="text-sm text-yellow-700">A category with the accounting code &quot;{formData.accounting_code.toUpperCase()}&quot; already exists</p>
                     </div>
                   </div>
                 </div>

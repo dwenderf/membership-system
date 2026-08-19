@@ -249,7 +249,7 @@ export default function WaitlistSelectionModal({
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  This user's saved payment method will be charged immediately. A confirmation email will be sent to the user.
+                  This user&apos;s saved payment method will be charged immediately. A confirmation email will be sent to the user.
                 </p>
               </div>
             </div>

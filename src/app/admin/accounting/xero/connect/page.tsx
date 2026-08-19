@@ -187,7 +187,7 @@ export default function XeroConnectPage() {
             </h3>
             
             <p className="text-sm text-gray-600 mb-6">
-              You'll be redirected to Xero to authorize the connection. Make sure you have admin access to your Xero organization.
+              You&apos;ll be redirected to Xero to authorize the connection. Make sure you have admin access to your Xero organization.
             </p>
 
             <div className="space-y-4">

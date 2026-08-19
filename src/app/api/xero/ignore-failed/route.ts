@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     console.log('🚫 Ignore failed sync triggered by admin:', user.email, { type, itemCount: items?.length || 'all' })
 
-    let ignoreResults = { invoices: 0, payments: 0, errors: [] as string[] }
+    const ignoreResults = { invoices: 0, payments: 0, errors: [] as string[] }
 
     if (type === 'all') {
       // Mark all failed items as ignored

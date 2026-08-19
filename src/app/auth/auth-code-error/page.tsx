@@ -23,7 +23,7 @@ export default function AuthCodeErrorPage() {
             <div className="text-sm text-gray-700">
               <h3 className="font-medium text-gray-900 mb-2">What happened?</h3>
               <p className="mb-3">
-                Your magic link couldn't be verified. This usually happens when:
+                Your magic link couldn&apos;t be verified. This usually happens when:
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>The link was opened in a different browser than where you requested it</li>

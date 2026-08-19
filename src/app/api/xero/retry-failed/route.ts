@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     console.log('🔄 Retry failed sync triggered by admin:', user.email, { type, itemCount: items?.length || 'all' })
 
-    let retryResults = { invoices: 0, payments: 0, errors: [] as string[] }
+    const retryResults = { invoices: 0, payments: 0, errors: [] as string[] }
 
     if (type === 'all') {
       // Reset all failed items to pending and trigger sync

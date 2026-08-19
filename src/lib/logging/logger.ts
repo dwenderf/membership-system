@@ -37,7 +37,9 @@ let path: any = null
 
 function ensureFsModules(): void {
   if (typeof window !== 'undefined') return
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy load to avoid Next's build-time fs tracing
   if (!fs) fs = require('fs')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy load to avoid Next's build-time fs tracing
   if (!path) path = require('path')
 }
 

@@ -289,7 +289,7 @@ export async function GET(request: NextRequest) {
 
         if (discountCode) {
           // Calculate requested discount amount
-          let requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
+          const requestedDiscountAmount = Math.round((basePrice * discountCode.percentage) / 100)
 
           // Check and apply seasonal cap
           const discountCategory = Array.isArray(discountCode.category) ? discountCode.category[0] : discountCode.category

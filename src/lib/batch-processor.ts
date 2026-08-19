@@ -245,7 +245,7 @@ export class BatchProcessor {
     )
 
     // Sort items by priority if specified
-    let sortedItems = [...items]
+    const sortedItems = [...items]
     if (priorityField) {
       sortedItems.sort((a, b) => {
         const aVal = a[priorityField]

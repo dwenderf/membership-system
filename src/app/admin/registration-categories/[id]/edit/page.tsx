@@ -113,7 +113,7 @@ export default function EditRegistrationCategoryPage() {
         />
         <div className="bg-white shadow rounded-lg p-6">
           <div className="text-center py-8">
-            <p className="text-gray-500">Category not found or you don't have permission to edit it.</p>
+            <p className="text-gray-500">Category not found or you don&apos;t have permission to edit it.</p>
             <Link
               href="/admin/registration-categories"
               className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"

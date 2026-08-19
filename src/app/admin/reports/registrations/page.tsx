@@ -288,7 +288,7 @@ export default function RegistrationReportsPage() {
         <div className="py-12 text-center">
           <p className="text-gray-500">No registrations found matching your filters.</p>
           {!showPastClosed && (
-            <p className="text-sm text-gray-400 mt-2">Try switching to "All" to see more results.</p>
+            <p className="text-sm text-gray-400 mt-2">Try switching to &quot;All&quot; to see more results.</p>
           )}
         </div>
       ) : (

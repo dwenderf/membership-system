@@ -99,7 +99,7 @@ export default function PaymentPlanSection({
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-lg font-medium text-gray-900">Payment Plans</h2>
         <p className="mt-1 text-sm text-gray-600">
-          Manage user's payment plan eligibility and view active plans
+          Manage user&apos;s payment plan eligibility and view active plans
         </p>
       </div>
 

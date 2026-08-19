@@ -337,7 +337,7 @@ export default async function UserInvoicesPage() {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Invoices Found</h3>
             <p className="text-gray-600">
-              You don't have any invoices yet. Invoices will appear here once they're created.
+              You don&apos;t have any invoices yet. Invoices will appear here once they&apos;re created.
             </p>
           </div>
         ) : (

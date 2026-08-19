@@ -82,7 +82,7 @@ export default function PaymentMethodNotice({
                 </>
               ) : (
                 <>
-                  We'll use your saved payment method ({cardDisplay}) for this purchase.
+                  We&apos;ll use your saved payment method ({cardDisplay}) for this purchase.
                 </>
               )}
             </div>
@@ -107,7 +107,7 @@ export default function PaymentMethodNotice({
             <div className="flex-1">
               <div className="text-sm font-medium text-blue-900">Payment Plans Available!</div>
               <div className="text-sm text-blue-700 mt-1">
-                You're eligible for 4-month payment plans. Save a payment method below to unlock this option.
+                You&apos;re eligible for 4-month payment plans. Save a payment method below to unlock this option.
               </div>
             </div>
           </div>

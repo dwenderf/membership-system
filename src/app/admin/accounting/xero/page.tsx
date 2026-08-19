@@ -245,7 +245,7 @@ function XeroIntegrationContent() {
                         <h3 className="text-sm font-medium text-yellow-800">Refresh Token Expiring Soon</h3>
                         <p className="text-sm text-yellow-700">
                           Your Xero refresh token expires on {new Date(new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000)).toLocaleString()}. 
-                          You'll need to reconnect to Xero before this date to maintain access.
+                          You&apos;ll need to reconnect to Xero before this date to maintain access.
                         </p>
                       </div>
                     </div>

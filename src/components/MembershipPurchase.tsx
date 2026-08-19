@@ -551,7 +551,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                 <div className={`text-sm font-medium ${
                   paymentOption === 'donation' ? 'text-blue-900' : 'text-gray-900'
                 }`}>
-                  I'd like to make an additional donation to support the membership
+                  I&apos;d like to make an additional donation to support the membership
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
                   Support other members who need assistance

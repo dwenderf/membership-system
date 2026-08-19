@@ -423,7 +423,7 @@ export default function NewRegistrationPage() {
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">Warning</h3>
                       <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
-                        <li>A registration with the name "{formData.name}" already exists</li>
+                        <li>A registration with the name &quot;{formData.name}&quot; already exists</li>
                       </ul>
                     </div>
                   </div>
@@ -442,7 +442,7 @@ export default function NewRegistrationPage() {
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-blue-800">About Categories</h3>
                     <div className="mt-2 text-sm text-blue-700">
-                      <p>After creating this registration, you'll be able to add participant categories (e.g., Players, Goalies, Alternates) with individual capacity limits, membership requirements, and accounting codes.</p>
+                      <p>After creating this registration, you&apos;ll be able to add participant categories (e.g., Players, Goalies, Alternates) with individual capacity limits, membership requirements, and accounting codes.</p>
                     </div>
                   </div>
                 </div>

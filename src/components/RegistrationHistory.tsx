@@ -19,9 +19,9 @@ function formatDateString(dateString: string): string {
 interface UserRegistration {
   id: string
   registration_id: string
-  registered_at: string
+  registered_at: string | null
   payment_status: string
-  amount_paid: number
+  amount_paid: number | null
   registration?: {
     name: string
     type: string
@@ -30,7 +30,7 @@ interface UserRegistration {
       start_date: string
       end_date: string
     }
-  }
+  } | null
 }
 
 interface RegistrationHistoryProps {
@@ -46,8 +46,8 @@ export default function RegistrationHistory({ userRegistrations }: RegistrationH
 
   // Sort by registration date (newest first)
   const sortedRegistrations = [...userRegistrations].sort((a, b) => {
-    const dateA = new Date(a.registered_at)
-    const dateB = new Date(b.registered_at)
+    const dateA = new Date(a.registered_at || 0)
+    const dateB = new Date(b.registered_at || 0)
     return dateB.getTime() - dateA.getTime()
   })
 
@@ -77,7 +77,7 @@ export default function RegistrationHistory({ userRegistrations }: RegistrationH
                 ? new Date(userRegistration.registration.season.end_date)
                 : null
               const isActive = seasonEndDate ? seasonEndDate > now : false
-              const registrationDate = new Date(userRegistration.registered_at)
+              const registrationDate = new Date(userRegistration.registered_at || 0)
               
               return (
                 <li key={userRegistration.id}>
@@ -108,7 +108,7 @@ export default function RegistrationHistory({ userRegistrations }: RegistrationH
                         </div>
                       </div>
                       <div className="text-sm text-gray-900 font-medium">
-                        ${(userRegistration.amount_paid / 100).toFixed(2)}
+                        ${((userRegistration.amount_paid || 0) / 100).toFixed(2)}
                       </div>
                     </div>
                     

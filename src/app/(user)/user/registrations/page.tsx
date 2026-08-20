@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import RegistrationHistory from '@/components/RegistrationHistory'
 import Link from 'next/link'
-import { getCategoryDisplayName } from '@/lib/registration-utils'
+import { getCategoryDisplayName, type RegistrationCategory } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import { formatAmount } from '@/lib/format-utils'
@@ -10,9 +10,29 @@ import EventCalendarButton from '@/components/EventCalendarButton'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import WaitlistBadge from '@/components/WaitlistBadge'
 import RoleBadge from '@/components/RoleBadge'
+import { Database } from '@/types/database'
+
+interface ActivityCheckRegistration {
+  type: string
+  end_date: string | null
+  season?: { end_date: string } | null
+}
+
+/** Shape returned by GET /api/user-registrations. */
+type UserRegistrationRow = Database['public']['Tables']['user_registrations']['Row'] & {
+  registration: {
+    id: string
+    name: string
+    type: string
+    start_date: string | null
+    end_date: string | null
+    season?: { name: string; start_date: string; end_date: string }
+  } | null
+  registration_category: RegistrationCategory | null
+}
 
 // Helper function to check if a registration is currently active
-function isRegistrationActive(registration: any, today: string): boolean {
+function isRegistrationActive(registration: ActivityCheckRegistration | null | undefined, today: string): boolean {
   if (!registration) return false
 
   // For events and scrimmages with dates set, use the event end_date
@@ -44,7 +64,7 @@ export default async function UserRegistrationsPage() {
   const todayDateString = new Date().toISOString().split('T')[0]
 
   // Get user's paid registrations only (via API for centralized logic)
-  let userRegistrations: any[] = []
+  let userRegistrations: UserRegistrationRow[] = []
   try {
     const registrationsResponse = await fetch(`${getBaseUrl()}/api/user-registrations`, {
       headers: {
@@ -52,7 +72,7 @@ export default async function UserRegistrationsPage() {
       },
     })
     if (registrationsResponse.ok) {
-      userRegistrations = await registrationsResponse.json()
+      userRegistrations = await registrationsResponse.json() as UserRegistrationRow[]
     }
   } catch (error) {
     console.error('Error fetching user registrations:', error)
@@ -132,7 +152,7 @@ export default async function UserRegistrationsPage() {
     .from('registration_captains')
     .select('registration_id')
     .eq('user_id', user.id)
-  const captainRegistrationIds = new Set((captainRows ?? []).map((r: any) => r.registration_id))
+  const captainRegistrationIds = new Set((captainRows ?? []).map((r) => r.registration_id))
 
   const currentRegistrations = userRegistrations?.filter(ur =>
     isRegistrationActive(ur.registration, todayDateString)
@@ -183,7 +203,7 @@ export default async function UserRegistrationsPage() {
 
                         {/* Badges */}
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          <RegistrationTypeBadge type={userRegistration.registration?.type} />
+                          <RegistrationTypeBadge type={userRegistration.registration?.type as 'team' | 'scrimmage' | 'event' | 'tournament'} />
                           {userRegistration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(userRegistration.registration_category)}
@@ -205,7 +225,7 @@ export default async function UserRegistrationsPage() {
                                   eventName={userRegistration.registration.name}
                                   startDate={userRegistration.registration.start_date}
                                   endDate={userRegistration.registration.end_date}
-                                  description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${getCategoryDisplayName(userRegistration.registration_category)}`}
+                                  description={`${userRegistration.registration.type.charAt(0).toUpperCase() + userRegistration.registration.type.slice(1)} - ${userRegistration.registration_category ? getCategoryDisplayName(userRegistration.registration_category) : 'Unknown Category'}`}
                                 />
                               </div>
                             )}
@@ -221,10 +241,10 @@ export default async function UserRegistrationsPage() {
                       <div className="ml-4 flex flex-col items-end space-y-2">
                         <div className="text-right">
                           <p className="text-sm font-semibold text-gray-900">
-                            ${(userRegistration.amount_paid / 100).toFixed(2)}
+                            ${((userRegistration.amount_paid || 0) / 100).toFixed(2)}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Registered: {formatDate(new Date(userRegistration.registered_at))}
+                            Registered: {formatDate(new Date(userRegistration.registered_at || 0))}
                           </p>
                         </div>
                       </div>
@@ -471,7 +491,7 @@ export default async function UserRegistrationsPage() {
 
                         {/* Badges */}
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          <RegistrationTypeBadge type={userRegistration.registration?.type} />
+                          <RegistrationTypeBadge type={userRegistration.registration?.type as 'team' | 'scrimmage' | 'event' | 'tournament'} />
                           {userRegistration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(userRegistration.registration_category)}
@@ -496,10 +516,10 @@ export default async function UserRegistrationsPage() {
                       <div className="ml-4 flex flex-col items-end space-y-2">
                         <div className="text-right">
                           <p className="text-sm font-semibold text-gray-900">
-                            ${(userRegistration.amount_paid / 100).toFixed(2)}
+                            ${((userRegistration.amount_paid || 0) / 100).toFixed(2)}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Registered: {formatDate(new Date(userRegistration.registered_at))}
+                            Registered: {formatDate(new Date(userRegistration.registered_at || 0))}
                           </p>
                         </div>
                       </div>

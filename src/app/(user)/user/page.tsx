@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { getCategoryDisplayName } from '@/lib/registration-utils'
+import { getCategoryDisplayName, type RegistrationCategory } from '@/lib/registration-utils'
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
@@ -9,10 +9,44 @@ import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import { formatEventDateTime } from '@/lib/date-utils'
+import { Database } from '@/types/database'
 
 type EventRegistrationType = 'event' | 'scrimmage' | 'tournament'
 const isEventRegistrationType = (type: string | undefined | null): type is EventRegistrationType =>
   type === 'event' || type === 'scrimmage' || type === 'tournament'
+
+type MembershipRow = Database['public']['Tables']['memberships']['Row']
+type UserMembershipRow = Database['public']['Tables']['user_memberships']['Row']
+
+interface UserMembershipWithDetails extends UserMembershipRow {
+  membership: MembershipRow | null
+}
+
+interface ConsolidatedMembership {
+  membershipId: string
+  membership: MembershipRow | null
+  validFrom: string
+  validUntil: string
+  purchases: UserMembershipWithDetails[]
+}
+
+interface RecentlyExpiredMembership {
+  membership: MembershipRow | null
+  validUntil: string
+}
+
+/** Shape returned by GET /api/user-registrations. */
+type UserRegistrationListItem = Database['public']['Tables']['user_registrations']['Row'] & {
+  registration: {
+    id: string
+    name: string
+    type: string
+    start_date: string | null
+    end_date: string | null
+    season: { name: string; start_date: string; end_date: string } | null
+  } | null
+  registration_category: RegistrationCategory | null
+}
 
 export default async function UserDashboardPage() {
   const headersList = await headers()
@@ -43,7 +77,7 @@ export default async function UserDashboardPage() {
     .order('valid_until', { ascending: false })
 
   // Get user's current paid registrations only (via API for centralized logic)
-  let userRegistrations: any[] = []
+  let userRegistrations: UserRegistrationListItem[] = []
   try {
     const registrationsResponse = await fetch(`${getBaseUrl()}/api/user-registrations`, {
       headers: {
@@ -51,9 +85,9 @@ export default async function UserDashboardPage() {
       },
     })
     if (registrationsResponse.ok) {
-      const allRegistrations = await registrationsResponse.json()
+      const allRegistrations = (await registrationsResponse.json()) as UserRegistrationListItem[]
       // Filter to only active registrations
-      const activeRegistrations = allRegistrations.filter((reg: any) => {
+      const activeRegistrations = allRegistrations.filter((reg) => {
         const registration = reg.registration
         if (!registration) return false
 
@@ -145,13 +179,13 @@ export default async function UserDashboardPage() {
     .from('registration_captains')
     .select('registration_id')
     .eq('user_id', user.id)
-  const captainRegistrationIds = new Set((captainRows ?? []).map((r: any) => r.registration_id))
+  const captainRegistrationIds = new Set((captainRows ?? []).map((r) => r.registration_id))
 
   const now = new Date()
-  
+
   // Get all paid memberships for processing
-  const paidMemberships = userMemberships?.filter(um => um.payment_status === 'paid') || []
-  
+  const paidMemberships = ((userMemberships ?? []) as UserMembershipWithDetails[]).filter(um => um.payment_status === 'paid')
+
   // Consolidate active memberships by type
   const consolidatedMemberships = paidMemberships.reduce((acc, um) => {
     const validUntil = new Date(um.valid_until)
@@ -182,8 +216,8 @@ export default async function UserDashboardPage() {
     }
     
     return acc
-  }, {} as Record<string, any>)
-  
+  }, {} as Record<string, ConsolidatedMembership>)
+
   const activeMemberships = Object.values(consolidatedMemberships)
   const hasActiveMembership = activeMemberships.length > 0
 
@@ -202,25 +236,25 @@ export default async function UserDashboardPage() {
       }
     }
     return acc
-  }, {} as Record<string, any>)
+  }, {} as Record<string, RecentlyExpiredMembership>)
 
   const recentlyExpired = Object.values(recentlyExpiredMemberships)
 
   // Check for expiring soon memberships (within 90 days)
-  const expiringSoonMemberships = activeMemberships.filter((consolidatedMembership: any) => {
+  const expiringSoonMemberships = activeMemberships.filter((consolidatedMembership) => {
     const validUntil = new Date(consolidatedMembership.validUntil)
     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiration <= 90
   })
 
   // Separate team registrations from event/scrimmage registrations
-  const teamRegistrations = userRegistrations.filter((reg: any) => {
+  const teamRegistrations = userRegistrations.filter((reg) => {
     const registration = reg.registration
     if (!registration) return false
     return registration.type === 'team'
   })
 
-  const eventRegistrations = userRegistrations.filter((reg: any) => {
+  const eventRegistrations = userRegistrations.filter((reg) => {
     const registration = reg.registration
     if (!registration) return false
     return isEventRegistrationType(registration.type)
@@ -247,7 +281,7 @@ export default async function UserDashboardPage() {
           ) : (
             <>
               {/* Show expiring soon memberships */}
-              {expiringSoonMemberships.map((consolidatedMembership: any) => {
+              {expiringSoonMemberships.map((consolidatedMembership) => {
                 const validUntil = new Date(consolidatedMembership.validUntil)
                 const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -262,7 +296,7 @@ export default async function UserDashboardPage() {
               })}
 
               {/* Show recently expired memberships */}
-              {recentlyExpired.map((expiredMembership: any) => (
+              {recentlyExpired.map((expiredMembership) => (
                 <p key={`expired-${expiredMembership.membership?.id}`} className="text-red-600">
                   Your {expiredMembership.membership?.name} has expired!{' '}
                   <Link href="/user/browse-memberships" className="text-blue-600 hover:text-blue-800 underline">
@@ -316,7 +350,7 @@ export default async function UserDashboardPage() {
                userWaitlistEntries?.some(w => w.registration?.type === 'team' && w.registration?.season && new Date(w.registration.season.end_date) >= now) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show team registrations */}
-                  {teamRegistrations.map((registration: any, index: number) => {
+                  {teamRegistrations.map((registration, index) => {
                     const reg = registration.registration
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === reg?.id)
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
@@ -359,7 +393,7 @@ export default async function UserDashboardPage() {
                     if (!registration.season) return false
                     const seasonEndDate = new Date(registration.season.end_date)
                     if (seasonEndDate < now) return false
-                    return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                    return !teamRegistrations.some((reg) => reg.registration?.id === registration.id)
                   }).map((alternateReg, index: number) => {
                     const registration = alternateReg.registration
                     if (!registration) return null
@@ -398,7 +432,7 @@ export default async function UserDashboardPage() {
                       if (!reg.season) return false
                       const seasonEndDate = new Date(reg.season.end_date)
                       if (seasonEndDate < now) return false
-                      return !teamRegistrations.some((r: any) => r.registration?.id === reg.id)
+                      return !teamRegistrations.some((r) => r.registration?.id === reg.id)
                     }).length || 0
 
                     return userWaitlistEntries?.filter(waitlist => {
@@ -408,7 +442,7 @@ export default async function UserDashboardPage() {
                       const seasonEndDate = new Date(registration.season.end_date)
                       if (seasonEndDate < now) return false
                       // Only show if not already in team registrations or alternates
-                      return !teamRegistrations.some((reg: any) => reg.registration?.id === registration.id) &&
+                      return !teamRegistrations.some((reg) => reg.registration?.id === registration.id) &&
                              !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
                     }).map((waitlistEntry, index: number) => {
                       const registration = waitlistEntry.registration
@@ -464,7 +498,7 @@ export default async function UserDashboardPage() {
                }) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show event/scrimmage registrations */}
-                  {eventRegistrations.map((registration: any, index: number) => {
+                  {eventRegistrations.map((registration, index) => {
                     const reg = registration.registration
                     const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
@@ -495,7 +529,7 @@ export default async function UserDashboardPage() {
                               eventName={reg.name}
                               startDate={reg.start_date}
                               endDate={reg.end_date}
-                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - ${getCategoryDisplayName(registration.registration_category)}`}
+                              description={`${reg.type.charAt(0).toUpperCase() + reg.type.slice(1)} - ${registration.registration_category ? getCategoryDisplayName(registration.registration_category) : 'Unknown Category'}`}
                             />
                           </div>
                         )}
@@ -511,7 +545,7 @@ export default async function UserDashboardPage() {
                     const gameDate = altReg?.game_date
                     if (!gameDate || new Date(gameDate) < now) return false
                     // Only show if not already in event registrations
-                    return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
+                    return !eventRegistrations.some((r) => r.registration?.id === reg.id)
                   }).map((selection, index: number) => {
                     const altReg = selection.alternate_registration
                     const reg = altReg?.registration
@@ -554,7 +588,7 @@ export default async function UserDashboardPage() {
                       if (!reg || !isEventRegistrationType(reg.type)) return false
                       const gameDate = altReg?.game_date
                       if (!gameDate || new Date(gameDate) < now) return false
-                      return !eventRegistrations.some((r: any) => r.registration?.id === reg.id)
+                      return !eventRegistrations.some((r) => r.registration?.id === reg.id)
                     }).length || 0
 
                     return userWaitlistEntries?.filter(waitlist => {
@@ -562,7 +596,7 @@ export default async function UserDashboardPage() {
                       if (!registration || !isEventRegistrationType(registration.type)) return false
                       if (!registration.end_date || new Date(registration.end_date) < now) return false
                       // Only show if not already in event registrations
-                      return !eventRegistrations.some((reg: any) => reg.registration?.id === registration.id)
+                      return !eventRegistrations.some((reg) => reg.registration?.id === registration.id)
                     }).map((waitlistEntry, index: number) => {
                       const registration = waitlistEntry.registration
                       if (!registration) return null

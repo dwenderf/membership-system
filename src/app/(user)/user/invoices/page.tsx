@@ -6,6 +6,40 @@ import Link from 'next/link'
 import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { getActiveTenant, getAuthenticatedXeroClient } from '@/lib/xero/client'
 import { Logger } from '@/lib/logging/logger'
+import { Invoice as XeroInvoice } from 'xero-node'
+
+interface FormattedInvoiceLineItem {
+  description?: string
+  quantity?: number
+  unitAmount: number
+  lineAmount: number
+  accountCode?: string
+}
+
+interface FormattedInvoicePayment {
+  paymentID: string
+  date: string
+  amount: number
+  reference: string
+}
+
+interface FormattedInvoice {
+  id?: string
+  number?: string
+  status?: XeroInvoice.StatusEnum
+  type?: XeroInvoice.TypeEnum
+  total: number
+  amountDue: number
+  amountPaid: number
+  date?: string
+  dueDate?: string
+  reference?: string
+  url: undefined
+  lineItems: FormattedInvoiceLineItem[]
+  payments: FormattedInvoicePayment[]
+  totalPaid: number
+  latestPaymentDate: string | null
+}
 
 export default async function UserInvoicesPage() {
   const supabase = await createClient()
@@ -48,7 +82,7 @@ export default async function UserInvoicesPage() {
   }
 
   // Fetch invoices from Xero API with improved filtering
-  let invoices: any[] = []
+  let invoices: FormattedInvoice[] = []
   let unpaidCount = 0
   let unpaidTotal = 0
   const logger = Logger.getInstance()
@@ -93,7 +127,7 @@ export default async function UserInvoicesPage() {
           }
           
           // Try filtering invoices by contact ID
-          let allInvoices: any[] = []
+          let allInvoices: XeroInvoice[] = []
           
           try {
             const filterString = `Contact.ContactID=guid("${contactResult.xeroContactId}")`
@@ -125,26 +159,26 @@ export default async function UserInvoicesPage() {
           }
           
           // Filter invoices for this specific contact
-          const userInvoices = allInvoices.filter((invoice: any) => {
+          const userInvoices = allInvoices.filter((invoice) => {
             const isCorrectContact = invoice.contact?.contactID === contactResult.xeroContactId
-            const isCorrectType = invoice.type === 'ACCREC'
-            const isCorrectStatus = (invoice.status === 'AUTHORISED' || invoice.status === 'PAID')
+            const isCorrectType = invoice.type === XeroInvoice.TypeEnum.ACCREC
+            const isCorrectStatus = (invoice.status === XeroInvoice.StatusEnum.AUTHORISED || invoice.status === XeroInvoice.StatusEnum.PAID)
             
             return isCorrectContact && isCorrectType && isCorrectStatus
           })
           
           // Log summary instead of every invoice
           if (allInvoices.length > 10) {
-            const contactSummary = allInvoices.reduce((acc: any, invoice: any) => {
-              const contactId = invoice.contact?.contactID
+            const contactSummary = allInvoices.reduce((acc, invoice) => {
+              const contactId = String(invoice.contact?.contactID)
               const contactName = invoice.contact?.name
               if (!acc[contactId]) {
-                acc[contactId] = { name: contactName, count: 0, types: new Set() }
+                acc[contactId] = { name: contactName, count: 0, types: new Set<XeroInvoice.TypeEnum | undefined>() }
               }
               acc[contactId].count++
               acc[contactId].types.add(invoice.type)
               return acc
-            }, {})
+            }, {} as Record<string, { name?: string; count: number; types: Set<XeroInvoice.TypeEnum | undefined> }>)
             
             logger.logSystem('invoice-summary', 'Invoice summary by contact', { 
               totalInvoices: allInvoices.length,
@@ -160,14 +194,14 @@ export default async function UserInvoicesPage() {
           })
           
           // Format the invoices for the frontend
-          const formattedInvoices = await Promise.all(userInvoices.map(async (invoice: any) => {
+          const formattedInvoices: FormattedInvoice[] = await Promise.all(userInvoices.map(async (invoice) => {
             // Sum up all payments and get the most recent payment date
             let totalPaid = 0
-            let latestPaymentDate = null
+            let latestPaymentDate: string | null = null
             if (invoice.payments && invoice.payments.length > 0) {
-              totalPaid = invoice.payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
-              latestPaymentDate = invoice.payments.reduce((latest: string | null, p: any) => {
-                if (!latest || new Date(p.date) > new Date(latest)) {
+              totalPaid = invoice.payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+              latestPaymentDate = invoice.payments.reduce<string | null>((latest, p) => {
+                if (p.date && (!latest || new Date(p.date) > new Date(latest))) {
                   return p.date
                 }
                 return latest
@@ -181,21 +215,21 @@ export default async function UserInvoicesPage() {
               number: invoice.invoiceNumber,
               status: invoice.status,
               type: invoice.type,
-              total: Math.round(invoice.total * 100), // Convert dollars to cents
+              total: Math.round((invoice.total || 0) * 100), // Convert dollars to cents
               amountDue: Math.round((invoice.amountDue || 0) * 100), // Convert dollars to cents
               amountPaid: Math.round((invoice.amountPaid || 0) * 100), // Convert dollars to cents
               date: invoice.date,
               dueDate: invoice.dueDate,
               reference: invoice.reference,
               url: undefined, // No URL needed for list view
-              lineItems: invoice.lineItems?.map((item: any) => ({
+              lineItems: invoice.lineItems?.map((item) => ({
                 description: item.description,
                 quantity: item.quantity,
                 unitAmount: Math.round((item.unitAmount || 0) * 100), // Convert dollars to cents
                 lineAmount: Math.round((item.lineAmount || 0) * 100), // Convert dollars to cents
                 accountCode: item.accountCode
               })) || [],
-              payments: invoice.payments?.map((payment: any) => ({
+              payments: invoice.payments?.map((payment) => ({
                 paymentID: payment.paymentID || '',
                 date: payment.date || '',
                 amount: Math.round((payment.amount || 0) * 100), // Convert dollars to cents
@@ -208,30 +242,30 @@ export default async function UserInvoicesPage() {
           
           // Sort invoices by date (newest first)
           invoices = formattedInvoices.sort((a, b) => {
-            const dateA = new Date(a.date).getTime()
-            const dateB = new Date(b.date).getTime()
+            const dateA = new Date(a.date || 0).getTime()
+            const dateB = new Date(b.date || 0).getTime()
             return dateB - dateA // Descending order (newest first)
           })
           
           // Calculate unpaid stats
           const unpaidInvoices = invoices.filter(invoice => 
-            invoice.status !== 'PAID' && invoice.status !== 'VOIDED'
+            invoice.status !== XeroInvoice.StatusEnum.PAID && invoice.status !== XeroInvoice.StatusEnum.VOIDED
           )
           unpaidCount = unpaidInvoices.length
-          unpaidTotal = unpaidInvoices.reduce((sum: number, invoice: any) => sum + (invoice.amountDue || 0), 0)
+          unpaidTotal = unpaidInvoices.reduce((sum, invoice) => sum + (invoice.amountDue || 0), 0)
           
           // Sort invoices: unpaid first, then by date descending
           invoices = formattedInvoices.sort((a, b) => {
-            const isAUnpaid = a.status !== 'PAID' && a.status !== 'VOIDED'
-            const isBUnpaid = b.status !== 'PAID' && b.status !== 'VOIDED'
+            const isAUnpaid = a.status !== XeroInvoice.StatusEnum.PAID && a.status !== XeroInvoice.StatusEnum.VOIDED
+            const isBUnpaid = b.status !== XeroInvoice.StatusEnum.PAID && b.status !== XeroInvoice.StatusEnum.VOIDED
             
             // If one is unpaid and the other isn't, unpaid comes first
             if (isAUnpaid && !isBUnpaid) return -1
             if (!isAUnpaid && isBUnpaid) return 1
             
             // If both have the same payment status, sort by date descending
-            const dateA = new Date(a.date).getTime()
-            const dateB = new Date(b.date).getTime()
+            const dateA = new Date(a.date || 0).getTime()
+            const dateB = new Date(b.date || 0).getTime()
             return dateB - dateA
           })
           
@@ -337,7 +371,7 @@ export default async function UserInvoicesPage() {
         ) : (
           <ul className="divide-y divide-gray-200">
             {invoices.map((invoice) => {
-              const isPaid = invoice.status === 'PAID'
+              const isPaid = invoice.status === XeroInvoice.StatusEnum.PAID
               const isOverdue = !isPaid && invoice.dueDate && isInvoiceOverdue(invoice.dueDate)
               const daysUntilDue = invoice.dueDate ? getDaysUntilDue(invoice.dueDate) : null
 
@@ -368,7 +402,7 @@ export default async function UserInvoicesPage() {
                               </span>
                             </div>
                             <div className="text-sm text-gray-500">
-                              {formatDate(new Date(invoice.date))}
+                              {formatDate(new Date(invoice.date || 0))}
                               {invoice.total > 0 && isPaid && invoice.latestPaymentDate ? (
                                 <span className="ml-2">
                                   • Paid: {formatDate(new Date(invoice.latestPaymentDate))}

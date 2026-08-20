@@ -70,13 +70,13 @@ export default function LoginPage() {
           router.push('/auth/verify-otp')
         }, 100)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Login error:', error)
       
       // Handle different types of network errors
       let errorMessage = 'An error occurred. Please try again.'
       
-      if (error?.message) {
+      if (error instanceof Error) {
         if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
           errorMessage = 'Network error. Please check your connection and try again.'
         } else {
@@ -111,13 +111,13 @@ export default function LoginPage() {
         setLoading(false) // Only reset on error
       }
       // Note: On success, user will be redirected to Google, so don't reset loading
-    } catch (error: any) {
+    } catch (error) {
       console.error('Google login error:', error)
       
       // Handle different types of network errors
       let errorMessage = 'An error occurred. Please try again.'
       
-      if (error?.message) {
+      if (error instanceof Error) {
         if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
           errorMessage = 'Network error. Please check your connection and try again.'
         } else {
@@ -164,7 +164,7 @@ export default function LoginPage() {
         setShowPasskeyHelp(true)
         setPasskeyLoading(false)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Passkey login error:', error)
 
       if (isUserCancelledError(error)) {
@@ -173,7 +173,7 @@ export default function LoginPage() {
       }
 
       let errorMessage = 'An error occurred. Please try again.'
-      if (error?.message) {
+      if (error instanceof Error) {
         if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
           errorMessage = 'Network error. Please check your connection and try again.'
         } else {

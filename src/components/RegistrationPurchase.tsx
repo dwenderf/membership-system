@@ -34,17 +34,17 @@ function formatDateString(dateString: string): string {
 
 interface RegistrationCategory {
   id: string
-  custom_name?: string
-  max_capacity?: number
+  custom_name?: string | null
+  max_capacity?: number | null
   current_count?: number
-  required_membership_id?: string
+  required_membership_id?: string | null
   price?: number
   categories?: {
     name: string
-  }
+  } | null
   memberships?: {
     name: string
-  }
+  } | null
 }
 
 interface Registration {
@@ -68,7 +68,7 @@ interface Registration {
     name: string
     start_date: string
     end_date: string
-  }
+  } | null
   registration_categories?: RegistrationCategory[]
 }
 

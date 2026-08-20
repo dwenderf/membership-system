@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { User } from '@supabase/supabase-js'
 import { formatDate } from '@/lib/date-utils'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
@@ -13,9 +14,31 @@ import dynamic from 'next/dynamic'
 const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
 const UserPaymentPlansSection = dynamic(() => import('@/components/UserPaymentPlansSection'), { ssr: false })
 
+// member_id/preferences aren't in the generated Database type (added after the last type regen).
+interface UserProfile {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  phone: string | null
+  member_id: number | null
+  is_admin: boolean
+  is_goalie: boolean
+  is_lgbtq: boolean | null
+  tags: string[] | null
+  created_at: string
+  preferences: {
+    emailNotifications?: {
+      rosterChanges?: boolean
+      newRegistrations?: boolean
+      refunds?: boolean
+    }
+  } | null
+}
+
 export default function AccountPage() {
-  const [user, setUser] = useState<any>(null)
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
   const [googleOAuth, setGoogleOAuth] = useState<{ email: string; id: string } | null>(null)
@@ -123,9 +146,9 @@ export default function AccountPage() {
       setGoogleOAuth(null)
       setShowUnlinkConfirm(false)
       showSuccess('Google Account Unlinked', 'You can now only sign in using magic links sent to your email.')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error unlinking Google account:', error)
-      const errorMessage = error?.message || 'Failed to unlink Google account. Please try again or contact support.'
+      const errorMessage = error instanceof Error ? error.message : 'Failed to unlink Google account. Please try again or contact support.'
       showError('Failed to Unlink', errorMessage)
     } finally {
       setUnlinking(false)

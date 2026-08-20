@@ -3,6 +3,7 @@ import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 import { getRegistrationStatus, RegistrationWithTiming } from '@/lib/registration-status'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
+import { Database } from '@/types/database'
 
 interface RegistrationListItem extends RegistrationWithTiming {
   name: string
@@ -11,6 +12,21 @@ interface RegistrationListItem extends RegistrationWithTiming {
     start_date: string
     end_date: string
   } | null
+}
+
+type MembershipRow = Database['public']['Tables']['memberships']['Row']
+type UserMembershipRow = Database['public']['Tables']['user_memberships']['Row']
+
+interface UserMembershipWithDetails extends UserMembershipRow {
+  membership: MembershipRow | null
+}
+
+interface ConsolidatedMembership {
+  membershipId: string
+  membership: MembershipRow | null
+  validFrom: string
+  validUntil: string
+  purchases: UserMembershipWithDetails[]
 }
 
 export default async function BrowseRegistrationsPage() {
@@ -67,7 +83,7 @@ export default async function BrowseRegistrationsPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  const activeMemberships = userMemberships || []
+  const activeMemberships = (userMemberships || []) as UserMembershipWithDetails[]
   const now = new Date()
 
   // Consolidate memberships by type to show latest expiration
@@ -98,14 +114,14 @@ export default async function BrowseRegistrationsPage() {
     }
 
     return acc
-  }, {} as Record<string, any>)
+  }, {} as Record<string, ConsolidatedMembership>)
 
   const consolidatedMembershipList = Object.values(consolidatedMemberships)
   const hasActiveMembership = consolidatedMembershipList.length > 0
   const userRegistrationIds = userRegistrations?.map(ur => ur.registration_id) || []
 
   // Check if any memberships are expiring soon (<=90 days)
-  const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership: any) => {
+  const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership) => {
     const validUntil = new Date(consolidatedMembership.validUntil)
     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiration <= 90
@@ -166,7 +182,7 @@ export default async function BrowseRegistrationsPage() {
             </h3>
           </div>
           <div className="space-y-2">
-            {expiringSoonMemberships.map((consolidatedMembership: any) => {
+            {expiringSoonMemberships.map((consolidatedMembership) => {
               const validUntil = new Date(consolidatedMembership.validUntil)
               const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 

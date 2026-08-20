@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import EmailChangeModal from '@/components/EmailChangeModal'
 
 export default function EditProfilePage() {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -106,6 +107,10 @@ export default function EditProfilePage() {
       return
     }
 
+    if (!user) {
+      return
+    }
+
     setSubmitting(true)
 
     try {
@@ -169,9 +174,9 @@ export default function EditProfilePage() {
       showSuccess('Profile updated!', 'Your profile has been successfully updated.')
       router.push('/user/account')
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating profile:', error)
-      const errorMessage = error?.message || 'Failed to update profile. Please try again.'
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update profile. Please try again.'
       setErrors({ submit: errorMessage })
       showError('Profile update failed', errorMessage)
       setSubmitting(false)

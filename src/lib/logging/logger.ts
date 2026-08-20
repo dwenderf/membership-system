@@ -32,8 +32,8 @@ import { formatTime } from '@/lib/date-utils'
 // Only import fs on server side, and only lazily so Next's build-time
 // output-file tracing doesn't treat this module as an unconditional fs
 // dependency for every route that imports the logger.
-let fs: any = null
-let path: any = null
+let fs: typeof import('fs') | null = null
+let path: typeof import('path') | null = null
 
 function ensureFsModules(): void {
   if (typeof window !== 'undefined') return
@@ -52,13 +52,15 @@ export type LogCategory =
   | 'admin-action'
   | 'system'
 
+export type LogMetadata = Record<string, unknown>
+
 export interface LogEntry {
   timestamp: string
   level: LogLevel
   category: LogCategory
   operation: string
   message: string
-  metadata?: Record<string, any>
+  metadata?: LogMetadata
   userId?: string
   requestId?: string
 }
@@ -136,7 +138,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): LogEntry {
@@ -213,16 +215,18 @@ export class Logger {
   private cleanupOldLogs(category: LogCategory): void {
     ensureFsModules()
     if (!fs || !path) return // Client-side or no fs available
-    
+    const fsModule = fs
+    const pathModule = path
+
     try {
-      const files = fs.readdirSync(/* turbopackIgnore: true */ this.logDir)
+      const files = fsModule.readdirSync(/* turbopackIgnore: true */ this.logDir)
         .filter((file: string) => file.startsWith(`${category}-`) && file.endsWith('.log'))
         .map((file: string) => ({
           name: file,
-          path: path.join(this.logDir, file),
-          mtime: fs.statSync(/* turbopackIgnore: true */ path.join(this.logDir, file)).mtime
+          path: pathModule.join(this.logDir, file),
+          mtime: fsModule.statSync(/* turbopackIgnore: true */ pathModule.join(this.logDir, file)).mtime
         }))
-        .sort((a: any, b: any) => b.mtime.getTime() - a.mtime.getTime())
+        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
 
       // Keep only the most recent files
       const filesToDelete = files.slice(this.maxFiles)
@@ -351,7 +355,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -367,7 +371,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -383,7 +387,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -399,7 +403,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -469,7 +473,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -490,7 +494,7 @@ export class Logger {
     category: LogCategory,
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     requestId?: string
   ): void {
@@ -539,7 +543,7 @@ export class Logger {
   logPaymentProcessing(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     level: LogLevel = 'info'
   ): void {
     this[level]('payment-processing', operation, message, metadata)
@@ -551,7 +555,7 @@ export class Logger {
   logXeroSync(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     level: LogLevel = 'info'
   ): void {
     this[level]('xero-sync', operation, message, metadata)
@@ -563,7 +567,7 @@ export class Logger {
   logBatchProcessing(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     level: LogLevel = 'info'
   ): void {
     this[level]('batch-processing', operation, message, metadata)
@@ -575,7 +579,7 @@ export class Logger {
   logServiceManagement(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     level: LogLevel = 'info'
   ): void {
     this[level]('service-management', operation, message, metadata)
@@ -587,7 +591,7 @@ export class Logger {
   logAdminAction(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     userId?: string,
     level: LogLevel = 'info'
   ): void {
@@ -600,7 +604,7 @@ export class Logger {
   logSystem(
     operation: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: LogMetadata,
     level: LogLevel = 'info'
   ): void {
     this[level]('system', operation, message, metadata)

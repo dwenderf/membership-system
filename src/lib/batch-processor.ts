@@ -12,13 +12,34 @@ export interface BatchJob {
   id: string
   type: 'xero_sync' | 'email_batch' | 'cleanup'
   priority: 'high' | 'medium' | 'low'
-  payload: any
+  payload: unknown
   retry_count: number
   max_retries: number
   next_retry_at?: Date
   created_at: Date
   updated_at: Date
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+}
+
+/**
+ * Shape of the retryable errors this processor sees: HTTP-client-style errors (rate
+ * limit responses) and Xero's REST API validation-error body.
+ */
+interface RetryableError {
+  message?: string
+  response?: {
+    status?: number
+    body?: {
+      Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>
+    }
+  }
+}
+
+function asRetryableError(error: unknown): RetryableError | undefined {
+  if (error && typeof error === 'object') {
+    return error as RetryableError
+  }
+  return undefined
 }
 
 export interface RetryStrategy {
@@ -92,7 +113,7 @@ export class BatchProcessor {
     context: string = 'Unknown operation'
   ): Promise<{ success: boolean; result?: T; error?: string }> {
     const strategy = this.retryStrategies[operationType]
-    let lastError: any = null
+    let lastError: unknown = null
 
     for (let attempt = 0; attempt <= strategy.maxRetries; attempt++) {
       try {
@@ -150,36 +171,39 @@ export class BatchProcessor {
   /**
    * Check if an error is a rate limit error (HTTP 429)
    */
-  private isRateLimitError(error: any): boolean {
+  private isRateLimitError(error: unknown): boolean {
+    const err = asRetryableError(error)
+
     // Check for HTTP 429 status code
-    if (error?.response?.status === 429) {
+    if (err?.response?.status === 429) {
       return true
     }
-    
+
     // Check for Xero-specific rate limit error messages
-    if (error?.message && typeof error.message === 'string') {
-      const message = error.message.toLowerCase()
-      return message.includes('rate limit') || 
-             message.includes('429') || 
+    if (err?.message && typeof err.message === 'string') {
+      const message = err.message.toLowerCase()
+      return message.includes('rate limit') ||
+             message.includes('429') ||
              message.includes('too many requests') ||
              message.includes('quota exceeded')
     }
-    
+
     // Check for Xero API error structure
-    if (error?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-      const validationMessage = error.response.body.Elements[0].ValidationErrors[0].Message.toLowerCase()
-      return validationMessage.includes('rate limit') || 
-             validationMessage.includes('429') || 
-             validationMessage.includes('too many requests')
+    const validationMessage = err?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message
+    if (validationMessage) {
+      const lowerMessage = validationMessage.toLowerCase()
+      return lowerMessage.includes('rate limit') ||
+             lowerMessage.includes('429') ||
+             lowerMessage.includes('too many requests')
     }
-    
+
     return false
   }
 
   /**
    * Format error message based on operation type and error type
    */
-  private formatErrorMessage(error: any, operationType: string): string {
+  private formatErrorMessage(error: unknown, operationType: string): string {
     const isRateLimit = this.isRateLimitError(error)
     
     if (isRateLimit) {

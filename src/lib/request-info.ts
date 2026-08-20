@@ -87,7 +87,11 @@ function getClientIP(request: NextRequest): string {
   }
   
   // Fallback to connection remote address (if available)
-  const connection = (request as any).connection || (request as any).socket
+  const requestWithSocket = request as unknown as {
+    connection?: { remoteAddress?: string }
+    socket?: { remoteAddress?: string }
+  }
+  const connection = requestWithSocket.connection || requestWithSocket.socket
   if (connection?.remoteAddress) {
     return connection.remoteAddress
   }

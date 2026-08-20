@@ -10,7 +10,7 @@ export interface SystemEventData {
   records_successful?: number
   records_failed?: number
   error_message?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**

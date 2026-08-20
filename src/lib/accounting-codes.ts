@@ -105,9 +105,11 @@ export async function getDiscountAccountingCode(discountCode: string): Promise<s
         )
       `)
       .eq('code', discountCode)
-      .single()
+      .single() as {
+        data: { discount_categories: { accounting_code: string | null } | null } | null
+      }
 
-    return (discount?.discount_categories as any)?.accounting_code || null
+    return discount?.discount_categories?.accounting_code || null
 
   } catch (error) {
     logger.logPaymentProcessing(

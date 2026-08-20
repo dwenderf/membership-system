@@ -1,19 +1,41 @@
 import * as Sentry from '@sentry/nextjs'
+import { NextRequest } from 'next/server'
 import { createClient } from './supabase/server'
 import { extractRequestInfo } from './request-info'
+
+interface SentryUserInfo {
+  id: string
+  email?: string
+  first_name?: string
+  last_name?: string
+  member_id?: string
+  is_admin?: boolean
+}
+
+interface SentryRequestInfo {
+  url?: string
+  method?: string
+  ip?: string
+  headers?: Record<string, string | undefined>
+}
+
+interface SentryContextBase {
+  user?: SentryUserInfo
+  request?: SentryRequestInfo
+  tags?: Record<string, string>
+  extra?: Record<string, unknown>
+}
+
+interface SentryErrorContext extends SentryContextBase {
+  level?: Sentry.SeverityLevel
+}
 
 /**
  * Enhanced Sentry error capture with automatic user context
  */
 export async function captureSentryError(
   error: Error | string,
-  context?: {
-    user?: any
-    request?: any
-    tags?: Record<string, string>
-    extra?: Record<string, any>
-    level?: Sentry.SeverityLevel
-  }
+  context?: SentryErrorContext
 ) {
   const scope = new Sentry.Scope()
 
@@ -95,12 +117,7 @@ export async function captureSentryError(
 export async function captureSentryMessage(
   message: string,
   level: Sentry.SeverityLevel = 'info',
-  context?: {
-    user?: any
-    request?: any
-    tags?: Record<string, string>
-    extra?: Record<string, any>
-  }
+  context?: SentryContextBase
 ) {
   const scope = new Sentry.Scope()
   scope.setLevel(level)
@@ -171,7 +188,7 @@ export async function captureSentryMessage(
 /**
  * Set up Sentry user context for API routes
  */
-export async function setupSentryUserContext(request?: any) {
+export async function setupSentryUserContext(request?: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -236,12 +253,12 @@ export interface PaymentContext {
 export interface DatabaseOperation {
   operation: string
   success: boolean
-  error?: any
-  details?: any
+  error?: unknown
+  details?: unknown
 }
 
 export async function captureCriticalPaymentError(
-  error: Error | any,
+  error: unknown,
   context: PaymentContext,
   databaseOperations: DatabaseOperation[] = []
 ) {
@@ -264,7 +281,7 @@ export async function captureCriticalPaymentError(
 }
 
 export async function capturePaymentError(
-  error: Error | any,
+  error: unknown,
   context: PaymentContext,
   severity: 'error' | 'warning' | 'info' = 'error'
 ) {
@@ -322,7 +339,7 @@ export async function capturePaymentSuccess(
 }
 
 // Account deletion functions
-export async function captureCriticalAccountDeletionError(error: Error, context?: any) {
+export async function captureCriticalAccountDeletionError(error: Error, context?: SentryErrorContext) {
   await captureSentryError(error, {
     ...context,
     tags: {
@@ -333,7 +350,7 @@ export async function captureCriticalAccountDeletionError(error: Error, context?
   })
 }
 
-export async function captureAccountDeletionWarning(message: string, context?: any) {
+export async function captureAccountDeletionWarning(message: string, context?: SentryContextBase) {
   await captureSentryMessage(message, 'warning', {
     ...context,
     tags: {

@@ -307,9 +307,9 @@ export class AlternatePaymentService {
           .single()
 
         if (!discountError && discount) {
-          discountCode = discount
-
           const category = Array.isArray(discount.category) ? discount.category[0] : discount.category
+          discountCode = { ...discount, category }
+
           const categoryId = category?.id
 
           let effectiveLimit = null

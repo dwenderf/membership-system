@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import RegistrationAlternatesSection from '@/components/RegistrationAlternatesSection'
 import AllRegistrationsActivityGrid from '@/components/AllRegistrationsActivityGrid'
@@ -69,14 +69,7 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
     ? registrationsForSeason.find(reg => reg.id === selectedRegistration)
     : null
 
-  // Fetch games for the current season's registrations for the overview
-  useEffect(() => {
-    fetchRegistrationsGames().catch(err => {
-      console.error('Error in useEffect fetchRegistrationsGames:', err)
-    })
-  }, [registrationsForSeason])
-
-  const fetchRegistrationsGames = async () => {
+  const fetchRegistrationsGames = useCallback(async () => {
     try {
       setOverviewLoading(true)
       setOverviewError(null)
@@ -110,7 +103,14 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
     } finally {
       setOverviewLoading(false)
     }
-  }
+  }, [registrationsForSeason])
+
+  // Fetch games for the current season's registrations for the overview
+  useEffect(() => {
+    fetchRegistrationsGames().catch(err => {
+      console.error('Error in useEffect fetchRegistrationsGames:', err)
+    })
+  }, [fetchRegistrationsGames])
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
@@ -23,13 +23,9 @@ export default function PaymentMethodManager() {
   const [removing, setRemoving] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const { showSuccess, showError } = useToast()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
-  useEffect(() => {
-    loadPaymentMethod()
-  }, [])
-
-  const loadPaymentMethod = async () => {
+  const loadPaymentMethod = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -44,7 +40,11 @@ export default function PaymentMethodManager() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadPaymentMethod()
+  }, [loadPaymentMethod])
 
   const handleRemoveClick = () => {
     setShowConfirmDialog(true)

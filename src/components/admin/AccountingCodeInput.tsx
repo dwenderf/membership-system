@@ -59,20 +59,6 @@ export default function AccountingCodeInput({
   const listRef = useRef<HTMLUListElement>(null)
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Fetch accounts on mount
-  useEffect(() => {
-    fetchAccounts()
-  }, [])
-
-  // Validate on value change
-  useEffect(() => {
-    if (value) {
-      validateAccountCode(value)
-    } else {
-      setValidationError(null)
-    }
-  }, [value])
-
   // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -99,7 +85,7 @@ export default function AccountingCodeInput({
     }
   }, [highlightedIndex, isOpen])
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     setIsLoading(true)
     try {
       // Fetch ALL accounts (no type filtering)
@@ -122,9 +108,9 @@ export default function AccountingCodeInput({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [suggestedAccountType])
 
-  const validateAccountCode = async (code: string) => {
+  const validateAccountCode = useCallback(async (code: string) => {
     if (!code) {
       setValidationError(null)
       setTypeWarning(null)
@@ -155,7 +141,21 @@ export default function AccountingCodeInput({
     } catch (error) {
       console.error('Validation error:', error)
     }
-  }
+  }, [suggestedAccountType])
+
+  // Fetch accounts on mount
+  useEffect(() => {
+    fetchAccounts()
+  }, [fetchAccounts])
+
+  // Validate on value change
+  useEffect(() => {
+    if (value) {
+      validateAccountCode(value)
+    } else {
+      setValidationError(null)
+    }
+  }, [value, validateAccountCode])
 
   // Debounced search function
   const debouncedSearch = useCallback(

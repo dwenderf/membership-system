@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -42,16 +42,10 @@ export default function RegistrationGamesPage() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [selectionResults, setSelectionResults] = useState<AlternateSelectionResponse | null>(null)
 
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showError, showSuccess } = useToast()
 
-  useEffect(() => {
-    if (registrationId) {
-      fetchRegistrationAndGames()
-    }
-  }, [registrationId])
-
-  const fetchRegistrationAndGames = async () => {
+  const fetchRegistrationAndGames = useCallback(async () => {
     try {
       // Fetch registration details
       const { data: regData, error: regError } = await supabase
@@ -82,7 +76,13 @@ export default function RegistrationGamesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [registrationId, supabase])
+
+  useEffect(() => {
+    if (registrationId) {
+      fetchRegistrationAndGames()
+    }
+  }, [registrationId, fetchRegistrationAndGames])
 
   const handleSelectionComplete = (results: AlternateSelectionResponse) => {
     setSelectionResults(results)

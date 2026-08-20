@@ -11,7 +11,7 @@ export default function NewRegistrationCategoryPage() {
   const router = useRouter()
   const params = useParams()
   const registrationId = params.id as string
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [registration, setRegistration] = useState<{
     id: string
@@ -127,7 +127,7 @@ export default function NewRegistrationCategoryPage() {
     }
     
     fetchData()
-  }, [registrationId])
+  }, [registrationId, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

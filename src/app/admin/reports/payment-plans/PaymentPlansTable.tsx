@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
 import { filterActivePlans } from '@/lib/payment-plan-utils'
@@ -55,11 +55,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
     results?: ProcessingResults
   } | null>(null)
 
-  useEffect(() => {
-    fetchData()
-  }, [filter])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch(`/api/admin/payment-plans?filter=${filter}`)
@@ -72,7 +68,11 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const toggleRow = (userId: string) => {
     const newExpanded = new Set(expandedRows)

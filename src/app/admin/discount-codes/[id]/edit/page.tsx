@@ -13,7 +13,7 @@ export default function EditDiscountCodePage() {
   const router = useRouter()
   const params = useParams()
   const codeId = params.id as string
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [code, setCode] = useState<DiscountCodeWithCategoryJoin<CategorySummary> | null>(null)
   const [formData, setFormData] = useState({
@@ -70,7 +70,7 @@ export default function EditDiscountCodePage() {
     }
     
     fetchData()
-  }, [codeId])
+  }, [codeId, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

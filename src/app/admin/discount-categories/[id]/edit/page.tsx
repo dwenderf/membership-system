@@ -12,7 +12,7 @@ export default function EditDiscountCategoryPage() {
   const router = useRouter()
   const params = useParams()
   const categoryId = params.id as string
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [category, setCategory] = useState<DiscountCategoryRow | null>(null)
   const [formData, setFormData] = useState({
@@ -73,7 +73,7 @@ export default function EditDiscountCategoryPage() {
     }
     
     fetchData()
-  }, [categoryId])
+  }, [categoryId, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

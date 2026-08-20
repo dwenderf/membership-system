@@ -53,7 +53,7 @@ export default function AccountPage() {
   const [notifRefunds, setNotifRefunds] = useState(true)
   const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null)
 
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showSuccess, showError } = useToast()
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function AccountPage() {
     }
 
     getUser()
-  }, [])
+  }, [supabase])
 
   const handleUnlinkGoogle = async () => {
     // Pre-check: verify both conditions before attempting unlink

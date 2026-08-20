@@ -101,7 +101,13 @@ export default function DateTimePicker({
         flatpickrRef.current.destroy()
       }
     }
-  }, []) // Only run once on mount
+    // Deliberately run once on mount only: this initializes the flatpickr instance,
+    // and later prop changes are applied imperatively by the effects below (and via
+    // flatpickrRef) rather than by re-running this one. Re-running on every prop
+    // change (e.g. an inline onChange recreated each render) would destroy and
+    // recreate the picker, losing its open/focus state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Update flatpickr when value changes externally
   useEffect(() => {

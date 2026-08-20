@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
 
 import Link from 'next/link'
@@ -16,11 +16,7 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  useEffect(() => {
-    fetchGames()
-  }, [registrationId])
-
-  const fetchGames = async () => {
+  const fetchGames = useCallback(async () => {
     try {
       const response = await fetch(`/api/alternate-registrations?registrationId=${registrationId}`)
 
@@ -36,7 +32,11 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [registrationId])
+
+  useEffect(() => {
+    fetchGames()
+  }, [fetchGames])
 
   const handleGameCreated = (newGame: Game) => {
     setGames(prev => [newGame, ...prev])

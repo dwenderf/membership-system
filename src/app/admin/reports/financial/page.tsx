@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDateTime } from '@/lib/date-utils'
@@ -130,7 +130,7 @@ export default function ReportsPage() {
   const [pagination, setPagination] = useState({ offset: 0, limit: 50, hasMore: false })
   const { showError } = useToast()
 
-  const fetchReportData = async (range: string, offset: number = 0) => {
+  const fetchReportData = useCallback(async (range: string, offset: number = 0) => {
     setLoading(true)
     try {
       const response = await fetch(`/api/admin/reports?range=${range}&offset=${offset}&limit=50`)
@@ -156,12 +156,12 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showError])
 
   useEffect(() => {
     fetchReportData(selectedRange)
     setPagination({ offset: 0, limit: 50, hasMore: false }) // Reset pagination when date range changes
-  }, [selectedRange])
+  }, [selectedRange, fetchReportData])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

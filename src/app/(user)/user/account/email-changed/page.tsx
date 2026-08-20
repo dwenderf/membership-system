@@ -110,7 +110,7 @@ export default function EmailChangedPage() {
         clearTimeout(redirectTimeout)
       }
     }
-  }, [])
+  }, [router, showError, showSuccess])
 
   // Error state
   if (state === 'error') {

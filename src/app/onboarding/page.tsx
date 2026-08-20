@@ -24,7 +24,7 @@ export default function OnboardingPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showSuccess, showError } = useToast()
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function OnboardingPage() {
     }
 
     getUser()
-  }, [supabase.auth, router])
+  }, [supabase, router])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}

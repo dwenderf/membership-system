@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDate, formatTime } from '@/lib/date-utils'
 
@@ -36,11 +36,7 @@ export default function XeroIntegrationPage() {
   const [syncing, setSyncing] = useState(false)
   const { showSuccess, showError } = useToast()
 
-  useEffect(() => {
-    fetchStatus()
-  }, [])
-
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const response = await fetch('/api/xero/status')
       if (response.ok) {
@@ -55,7 +51,11 @@ export default function XeroIntegrationPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showError])
+
+  useEffect(() => {
+    fetchStatus()
+  }, [fetchStatus])
 
   const handleConnect = async () => {
     try {

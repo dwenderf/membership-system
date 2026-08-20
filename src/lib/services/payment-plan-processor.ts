@@ -18,6 +18,16 @@ import { formatAmount } from '@/lib/format-utils'
  * avoid maintenance issues from duplicated code.
  */
 
+/** Shape of the `xero_invoice` relation as selected below — not the full DB row,
+ * just the nested fields queried and read downstream. */
+interface DuePaymentInvoiceJoin {
+  id: string
+  user_registrations: Array<{
+    user_id: string
+    registration: { name: string; season: { name: string } | null } | null
+  }>
+}
+
 interface ProcessingResults {
   paymentsProcessed: number
   paymentsFailed: number
@@ -135,7 +145,7 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
   // Process each eligible payment
   for (const payment of processablePayments) {
     const isRetry = payment.attempt_count > 0
-    const invoice = payment.xero_invoice as any
+    const invoice = payment.xero_invoice as DuePaymentInvoiceJoin
     const userReg = invoice.user_registrations[0]
 
     if (isRetry) {
@@ -383,7 +393,7 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
   )
 
   for (const payment of upcomingPayments) {
-    const invoice = payment.xero_invoice as any
+    const invoice = payment.xero_invoice as DuePaymentInvoiceJoin
     const userReg = invoice.user_registrations[0]
 
     // Get user details

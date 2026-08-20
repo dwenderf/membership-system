@@ -7,7 +7,26 @@
 
 import { logger } from '@/lib/logging/logger'
 import { createAdminClient } from '@/lib/supabase/server'
-import { LoopsClient } from 'loops'
+import { LoopsClient, EventProperties } from 'loops'
+import { Json } from '@/types/database'
+
+/** Row shape of `email_logs` as read/updated by this processor — not the full DB
+ * row, just the fields queried and accessed downstream. */
+interface StagedEmailLog {
+  id: string
+  user_id: string
+  email_address: string
+  subject: string
+  event_type: string
+  template_id: string | null
+  email_data: Record<string, Json> | null
+}
+
+/** The Loops SDK's response types don't model the `id` field the API actually
+ * returns on success — this reflects the real (undocumented) runtime shape. */
+interface LoopsResponseWithId {
+  id?: string
+}
 
 export class EmailProcessingManager {
   private loops: LoopsClient | null = null
@@ -150,7 +169,7 @@ export class EmailProcessingManager {
   /**
    * Send a specific staged email directly to Loops and update the existing log record
    */
-  private async sendStagedEmail(emailLog: any): Promise<boolean> {
+  private async sendStagedEmail(emailLog: StagedEmailLog): Promise<boolean> {
     try {
       const supabase = createAdminClient()
       const emailData = emailLog.email_data || {}
@@ -215,7 +234,7 @@ export class EmailProcessingManager {
           eventProperties: {
             subject: emailLog.subject,
             ...emailData
-          }
+          } as EventProperties
         })
       }
 
@@ -224,7 +243,7 @@ export class EmailProcessingManager {
         await supabase
           .from('email_logs')
           .update({
-            loops_event_id: (loopsResponse as any).id || 'sent',
+            loops_event_id: (loopsResponse as LoopsResponseWithId).id || 'sent',
             status: 'sent',
             delivered_at: new Date().toISOString()
           })
@@ -237,7 +256,7 @@ export class EmailProcessingManager {
             emailLogId: emailLog.id,
             eventType: emailLog.event_type,
             userId: emailLog.user_id,
-            loopsEventId: (loopsResponse as any).id
+            loopsEventId: (loopsResponse as LoopsResponseWithId).id
           }
         )
 

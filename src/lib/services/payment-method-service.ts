@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
@@ -9,7 +10,7 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function getUserSavedPaymentMethodId(
   userId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<string | null> {
   const { data: userProfile } = await supabase
     .from('users')
@@ -31,7 +32,7 @@ export async function getUserSavedPaymentMethodId(
 export async function savePaymentMethodFromIntent(
   paymentIntent: Stripe.PaymentIntent,
   userId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   if (!paymentIntent.payment_method || !paymentIntent.setup_future_usage) {
     return

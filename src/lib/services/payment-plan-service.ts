@@ -6,6 +6,29 @@ import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-
 import { toDateString } from '@/lib/date-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
+/** Shape of the `xero_invoice` relation as selected below — not the full DB row,
+ * just the nested fields queried and read downstream. */
+interface DuePaymentInvoiceJoin {
+  id: string
+  user_registrations: Array<{
+    user_id: string
+    registration: { name: string; season: { name: string } | null } | null
+  }>
+}
+
+/** Row shape of the `payment_plan_summary` view as consumed by getUserPaymentPlans. */
+interface PaymentPlanSummaryViewRow {
+  invoice_id: string
+  registration_id: string | null
+  registration_name: string | null
+  total_amount: number
+  paid_amount: number
+  total_installments: number
+  installments_paid: number
+  next_payment_date: string | null
+  status: string
+}
+
 export interface PaymentPlanCreationData {
   userRegistrationId: string
   userId: string
@@ -221,7 +244,7 @@ export class PaymentPlanService {
         return { success: false, error: 'Payment record not found' }
       }
 
-      const invoice = xeroPayment.xero_invoice as any
+      const invoice = xeroPayment.xero_invoice as DuePaymentInvoiceJoin
       const userReg = invoice.user_registrations[0]
 
       // Get user's payment method
@@ -741,7 +764,7 @@ export class PaymentPlanService {
       }
 
       // Map plans with registration data (from view)
-      const enrichedPlans = (plans || []).map((plan: any) => {
+      const enrichedPlans = (plans || []).map((plan: PaymentPlanSummaryViewRow) => {
         const installmentAmount = plan.total_installments > 0
           ? plan.total_amount / plan.total_installments
           : 0

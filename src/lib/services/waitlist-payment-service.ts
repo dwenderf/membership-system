@@ -3,10 +3,13 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
-import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getStripe } from '@/lib/stripe/server-client'
+import { Database } from '@/types/database'
+
+type XeroInvoiceRow = Database['public']['Tables']['xero_invoices']['Row']
 
 export interface WaitlistChargeResult {
   paymentId: string
@@ -81,7 +84,7 @@ export class WaitlistPaymentService {
       let effectiveBasePrice: number
       let finalAmount: number
       let discountAmount: number
-      let discountCode: any = null
+      let discountCode: DiscountCodeWithCategory | null = null
 
       if (overridePrice !== undefined) {
         // Override price: use override as new base, then apply discount
@@ -134,7 +137,13 @@ export class WaitlistPaymentService {
             accounting_code: category.accounting_code
           }
         ],
-        discount_codes_used: discountCode ? [discountCode] : [],
+        discount_codes_used: discountCode ? [{
+          code: discountCode.code,
+          amount_saved: centsToCents(discountAmount),
+          category_name: discountCode.category?.name ?? '',
+          accounting_code: discountCode.category?.accounting_code ?? undefined,
+          discount_code_id: discountCode.id
+        }] : [],
         stripe_payment_intent_id: null // Will be updated after payment
       }
 
@@ -331,7 +340,7 @@ export class WaitlistPaymentService {
     discountCodeId?: string,
     userId?: string,
     basePriceOverride?: number
-  ): Promise<{ finalAmount: number; discountAmount: number; discountCode?: any }> {
+  ): Promise<{ finalAmount: number; discountAmount: number; discountCode: DiscountCodeWithCategory | null }> {
     try {
       let basePrice = 0
       if (basePriceOverride !== undefined) {
@@ -482,7 +491,7 @@ export class WaitlistPaymentService {
     registrationId: string,
     categoryId: string,
     categoryName: string,
-    stagingRecord: any
+    stagingRecord: XeroInvoiceRow
   ): Promise<WaitlistChargeResult> {
     try {
       const supabase = await createClient()

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { Json } from '@/types/database'
 
 export interface StagedEmailData {
   user_id: string
@@ -7,7 +8,7 @@ export interface StagedEmailData {
   event_type: string
   subject: string
   template_id?: string
-  email_data?: Record<string, any>
+  email_data?: Record<string, Json>
   triggered_by?: 'user_action' | 'admin_send' | 'automated'
   triggered_by_user_id?: string
   related_entity_type?: 'user_memberships' | 'user_registrations' | 'payments' | 'alternate_selections'

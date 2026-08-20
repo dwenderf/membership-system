@@ -86,7 +86,7 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
 
       showSuccess('Passkey created!', 'You can now sign in with your passkey. Manage it from your account page.')
       setVisible(false)
-    } catch (error: any) {
+    } catch (error) {
       if (!isUserCancelledError(error)) {
         console.error('Passkey registration error:', error)
         showError('Passkey setup failed', 'Something went wrong. You can try again from your account page.')

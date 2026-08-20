@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import {SortableItem} from "./SortableItem"
 
@@ -35,7 +35,7 @@ export default function RegistrationCategoriesDndList({ categories, registration
     useSensor(PointerSensor)
   )
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = items.findIndex((item) => item.id === active.id)

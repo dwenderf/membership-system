@@ -47,3 +47,4 @@ next-env.d.ts
 /logs/
 .claude/settings.local.json
 .claude/settings.local.json
+.env*.local

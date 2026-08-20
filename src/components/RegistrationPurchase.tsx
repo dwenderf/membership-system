@@ -10,12 +10,13 @@ import PaymentForm from './PaymentForm'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import PaymentMethodNotice from './PaymentMethodNotice'
 import SavedPaymentConfirmation from './SavedPaymentConfirmation'
-import TallySurveyEmbed from './TallySurveyEmbed'
+import TallySurveyEmbed, { type TallySubmissionPayload } from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
 import { validateMembershipCoverage, formatMembershipWarning } from '@/lib/membership-validation'
 import { RegistrationValidationService, type UserMembership } from '@/lib/services/registration-validation-service'
-import { getRegistrationStatus, isRegistrationAvailable } from '@/lib/registration-status'
+import { getRegistrationStatus, isRegistrationAvailable, type RegistrationWithTiming } from '@/lib/registration-status'
+import type { DiscountValidationResult } from '@/app/api/validate-discount-code/route'
 import WaitlistBadge from './WaitlistBadge'
 
 // Force import client config
@@ -34,7 +35,7 @@ function formatDateString(dateString: string): string {
 
 interface RegistrationCategory {
   id: string
-  custom_name?: string | null
+  custom_name: string | null
   max_capacity?: number | null
   current_count?: number
   required_membership_id?: string | null
@@ -47,15 +48,12 @@ interface RegistrationCategory {
   } | null
 }
 
-interface Registration {
-  id: string
+interface Registration extends RegistrationWithTiming {
   name: string
-  type: string
   alternate_price?: number | null
   alternate_accounting_code?: string | null
   allow_alternates?: boolean
   allow_lgbtq_presale?: boolean
-  presale_code?: string | null
   allow_discounts?: boolean
   survey_id?: string | null
   require_survey?: boolean
@@ -113,7 +111,7 @@ export default function RegistrationPurchase({
   const [error, setError] = useState<string | null>(null)
   const [presaleCode, setPresaleCode] = useState<string>('')
   const [discountCode, setDiscountCode] = useState<string>('')
-  const [discountValidation, setDiscountValidation] = useState<any>(null)
+  const [discountValidation, setDiscountValidation] = useState<DiscountValidationResult | null>(null)
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false)
   const [userWaitlistEntries, setUserWaitlistEntries] = useState<Record<string, { position: number, id: string }>>({})
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null)
@@ -123,7 +121,7 @@ export default function RegistrationPurchase({
   const [paymentPlanEligible, setPaymentPlanEligible] = useState(false)
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(false)
   const [firstInstallmentAmount, setFirstInstallmentAmount] = useState<number | null>(null)
-  const [, setSurveyResponses] = useState<Record<string, any> | null>(null)
+  const [, setSurveyResponses] = useState<TallySubmissionPayload | null>(null)
   const [, setShowSurvey] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [surveyStarted, setSurveyStarted] = useState(false)
@@ -266,19 +264,19 @@ export default function RegistrationPurchase({
   
   // Get pricing for selected category
   const originalAmount = selectedCategory?.price ?? 0
-  const discountAmount = discountValidation?.isValid ? discountValidation.discountAmount : 0
+  const discountAmount = discountValidation?.isValid ? (discountValidation.discountAmount ?? 0) : 0
   const finalAmount = originalAmount - discountAmount
 
   // Calculate the amount to charge: first installment for payment plan, or full amount
   const amountToCharge = usePaymentPlan && firstInstallmentAmount ? firstInstallmentAmount : finalAmount
   
   // Check registration timing status
-  const registrationStatus = getRegistrationStatus(registration as any)
+  const registrationStatus = getRegistrationStatus(registration)
   const isPresale = registrationStatus === 'presale'
   const isLgbtqPresaleEligible = isPresale && isLgbtq && registration.allow_lgbtq_presale
   const hasValidPresaleCode = isPresale && 
     presaleCode.trim().toUpperCase() === registration.presale_code?.toUpperCase()
-  const isTimingAvailable = isRegistrationAvailable(registration as any, hasValidPresaleCode || isLgbtqPresaleEligible)
+  const isTimingAvailable = isRegistrationAvailable(registration, hasValidPresaleCode || isLgbtqPresaleEligible)
   
   // Check if selected category is at capacity
   const isCategoryAtCapacity = selectedCategory?.max_capacity !== null && selectedCategory?.max_capacity !== undefined
@@ -372,7 +370,7 @@ export default function RegistrationPurchase({
   }, [selectedCategoryId, registration.require_survey, registration.survey_id])
 
   // Handle survey completion
-  const handleSurveyComplete = (responseData: any) => {
+  const handleSurveyComplete = (responseData: TallySubmissionPayload | null) => {
     console.log('Survey completed with data:', responseData)
     setSurveyResponses(responseData)
     setSurveyCompleted(true)
@@ -788,7 +786,7 @@ export default function RegistrationPurchase({
           </label>
           <div className="grid grid-cols-1 gap-2">
             {categories.map((category) => {
-              const categoryName = getCategoryDisplayName(category as any)
+              const categoryName = getCategoryDisplayName(category)
               const requiresMembership = registration.required_membership_id || category.required_membership_id
               
               // Use the proper validation service to check BOTH registration and category level memberships
@@ -926,7 +924,7 @@ export default function RegistrationPurchase({
           <h4 className="text-sm font-medium text-gray-900 mb-3">Select Registration Category</h4>
           <div className="space-y-2">
             {categories.map((category) => {
-              const categoryName = getCategoryDisplayName(category as any)
+              const categoryName = getCategoryDisplayName(category)
               const requiresMembership = registration.required_membership_id || category.required_membership_id
 
               // Use the proper validation service to check BOTH registration and category level memberships
@@ -1074,7 +1072,7 @@ export default function RegistrationPurchase({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Category:</span>
-              <span className="text-gray-900">{getCategoryDisplayName(selectedCategory as any)}</span>
+              <span className="text-gray-900">{getCategoryDisplayName(selectedCategory)}</span>
             </div>
             {registration.season && (
               <div className="flex justify-between">
@@ -1091,7 +1089,7 @@ export default function RegistrationPurchase({
                   <span className="text-gray-900">${(originalAmount / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-green-600">
-                  <span>Discount ({discountValidation.discountCode.code}):</span>
+                  <span>Discount ({discountValidation.discountCode?.code}):</span>
                   <span>-${(discountAmount / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-medium">
@@ -1262,7 +1260,7 @@ export default function RegistrationPurchase({
               userId={userId}
               firstName={firstName}
               lastName={lastName}
-              registrationCategory={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : 'Unknown'}
+              registrationCategory={selectedCategory ? getCategoryDisplayName(selectedCategory) : 'Unknown'}
               onComplete={handleSurveyComplete}
               onClose={handleSurveyClose}
               onError={(error) => setError(`Survey error: ${error}`)}
@@ -1322,14 +1320,14 @@ export default function RegistrationPurchase({
                         discountValidation.partialDiscountMessage
                       ) : (
                         <>
-                          {discountValidation.discountCode.percentage}% discount applied! 
-                          Save ${(discountValidation.discountAmount / 100).toFixed(2)}
+                          {discountValidation.discountCode?.percentage}% discount applied!
+                          Save ${((discountValidation.discountAmount ?? 0) / 100).toFixed(2)}
                         </>
                       )}
                     </div>
                     {!discountValidation.isPartialDiscount && (
                       <div className="text-xs">
-                        {discountValidation.discountCode.category.name}
+                        {discountValidation.discountCode?.category.name}
                       </div>
                     )}
                   </div>
@@ -1610,7 +1608,7 @@ export default function RegistrationPurchase({
             </div>
             
             <div className="mb-4 p-3 bg-gray-50 rounded">
-              <div className="text-sm text-gray-600">{registration.name} - {selectedCategory ? getCategoryDisplayName(selectedCategory as any) : ''}</div>
+              <div className="text-sm text-gray-600">{registration.name} - {selectedCategory ? getCategoryDisplayName(selectedCategory) : ''}</div>
               
               {/* Pricing Breakdown */}
               {discountValidation?.isValid ? (
@@ -1620,7 +1618,7 @@ export default function RegistrationPurchase({
                     <span>${(originalAmount / 100).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount ({discountValidation.discountCode.code}):</span>
+                    <span>Discount ({discountValidation.discountCode?.code}):</span>
                     <span>-${(discountAmount / 100).toFixed(2)}</span>
                   </div>
                   <div className="border-t pt-1 flex justify-between font-medium text-gray-900">
@@ -1720,7 +1718,7 @@ export default function RegistrationPurchase({
                 discountAmount={discountAmount}
                 discountCode={discountValidation?.isValid ? discountCode : undefined}
                 registrationName={registration.name}
-                categoryName={selectedCategory ? getCategoryDisplayName(selectedCategory as any) : ''}
+                categoryName={selectedCategory ? getCategoryDisplayName(selectedCategory) : ''}
                 seasonName={registration.season?.name}
                 reservationExpiresAt={reservationExpiresAt || undefined}
                 onTimerExpired={handleTimerExpired}

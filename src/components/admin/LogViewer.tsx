@@ -15,8 +15,14 @@ interface LogFilters {
   limit: number
 }
 
+/** A row from email_logs, email_change_logs, or xero_sync_logs — fields vary by table. */
+interface LogRecord {
+  id: string
+  [key: string]: unknown
+}
+
 interface LogResponse {
-  logs: any[]
+  logs: LogRecord[]
   logType: LogType
   total: number
   limit: number
@@ -24,7 +30,7 @@ interface LogResponse {
 }
 
 export default function LogViewer() {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<LogRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -95,7 +101,7 @@ export default function LogViewer() {
   }
 
   // Render field value with appropriate formatting
-  const renderFieldValue = (key: string, value: any) => {
+  const renderFieldValue = (key: string, value: unknown) => {
     // Null/undefined
     if (value === null || value === undefined) {
       return <span className="text-gray-400 italic">null</span>
@@ -111,7 +117,7 @@ export default function LogViewer() {
     }
 
     // Date/timestamp fields
-    if (key.includes('_at') || key.includes('_date')) {
+    if ((key.includes('_at') || key.includes('_date')) && (typeof value === 'string' || typeof value === 'number')) {
       try {
         const date = new Date(value)
         if (!isNaN(date.getTime())) {
@@ -141,7 +147,7 @@ export default function LogViewer() {
     }
 
     // Status fields - color-coded
-    if (key === 'status') {
+    if (key === 'status' && typeof value === 'string') {
       const statusColors: Record<string, string> = {
         'success': 'bg-green-100 text-green-800 border-green-200',
         'sent': 'bg-green-100 text-green-800 border-green-200',
@@ -166,7 +172,7 @@ export default function LogViewer() {
   }
 
   // Get displayable fields (exclude internal/redundant fields)
-  const getDisplayFields = (log: any) => {
+  const getDisplayFields = (log: LogRecord) => {
     const excludeFields = ['id']
     return Object.keys(log).filter(key => !excludeFields.includes(key))
   }

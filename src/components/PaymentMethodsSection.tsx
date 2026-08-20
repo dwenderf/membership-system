@@ -16,6 +16,15 @@ interface PaymentMethod {
   }
 }
 
+/** Shape returned by GET /api/user-alternate-registrations (only the fields this component reads). */
+interface AlternateRegistration {
+  registration?: {
+    season?: {
+      end_date: string | null
+    } | null
+  } | null
+}
+
 export default function PaymentMethodsSection() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [loading, setLoading] = useState(true)
@@ -24,7 +33,7 @@ export default function PaymentMethodsSection() {
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [showManageModal, setShowManageModal] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [alternateRegs, setAlternateRegs] = useState<any[]>([])
+  const [alternateRegs, setAlternateRegs] = useState<AlternateRegistration[]>([])
   const { showSuccess, showError } = useToast()
 
   const loadPaymentMethod = async (): Promise<PaymentMethod | null> => {

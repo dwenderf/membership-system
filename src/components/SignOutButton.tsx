@@ -24,7 +24,7 @@ export default function SignOutButton() {
         showSuccess('Signed out successfully', 'You have been signed out of your account')
         router.push('/auth/login')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Sign out error:', error)
       showError('Sign out failed', 'An error occurred while signing out')
       setIsSigningOut(false)

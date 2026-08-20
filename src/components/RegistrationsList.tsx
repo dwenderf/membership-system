@@ -2,25 +2,16 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle } from '@/lib/registration-status'
+import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle, type RegistrationWithTiming } from '@/lib/registration-status'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import { formatEventDateTime } from '@/lib/date-utils'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
 
-interface Registration {
-  id: string
+interface Registration extends RegistrationWithTiming {
   name: string
-  type: string
-  is_active: boolean
-  published_at?: string | null
+  published_at: string | null
   allow_discounts: boolean
-  presale_code: string | null
-  presale_start_at?: string | null
-  regular_start_at?: string | null
-  registration_end_at?: string | null
   created_at: string
-  start_date?: string | null
-  end_date?: string | null
   seasons?: {
     name: string
   }
@@ -91,7 +82,7 @@ function RegistrationItem({
   registration: Registration
   onDeleteClick: (id: string, name: string) => void
 }) {
-  const status = getRegistrationStatus(registration as any)
+  const status = getRegistrationStatus(registration)
 
   return (
     <li>
@@ -160,19 +151,19 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
 
   // Group registrations by status
   const activeRegistrations = regs.filter(reg => {
-    const status = getRegistrationStatus(reg as any)
+    const status = getRegistrationStatus(reg)
     return status === 'open' || status === 'presale'
   })
 
   const comingSoonRegistrations = regs.filter(reg => {
-    const status = getRegistrationStatus(reg as any)
+    const status = getRegistrationStatus(reg)
     return status === 'coming_soon'
   })
 
   const draftRegistrations = regs.filter(reg => !reg.is_active)
 
   const closedRegistrations = regs.filter(reg => {
-    const status = getRegistrationStatus(reg as any)
+    const status = getRegistrationStatus(reg)
     return status === 'expired' || status === 'past'
   })
 

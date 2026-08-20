@@ -54,9 +54,9 @@ export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
         router.push('/auth/login')
       }, 2000)
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Account deletion error:', error)
-      showError('Account deletion failed', error.message || 'An error occurred while deleting your account')
+      showError('Account deletion failed', error instanceof Error ? error.message : 'An error occurred while deleting your account')
       setIsDeleting(false)
     }
   }

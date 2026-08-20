@@ -4,17 +4,7 @@ import { useState, useEffect } from 'react'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
 
 import Link from 'next/link'
-import GameCreationForm from '@/components/GameCreationForm'
-
-interface Game {
-  id: string
-  registrationId: string
-  gameDescription: string
-  gameDate: string | null
-  createdAt: string
-  selectedCount?: number
-  availableCount?: number
-}
+import GameCreationForm, { type Game } from '@/components/GameCreationForm'
 
 interface GamesPreviewProps {
   registrationId: string
@@ -48,7 +38,7 @@ export default function GamesPreview({ registrationId }: GamesPreviewProps) {
     }
   }
 
-  const handleGameCreated = (newGame: any) => {
+  const handleGameCreated = (newGame: Game) => {
     setGames(prev => [newGame, ...prev])
     setShowCreateForm(false)
   }

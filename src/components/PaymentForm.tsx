@@ -119,12 +119,15 @@ export default function PaymentForm({
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: registrationId 
+          return_url: registrationId
             ? `${window.location.origin}/user/registrations`
             : `${window.location.origin}/user/memberships`,
         },
         redirect: 'if_required',
       })
+      // Stripe's types narrow paymentIntent to `never` in the error branch, but a decline
+      // can still return a payment intent alongside the error - capture the id before narrowing.
+      const confirmedPaymentIntentId = paymentIntent?.id
 
       // Update registration status to 'processing' with payment intent ID (for registrations only)
       if (!error && paymentIntent && registrationId && categoryId) {
@@ -192,7 +195,7 @@ export default function PaymentForm({
 
         // Update payment record status to 'failed' 
         // Use payment intent ID from either the error response or the prop passed from parent
-        const intentId = (paymentIntent as any)?.id || paymentIntentId
+        const intentId = confirmedPaymentIntentId || paymentIntentId
         
         if (intentId) {
           try {

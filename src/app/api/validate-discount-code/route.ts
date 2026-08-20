@@ -14,7 +14,7 @@ interface DiscountCodeQueryResult {
   discount_categories: (DiscountCategoryInfo & { is_active: boolean }) | null
 }
 
-interface DiscountValidationResult {
+export interface DiscountValidationResult {
   isValid: boolean
   discountCodeId?: string // Discount code ID for easy access
   discountCode?: {

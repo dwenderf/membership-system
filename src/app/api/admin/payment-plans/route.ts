@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { filterActivePlans } from '@/lib/payment-plan-utils'
+import { filterActivePlans, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 
 /**
  * GET /api/admin/payment-plans
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     // Get all payment plans for these users using the payment_plan_summary view
     const userIds = users?.map(u => u.id) || []
 
-    let plansData: any[] = []
+    let plansData: PaymentPlanSummaryRow[] = []
     if (userIds.length > 0) {
       // Fetch payment plans from view (includes registration data)
       const { data: plans, error: plansError } = await adminSupabase
@@ -81,8 +81,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Organize plans by user (contact_id is the user_id in payment_plan_summary)
-    const plansByUser = new Map<string, any[]>()
+    const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()
     for (const plan of plansData) {
+      if (!plan.contact_id) continue
       if (!plansByUser.has(plan.contact_id)) {
         plansByUser.set(plan.contact_id, [])
       }

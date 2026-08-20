@@ -1,16 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Log email change event
  */
 async function logEvent(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   oldEmail: string,
   newEmail: string | null,
   eventType: string,
-  metadata: any = {},
+  metadata: Record<string, unknown> = {},
   request: NextRequest
 ) {
   const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
@@ -46,10 +47,12 @@ async function sendConfirmationEmail(
     return
   }
 
+  const { EMAIL_EVENTS } = await import('@/lib/email/service')
+
   await emailService.sendEmailImmediately({
     userId: '',
     email,
-    eventType: 'email_change_confirmed' as any,
+    eventType: EMAIL_EVENTS.EMAIL_CHANGE_CONFIRMED,
     subject: 'Your email address has been updated',
     templateId,
     data: {
@@ -197,7 +200,7 @@ export async function POST(request: NextRequest) {
     try {
       const { data: identitiesData } = await supabase.auth.getUserIdentities()
       const identities = identitiesData?.identities || []
-      const googleIdentity = identities.find((id: any) => id.provider === 'google')
+      const googleIdentity = identities.find((id) => id.provider === 'google')
 
       if (googleIdentity && googleIdentity.identity_data?.email) {
         const googleEmail = googleIdentity.identity_data.email

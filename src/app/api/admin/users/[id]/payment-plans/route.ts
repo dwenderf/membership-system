@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 
 /**
  * GET /api/admin/users/[id]/payment-plans
@@ -54,7 +55,7 @@ export async function GET(
     }
 
     // Format the response
-    const formattedPlans = (plans || []).map((plan: any) => {
+    const formattedPlans = (plans || []).map((plan: PaymentPlanSummaryRow) => {
       // Calculate installment amount (total / number of installments)
       const installmentAmount = plan.total_installments > 0
         ? Math.round(plan.total_amount / plan.total_installments)

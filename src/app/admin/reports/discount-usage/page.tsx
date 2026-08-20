@@ -15,7 +15,7 @@ interface UserUsage {
   userId: string
   userName: string
   userEmail: string
-  memberId: string | null
+  memberId: number | null
   totalAmount: number
   remaining: number | null
   isFullyUtilized: boolean

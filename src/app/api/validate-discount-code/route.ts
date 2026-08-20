@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory, DiscountCategoryInfo } from '@/lib/services/discount-limit-service'
+
+/** Row shape of `discount_codes`, joined with its `discount_categories`, as selected below. */
+interface DiscountCodeQueryResult {
+  id: string
+  code: string
+  percentage: number | string | null
+  uses_user_allowance: boolean | null
+  is_active: boolean
+  valid_from: string | null
+  valid_until: string | null
+  discount_categories: (DiscountCategoryInfo & { is_active: boolean }) | null
+}
 
 interface DiscountValidationResult {
   isValid: boolean
@@ -53,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the discount code with its category
-    const { data: discountCode, error: codeError } = await supabase
+    const { data: discountCodeData, error: codeError } = await supabase
       .from('discount_codes')
       .select(`
         id,
@@ -77,7 +89,7 @@ export async function POST(request: NextRequest) {
       .eq('is_active', true)
       .single()
 
-    if (codeError || !discountCode) {
+    if (codeError || !discountCodeData) {
       const result: DiscountValidationResult = {
         isValid: false,
         error: 'Invalid discount code'
@@ -85,9 +97,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
+    // The `discount_categories` relation is a single joined object at runtime; the untyped
+    // client can't infer relation cardinality and types it as an array.
+    const discountCode = discountCodeData as unknown as DiscountCodeQueryResult
+
     // Check if category is active
-    const discountCategory = discountCode.discount_categories as any
-    
+    const discountCategory = discountCode.discount_categories
+
     if (!discountCategory?.is_active) {
       const result: DiscountValidationResult = {
         isValid: false,
@@ -114,7 +130,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
-    const category = discountCategory as any
+    const category = discountCategory
     const codeWithCategory: DiscountCodeWithCategory = {
       id: discountCode.id,
       code: discountCode.code,
@@ -338,8 +354,8 @@ export async function POST(request: NextRequest) {
         category: {
           id: category.id,
           name: category.name,
-          accounting_code: category.accounting_code,
-          max_discount_per_user_per_season: category.max_discount_per_user_per_season
+          accounting_code: category.accounting_code || '',
+          max_discount_per_user_per_season: category.max_discount_per_user_per_season ?? null
         }
       },
       discountAmount,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 import { getStripe } from '@/lib/stripe/server-client'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Helper function to update user registrations to refunded status
@@ -11,7 +12,7 @@ import { getStripe } from '@/lib/stripe/server-client'
 async function updateRegistrationsToRefunded(
   paymentId: string,
   refundId: string,
-  adminSupabase: any,
+  adminSupabase: SupabaseClient,
   logger: Logger,
   logPrefix: string
 ): Promise<{ success: boolean; count: number }> {

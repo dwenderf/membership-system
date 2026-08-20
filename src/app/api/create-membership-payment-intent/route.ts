@@ -11,6 +11,12 @@ import { centsToCents } from '@/types/currency'
 // Force import server config
 
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
+import { SupabaseClient, User } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
+import Stripe from 'stripe'
+
+type MembershipRow = Database['public']['Tables']['memberships']['Row']
+type UserProfileRow = Database['public']['Tables']['users']['Row']
 
 // Handle free membership purchases (amount = 0)
 async function handleFreeMembership({
@@ -27,15 +33,15 @@ async function handleFreeMembership({
   expectedValidFrom,
   expectedValidUntil
 }: {
-  supabase: any
-  user: any
-  userProfile: any
-  membership: any
+  supabase: SupabaseClient
+  user: User
+  userProfile: UserProfileRow | null
+  membership: MembershipRow | null
   membershipId: string
   durationMonths: number
   paymentOption?: string
   assistanceAmount?: number
-  paymentContext: any
+  paymentContext: PaymentContext
   startTime: number
   expectedValidFrom?: string
   expectedValidUntil?: string
@@ -55,7 +61,7 @@ async function handleFreeMembership({
         capturePaymentError(membershipError || new Error('Membership not found'), paymentContext, 'error')
         return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
       }
-      membership = membershipData
+      membership = membershipData as MembershipRow
     }
 
     if (!userProfile) {
@@ -69,7 +75,7 @@ async function handleFreeMembership({
         capturePaymentError(profileError || new Error('User profile not found'), paymentContext, 'error')
         return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
       }
-      userProfile = profileData
+      userProfile = profileData as UserProfileRow
     }
 
     // Stage Xero records FIRST - fail fast if this fails
@@ -119,7 +125,7 @@ async function handleFreeMembership({
           item_id: membershipId,
           item_amount: centsToCents(membershipAmount), // Use actual membership price (0 if naturally free)
           description: `Membership: ${membership.name} - ${durationMonths} months`,
-          accounting_code: membership.accounting_code
+          accounting_code: membership.accounting_code ?? undefined
         }
       ],
       discount_codes_used: [], // No discount codes for membership - hardcoded codes are treated as donations
@@ -284,7 +290,12 @@ async function handleFreeMembership({
         .eq('user_id', user.id)
         .eq('payment_status', 'paid')
 
-      startDate = calculateMembershipStartDate(membershipId, existingMemberships || [])
+      // The `membership` relation is a single joined object at runtime; the untyped
+      // client can't infer relation cardinality and types it as an array.
+      startDate = calculateMembershipStartDate(
+        membershipId,
+        (existingMemberships || []) as unknown as Array<{ valid_until: string; membership?: { id: string } }>
+      )
       endDate = calculateMembershipEndDate(startDate, durationMonths)
     }
 
@@ -711,7 +722,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create payment intent
-    const paymentIntentParams: any = {
+    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
       amount: centsToCents(amountToCharge), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,

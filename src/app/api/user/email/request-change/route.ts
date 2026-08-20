@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Validate email format
@@ -13,7 +14,7 @@ function isValidEmail(email: string): boolean {
 /**
  * Check if user has exceeded rate limit (max 3 requests per hour)
  */
-async function checkRateLimit(supabase: any, userId: string): Promise<boolean> {
+async function checkRateLimit(supabase: SupabaseClient, userId: string): Promise<boolean> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
 
   const { count, error } = await supabase
@@ -35,12 +36,12 @@ async function checkRateLimit(supabase: any, userId: string): Promise<boolean> {
  * Log email change event
  */
 async function logEvent(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   oldEmail: string,
   newEmail: string | null,
   eventType: string,
-  metadata: any = {},
+  metadata: Record<string, unknown> = {},
   request: NextRequest
 ) {
   const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')

@@ -4,14 +4,27 @@ import { formatDate } from '@/lib/date-utils'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 
 // Force import server config
 
 import * as Sentry from '@sentry/nextjs'
 
+/** Row shape of `waitlists`, as inserted/updated below (not in generated Supabase types). */
+interface WaitlistRow {
+  id: string
+  user_id: string
+  registration_id: string
+  registration_category_id: string
+  position: number
+  discount_code_id: string | null
+  removed_at: string | null
+  joined_at: string
+}
+
 // Helper function to get next waitlist position
-async function getNextPosition(supabase: any, registrationId: string, categoryId: string): Promise<number> {
+async function getNextPosition(supabase: SupabaseClient, registrationId: string, categoryId: string): Promise<number> {
   const { data: maxPosition } = await supabase
     .from('waitlists')
     .select('position')
@@ -156,7 +169,7 @@ export async function POST(request: NextRequest) {
       .eq('registration_category_id', categoryId)
       .maybeSingle()
 
-    let waitlistEntry: any
+    let waitlistEntry: WaitlistRow | undefined
     let nextPosition: number
 
     if (existingWaitlist) {
@@ -272,7 +285,9 @@ export async function POST(request: NextRequest) {
 
       // Send waitlist notification email
       try {
-        const season = registration.seasons as any  // Supabase types this as array but it's a single object
+        // The `seasons` relation is a single joined object at runtime; the untyped
+        // client can't infer relation cardinality and types it as an array.
+        const season = registration.seasons as unknown as { name: string; start_date: string; end_date: string } | null
         const seasonName = season
           ? `${season.name} (${formatDate(new Date(season.start_date))} - ${formatDate(new Date(season.end_date))})`
           : 'Unknown Season'
@@ -314,7 +329,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       position: nextPosition,
-      waitlistId: waitlistEntry.id,
+      waitlistId: waitlistEntry!.id,
       message: `You've been added to the waitlist. You're #${nextPosition} in line.`
     })
     

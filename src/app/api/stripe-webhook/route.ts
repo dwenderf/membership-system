@@ -8,6 +8,11 @@ import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
+
+type UserMembershipRow = Database['public']['Tables']['user_memberships']['Row']
+type UserRegistrationRow = Database['public']['Tables']['user_registrations']['Row']
 
 // Force import server config
 
@@ -189,7 +194,7 @@ async function updatePaymentPlanStatuses(
 }
 
 // Handle membership payment processing
-async function handleMembershipPayment(supabase: any, adminSupabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, membershipId: string, durationMonths: number) {
+async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: SupabaseClient, paymentIntent: Stripe.PaymentIntent, userId: string, membershipId: string, durationMonths: number) {
   // Check if user membership already exists (avoid duplicates)
   const { data: existingMembership } = await supabase
     .from('user_memberships')
@@ -197,7 +202,7 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
     .eq('stripe_payment_intent_id', paymentIntent.id)
     .single()
 
-  let membershipRecord: any
+  let membershipRecord: UserMembershipRow
 
   if (existingMembership) {
     console.log('User membership already exists for payment intent:', paymentIntent.id)
@@ -388,11 +393,11 @@ async function handleMembershipPayment(supabase: any, adminSupabase: any, paymen
 }
 
 // Handle registration payment processing
-async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.PaymentIntent, userId: string, registrationId: string) {
+async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent: Stripe.PaymentIntent, userId: string, registrationId: string) {
   // Note: Webhook doesn't have access to categoryId, so we'll need to get it from the registration
   // For now, let's keep the direct database update in webhooks since they're backup/redundancy
 
-  let userRegistration: any
+  let userRegistration: UserRegistrationRow
 
   // First, check if registration already exists and is paid
   const { data: existingPaidRegistration } = await supabase
@@ -534,7 +539,7 @@ async function handleRegistrationPayment(supabase: any, paymentIntent: Stripe.Pa
 }
 
 // Handle charge updated events (when balance transaction becomes available)
-async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
+async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
     console.log('🔄 Processing charge updated event for fee update...')
 
@@ -590,7 +595,7 @@ async function handleChargeUpdated(supabase: any, charge: Stripe.Charge) {
 }
 
 // Handle charge refunded events
-async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
+async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
     console.log('🔄 Processing charge refunded event...')
 
@@ -748,7 +753,7 @@ async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
       .eq('payment_id', payment.id)
       .eq('status', 'completed')
 
-    const totalRefunded = allRefunds?.reduce((sum: number, refund: any) => sum + refund.amount, 0) || 0
+    const totalRefunded = allRefunds?.reduce((sum: number, refund: { amount: number }) => sum + refund.amount, 0) || 0
 
     // If fully refunded, update payment status
     if (totalRefunded >= payment.final_amount && payment.status !== 'refunded') {
@@ -1326,7 +1331,7 @@ export async function POST(request: NextRequest) {
             await savePaymentMethodFromIntent(paymentIntent, paymentIntent.metadata.userId, supabase)
 
             // Handle idempotent webhook delivery - check if registration already paid
-            let userRegistration: any
+            let userRegistration: UserRegistrationRow
 
             // First, check if registration already exists and is paid (idempotency)
             const { data: existingPaidRegistration } = await supabase

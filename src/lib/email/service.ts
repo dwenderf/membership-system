@@ -23,6 +23,7 @@ export const EMAIL_EVENTS = {
   REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
   ACCOUNT_DELETED: 'account.deleted',
+  EMAIL_CHANGE_CONFIRMED: 'email_change_confirmed',
   PAYMENT_PLAN_PRE_NOTIFICATION: 'payment_plan.pre_notification',
   PAYMENT_PLAN_PAYMENT_PROCESSED: 'payment_plan.payment_processed',
   PAYMENT_PLAN_PAYMENT_FAILED: 'payment_plan.payment_failed',

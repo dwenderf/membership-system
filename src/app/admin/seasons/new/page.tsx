@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { SEASON_TYPES, calculateSeasonDates, generateSeasonName, getSeasonTypeByKey } from '@/lib/season-types'
 import Link from 'next/link'
 import { formatDate } from '@/lib/date-utils'
+import { Database } from '@/types/database'
 
 export default function NewSeasonPage() {
   const router = useRouter()
@@ -19,7 +20,7 @@ export default function NewSeasonPage() {
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [existingSeasons, setExistingSeasons] = useState<any[]>([])
+  const [existingSeasons, setExistingSeasons] = useState<Pick<Database['public']['Tables']['seasons']['Row'], 'type' | 'start_date' | 'name'>[]>([])
 
   // Calculate derived values only if type is selected
   const seasonType = formData.type ? getSeasonTypeByKey(formData.type) : null

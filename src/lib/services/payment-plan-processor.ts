@@ -28,7 +28,7 @@ interface DuePaymentInvoiceJoin {
   }>
 }
 
-interface ProcessingResults {
+export interface ProcessingResults {
   paymentsProcessed: number
   paymentsFailed: number
   retriesAttempted: number

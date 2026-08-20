@@ -2,19 +2,21 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useState, useEffect } from 'react'
+import { User } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
+
+type UserMembershipWithName = Database['public']['Tables']['user_memberships']['Row'] & {
+  membership: Pick<Database['public']['Tables']['memberships']['Row'], 'name'> | null
+}
 
 export default function SimpleTestDataPage() {
-  const [memberships, setMemberships] = useState<any[]>([])
-  const [currentMemberships, setCurrentMemberships] = useState<any[]>([])
-  const [user, setUser] = useState<any>(null)
+  const [memberships, setMemberships] = useState<Database['public']['Tables']['memberships']['Row'][]>([])
+  const [currentMemberships, setCurrentMemberships] = useState<UserMembershipWithName[]>([])
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
   const supabase = createClient()
-
-  useEffect(() => {
-    loadData()
-  }, [])
 
   async function loadData() {
     // Get current user
@@ -27,7 +29,7 @@ export default function SimpleTestDataPage() {
       .from('memberships')
       .select('*')
       .order('name')
-    
+
     console.log('Memberships:', membershipData, 'Error:', membershipError)
     setMemberships(membershipData || [])
 
@@ -41,11 +43,16 @@ export default function SimpleTestDataPage() {
         `)
         .eq('user_id', currentUser.id)
         .order('valid_until', { ascending: false })
-      
+
       console.log('User memberships:', userMembershipData, 'Error:', userMembershipError)
       setCurrentMemberships(userMembershipData || [])
     }
   }
+
+  useEffect(() => {
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function addTestMembership(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

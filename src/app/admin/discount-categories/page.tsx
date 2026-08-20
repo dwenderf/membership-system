@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { DiscountCategoryRow } from '@/lib/discount-types'
+
+type DiscountCategoryWithCodeCount = DiscountCategoryRow & { discount_codes: { count: number }[] }
 
 export default async function DiscountCategoriesPage() {
   const supabase = await createClient()
@@ -78,7 +81,7 @@ export default async function DiscountCategoriesPage() {
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">
-                {categories.map((category: any) => {
+                {categories.map((category: DiscountCategoryWithCodeCount) => {
                   const codeCount = category.discount_codes?.[0]?.count || 0
                   
                   return (

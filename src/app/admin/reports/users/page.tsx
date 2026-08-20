@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { User as SupabaseAuthUser } from '@supabase/supabase-js'
 import UsersTable from './UsersTable'
 
 interface User {
@@ -20,7 +21,7 @@ interface User {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [authUser, setAuthUser] = useState<any>(null)
+  const [authUser, setAuthUser] = useState<SupabaseAuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')

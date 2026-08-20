@@ -13,6 +13,68 @@ import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 
+/** Narrow "as selected" projection of `xero_invoice_line_items` from the `payments.xero_invoices` join below. */
+interface PaymentLineItem {
+  id: string
+  description: string
+  line_amount: number
+  account_code: string
+}
+
+/** Narrow "as selected" projection of `xero_invoices` joined onto `payments` below. */
+interface UserInvoiceJoin {
+  id: string
+  xero_invoice_id: string | null
+  invoice_number: string | null
+  invoice_status: string
+  total_amount: number
+  net_amount: number
+  created_at: string
+  invoice_type: string
+  sync_status: string
+  is_payment_plan: boolean
+  xero_invoice_line_items: PaymentLineItem[]
+}
+
+/** Narrow "as selected" projection of `refunds` joined onto `payments` below. */
+interface UserPaymentRefundJoin {
+  id: string
+  amount: number
+  status: string
+}
+
+/**
+ * jsonb blob stored on `xero_invoices.staging_metadata` (src/lib/xero/staging.ts);
+ * only the fields this page reads off it.
+ */
+interface RefundStagingMetadata {
+  user_id?: string
+  refund_id?: string | null
+  refund_type?: string
+}
+
+/** Display shape both real invoices and credit notes get transformed into below. */
+interface DisplayInvoice {
+  id: string
+  paymentId: string
+  number: string
+  date: string
+  originalAmount: number
+  totalRefunded: number
+  netAmount: number
+  status: string
+  isPartiallyRefunded: boolean
+  isFullyRefunded: boolean
+  hasXeroInvoice: boolean
+  xeroInvoiceId?: string
+  canRefund: boolean
+  lineItems: PaymentLineItem[]
+  invoice_type: string
+  isPaymentPlan?: boolean
+  isPaymentPlanFullyPaid?: boolean
+  paymentPlanAmountPaid?: number
+}
+
 interface PageProps {
   params: Promise<{
     id: string
@@ -86,7 +148,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
     .order('created_at', { ascending: false })
 
   // Fetch user's payments and invoices
-  let invoices: any[] = []
+  let invoices: DisplayInvoice[] = []
   
   // Fetch payments with related Xero invoice data and refunds (only original invoices, not credit notes)
   const { data: userPayments } = await adminSupabase
@@ -143,7 +205,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
   const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean, amountPaid: number }>()
 
   for (const payment of userPayments || []) {
-    const originalInvoice = payment.xero_invoices?.find((inv: any) =>
+    const originalInvoice = payment.xero_invoices?.find((inv: UserInvoiceJoin) =>
       inv.invoice_type === 'ACCREC' && inv.is_payment_plan
     )
 
@@ -168,19 +230,19 @@ export default async function UserDetailPage({ params, searchParams: searchParam
   // Transform payments into invoice-like objects for display
   invoices = userPayments?.map(payment => {
     // Calculate refund information
-    const completedRefunds = payment.refunds?.filter((refund: any) => refund.status === 'completed') || []
-    const totalRefunded = completedRefunds.reduce((sum: number, refund: any) => sum + refund.amount, 0)
+    const completedRefunds: UserPaymentRefundJoin[] = payment.refunds?.filter((refund: UserPaymentRefundJoin) => refund.status === 'completed') || []
+    const totalRefunded = completedRefunds.reduce((sum: number, refund: UserPaymentRefundJoin) => sum + refund.amount, 0)
 
     // Filter to get synced or pending ACCREC invoices (exclude staged and credit notes)
     // Pending invoices are awaiting Xero sync (payment successful, just not synced yet)
-    const validInvoices = payment.xero_invoices?.filter((invoice: any) =>
+    const validInvoices: UserInvoiceJoin[] = payment.xero_invoices?.filter((invoice: UserInvoiceJoin) =>
       invoice.invoice_type === 'ACCREC' &&
       (invoice.sync_status === 'synced' || invoice.sync_status === 'pending')
     ) || []
 
     // Prefer synced invoices with invoice numbers, then pending invoices
-    const originalInvoice = validInvoices.find((inv: any) => inv.invoice_number && inv.sync_status === 'synced')
-      || validInvoices.find((inv: any) => inv.sync_status === 'pending')
+    const originalInvoice = validInvoices.find((inv: UserInvoiceJoin) => inv.invoice_number && inv.sync_status === 'synced')
+      || validInvoices.find((inv: UserInvoiceJoin) => inv.sync_status === 'pending')
       || validInvoices[0]
 
     // Skip payments without a valid invoice (e.g., payment plan payoffs)
@@ -232,8 +294,8 @@ export default async function UserDetailPage({ params, searchParams: searchParam
   // Transform credit notes and add them to the invoices list
   const creditNoteInvoices = userCreditNotes?.filter(creditNote => {
     // Filter credit notes for this user by checking the staging metadata
-    const metadata = creditNote.staging_metadata as any
-    return metadata?.customer?.id === id
+    const metadata = creditNote.staging_metadata as RefundStagingMetadata | null
+    return metadata?.user_id === id
   }).map(creditNote => {
     return {
       id: creditNote.id,
@@ -560,7 +622,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                             </div>
                             {invoice.lineItems.length > 0 && (
                               <div className="text-xs text-gray-400 mt-1">
-                                {invoice.lineItems.map((item: any, index: number) => (
+                                {invoice.lineItems.map((item, index) => (
                                   <div key={item.id || index} className="truncate">
                                     {item.description}
                                   </div>
@@ -583,7 +645,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                               )}
                               {invoice.isPaymentPlan && !invoice.isPaymentPlanFullyPaid && (
                                 <div className="text-xs text-gray-400">
-                                  {formatAmount(invoice.paymentPlanAmountPaid)} paid
+                                  {formatAmount(invoice.paymentPlanAmountPaid ?? 0)} paid
                                 </div>
                               )}
                             </div>

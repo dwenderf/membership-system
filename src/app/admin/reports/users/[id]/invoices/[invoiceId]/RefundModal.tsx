@@ -31,6 +31,47 @@ interface RefundModalProps {
   invoiceNumber: string
 }
 
+/** Line item shape returned in `staging.line_items` by POST /api/admin/refunds/preview. */
+interface RefundStagingLineItem {
+  id: string
+  description: string
+  line_amount: number
+  account_code: string
+  tax_type: string
+}
+
+interface RefundStagingPaymentInfo {
+  payment_id: string
+  original_amount: number
+  available_for_refund: number
+}
+
+interface RefundStagingDiscountInfo {
+  code: string
+  category: string
+  percentage: number
+  is_partial: boolean
+  partial_message?: string
+}
+
+/** Response shape of `staging` from POST /api/admin/refunds/preview. */
+interface RefundStagingData {
+  refund_id: string | null
+  staging_id: string
+  refund_type: RefundType
+  total_amount: number
+  line_items: RefundStagingLineItem[]
+  payment_info: RefundStagingPaymentInfo
+  discount_info?: RefundStagingDiscountInfo
+}
+
+interface RefundPreviewRequest {
+  paymentId: string
+  refundType: RefundType
+  amount?: number
+  discountValidation?: DiscountValidation
+}
+
 export default function RefundModal({ 
   paymentId, 
   availableAmount, 
@@ -47,7 +88,7 @@ export default function RefundModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [stagingData, setStagingData] = useState<any>(null)
+  const [stagingData, setStagingData] = useState<RefundStagingData | null>(null)
   const [isStaging, setIsStaging] = useState(false)
   const [isRegistrationPayment, setIsRegistrationPayment] = useState<boolean | null>(null)
   const discountCodeInputRef = useRef<HTMLInputElement>(null)
@@ -205,7 +246,7 @@ export default function RefundModal({
     setIsStaging(true)
 
     try {
-      const requestData: any = {
+      const requestData: RefundPreviewRequest = {
         paymentId,
         refundType
       }
@@ -655,7 +696,7 @@ export default function RefundModal({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {stagingData.line_items?.map((item: any, index: number) => (
+                      {stagingData.line_items?.map((item, index: number) => (
                         <tr key={index}>
                           <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
                           <td className="px-4 py-2 text-sm text-gray-500">{item.account_code}</td>

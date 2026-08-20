@@ -5,6 +5,9 @@ import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
+import { Database } from '@/types/database'
+
+type MembershipAnalyticsRow = Database['public']['Views']['membership_analytics_data']['Row']
 
 interface MembershipType {
   id: string
@@ -111,7 +114,7 @@ export default function MembershipReportsPage() {
       console.log('Membership data received:', membershipData?.length || 0, 'records')
 
       // Process the data - much simpler now since the view handles all the logic
-      const membersList: MemberData[] = membershipData?.map((item: any) => ({
+      const membersList: MemberData[] = membershipData?.map((item: MembershipAnalyticsRow) => ({
         user_id: item.user_id || '',
         member_id: item.member_id?.toString() || 'N/A',
         first_name: item.first_name,

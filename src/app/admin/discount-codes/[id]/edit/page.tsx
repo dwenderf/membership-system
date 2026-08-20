@@ -5,21 +5,24 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { DiscountCategoryRow, DiscountCodeRow, DiscountCodeWithCategoryJoin } from '@/lib/discount-types'
+
+type CategorySummary = Pick<DiscountCategoryRow, 'id' | 'name' | 'accounting_code' | 'max_discount_per_user_per_season'>
 
 export default function EditDiscountCodePage() {
   const router = useRouter()
   const params = useParams()
   const codeId = params.id as string
   const supabase = createClient()
-  
-  const [code, setCode] = useState<any>(null)
+
+  const [code, setCode] = useState<DiscountCodeWithCategoryJoin<CategorySummary> | null>(null)
   const [formData, setFormData] = useState({
     code: '',
     percentage: '',
     is_active: true,
   })
   
-  const [existingCodes, setExistingCodes] = useState<any[]>([])
+  const [existingCodes, setExistingCodes] = useState<Pick<DiscountCodeRow, 'id' | 'code'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

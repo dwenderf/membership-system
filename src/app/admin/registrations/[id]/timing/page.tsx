@@ -6,14 +6,19 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import DateTimePicker from '@/components/DateTimePicker'
+import { Database } from '@/types/database'
+
+type RegistrationWithSeason = Database['public']['Tables']['registrations']['Row'] & {
+  seasons: Pick<Database['public']['Tables']['seasons']['Row'], 'id' | 'name'> | null
+}
 
 export default function EditRegistrationTimingPage() {
   const router = useRouter()
   const params = useParams()
   const registrationId = params.id as string
   const supabase = createClient()
-  
-  const [registration, setRegistration] = useState<any>(null)
+
+  const [registration, setRegistration] = useState<RegistrationWithSeason | null>(null)
   const [formData, setFormData] = useState({
     is_active: false,
     presale_start_at: '',

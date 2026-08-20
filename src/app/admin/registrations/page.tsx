@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getRegistrationStatus } from '@/lib/registration-status'
+import { getRegistrationStatus, RegistrationWithTiming } from '@/lib/registration-status'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import RegistrationsList from '@/components/RegistrationsList'
@@ -78,16 +78,16 @@ export default async function RegistrationsPage() {
               {registrations && registrations.length > 0 && (
                 <div className="mt-3 flex items-center space-x-4 text-sm">
                   {(() => {
-                    const activeCount = registrations.filter((reg: any) => {
+                    const activeCount = registrations.filter((reg: RegistrationWithTiming) => {
                       const status = getRegistrationStatus(reg)
                       return status === 'open' || status === 'presale'
                     }).length
-                    const draftCount = registrations.filter((reg: any) => !reg.is_active).length
-                    const closedCount = registrations.filter((reg: any) => {
+                    const draftCount = registrations.filter((reg: RegistrationWithTiming) => !reg.is_active).length
+                    const closedCount = registrations.filter((reg: RegistrationWithTiming) => {
                       const status = getRegistrationStatus(reg)
                       return status === 'expired' || status === 'past'
                     }).length
-                    const comingSoonCount = registrations.filter((reg: any) => {
+                    const comingSoonCount = registrations.filter((reg: RegistrationWithTiming) => {
                       const status = getRegistrationStatus(reg)
                       return status === 'coming_soon'
                     }).length

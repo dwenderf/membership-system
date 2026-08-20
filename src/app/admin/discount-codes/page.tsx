@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import CategoryFilter from './CategoryFilter'
 import { formatDate } from '@/lib/date-utils'
+import { DiscountCategoryRow, DiscountCodeWithCategoryJoin } from '@/lib/discount-types'
+
+type CategorySummary = Pick<DiscountCategoryRow, 'id' | 'name' | 'accounting_code' | 'max_discount_per_user_per_season'>
 
 interface PageProps {
   searchParams: Promise<{ category?: string }>
@@ -142,7 +145,7 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">
-                {codes.map((code: any) => {
+                {codes.map((code: DiscountCodeWithCategoryJoin<CategorySummary>) => {
                   const isExpired = code.valid_until && new Date(code.valid_until) < new Date()
                   const isNotYetValid = code.valid_from && new Date(code.valid_from) > new Date()
                   const category = Array.isArray(code.discount_categories) ? code.discount_categories[0] : code.discount_categories

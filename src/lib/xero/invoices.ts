@@ -3,6 +3,7 @@ import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './clie
 import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
+import { getXeroValidationMessage, XeroApiError } from './xero-errors'
 
 // Helper function to get system accounting codes
 async function getSystemAccountingCode(codeType: string): Promise<string | null> {
@@ -158,18 +159,12 @@ export async function createXeroInvoiceBeforePayment(
         invoices: [xeroInvoiceData]
       })
       console.log('✅ Invoice creation successful')
-    } catch (invoiceError: any) {
+    } catch (invoiceError: unknown) {
       console.error('❌ Invoice creation failed:', invoiceError)
       // Check if the error is due to archived contact
-      let errorMessage = ''
-      if (invoiceError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-        errorMessage = invoiceError.response.body.Elements[0].ValidationErrors[0].Message
-      } else if (invoiceError?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-        errorMessage = invoiceError.body.Elements[0].ValidationErrors[0].Message
-      } else if (invoiceError?.message) {
-        errorMessage = invoiceError.message
-      }
-      
+      const errorMessage = getXeroValidationMessage(invoiceError) || ''
+
+
       // Check if this is an archived contact error
       const fullErrorString = JSON.stringify(invoiceError)
       if (errorMessage.includes('archived') || errorMessage.includes('un-archived') || fullErrorString.includes('archived') || fullErrorString.includes('un-archived')) {
@@ -271,10 +266,11 @@ export async function createXeroInvoiceBeforePayment(
       errorMessage = error.message
     } else if (error && typeof error === 'object') {
       // Handle Xero API error structure
-      const xeroError = error as any
-      
+      const validationMessage = getXeroValidationMessage(error)
+      const xeroError = error as XeroApiError
+
       if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-        errorMessage = `Xero validation error: ${xeroError.response.body.Elements[0].ValidationErrors[0].Message}`
+        errorMessage = `Xero validation error: ${validationMessage}`
         errorCode = 'xero_validation_error'
       } else if (xeroError.response?.body?.Message) {
         errorMessage = `Xero API error: ${xeroError.response.body.Message}`
@@ -660,12 +656,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
         discount_amount,
         final_amount,
         stripe_fee_amount,
-        stripe_payment_intent_id,
-        payment_items (
-          item_type,
-          item_id,
-          amount
-        )
+        stripe_payment_intent_id
       `)
       .eq('id', paymentId)
       .single()
@@ -675,9 +666,27 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
       return null
     }
 
+    // Line item data lives on xero_invoice_line_items (the payment_items table was
+    // dropped in favor of it - see 2025-07-14-drop-payment-items-table.sql). Discount
+    // lines are excluded here since they're sourced from discount_usage_computed below.
+    const { data: invoiceForPayment } = await supabase
+      .from('xero_invoices')
+      .select('xero_invoice_line_items (line_item_type, item_id, line_amount)')
+      .eq('payment_id', paymentId)
+      .eq('invoice_type', 'ACCREC')
+      .single()
+
+    const rawPaymentItems: PaymentInvoiceData['payment_items'] = (invoiceForPayment?.xero_invoice_line_items || [])
+      .filter((lineItem) => lineItem.line_item_type !== 'discount')
+      .map((lineItem) => ({
+        item_type: lineItem.line_item_type as 'membership' | 'registration' | 'donation',
+        item_id: lineItem.item_id,
+        amount: lineItem.line_amount
+      }))
+
     // Enhance payment items with descriptions and accounting codes
     const enhancedPaymentItems = await Promise.all(
-      payment.payment_items.map(async (item: any) => {
+      rawPaymentItems.map(async (item) => {
         let description = ''
         let accounting_code = ''
 
@@ -722,7 +731,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
       .select('amount_saved, discount_code, discount_category_name, discount_category_accounting_code, discount_code_id')
       .eq('payment_id', paymentId)
 
-    const discountCodesUsed = discountUsage?.map((usage: any) => ({
+    const discountCodesUsed = discountUsage?.map((usage) => ({
       code: usage.discount_code,
       amount_saved: usage.amount_saved,
       category_name: usage.discount_category_name,

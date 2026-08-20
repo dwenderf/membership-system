@@ -1,5 +1,7 @@
 import { XeroClient } from 'xero-node'
 import { Logger } from '@/lib/logging/logger'
+import { asHttpClientError } from './xero-errors'
+import { Json } from '../../types/database'
 
 const logger = Logger.getInstance()
 
@@ -348,17 +350,18 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
         ? new Date(refreshedTokenSet.expires_at * 1000).toISOString() // Convert Unix timestamp to ISO string
         : new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const httpError = asHttpClientError(error)
     const { logger } = await import('../logging/logger')
     logger.logXeroSync(
       'token-refresh-error',
       'Error refreshing Xero token',
       {
         tenantId,
-        error: error.message,
-        errorDetails: error?.response?.data,
-        status: error?.response?.status,
-        stack: error.stack
+        error: httpError?.message,
+        errorDetails: httpError?.response?.data,
+        status: httpError?.response?.status,
+        stack: httpError?.stack
       },
       'error'
     )
@@ -375,10 +378,10 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
         },
         extra: {
           tenant_id: tenantId,
-          error_type: error?.response?.data?.error || 'unknown',
-          error_status: error?.response?.status,
-          error_details: error?.response?.data,
-          error_message: error?.message,
+          error_type: (httpError?.response?.data as { error?: string } | undefined)?.error || 'unknown',
+          error_status: httpError?.response?.status,
+          error_details: httpError?.response?.data,
+          error_message: httpError?.message,
           possible_causes: [
             'Refresh token has expired (Demo Company: ~7-14 days, Production: ~60 days)',
             'App has been disconnected by user in Xero',
@@ -654,8 +657,8 @@ export async function logXeroSync(
   status: 'success' | 'error' | 'warning',
   errorCode?: string,
   errorMessage?: string,
-  requestData?: any,
-  responseData?: any
+  requestData?: Record<string, unknown>,
+  responseData?: Record<string, unknown>
 ): Promise<void>
 
 // Helper function to log Xero sync operations (new object format)
@@ -668,8 +671,8 @@ export async function logXeroSync(params: {
   xero_id?: string
   details?: string
   error_message?: string
-  response_data?: any
-  request_data?: any
+  response_data?: Record<string, unknown>
+  request_data?: Record<string, unknown>
 }): Promise<void>
 
 // Implementation
@@ -683,8 +686,8 @@ export async function logXeroSync(
     xero_id?: string
     details?: string
     error_message?: string
-    response_data?: any
-    request_data?: any
+    response_data?: Record<string, unknown>
+    request_data?: Record<string, unknown>
   },
   operationType?: 'contact_sync' | 'invoice_sync' | 'payment_sync' | 'token_refresh',
   entityType?: 'user' | 'payment' | 'invoice' | 'contact' | null,
@@ -693,8 +696,8 @@ export async function logXeroSync(
   status?: 'success' | 'error' | 'warning',
   errorCode?: string,
   errorMessage?: string,
-  requestData?: any,
-  responseData?: any
+  requestData?: Record<string, unknown>,
+  responseData?: Record<string, unknown>
 ): Promise<void> {
   try {
     const { createAdminClient } = await import('../supabase/admin')
@@ -714,8 +717,10 @@ export async function logXeroSync(
           xero_entity_id: params.xero_id || null,
           status: params.success ? 'success' : 'error',
           error_message: params.error_message || null,
-          request_data: params.request_data || null,
-          response_data: params.response_data || (params.details ? { details: params.details } : null)
+          // Callers pass plain JSON-serializable objects; cast at this DB boundary since
+          // TS can't statically verify arbitrary Record<string, unknown> values are Json.
+          request_data: (params.request_data as unknown as Json | undefined) || null,
+          response_data: (params.response_data as unknown as Json | undefined) || (params.details ? { details: params.details } : null)
         })
     } else {
       // Legacy format
@@ -730,8 +735,8 @@ export async function logXeroSync(
           status: status!,
           error_code: errorCode,
           error_message: errorMessage,
-          request_data: requestData,
-          response_data: responseData
+          request_data: requestData as unknown as Json | undefined,
+          response_data: responseData as unknown as Json | undefined
         })
     }
 

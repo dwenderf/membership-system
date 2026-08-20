@@ -2,6 +2,7 @@ import { Contact, ContactPerson } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { createAdminClient } from '../supabase/admin'
 import * as Sentry from '@sentry/nextjs'
+import { getXeroValidationMessage, XeroApiError } from './xero-errors'
 
 // Helper function to generate contact name following our naming convention
 export function generateContactName(firstName: string, lastName: string, memberId?: number | null): string {
@@ -279,9 +280,9 @@ export async function syncUserToXeroContact(
         response = await xeroApi.accountingApi.updateContact(tenantId, xeroContactId, {
           contacts: [contactData]
         })
-      } catch (updateError: any) {
+      } catch (updateError: unknown) {
         // Check if the error is due to archived contact
-        const errorMessage = updateError?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message || ''
+        const errorMessage = getXeroValidationMessage(updateError) || ''
         if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
           console.log(`⚠️ Contact ${xeroContactId} is archived, checking for other non-archived contacts with same email`)
           
@@ -497,11 +498,12 @@ export async function syncUserToXeroContact(
       errorMessage = error.message
     } else if (error && typeof error === 'object') {
       // Handle Xero API error structure
-      const xeroError = error as any
-      
+      const validationMessage = getXeroValidationMessage(error)
+      const xeroError = error as XeroApiError
+
       if (xeroError.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-        errorMessage = `Xero validation error: ${xeroError.response.body.Elements[0].ValidationErrors[0].Message}`
-        errorCode = xeroError.response.body.Elements[0].ValidationErrors[0].Message
+        errorMessage = `Xero validation error: ${validationMessage}`
+        errorCode = validationMessage!
       } else if (xeroError.response?.body?.Message) {
         errorMessage = `Xero API error: ${xeroError.response.body.Message}`
         errorCode = 'xero_api_error'
@@ -713,11 +715,13 @@ export async function syncEmailChangeToXero(
   }
 }
 
+type ContactSummary = Pick<Contact, 'contactID' | 'name' | 'firstName' | 'lastName' | 'emailAddress' | 'contactNumber'>
+
 // Debug function to find duplicate contacts by email
 export async function findDuplicateContactsByEmail(
   tenantId: string,
   email: string
-): Promise<{ success: boolean; contacts?: any[]; error?: string }> {
+): Promise<{ success: boolean; contacts?: ContactSummary[]; error?: string }> {
   try {
     const xeroApi = await getAuthenticatedXeroClient(tenantId)
     if (!xeroApi) {

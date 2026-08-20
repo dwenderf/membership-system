@@ -54,13 +54,14 @@ export async function PUT(
     if (action === 'sync_xero') {
       // Manually trigger staging for this refund's credit note
       try {
-        const stagingSuccess = await xeroStagingManager.createCreditNoteStaging(
+        const stagingId = await xeroStagingManager.createRefundStaging(
           refundId,
           refund.payment_id,
-          centsToCents(refund.amount)
+          'proportional',
+          { amount: centsToCents(refund.amount) }
         )
-        
-        if (stagingSuccess) {
+
+        if (stagingId) {
           logger.logSystem('refund-xero-staging-manual', 'Manual credit note staging completed', {
             refundId: refundId,
             triggeredBy: authUser.id

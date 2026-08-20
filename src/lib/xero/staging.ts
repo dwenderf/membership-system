@@ -12,6 +12,10 @@ import { logger } from '../logging/logger'
 import { Cents, centsToCents, negativeCents } from '../../types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../services/payment-plan-config'
 import { toDateString } from '../date-utils'
+import { Database } from '../../types/database'
+import { XeroLineItemRow } from './xero-types'
+
+type XeroInvoiceStagingRow = Database['public']['Tables']['xero_invoices']['Row']
 
 /**
  * Data structure for staging Xero invoice and payment records
@@ -109,6 +113,48 @@ export type StagingPaymentData = {
   stripe_payment_intent_id?: string | null
 }
 
+/** Result of `getFreePurchaseData` — the joined registration/membership row plus the
+ * fields `convertToStagingData` reads from it. Not the full DB row shape, just what's
+ * selected in the query and accessed downstream. */
+interface FreePurchasePayment {
+  id: string
+  final_amount: number
+  discount_amount: number
+  stripe_payment_intent_id: string | null
+}
+
+interface FreeRegistrationPurchase {
+  registration_id: string | null
+  amount_paid: number | null
+  registration: { name: string } | null
+  registration_category: { name: string; price: number; accounting_code: string } | null
+  payment: FreePurchasePayment | null
+}
+
+interface FreeMembershipPurchase {
+  membership_id: string | null
+  amount_paid: number | null
+  months_purchased: number | null
+  membership: { name: string; price: number; accounting_code: string } | null
+  payment: FreePurchasePayment | null
+}
+
+type FreePurchaseData =
+  | { type: 'registration'; data: FreeRegistrationPurchase; user_id: string }
+  | { type: 'membership'; data: FreeMembershipPurchase; user_id: string }
+
+/** A credit note line item built from an original invoice's line items, proportionally
+ * allocated (or copied 1:1 for zero-dollar refunds) for a refund's credit note. */
+interface CreditNoteLineItem {
+  description: string
+  line_amount: number
+  account_code: string | null
+  tax_type: string | null
+  line_item_type: string
+  discount_code_id: string | null
+  item_id: string | null
+}
+
 export class XeroStagingManager {
   private _supabase: ReturnType<typeof createAdminClient> | null = null
 
@@ -177,7 +223,7 @@ export class XeroStagingManager {
    * Create staging records immediately with provided invoice data
    * (for immediate staging at purchase time)
    */
-  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean, isPaymentPlan?: boolean }): Promise<any | null> {
+  async createImmediateStaging(data: StagingPaymentData, options?: { isFree?: boolean, isPaymentPlan?: boolean }): Promise<XeroInvoiceStagingRow | null> {
     try {
       logger.logXeroSync(
         'staging-immediate-start',
@@ -239,8 +285,8 @@ export class XeroStagingManager {
       
       // Create staging record without tenant_id - will be populated during sync
       const success = await this.createInvoiceStaging(stagingData, null)
-      
-      return success
+
+      return !!success
     } catch (error) {
       logger.logXeroSync(
         'staging-free-purchase-error',
@@ -296,7 +342,7 @@ export class XeroStagingManager {
     data: StagingPaymentData,
     tenantId: string | null,
     options?: { isFree?: boolean, isPaymentPlan?: boolean }
-  ): Promise<any | null> {
+  ): Promise<XeroInvoiceStagingRow | null> {
     try {
       // Let Xero generate its own invoice number - don't set one here
       
@@ -514,7 +560,7 @@ export class XeroStagingManager {
     user_id: string
     record_id: string
     trigger_source: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
-  }) {
+  }): Promise<FreePurchaseData | null> {
     try {
       if (event.trigger_source === 'user_registrations' || event.trigger_source === 'free_registration') {
         // Get registration data
@@ -621,16 +667,16 @@ export class XeroStagingManager {
    * Convert purchase data to staging format
    */
   private async convertToStagingData(
-    purchaseData: any, 
+    purchaseData: FreePurchaseData,
     type: 'user_memberships' | 'user_registrations' | 'free_registration' | 'free_membership'
   ): Promise<StagingPaymentData> {
     try {
       if (type === 'user_registrations' || type === 'free_registration') {
-        const registration = purchaseData.data
+        const registration = purchaseData.data as FreeRegistrationPurchase
         const payment = registration.payment
-        
+
         return {
-          payment_id: payment?.id || null,
+          payment_id: payment?.id || undefined,
           user_id: purchaseData.user_id,
           total_amount: centsToCents(registration.registration_category?.price || 0),
           discount_amount: centsToCents(payment?.discount_amount || 0),
@@ -639,17 +685,17 @@ export class XeroStagingManager {
             item_type: 'registration',
             item_id: registration.registration_id,
             item_amount: centsToCents(registration.amount_paid || 0),
-            description: `${registration.registration.name} - ${registration.registration_category?.name || 'Standard'}`,
+            description: `${registration.registration!.name} - ${registration.registration_category?.name || 'Standard'}`,
             accounting_code: registration.registration_category?.accounting_code || 'REGISTRATION'
           }],
           stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
         }
       } else if (type === 'user_memberships' || type === 'free_membership') {
-        const membership = purchaseData.data
+        const membership = purchaseData.data as FreeMembershipPurchase
         const payment = membership.payment
-        
+
         return {
-          payment_id: payment?.id || null,
+          payment_id: payment?.id || undefined,
           user_id: purchaseData.user_id,
           total_amount: centsToCents(membership.membership?.price || 0),
           discount_amount: centsToCents(payment?.discount_amount || 0),
@@ -658,7 +704,7 @@ export class XeroStagingManager {
             item_type: 'membership',
             item_id: membership.membership_id,
             item_amount: centsToCents(membership.amount_paid || 0),
-            description: `${membership.membership.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
+            description: `${membership.membership!.name} (${membership.months_purchased || 1} month${membership.months_purchased !== 1 ? 's' : ''})`,
             accounting_code: membership.membership?.accounting_code || 'MEMBERSHIP'
           }],
           stripe_payment_intent_id: payment?.stripe_payment_intent_id || null
@@ -960,7 +1006,7 @@ export class XeroStagingManager {
       const { error: lineItemsError } = await this.supabase
         .from('xero_invoice_line_items')
         .insert(
-          lineItems.map((item: any) => ({
+          lineItems.map((item) => ({
             xero_invoice_id: stagingRecord.id,
             description: item.description,
             quantity: 1,
@@ -1125,7 +1171,8 @@ export class XeroStagingManager {
         .eq('invoice_type', 'ACCREC')
         .single()
       
-      let lineItems = []
+      const invoiceLineItems = originalInvoice?.xero_invoice_line_items as XeroLineItemRow[] | undefined
+      let lineItems: CreditNoteLineItem[] = []
       if (invoiceError) {
         logger.logXeroSync(
           'staging-proportional-no-original-invoice',
@@ -1134,16 +1181,16 @@ export class XeroStagingManager {
           'warn'
         )
       }
-      
-      if (originalInvoice?.xero_invoice_line_items && !invoiceError) {
+
+      if (invoiceLineItems && !invoiceError) {
         // Calculate total invoice amount
-        const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
-          (sum: number, item: any) => sum + item.line_amount, 0
+        const totalInvoiceAmount = invoiceLineItems.reduce(
+          (sum, item) => sum + item.line_amount, 0
         )
 
         // For zero-dollar refunds, copy the exact line items (credit note type tells Xero it's a reversal)
         if (refundAmountCents === 0 && totalInvoiceAmount === 0) {
-          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => ({
+          lineItems = invoiceLineItems.map((item) => ({
             description: `Credit: ${item.description}`,
             // Keep the same signs as original invoice - Xero's credit note type handles the reversal
             // - Revenue items stay positive (Xero credits this back)
@@ -1160,7 +1207,7 @@ export class XeroStagingManager {
           // Calculate what fraction of the original invoice is being refunded
           const refundFraction = refundAmountCents / totalInvoiceAmount
 
-          lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+          lineItems = invoiceLineItems.map((item) => {
             // Apply refund fraction to each line item, keeping the same sign
             // Xero's credit note type handles the reversal - we just need correct proportions
             // - Revenue items stay positive
@@ -1180,12 +1227,12 @@ export class XeroStagingManager {
 
           // Ensure total matches refund amount exactly (handle rounding)
           // Credit note total should equal refund amount (positive, as Xero shows credits as positive)
-          const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+          const calculatedTotal = lineItems.reduce((sum, item) => sum + item.line_amount, 0) as Cents
           const expectedTotal = refundAmountCents
           const difference = expectedTotal - calculatedTotal
           if (difference !== 0 && lineItems.length > 0) {
             // Adjust the first revenue item (positive amount)
-            const revenueItem = lineItems.find((item: any) => item.line_amount > 0)
+            const revenueItem = lineItems.find((item) => item.line_amount > 0)
             if (revenueItem) {
               revenueItem.line_amount = centsToCents(revenueItem.line_amount + difference)
             } else {
@@ -1241,7 +1288,7 @@ export class XeroStagingManager {
         const { error: lineItemsError } = await this.supabase
           .from('xero_invoice_line_items')
           .insert(
-            lineItems.map((item: any) => ({
+            lineItems.map((item) => ({
               xero_invoice_id: stagingRecord.id,
               description: item.description,
               quantity: 1,
@@ -1442,25 +1489,29 @@ export class XeroStagingManager {
           }
         }
 
+        const previewLineItems = originalInvoice.xero_invoice_line_items as Array<
+          Pick<Database['public']['Tables']['xero_invoice_line_items']['Row'], 'description' | 'line_amount' | 'account_code' | 'tax_type'>
+        >
+
         // Calculate proportional line items (same logic as createProportionalCreditNoteStaging)
-        const totalInvoiceAmount = originalInvoice.xero_invoice_line_items.reduce(
-          (sum: number, item: any) => sum + item.line_amount, 0
+        const totalInvoiceAmount = previewLineItems.reduce(
+          (sum, item) => sum + item.line_amount, 0
         )
-        
-        const lineItems = originalInvoice.xero_invoice_line_items.map((item: any) => {
+
+        const lineItems = previewLineItems.map((item) => {
           const proportion = item.line_amount / totalInvoiceAmount
           const creditAmount = centsToCents(refundData.amount! * proportion)
-          
+
           return {
             description: `Credit: ${item.description}`,
             line_amount: creditAmount,
-            account_code: item.account_code,
-            tax_type: item.tax_type
+            account_code: item.account_code || '400', // Default sales account
+            tax_type: item.tax_type || 'NONE'
           }
         })
 
         // Handle rounding to match exact refund amount
-        const calculatedTotal = lineItems.reduce((sum: number, item: any) => sum + item.line_amount, 0) as Cents
+        const calculatedTotal = lineItems.reduce((sum, item) => sum + item.line_amount, 0) as Cents
         const difference = refundData.amount - calculatedTotal
         if (difference !== 0 && lineItems.length > 0) {
           lineItems[0].line_amount = centsToCents(lineItems[0].line_amount + difference)

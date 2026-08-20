@@ -27,6 +27,7 @@ export interface EffectiveLimit {
 export interface DiscountCategoryInfo {
   id: string
   name: string
+  accounting_code?: string | null
   max_discount_per_user_per_season?: number | null
   requires_user_allowance?: boolean | null
   default_percentage?: number | string | null
@@ -38,6 +39,16 @@ export interface DiscountCodeWithCategory {
   percentage?: number | string | null
   uses_user_allowance?: boolean | null
   category: DiscountCategoryInfo | null
+}
+
+/** Row shape of `user_discount_allowances` as selected by the resolvers below —
+ * not the full DB row, just the columns queried and read downstream. */
+interface DiscountAllowanceRow {
+  user_id: string
+  discount_category_id: string
+  season_id: string
+  discount_percentage: number | string | null
+  max_discount_amount: number | null
 }
 
 export interface CheckSeasonalDiscountLimitOptions {
@@ -293,7 +304,7 @@ export async function resolveEffectiveDiscountLimits(
   const categoryDefaultPct = categoryDefaultPctParsed != null && !isNaN(categoryDefaultPctParsed) ? categoryDefaultPctParsed : null
 
   // 2. Fetch allowance for user, category, and season
-  let allowance: any = null
+  let allowance: DiscountAllowanceRow | null = null
   if (seasonId) {
     const { data: allowanceData, error: allowanceError } = await supabase
       .from('user_discount_allowances')
@@ -412,7 +423,7 @@ export async function resolveEffectiveDiscountLimitsBatch(
     throw allowanceError
   }
 
-  const allowanceMap = new Map<string, any>()
+  const allowanceMap = new Map<string, DiscountAllowanceRow>()
   allowances?.forEach(row => {
     allowanceMap.set(`${row.user_id}:${row.discount_category_id}`, row)
   })

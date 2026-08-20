@@ -1,8 +1,15 @@
-import { LoopsClient } from 'loops'
+import { LoopsClient, EventProperties, TransactionalVariables } from 'loops'
 import { formatDate } from '@/lib/date-utils'
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { getWelcomeMessage } from '@/lib/organization'
+import { Json } from '@/types/database'
+
+/** The Loops SDK's response types don't model the `id` field the API actually
+ * returns on success — this reflects the real (undocumented) runtime shape. */
+interface LoopsResponseWithId {
+  id?: string
+}
 
 // Email event types
 export const EMAIL_EVENTS = {
@@ -31,7 +38,7 @@ export const EMAIL_EVENTS = {
 export type EmailEventType = typeof EMAIL_EVENTS[keyof typeof EMAIL_EVENTS]
 
 interface EmailData {
-  [key: string]: any
+  [key: string]: Json
 }
 
 interface SendEmailOptions {
@@ -46,13 +53,13 @@ interface SendEmailOptions {
 }
 
 class EmailService {
-  private loops: LoopsClient
-  
+  private loops: LoopsClient | null
+
   constructor() {
     const apiKey = process.env.LOOPS_API_KEY
     if (!apiKey || apiKey === 'your_loops_api_key') {
       console.warn('LOOPS_API_KEY not configured. Email sending will be disabled.')
-      this.loops = null as any
+      this.loops = null
     } else {
       this.loops = new LoopsClient(apiKey)
     }
@@ -125,7 +132,7 @@ class EmailService {
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
-          dataVariables: cleanData
+          dataVariables: cleanData as TransactionalVariables
         })
       } else {
         // Send as a basic contact event (for triggering automations)
@@ -135,13 +142,13 @@ class EmailService {
           eventProperties: {
             subject,
             ...data
-          }
+          } as EventProperties
         })
       }
 
       // Determine success/failure based on Loops response
       const sendSucceeded = loopsResponse && 'success' in loopsResponse && loopsResponse.success
-      const loopsEventId = sendSucceeded ? (loopsResponse as any).id : undefined
+      const loopsEventId = sendSucceeded ? (loopsResponse as LoopsResponseWithId).id : undefined
 
       // Log to email_logs for tracking (even for immediate sends)
       // Fire-and-forget to avoid blocking the response
@@ -176,7 +183,7 @@ class EmailService {
 
       // Log additional error details if available
       if (error && typeof error === 'object' && 'json' in error) {
-        console.error('Loops.so API error details:', (error as any).json)
+        console.error('Loops.so API error details:', error.json)
       }
 
       // Queue as pending so the cron retries it — transient failures (network,

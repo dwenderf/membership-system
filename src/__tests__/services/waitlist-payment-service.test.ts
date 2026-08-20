@@ -113,7 +113,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50, // 50% off = $50
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -184,7 +183,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50, // 50% off = $50
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -246,7 +244,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50,
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -282,86 +279,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       expect(result.finalAmount).toBe(10000) // Full price, no discount
       expect(result.discountAmount).toBe(0)
       expect(result.discountCode).toBeDefined()
-    })
-
-    it('should respect per-code usage limits before checking seasonal caps', async () => {
-      // Mock category query
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                price: 10000 // $100
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount code query - has usage_limit of 2
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'TWOTIMER',
-                percentage: 100,
-                usage_limit: 2, // Can only use twice
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category'
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - already used twice
-      mockSupabase.from.mockImplementation((table: string) => {
-        if (table === 'user_discount_allowances') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                eq: jest.fn().mockReturnValue({
-                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
-                })
-              })
-            })
-          }
-        }
-        if (table === 'discount_usage_computed') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                eq: jest.fn().mockResolvedValue({
-                  data: [{ id: 'usage-1' }, { id: 'usage-2' }], // Already used 2 times
-                  error: null
-                })
-              })
-            })
-          }
-        }
-        return {}
-      })
-
-      const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
-        'category-id',
-        'season-id',
-        'code-id',
-        'user-id'
-      )
-
-      expect(result.finalAmount).toBe(10000) // Full price
-      expect(result.discountAmount).toBe(0) // No discount due to per-code limit
-      expect(result.discountCode).toBeDefined()
-
-      // Should NOT call seasonal limit check since per-code limit blocked it
-      expect(checkSeasonalDiscountLimit).not.toHaveBeenCalled()
     })
 
     it('should handle no discount code gracefully', async () => {
@@ -442,7 +359,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'FREE100',
                 percentage: 100, // 100% off = $100
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -504,7 +420,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TINY10',
                 percentage: 10, // 10% of $1.00 = $0.10
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -603,7 +518,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                     code: 'PRIDE',
                     percentage: null,
                     uses_user_allowance: true,
-                    usage_limit: null,
                     category: {
                       id: 'cat-id',
                       name: 'Financial Aid',
@@ -707,7 +621,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 code: 'PRIDE',
                 percentage: null,
                 uses_user_allowance: true,
-                usage_limit: null,
                 category: {
                   id: 'cat-id',
                   name: 'Financial Aid',
@@ -775,7 +688,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 code: 'FIXED75',
                 percentage: 75,
                 uses_user_allowance: false,
-                usage_limit: null,
                 category: {
                   id: 'cat-id',
                   name: 'Financial Aid',
@@ -843,7 +755,6 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
                 code: 'GATED',
                 percentage: null,
                 uses_user_allowance: true,
-                usage_limit: null,
                 category: {
                   id: 'cat-gated',
                   name: 'Gated Category',

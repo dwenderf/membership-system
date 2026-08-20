@@ -4,9 +4,12 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
-import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage } from '@/lib/services/discount-limit-service'
+import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
+
+type XeroInvoiceRow = Database['public']['Tables']['xero_invoices']['Row']
 
 export interface AlternateChargeResult {
   paymentId: string
@@ -86,7 +89,13 @@ export class AlternatePaymentService {
             accounting_code: registration.alternate_accounting_code
           }
         ],
-        discount_codes_used: discountCode ? [discountCode] : [],
+        discount_codes_used: discountCode ? [{
+          code: discountCode.code,
+          amount_saved: centsToCents(discountAmount),
+          category_name: discountCode.category?.name ?? '',
+          accounting_code: discountCode.category?.accounting_code ?? undefined,
+          discount_code_id: discountCode.id
+        }] : [],
         stripe_payment_intent_id: null // Will be updated after payment
       }
 
@@ -269,7 +278,7 @@ export class AlternatePaymentService {
     seasonId: string,
     discountCodeId?: string,
     userId?: string
-  ): Promise<{ finalAmount: number; discountAmount: number; discountCode?: any }> {
+  ): Promise<{ finalAmount: number; discountAmount: number; discountCode: DiscountCodeWithCategory | null }> {
     try {
       // Get registration pricing
       const { data: registration, error: registrationError } = await supabase
@@ -298,9 +307,9 @@ export class AlternatePaymentService {
           .single()
 
         if (!discountError && discount) {
-          discountCode = discount
-
           const category = Array.isArray(discount.category) ? discount.category[0] : discount.category
+          discountCode = { ...discount, category }
+
           const categoryId = category?.id
 
           let effectiveLimit = null
@@ -328,25 +337,9 @@ export class AlternatePaymentService {
           }
 
           const isEligible = effectiveLimit?.isEligible ?? true
-          let requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
+          const requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
             ? Math.round((basePrice * pct) / 100)
             : 0
-
-          // Check per-code usage limits
-          if (requestedDiscountAmount > 0 && discount.usage_limit && discount.usage_limit > 0) {
-            const { data: usageCount } = await supabase
-              .from('discount_usage_computed')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('discount_code_id', discountCodeId)
-
-            const currentUsage = usageCount?.length || 0
-
-            if (currentUsage >= discount.usage_limit) {
-              // User has exceeded per-code limit - no discount
-              requestedDiscountAmount = 0
-            }
-          }
 
           // Enforce seasonal discount cap (only if discount is still applicable)
           if (requestedDiscountAmount > 0) {
@@ -413,7 +406,7 @@ export class AlternatePaymentService {
     userId: string,
     registrationId: string,
     gameDescription: string,
-    stagingRecord: any
+    stagingRecord: XeroInvoiceRow
   ): Promise<AlternateChargeResult> {
     try {
       const adminSupabase = createAdminClient()

@@ -10,6 +10,14 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
 
+/** The slice of a user's `preferences` jsonb blob this module reads —
+ * not the full shape (which also holds unrelated keys like adminFavorites). */
+interface UserEmailPreferences {
+  emailNotifications?: {
+    rosterChanges?: boolean
+  }
+}
+
 /** Delay between sends — reuses the same env var as the batch cron (default 150ms) */
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const getEmailDelayMs = () => {
@@ -107,7 +115,7 @@ export async function stageCaptainRosterChangeNotification(
       .filter(captain => {
         if (!captain) return false
         if (captain.id === playerUserId) return false // skip self-notification
-        const prefs = (captain as any).preferences ?? {}
+        const prefs = (captain.preferences as UserEmailPreferences | null) ?? {}
         return prefs?.emailNotifications?.rosterChanges !== false
       })
 

@@ -14,6 +14,15 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
 
+/** The slice of a user's `preferences` jsonb blob this module reads —
+ * not the full shape (which also holds unrelated keys like adminFavorites). */
+interface UserEmailPreferences {
+  emailNotifications?: {
+    newRegistrations?: boolean
+    refunds?: boolean
+  }
+}
+
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
 /** Delay between sends — reuses the same env var as the batch cron (default 150ms) */
@@ -40,7 +49,7 @@ async function getOptedInAdmins(
   }
 
   return admins.filter((admin) => {
-    const pref = (admin as any).preferences?.emailNotifications?.[prefKey]
+    const pref = (admin.preferences as UserEmailPreferences | null)?.emailNotifications?.[prefKey]
     return pref !== false // absent or true = opted in
   })
 }

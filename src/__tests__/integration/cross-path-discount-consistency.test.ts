@@ -113,7 +113,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                     code: 'PRIDE75',
                     percentage: 75,
                     uses_user_allowance: false,
-                    usage_limit: null,
                     category: {
                       id: 'cat-aid',
                       name: 'Financial Aid',
@@ -251,7 +250,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                   code: 'PRIDE75',
                   percentage: 75,
                   uses_user_allowance: false,
-                  usage_limit: null,
                   category: {
                     id: 'cat-aid',
                     name: 'Financial Aid',
@@ -369,7 +367,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                     code: 'PRIDE',
                     percentage: null,
                     uses_user_allowance: true,
-                    usage_limit: null,
                     category: {
                       id: 'cat-aid',
                       name: 'Financial Aid',
@@ -507,7 +504,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                   code: 'PRIDE',
                   percentage: null,
                   uses_user_allowance: true,
-                  usage_limit: null,
                   category: {
                     id: 'cat-aid',
                     name: 'Financial Aid',
@@ -626,7 +622,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                     code: 'PRIDE',
                     percentage: null,
                     uses_user_allowance: true,
-                    usage_limit: null,
                     category: {
                       id: 'cat-aid',
                       name: 'Financial Aid',
@@ -742,7 +737,6 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
                   code: 'PRIDE',
                   percentage: null,
                   uses_user_allowance: true,
-                  usage_limit: null,
                   category: {
                     id: 'cat-aid',
                     name: 'Financial Aid',

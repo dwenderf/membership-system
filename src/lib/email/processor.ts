@@ -18,6 +18,16 @@ import { centsToDollars } from '@/types/currency'
 import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { Json } from '@/types/database'
+import type { createAdminClient } from '../supabase/server'
+
+/** The slice of a `users` row this processor reads to build confirmation emails —
+ * not the full row shape, just what's accessed downstream. */
+interface ConfirmationEmailUser {
+  email: string
+  first_name: string
+  last_name: string
+}
 
 export type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -35,7 +45,7 @@ export type PaymentCompletionEvent = {
 }
 
 export class EmailProcessor {
-  private supabase: any
+  private supabase: ReturnType<typeof createAdminClient> | null = null
   private logger: Logger
 
   constructor() {
@@ -75,7 +85,7 @@ export class EmailProcessor {
       await this.initialize()
       
       // Get user details
-      const { data: user } = await this.supabase
+      const { data: user } = await this.supabase!
         .from('users')
         .select('*')
         .eq('id', event.user_id)
@@ -148,7 +158,7 @@ export class EmailProcessor {
       await this.initialize()
       
       // Get user details
-      const { data: user } = await this.supabase
+      const { data: user } = await this.supabase!
         .from('users')
         .select('*')
         .eq('id', event.user_id)
@@ -202,7 +212,7 @@ export class EmailProcessor {
    */
   private async checkExistingEmail(event: PaymentCompletionEvent, eventType: string) {
     try {
-      const { data: existingEmail } = await this.supabase
+      const { data: existingEmail } = await this.supabase!
         .from('email_logs')
         .select('id, created_at')
         .eq('user_id', event.user_id)
@@ -223,7 +233,7 @@ export class EmailProcessor {
   /**
    * Stage membership confirmation email
    */
-  private async stageMembershipConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+  private async stageMembershipConfirmationEmail(event: PaymentCompletionEvent, user: ConfirmationEmailUser) {
     this.logger.logPaymentProcessing('stage-membership-confirmation-email', '📧 Starting membership email staging', { 
       paymentId: event.payment_id,
       userEmail: user.email
@@ -248,7 +258,7 @@ export class EmailProcessor {
       }
       
       // Get membership details by payment_id
-      const { data: membership, error: membershipError } = await this.supabase
+      const { data: membership, error: membershipError } = await this.supabase!
         .from('user_memberships')
         .select(`
           *,
@@ -271,7 +281,7 @@ export class EmailProcessor {
         this.logger.logPaymentProcessing('stage-membership-confirmation-email', '❌ Membership not found', { paymentId: event.payment_id })
         
         // Let's check what user_memberships exist for this user
-        const { data: allUserMemberships } = await this.supabase
+        const { data: allUserMemberships } = await this.supabase!
           .from('user_memberships')
           .select('id, membership_id, user_id, payment_id, created_at')
           .eq('user_id', event.user_id)
@@ -325,7 +335,7 @@ export class EmailProcessor {
   /**
    * Stage registration confirmation email
    */
-  private async stageRegistrationConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+  private async stageRegistrationConfirmationEmail(event: PaymentCompletionEvent, user: ConfirmationEmailUser) {
     this.logger.logPaymentProcessing('stage-registration-confirmation-email', '📧 Starting registration email staging', { 
       paymentId: event.payment_id,
       userEmail: user.email
@@ -350,7 +360,7 @@ export class EmailProcessor {
       }
       
       // Get registration details by payment_id
-      const { data: registration, error: registrationError } = await this.supabase
+      const { data: registration, error: registrationError } = await this.supabase!
         .from('user_registrations')
         .select(`
           *,
@@ -383,7 +393,7 @@ export class EmailProcessor {
         this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Registration not found', { paymentId: event.payment_id })
         
         // Let's check what user_registrations exist for this user
-        const { data: allUserRegistrations } = await this.supabase
+        const { data: allUserRegistrations } = await this.supabase!
           .from('user_registrations')
           .select('id, registration_id, user_id, payment_id, created_at')
           .eq('user_id', event.user_id)
@@ -409,7 +419,7 @@ export class EmailProcessor {
       })
 
       // Prepare base email data
-      const emailData: any = {
+      const emailData: Record<string, Json> = {
         userName: `${user.first_name} ${user.last_name}`,
         registrationName: registration.registration.name,
         categoryName: categoryName,
@@ -477,7 +487,7 @@ export class EmailProcessor {
   /**
    * Stage alternate selection confirmation email
    */
-  private async stageAlternateSelectionConfirmationEmail(event: PaymentCompletionEvent, user: any) {
+  private async stageAlternateSelectionConfirmationEmail(event: PaymentCompletionEvent, user: ConfirmationEmailUser) {
     this.logger.logPaymentProcessing('stage-alternate-selection-confirmation-email', '📧 Starting alternate selection email staging', { 
       paymentId: event.payment_id,
       userEmail: user.email
@@ -500,7 +510,7 @@ export class EmailProcessor {
       }
       
       // Get alternate selection details by payment_id
-      const { data: alternateSelection, error: selectionError } = await this.supabase
+      const { data: alternateSelection, error: selectionError } = await this.supabase!
         .from('alternate_selections')
         .select(`
           *,
@@ -526,7 +536,7 @@ export class EmailProcessor {
       }
       
       // Get payment details for amount and payment intent information
-      const { data: payment } = await this.supabase
+      const { data: payment } = await this.supabase!
         .from('payments')
         .select('final_amount, stripe_payment_intent_id')
         .eq('id', event.payment_id)
@@ -549,7 +559,7 @@ export class EmailProcessor {
       const formattedTime = formatTime(gameDate)
 
       // Prepare base email data
-      const emailData: any = {
+      const emailData: Record<string, Json> = {
         userName: `${user.first_name} ${user.last_name}`,
         registrationName: alternateSelection.alternate_registration.registration.name,
         seasonName: alternateSelection.alternate_registration.registration.season?.name || '',

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
 import { filterActivePlans } from '@/lib/payment-plan-utils'
+import type { ProcessingResults } from '@/lib/services/payment-plan-processor'
 import UserLink from '@/components/UserLink'
 
 interface PaymentPlan {
@@ -51,7 +52,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
   const [processingResult, setProcessingResult] = useState<{
     success: boolean
     message: string
-    results?: any
+    results?: ProcessingResults
   } | null>(null)
 
   useEffect(() => {

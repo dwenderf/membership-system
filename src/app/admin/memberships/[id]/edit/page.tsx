@@ -34,7 +34,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
     allow_monthly: true,
   })
   
-  const [existingMemberships, setExistingMemberships] = useState<any[]>([])
+  const [existingMemberships, setExistingMemberships] = useState<Pick<Membership, 'id' | 'name'>[]>([])
   const [, setCurrentMembership] = useState<Membership | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)

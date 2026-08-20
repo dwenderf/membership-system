@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import PaymentPlansTable from './PaymentPlansTable'
+import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 
 export default async function PaymentPlansReportPage() {
   const supabase = await createClient()
@@ -37,7 +38,7 @@ export default async function PaymentPlansReportPage() {
 
   // Get payment plans
   const userIds = users?.map(u => u.id) || []
-  let plansData: any[] = []
+  let plansData: PaymentPlanSummaryRow[] = []
 
   if (userIds.length > 0) {
     const { data: plans } = await adminSupabase
@@ -50,8 +51,9 @@ export default async function PaymentPlansReportPage() {
   }
 
   // Organize plans by user
-  const plansByUser = new Map<string, any[]>()
+  const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()
   for (const plan of plansData) {
+    if (!plan.contact_id) continue
     if (!plansByUser.has(plan.contact_id)) {
       plansByUser.set(plan.contact_id, [])
     }

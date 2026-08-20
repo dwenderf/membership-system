@@ -29,6 +29,35 @@ interface Registration {
   alternate_accounting_code: string
 }
 
+/** Result of processing a single alternate selection, from POST /api/alternate-registrations/[gameId]/select. */
+interface AlternateSelectionResult {
+  userId: string
+  userName: string
+  success: boolean
+  error?: string
+  paymentId?: string
+  amountCharged?: number
+}
+
+interface AlternateSelectionResponse {
+  success: boolean
+  message: string
+  summary: {
+    totalProcessed: number
+    totalSelected: number
+    successfulSelections: number
+    failedSelections: number
+    totalAmountCharged: number
+    alreadySelected: number
+  }
+  results: AlternateSelectionResult[]
+  game: {
+    id: string
+    description: string
+    registrationName: string | undefined
+  }
+}
+
 export default function RegistrationGamesPage() {
   const params = useParams()
   const registrationId = params.id as string
@@ -38,7 +67,7 @@ export default function RegistrationGamesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
-  const [selectionResults, setSelectionResults] = useState<any>(null)
+  const [selectionResults, setSelectionResults] = useState<AlternateSelectionResponse | null>(null)
 
   const supabase = createClient()
   const { showError, showSuccess } = useToast()
@@ -82,15 +111,15 @@ export default function RegistrationGamesPage() {
     }
   }
 
-  const handleSelectionComplete = (results: any) => {
+  const handleSelectionComplete = (results: AlternateSelectionResponse) => {
     setSelectionResults(results)
     setSelectedGame(null)
-    
+
     // Show appropriate toast notifications
     const { summary } = results
     const failureDetails = (results.results || [])
-      .filter((r: any) => !r.success && r.error)
-      .map((r: any) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
+      .filter((r) => !r.success && r.error)
+      .map((r) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
       .join('\n') || undefined
     if (summary.failedSelections > 0 && summary.successfulSelections === 0) {
       // All selections failed

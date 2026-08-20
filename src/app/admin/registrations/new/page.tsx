@@ -7,6 +7,7 @@ import { convertToNYTimezone } from '@/lib/date-utils'
 import Link from 'next/link'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
+import { Database } from '@/types/database'
 
 export default function NewRegistrationPage() {
   const router = useRouter()
@@ -27,9 +28,9 @@ export default function NewRegistrationPage() {
     survey_id: '',
   })
 
-  const [seasons, setSeasons] = useState<any[]>([])
-  const [existingRegistrations, setExistingRegistrations] = useState<any[]>([])
-  const [availableMemberships, setAvailableMemberships] = useState<any[]>([])
+  const [seasons, setSeasons] = useState<Database['public']['Tables']['seasons']['Row'][]>([])
+  const [existingRegistrations, setExistingRegistrations] = useState<Pick<Database['public']['Tables']['registrations']['Row'], 'name'>[]>([])
+  const [availableMemberships, setAvailableMemberships] = useState<Pick<Database['public']['Tables']['memberships']['Row'], 'id' | 'name' | 'price_monthly' | 'price_annual'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)

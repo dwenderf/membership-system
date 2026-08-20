@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
+import { DiscountCategoryRow } from '@/lib/discount-types'
 
 export default function NewDiscountCategoryPage() {
   const router = useRouter()
   const supabase = createClient()
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -19,7 +20,7 @@ export default function NewDiscountCategoryPage() {
     requires_user_allowance: false,
   })
   
-  const [existingCategories, setExistingCategories] = useState<any[]>([])
+  const [existingCategories, setExistingCategories] = useState<Pick<DiscountCategoryRow, 'name' | 'accounting_code'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

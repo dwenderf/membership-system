@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
+import { Database } from '@/types/database'
 
 export default function NewMembershipPage() {
   const router = useRouter()
@@ -21,7 +22,7 @@ export default function NewMembershipPage() {
   })
   
   // Removed seasons state - no longer needed
-  const [existingMemberships, setExistingMemberships] = useState<any[]>([])
+  const [existingMemberships, setExistingMemberships] = useState<Pick<Database['public']['Tables']['memberships']['Row'], 'name'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [accountingCodesValid, setAccountingCodesValid] = useState<boolean | null>(null)

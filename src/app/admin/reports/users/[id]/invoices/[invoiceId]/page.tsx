@@ -6,6 +6,26 @@ import RefundModal from './RefundModal'
 import { formatDate, formatDateTime } from '@/lib/date-utils'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs } from '@/lib/breadcrumb-utils'
+import { Database } from '@/types/database'
+
+/** Narrow "as selected" projection of `xero_invoice_line_items` from the `payments.xero_invoices` join below. */
+interface InvoiceLineItem {
+  id: string
+  description: string
+  line_amount: number
+  account_code: string
+  line_item_type: string
+}
+
+/** Narrow "as selected" projection of `xero_invoice_line_items` from the credit-note lookup below (no line_item_type selected). */
+interface CreditNoteLineItem {
+  id: string
+  description: string
+  line_amount: number
+  account_code: string
+}
+
+type XeroPaymentRow = Database['public']['Tables']['xero_payments']['Row']
 
 interface PageProps {
   params: Promise<{
@@ -147,7 +167,7 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams:
   const isPaymentPlan = xeroInvoice?.is_payment_plan ?? false
 
   // For payment plans, fetch all payments (installments + payoff)
-  let allInvoicePayments: any[] = []
+  let allInvoicePayments: XeroPaymentRow[] = []
   let totalPaidAmount = payment.final_amount
   let invoiceStatus = payment.status
 
@@ -278,7 +298,7 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams:
               {invoice.lineItems.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <div className="space-y-3">
-                    {invoice.lineItems.map((item: any) => (
+                    {invoice.lineItems.map((item: InvoiceLineItem) => (
                       <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3 border-b border-gray-100 last:border-b-0">
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">{item.description}</div>
@@ -308,15 +328,15 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams:
                 {/* Payment Line Items */}
                 <div className="space-y-3">
                   {invoice.allPayments
-                    .filter((pmt: any) => pmt.sync_status === 'synced')
-                    .map((pmt: any) => (
+                    .filter((pmt) => pmt.sync_status === 'synced')
+                    .map((pmt) => (
                     <div key={pmt.id} className="flex flex-col sm:flex-row sm:justify-between gap-2 pb-3 border-b border-gray-100 last:border-b-0">
                       <div className="flex-1">
                         <div className="text-sm text-gray-900">
                           {pmt.created_at ? formatDateTime(pmt.created_at) : 'N/A'}
                         </div>
                         <div className="text-sm text-gray-500 font-mono mt-1">
-                          {pmt.staging_metadata?.stripe_charge_id || 'N/A'}
+                          {(pmt.staging_metadata as { stripe_charge_id?: string } | null)?.stripe_charge_id || 'N/A'}
                         </div>
                       </div>
                       <div className="text-sm font-medium text-gray-900 sm:text-right">
@@ -436,7 +456,7 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams:
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
-                                {refund.credit_note.xero_invoice_line_items.map((item: any) => (
+                                {refund.credit_note.xero_invoice_line_items.map((item: CreditNoteLineItem) => (
                                   <tr key={item.id}>
                                     <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
                                     <td className="px-4 py-2 text-sm text-gray-500">{item.account_code}</td>

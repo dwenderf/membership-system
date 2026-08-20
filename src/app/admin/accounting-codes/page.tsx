@@ -39,6 +39,20 @@ interface Membership {
   allow_discounts: boolean
 }
 
+interface DiscountCategoryUpdateResult {
+  category_id: string
+  success: boolean
+  error?: string
+  name?: string
+}
+
+interface MembershipUpdateResult {
+  membership_id: string
+  success: boolean
+  error?: string
+  name?: string
+}
+
 export default function AccountingCodesPage() {
   const [codes, setCodes] = useState<AccountingCodes>({
     donation_received_default: '',
@@ -321,9 +335,9 @@ export default function AccountingCodesPage() {
         const { successCount, errorCount, results } = data
 
         // Update local state for successful updates
-        results.forEach((result: any) => {
+        results.forEach((result: DiscountCategoryUpdateResult) => {
           if (result.success) {
-            setDiscountCategories(prev => prev.map(cat => 
+            setDiscountCategories(prev => prev.map(cat =>
               cat.id === result.category_id 
                 ? { ...cat, accounting_code: categoryInputs[result.category_id] } 
                 : cat
@@ -333,7 +347,7 @@ export default function AccountingCodesPage() {
 
         // Update original inputs to reflect saved state for successful updates
         const newOriginalInputs = { ...originalCategoryInputs }
-        results.forEach((result: any) => {
+        results.forEach((result: DiscountCategoryUpdateResult) => {
           if (result.success) {
             newOriginalInputs[result.category_id] = categoryInputs[result.category_id]
           }
@@ -408,9 +422,9 @@ export default function AccountingCodesPage() {
         const { successCount, errorCount, results } = data
 
         // Update local state for successful updates
-        results.forEach((result: any) => {
+        results.forEach((result: MembershipUpdateResult) => {
           if (result.success) {
-            setMemberships(prev => prev.map(membership => 
+            setMemberships(prev => prev.map(membership =>
               membership.id === result.membership_id 
                 ? { ...membership, accounting_code: membershipInputs[result.membership_id] || null } 
                 : membership
@@ -420,7 +434,7 @@ export default function AccountingCodesPage() {
 
         // Update original inputs to reflect saved state for successful updates
         const newOriginalInputs = { ...originalMembershipInputs }
-        results.forEach((result: any) => {
+        results.forEach((result: MembershipUpdateResult) => {
           if (result.success) {
             newOriginalInputs[result.membership_id] = membershipInputs[result.membership_id]
           }

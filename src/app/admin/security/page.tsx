@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { Json } from '@/types/database'
 
 type TabType = 'auth' | 'email' | 'oauth'
 
@@ -20,7 +21,7 @@ interface AuthLog {
   first_name: string | null
   last_name: string | null
   action: string
-  payload: any
+  payload: Json
 }
 
 interface EmailLog {
@@ -32,7 +33,7 @@ interface EmailLog {
   event_type: string
   ip_address: string | null
   user_agent: string | null
-  metadata: any
+  metadata: Json
   users: {
     id: string
     first_name: string

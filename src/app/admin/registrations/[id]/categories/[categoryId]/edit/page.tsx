@@ -6,6 +6,26 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
+import { Database } from '@/types/database'
+
+/**
+ * Row shape of `registration_categories`, which isn't in the generated
+ * Supabase types, joined with `categories` and a narrow `memberships` projection.
+ */
+interface RegistrationCategoryRow {
+  id: string
+  registration_id: string
+  category_id: string | null
+  custom_name: string | null
+  price: number
+  max_capacity: number | null
+  accounting_code: string | null
+  required_membership_id: string | null
+  sort_order: number
+  created_at: string
+  categories: Database['public']['Tables']['categories']['Row'] | null
+  memberships: Pick<Database['public']['Tables']['memberships']['Row'], 'id' | 'name'> | null
+}
 
 export default function EditRegistrationCategoryPage() {
   const router = useRouter()
@@ -19,7 +39,7 @@ export default function EditRegistrationCategoryPage() {
     name: string
     type: string
   } | null>(null)
-  const [category, setCategory] = useState<any>(null)
+  const [category, setCategory] = useState<RegistrationCategoryRow | null>(null)
   const [formData, setFormData] = useState({
     category_id: '',     // Selected from master categories
     custom_name: '',     // For one-off custom categories

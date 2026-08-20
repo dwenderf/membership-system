@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
+import { Json } from '@/types/database'
+
+/** Fields we actually read off staging_metadata's jsonb blob; the column itself is untyped Json. */
+interface StagingMetadata {
+  customer?: { name?: string }
+  refund_id?: string
+}
 
 interface SyncLog {
   id: string
@@ -12,15 +19,15 @@ interface SyncLog {
   status: string
   error_message?: string
   created_at: string
-  response_data?: any
-  request_data?: any
+  response_data?: Json
+  request_data?: Json
 }
 
 interface PendingItem {
   id: string
   sync_status: string
   last_synced_at: string
-  staging_metadata?: any
+  staging_metadata?: Json
   // Invoice-specific fields
   net_amount?: number
   payment_id?: string | null
@@ -61,7 +68,7 @@ interface FailedItem {
   sync_error: string | null
   last_synced_at: string
   created_at: string
-  staging_metadata?: any
+  staging_metadata?: Json
   payment_id?: string | null
   payments?: {
     user_id: string
@@ -134,7 +141,7 @@ function PendingItemCard({
   }
 
   // For credit notes, also check staging metadata as fallback
-  const metadata = item.staging_metadata as any
+  const metadata = item.staging_metadata as StagingMetadata | null | undefined
 
   // Use Xero contact naming convention: "First Last - MemberID"
   const userDisplayName = user?.first_name && user?.last_name

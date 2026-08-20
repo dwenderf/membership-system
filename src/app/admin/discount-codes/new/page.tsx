@@ -4,6 +4,9 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { DiscountCategoryRow, DiscountCodeRow } from '@/lib/discount-types'
+
+type CategoryOption = Pick<DiscountCategoryRow, 'id' | 'name' | 'accounting_code' | 'max_discount_per_user_per_season' | 'is_active'>
 
 function NewDiscountCodeForm() {
   const router = useRouter()
@@ -17,8 +20,8 @@ function NewDiscountCodeForm() {
     is_active: true,
   })
   
-  const [categories, setCategories] = useState<any[]>([])
-  const [existingCodes, setExistingCodes] = useState<any[]>([])
+  const [categories, setCategories] = useState<CategoryOption[]>([])
+  const [existingCodes, setExistingCodes] = useState<Pick<DiscountCodeRow, 'code'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

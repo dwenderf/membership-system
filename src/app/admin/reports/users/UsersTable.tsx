@@ -46,8 +46,8 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
 
   const sortedUsers = useMemo(() => {
     return [...filteredUsers].sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: string | number
+      let bValue: string | number
       switch (sortField) {
         case 'name':
           aValue = `${a.first_name} ${a.last_name}`.toLowerCase()

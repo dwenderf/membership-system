@@ -1268,7 +1268,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         }
 
         // Check for validation errors (like invoice sync does)
-        if (xeroPayment.hasErrors || (xeroPayment.validationErrors && xeroPayment.validationErrors.length > 0)) {
+        if (xeroPayment.validationErrors && xeroPayment.validationErrors.length > 0) {
           const errorMessages = xeroPayment.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
           console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
 

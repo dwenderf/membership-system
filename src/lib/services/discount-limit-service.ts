@@ -38,10 +38,6 @@ export interface DiscountCodeWithCategory {
   code: string
   percentage?: number | string | null
   uses_user_allowance?: boolean | null
-  /** Per-code usage cap. Not currently a live DB column (dropped in a prior migration
-   * but still exercised by tests with mocked data) — kept optional so callers that
-   * check it compile without changing today's (currently dead) enforcement behavior. */
-  usage_limit?: number | null
   category: DiscountCategoryInfo | null
 }
 

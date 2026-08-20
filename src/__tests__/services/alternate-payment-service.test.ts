@@ -96,7 +96,6 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50, // 50% off
-                usage_limit: null, // No per-code limit
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -167,7 +166,6 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50, // 50% off = $25
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -238,7 +236,6 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
                 id: 'code-id',
                 code: 'TEST50',
                 percentage: 50,
-                usage_limit: null,
                 category: {
                   id: 'category-id',
                   name: 'Test Category'
@@ -274,86 +271,6 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       expect(result.finalAmount).toBe(5000) // Full price, no discount
       expect(result.discountAmount).toBe(0)
       expect(result.discountCode).toBeDefined()
-    })
-
-    it('should respect per-code usage limits before checking seasonal caps', async () => {
-      // Mock registration query
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                alternate_price: 5000 // $50
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount code query - has usage_limit of 1
-      mockSupabase.from.mockReturnValueOnce({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: {
-                id: 'code-id',
-                code: 'ONETIME',
-                percentage: 100,
-                usage_limit: 1, // Can only use once
-                category: {
-                  id: 'category-id',
-                  name: 'Test Category'
-                }
-              },
-              error: null
-            })
-          })
-        })
-      })
-
-      // Mock discount usage query - already used once
-      mockSupabase.from.mockImplementation((table: string) => {
-        if (table === 'user_discount_allowances') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                eq: jest.fn().mockReturnValue({
-                  eq: jest.fn().mockResolvedValue({ data: [], error: null })
-                })
-              })
-            })
-          }
-        }
-        if (table === 'discount_usage_computed') {
-          return {
-            select: jest.fn().mockReturnValue({
-              eq: jest.fn().mockReturnValue({
-                eq: jest.fn().mockResolvedValue({
-                  data: [{ id: 'usage-1' }], // Already used 1 time
-                  error: null
-                })
-              })
-            })
-          }
-        }
-        return {}
-      })
-
-      const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
-        'registration-id',
-        'season-id',
-        'code-id',
-        'user-id'
-      )
-
-      expect(result.finalAmount).toBe(5000) // Full price
-      expect(result.discountAmount).toBe(0) // No discount due to per-code limit
-      expect(result.discountCode).toBeDefined()
-
-      // Should NOT call seasonal limit check since per-code limit blocked it
-      expect(checkSeasonalDiscountLimit).not.toHaveBeenCalled()
     })
 
     it('should handle no discount code gracefully', async () => {

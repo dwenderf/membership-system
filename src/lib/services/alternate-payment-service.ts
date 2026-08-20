@@ -337,25 +337,9 @@ export class AlternatePaymentService {
           }
 
           const isEligible = effectiveLimit?.isEligible ?? true
-          let requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
+          const requestedDiscountAmount = (isEligible && pct != null && !isNaN(pct) && pct > 0)
             ? Math.round((basePrice * pct) / 100)
             : 0
-
-          // Check per-code usage limits
-          if (requestedDiscountAmount > 0 && discount.usage_limit && discount.usage_limit > 0) {
-            const { data: usageCount } = await supabase
-              .from('discount_usage_computed')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('discount_code_id', discountCodeId)
-
-            const currentUsage = usageCount?.length || 0
-
-            if (currentUsage >= discount.usage_limit) {
-              // User has exceeded per-code limit - no discount
-              requestedDiscountAmount = 0
-            }
-          }
 
           // Enforce seasonal discount cap (only if discount is still applicable)
           if (requestedDiscountAmount > 0) {

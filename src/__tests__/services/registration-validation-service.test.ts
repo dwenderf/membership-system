@@ -8,9 +8,18 @@
  */
 
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
+import { SupabaseClient } from '@supabase/supabase-js'
+
+type MockSupabaseClient = {
+  from: jest.Mock
+}
+
+function asClient(client: MockSupabaseClient): SupabaseClient {
+  return client as unknown as SupabaseClient
+}
 
 describe('RegistrationValidationService', () => {
-  let mockSupabase: any
+  let mockSupabase: MockSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -39,7 +48,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.canUserRegister(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456'
       )
@@ -74,7 +83,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.canUserRegister(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456'
       )
@@ -103,7 +112,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.canUserRegister(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456'
       )
@@ -131,7 +140,7 @@ describe('RegistrationValidationService', () => {
 
       await expect(
         RegistrationValidationService.canUserRegister(
-          mockSupabase,
+          asClient(mockSupabase),
           'user-123',
           'registration-456'
         )
@@ -156,7 +165,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validatePaymentMethod(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123'
       )
 
@@ -180,7 +189,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validatePaymentMethod(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123'
       )
 
@@ -207,7 +216,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validatePaymentMethod(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123'
       )
 
@@ -229,7 +238,7 @@ describe('RegistrationValidationService', () => {
 
       await expect(
         RegistrationValidationService.validatePaymentMethod(
-          mockSupabase,
+          asClient(mockSupabase),
           'user-123'
         )
       ).rejects.toThrow('User not found')
@@ -257,7 +266,7 @@ describe('RegistrationValidationService', () => {
       // No payment method validation should happen for effectivePrice = 0
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {
@@ -306,7 +315,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {
@@ -345,7 +354,7 @@ describe('RegistrationValidationService', () => {
       // Payment method validation should NOT be called because duplicate check fails first
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {
@@ -394,7 +403,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {
@@ -440,7 +449,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {
@@ -492,7 +501,7 @@ describe('RegistrationValidationService', () => {
       })
 
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-with-refunded-reg',
         'new-registration-789',
         {
@@ -527,7 +536,7 @@ describe('RegistrationValidationService', () => {
 
       // When we DON'T pass effectivePrice, payment method validation is skipped
       const result = await RegistrationValidationService.validateRegistrationEligibility(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-123',
         'registration-456',
         {

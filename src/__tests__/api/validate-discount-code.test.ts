@@ -17,7 +17,12 @@ jest.mock('@/lib/services/discount-limit-service', () => {
   }
 })
 
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },

@@ -59,9 +59,18 @@ jest.mock('@/lib/supabase/server', () => ({
 import { WaitlistPaymentService } from '@/lib/services/waitlist-payment-service'
 import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { SupabaseClient } from '@supabase/supabase-js'
+
+type MockSupabaseClient = {
+  from: jest.Mock
+}
+
+function asClient(client: MockSupabaseClient): SupabaseClient {
+  return client as unknown as SupabaseClient
+}
 
 describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
-  let mockSupabase: any
+  let mockSupabase: MockSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -137,7 +146,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         'code-id',
@@ -150,7 +159,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
 
       // Verify seasonal limit check was called
       expect(checkSeasonalDiscountLimit).toHaveBeenCalledWith(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -208,7 +217,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         'code-id',
@@ -269,7 +278,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         'code-id',
@@ -297,7 +306,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         undefined, // No discount code
@@ -324,7 +333,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
 
       await expect(
         WaitlistPaymentService.calculateChargeAmount(
-          mockSupabase,
+          asClient(mockSupabase),
           'invalid-id',
           'season-id',
           'code-id',
@@ -384,7 +393,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         'code-id',
@@ -439,7 +448,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'category-id',
         'season-id',
         'code-id',
@@ -655,7 +664,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'cat-id',
         'season-id',
         'code-pride',
@@ -722,7 +731,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'cat-id',
         'season-id',
         'code-fixed75',
@@ -783,7 +792,7 @@ describe('WaitlistPaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await WaitlistPaymentService.calculateChargeAmount(
-        mockSupabase,
+        asClient(mockSupabase),
         'cat-gated',
         'season-id',
         'code-gated',

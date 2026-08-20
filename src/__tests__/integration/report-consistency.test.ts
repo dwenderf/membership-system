@@ -16,11 +16,30 @@ import { GET as getEligibilityReport } from '@/app/api/admin/reports/discount-el
 import { NextRequest } from 'next/server'
 
 // Mock Supabase Server Clients - Real discount-limit-service runs against this mocked client
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },
   from: jest.fn()
+}
+
+interface UsageReportData {
+  seasons: {
+    seasonId: string
+    categories: {
+      categoryId: string
+      users: { userId: string; totalAmount: number; remaining: number }[]
+    }[]
+  }[]
+}
+
+interface EligibilityReportData {
+  eligibility: { userId: string; categoryId: string; totalUsed: number; remaining: number }[]
 }
 
 jest.mock('@/lib/supabase/server', () => ({
@@ -210,32 +229,32 @@ describe('Report Consistency Integration (End-to-End Resolution)', () => {
     const reqUsage = new NextRequest('http://localhost/api/admin/reports/discount-usage')
     const resUsage = await getUsageReport(reqUsage)
     expect(resUsage.status).toBe(200)
-    const usageData = await resUsage.json()
+    const usageData = await resUsage.json() as UsageReportData
 
     // 2. Call Eligibility Report GET
     const reqEligibility = new NextRequest(`http://localhost/api/admin/reports/discount-eligibility?seasonId=${seasonId}`)
     const resEligibility = await getEligibilityReport(reqEligibility)
     expect(resEligibility.status).toBe(200)
-    const eligibilityData = await resEligibility.json()
+    const eligibilityData = await resEligibility.json() as EligibilityReportData
 
     // Extract user record from Usage Report
-    const seasonUsage = usageData.seasons.find((s: any) => s.seasonId === seasonId)
-    const catUsage = seasonUsage.categories.find((c: any) => c.categoryId === categoryId)
-    const userUsage = catUsage.users.find((u: any) => u.userId === userId)
+    const seasonUsage = usageData.seasons.find((s) => s.seasonId === seasonId)
+    const catUsage = seasonUsage!.categories.find((c) => c.categoryId === categoryId)
+    const userUsage = catUsage!.users.find((u) => u.userId === userId)
 
     // Extract user record from Eligibility Report
-    const userEligibility = eligibilityData.eligibility.find((e: any) => e.userId === userId && e.categoryId === categoryId)
+    const userEligibility = eligibilityData.eligibility.find((e) => e.userId === userId && e.categoryId === categoryId)
 
     // Verify both reports read the $100 total used
-    expect(userUsage.totalAmount).toBe(10000)
-    expect(userEligibility.totalUsed).toBe(10000)
+    expect(userUsage!.totalAmount).toBe(10000)
+    expect(userEligibility!.totalUsed).toBe(10000)
 
     // VERIFY NON-TAUTOLOGICAL RESOLUTION:
     // Allowance cap = $250 (25000 cents). Used = $100 (10000 cents).
     // Remaining MUST be $150 (15000 cents) on BOTH reports.
     // If either report read the category default cap ($750), remaining would be $650 (65000 cents) and fail here.
-    expect(userUsage.remaining).toBe(15000)
-    expect(userEligibility.remaining).toBe(15000)
-    expect(userUsage.remaining).toBe(userEligibility.remaining)
+    expect(userUsage!.remaining).toBe(15000)
+    expect(userEligibility!.remaining).toBe(15000)
+    expect(userUsage!.remaining).toBe(userEligibility!.remaining)
   })
 })

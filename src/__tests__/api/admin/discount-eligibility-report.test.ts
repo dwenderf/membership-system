@@ -20,8 +20,21 @@ import {
 } from '@/lib/services/discount-limit-service'
 import { NextRequest } from 'next/server'
 
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+interface EligibilityRow {
+  userId: string
+  totalUsed: number
+  remaining: number
+  source: string
+  isRevoked: boolean
+}
+
 describe('/api/admin/reports/discount-eligibility', () => {
-  let mockSupabase: any
+  let mockSupabase: MockSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -144,23 +157,23 @@ describe('/api/admin/reports/discount-eligibility', () => {
     const res = await GET(req)
 
     expect(res.status).toBe(200)
-    const data = await res.json()
+    const data = await res.json() as { eligibility: EligibilityRow[] }
 
     expect(data.eligibility).toHaveLength(2)
 
     // Check user with zero usage
-    const activeRow = data.eligibility.find((r: any) => r.userId === 'user-zero-usage')
+    const activeRow = data.eligibility.find((r) => r.userId === 'user-zero-usage')
     expect(activeRow).toBeDefined()
-    expect(activeRow.totalUsed).toBe(0)
-    expect(activeRow.remaining).toBe(25000)
-    expect(activeRow.source).toBe('user_allowance')
-    expect(activeRow.isRevoked).toBe(false)
+    expect(activeRow!.totalUsed).toBe(0)
+    expect(activeRow!.remaining).toBe(25000)
+    expect(activeRow!.source).toBe('user_allowance')
+    expect(activeRow!.isRevoked).toBe(false)
 
     // Check revoked user
-    const revokedRow = data.eligibility.find((r: any) => r.userId === 'user-revoked')
+    const revokedRow = data.eligibility.find((r) => r.userId === 'user-revoked')
     expect(revokedRow).toBeDefined()
-    expect(revokedRow.remaining).toBe(0)
-    expect(revokedRow.source).toBe('denied')
-    expect(revokedRow.isRevoked).toBe(true)
+    expect(revokedRow!.remaining).toBe(0)
+    expect(revokedRow!.source).toBe('denied')
+    expect(revokedRow!.isRevoked).toBe(true)
   })
 })

@@ -32,9 +32,18 @@ import {
 } from '@/lib/services/discount-limit-service'
 import { NextRequest } from 'next/server'
 
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+type MockAdminSupabaseClient = {
+  from: jest.Mock
+}
+
 describe('/api/alternate-registrations/[gameId]/alternates ineligible vs over-limit separation', () => {
-  let mockSupabase: any
-  let mockAdminSupabase: any
+  let mockSupabase: MockSupabaseClient
+  let mockAdminSupabase: MockAdminSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()

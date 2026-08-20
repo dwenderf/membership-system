@@ -46,9 +46,47 @@ interface Game {
   alternateAccountingCode: string
 }
 
+interface AlternatesSummary {
+  totalAlternates: number
+  availableAlternates: number
+  alreadySelected: number
+  withValidPayment: number
+  withDiscounts: number
+  overLimitDiscounts: number
+}
+
+/** Result of a single alternate selection, from POST /api/alternate-registrations/[gameId]/select. */
+export interface AlternateSelectionResult {
+  userId: string
+  userName: string
+  success: boolean
+  error?: string
+  paymentId?: string
+  amountCharged?: number
+}
+
+export interface AlternateSelectionResponse {
+  success: boolean
+  message: string
+  summary: {
+    totalProcessed: number
+    totalSelected: number
+    successfulSelections: number
+    failedSelections: number
+    totalAmountCharged: number
+    alreadySelected: number
+  }
+  results: AlternateSelectionResult[]
+  game: {
+    id: string
+    description: string
+    registrationName: string | undefined
+  }
+}
+
 interface AlternateSelectionInterfaceProps {
   gameId: string
-  onSelectionComplete: (results: any) => void
+  onSelectionComplete: (results: AlternateSelectionResponse) => void
   onCancel: () => void
 }
 
@@ -63,7 +101,7 @@ export default function AlternateSelectionInterface({
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
-  const [summary, setSummary] = useState<any>(null)
+  const [summary, setSummary] = useState<AlternatesSummary | null>(null)
 
   useEffect(() => {
     fetchAlternates().catch(err => {

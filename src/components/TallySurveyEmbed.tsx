@@ -2,6 +2,34 @@
 
 import React, { useEffect, useState, useRef } from 'react'
 
+/** Payload passed to Tally's onSubmit handler; Tally does not publish TS types. */
+export interface TallySubmissionPayload {
+  respondentId?: string
+  formId?: string
+  formName?: string
+  [key: string]: unknown
+}
+
+interface TallyPopupOptions {
+  layout: string
+  width: number
+  autoClose: number
+  emoji: { text: string; animation: string }
+  hiddenFields: Record<string, string>
+  onOpen: () => void
+  onClose: () => void
+  onSubmit: (payload: TallySubmissionPayload) => void
+}
+
+declare global {
+  interface Window {
+    Tally?: {
+      openPopup: (formId: string, options: TallyPopupOptions) => void
+      closePopup: (formId: string) => void
+    }
+  }
+}
+
 interface TallySurveyEmbedProps {
   surveyId: string                    // e.g., "VLzWBv"
   userEmail: string                   // from users table
@@ -12,7 +40,7 @@ interface TallySurveyEmbedProps {
   memberNumber?: string               // member_id (e.g., "1002") - optional
   
   // Component behavior
-  onComplete?: (responseData: any) => void
+  onComplete?: (responseData: TallySubmissionPayload | null) => void
   onClose?: () => void
   onError?: (error: string) => void
 }
@@ -75,7 +103,7 @@ export default function TallySurveyEmbed({
   }
 
   // Store survey response in database
-  const storeSurveyResponse = async (responseData: any) => {
+  const storeSurveyResponse = async (responseData: TallySubmissionPayload) => {
     try {
       const response = await fetch('/api/user-survey-responses', {
         method: 'POST',
@@ -112,7 +140,7 @@ export default function TallySurveyEmbed({
 
         // Use Tally popup API for both desktop and mobile
         // Mobile gets full-screen appearance via CSS overrides in globals.css
-        if (typeof window !== 'undefined' && !(window as any).Tally) {
+        if (typeof window !== 'undefined' && !window.Tally) {
           console.log('Loading Tally embed script...')
           const script = document.createElement('script')
           script.src = 'https://tally.so/widgets/embed.js'
@@ -176,7 +204,7 @@ export default function TallySurveyEmbed({
             setSurveyOpened(false)
             onCloseRef.current?.()
           },
-          onSubmit: async (payload: any) => {
+          onSubmit: async (payload: TallySubmissionPayload) => {
             console.log('Survey submitted:', payload)
             setSurveyCompleted(true)
             setSurveyOpened(false)
@@ -185,7 +213,7 @@ export default function TallySurveyEmbed({
           }
         }
 
-        ;(window as any).Tally.openPopup(surveyId, popupOptions)
+        window.Tally?.openPopup(surveyId, popupOptions)
 
       } catch (err) {
         console.error('Error opening Tally popup:', err)
@@ -202,8 +230,8 @@ export default function TallySurveyEmbed({
 
     // Cleanup function
     return () => {
-      if (surveyOpened && (window as any).Tally?.closePopup) {
-        (window as any).Tally.closePopup(surveyId)
+      if (surveyOpened && window.Tally?.closePopup) {
+        window.Tally.closePopup(surveyId)
       }
     }
   }, [surveyId, userEmail, userId, firstName, lastName, registrationCategory, memberNumber])

@@ -5,6 +5,7 @@ import { formatDate, formatTime } from '@/lib/date-utils'
 
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import { useToast } from '@/contexts/ToastContext'
+import type { AlternateSelectionResponse } from '@/components/AlternateSelectionInterface'
 
 interface Game {
   id: string
@@ -184,22 +185,22 @@ export default function GameAlternatesCard({
         throw new Error('Failed to select alternates')
       }
 
-      const data = await response.json()
-      
+      const data: AlternateSelectionResponse = await response.json()
+
       // Refresh alternates list to show updated selection status
       await fetchAlternates()
       setSelectedAlternates(new Set())
       setError('') // Clear any previous errors
-      
+
       // Handle results and show appropriate toasts
       if (data.results) {
-        const successful = data.results.filter((r: any) => r.success).length
-        const failed = data.results.filter((r: any) => !r.success).length
-        
+        const successful = data.results.filter((r) => r.success).length
+        const failed = data.results.filter((r) => !r.success).length
+
         if (failed > 0) {
           const failureDetails = data.results
-            .filter((r: any) => !r.success && r.error)
-            .map((r: any) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
+            .filter((r) => !r.success && r.error)
+            .map((r) => (r.userName ? `${r.userName}: ${r.error}` : r.error))
             .join('\n')
           showError(
             `${successful} charged successfully, ${failed} failed`,

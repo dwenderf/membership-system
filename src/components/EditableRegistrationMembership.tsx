@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { Database } from '@/types/database'
 
 interface EditableRegistrationMembershipProps {
   registrationId: string
@@ -15,7 +16,7 @@ export default function EditableRegistrationMembership({
   const supabase = createClient()
   const [isEditing, setIsEditing] = useState(false)
   const [membershipId, setMembershipId] = useState(initialMembershipId || '')
-  const [availableMemberships, setAvailableMemberships] = useState<any[]>([])
+  const [availableMemberships, setAvailableMemberships] = useState<Pick<Database['public']['Tables']['memberships']['Row'], 'id' | 'name'>[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 

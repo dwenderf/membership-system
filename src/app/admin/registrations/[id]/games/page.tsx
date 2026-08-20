@@ -5,7 +5,9 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
-import AlternateSelectionInterface from '@/components/AlternateSelectionInterface'
+import AlternateSelectionInterface, {
+  type AlternateSelectionResponse
+} from '@/components/AlternateSelectionInterface'
 import { formatDate } from '@/lib/date-utils'
 
 interface Game {
@@ -27,35 +29,6 @@ interface Registration {
   allow_alternates: boolean
   alternate_price: number
   alternate_accounting_code: string
-}
-
-/** Result of processing a single alternate selection, from POST /api/alternate-registrations/[gameId]/select. */
-interface AlternateSelectionResult {
-  userId: string
-  userName: string
-  success: boolean
-  error?: string
-  paymentId?: string
-  amountCharged?: number
-}
-
-interface AlternateSelectionResponse {
-  success: boolean
-  message: string
-  summary: {
-    totalProcessed: number
-    totalSelected: number
-    successfulSelections: number
-    failedSelections: number
-    totalAmountCharged: number
-    alreadySelected: number
-  }
-  results: AlternateSelectionResult[]
-  game: {
-    id: string
-    description: string
-    registrationName: string | undefined
-  }
 }
 
 export default function RegistrationGamesPage() {

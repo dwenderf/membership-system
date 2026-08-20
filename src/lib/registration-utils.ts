@@ -49,7 +49,10 @@ export interface Registration {
 /**
  * Get display name for a registration category
  */
-export function getCategoryDisplayName(category: RegistrationCategory): string {
+export function getCategoryDisplayName(category: {
+  custom_name: string | null
+  categories?: { name: string } | null
+}): string {
   return category.categories?.name || category.custom_name || 'Unknown Category'
 }
 

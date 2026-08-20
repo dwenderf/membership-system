@@ -5,9 +5,19 @@ import { convertToNYTimezone } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
 
+export interface Game {
+  id: string
+  registrationId: string
+  gameDescription: string
+  gameDate: string | null
+  createdAt: string
+  selectedCount?: number
+  availableCount?: number
+}
+
 interface GameCreationFormProps {
   registrationId: string
-  onGameCreated: (game: any) => void
+  onGameCreated: (game: Game) => void
   onCancel: () => void
 }
 

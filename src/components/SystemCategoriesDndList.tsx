@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/date-utils'
 import {
   DndContext,
   closestCenter,
+  type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -22,7 +23,6 @@ export interface Category {
   description?: string
   created_at: string
   sort_order?: number
-  [key: string]: any
 }
 
 interface SystemCategoriesDndListProps {
@@ -46,11 +46,11 @@ export default function SystemCategoriesDndList({ categories }: SystemCategories
     })
   }, [categories])
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
-    if (active.id !== over?.id) {
-      const oldIndex = items.indexOf(active.id)
-      const newIndex = items.indexOf(over.id)
+    if (over && active.id !== over.id) {
+      const oldIndex = items.indexOf(String(active.id))
+      const newIndex = items.indexOf(String(over.id))
       const newItems = arrayMove(items, oldIndex, newIndex)
       setItems(newItems)
 

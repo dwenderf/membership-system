@@ -79,7 +79,7 @@ export default function PasskeysSection() {
 
       showSuccess('Passkey created!', 'You can now sign in with your passkey.')
       await loadPasskeys()
-    } catch (error: any) {
+    } catch (error) {
       if (!isUserCancelledError(error)) {
         console.error('Passkey registration error:', error)
         showError('Passkey setup failed', 'Something went wrong. Please try again.')

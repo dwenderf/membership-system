@@ -21,3 +21,7 @@ Run `npm run build` and paste the raw, unfiltered output — including the final
 `npx tsc --noEmit` is a faster subset useful during iteration, but it is not a substitute: `npm run build` additionally parses pages and components that no test imports, runs lint, and validates server/client boundaries.
 
 The same applies to test runs: paste the actual Jest output, not a description of it.
+
+## Linting
+
+CI's lint step is currently non-blocking (`continue-on-error: true`) while a pre-existing backlog gets paid down (issue #197) — don't take that as license to add to it. Run `npm run lint` before reporting work complete and don't introduce new errors or warnings in files you touch, even though CI won't fail on them yet. If your task is specifically a #197 sub-issue, verify with `npm run lint`, `npm test`, and `npm run build` as its plan describes.

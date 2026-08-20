@@ -20,6 +20,7 @@ import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notific
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { Json } from '@/types/database'
 import type { createAdminClient } from '../supabase/server'
+import { getBaseUrl } from '@/lib/url-utils'
 
 /** The slice of a `users` row this processor reads to build confirmation emails —
  * not the full row shape, just what's accessed downstream. */
@@ -192,7 +193,7 @@ export class EmailProcessor {
           userName: `${user.first_name} ${user.last_name}`,
           paymentIntentId: event.metadata?.payment_intent_id || 'unknown',
           failureReason: event.metadata?.failure_reason || 'Unknown error',
-          retryUrl: `${process.env.NEXTAUTH_URL}/user/memberships`,
+          retryUrl: `${getBaseUrl()}/user/memberships`,
           amount: event.amount
         },
         triggered_by: 'automated'

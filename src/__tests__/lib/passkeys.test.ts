@@ -9,9 +9,11 @@ import {
   getPasskeyStorageHint,
 } from '@/lib/passkeys'
 
+type GlobalWithWindow = { window?: { PublicKeyCredential?: unknown } }
+
 describe('isWebAuthnSupported', () => {
   afterEach(() => {
-    delete (global as any).window
+    delete (global as unknown as GlobalWithWindow).window
   })
 
   it('returns false when window is undefined (server)', () => {
@@ -19,12 +21,12 @@ describe('isWebAuthnSupported', () => {
   })
 
   it('returns false when PublicKeyCredential is absent', () => {
-    ;(global as any).window = {}
+    ;(global as unknown as GlobalWithWindow).window = {}
     expect(isWebAuthnSupported()).toBe(false)
   })
 
   it('returns true when PublicKeyCredential exists', () => {
-    ;(global as any).window = { PublicKeyCredential: function () {} }
+    ;(global as unknown as GlobalWithWindow).window = { PublicKeyCredential: function () {} }
     expect(isWebAuthnSupported()).toBe(true)
   })
 })

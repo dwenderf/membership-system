@@ -45,9 +45,14 @@ jest.mock('@/lib/supabase/server', () => ({
 
 import { AlternatePaymentService } from '@/lib/services/alternate-payment-service'
 import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { SupabaseClient } from '@supabase/supabase-js'
+
+type MockSupabaseClient = {
+  from: jest.Mock
+}
 
 describe('AlternatePaymentService - Seasonal Discount Caps', () => {
-  let mockSupabase: any
+  let mockSupabase: MockSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -120,7 +125,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
+        mockSupabase as unknown as SupabaseClient,
         'registration-id',
         'season-id',
         'code-id',
@@ -191,7 +196,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
+        mockSupabase as unknown as SupabaseClient,
         'registration-id',
         'season-id',
         'code-id',
@@ -261,7 +266,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
+        mockSupabase as unknown as SupabaseClient,
         'registration-id',
         'season-id',
         'code-id',
@@ -289,7 +294,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
+        mockSupabase as unknown as SupabaseClient,
         'registration-id',
         'season-id',
         undefined, // No discount code
@@ -318,7 +323,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
       })
 
       const result = await AlternatePaymentService.calculateChargeAmount(
-        mockSupabase,
+        mockSupabase as unknown as SupabaseClient,
         'registration-id',
         'season-id',
         'code-id',
@@ -345,7 +350,7 @@ describe('AlternatePaymentService - Seasonal Discount Caps', () => {
 
       await expect(
         AlternatePaymentService.calculateChargeAmount(
-          mockSupabase,
+          mockSupabase as unknown as SupabaseClient,
           'invalid-id',
           'season-id',
           'code-id',

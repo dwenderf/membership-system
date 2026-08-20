@@ -2,7 +2,12 @@ import { PUT } from '@/app/api/admin/discount-codes/[id]/route'
 import { NextRequest } from 'next/server'
 
 // Mock Supabase Server Client
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },

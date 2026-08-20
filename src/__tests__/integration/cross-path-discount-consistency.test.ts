@@ -8,9 +8,17 @@
 import { GET } from '@/app/api/alternate-registrations/[gameId]/alternates/route'
 import { AlternatePaymentService } from '@/lib/services/alternate-payment-service'
 import { NextRequest } from 'next/server'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 // Mock Supabase Server Clients
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+type SelectWithEq = Promise<{ data: unknown; error: unknown }> & { eq: jest.Mock }
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },
@@ -179,7 +187,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
           requires_user_allowance: false,
           default_percentage: 50
         }
-        const selectObj: any = Promise.resolve({ data: [catData], error: null })
+        const selectObj = Promise.resolve({ data: [catData], error: null }) as SelectWithEq
         selectObj.eq = jest.fn().mockReturnValue({
           single: jest.fn().mockResolvedValue({
             data: catData,
@@ -298,7 +306,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
 
     // Path B: AlternatePaymentService charge calculation
     const chargeResult = await AlternatePaymentService.calculateChargeAmount(
-      mockSupabase,
+      mockSupabase as unknown as SupabaseClient,
       registrationId,
       seasonId,
       discountCodeId,
@@ -433,7 +441,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
           requires_user_allowance: true,
           default_percentage: 50
         }
-        const selectObj: any = Promise.resolve({ data: [catData], error: null })
+        const selectObj = Promise.resolve({ data: [catData], error: null }) as SelectWithEq
         selectObj.eq = jest.fn().mockReturnValue({
           single: jest.fn().mockResolvedValue({
             data: catData,
@@ -553,7 +561,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
 
     // Path B: AlternatePaymentService charge calculation
     const chargeResult = await AlternatePaymentService.calculateChargeAmount(
-      mockSupabase,
+      mockSupabase as unknown as SupabaseClient,
       registrationId,
       seasonId,
       discountCodeId,
@@ -688,7 +696,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
           requires_user_allowance: true,
           default_percentage: 50
         }
-        const selectObj: any = Promise.resolve({ data: [catData], error: null })
+        const selectObj = Promise.resolve({ data: [catData], error: null }) as SelectWithEq
         selectObj.eq = jest.fn().mockReturnValue({
           single: jest.fn().mockResolvedValue({
             data: catData,
@@ -785,7 +793,7 @@ describe('Cross-Path Discount Consistency (Alternates List vs Alternate Charge)'
 
     // Path B: AlternatePaymentService charge calculation
     const chargeResult = await AlternatePaymentService.calculateChargeAmount(
-      mockSupabase,
+      mockSupabase as unknown as SupabaseClient,
       registrationId,
       seasonId,
       discountCodeId,

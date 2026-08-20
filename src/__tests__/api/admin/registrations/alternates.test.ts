@@ -2,18 +2,16 @@
 import { PUT } from '@/app/api/admin/registrations/[id]/alternates/route'
 import { NextRequest } from 'next/server'
 
-// Jest globals are available, but we need to declare them for TypeScript
-declare const jest: any
-declare const describe: any
-declare const it: any
-declare const expect: any
-declare const beforeEach: any
-
 // Mock dependencies
 jest.mock('@/lib/supabase/server')
 jest.mock('@/lib/logging/logger')
 
-const mockSupabase = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },

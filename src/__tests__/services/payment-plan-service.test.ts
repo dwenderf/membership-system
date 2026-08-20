@@ -20,10 +20,26 @@ jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({}))
 })
 
+interface InsertedPayment {
+  amount_paid: number
+  installment_number: number
+  sync_status: string
+  payment_type: string
+  staging_metadata: {
+    user_id: string
+    user_registration_id: string
+    first_payment_id?: string
+  }
+}
+
+type MockAdminSupabaseClient = {
+  from: jest.Mock
+}
+
 describe('PaymentPlanService', () => {
   describe('createPaymentPlan - Installment Amount Distribution', () => {
-    let mockAdminSupabase: any
-    let mockInsertedPayments: any[]
+    let mockAdminSupabase: MockAdminSupabaseClient
+    let mockInsertedPayments: InsertedPayment[]
 
     beforeEach(() => {
       jest.clearAllMocks()
@@ -42,7 +58,7 @@ describe('PaymentPlanService', () => {
           }
           if (table === 'xero_payments') {
             return {
-              insert: jest.fn((payments: any[]) => {
+              insert: jest.fn((payments: InsertedPayment[]) => {
                 mockInsertedPayments = payments
                 return Promise.resolve({ error: null })
               })

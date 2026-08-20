@@ -15,7 +15,12 @@ jest.mock('@/lib/xero/client', () => ({
   createXeroOAuthClient: jest.fn()
 }))
 
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  auth: { getUser: jest.Mock }
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   auth: {
     getUser: jest.fn()
   },

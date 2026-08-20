@@ -17,18 +17,36 @@ jest.mock('@/lib/xero/client', () => ({
   revokeXeroTokens: jest.fn().mockResolvedValue(true)
 }))
 
-function makeQueryBuilder(result: any = { data: null, error: null }) {
-  const builder: any = {}
+interface QueryResult {
+  data: unknown
+  error: unknown
+}
+
+interface MockQueryBuilder {
+  select: jest.Mock
+  update: jest.Mock
+  eq: jest.Mock
+  single: jest.Mock
+  insert: jest.Mock
+  then: Promise<QueryResult>['then']
+}
+
+function makeQueryBuilder(result: QueryResult = { data: null, error: null }): MockQueryBuilder {
+  const builder = {} as MockQueryBuilder
   builder.select = jest.fn(() => builder)
   builder.update = jest.fn(() => builder)
   builder.eq = jest.fn(() => builder)
   builder.single = jest.fn(() => Promise.resolve(result))
   builder.insert = jest.fn(() => Promise.resolve(result))
-  builder.then = (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected)
+  builder.then = (onFulfilled, onRejected) => Promise.resolve(result).then(onFulfilled, onRejected)
   return builder
 }
 
-const mockSupabase: any = {
+type MockSupabaseClient = {
+  from: jest.Mock
+}
+
+const mockSupabase: MockSupabaseClient = {
   from: jest.fn(() => makeQueryBuilder())
 }
 

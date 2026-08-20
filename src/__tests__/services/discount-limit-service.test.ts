@@ -13,6 +13,7 @@ import {
   resolveEffectiveDiscountLimitsBatch,
   resolveDiscountPercentage
 } from '@/lib/services/discount-limit-service'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 // Mock dependencies
 jest.mock('@/lib/logging/logger', () => ({
@@ -21,8 +22,16 @@ jest.mock('@/lib/logging/logger', () => ({
   }
 }))
 
+type MockSupabaseClient = {
+  from: jest.Mock
+}
+
+function asClient(client: MockSupabaseClient): SupabaseClient {
+  return client as unknown as SupabaseClient
+}
+
 describe('DiscountLimitService', () => {
-  let mockSupabase: any
+  let mockSupabase: MockSupabaseClient
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -61,7 +70,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await calculateSeasonalDiscountUsage(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -89,7 +98,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await calculateSeasonalDiscountUsage(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -117,7 +126,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await calculateSeasonalDiscountUsage(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -142,7 +151,7 @@ describe('DiscountLimitService', () => {
 
       await expect(
         calculateSeasonalDiscountUsage(
-          mockSupabase,
+          asClient(mockSupabase),
           'user-id',
           'category-id',
           'season-id'
@@ -191,7 +200,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -259,7 +268,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -331,7 +340,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -406,7 +415,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -479,7 +488,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -511,7 +520,7 @@ describe('DiscountLimitService', () => {
 
       await expect(
         checkSeasonalDiscountLimit(
-          mockSupabase,
+          asClient(mockSupabase),
           'user-id',
           'code-id',
           'season-id',
@@ -537,7 +546,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -561,7 +570,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -622,7 +631,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -687,7 +696,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -747,7 +756,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'gated-cat-id',
         'season-id'
@@ -774,7 +783,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await getSeasonalDiscountUsageSummary(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'category-id',
         'season-id'
@@ -787,7 +796,7 @@ describe('DiscountLimitService', () => {
   describe('Phase 1 Refactor Extensions', () => {
     it('should bypass seasonal cap when isRefund is true', async () => {
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-id',
         'code-id',
         'season-id',
@@ -857,7 +866,7 @@ describe('DiscountLimitService', () => {
       })
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-1',
         'code-1',
         'season-1',
@@ -882,7 +891,7 @@ describe('DiscountLimitService', () => {
       }
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-1',
         'code-1',
         'season-1',
@@ -908,7 +917,7 @@ describe('DiscountLimitService', () => {
       }
 
       const result = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-1',
         'code-1',
         'season-1',
@@ -942,7 +951,7 @@ describe('DiscountLimitService', () => {
       })
 
       const map = await calculateSeasonalDiscountUsageBatch(
-        mockSupabase,
+        asClient(mockSupabase),
         ['u1', 'u2'],
         'season-1'
       )
@@ -954,7 +963,7 @@ describe('DiscountLimitService', () => {
 
     it('calculateSeasonalDiscountUsageBatch should throw if seasonId is missing', async () => {
       await expect(
-        calculateSeasonalDiscountUsageBatch(mockSupabase, ['u1'], '')
+        calculateSeasonalDiscountUsageBatch(asClient(mockSupabase), ['u1'], '')
       ).rejects.toThrow('Season ID is required for batch seasonal discount usage calculation')
     })
 
@@ -1035,7 +1044,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      const res = await resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-1', 'season-1')
       expect(res).toEqual({
         maxAllowed: 5000,
         percentage: 25,
@@ -1084,7 +1093,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      const res = await resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-1', 'season-1')
       expect(res).toEqual({
         maxAllowed: 10000,
         percentage: 50,
@@ -1127,7 +1136,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-gated', 'season-1')
+      const res = await resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-gated', 'season-1')
       expect(res).toEqual({
         maxAllowed: null,
         percentage: null,
@@ -1176,7 +1185,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-gated', 'season-1')
+      const res = await resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-gated', 'season-1')
       expect(res).toEqual({
         maxAllowed: 8000,
         percentage: 30,
@@ -1225,7 +1234,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const res = await resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+      const res = await resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-1', 'season-1')
       expect(res).toEqual({
         maxAllowed: 0,
         percentage: 20,
@@ -1264,7 +1273,7 @@ describe('DiscountLimitService', () => {
         return {}
       })
 
-      const batchMap = await resolveEffectiveDiscountLimitsBatch(mockSupabase, ['u1', 'u2'], 'season-1')
+      const batchMap = await resolveEffectiveDiscountLimitsBatch(asClient(mockSupabase), ['u1', 'u2'], 'season-1')
 
       // u1 on cat-gated -> user_allowance
       expect(batchMap.get('u1:cat-gated')).toEqual({
@@ -1321,7 +1330,7 @@ describe('DiscountLimitService', () => {
       })
 
       const res = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-revoked',
         'dc-1',
         'season-1',
@@ -1365,7 +1374,7 @@ describe('DiscountLimitService', () => {
       })
 
       await expect(
-        resolveEffectiveDiscountLimits(mockSupabase, 'user-1', 'cat-1', 'season-1')
+        resolveEffectiveDiscountLimits(asClient(mockSupabase), 'user-1', 'cat-1', 'season-1')
       ).rejects.toThrow('Database connection failed')
     })
   })
@@ -1413,7 +1422,7 @@ describe('DiscountLimitService', () => {
       }
 
       const res = await checkSeasonalDiscountLimit(
-        mockSupabase,
+        asClient(mockSupabase),
         'user-ineligible',
         'code-gated',
         'season-1',

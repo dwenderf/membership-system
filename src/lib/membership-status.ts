@@ -8,6 +8,7 @@ interface UserMembership {
   membership?: {
     id: string
     name: string
+    description?: string | null
   }
 }
 
@@ -88,12 +89,20 @@ export function getMembershipStatus(
  * @param userMemberships - Array of user's membership records
  * @returns Array of consolidated memberships with combined validity periods
  */
+interface ConsolidatedMembership {
+  membershipId: string
+  membership?: UserMembership['membership']
+  validFrom: string
+  validUntil: string
+  purchases: UserMembership[]
+}
+
 export function consolidateUserMemberships(userMemberships: UserMembership[]) {
   const now = new Date()
-  
+
   // Get all paid memberships for processing
   const paidMemberships = userMemberships.filter(um => um.payment_status === 'paid')
-  
+
   // Consolidate active memberships by type
   const consolidated = paidMemberships.reduce((acc, um) => {
     const validUntil = new Date(um.valid_until)
@@ -124,7 +133,7 @@ export function consolidateUserMemberships(userMemberships: UserMembership[]) {
     }
     
     return acc
-  }, {} as Record<string, any>)
+  }, {} as Record<string, ConsolidatedMembership>)
   
   return Object.values(consolidated)
 }

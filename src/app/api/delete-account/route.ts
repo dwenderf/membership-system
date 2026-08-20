@@ -27,9 +27,11 @@ export async function POST() {
     if (profileError || !userProfile) {
       const error = new Error('User profile not found')
       captureCriticalAccountDeletionError(error, {
-        userId: user.id,
-        userEmail: user.email || 'unknown',
-        step: 'database_update'
+        extra: {
+          userId: user.id,
+          userEmail: user.email || 'unknown',
+          step: 'database_update'
+        }
       })
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }

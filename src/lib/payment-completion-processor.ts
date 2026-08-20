@@ -51,6 +51,8 @@
 import { xeroStagingManager } from '@/lib/xero/staging'
 import { emailProcessor } from '@/lib/email'
 import { Logger } from '@/lib/logging/logger'
+import type { createAdminClient } from '@/lib/supabase/server'
+import type { Database, Json } from '@/types/database'
 
 type PaymentCompletionEvent = {
   event_type: 'payments' | 'user_memberships' | 'user_registrations' | 'alternate_selections'
@@ -72,7 +74,7 @@ type PaymentCompletionEvent = {
 }
 
 export class PaymentCompletionProcessor {
-  private supabase: any
+  private supabase: ReturnType<typeof createAdminClient> | null = null
   private logger: Logger
 
   constructor() {
@@ -252,7 +254,7 @@ export class PaymentCompletionProcessor {
       }
 
       // At this point, xero_staging_record_id is guaranteed to exist
-      const { data: invoiceById, error: idError } = await this.supabase
+      const { data: invoiceById, error: idError } = await this.supabase!
         .from('xero_invoices')
         .select('*')
         .eq('id', event.metadata.xero_staging_record_id)
@@ -313,8 +315,8 @@ export class PaymentCompletionProcessor {
    * @param options - Update options including success status and error message
    */
   private async updateXeroStagingRecords(
-    event: PaymentCompletionEvent, 
-    existingRecords: any,
+    event: PaymentCompletionEvent,
+    existingRecords: Database['public']['Tables']['xero_invoices']['Row'],
     options: {
       success: boolean
       error?: string
@@ -326,8 +328,9 @@ export class PaymentCompletionProcessor {
       await this.initialize()
       
       // Update staging metadata to include payment intent ID and payment plan info if available
+      const existingStagingMetadata = existingRecords.staging_metadata as Record<string, Json> | null
       const updatedStagingMetadata = {
-        ...existingRecords.staging_metadata,
+        ...existingStagingMetadata,
         ...(event.metadata?.payment_intent_id && {
           stripe_payment_intent_id: event.metadata.payment_intent_id
         }),
@@ -349,7 +352,7 @@ export class PaymentCompletionProcessor {
       }
 
       // Update the invoice record
-      const { error: updateError } = await this.supabase
+      const { error: updateError } = await this.supabase!
         .from('xero_invoices')
         .update(updateData)
         .eq('id', existingRecords.id)
@@ -363,7 +366,7 @@ export class PaymentCompletionProcessor {
       // Skip for payment plans - the webhook handles payment plan status updates via updatePaymentPlanStatuses()
       if (event.payment_id && options.success && !event.metadata?.is_payment_plan) {
         // Get the latest bank account code from system accounting codes
-        const { data: systemCode } = await this.supabase
+        const { data: systemCode } = await this.supabase!
           .from('system_accounting_codes')
           .select('accounting_code')
           .eq('code_type', 'stripe_bank_account')
@@ -373,7 +376,7 @@ export class PaymentCompletionProcessor {
         
         // Update payment staging metadata to include payment_id
         // Look for payment records that match the current payment_id to avoid updating wrong records
-        const { data: existingPaymentRecord } = await this.supabase
+        const { data: existingPaymentRecord } = await this.supabase!
           .from('xero_payments')
           .select('staging_metadata')
           .eq('xero_invoice_id', existingRecords.id)
@@ -402,7 +405,7 @@ export class PaymentCompletionProcessor {
           updated_at: new Date().toISOString()
         }
 
-        const { error: paymentUpdateError } = await this.supabase
+        const { error: paymentUpdateError } = await this.supabase!
           .from('xero_payments')
           .update(paymentUpdateData)
           .eq('xero_invoice_id', existingRecords.id)
@@ -550,7 +553,7 @@ export class PaymentCompletionProcessor {
    */
   private async getPaymentData(event: PaymentCompletionEvent) {
     if (event.payment_id) {
-      const { data } = await this.supabase
+      const { data } = await this.supabase!
         .from('payments')
         .select('*')
         .eq('id', event.payment_id)
@@ -588,7 +591,7 @@ export class PaymentCompletionProcessor {
   /**
    * Helper: Create event from payment completion
    */
-  createPaymentEvent(payment: any): PaymentCompletionEvent {
+  createPaymentEvent(payment: Database['public']['Tables']['payments']['Row']): PaymentCompletionEvent {
     return {
       event_type: 'payments',
       record_id: null,
@@ -598,7 +601,7 @@ export class PaymentCompletionProcessor {
       trigger_source: 'payments',
       timestamp: new Date().toISOString(),
       metadata: {
-        payment_intent_id: payment.stripe_payment_intent_id
+        payment_intent_id: payment.stripe_payment_intent_id ?? undefined
       }
     }
   }
@@ -606,7 +609,7 @@ export class PaymentCompletionProcessor {
   /**
    * Helper: Create event from membership completion
    */
-  createMembershipEvent(membership: any): PaymentCompletionEvent {
+  createMembershipEvent(membership: Database['public']['Tables']['user_memberships']['Row']): PaymentCompletionEvent {
     return {
       event_type: 'user_memberships',
       record_id: membership.id,
@@ -616,7 +619,7 @@ export class PaymentCompletionProcessor {
       trigger_source: 'user_memberships',
       timestamp: new Date().toISOString(),
       metadata: {
-        payment_intent_id: membership.stripe_payment_intent_id
+        payment_intent_id: membership.stripe_payment_intent_id ?? undefined
       }
     }
   }
@@ -624,7 +627,7 @@ export class PaymentCompletionProcessor {
   /**
    * Helper: Create event from registration completion
    */
-  createRegistrationEvent(registration: any): PaymentCompletionEvent {
+  createRegistrationEvent(registration: Database['public']['Tables']['user_registrations']['Row']): PaymentCompletionEvent {
     return {
       event_type: 'user_registrations',
       record_id: registration.id,
@@ -634,7 +637,7 @@ export class PaymentCompletionProcessor {
       trigger_source: 'user_registrations',
       timestamp: new Date().toISOString(),
       metadata: {
-        payment_intent_id: registration.stripe_payment_intent_id
+        payment_intent_id: registration.stripe_payment_intent_id ?? undefined
       }
     }
   }
@@ -642,7 +645,7 @@ export class PaymentCompletionProcessor {
   /**
    * Helper: Create failed payment event
    */
-  createFailedPaymentEvent(payment: any, failureReason: string): PaymentCompletionEvent {
+  createFailedPaymentEvent(payment: Database['public']['Tables']['payments']['Row'], failureReason: string): PaymentCompletionEvent {
     return {
       event_type: 'payments',
       record_id: null,
@@ -654,7 +657,7 @@ export class PaymentCompletionProcessor {
       metadata: {
         failed: true,
         failure_reason: failureReason,
-        payment_intent_id: payment.stripe_payment_intent_id
+        payment_intent_id: payment.stripe_payment_intent_id ?? undefined
       }
     }
   }

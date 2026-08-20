@@ -124,7 +124,7 @@ export default function OnboardingPage() {
         await completeOnboarding(formDataToSend)
       } catch (error) {
         // NEXT_REDIRECT is expected when redirect() is called in server actions
-        if (error instanceof Error && 'digest' in error && typeof error.digest === 'string' && error.digest.includes('NEXT_REDIRECT')) {
+        if (typeof error === 'object' && error !== null && 'digest' in error && typeof error.digest === 'string' && error.digest.includes('NEXT_REDIRECT')) {
           // This is a successful redirect, show success message
           showSuccess('Profile completed successfully!')
           return

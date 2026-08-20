@@ -4,9 +4,32 @@ import { NextResponse } from 'next/server'
 import { emailService } from '@/lib/email'
 import { captureCriticalAccountDeletionError, captureAccountDeletionWarning } from '@/lib/sentry-helpers'
 
+interface DeletionContext {
+  userId?: string
+  userEmail?: string
+  userName?: string
+  originalEmail?: string
+  emailSent?: boolean
+}
+
+/**
+ * Wraps deletion context + step (+ any triggering error) under `extra` so it
+ * actually reaches Sentry - captureCriticalAccountDeletionError/captureAccountDeletionWarning
+ * only read `.user`, `.request`, `.tags`, `.extra`, and `.level` off their context argument.
+ */
+function deletionErrorContext(deletionContext: DeletionContext, step: string, triggeringError?: unknown) {
+  return {
+    extra: {
+      ...deletionContext,
+      step,
+      ...(triggeringError !== undefined && { triggeringError })
+    }
+  }
+}
+
 export async function POST() {
-  let deletionContext: any = {}
-  
+  let deletionContext: DeletionContext = {}
+
   try {
     const supabase = await createClient()
     
@@ -26,13 +49,10 @@ export async function POST() {
 
     if (profileError || !userProfile) {
       const error = new Error('User profile not found')
-      captureCriticalAccountDeletionError(error, {
-        extra: {
-          userId: user.id,
-          userEmail: user.email || 'unknown',
-          step: 'database_update'
-        }
-      })
+      captureCriticalAccountDeletionError(error, deletionErrorContext(
+        { userId: user.id, userEmail: user.email || 'unknown' },
+        'database_update'
+      ))
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 })
     }
 
@@ -46,10 +66,10 @@ export async function POST() {
 
     // Check if account is already deleted
     if (userProfile.deleted_at) {
-      captureAccountDeletionWarning('Account deletion attempted on already deleted account', {
-        ...deletionContext,
-        step: 'database_update'
-      })
+      captureAccountDeletionWarning(
+        'Account deletion attempted on already deleted account',
+        deletionErrorContext(deletionContext, 'database_update')
+      )
       return NextResponse.json({ error: 'Account already deleted' }, { status: 400 })
     }
 
@@ -62,10 +82,10 @@ export async function POST() {
 
     if (paymentPlansError) {
       console.error('Error checking payment plans:', paymentPlansError)
-      captureAccountDeletionWarning('Failed to check payment plans during deletion', {
-        ...deletionContext,
-        step: 'payment_plan_check'
-      }, paymentPlansError)
+      captureAccountDeletionWarning(
+        'Failed to check payment plans during deletion',
+        deletionErrorContext(deletionContext, 'payment_plan_check', paymentPlansError)
+      )
       // Continue with deletion despite error
     } else if (activePaymentPlans && activePaymentPlans.length > 0) {
       // Calculate total outstanding balance
@@ -101,11 +121,10 @@ export async function POST() {
       deletionContext.emailSent = true
     } catch (emailError) {
       console.error('Failed to send account deletion confirmation email:', emailError)
-      captureAccountDeletionWarning('Account deletion email failed to send', {
-        ...deletionContext,
-        step: 'email_send',
-        emailSent: false
-      }, emailError)
+      captureAccountDeletionWarning(
+        'Account deletion email failed to send',
+        deletionErrorContext({ ...deletionContext, emailSent: false }, 'email_send', emailError)
+      )
       // Continue with deletion even if email fails
     }
 
@@ -123,11 +142,10 @@ export async function POST() {
 
     if (updateError) {
       console.error('Failed to mark user as deleted:', updateError)
-      captureCriticalAccountDeletionError(updateError, {
-        ...deletionContext,
-        step: 'database_update',
-        emailSent
-      })
+      captureCriticalAccountDeletionError(
+        updateError,
+        deletionErrorContext({ ...deletionContext, emailSent }, 'database_update')
+      )
       return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 })
     }
 
@@ -150,11 +168,10 @@ export async function POST() {
 
     if (deleteUserError) {
       console.error('Failed to delete auth.users record:', deleteUserError)
-      captureCriticalAccountDeletionError(deleteUserError, {
-        ...deletionContext,
-        step: 'auth_delete',
-        emailSent
-      })
+      captureCriticalAccountDeletionError(
+        deleteUserError,
+        deletionErrorContext({ ...deletionContext, emailSent }, 'auth_delete')
+      )
       return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
     }
 
@@ -167,15 +184,15 @@ export async function POST() {
 
   } catch (error) {
     console.error('Account deletion error:', error)
-    
+
     // Capture critical error with all available context
-    captureCriticalAccountDeletionError(error, {
-      ...deletionContext,
-      step: 'unknown'
-    })
-    
-    return NextResponse.json({ 
-      error: 'Internal server error' 
+    captureCriticalAccountDeletionError(
+      error instanceof Error ? error : new Error(String(error)),
+      deletionErrorContext(deletionContext, 'unknown')
+    )
+
+    return NextResponse.json({
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }

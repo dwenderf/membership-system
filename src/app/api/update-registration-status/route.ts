@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database'
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build update object based on status and provided fields
-    const updateData: any = {
+    const updateData: Database['public']['Tables']['user_registrations']['Update'] = {
       payment_status: status,
     }
 

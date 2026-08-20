@@ -6,6 +6,23 @@ import {
   calculateSeasonalDiscountUsageBatch
 } from '@/lib/services/discount-limit-service'
 
+/** Row shape of `user_discount_allowances` as selected below, with its joined category/season. */
+interface DiscountAllowanceWithJoins {
+  id: string
+  user_id: string
+  discount_category_id: string
+  season_id: string
+  discount_percentage: number | string | null
+  max_discount_amount: number | null
+  notes: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+  category: { id: string; name: string; requires_user_allowance: boolean | null } | { id: string; name: string; requires_user_allowance: boolean | null }[] | null
+  season: { id: string; name: string; start_date: string; end_date: string } | null
+}
+
 /**
  * GET /api/admin/users/[id]/discount-allowances
  * List user's discount allowances for current and upcoming seasons
@@ -50,7 +67,7 @@ export async function GET(
     const activeSeasonIds = (activeSeasons || []).map(s => s.id)
 
     // 2. Query user's discount allowances for active/upcoming seasons
-    let rawAllowances: any[] = []
+    let rawAllowances: DiscountAllowanceWithJoins[] = []
     if (activeSeasonIds.length > 0) {
       const { data: allowancesData, error: allowancesError } = await supabase
         .from('user_discount_allowances')
@@ -75,7 +92,9 @@ export async function GET(
       if (allowancesError) {
         return NextResponse.json({ error: 'Failed to fetch discount allowances' }, { status: 500 })
       }
-      rawAllowances = allowancesData || []
+      // The `category`/`season` joins are single objects at runtime; the untyped
+      // client can't infer relation cardinality and types them as arrays.
+      rawAllowances = (allowancesData || []) as unknown as DiscountAllowanceWithJoins[]
     }
 
     // 3. Batch resolve usage & effective limits for each active season

@@ -8,11 +8,37 @@ import { logger } from '@/lib/logging/logger'
 import { getRegistrationAccountingCodes } from '@/lib/accounting-codes'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { centsToCents } from '@/types/currency'
+import { Cents } from '@/types/currency'
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 
 // Force import server config
 
 import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentContext } from '@/lib/sentry-helpers'
+import { SupabaseClient, User } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
+import Stripe from 'stripe'
+
+type RegistrationRow = Database['public']['Tables']['registrations']['Row']
+type SeasonRow = Database['public']['Tables']['seasons']['Row']
+
+/** Row shape of `registration_categories`, joined with its master `category`, as selected below. */
+interface RegistrationCategoryJoin {
+  id: string
+  registration_id: string
+  category_id: string | null
+  custom_name: string | null
+  max_capacity: number | null
+  accounting_code: string | null
+  required_membership_id: string | null
+  price: number
+  sort_order: number
+  category: { name: string } | null
+}
+
+interface RegistrationWithDetails extends RegistrationRow {
+  season: SeasonRow | null
+  registration_categories: RegistrationCategoryJoin[]
+}
 
 // Handle free registration purchases (amount = 0)
 async function handleFreeRegistration({
@@ -26,23 +52,23 @@ async function handleFreeRegistration({
   startTime,
   request
 }: {
-  supabase: any
-  user: any
+  supabase: SupabaseClient
+  user: User
   registrationId: string
   categoryId: string
   presaleCode?: string
   discountCode?: string
-  paymentContext: any
+  paymentContext: PaymentContext
   startTime: number
   request: NextRequest
 }) {
-  let freeStagingRecord: any = null
+  let freeStagingRecord: { id: string } | null = null
   
   try {
     const adminSupabase = createAdminClient()
 
     // Get registration details for validation
-    const { data: registration, error: registrationError } = await supabase
+    const { data: registrationData, error: registrationError } = await supabase
       .from('registrations')
       .select(`
         *,
@@ -55,13 +81,17 @@ async function handleFreeRegistration({
       .eq('id', registrationId)
       .single()
 
-    if (registrationError || !registration) {
+    if (registrationError || !registrationData) {
       capturePaymentError(registrationError || new Error('Registration not found'), paymentContext, 'error')
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
     }
 
+    // The `season` and `category` relations are single joined objects at runtime; the
+    // untyped client can't infer relation cardinality and types them as arrays.
+    const registration = registrationData as unknown as RegistrationWithDetails
+
     // Find the selected category
-    const selectedCategory = registration.registration_categories.find((cat: any) => cat.id === categoryId)
+    const selectedCategory = registration.registration_categories.find((cat) => cat.id === categoryId)
     if (!selectedCategory) {
       const error = new Error('Category not found')
       capturePaymentError(error, paymentContext, 'error')
@@ -124,7 +154,7 @@ async function handleFreeRegistration({
       )
       
       // Get registration and category details for invoice line items
-      const registrationCategory = registration.registration_categories.find((rc: any) => rc.id === categoryId)
+      const registrationCategory = registration.registration_categories.find((rc) => rc.id === categoryId)
       
       if (registrationCategory) {
         // Build invoice data with line items
@@ -140,7 +170,7 @@ async function handleFreeRegistration({
         const paymentItems: Array<{
           item_type: 'registration' | 'discount'
           item_id: string | null
-          item_amount: any
+          item_amount: Cents
           description: string
           accounting_code?: string
           discount_code_id?: string
@@ -352,7 +382,7 @@ async function handleFreeRegistration({
     const { error: stagingUpdateError } = await adminSupabase
       .from('xero_invoices')
       .update({ payment_id: paymentRecord.id })
-      .eq('id', freeStagingRecord.id)
+      .eq('id', freeStagingRecord!.id)
 
     if (stagingUpdateError) {
       logger.logPaymentProcessing(
@@ -1100,7 +1130,7 @@ export async function POST(request: NextRequest) {
     const paymentItems: Array<{
       item_type: 'registration' | 'discount'
       item_id: string | null
-      item_amount: any
+      item_amount: Cents
       description: string
       accounting_code?: string
       discount_code_id?: string
@@ -1226,7 +1256,7 @@ export async function POST(request: NextRequest) {
     const chargeAmount = firstInstallmentAmount // Amount to charge now
 
     // Create payment intent
-    const paymentIntentParams: any = {
+    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
       amount: centsToCents(chargeAmount), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,

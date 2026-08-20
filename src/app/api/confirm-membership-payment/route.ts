@@ -8,6 +8,7 @@ import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-servi
 
 import * as Sentry from '@sentry/nextjs'
 import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, capturePaymentSuccess } from '@/lib/sentry-helpers'
+import { Database } from '@/types/database'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
     const durationMonths = parseInt(paymentIntent.metadata.durationMonths)
 
     // Create user membership record - THIS IS THE CRITICAL OPERATION (handle duplicate gracefully)
-    let userMembership: any
+    let userMembership: Database['public']['Tables']['user_memberships']['Row']
     try {
       const { data: newMembership, error: membershipError } = await supabase
         .from('user_memberships')

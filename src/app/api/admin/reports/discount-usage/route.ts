@@ -2,6 +2,28 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { resolveEffectiveDiscountLimitsBatch } from '@/lib/services/discount-limit-service'
 
+/** Row shape of `discount_usage_computed`, as selected below (not the full view). */
+interface DiscountUsageRow {
+  id: string
+  user_id: string | null
+  user_first_name: string | null
+  user_last_name: string | null
+  user_email: string | null
+  user_member_id: number | null
+  amount_saved: number | null
+  used_at: string | null
+  season_id: string | null
+  season_name: string | null
+  season_start_date: string | null
+  season_end_date: string | null
+  discount_category_id: string | null
+  discount_category_name: string | null
+  discount_category_max_per_season: number | null
+  discount_code_id: string | null
+  discount_code: string | null
+  registration_name: string | null
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -67,7 +89,7 @@ export async function GET() {
       userId: string
       userName: string
       userEmail: string
-      memberId: string | null
+      memberId: number | null
       totalAmount: number
       remaining: number | null
       isFullyUtilized: boolean
@@ -93,22 +115,22 @@ export async function GET() {
 
     const seasonMap = new Map<string, SeasonUsage>()
 
-    discountUsage?.forEach((usage: any) => {
-      const seasonId = usage.season_id
-      const seasonName = usage.season_name
-      const seasonStartDate = usage.season_start_date
-      const seasonEndDate = usage.season_end_date
+    discountUsage?.forEach((usage: DiscountUsageRow) => {
+      const seasonId = usage.season_id || 'unknown'
+      const seasonName = usage.season_name || 'Unknown Season'
+      const seasonStartDate = usage.season_start_date || ''
+      const seasonEndDate = usage.season_end_date || ''
       const categoryId = usage.discount_category_id || 'other'
       const categoryName = usage.discount_category_name || 'Other'
       const maxPerUser = usage.discount_category_max_per_season
-      const userId = usage.user_id
+      const userId = usage.user_id || 'unknown'
       const userName = `${usage.user_first_name || ''} ${usage.user_last_name || ''}`.trim() || 'Unknown'
-      const userEmail = usage.user_email
+      const userEmail = usage.user_email || ''
       const memberId = usage.user_member_id
       const codeId = usage.discount_code_id || 'unknown'
       const code = usage.discount_code || 'Unknown Code'
-      const amount = usage.amount_saved
-      const date = usage.used_at
+      const amount = usage.amount_saved || 0
+      const date = usage.used_at || ''
       const registrationName = usage.registration_name
 
       // Get or create season

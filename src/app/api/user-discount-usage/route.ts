@@ -1,6 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+/** Row shape of `discount_usage_computed`, as selected below (not the full view). */
+interface DiscountUsageRow {
+  amount_saved: number | null
+  season_name: string | null
+  season_end_date: string | null
+  discount_category_id: string | null
+  discount_category_name: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -47,8 +56,8 @@ export async function GET(request: NextRequest) {
     // Group the data by season, then by category
     const groupedUsage: Record<string, Record<string, { amount: number, categoryId: string }>> = {}
 
-    discountUsage?.forEach((usage: any) => {
-      const seasonName = usage.season_name
+    discountUsage?.forEach((usage: DiscountUsageRow) => {
+      const seasonName = usage.season_name ?? 'Unknown'
       const categoryName = usage.discount_category_name || 'Other'
       const categoryId = usage.discount_category_id || 'other'
 
@@ -60,7 +69,7 @@ export async function GET(request: NextRequest) {
         groupedUsage[seasonName][categoryName] = { amount: 0, categoryId }
       }
 
-      groupedUsage[seasonName][categoryName].amount += usage.amount_saved
+      groupedUsage[seasonName][categoryName].amount += usage.amount_saved ?? 0
     })
 
     // Convert to array format for easier frontend consumption

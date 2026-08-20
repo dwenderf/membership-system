@@ -1,3 +1,11 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
 export type Database = {
   public: {
     Tables: {
@@ -459,9 +467,10 @@ export type Database = {
           last_synced_at: string | null
           sync_error: string | null
           staged_at: string | null
-          staging_metadata: any | null
+          staging_metadata: Json | null
           created_at: string
           updated_at: string
+          is_payment_plan: boolean
         }
         Insert: {
           id?: string
@@ -479,9 +488,10 @@ export type Database = {
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null
-          staging_metadata?: any | null
+          staging_metadata?: Json | null
           created_at?: string
           updated_at?: string
+          is_payment_plan?: boolean
         }
         Update: {
           id?: string
@@ -499,9 +509,10 @@ export type Database = {
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null
-          staging_metadata?: any | null
+          staging_metadata?: Json | null
           created_at?: string
           updated_at?: string
+          is_payment_plan?: boolean
         }
         Relationships: [
           {
@@ -535,9 +546,15 @@ export type Database = {
           last_synced_at: string | null
           sync_error: string | null
           staged_at: string | null
-          staging_metadata: any | null
+          staging_metadata: Json | null
           created_at: string
           updated_at: string
+          payment_type: string
+          installment_number: number | null
+          planned_payment_date: string | null
+          attempt_count: number | null
+          last_attempt_at: string | null
+          failure_reason: string | null
         }
         Insert: {
           id?: string
@@ -553,9 +570,15 @@ export type Database = {
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null
-          staging_metadata?: any | null
+          staging_metadata?: Json | null
           created_at?: string
           updated_at?: string
+          payment_type?: string
+          installment_number?: number | null
+          planned_payment_date?: string | null
+          attempt_count?: number | null
+          last_attempt_at?: string | null
+          failure_reason?: string | null
         }
         Update: {
           id?: string
@@ -567,13 +590,19 @@ export type Database = {
           amount_paid?: number
           stripe_fee_amount?: number
           reference?: string | null
-          sync_status?: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore'
+          sync_status?: 'pending' | 'staged' | 'processing' | 'synced' | 'failed' | 'ignore' | 'abandoned'
           last_synced_at?: string | null
           sync_error?: string | null
           staged_at?: string | null
-          staging_metadata?: any | null
+          staging_metadata?: Json | null
           created_at?: string
           updated_at?: string
+          payment_type?: string
+          installment_number?: number | null
+          planned_payment_date?: string | null
+          attempt_count?: number | null
+          last_attempt_at?: string | null
+          failure_reason?: string | null
         }
       }
       xero_invoice_line_items: {
@@ -589,6 +618,7 @@ export type Database = {
           tax_type: string
           line_amount: number
           created_at: string
+          discount_code_id: string | null
         }
         Insert: {
           id?: string
@@ -602,6 +632,7 @@ export type Database = {
           tax_type?: string
           line_amount: number
           created_at?: string
+          discount_code_id?: string | null
         }
         Update: {
           id?: string
@@ -614,6 +645,54 @@ export type Database = {
           account_code?: string | null
           tax_type?: string
           line_amount?: number
+          created_at?: string
+          discount_code_id?: string | null
+        }
+      }
+      xero_sync_logs: {
+        Row: {
+          id: string
+          tenant_id: string
+          operation_type: string
+          entity_type: string | null
+          entity_id: string | null
+          xero_entity_id: string | null
+          status: string
+          error_code: string | null
+          error_message: string | null
+          request_data: Json | null
+          response_data: Json | null
+          retry_count: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          operation_type: string
+          entity_type?: string | null
+          entity_id?: string | null
+          xero_entity_id?: string | null
+          status: string
+          error_code?: string | null
+          error_message?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          retry_count?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          operation_type?: string
+          entity_type?: string | null
+          entity_id?: string | null
+          xero_entity_id?: string | null
+          status?: string
+          error_code?: string | null
+          error_message?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          retry_count?: number | null
           created_at?: string
         }
       }
@@ -851,6 +930,36 @@ export type Database = {
           days_to_expiration: number
           expiration_status: string
           lgbtq_status: string
+        }
+        Insert: never
+        Update: never
+      }
+      discount_usage_computed: {
+        Row: {
+          id: string
+          user_id: string | null
+          user_first_name: string | null
+          user_last_name: string | null
+          user_email: string | null
+          user_member_id: number | null
+          discount_code_id: string | null
+          discount_category_id: string | null
+          season_id: string | null
+          season_name: string | null
+          season_start_date: string | null
+          season_end_date: string | null
+          amount_saved: number | null
+          used_at: string | null
+          payment_id: string | null
+          registration_id: string | null
+          registration_name: string | null
+          discount_code: string | null
+          discount_category_name: string | null
+          discount_category_accounting_code: string | null
+          discount_category_max_per_season: number | null
+          invoice_type: string | null
+          invoice_number: string | null
+          sync_status: string | null
         }
         Insert: never
         Update: never

@@ -185,7 +185,7 @@ export class AlternatePaymentService {
       })
 
       // Update staging record with payment intent ID
-      const currentMetadata = stagingRecord.staging_metadata || {}
+      const currentMetadata = (stagingRecord.staging_metadata as Record<string, unknown> | null) || {}
       const updatedMetadata = {
         ...currentMetadata,
         stripe_payment_intent_id: paymentIntent.id

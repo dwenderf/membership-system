@@ -12,6 +12,7 @@ import { Database } from '../../types/database'
 import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
 import { centsToCents, centsToDollars } from '../../types/currency'
+import { asHttpClientError, getXeroErrorStatus, getXeroValidationMessage, parseXeroBatchError } from './xero-errors'
 
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
@@ -31,11 +32,29 @@ type XeroInvoiceRecord = Database['public']['Tables']['xero_invoices']['Row'] & 
 
 type XeroPaymentRecord = Database['public']['Tables']['xero_payments']['Row']
 
+type SyncResult = {
+  invoices: { synced: number; failed: number }
+  credit_notes: { synced: number; failed: number }
+  payments: { synced: number; failed: number }
+  connectionStatus: 'valid' | 'failed' | 'no_tenant'
+}
+
+/** The subset of `staging_metadata`'s fields this module reads. `staging_metadata` is
+ * genuinely-polymorphic JSON written by several different call sites (staging.ts, Stripe
+ * webhook, refund routes) — this is not the full shape, just what's used here. */
+interface XeroStagingMetadata {
+  user_id?: string
+  customer?: { id?: string }
+  refund_id?: string
+  reason?: string
+  stripe_charge_id?: string
+}
+
 export class XeroBatchSyncManager {
   private _supabase: ReturnType<typeof createAdminClient> | null = null
   private isRunning: boolean = false
   private lastRunTime: Date | null = null
-  private currentRunPromise: Promise<any> | null = null
+  private currentRunPromise: Promise<SyncResult> | null = null
   private readonly MIN_DELAY_BETWEEN_SYNCS = 2000 // 2 seconds minimum delay between syncs
 
   private get supabase(): ReturnType<typeof createAdminClient> {
@@ -258,12 +277,7 @@ export class XeroBatchSyncManager {
   /**
    * Internal method that performs the actual sync operation
    */
-  private async performSync(): Promise<{
-    invoices: { synced: number; failed: number }
-    credit_notes: { synced: number; failed: number }
-    payments: { synced: number; failed: number }
-    connectionStatus: 'valid' | 'failed' | 'no_tenant'
-  }> {
+  private async performSync(): Promise<SyncResult> {
     const startTime = Date.now()
     console.log('🔄 Starting intelligent batch sync of pending Xero records...')
 
@@ -528,9 +542,9 @@ export class XeroBatchSyncManager {
       }
 
       // Get or create contact in Xero
-      const metadata = invoiceRecord.staging_metadata as any
+      const metadata = invoiceRecord.staging_metadata as XeroStagingMetadata
       console.log('👤 Getting/creating Xero contact for user:', metadata?.user_id)
-      const contactResult = await getOrCreateXeroContact(metadata.user_id, activeTenant.tenant_id)
+      const contactResult = await getOrCreateXeroContact(metadata.user_id!, activeTenant.tenant_id)
       console.log('👤 Contact result:', contactResult)
       
       // Apply rate limiting delay only if an API call was made
@@ -719,7 +733,7 @@ export class XeroBatchSyncManager {
       }
 
       // Parse staging metadata for refund details
-      const metadata = creditNoteRecord.staging_metadata as any
+      const metadata = creditNoteRecord.staging_metadata as XeroStagingMetadata | null
       if (!metadata || !metadata.refund_id) {
         console.error('❌ No refund metadata found in credit note record')
         await this.markItemAsFailed(creditNoteRecord.id, 'No refund metadata available')
@@ -747,7 +761,7 @@ export class XeroBatchSyncManager {
 
       // Get or create Xero contact
       console.log('👤 Getting/creating Xero contact for credit note user:', metadata.customer?.id || metadata.user_id)
-      const contactResult = await getOrCreateXeroContact(metadata.customer?.id || metadata.user_id, activeTenant.tenant_id)
+      const contactResult = await getOrCreateXeroContact((metadata.customer?.id || metadata.user_id)!, activeTenant.tenant_id)
       if (!contactResult.success || !contactResult.xeroContactId) {
         console.error('❌ Failed to get/create Xero contact for credit note')
         await this.markItemAsFailed(creditNoteRecord.id, 'Failed to get/create Xero contact')
@@ -921,22 +935,10 @@ export class XeroBatchSyncManager {
 
     console.log(`✅ Xero invoice sync completed: ${syncedCount} synced, ${failedCount} failed`)
     return { success: true, synced: syncedCount, failed: failedCount }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error syncing Xero invoices:', error)
 
-      // The Xero SDK may serialize the error as a JSON string
-      let parsedError = error
-      if (typeof error === 'string') {
-        try {
-          parsedError = JSON.parse(error)
-        } catch {
-          // If parsing fails, use original error
-          parsedError = error
-        }
-      }
-
-      // The Xero SDK wraps errors - check both error.response.body and error.body
-      const errorBody = parsedError?.response?.body || parsedError?.body || parsedError
+      const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
@@ -956,7 +958,7 @@ export class XeroBatchSyncManager {
           // Extract validation errors from the element
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
-            const errorMessages = validationErrors.map((e: any) => e.Message).join('; ')
+            const errorMessages = validationErrors.map((e) => e.Message).join('; ')
             console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
 
             // Mark invoice as failed with specific error
@@ -1004,7 +1006,10 @@ export class XeroBatchSyncManager {
         }
       } else {
         // Generic error - mark all invoices in this batch as failed
-        const errorMessage = error?.message || error?.response?.statusText || 'Unknown error'
+        const httpError = asHttpClientError(error)
+        const errorMessage = httpError?.message
+          || (httpError?.response as { statusText?: string } | undefined)?.statusText
+          || 'Unknown error'
         console.error('❌ Batch sync error (no Elements array):', errorMessage)
 
         for (const item of xeroInvoicesToSync) {
@@ -1163,22 +1168,10 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
 
       console.log(`✅ Xero credit note sync completed: ${syncedCount} synced, ${failedCount} failed`)
       return { success: true, synced: syncedCount, failed: failedCount }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error syncing Xero credit notes:', error)
 
-      // The Xero SDK may serialize the error as a JSON string
-      let parsedError = error
-      if (typeof error === 'string') {
-        try {
-          parsedError = JSON.parse(error)
-        } catch {
-          // If parsing fails, use original error
-          parsedError = error
-        }
-      }
-
-      // The Xero SDK wraps errors - check both error.response.body and error.body
-      const errorBody = parsedError?.response?.body || parsedError?.body || parsedError
+      const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
@@ -1198,7 +1191,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
           // Extract validation errors from the element
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
-            const errorMessages = validationErrors.map((e: any) => e.Message).join('; ')
+            const errorMessages = validationErrors.map((e) => e.Message).join('; ')
             console.error(`❌ Credit note validation failed for record ${originalRecord.id}:`, errorMessages)
 
             // Mark credit note as failed with specific error
@@ -1384,22 +1377,10 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
 
       console.log('✅ Xero payment(s) created:', response.body.payments?.length || 0)
       return true
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error syncing Xero payments:', error)
 
-      // The Xero SDK may serialize the error as a JSON string
-      let parsedError = error
-      if (typeof error === 'string') {
-        try {
-          parsedError = JSON.parse(error)
-        } catch {
-          // If parsing fails, use original error
-          parsedError = error
-        }
-      }
-
-      // The Xero SDK wraps errors - check both error.response.body and error.body
-      const errorBody = parsedError?.response?.body || parsedError?.body || parsedError
+      const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
@@ -1452,7 +1433,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
           // Extract validation errors from the element
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
-            const errorMessages = validationErrors.map((e: any) => e.Message).join('; ')
+            const errorMessages = validationErrors.map((e) => e.Message).join('; ')
             console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
 
             // Mark payment as failed with specific error
@@ -1533,7 +1514,10 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         }
       } else {
         // Generic error - mark all payments in this batch as failed
-        const errorMessage = error?.message || error?.response?.statusText || 'Unknown error'
+        const httpError = asHttpClientError(error)
+        const errorMessage = httpError?.message
+          || (httpError?.response as { statusText?: string } | undefined)?.statusText
+          || 'Unknown error'
         console.error('❌ Batch sync error (no Elements array):', errorMessage)
 
         for (const record of paymentRecords) {
@@ -1636,7 +1620,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         },
         amount: Math.abs(paymentRecord.amount_paid) / 100, // Convert cents to dollars, ensure positive for Xero
         date: new Date().toISOString().split('T')[0],
-        reference: paymentRecord.reference || (paymentRecord.staging_metadata as any)?.stripe_charge_id || invoiceRecord.invoice_number || ''
+        reference: paymentRecord.reference || (paymentRecord.staging_metadata as XeroStagingMetadata | null)?.stripe_charge_id || invoiceRecord.invoice_number || ''
       }
 
       // Add either invoice or creditNote field based on the record type
@@ -1674,7 +1658,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       tenantId
     })
     
-    const updateData: any = {
+    const updateData: Database['public']['Tables']['xero_invoices']['Update'] = {
       xero_invoice_id: xeroId,
       invoice_number: number,
       invoice_status: 'AUTHORISED', // Any synced invoice should be AUTHORISED
@@ -1745,7 +1729,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       tenantId
     })
     
-    const updateData: any = {
+    const updateData: Database['public']['Tables']['xero_payments']['Update'] = {
       xero_payment_id: xeroPaymentId,
       sync_status: 'synced',
       last_synced_at: new Date().toISOString(),
@@ -1806,29 +1790,31 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
   /**
    * Check if an error is a rate limit error (HTTP 429)
    */
-  private isRateLimitError(error: any): boolean {
+  private isRateLimitError(error: unknown): boolean {
     // Check for HTTP 429 status code
-    if (error?.response?.status === 429) {
+    if (getXeroErrorStatus(error) === 429) {
       return true
     }
-    
+
     // Check for Xero-specific rate limit error messages
-    if (error?.message && typeof error.message === 'string') {
-      const message = error.message.toLowerCase()
-      return message.includes('rate limit') || 
-             message.includes('429') || 
+    const httpError = asHttpClientError(error)
+    if (httpError?.message && typeof httpError.message === 'string') {
+      const message = httpError.message.toLowerCase()
+      return message.includes('rate limit') ||
+             message.includes('429') ||
              message.includes('too many requests') ||
              message.includes('quota exceeded')
     }
-    
+
     // Check for Xero API error structure
-    if (error?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message) {
-      const validationMessage = error.response.body.Elements[0].ValidationErrors[0].Message.toLowerCase()
-      return validationMessage.includes('rate limit') || 
-             validationMessage.includes('429') || 
-             validationMessage.includes('too many requests')
+    const validationMessage = getXeroValidationMessage(error)
+    if (validationMessage) {
+      const lowerMessage = validationMessage.toLowerCase()
+      return lowerMessage.includes('rate limit') ||
+             lowerMessage.includes('429') ||
+             lowerMessage.includes('too many requests')
     }
-    
+
     return false
   }
 }

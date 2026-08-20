@@ -1413,6 +1413,8 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 1. Get added to the **nycpha** team on Vercel (Team Settings → Members → Invite) with at least the **Developer** role — Developers can manage environment variables for Preview/Development, they're just locked out of Production env vars, which is exactly the right level of access for this secret. (Member also works and is broader, but Developer is the minimum needed.)
 2. From their own machine: `vercel login`, then `vercel link` inside the repo to connect it to `nycpha/membership-system`, then `vercel env pull --environment=preview` to write the current values (including `PREVIEW_AUTH_SECRET`) to a local `.env` file — never manually retype or forward the value.
 
+**"Their own machine" is load-bearing.** This needs a `vercel` CLI that can either reuse a cached login or complete the interactive OAuth flow — neither is available in a fresh Claude Code on the web / cloud session, so an AI agent running there can't pull `PREVIEW_AUTH_SECRET` itself this way, and therefore can't call `/api/preview-auth` on its own. Enabling the Vercel MCP connector in that session doesn't help either — it covers project/deployment management, not reading environment variable values. The secret still has to be pulled on a machine with real CLI auth and handed to the agent's session (e.g. as an env var on the environment, or a `.env.local` it's given), never pasted as plaintext into chat.
+
 **Sensitive flag — these vars split into two different tiers:**
 
 - `PREVIEW_AUTH_SECRET` must stay **non-Sensitive**. Devs/LLMs need to know its value to call the endpoint at all, so it has to remain pull-able via `vercel env pull` / visible in the dashboard.

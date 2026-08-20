@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatTime, formatEventDateTime } from '@/lib/date-utils'
 import { getCategoryRegistrationCounts } from '@/lib/registration-counts'
-import { getRegistrationStatus } from '@/lib/registration-status'
+import { getRegistrationStatus, type RegistrationWithTiming } from '@/lib/registration-status'
 import RegistrationPurchase from '@/components/RegistrationPurchase'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Database } from '@/types/database'
 
 interface PageProps {
   params: Promise<{
@@ -13,8 +14,43 @@ interface PageProps {
   }>
 }
 
+type MembershipRow = Database['public']['Tables']['memberships']['Row']
+type UserMembershipRow = Database['public']['Tables']['user_memberships']['Row']
+
+interface UserMembershipWithDetails extends UserMembershipRow {
+  membership: MembershipRow | null
+}
+
+interface ConsolidatedMembership {
+  membershipId: string
+  membership: MembershipRow | null
+  validFrom: string
+  validUntil: string
+  purchases: UserMembershipWithDetails[]
+}
+
+/** registration_categories isn't in the generated Database types. */
+interface RegistrationCategoryRow {
+  id: string
+  custom_name: string | null
+  price: number
+  max_capacity: number | null
+  required_membership_id: string | null
+  sort_order: number
+  categories: Pick<Database['public']['Tables']['categories']['Row'], 'name'> | null
+  memberships: Pick<MembershipRow, 'id' | 'name'> | null
+}
+
+interface RegistrationRow extends RegistrationWithTiming {
+  name: string
+  required_membership_id: string | null
+  memberships: Pick<MembershipRow, 'id' | 'name'> | null
+  season: Pick<Database['public']['Tables']['seasons']['Row'], 'name' | 'start_date' | 'end_date'> | null
+  registration_categories: RegistrationCategoryRow[] | null
+}
+
 // Helper function to get timing message for coming soon registrations
-function getTimingMessage(registration: any): string {
+function getTimingMessage(registration: RegistrationRow): string {
   const now = new Date()
 
   // Check if presale is configured and coming up
@@ -87,7 +123,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
     .eq('user_id', user.id)
 
   // Get the specific registration
-  const { data: registration, error } = await supabase
+  const { data: registrationData, error } = await supabase
     .from('registrations')
     .select(`
       *,
@@ -102,9 +138,11 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
     .eq('id', id)
     .single()
 
-  if (error || !registration) {
+  if (error || !registrationData) {
     notFound()
   }
+
+  const registration = registrationData as RegistrationRow
 
   // Check if registration is for a current/future season
   const now = new Date()
@@ -113,10 +151,10 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
   }
 
   // Get paid registration counts for categories
-  const categoryIds = registration.registration_categories?.map((cat: any) => cat.id) || []
+  const categoryIds = registration.registration_categories?.map((cat) => cat.id) || []
   const categoryRegistrationCounts = await getCategoryRegistrationCounts(categoryIds)
 
-  const activeMemberships = userMemberships || []
+  const activeMemberships = (userMemberships || []) as UserMembershipWithDetails[]
 
   // Transform memberships to the format expected by RegistrationValidationService
   const activeMembershipsForValidation = activeMemberships.map(um => ({
@@ -161,7 +199,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
     }
 
     return acc
-  }, {} as Record<string, any>)
+  }, {} as Record<string, ConsolidatedMembership>)
 
   const consolidatedMembershipList = Object.values(consolidatedMemberships)
   const hasActiveMembership = consolidatedMembershipList.length > 0
@@ -169,7 +207,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
   const userAlternateRegistrationIds = userAlternateRegistrations?.map(uar => uar.registration_id) || []
 
   // Check if any memberships are expiring soon (<=90 days)
-  const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership: any) => {
+  const expiringSoonMemberships = consolidatedMembershipList.filter((consolidatedMembership) => {
     const validUntil = new Date(consolidatedMembership.validUntil)
     const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilExpiration <= 90
@@ -179,7 +217,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
   // Check membership eligibility
   const registrationMembershipId = registration.required_membership_id || null
   const categoryMembershipIds: string[] = registration.registration_categories
-    ?.map((cat: any) => cat.required_membership_id)
+    ?.map((cat) => cat.required_membership_id)
     .filter((id: string | null): id is string => id !== null) || []
   const uniqueCategoryMembershipIds = [...new Set(categoryMembershipIds)]
 
@@ -204,7 +242,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
   const userRegisteredCategory = userRegistrations?.find(ur => ur.registration_id === registration.id)
 
   // Sort registration_categories by sort_order, then by category name
-  let sortedCategories = (registration.registration_categories || []).slice().sort((a: any, b: any) => {
+  let sortedCategories = (registration.registration_categories || []).slice().sort((a, b) => {
     if (a.sort_order !== b.sort_order) {
       return (a.sort_order ?? 9999) - (b.sort_order ?? 9999)
     }
@@ -215,10 +253,18 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
 
   // If user is already registered for a category, only show that category + alternates
   if (userRegisteredCategory) {
-    sortedCategories = sortedCategories.filter((cat: any) =>
+    sortedCategories = sortedCategories.filter((cat) =>
       cat.id === userRegisteredCategory.registration_category_id ||
       cat.categories?.name?.toLowerCase() === 'alternate'
     )
+  }
+
+  const registrationForPurchase = {
+    ...registration,
+    registration_categories: sortedCategories.map((cat) => ({
+      ...cat,
+      current_count: categoryRegistrationCounts[cat.id] || 0
+    }))
   }
 
   return (
@@ -260,7 +306,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
             </h3>
           </div>
           <div className="space-y-2">
-            {expiringSoonMemberships.map((consolidatedMembership: any) => {
+            {expiringSoonMemberships.map((consolidatedMembership) => {
               const validUntil = new Date(consolidatedMembership.validUntil)
               const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -375,7 +421,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                         )}
                         {uniqueCategoryMembershipIds.map((membershipId) => {
                           const category = registration.registration_categories?.find(
-                            (cat: any) => cat.required_membership_id === membershipId
+                            (cat) => cat.required_membership_id === membershipId
                           )
                           const membershipName = category?.memberships?.name
                           // Don't show duplicate if same as registration-level
@@ -427,13 +473,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
               </div>
             ) : (
               <RegistrationPurchase
-                registration={{
-                  ...registration,
-                  registration_categories: sortedCategories.map((cat: any) => ({
-                    ...cat,
-                    current_count: categoryRegistrationCounts[cat.id] || 0
-                  }))
-                }}
+                registration={registrationForPurchase}
                 userEmail={user.email || ''}
                 userId={user.id}
                 firstName={userProfile?.first_name || ''}

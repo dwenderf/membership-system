@@ -3,13 +3,14 @@
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
 import { completeOnboarding } from './actions'
 
 export default function OnboardingPage() {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [formData, setFormData] = useState({
@@ -121,9 +122,9 @@ export default function OnboardingPage() {
         formDataToSend.append('wantsMembership', formData.wantsMembership.toString())
         
         await completeOnboarding(formDataToSend)
-      } catch (error: any) {
+      } catch (error) {
         // NEXT_REDIRECT is expected when redirect() is called in server actions
-        if (error?.digest?.includes('NEXT_REDIRECT')) {
+        if (typeof error === 'object' && error !== null && 'digest' in error && typeof error.digest === 'string' && error.digest.includes('NEXT_REDIRECT')) {
           // This is a successful redirect, show success message
           showSuccess('Profile completed successfully!')
           return

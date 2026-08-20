@@ -104,15 +104,15 @@ export async function completeOnboarding(formData: FormData) {
       redirect('/dashboard')
     }
 
-  } catch (error: any) {
+  } catch (error) {
     // NEXT_REDIRECT is expected when redirect() is called - don't log as error
-    if (error?.digest?.includes('NEXT_REDIRECT')) {
+    if (error instanceof Error && 'digest' in error && typeof error.digest === 'string' && error.digest.includes('NEXT_REDIRECT')) {
       // Re-throw the redirect error without logging
       throw error
     }
-    
+
     // Only log real errors
     console.error('Error completing onboarding:', error)
     throw error
   }
-} 
+}

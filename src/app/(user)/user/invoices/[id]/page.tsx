@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getAuthenticatedXeroClient, getActiveTenant } from '@/lib/xero/client'
 import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { logger } from '@/lib/logging/logger'
+import type { LineItem as XeroLineItem, Payment as XeroPayment } from 'xero-node'
 
 interface PageProps {
   params: Promise<{
@@ -136,14 +137,16 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       dueDate: xeroInvoice.dueDate || '',
       reference: xeroInvoice.reference || '',
       url: publicUrl, // Public payment URL from Xero
-      lineItems: xeroInvoice.lineItems?.map((item: any) => ({
+      lineItems: xeroInvoice.lineItems?.map((item: XeroLineItem) => ({
         description: item.description || '',
         quantity: item.quantity || 0,
         unitAmount: (item.unitAmount || 0) * 100,
         lineAmount: (item.lineAmount || 0) * 100,
-        accountCode: typeof item.accountCode === 'string' ? item.accountCode : item.accountCode?.code || ''
+        accountCode: typeof item.accountCode === 'string'
+          ? item.accountCode
+          : (item.accountCode as unknown as { code?: string } | undefined)?.code || ''
       })) || [],
-      payments: xeroInvoice.payments?.map((payment: any) => ({
+      payments: xeroInvoice.payments?.map((payment: XeroPayment) => ({
         paymentID: payment.paymentID || '',
         date: payment.date || '',
         amount: (payment.amount || 0) * 100, // Convert dollars to cents

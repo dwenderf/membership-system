@@ -131,9 +131,9 @@ export default function VerifyOTPPage() {
         // Redirect to dashboard or intended page
         router.push('/user')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('OTP verification error:', error)
-      const errorMessage = error?.message || 'An error occurred. Please try again.'
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.'
       setMessage(errorMessage)
       showError('Verification failed', errorMessage)
       setLoading(false) // Only reset loading on error
@@ -161,9 +161,9 @@ export default function VerifyOTPPage() {
         // Focus first input
         otpInputs.current[0]?.focus()
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Resend error:', error)
-      const errorMessage = error?.message || 'An error occurred. Please try again.'
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.'
       setMessage(errorMessage)
       showError('Resend failed', errorMessage)
     } finally {

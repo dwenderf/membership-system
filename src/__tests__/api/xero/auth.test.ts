@@ -4,7 +4,7 @@
  * and set as an httpOnly cookie on the response.
  */
 
-jest.mock('next/server', () => require('../../../test-helpers/mock-next-server'))
+jest.mock('next/server', () => jest.requireActual('../../../test-helpers/mock-next-server'))
 
 import { GET } from '@/app/api/xero/auth/route'
 import { createXeroOAuthClient } from '@/lib/xero/client'

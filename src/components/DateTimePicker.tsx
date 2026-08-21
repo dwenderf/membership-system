@@ -4,22 +4,7 @@ import { useEffect, useRef } from 'react'
 import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
 import { Instance } from 'flatpickr/dist/types/instance'
-
-// Parses our "YYYY-MM-DD" / "YYYY-MM-DDTHH:MM" value strings into a local Date,
-// mirroring exactly how the onChange handler below builds those strings. Handing
-// flatpickr the raw string instead (via setDate/parseDate with no explicit format)
-// makes it parse using the display dateFormat (e.g. "M j, Y \\a\\t h:i K"), which
-// doesn't match this shape and silently fails, leaving the field blank.
-function parseValueToDate(value: string): Date | null {
-  if (!value) return null
-  const [datePart, timePart] = value.split('T')
-  const [year, month, day] = datePart.split('-').map(Number)
-  if (timePart) {
-    const [hours, minutes] = timePart.split(':').map(Number)
-    return new Date(year, month - 1, day, hours, minutes)
-  }
-  return new Date(year, month - 1, day)
-}
+import { parseValueToDate } from '@/lib/datetime-picker-utils'
 
 interface DateTimePickerProps {
   value: string

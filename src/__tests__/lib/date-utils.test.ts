@@ -9,6 +9,8 @@ import {
   formatEventDateTime,
   formatDateString,
   toNYDateString,
+  convertToNYTimezone,
+  convertFromUTCToNYDateTimeLocal,
 } from '@/lib/date-utils'
 
 describe('Date Utility Functions', () => {
@@ -195,6 +197,48 @@ describe('Date Utility Functions', () => {
       const result = toNYDateString()
       expect(result).toBeTruthy()
       expect(result).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
+    })
+  })
+
+  describe('convertToNYTimezone', () => {
+    it('should return an empty string for an empty input', () => {
+      expect(convertToNYTimezone('')).toBe('')
+    })
+
+    it('should convert an EST (winter) NY wall-clock time to the correct UTC instant', () => {
+      // NY is UTC-5 in January (standard time), so noon NY -> 17:00 UTC.
+      const result = convertToNYTimezone('2026-01-15T12:00')
+      expect(result).toBe('2026-01-15T17:00:00.000Z')
+    })
+
+    it('should convert an EDT (summer) NY wall-clock time to the correct UTC instant', () => {
+      // NY is UTC-4 in July (daylight time), so noon NY -> 16:00 UTC.
+      const result = convertToNYTimezone('2026-07-15T12:00')
+      expect(result).toBe('2026-07-15T16:00:00.000Z')
+    })
+  })
+
+  describe('convertFromUTCToNYDateTimeLocal', () => {
+    it('should return an empty string for an empty input', () => {
+      expect(convertFromUTCToNYDateTimeLocal('')).toBe('')
+    })
+
+    it('should convert a UTC instant back to NY wall-clock time in winter (EST)', () => {
+      const result = convertFromUTCToNYDateTimeLocal('2026-01-15T17:00:00.000Z')
+      expect(result).toBe('2026-01-15T12:00')
+    })
+
+    it('should convert a UTC instant back to NY wall-clock time in summer (EDT)', () => {
+      const result = convertFromUTCToNYDateTimeLocal('2026-07-15T16:00:00.000Z')
+      expect(result).toBe('2026-07-15T12:00')
+    })
+
+    it('should round-trip through convertToNYTimezone without drift across the DST boundary', () => {
+      const winterInput = '2026-01-15T12:00'
+      const summerInput = '2026-07-15T12:00'
+
+      expect(convertFromUTCToNYDateTimeLocal(convertToNYTimezone(winterInput))).toBe(winterInput)
+      expect(convertFromUTCToNYDateTimeLocal(convertToNYTimezone(summerInput))).toBe(summerInput)
     })
   })
 

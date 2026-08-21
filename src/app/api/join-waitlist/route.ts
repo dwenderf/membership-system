@@ -169,42 +169,39 @@ export async function POST(request: NextRequest) {
       .eq('registration_category_id', categoryId)
       .maybeSingle()
 
+    if (existingWaitlist && existingWaitlist.removed_at === null) {
+      // Already on active waitlist
+      return NextResponse.json({
+        error: `You are already on the waitlist for this category`
+      }, { status: 400 })
+    }
+
     let waitlistEntry: WaitlistRow | undefined
     let nextPosition: number
 
     if (existingWaitlist) {
-      if (existingWaitlist.removed_at === null) {
-        // Already on active waitlist
-        return NextResponse.json({
-          error: `You are already on the waitlist for this category`
-        }, { status: 400 })
-      } else {
-        // Previously removed from waitlist - update the existing record instead of inserting
-        nextPosition = await getNextPosition(supabase, registrationId, categoryId)
+      // Previously removed from waitlist - update the existing record instead of inserting
+      nextPosition = await getNextPosition(supabase, registrationId, categoryId)
 
-        const { data: reactivatedEntry, error: reactivateError } = await supabase
-          .from('waitlists')
-          .update({
-            removed_at: null,
-            position: nextPosition,
-            discount_code_id: validatedDiscountCodeId,
-            joined_at: new Date().toISOString()
-          })
-          .eq('id', existingWaitlist.id)
-          .select()
-          .single()
+      const { data: reactivatedEntry, error: reactivateError } = await supabase
+        .from('waitlists')
+        .update({
+          removed_at: null,
+          position: nextPosition,
+          discount_code_id: validatedDiscountCodeId,
+          joined_at: new Date().toISOString()
+        })
+        .eq('id', existingWaitlist.id)
+        .select()
+        .single()
 
-        if (reactivateError) {
-          console.error('Error reactivating waitlist entry:', reactivateError)
-          return NextResponse.json({ error: 'Failed to rejoin waitlist' }, { status: 500 })
-        }
-
-        waitlistEntry = reactivatedEntry
+      if (reactivateError) {
+        console.error('Error reactivating waitlist entry:', reactivateError)
+        return NextResponse.json({ error: 'Failed to rejoin waitlist' }, { status: 500 })
       }
-    }
 
-    // Only insert if we didn't reactivate an existing entry
-    if (!existingWaitlist) {
+      waitlistEntry = reactivatedEntry
+    } else {
       // Get the next position in line for this category
       nextPosition = await getNextPosition(supabase, registrationId, categoryId)
 

@@ -5,6 +5,22 @@ import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
 import { Instance } from 'flatpickr/dist/types/instance'
 
+// Parses our "YYYY-MM-DD" / "YYYY-MM-DDTHH:MM" value strings into a local Date,
+// mirroring exactly how the onChange handler below builds those strings. Handing
+// flatpickr the raw string instead (via setDate/parseDate with no explicit format)
+// makes it parse using the display dateFormat (e.g. "M j, Y \\a\\t h:i K"), which
+// doesn't match this shape and silently fails, leaving the field blank.
+function parseValueToDate(value: string): Date | null {
+  if (!value) return null
+  const [datePart, timePart] = value.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  if (timePart) {
+    const [hours, minutes] = timePart.split(':').map(Number)
+    return new Date(year, month - 1, day, hours, minutes)
+  }
+  return new Date(year, month - 1, day)
+}
+
 interface DateTimePickerProps {
   value: string
   onChange: (value: string) => void
@@ -91,8 +107,9 @@ export default function DateTimePicker({
     })
 
     // Set initial value if provided
-    if (value) {
-      flatpickrRef.current.setDate(value, false)
+    const initialDate = parseValueToDate(value)
+    if (initialDate) {
+      flatpickrRef.current.setDate(initialDate, false)
     }
 
     // Cleanup
@@ -116,7 +133,7 @@ export default function DateTimePicker({
     // Compare the selected dates (parsed Date objects) instead of string representations
     // to avoid format mismatch issues (value is in datetime-local format YYYY-MM-DDTHH:MM,
     // while flatpickr.input.value is in dateFormat which is YYYY-MM-DD HH:MM K)
-    const valueAsDate = value ? flatpickrRef.current.parseDate(value) : null
+    const valueAsDate = parseValueToDate(value)
     const currentSelectedDate =
       flatpickrRef.current.selectedDates.length > 0
         ? flatpickrRef.current.selectedDates[0]
@@ -130,8 +147,8 @@ export default function DateTimePicker({
         valueAsDate.getTime() !== currentSelectedDate.getTime())
 
     if (datesAreDifferent) {
-      if (value) {
-        flatpickrRef.current.setDate(value, false)
+      if (valueAsDate) {
+        flatpickrRef.current.setDate(valueAsDate, false)
       } else {
         flatpickrRef.current.clear()
       }

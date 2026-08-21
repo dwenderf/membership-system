@@ -78,6 +78,8 @@ interface AlternateData {
   }>
 }
 
+type AlternateSortField = Exclude<keyof AlternateData, 'selections'>
+
 type LgbtqFilter = 'lgbtq' | 'ally' | 'no_response'
 type GoalieFilter = 'goalie' | 'non_goalie'
 
@@ -97,7 +99,7 @@ export default function CaptainRosterPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<keyof RegistrationData>('first_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  const [alternatesSortField, setAlternatesSortField] = useState<keyof AlternateData>('first_name')
+  const [alternatesSortField, setAlternatesSortField] = useState<AlternateSortField>('first_name')
   const [alternatesSortDirection, setAlternatesSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // Filter state
@@ -166,7 +168,7 @@ export default function CaptainRosterPage() {
     }
   }
 
-  const handleAlternatesSort = (field: keyof AlternateData) => {
+  const handleAlternatesSort = (field: AlternateSortField) => {
     if (alternatesSortField === field) {
       setAlternatesSortDirection(alternatesSortDirection === 'asc' ? 'desc' : 'asc')
     } else {
@@ -795,7 +797,7 @@ export default function CaptainRosterPage() {
                           <th
                             key={key}
                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                            onClick={() => handleAlternatesSort(key as keyof AlternateData)}
+                            onClick={() => handleAlternatesSort(key as AlternateSortField)}
                           >
                             <div className="flex items-center">
                               {label}

@@ -4,10 +4,11 @@ import { Logger } from '@/lib/logging/logger'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; invoiceId: string } }
+  { params }: { params: Promise<{ id: string; invoiceId: string }> }
 ) {
   const supabase = await createClient()
   const logger = Logger.getInstance()
+  const { id, invoiceId } = await params
 
   try {
     // Check if current user is admin
@@ -42,8 +43,8 @@ export async function POST(
     // 5. Update payment status in database
 
     logger.logSystem('refund-requested', 'Refund requested (not yet implemented)', {
-      targetUserId: params.id,
-      invoiceId: params.invoiceId,
+      targetUserId: id,
+      invoiceId,
       amount,
       reason,
       requestedByUserId: authUser.id
@@ -55,15 +56,15 @@ export async function POST(
       details: {
         requestedAmount: amount,
         reason,
-        invoiceId: params.invoiceId,
-        userId: params.id
+        invoiceId,
+        userId: id
       }
     })
 
   } catch (error) {
     logger.logSystem('refund-error', 'Error processing refund request', { 
-      targetUserId: params.id,
-      invoiceId: params.invoiceId,
+      targetUserId: id,
+      invoiceId,
       error: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User } from '@supabase/supabase-js'
+import { User, UserIdentity } from '@supabase/supabase-js'
 import { formatDate } from '@/lib/date-utils'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
@@ -41,7 +41,7 @@ export default function AccountPage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
-  const [googleOAuth, setGoogleOAuth] = useState<{ email: string; id: string } | null>(null)
+  const [googleOAuth, setGoogleOAuth] = useState<UserIdentity | null>(null)
   const [hasEmailAuth, setHasEmailAuth] = useState(false)
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
@@ -77,10 +77,7 @@ export default function AccountPage() {
       // Check for Google OAuth
       const googleIdentity = identities.find(id => id.provider === 'google')
       if (googleIdentity) {
-        setGoogleOAuth({
-          email: googleIdentity.identity_data?.email || '',
-          id: googleIdentity.identity_id  // Use identity_id (UUID), not id (provider ID)
-        })
+        setGoogleOAuth(googleIdentity)
       }
 
       // Check for email auth (magic link/PIN capability)
@@ -117,7 +114,7 @@ export default function AccountPage() {
 
     setUnlinking(true)
     try {
-      const { error } = await supabase.auth.unlinkIdentity({ identity_id: googleOAuth.id })
+      const { error } = await supabase.auth.unlinkIdentity(googleOAuth)
 
       if (error) {
         // Handle specific Supabase errors
@@ -518,7 +515,7 @@ export default function AccountPage() {
               {googleOAuth && hasEmailAuth && (
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <p className="text-sm text-blue-700 mb-2">
-                    <strong>Connected Google Account:</strong> {googleOAuth.email}
+                    <strong>Connected Google Account:</strong> {googleOAuth.identity_data?.email}
                   </p>
                   <p className="text-sm text-blue-700">
                     You can{' '}
@@ -538,7 +535,7 @@ export default function AccountPage() {
               {googleOAuth && !hasEmailAuth && (
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <p className="text-sm text-blue-700 mb-2">
-                    <strong>Connected Google Account:</strong> {googleOAuth.email}
+                    <strong>Connected Google Account:</strong> {googleOAuth.identity_data?.email}
                   </p>
                   <p className="text-sm text-blue-700">
                     You currently sign in with Google only. To unlink your Google account, you must first set up email authentication by signing out and using the &quot;Sign in with Email&quot; option to create a magic link login.
@@ -612,7 +609,7 @@ export default function AccountPage() {
                 </h3>
                 <div className="mt-2 px-7 py-3">
                   <p className="text-sm text-gray-500">
-                    Are you sure you want to unlink your Google account ({googleOAuth.email})?
+                    Are you sure you want to unlink your Google account ({googleOAuth.identity_data?.email})?
                   </p>
                   <p className="text-sm text-gray-500 mt-2">
                     After unlinking, you will only be able to sign in using magic links sent to your email address.

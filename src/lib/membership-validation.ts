@@ -109,19 +109,6 @@ export function formatMembershipWarning(validation: MembershipValidationResult):
 }
 
 /**
- * Calculate the cost for extending membership
- */
-export function calculateExtensionCost(
-  membership: UserMembership,
-  monthsNeeded: number
-): number {
-  if (!membership.membership) return 0
-
-  const monthlyPrice = membership.membership.price_monthly
-  return monthsNeeded * monthlyPrice
-}
-
-/**
  * Validate the "how much are you able to pay?" field on an assistance
  * purchase. Returns an error message when the value is blank, non-numeric,
  * negative, or exceeds the membership price; null when it's a valid amount.

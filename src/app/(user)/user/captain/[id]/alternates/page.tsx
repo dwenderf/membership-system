@@ -41,6 +41,16 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
     `)
     .eq('id', registrationId)
     .single()
+    .overrideTypes<{
+      id: string
+      name: string
+      type: string
+      allow_alternates: boolean
+      alternate_price: number | null
+      alternate_accounting_code: string | null
+      is_active: boolean
+      seasons: { id: string; name: string; end_date: string } | null
+    }, { merge: false }>()
 
   if (error || !registration) {
     console.error('Error fetching registration:', error)

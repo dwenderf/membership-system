@@ -46,6 +46,16 @@ export default async function AlternatesPage() {
     .eq('allow_alternates', true)
     .eq('is_active', true)
     .order('name')
+    .overrideTypes<Array<{
+      id: string
+      name: string
+      type: string
+      allow_alternates: boolean
+      alternate_price: number | null
+      alternate_accounting_code: string | null
+      is_active: boolean
+      seasons: { id: string; name: string; start_date: string; end_date: string } | null
+    }>, { merge: false }>()
 
   if (error) {
     console.error('Error fetching registrations:', error)

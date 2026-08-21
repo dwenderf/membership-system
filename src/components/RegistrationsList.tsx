@@ -14,7 +14,7 @@ interface Registration extends RegistrationWithTiming {
   created_at: string
   seasons?: {
     name: string
-  }
+  } | null
 }
 
 interface RegistrationsListProps {

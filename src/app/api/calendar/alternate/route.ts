@@ -39,14 +39,29 @@ export async function GET(request: NextRequest) {
       .eq('id', alternateSelectionId)
       .eq('alternate_registration_id', alternateRegistrationId)
       .single()
+      .overrideTypes<{
+        id: string
+        user_id: string
+        alternate_registration: {
+          id: string
+          game_description: string
+          game_date: string | null
+          game_end_time: string | null
+          registration: { name: string } | null
+        } | null
+      }, { merge: false }>()
 
-    if (selectionError || !alternateSelection) {
+    if (selectionError || !alternateSelection || !alternateSelection.alternate_registration) {
       return NextResponse.json({ error: 'Alternate selection not found' }, { status: 404 })
     }
 
     // Verify user has access to this selection
     if (alternateSelection.user_id !== user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    if (!alternateSelection.alternate_registration.game_date) {
+      return NextResponse.json({ error: 'This game does not have a scheduled date' }, { status: 400 })
     }
 
     const gameDate = new Date(alternateSelection.alternate_registration.game_date)
@@ -60,7 +75,7 @@ export async function GET(request: NextRequest) {
       alternateSelection.alternate_registration.game_description,
       gameDate.toISOString(),
       gameEndDate.toISOString(),
-      `Alternate game for ${alternateSelection.alternate_registration.registration.name}`
+      `Alternate game for ${alternateSelection.alternate_registration.registration?.name}`
     )
 
     // Return as downloadable .ics file

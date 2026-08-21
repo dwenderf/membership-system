@@ -24,6 +24,12 @@ const mockLogger = {
   logSystem: jest.fn()
 }
 
+// Mimics postgrest-js's chainable .overrideTypes() on a resolved query result,
+// so mocks calling it after .single() (as the route now does) don't need a real client.
+function withOverrideTypes<T>(promise: Promise<T>): Promise<T> & { overrideTypes: () => Promise<T> } {
+  return Object.assign(promise, { overrideTypes: () => promise })
+}
+
 // Mock the imports
 jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
 jest.requireMock('@/lib/logging/logger').logger = mockLogger
@@ -88,7 +94,7 @@ describe('/api/alternate-registrations', () => {
       mockSupabase.from.mockReturnValueOnce({
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({
+            single: jest.fn(() => withOverrideTypes(Promise.resolve({
               data: {
                 id: 'reg-123',
                 name: 'Test Registration',
@@ -98,7 +104,7 @@ describe('/api/alternate-registrations', () => {
                 seasons: { name: 'Test Season' }
               },
               error: null
-            }))
+            })))
           }))
         }))
       })
@@ -321,7 +327,7 @@ describe('/api/alternate-registrations', () => {
         mockSupabase.from.mockReturnValueOnce({
           select: jest.fn(() => ({
             eq: jest.fn(() => ({
-              single: jest.fn(() => Promise.resolve({
+              single: jest.fn(() => withOverrideTypes(Promise.resolve({
                 data: {
                   id: 'reg-123',
                   name: 'Team A',
@@ -331,7 +337,7 @@ describe('/api/alternate-registrations', () => {
                   seasons: { name: 'Season 2024' }
                 },
                 error: null
-              }))
+              })))
             }))
           }))
         })
@@ -517,7 +523,7 @@ describe('/api/alternate-registrations', () => {
         mockSupabase.from.mockReturnValueOnce({
           select: jest.fn(() => ({
             eq: jest.fn(() => ({
-              single: jest.fn(() => Promise.resolve({
+              single: jest.fn(() => withOverrideTypes(Promise.resolve({
                 data: {
                   id: 'reg-999',
                   name: 'Any Team',
@@ -527,7 +533,7 @@ describe('/api/alternate-registrations', () => {
                   seasons: { name: 'Season 2024' }
                 },
                 error: null
-              }))
+              })))
             }))
           }))
         })

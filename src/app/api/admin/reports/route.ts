@@ -382,11 +382,14 @@ export async function GET(request: NextRequest) {
         .from('payments')
         .select(`
           id,
+          user_id,
           final_amount,
           created_at,
           users!payments_user_id_fkey (
             first_name,
-            last_name
+            last_name,
+            email,
+            member_id
           )
         `)
         .gte('created_at', startDate)
@@ -394,18 +397,30 @@ export async function GET(request: NextRequest) {
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+        .overrideTypes<Array<{
+          id: string
+          user_id: string
+          final_amount: number
+          created_at: string
+          users: { first_name: string; last_name: string; email: string; member_id: number | null } | null
+        }>, { merge: false }>()
 
       if (fallbackError) {
         console.error('Error fetching fallback payments:', fallbackError)
       } else {
         processedTransactions = fallbackPayments?.map(payment => {
-          const userData = Array.isArray(payment.users) ? payment.users[0] : payment.users
+          const userData = payment.users
           const customerName = userData ? `${userData.first_name} ${userData.last_name}`.trim() : 'Unknown'
-          
+
           return {
             id: payment.id,
             invoiceNumber: 'N/A',
             customerName,
+            userId: payment.user_id,
+            firstName: userData?.first_name || null,
+            lastName: userData?.last_name || null,
+            email: userData?.email || null,
+            memberId: userData?.member_id || null,
             amount: payment.final_amount || 0,
             type: 'payment',
             date: payment.created_at,

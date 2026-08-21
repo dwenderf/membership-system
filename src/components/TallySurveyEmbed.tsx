@@ -234,6 +234,12 @@ export default function TallySurveyEmbed({
         window.Tally.closePopup(surveyId)
       }
     }
+    // `checkExistingSurveyCompletion`/`storeSurveyResponse` are recreated every render
+    // and `onComplete`/`onClose`/`onError` are deliberately routed through refs above
+    // for the same reason: this effect should load the script and open the popup once
+    // per identity-relevant prop set, not on every render. `surveyOpened` is read only
+    // by the cleanup closure; depending on it would reopen the popup every time it closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surveyId, userEmail, userId, firstName, lastName, registrationCategory, memberNumber])
 
   if (error) {

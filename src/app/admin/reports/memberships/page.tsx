@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
@@ -52,17 +52,7 @@ export default function MembershipReportsPage() {
 
   const searchParams = useSearchParams()
 
-  useEffect(() => {
-    fetchMembershipTypes()
-  }, [])
-
-  useEffect(() => {
-    if (selectedMembership && selectedMembership.trim() !== '') {
-      fetchMembershipData(selectedMembership)
-    }
-  }, [selectedMembership])
-
-  const fetchMembershipTypes = async () => {
+  const fetchMembershipTypes = useCallback(async () => {
     try {
       setError(null)
       const response = await fetch('/api/admin/reports/memberships')
@@ -93,7 +83,11 @@ export default function MembershipReportsPage() {
       console.error('Error fetching membership types:', error)
       setError(`Failed to load membership types: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
+  }, [searchParams])
+
+  useEffect(() => {
+    fetchMembershipTypes()
+  }, [fetchMembershipTypes])
 
   const fetchMembershipData = async (membershipId: string) => {
     setLoading(true)
@@ -169,6 +163,12 @@ export default function MembershipReportsPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (selectedMembership && selectedMembership.trim() !== '') {
+      fetchMembershipData(selectedMembership)
+    }
+  }, [selectedMembership])
 
   const filteredMembers = members.filter(member =>
     member.member_id.toLowerCase().includes(searchTerm.toLowerCase()) ||

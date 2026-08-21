@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
 
@@ -391,7 +391,7 @@ export default function RegistrationPurchase({
   }
 
   // Validate discount code
-  const validateDiscountCode = async (code: string) => {
+  const validateDiscountCode = useCallback(async (code: string) => {
     if (!code.trim() || !selectedCategoryId) {
       setDiscountValidation(null)
       return
@@ -429,7 +429,7 @@ export default function RegistrationPurchase({
     } finally {
       setIsValidatingDiscount(false)
     }
-  }
+  }, [selectedCategoryId, registration.id, originalAmount])
 
   // Validate discount when code or selected category changes
   useEffect(() => {
@@ -437,12 +437,12 @@ export default function RegistrationPurchase({
       const timeoutId = setTimeout(() => {
         validateDiscountCode(discountCode)
       }, 500) // Debounce validation
-      
+
       return () => clearTimeout(timeoutId)
     } else {
       setDiscountValidation(null)
     }
-  }, [discountCode, selectedCategoryId, originalAmount])
+  }, [discountCode, selectedCategoryId, validateDiscountCode])
 
   const handlePurchase = async () => {
     if (!selectedCategoryId) {

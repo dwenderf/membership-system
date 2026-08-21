@@ -9,7 +9,7 @@ import { DiscountCategoryRow } from '@/lib/discount-types'
 
 export default function NewDiscountCategoryPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [formData, setFormData] = useState({
     name: '',
@@ -37,7 +37,7 @@ export default function NewDiscountCategoryPage() {
     }
     
     fetchData()
-  }, [])
+  }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

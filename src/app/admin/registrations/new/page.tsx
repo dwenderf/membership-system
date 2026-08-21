@@ -11,7 +11,7 @@ import { Database } from '@/types/database'
 
 export default function NewRegistrationPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [formData, setFormData] = useState({
     season_id: '',
@@ -88,7 +88,7 @@ export default function NewRegistrationPage() {
     }
 
     fetchData()
-  }, [])
+  }, [supabase])
 
   // Removed season membership fetching - no longer needed
 

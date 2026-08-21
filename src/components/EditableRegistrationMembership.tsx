@@ -13,7 +13,7 @@ export default function EditableRegistrationMembership({
   registrationId,
   initialMembershipId,
 }: EditableRegistrationMembershipProps) {
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const [isEditing, setIsEditing] = useState(false)
   const [membershipId, setMembershipId] = useState(initialMembershipId || '')
   const [availableMemberships, setAvailableMemberships] = useState<Pick<Database['public']['Tables']['memberships']['Row'], 'id' | 'name'>[]>([])
@@ -32,7 +32,7 @@ export default function EditableRegistrationMembership({
       }
     }
     fetchMemberships()
-  }, [])
+  }, [supabase])
 
   const handleSave = async () => {
     setLoading(true)

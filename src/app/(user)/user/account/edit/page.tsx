@@ -26,7 +26,7 @@ export default function EditProfilePage() {
   const [showEmailChangeModal, setShowEmailChangeModal] = useState(false)
 
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showSuccess, showError } = useToast()
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function EditProfilePage() {
     }
 
     getUser()
-  }, [supabase.auth, router])
+  }, [supabase, router])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}

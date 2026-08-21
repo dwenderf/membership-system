@@ -11,7 +11,7 @@ type CategoryOption = Pick<DiscountCategoryRow, 'id' | 'name' | 'accounting_code
 function NewDiscountCodeForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [formData, setFormData] = useState({
     discount_category_id: searchParams.get('category') || '',
@@ -49,7 +49,7 @@ function NewDiscountCodeForm() {
     }
     
     fetchData()
-  }, [])
+  }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

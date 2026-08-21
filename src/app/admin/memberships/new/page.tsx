@@ -9,7 +9,7 @@ import { Database } from '@/types/database'
 
 export default function NewMembershipPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [formData, setFormData] = useState({
     name: '',
@@ -59,7 +59,7 @@ export default function NewMembershipPage() {
     }
     
     fetchData()
-  }, [])
+  }, [supabase])
 
   // Removed auto-generation - user will create membership types manually
 

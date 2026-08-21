@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
@@ -63,11 +63,7 @@ export default function DiscountAllowanceSection({
   const { showSuccess, showError } = useToast()
   const router = useRouter()
 
-  useEffect(() => {
-    fetchAllowances()
-  }, [userId])
-
-  const fetchAllowances = async () => {
+  const fetchAllowances = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/users/${userId}/discount-allowances`)
       const data = await res.json()
@@ -88,7 +84,11 @@ export default function DiscountAllowanceSection({
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId, showError])
+
+  useEffect(() => {
+    fetchAllowances()
+  }, [fetchAllowances])
 
   const openAddModal = () => {
     setEditingAllowance(null)

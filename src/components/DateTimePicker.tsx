@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import flatpickr from 'flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
 import { Instance } from 'flatpickr/dist/types/instance'
+import { parseValueToDate } from '@/lib/datetime-picker-utils'
 
 interface DateTimePickerProps {
   value: string
@@ -91,8 +92,9 @@ export default function DateTimePicker({
     })
 
     // Set initial value if provided
-    if (value) {
-      flatpickrRef.current.setDate(value, false)
+    const initialDate = parseValueToDate(value)
+    if (initialDate) {
+      flatpickrRef.current.setDate(initialDate, false)
     }
 
     // Cleanup
@@ -101,7 +103,13 @@ export default function DateTimePicker({
         flatpickrRef.current.destroy()
       }
     }
-  }, []) // Only run once on mount
+    // Deliberately run once on mount only: this initializes the flatpickr instance,
+    // and later prop changes are applied imperatively by the effects below (and via
+    // flatpickrRef) rather than by re-running this one. Re-running on every prop
+    // change (e.g. an inline onChange recreated each render) would destroy and
+    // recreate the picker, losing its open/focus state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Update flatpickr when value changes externally
   useEffect(() => {
@@ -110,7 +118,7 @@ export default function DateTimePicker({
     // Compare the selected dates (parsed Date objects) instead of string representations
     // to avoid format mismatch issues (value is in datetime-local format YYYY-MM-DDTHH:MM,
     // while flatpickr.input.value is in dateFormat which is YYYY-MM-DD HH:MM K)
-    const valueAsDate = value ? flatpickrRef.current.parseDate(value) : null
+    const valueAsDate = parseValueToDate(value)
     const currentSelectedDate =
       flatpickrRef.current.selectedDates.length > 0
         ? flatpickrRef.current.selectedDates[0]
@@ -124,8 +132,8 @@ export default function DateTimePicker({
         valueAsDate.getTime() !== currentSelectedDate.getTime())
 
     if (datesAreDifferent) {
-      if (value) {
-        flatpickrRef.current.setDate(value, false)
+      if (valueAsDate) {
+        flatpickrRef.current.setDate(valueAsDate, false)
       } else {
         flatpickrRef.current.clear()
       }

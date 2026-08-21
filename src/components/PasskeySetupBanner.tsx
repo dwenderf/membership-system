@@ -46,6 +46,11 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
 
     checkExistingPasskeys()
     return () => { cancelled = true }
+    // Deliberately check-once-on-mount: `promptPrefs` is only read to decide initial
+    // eligibility, and re-running on every reference change (it's a new object each
+    // parent render) would re-run the eligibility check and could flicker the banner.
+    // `supabase` is recreated every render too, so it isn't a meaningful dep to track here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const savePromptPrefs = async (prefs: PasskeyPromptPrefs) => {

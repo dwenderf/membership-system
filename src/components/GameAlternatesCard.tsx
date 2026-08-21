@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatDate, formatTime } from '@/lib/date-utils'
 
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
@@ -123,16 +123,7 @@ export default function GameAlternatesCard({
     else if (e.key === 'Escape') handleDescriptionCancel()
   }
 
-  // Fetch alternates when expanded
-  useEffect(() => {
-    if (isExpanded && alternates.length === 0) {
-      fetchAlternates().catch(err => {
-        console.error('Error in useEffect fetchAlternates:', err)
-      })
-    }
-  }, [isExpanded])
-
-  const fetchAlternates = async () => {
+  const fetchAlternates = useCallback(async () => {
     try {
       setLoading(true)
       setError('')
@@ -151,7 +142,16 @@ export default function GameAlternatesCard({
     } finally {
       setLoading(false)
     }
-  }
+  }, [game.id])
+
+  // Fetch alternates when expanded
+  useEffect(() => {
+    if (isExpanded && alternates.length === 0) {
+      fetchAlternates().catch(err => {
+        console.error('Error in useEffect fetchAlternates:', err)
+      })
+    }
+  }, [isExpanded, alternates.length, fetchAlternates])
 
   const handleAlternateToggle = (alternateId: string) => {
     setSelectedAlternates(prev => {

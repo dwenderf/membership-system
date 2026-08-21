@@ -10,7 +10,7 @@ import { Database } from '@/types/database'
 
 export default function NewSeasonPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [formData, setFormData] = useState({
     type: '' as '' | 'fall_winter' | 'spring_summer',
@@ -47,7 +47,7 @@ export default function NewSeasonPage() {
     }
     
     fetchSeasons()
-  }, [])
+  }, [supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

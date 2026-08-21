@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import UserPicker from '@/components/admin/UserPicker'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
 
@@ -33,11 +33,7 @@ export default function CaptainManager({
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [captainToRemove, setCaptainToRemove] = useState<{ id: string; name: string } | null>(null)
 
-  useEffect(() => {
-    fetchCaptains()
-  }, [registrationId])
-
-  const fetchCaptains = async () => {
+  const fetchCaptains = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -51,7 +47,11 @@ export default function CaptainManager({
     } finally {
       setLoading(false)
     }
-  }
+  }, [registrationId])
+
+  useEffect(() => {
+    fetchCaptains()
+  }, [fetchCaptains])
 
   const handleUserSelect = (userId: string, userName: string) => {
     setSelectedUser({ id: userId, name: userName })

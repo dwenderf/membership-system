@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import XeroAccountsSection from '@/components/admin/XeroAccountsSection'
@@ -76,14 +76,7 @@ export default function AccountingCodesPage() {
   const [updating, setUpdating] = useState(false)
   const { showError, showSuccess, showWarning } = useToast()
 
-  // Fetch system codes, discount categories and memberships on component mount
-  useEffect(() => {
-    fetchSystemCodes()
-    fetchDiscountCategories()
-    fetchMemberships()
-  }, [])
-
-  const fetchSystemCodes = async () => {
+  const fetchSystemCodes = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/system-accounting-codes')
       if (response.ok) {
@@ -117,9 +110,9 @@ export default function AccountingCodesPage() {
       console.error('Error fetching system accounting codes:', error)
       showError('Error fetching system accounting codes')
     }
-  }
+  }, [showError])
 
-  const fetchDiscountCategories = async () => {
+  const fetchDiscountCategories = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch('/api/admin/discount-categories')
@@ -144,9 +137,9 @@ export default function AccountingCodesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showError])
 
-  const fetchMemberships = async () => {
+  const fetchMemberships = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/memberships')
       if (response.ok) {
@@ -170,7 +163,14 @@ export default function AccountingCodesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showError])
+
+  // Fetch system codes, discount categories and memberships on component mount
+  useEffect(() => {
+    fetchSystemCodes()
+    fetchDiscountCategories()
+    fetchMemberships()
+  }, [fetchSystemCodes, fetchDiscountCategories, fetchMemberships])
 
   const handleInputChange = (key: keyof AccountingCodes, value: string) => {
     setCodes(prev => ({

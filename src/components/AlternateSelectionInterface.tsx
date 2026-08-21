@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
 
 
@@ -103,13 +103,7 @@ export default function AlternateSelectionInterface({
   const [error, setError] = useState('')
   const [summary, setSummary] = useState<AlternatesSummary | null>(null)
 
-  useEffect(() => {
-    fetchAlternates().catch(err => {
-      console.error('Error in useEffect fetchAlternates:', err)
-    })
-  }, [gameId])
-
-  const fetchAlternates = async () => {
+  const fetchAlternates = useCallback(async () => {
     try {
       const response = await fetch(`/api/alternate-registrations/${gameId}/alternates`)
       
@@ -128,7 +122,13 @@ export default function AlternateSelectionInterface({
     } finally {
       setLoading(false)
     }
-  }
+  }, [gameId])
+
+  useEffect(() => {
+    fetchAlternates().catch(err => {
+      console.error('Error in useEffect fetchAlternates:', err)
+    })
+  }, [fetchAlternates])
 
   const handleAlternateToggle = (alternateId: string) => {
     setSelectedAlternates(prev => {

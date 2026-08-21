@@ -32,7 +32,7 @@ export default function EditRegistrationCategoryPage() {
   const params = useParams()
   const registrationId = params.id as string
   const categoryId = params.categoryId as string
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   
   const [registration, setRegistration] = useState<{
     id: string
@@ -151,7 +151,7 @@ export default function EditRegistrationCategoryPage() {
     }
     
     fetchData()
-  }, [registrationId, categoryId])
+  }, [registrationId, categoryId, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

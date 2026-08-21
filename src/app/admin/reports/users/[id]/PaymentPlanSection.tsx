@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
@@ -39,12 +39,7 @@ export default function PaymentPlanSection({
   const { showSuccess, showError } = useToast()
   const router = useRouter()
 
-  // Fetch payment plans
-  useEffect(() => {
-    fetchPaymentPlans()
-  }, [userId])
-
-  const fetchPaymentPlans = async () => {
+  const fetchPaymentPlans = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/users/${userId}/payment-plans`)
       const data = await response.json()
@@ -59,7 +54,11 @@ export default function PaymentPlanSection({
     } finally {
       setPlansLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    fetchPaymentPlans()
+  }, [fetchPaymentPlans])
 
   const handleToggleEligibility = async () => {
     setIsLoading(true)

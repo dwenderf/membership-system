@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import GameAlternatesCard from '@/components/GameAlternatesCard'
 import GameCreationForm from '@/components/GameCreationForm'
@@ -45,18 +45,11 @@ export default function RegistrationAlternatesSection({
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  // Fetch games for this registration
-  useEffect(() => {
-    fetchGames().catch(err => {
-      console.error('Error in useEffect fetchGames:', err)
-    })
-  }, [registration.id])
-
-  const fetchGames = async () => {
+  const fetchGames = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/alternate-registrations?registrationId=${registration.id}`)
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch games')
       }
@@ -69,7 +62,14 @@ export default function RegistrationAlternatesSection({
     } finally {
       setLoading(false)
     }
-  }
+  }, [registration.id])
+
+  // Fetch games for this registration
+  useEffect(() => {
+    fetchGames().catch(err => {
+      console.error('Error in useEffect fetchGames:', err)
+    })
+  }, [fetchGames])
 
   const handleGameCreated = (game: Game) => {
     // Add the new game to the list and sort by gameDate (descending, like the API)

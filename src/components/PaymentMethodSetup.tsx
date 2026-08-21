@@ -68,7 +68,7 @@ export default function PaymentMethodSetup({
     }
 
     createSetupIntent()
-  }, [showError])
+  }, [showError, isUpdate])
 
   const handleClose = () => {
     onCancel?.()

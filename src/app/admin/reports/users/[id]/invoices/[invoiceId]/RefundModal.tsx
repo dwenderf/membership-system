@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 
 type RefundType = 'proportional' | 'discount_code'
@@ -159,7 +159,7 @@ export default function RefundModal({
     setIsStaging(false)
   }
 
-  const validateDiscountCode = async (code: string) => {
+  const validateDiscountCode = useCallback(async (code: string) => {
     if (!code.trim()) {
       setDiscountValidation(null)
       return
@@ -225,7 +225,7 @@ export default function RefundModal({
         }
       }, 50) // Slightly longer timeout to ensure DOM has settled
     }
-  }
+  }, [paymentId, paymentAmount])
 
   // Debounced discount code validation using useEffect
   useEffect(() => {
@@ -233,12 +233,12 @@ export default function RefundModal({
       const timeoutId = setTimeout(() => {
         validateDiscountCode(discountCode)
       }, 500) // Debounce validation by 500ms
-      
+
       return () => clearTimeout(timeoutId)
     } else {
       setDiscountValidation(null)
     }
-  }, [discountCode, refundType, paymentId, paymentAmount])
+  }, [discountCode, refundType, validateDiscountCode])
 
   const handlePreview = async (e: React.FormEvent) => {
     e.preventDefault()

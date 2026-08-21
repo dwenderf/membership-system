@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { KeyRound, Pencil, Trash2, Check, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
@@ -35,15 +35,10 @@ export default function PasskeysSection() {
   const [deleting, setDeleting] = useState(false)
   const [showRemovalHelp, setShowRemovalHelp] = useState(false)
 
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showSuccess, showError } = useToast()
 
-  useEffect(() => {
-    setSupported(isWebAuthnSupported())
-    loadPasskeys()
-  }, [])
-
-  const loadPasskeys = async () => {
+  const loadPasskeys = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase.auth.passkey.list()
     if (error) {
@@ -54,7 +49,12 @@ export default function PasskeysSection() {
       setLoadError(false)
     }
     setLoading(false)
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    setSupported(isWebAuthnSupported())
+    loadPasskeys()
+  }, [loadPasskeys])
 
   const handleAdd = async () => {
     setAdding(true)

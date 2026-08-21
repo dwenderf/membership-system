@@ -16,7 +16,7 @@ export default function EditRegistrationTimingPage() {
   const router = useRouter()
   const params = useParams()
   const registrationId = params.id as string
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [registration, setRegistration] = useState<RegistrationWithSeason | null>(null)
   const [formData, setFormData] = useState({
@@ -74,7 +74,7 @@ export default function EditRegistrationTimingPage() {
     }
     
     fetchData()
-  }, [registrationId])
+  }, [registrationId, supabase])
 
   const handlePublishToggle = async (newIsActive: boolean) => {
     setError('')

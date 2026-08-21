@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { CheckCircle, XCircle, X, AlertTriangle, Info } from 'lucide-react'
 
 export interface ToastProps {
@@ -22,6 +22,11 @@ export default function Toast({ id, title, message, type, duration = 5000, onClo
     return () => clearTimeout(timer)
   }, [])
 
+  const handleClose = useCallback(() => {
+    setIsLeaving(true)
+    setTimeout(() => onClose(id), 300) // Match transition duration
+  }, [id, onClose])
+
   useEffect(() => {
     if (duration > 0) {
       const timer = setTimeout(() => {
@@ -29,12 +34,7 @@ export default function Toast({ id, title, message, type, duration = 5000, onClo
       }, duration)
       return () => clearTimeout(timer)
     }
-  }, [duration])
-
-  const handleClose = () => {
-    setIsLeaving(true)
-    setTimeout(() => onClose(id), 300) // Match transition duration
-  }
+  }, [duration, handleClose])
 
   const getIcon = () => {
     switch (type) {

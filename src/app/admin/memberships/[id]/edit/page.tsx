@@ -21,7 +21,7 @@ interface Membership {
 export default function EditMembershipPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const { showError, showSuccess } = useToast()
   
   const [formData, setFormData] = useState({
@@ -87,7 +87,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
     }
     
     fetchData()
-  }, [resolvedParams.id])
+  }, [resolvedParams.id, supabase, router, showError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

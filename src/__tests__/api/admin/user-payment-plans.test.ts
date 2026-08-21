@@ -3,6 +3,7 @@
  * Endpoint: /api/admin/users/[id]/payment-plans
  */
 
+import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/admin/users/[id]/payment-plans/route'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 
@@ -46,8 +47,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
         error: null
       })
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plans')
-      const response = await GET(request, { params: { id: 'test-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plans')
+      const response = await GET(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -68,8 +69,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
 
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plans')
-      const response = await GET(request, { params: { id: 'test-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plans')
+      const response = await GET(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -115,8 +116,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
-      const response = await GET(request, { params: { id: 'target-user-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
+      const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -150,8 +151,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
-      const response = await GET(request, { params: { id: 'target-user-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
+      const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -181,8 +182,8 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
-      const response = await GET(request, { params: { id: 'target-user-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
+      const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(500)

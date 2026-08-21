@@ -226,8 +226,7 @@ describe('Report Consistency Integration (End-to-End Resolution)', () => {
 
   it('Discount Usage and Discount Eligibility reports agree on remaining balance ($150) driven by allowance cap ($250), not category cap ($750)', async () => {
     // 1. Call Usage Report GET
-    const reqUsage = new NextRequest('http://localhost/api/admin/reports/discount-usage')
-    const resUsage = await getUsageReport(reqUsage)
+    const resUsage = await getUsageReport()
     expect(resUsage.status).toBe(200)
     const usageData = await resUsage.json() as UsageReportData
 

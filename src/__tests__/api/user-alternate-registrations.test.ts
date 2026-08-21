@@ -250,8 +250,7 @@ describe('/api/user-alternate-registrations', () => {
     it('should require authentication', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null } })
 
-      const request = new NextRequest('http://localhost/api/user-alternate-registrations')
-      const response = await GET(request)
+      const response = await GET()
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -287,8 +286,7 @@ describe('/api/user-alternate-registrations', () => {
         }))
       })
 
-      const request = new NextRequest('http://localhost/api/user-alternate-registrations')
-      const response = await GET(request)
+      const response = await GET()
       const data = await response.json()
 
       expect(response.status).toBe(200)

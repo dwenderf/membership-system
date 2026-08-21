@@ -11,11 +11,7 @@ const mockSupabase = {
   auth: {
     getUser: jest.fn()
   },
-  from: jest.fn(() => ({
-    select: jest.fn().mockReturnThis(),
-    in: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis()
-  }))
+  from: jest.fn() as jest.Mock
 }
 
 const mockLogger = {

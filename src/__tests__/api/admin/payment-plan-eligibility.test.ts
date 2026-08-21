@@ -3,6 +3,7 @@
  * Endpoint: /api/admin/users/[id]/payment-plan-eligibility
  */
 
+import { NextRequest } from 'next/server'
 import { GET, PUT } from '@/app/api/admin/users/[id]/payment-plan-eligibility/route'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 
@@ -48,8 +49,8 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility')
-      const response = await GET(request, { params: { id: 'test-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility')
+      const response = await GET(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -70,8 +71,8 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
 
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility')
-      const response = await GET(request, { params: { id: 'test-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility')
+      const response = await GET(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -102,8 +103,8 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         .mockReturnValueOnce(adminCheckChain)
         .mockReturnValueOnce(userChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility')
-      const response = await GET(request, { params: { id: 'target-user-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility')
+      const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -135,8 +136,8 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         .mockReturnValueOnce(adminCheckChain)
         .mockReturnValueOnce(userChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/invalid-id/payment-plan-eligibility')
-      const response = await GET(request, { params: { id: 'invalid-id' } })
+      const request = new NextRequest('http://localhost:3000/api/admin/users/invalid-id/payment-plan-eligibility')
+      const response = await GET(request, { params: Promise.resolve({ id: 'invalid-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(404)
@@ -151,11 +152,11 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
         error: null
       })
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
         body: JSON.stringify({ enabled: true })
       })
-      const response = await PUT(request, { params: { id: 'test-id' } })
+      const response = await PUT(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -176,11 +177,11 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
 
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
         body: JSON.stringify({ enabled: true })
       })
-      const response = await PUT(request, { params: { id: 'test-id' } })
+      const response = await PUT(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -201,11 +202,11 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
 
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
         body: JSON.stringify({ enabled: 'yes' })
       })
-      const response = await PUT(request, { params: { id: 'test-id' } })
+      const response = await PUT(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -241,11 +242,11 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
 
       mockAdminSupabase.from.mockReturnValueOnce(updateChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility', {
+      const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plan-eligibility', {
         method: 'PUT',
         body: JSON.stringify({ enabled: true })
       })
-      const response = await PUT(request, { params: { id: 'target-user-id' } })
+      const response = await PUT(request, { params: Promise.resolve({ id: 'target-user-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -283,11 +284,11 @@ describe('/api/admin/users/[id]/payment-plan-eligibility', () => {
 
       mockAdminSupabase.from.mockReturnValueOnce(updateChain)
 
-      const request = new Request('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
+      const request = new NextRequest('http://localhost:3000/api/admin/users/test-id/payment-plan-eligibility', {
         method: 'PUT',
         body: JSON.stringify({ enabled: false })
       })
-      const response = await PUT(request, { params: { id: 'test-id' } })
+      const response = await PUT(request, { params: Promise.resolve({ id: 'test-id' }) })
       const data = await response.json()
 
       expect(response.status).toBe(500)

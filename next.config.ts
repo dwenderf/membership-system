@@ -2,9 +2,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   webpack: (config) => {
     // Suppress Supabase realtime warnings
     config.ignoreWarnings = [

@@ -43,6 +43,14 @@ export async function GET(request: NextRequest) {
       `)
       .eq('id', registrationId)
       .single()
+      .overrideTypes<{
+        id: string
+        name: string
+        allow_alternates: boolean
+        alternate_price: number | null
+        alternate_accounting_code: string | null
+        seasons: { name: string } | null
+      }, { merge: false }>()
 
     if (registrationError || !registration) {
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 })

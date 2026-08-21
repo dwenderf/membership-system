@@ -330,6 +330,14 @@ export class RegistrationValidationService {
       .eq('user_id', userId)
       .eq('payment_status', 'paid')
       .gte('valid_until', today)
+      .overrideTypes<Array<{
+        id: string
+        membership_id: string
+        valid_from: string
+        valid_until: string
+        payment_status: string
+        memberships: { id: string; name: string } | null
+      }>, { merge: false }>()
 
     if (error) {
       throw new Error(`Failed to fetch user memberships: ${error.message}`)

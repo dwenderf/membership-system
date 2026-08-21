@@ -49,6 +49,22 @@ export default async function RegistrationsPage() {
       )
     `)
     .order('created_at', { ascending: false })
+    .overrideTypes<Array<{
+      id: string
+      name: string
+      type: string
+      is_active: boolean
+      published_at: string | null
+      allow_discounts: boolean
+      presale_code: string | null
+      presale_start_at: string | null
+      regular_start_at: string | null
+      registration_end_at: string | null
+      start_date: string | null
+      end_date: string | null
+      created_at: string
+      seasons: { id: string; name: string; type: string; start_date: string; end_date: string } | null
+    }>, { merge: false }>()
 
   if (error) {
     console.error('Error fetching registrations:', error)

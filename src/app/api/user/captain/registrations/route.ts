@@ -54,6 +54,16 @@ export async function GET(request: NextRequest) {
         )
       `)
       .in('id', registrationIds)
+      .overrideTypes<Array<{
+        id: string
+        name: string
+        type: string
+        season_id: string
+        allow_alternates: boolean
+        start_date: string | null
+        end_date: string | null
+        seasons: { id: string; name: string; start_date: string; end_date: string }
+      }>, { merge: false }>()
 
     if (registrationsError) {
       console.error('Error fetching registrations:', registrationsError)
@@ -169,7 +179,7 @@ export async function GET(request: NextRequest) {
 
           altSelections?.forEach(sel => {
             const payment = Array.isArray(sel.payments) ? sel.payments[0] : sel.payments
-            if (payment && !['completed', 'pending', 'processing'].includes(payment.status)) return
+            if (payment && !['completed', 'pending'].includes(payment.status)) return
             altGross += payment?.total_amount || sel.amount_charged
             altNet += payment?.final_amount || sel.amount_charged
           })

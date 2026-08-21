@@ -954,7 +954,7 @@ src/
 │   │   └── staging.ts # Email staging and batch processing
 │   ├── supabase.ts     # Database client
 │   └── stripe.ts       # Payment processing
-├── middleware.ts       # Authentication middleware
+├── proxy.ts            # Authentication proxy (middleware)
 └── types/              # TypeScript type definitions
 ```
 
@@ -1421,7 +1421,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 - `PREVIEW_TEST_USER_PASSWORD` and `PREVIEW_TEST_ADMIN_PASSWORD` should be marked **Sensitive**. Nobody needs to read these back out — the route reads them server-side and calls `signInWithPassword` internally, the caller never sees or needs the password itself. They're also real Supabase credentials that could authenticate directly against the Supabase API, not just through this route, so there's no reason to leave them human-readable. Marking a var Sensitive doesn't stop the deployed app from using it, it only stops anyone (including you) from reading the value back out afterward — set it once, and if you ever need to change it, overwrite it blind rather than editing it.
 - `PREVIEW_TEST_USER_EMAIL` / `PREVIEW_TEST_ADMIN_EMAIL` aren't secrets (they're fake addresses that never receive mail — see setup step 3) and don't need the Sensitive flag either way.
 
-**Usage:** navigate to `https://<preview-url>/api/preview-auth?secret=<PREVIEW_AUTH_SECRET>&role=member` (or `role=admin`) — it sets session cookies and redirects to `/dashboard` (or `/admin`). No changes are needed to the normal login flow, and `src/middleware.ts` is untouched.
+**Usage:** navigate to `https://<preview-url>/api/preview-auth?secret=<PREVIEW_AUTH_SECRET>&role=member` (or `role=admin`) — it sets session cookies and redirects to `/dashboard` (or `/admin`). No changes are needed to the normal login flow, and `src/proxy.ts` is untouched.
 
 #### Step 5: Update Service Configurations
 

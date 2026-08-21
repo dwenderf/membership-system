@@ -2,9 +2,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -36,9 +33,6 @@ export default withSentryConfig(nextConfig, {
   
   // Upload a larger set of source maps for prettier stack traces (increases build time)
   widenClientFileUpload: true,
-  
-  // Automatically tree-shake Sentry logger statements for a smaller bundle
-  disableLogger: true,
 
   // Uploads source maps to Sentry for readable stack traces (requires
   // SENTRY_AUTH_TOKEN; falls back to no-op with a warning if it's unset).

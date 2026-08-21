@@ -29,10 +29,10 @@ When adding a new admin page, add it to navigation and verify it's reachable by 
 
 Run `npm run build` and paste the raw, unfiltered output — including the final success or error lines. Do not summarize, scope, or filter the result (e.g. "0 errors in modified files"). If the build fails, fix it and re-run; do not report completion with a failing build.
 
-`npx tsc --noEmit` is a faster subset useful during iteration, but it is not a substitute: `npm run build` additionally parses pages and components that no test imports, runs lint, and validates server/client boundaries.
+`npx tsc --noEmit` is a faster subset useful during iteration, but it is not a substitute: `npm run build` additionally parses pages and components that no test imports, runs lint, and validates server/client boundaries. Note that `next.config.ts` currently sets `typescript: { ignoreBuildErrors: true }`, so `npm run build` does **not** currently fail on type errors — `npx tsc --noEmit` is the only thing that will catch those until issue #243 removes that flag. Run it anyway and don't introduce new type errors in files you touch, even though the build won't fail on them yet.
 
 The same applies to test runs: paste the actual Jest output, not a description of it.
 
 ## Linting
 
-CI's lint step is currently non-blocking (`continue-on-error: true`) while a pre-existing backlog gets paid down (issue #197) — don't take that as license to add to it. Run `npm run lint` before reporting work complete and don't introduce new errors or warnings in files you touch, even though CI won't fail on them yet. If your task is specifically a #197 sub-issue, verify with `npm run lint`, `npm test`, and `npm run build` as its plan describes.
+`npm run lint` is a blocking CI step — a lint error fails the build, not just a warning. Run it before reporting work complete and fix anything it flags in files you touch.

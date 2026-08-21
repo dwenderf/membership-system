@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getOrganizationName } from '@/lib/organization'
@@ -87,9 +88,11 @@ export default function UserNavigation({ user }: UserNavigationProps) {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/user" className="flex items-center">
-                <img
+                <Image
                   src="/images/logo.png"
                   alt={`${getOrganizationName('short')} logo`}
+                  width={40}
+                  height={38}
                   className="h-10 w-auto"
                 />
               </Link>

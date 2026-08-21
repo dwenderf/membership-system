@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 
@@ -79,9 +80,11 @@ export default async function MagicConfirmPage({
         </div>
 
         <div className="text-center">
-          <img
-            src="https://my.nycpha.org/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
+          <Image
+            src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
             alt="NYCPHA Logo"
+            width={640}
+            height={120}
             className="mx-auto max-w-full h-auto"
           />
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
@@ -176,10 +177,13 @@ export default function VerifyOTPPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center mb-6">
-            <img 
-              src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png" 
-              alt="NYC PHA" 
+            <Image
+              src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
+              alt="NYC PHA"
+              width={640}
+              height={120}
               className="h-16 w-auto max-w-full"
+              priority
             />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">

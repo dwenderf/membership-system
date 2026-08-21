@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -193,10 +194,13 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center mb-6">
-            <img 
-              src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png" 
-              alt="NYC PHA" 
+            <Image
+              src="/images/NYCPHA_Wordmark_Horizontal_Black_Tide.png"
+              alt="NYC PHA"
+              width={640}
+              height={120}
               className="h-12 w-auto"
+              priority
             />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">

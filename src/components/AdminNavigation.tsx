@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getOrganizationName } from '@/lib/organization'
@@ -93,9 +94,11 @@ export default function AdminNavigation({ user }: AdminNavigationProps) {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link href="/admin" className="flex items-center space-x-2">
-                <img
+                <Image
                   src="/images/logo.png"
                   alt={`${getOrganizationName('short')} logo`}
+                  width={40}
+                  height={38}
                   className="h-10 w-auto"
                 />
                 <span className="text-xl font-bold text-gray-900">Admin</span>

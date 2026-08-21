@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
 import DateTimePicker from '@/components/DateTimePicker'
 import DurationInput from '@/components/DurationInput'
 import { convertToNYTimezone } from '@/lib/date-utils'
@@ -24,26 +24,23 @@ export default function EventDateTimeInput({
   required = false,
   disabled = false,
 }: EventDateTimeInputProps) {
-  const [isPastDate, setIsPastDate] = useState(false)
   const isTournament = registrationType === 'tournament'
 
   // Check if the selected date is in the past
-  useEffect(() => {
-    if (startDate) {
-      // For tournaments, append time if not present
-      let dateTimeString = startDate
-      if (isTournament && !startDate.includes('T')) {
-        dateTimeString = startDate + 'T00:00'
-      }
+  const isPastDate = useMemo(() => {
+    if (!startDate) return false
 
-      // Convert datetime-local to NY timezone before comparing
-      const selectedDateISO = convertToNYTimezone(dateTimeString)
-      const selectedDate = new Date(selectedDateISO)
-      const now = new Date()
-      setIsPastDate(selectedDate < now)
-    } else {
-      setIsPastDate(false)
+    // For tournaments, append time if not present
+    let dateTimeString = startDate
+    if (isTournament && !startDate.includes('T')) {
+      dateTimeString = startDate + 'T00:00'
     }
+
+    // Convert datetime-local to NY timezone before comparing
+    const selectedDateISO = convertToNYTimezone(dateTimeString)
+    const selectedDate = new Date(selectedDateISO)
+    const now = new Date()
+    return selectedDate < now
   }, [startDate, isTournament])
 
   // For tournaments, convert between days and minutes

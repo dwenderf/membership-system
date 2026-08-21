@@ -29,6 +29,26 @@ interface UsersTableProps {
 type SortField = 'name' | 'email' | 'member_id' | 'account_type' | 'payment' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
+function SortIcon({ active, direction }: { active: boolean; direction: SortDirection }) {
+  if (!active) {
+    return (
+      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+      </svg>
+    )
+  }
+
+  return direction === 'asc' ? (
+    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+  ) : (
+    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  )
+}
+
 export default function UsersTable({ users, currentUserId, searchTerm = '' }: UsersTableProps) {
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -95,26 +115,6 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
     }
   }
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) {
-      return (
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-        </svg>
-      )
-    }
-    
-    return sortDirection === 'asc' ? (
-      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-      </svg>
-    ) : (
-      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    )
-  }
-
   return (
     <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -126,7 +126,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               >
                 <div className="flex items-center space-x-1">
                   <span>Name</span>
-                  <SortIcon field="name" />
+                  <SortIcon active={sortField === 'name'} direction={sortDirection} />
                 </div>
               </th>
               <th 
@@ -135,7 +135,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               >
                 <div className="flex items-center space-x-1">
                   <span>Member #</span>
-                  <SortIcon field="member_id" />
+                  <SortIcon active={sortField === 'member_id'} direction={sortDirection} />
                 </div>
               </th>
               <th 
@@ -144,7 +144,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               >
                 <div className="flex items-center space-x-1">
                   <span>Account Type</span>
-                  <SortIcon field="account_type" />
+                  <SortIcon active={sortField === 'account_type'} direction={sortDirection} />
                 </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -156,7 +156,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               >
                 <div className="flex items-center space-x-1">
                   <span>Saved Payment</span>
-                  <SortIcon field="payment" />
+                  <SortIcon active={sortField === 'payment'} direction={sortDirection} />
                 </div>
               </th>
               <th
@@ -165,7 +165,7 @@ export default function UsersTable({ users, currentUserId, searchTerm = '' }: Us
               >
                 <div className="flex items-center space-x-1">
                   <span>Created</span>
-                  <SortIcon field="created_at" />
+                  <SortIcon active={sortField === 'created_at'} direction={sortDirection} />
                 </div>
               </th>
             </tr>

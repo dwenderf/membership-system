@@ -2,7 +2,7 @@
  * Unit tests for src/lib/xero/oauth-state.ts CSRF state cookie helpers
  */
 
-jest.mock('next/server', () => require('../../../test-helpers/mock-next-server'))
+jest.mock('next/server', () => jest.requireActual('../../../test-helpers/mock-next-server'))
 
 import { NextRequest, NextResponse } from 'next/server'
 import {

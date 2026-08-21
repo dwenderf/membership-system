@@ -21,6 +21,13 @@ interface UserNavigationProps {
   useToggle?: boolean
 }
 
+interface NavItem {
+  name: string
+  href: string
+  current: boolean
+  badge?: string
+}
+
 export default function UserNavigation({ user }: UserNavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [hasUnpaid, setHasUnpaid] = useState(false)
@@ -53,7 +60,7 @@ export default function UserNavigation({ user }: UserNavigationProps) {
     }
   }, [user?.id])
 
-  const baseNavigation = [
+  const baseNavigation: NavItem[] = [
     { name: 'Dashboard', href: '/user', current: pathname === '/user' },
     { name: 'My Memberships', href: '/user/memberships', current: pathname === '/user/memberships' },
     { name: 'My Registrations', href: '/user/registrations', current: pathname === '/user/registrations' },

@@ -5,12 +5,11 @@ import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
 // DELETE /api/admin/registrations/[id]/captains/[captainId] - Remove a captain
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; captainId: string } }
+  { params }: { params: Promise<{ id: string; captainId: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const registrationId = params.id
-    const captainId = params.captainId
+    const { id: registrationId, captainId } = await params
     const body = await request.json()
     const { registrationName, seasonName } = body
 

@@ -7,13 +7,22 @@ interface AdminHeaderProps {
   title: string
   description?: string
   useToggle?: boolean
+  backLink?: string
 }
 
-export default function AdminHeader({ title, description, useToggle = false }: AdminHeaderProps) {
+export default function AdminHeader({ title, description, useToggle = false, backLink }: AdminHeaderProps) {
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between">
         <div>
+          {backLink && (
+            <Link
+              href={backLink}
+              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+            >
+              ← Back
+            </Link>
+          )}
           <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
           {description && (
             <p className="mt-1 text-sm text-gray-600">{description}</p>

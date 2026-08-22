@@ -18,6 +18,17 @@ This repo is linked to Vercel (`nycpha/membership-system`). A fresh git worktree
 
 `.env.example` is the source of truth for which env vars the app expects. When you add code that reads a new `process.env.X`, add `X=` (key only, never a real value) to `.env.example` in the same change.
 
+### Setting up your own personal Vercel project for preview deploys
+
+If you connect a personal/sandbox Vercel project (rather than using the shared team project) to test a preview deploy, two gotchas:
+
+- **Empty placeholder vars silently survive a bulk paste-import.** Vercel auto-creates empty placeholder env vars for every key it detects in `.env.example` when you first connect a GitHub repo. A bulk "paste .env" import into the dashboard silently skips any key that already exists — even if the existing value is empty — so `vercel env ls` shows every name present while some are still blank, and the failure only surfaces later as a build crash (e.g. `Error: <X> is required`). If a deploy fails on a var you're sure you set, delete and recreate that specific variable rather than editing it in place:
+  ```bash
+  npx vercel env rm KEY_NAME preview -y
+  npx vercel env add KEY_NAME preview --value "the-real-value" --yes
+  ```
+- **`vercel.json`'s cron schedules block Hobby-tier deploys.** Several crons in `vercel.json` run more often than daily, which Hobby-tier Vercel accounts don't support — a personal (non-Pro) project fails at the "Deploying outputs" step (after a full successful build) with `Hobby accounts are limited to daily cron jobs`. Passing `--local-config` doesn't help; Vercel re-reads the real `vercel.json` from the uploaded source tree regardless. Temporarily strip the `crons` key from `vercel.json` before deploying (never commit that change) if you need to validate a preview build on a Hobby-tier project.
+
 ## Database migrations
 
 Migrations are applied manually by the maintainer. Write the migration file only. Do not run `supabase db push`, `db reset`, `migration up`, or `supabase link` under any circumstances. Do not attempt to verify the migration by connecting to the database. The migration file existing in `supabase/migrations/` is the complete deliverable.

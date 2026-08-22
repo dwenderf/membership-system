@@ -536,5 +536,5 @@ Document API endpoints with:
 
 ---
 
-*Last updated: October 23, 2025*
+*Last updated: August 22, 2026*
 *This document should be updated as new patterns and practices are established.*

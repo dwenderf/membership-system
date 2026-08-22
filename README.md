@@ -193,6 +193,8 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
    # Apply the schema.sql file in your Supabase SQL editor
    ```
 
+   **Note:** `supabase/schema.sql` is a periodically-refreshed snapshot, not auto-generated on every migration — it can lag `supabase/migrations/` by months (tracked in dwenderf/membership-system#256). After applying it, check `supabase/migrations/` for any files dated after schema.sql's own last-modified date (`git log -1 -- supabase/schema.sql`) and apply those too, in filename order, to get a fully current schema. A missing table/column/view during local setup is often this, not a real bug.
+
 4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
 
 ### 4. Run Development Server

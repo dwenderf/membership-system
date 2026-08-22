@@ -197,6 +197,14 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 
 4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
 
+5. **Fix the magic-link email template** (required — every fresh Supabase project needs this): Supabase's default "Magic Link" email template uses `{{ .ConfirmationURL }}`, which sends a PKCE-flow link (`?code=...`). This app's magic-link confirmation page (`src/app/auth/magic-confirm/page.tsx`) instead expects `?token_hash=...&type=...` and calls `supabase.auth.verifyOtp({ token_hash, type })` — so every magic-link sign-in will silently 404 into `/auth/auth-code-error` until you fix the template. Go to **Authentication** → **Email Templates** → **Magic Link** in the Supabase dashboard and set the link in the template body to:
+
+   ```
+   {{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink
+   ```
+
+   This is a dashboard-only setting with no trace in the repo (tracked in dwenderf/membership-system#265), so it has to be set by hand on every fresh Supabase project.
+
 ### 4. Run Development Server
 
 ```bash

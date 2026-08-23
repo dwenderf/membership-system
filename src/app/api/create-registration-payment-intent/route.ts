@@ -32,7 +32,7 @@ interface RegistrationCategoryJoin {
   required_membership_id: string | null
   price: number
   sort_order: number
-  category: { name: string } | null
+  category: { name: string; is_goalie_only: boolean } | null
 }
 
 interface RegistrationWithDetails extends RegistrationRow {
@@ -75,7 +75,7 @@ async function handleFreeRegistration({
         season:seasons(*),
         registration_categories(
           *,
-          category:categories(name)
+          category:categories(name, is_goalie_only)
         )
       `)
       .eq('id', registrationId)
@@ -96,6 +96,27 @@ async function handleFreeRegistration({
       const error = new Error('Category not found')
       capturePaymentError(error, paymentContext, 'error')
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    }
+
+    // Check goalie-only eligibility
+    if (selectedCategory.category?.is_goalie_only) {
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('is_goalie')
+        .eq('id', user.id)
+        .single()
+
+      const goalieValidation = RegistrationValidationService.validateGoalieRequirement(
+        true,
+        !!userProfile?.is_goalie
+      )
+
+      if (!goalieValidation.eligible) {
+        capturePaymentError(new Error('Goalie-only category'), paymentContext, 'warning')
+        return NextResponse.json({
+          error: goalieValidation.error || 'This category is only open to registered goalies'
+        }, { status: 400 })
+      }
     }
 
     // Get user's active membership for eligibility (if any)
@@ -561,7 +582,7 @@ export async function POST(request: NextRequest) {
         season:seasons(*),
         registration_categories(
           *,
-          category:categories(name),
+          category:categories(name, is_goalie_only),
           membership:memberships(name)
         )
       `)
@@ -615,6 +636,27 @@ export async function POST(request: NextRequest) {
         capturePaymentError(new Error('Membership required'), paymentContext, 'warning')
         return NextResponse.json({
           error: membershipValidation.error || 'Required membership not found'
+        }, { status: 400 })
+      }
+    }
+
+    // Check goalie-only eligibility
+    if (selectedCategory.category?.is_goalie_only) {
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('is_goalie')
+        .eq('id', user.id)
+        .single()
+
+      const goalieValidation = RegistrationValidationService.validateGoalieRequirement(
+        true,
+        !!userProfile?.is_goalie
+      )
+
+      if (!goalieValidation.eligible) {
+        capturePaymentError(new Error('Goalie-only category'), paymentContext, 'warning')
+        return NextResponse.json({
+          error: goalieValidation.error || 'This category is only open to registered goalies'
         }, { status: 400 })
       }
     }

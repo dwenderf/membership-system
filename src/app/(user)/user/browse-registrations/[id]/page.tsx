@@ -37,7 +37,7 @@ interface RegistrationCategoryRow {
   max_capacity: number | null
   required_membership_id: string | null
   sort_order: number
-  categories: Pick<Database['public']['Tables']['categories']['Row'], 'name'> | null
+  categories: Pick<Database['public']['Tables']['categories']['Row'], 'name' | 'is_goalie_only'> | null
   memberships: Pick<MembershipRow, 'id' | 'name'> | null
 }
 
@@ -87,7 +87,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
   // Get user profile to check LGBTQ status and name
   const { data: userProfile } = await supabase
     .from('users')
-    .select('is_lgbtq, first_name, last_name')
+    .select('is_lgbtq, is_goalie, first_name, last_name')
     .eq('id', user.id)
     .single()
 
@@ -131,7 +131,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
       memberships:required_membership_id(id, name),
       registration_categories(
         *,
-        categories:category_id(name),
+        categories:category_id(name, is_goalie_only),
         memberships:required_membership_id(id, name)
       )
     `)
@@ -481,6 +481,7 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
                 activeMemberships={activeMembershipsForValidation}
                 isEligible={hasEligibleMembership}
                 isLgbtq={userProfile?.is_lgbtq || false}
+                isGoalie={userProfile?.is_goalie || false}
                 isAlreadyRegistered={isAlreadyRegistered}
                 isAlreadyAlternate={userAlternateRegistrationIds.includes(registration.id)}
               />

@@ -63,60 +63,66 @@ export default function EditableRegistrationMembership({
 
   if (isEditing) {
     return (
-      <div className="space-y-2">
-        <select
-          value={membershipId}
-          onChange={(e) => setMembershipId(e.target.value)}
-          className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          disabled={loading}
-        >
-          <option value="">None (optional)</option>
-          {availableMemberships.map((membership) => (
-            <option key={membership.id} value={membership.id}>
-              {membership.name}
-            </option>
-          ))}
-        </select>
-
-        <p className="text-xs text-gray-500">
-          Optional default requirement. Categories can offer alternatives.
-        </p>
-
-        {error && (
-          <div className="text-sm text-red-600">{error}</div>
-        )}
-
-        <div className="flex space-x-2">
-          <button
-            onClick={handleSave}
+      <div>
+        <dt className="text-sm font-medium text-gray-500 mb-1">Required Membership</dt>
+        <dd className="space-y-2">
+          <select
+            value={membershipId}
+            onChange={(e) => setMembershipId(e.target.value)}
+            className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             disabled={loading}
-            className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
           >
-            {loading ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            onClick={handleCancel}
-            disabled={loading}
-            className="text-sm text-gray-600 hover:text-gray-500 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
+            <option value="">None (optional)</option>
+            {availableMemberships.map((membership) => (
+              <option key={membership.id} value={membership.id}>
+                {membership.name}
+              </option>
+            ))}
+          </select>
+
+          <p className="text-xs text-gray-500">
+            Optional default requirement. Categories can offer alternatives.
+          </p>
+
+          {error && (
+            <div className="text-sm text-red-600">{error}</div>
+          )}
+
+          <div className="flex space-x-2">
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={handleCancel}
+              disabled={loading}
+              className="text-sm text-gray-600 hover:text-gray-500 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </dd>
       </div>
     )
   }
 
   return (
-    <div className="flex items-center space-x-2">
-      <span className="text-sm text-gray-900">
+    <div>
+      <dt className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-500">Required Membership</span>
+        <button
+          onClick={() => setIsEditing(true)}
+          className="text-xs text-blue-600 hover:text-blue-500 font-medium"
+        >
+          Edit
+        </button>
+      </dt>
+      <dd className="mt-1 text-sm text-gray-900">
         {selectedMembership ? selectedMembership.name : 'None (optional)'}
-      </span>
-      <button
-        onClick={() => setIsEditing(true)}
-        className="text-sm text-blue-600 hover:text-blue-500"
-      >
-        Edit
-      </button>
+      </dd>
     </div>
   )
 }

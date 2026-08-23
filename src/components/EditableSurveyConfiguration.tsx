@@ -65,8 +65,17 @@ export default function EditableSurveyConfiguration({
 
   if (!isEditing) {
     return (
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
+      <div>
+        <dt className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-500">Survey</span>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-blue-600 hover:text-blue-500 font-medium"
+          >
+            Edit
+          </button>
+        </dt>
+        <dd className="mt-1">
           {requireSurvey ? (
             <div className="space-y-1">
               <div className="text-sm text-gray-900">
@@ -83,76 +92,73 @@ export default function EditableSurveyConfiguration({
           ) : (
             <span className="text-sm text-gray-500">Not required</span>
           )}
-        </div>
-        <button
-          onClick={() => setIsEditing(true)}
-          className="ml-3 text-sm text-blue-600 hover:text-blue-500 font-medium"
-        >
-          Edit
-        </button>
+        </dd>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      {error && (
-        <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
-          {error}
-        </div>
-      )}
+    <div>
+      <dt className="text-sm font-medium text-gray-500 mb-1">Survey</dt>
+      <dd className="space-y-3">
+        {error && (
+          <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+            {error}
+          </div>
+        )}
 
-      <div className="flex items-center">
-        <input
-          id="require_survey_edit"
-          type="checkbox"
-          checked={requireSurvey}
-          onChange={(e) => {
-            setRequireSurvey(e.target.checked)
-            // Clear survey_id if unchecked
-            if (!e.target.checked) {
-              setSurveyId('')
-            }
-          }}
-          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-        />
-        <label htmlFor="require_survey_edit" className="ml-2 block text-sm text-gray-900">
-          Require survey before payment
-        </label>
-      </div>
-
-      {requireSurvey && (
-        <div>
-          <label htmlFor="survey_id_edit" className="block text-xs font-medium text-gray-700 mb-1">
-            Survey ID (Tally)
-          </label>
+        <div className="flex items-center">
           <input
-            id="survey_id_edit"
-            type="text"
-            value={surveyId}
-            onChange={(e) => setSurveyId(e.target.value)}
-            placeholder="e.g., VLzWBv"
-            className="block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            id="require_survey_edit"
+            type="checkbox"
+            checked={requireSurvey}
+            onChange={(e) => {
+              setRequireSurvey(e.target.checked)
+              // Clear survey_id if unchecked
+              if (!e.target.checked) {
+                setSurveyId('')
+              }
+            }}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           />
+          <label htmlFor="require_survey_edit" className="ml-2 block text-sm text-gray-900">
+            Require survey before payment
+          </label>
         </div>
-      )}
 
-      <div className="flex justify-end space-x-2">
-        <button
-          onClick={handleCancel}
-          disabled={isSaving}
-          className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
-          {isSaving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
+        {requireSurvey && (
+          <div>
+            <label htmlFor="survey_id_edit" className="block text-xs font-medium text-gray-700 mb-1">
+              Survey ID (Tally)
+            </label>
+            <input
+              id="survey_id_edit"
+              type="text"
+              value={surveyId}
+              onChange={(e) => setSurveyId(e.target.value)}
+              placeholder="e.g., VLzWBv"
+              className="block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2">
+          <button
+            onClick={handleCancel}
+            disabled={isSaving}
+            className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </dd>
     </div>
   )
 }

@@ -42,6 +42,7 @@ interface RegistrationCategory {
   price?: number
   categories?: {
     name: string
+    is_goalie_only?: boolean
   } | null
   memberships?: {
     name: string
@@ -79,19 +80,21 @@ interface RegistrationPurchaseProps {
   activeMemberships?: UserMembership[]
   isEligible: boolean
   isLgbtq: boolean
+  isGoalie: boolean
   isAlreadyRegistered?: boolean
   isAlreadyAlternate?: boolean
 }
 
-export default function RegistrationPurchase({ 
-  registration, 
-  userEmail, 
+export default function RegistrationPurchase({
+  registration,
+  userEmail,
   userId,
   firstName,
   lastName,
   activeMemberships = [],
   isEligible,
   isLgbtq,
+  isGoalie,
   isAlreadyRegistered = false,
   isAlreadyAlternate = false
 }: RegistrationPurchaseProps) {
@@ -252,7 +255,7 @@ export default function RegistrationPurchase({
     current_count: 0,
     required_membership_id: null,
     memberships: null,
-    categories: { name: 'Alternate' }
+    categories: { name: 'Alternate', is_goalie_only: false }
   } : null
   
   const categories = alternateCategory ? [...baseCategories, alternateCategory] : baseCategories
@@ -315,9 +318,17 @@ export default function RegistrationPurchase({
   
 
   // Check if selected category is eligible (basic membership check)
-  const isCategoryEligible = selectedCategory ? 
-    !selectedCategory.required_membership_id || 
+  const hasRequiredMembershipForSelected = selectedCategory ?
+    !selectedCategory.required_membership_id ||
     activeMemberships.some(um => um.memberships?.id === selectedCategory.required_membership_id)
+    : false
+  const isGoalieOnlySelectedCategory = !!selectedCategory?.categories?.is_goalie_only
+  const isGoalieEligibleForSelected = RegistrationValidationService.validateGoalieRequirement(
+    isGoalieOnlySelectedCategory,
+    isGoalie
+  ).eligible
+  const isCategoryEligible = selectedCategory
+    ? hasRequiredMembershipForSelected && isGoalieEligibleForSelected
     : false
 
 
@@ -502,7 +513,11 @@ export default function RegistrationPurchase({
 
     // Regular category registration logic
     if (!isCategoryEligible) {
-      setError('You need the required membership for this category')
+      setError(
+        isGoalieOnlySelectedCategory && !isGoalieEligibleForSelected
+          ? 'This category is only open to registered goalies'
+          : 'You need the required membership for this category'
+      )
       return
     }
 
@@ -796,23 +811,32 @@ export default function RegistrationPurchase({
                 activeMemberships
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
+
+              // Check goalie-only eligibility for this category
+              const isGoalieOnlyCategory = !!category.categories?.is_goalie_only
+              const isGoalieEligible = RegistrationValidationService.validateGoalieRequirement(
+                isGoalieOnlyCategory,
+                isGoalie
+              ).eligible
+              const isEligibleForSelection = hasRequiredMembership && isGoalieEligible
+
               const categoryPrice = category.price ?? 0
-              
+
               // Determine availability logic
               const isAlternateCategory = category.id === 'alternate'
               const isRegularCategory = !isAlternateCategory
-              
+
               // For regular categories: unavailable if user is already registered for ANY regular category
               const isRegularCategoryUnavailable = isRegularCategory && isAlreadyRegistered
-              
+
               // For alternate category: unavailable if user is already registered as alternate
               const isAlternateCategoryUnavailable = isAlternateCategory && isUserAlreadyAlternate
-              
+
               // Overall availability
               const isUnavailableDueToExistingRegistration = isRegularCategoryUnavailable || isAlternateCategoryUnavailable
-              
+
               // Visual state logic - no additional variables needed
-              
+
               return (
                 <label
                   key={category.id}
@@ -821,7 +845,7 @@ export default function RegistrationPurchase({
                       ? 'border-gray-300 bg-gray-50 opacity-60 cursor-default'
                       : selectedCategoryId === category.id
                       ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50 cursor-pointer'
-                      : hasRequiredMembership
+                      : isEligibleForSelection
                       ? 'border-gray-300 hover:border-gray-400 cursor-pointer'
                       : 'border-yellow-300 bg-yellow-50 cursor-not-allowed'
                   }`}
@@ -832,7 +856,7 @@ export default function RegistrationPurchase({
                     value={category.id}
                     checked={selectedCategoryId === category.id || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
                     onChange={(e) => !(isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id]) && setSelectedCategoryId(e.target.value)}
-                    disabled={!hasRequiredMembership || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
+                    disabled={!isEligibleForSelection || isUnavailableDueToExistingRegistration || !!userWaitlistEntries[category.id]}
                     className="sr-only"
                   />
                   <div className="flex w-full justify-between">
@@ -841,7 +865,7 @@ export default function RegistrationPurchase({
                         <div className={`font-medium ${
                           isUnavailableDueToExistingRegistration || userWaitlistEntries[category.id] ? 'text-gray-700' :
                           selectedCategoryId === category.id ? 'text-blue-900' :
-                          hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
+                          isEligibleForSelection ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
                           {isUnavailableDueToExistingRegistration && (
@@ -865,6 +889,11 @@ export default function RegistrationPurchase({
                               }
                               return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
                             })()}
+                          </div>
+                        )}
+                        {isGoalieOnlyCategory && (
+                          <div className="text-xs text-gray-600">
+                            Goalies only
                           </div>
                         )}
                         {isAlternateCategory && (
@@ -934,6 +963,15 @@ export default function RegistrationPurchase({
                 activeMemberships
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
+
+              // Check goalie-only eligibility for this category
+              const isGoalieOnlyCategory = !!category.categories?.is_goalie_only
+              const isGoalieEligible = RegistrationValidationService.validateGoalieRequirement(
+                isGoalieOnlyCategory,
+                isGoalie
+              ).eligible
+              const isEligibleForSelection = hasRequiredMembership && isGoalieEligible
+
               const categoryPrice = category.price ?? 0
 
               const isOnWaitlist = !!userWaitlistEntries[category.id]
@@ -959,10 +997,10 @@ export default function RegistrationPurchase({
                     isOnWaitlist || isUnavailableDueToExistingRegistration
                       ? 'border-gray-300 bg-gray-50 opacity-60'
                       : selectedCategoryId === category.id
-                      ? hasRequiredMembership
+                      ? isEligibleForSelection
                         ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50'
                         : 'border-yellow-500 bg-yellow-50'
-                      : hasRequiredMembership
+                      : isEligibleForSelection
                       ? 'border-gray-300 hover:border-gray-400'
                       : 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
                   }`}>
@@ -971,8 +1009,8 @@ export default function RegistrationPurchase({
                         <div className={`font-medium text-sm ${
                           isOnWaitlist || isUnavailableDueToExistingRegistration ? 'text-gray-700' :
                           selectedCategoryId === category.id
-                            ? hasRequiredMembership ? 'text-blue-900' : 'text-yellow-800'
-                            : hasRequiredMembership ? 'text-gray-900' : 'text-yellow-800'
+                            ? isEligibleForSelection ? 'text-blue-900' : 'text-yellow-800'
+                            : isEligibleForSelection ? 'text-gray-900' : 'text-yellow-800'
                         }`}>
                           {categoryName}
                           {isUnavailableDueToExistingRegistration && (
@@ -996,6 +1034,11 @@ export default function RegistrationPurchase({
                               }
                               return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
                             })()}
+                          </div>
+                        )}
+                        {isGoalieOnlyCategory && (
+                          <div className="text-xs text-gray-600">
+                            Goalies only
                           </div>
                         )}
                         {(category.max_capacity !== null && category.max_capacity !== undefined) && (
@@ -1473,7 +1516,7 @@ export default function RegistrationPurchase({
          !selectedCategoryId ? 'Select Category to Continue' :
          (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Registered' :
          (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Registered' :
-         !isCategoryEligible ? 'Membership Required' :
+         !isCategoryEligible ? (isGoalieOnlySelectedCategory && !isGoalieEligibleForSelected ? 'Goalies Only' : 'Membership Required') :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
          (registration.require_survey && !surveyCompleted) ? 'Complete Survey to Continue' :

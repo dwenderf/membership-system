@@ -69,6 +69,7 @@ export default async function RegistrationCategoriesPage() {
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Goalie</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -81,6 +82,13 @@ export default async function RegistrationCategoriesPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-500 max-w-xs truncate">{category.description || 'No description'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {category.is_goalie_only ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Yes</span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(new Date(category.created_at))}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -110,6 +118,7 @@ export default async function RegistrationCategoriesPage() {
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Goalie</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -122,6 +131,13 @@ export default async function RegistrationCategoriesPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-500 max-w-xs truncate">{category.description || 'No description'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {category.is_goalie_only ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Yes</span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(new Date(category.created_at))}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

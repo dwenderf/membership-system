@@ -13,6 +13,7 @@ interface Category {
   description: string | null
   category_type: string
   created_at: string
+  is_goalie_only: boolean
 }
 
 export default function EditRegistrationCategoryPage() {
@@ -23,6 +24,7 @@ export default function EditRegistrationCategoryPage() {
   const [category, setCategory] = useState<Category | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [isGoalieOnly, setIsGoalieOnly] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
@@ -41,6 +43,7 @@ export default function EditRegistrationCategoryPage() {
         setCategory(data)
         setName(data.name)
         setDescription(data.description || '')
+        setIsGoalieOnly(data.is_goalie_only ?? false)
       } catch (err) {
         setError('An unexpected error occurred')
         console.error('Error fetching category:', err)
@@ -66,6 +69,7 @@ export default function EditRegistrationCategoryPage() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
+          is_goalie_only: isGoalieOnly,
         }),
       })
 
@@ -182,6 +186,26 @@ export default function EditRegistrationCategoryPage() {
             <p className="mt-2 text-sm text-gray-500">
               Provide additional context about when and how this category should be used.
             </p>
+          </div>
+
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="is_goalie_only"
+                type="checkbox"
+                checked={isGoalieOnly}
+                onChange={(e) => setIsGoalieOnly(e.target.checked)}
+                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+              />
+            </div>
+            <div className="ml-3 text-sm">
+              <label htmlFor="is_goalie_only" className="font-medium text-gray-700">
+                Goalie Only
+              </label>
+              <p className="text-gray-500 text-xs mt-1">
+                Only members who have identified themselves as a goalie will be able to register in this category.
+              </p>
+            </div>
           </div>
 
           <div className="bg-gray-50 border border-gray-200 rounded-md p-4">

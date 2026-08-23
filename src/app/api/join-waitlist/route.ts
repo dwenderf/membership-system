@@ -4,6 +4,7 @@ import { formatDate } from '@/lib/date-utils'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
+import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { SupabaseClient } from '@supabase/supabase-js'
 
 
@@ -102,20 +103,42 @@ export async function POST(request: NextRequest) {
     const { data: category, error: categoryError } = await supabase
       .from('registration_categories')
       .select(`
-        id, 
+        id,
         max_capacity,
         custom_name,
         category_id,
         accounting_code,
         required_membership_id,
         sort_order,
-        registration_id
+        registration_id,
+        categories:category_id (is_goalie_only)
       `)
       .eq('id', categoryId)
       .single()
 
     if (categoryError || !category) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+    }
+
+    // Check goalie-only eligibility
+    const goalieOnlyCategory = category.categories as unknown as { is_goalie_only: boolean } | null
+    if (goalieOnlyCategory?.is_goalie_only) {
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('is_goalie')
+        .eq('id', user.id)
+        .single()
+
+      const goalieValidation = RegistrationValidationService.validateGoalieRequirement(
+        true,
+        !!userProfile?.is_goalie
+      )
+
+      if (!goalieValidation.eligible) {
+        return NextResponse.json({
+          error: goalieValidation.error || 'This category is only open to registered goalies'
+        }, { status: 400 })
+      }
     }
 
     // Check if category has capacity limits (null/undefined = unlimited; 0 = waitlist-only)

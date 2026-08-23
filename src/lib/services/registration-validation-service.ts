@@ -25,6 +25,11 @@ export interface MembershipValidationResult {
   }
 }
 
+export interface GoalieValidationResult {
+  eligible: boolean
+  error?: string
+}
+
 export interface UserMembership {
   id: string
   membership_id: string
@@ -275,6 +280,26 @@ export class RegistrationValidationService {
     return {
       hasRequiredMembership: false,
       error: `You need ${requirementText} to register for this event`
+    }
+  }
+
+  /**
+   * Check whether a user is eligible for a category that may be restricted to goalies.
+   *
+   * @param isCategoryGoalieOnly - Whether the category is marked goalie-only
+   * @param isUserGoalie - Whether the user has identified themselves as a goalie
+   */
+  static validateGoalieRequirement(
+    isCategoryGoalieOnly: boolean,
+    isUserGoalie: boolean
+  ): GoalieValidationResult {
+    if (!isCategoryGoalieOnly || isUserGoalie) {
+      return { eligible: true }
+    }
+
+    return {
+      eligible: false,
+      error: 'This category is only open to registered goalies'
     }
   }
 

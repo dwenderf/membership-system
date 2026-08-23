@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, description } = body
+    const { name, description, is_goalie_only } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         description: description?.trim() || null,
         category_type: 'system',
-        created_by: user.id
+        created_by: user.id,
+        is_goalie_only: Boolean(is_goalie_only)
       })
       .select()
       .single()

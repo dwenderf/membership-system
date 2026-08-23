@@ -221,7 +221,8 @@ CREATE TABLE categories (
     category_type TEXT NOT NULL CHECK (category_type IN ('system', 'user')),
     created_by UUID REFERENCES users(id), -- NULL for system categories
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+    is_goalie_only BOOLEAN NOT NULL DEFAULT false,
+
     -- Ensure no duplicate names within the same type
     UNIQUE(name, category_type)
 );

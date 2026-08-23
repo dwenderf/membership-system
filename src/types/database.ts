@@ -70,6 +70,7 @@ export type Database = {
           category_type: 'system' | 'user'
           created_by: string | null
           created_at: string
+          is_goalie_only: boolean
         }
         Insert: {
           id?: string
@@ -78,6 +79,7 @@ export type Database = {
           category_type: 'system' | 'user'
           created_by?: string | null
           created_at?: string
+          is_goalie_only?: boolean
         }
         Update: {
           id?: string
@@ -86,6 +88,7 @@ export type Database = {
           category_type?: 'system' | 'user'
           created_by?: string | null
           created_at?: string
+          is_goalie_only?: boolean
         }
       }
       seasons: {

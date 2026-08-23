@@ -8,6 +8,7 @@
 import { logger } from '@/lib/logging/logger'
 import { createAdminClient } from '@/lib/supabase/server'
 import { LoopsClient, EventProperties } from 'loops'
+import { getTestEmailPrefix } from '@/lib/email/environment'
 import { Json } from '@/types/database'
 
 /** Row shape of `email_logs` as read/updated by this processor — not the full DB
@@ -173,12 +174,14 @@ export class EmailProcessingManager {
     try {
       const supabase = createAdminClient()
       const emailData = emailLog.email_data || {}
+      const testEmailPrefix = getTestEmailPrefix()
+      const prefixedSubject = `${testEmailPrefix}${emailLog.subject}`
 
       // If Loops is not configured, just mark as sent for development
       if (!this.loops) {
         console.log('📧 Email would be sent (Loops not configured):', {
           to: emailLog.email_address,
-          subject: emailLog.subject,
+          subject: prefixedSubject,
           eventType: emailLog.event_type,
           data: emailData
         })
@@ -224,7 +227,7 @@ export class EmailProcessingManager {
         loopsResponse = await this.loops!.sendTransactionalEmail({
           transactionalId: emailLog.template_id,
           email: emailLog.email_address,
-          dataVariables: cleanData
+          dataVariables: { ...cleanData, testEmailPrefix }
         })
       } else {
         // Send as a basic contact event (for triggering automations)
@@ -232,7 +235,7 @@ export class EmailProcessingManager {
           email: emailLog.email_address,
           eventName: emailLog.event_type,
           eventProperties: {
-            subject: emailLog.subject,
+            subject: prefixedSubject,
             ...emailData
           } as EventProperties
         })

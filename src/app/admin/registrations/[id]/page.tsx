@@ -207,27 +207,17 @@ export default async function RegistrationDetailPage({
                       </dd>
                     </div>
                   )}
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Required Membership</dt>
-                    <dd className="mt-1">
-                      <EditableRegistrationMembership
-                        registrationId={id}
-                        initialMembershipId={registration.required_membership_id}
-                      />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Survey</dt>
-                    <dd className="mt-1">
-                      <EditableSurveyConfiguration
-                        registrationId={id}
-                        initialConfig={{
-                          require_survey: registration.require_survey || false,
-                          survey_id: registration.survey_id
-                        }}
-                      />
-                    </dd>
-                  </div>
+                  <EditableRegistrationMembership
+                    registrationId={id}
+                    initialMembershipId={registration.required_membership_id}
+                  />
+                  <EditableSurveyConfiguration
+                    registrationId={id}
+                    initialConfig={{
+                      require_survey: registration.require_survey || false,
+                      survey_id: registration.survey_id
+                    }}
+                  />
                   <EditableEventDates
                     registrationId={id}
                     registrationType={registration.type}
@@ -244,19 +234,14 @@ export default async function RegistrationDetailPage({
                       )}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Alternates</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      <EditableAlternateConfiguration
-                        registrationId={id}
-                        initialConfig={{
-                          allow_alternates: registration.allow_alternates || false,
-                          alternate_price: registration.alternate_price,
-                          alternate_accounting_code: registration.alternate_accounting_code
-                        }}
-                      />
-                    </dd>
-                  </div>
+                  <EditableAlternateConfiguration
+                    registrationId={id}
+                    initialConfig={{
+                      allow_alternates: registration.allow_alternates || false,
+                      alternate_price: registration.alternate_price,
+                      alternate_accounting_code: registration.alternate_accounting_code
+                    }}
+                  />
                   <div>
                     <dt className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-500">Registration Timing</span>

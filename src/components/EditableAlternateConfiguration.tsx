@@ -75,8 +75,17 @@ export default function EditableAlternateConfiguration({
 
   if (!isEditing) {
     return (
-      <div className="flex items-center justify-between">
-        <div>
+      <div>
+        <dt className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-500">Alternates</span>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-blue-600 hover:text-blue-500 font-medium"
+          >
+            Edit
+          </button>
+        </dt>
+        <dd className="mt-1 text-sm text-gray-900">
           {config.allow_alternates ? (
             <div className="space-y-1">
               <span className="text-green-600">Enabled</span>
@@ -94,105 +103,102 @@ export default function EditableAlternateConfiguration({
           ) : (
             <span className="text-red-600">Disabled</span>
           )}
-        </div>
-        <button
-          onClick={() => setIsEditing(true)}
-          className="text-xs text-blue-600 hover:text-blue-500 font-medium"
-        >
-          Edit
-        </button>
+        </dd>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {error && (
-        <div className="text-red-600 text-sm">{error}</div>
-      )}
-      
-      {/* Allow Alternates Toggle */}
-      <div className="flex items-center">
-        <input
-          id="allow_alternates"
-          type="checkbox"
-          checked={config.allow_alternates}
-          onChange={(e) => setConfig(prev => ({ 
-            ...prev, 
-            allow_alternates: e.target.checked,
-            // Clear fields if disabling
-            alternate_price: e.target.checked ? prev.alternate_price : '',
-            alternate_accounting_code: e.target.checked ? prev.alternate_accounting_code : ''
-          }))}
-          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-        />
-        <label htmlFor="allow_alternates" className="ml-2 block text-sm text-gray-900">
-          Enable alternates
-        </label>
-      </div>
+    <div>
+      <dt className="text-sm font-medium text-gray-500 mb-1">Alternates</dt>
+      <dd className="space-y-4">
+        {error && (
+          <div className="text-red-600 text-sm">{error}</div>
+        )}
 
-      {/* Alternate Configuration Fields */}
-      {config.allow_alternates && (
-        <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          {/* Alternate Price */}
-          <div>
-            <label htmlFor="alternate_price" className="block text-xs font-medium text-gray-700">
-              Price (USD)
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                <span className="text-gray-500 text-sm">$</span>
+        {/* Allow Alternates Toggle */}
+        <div className="flex items-center">
+          <input
+            id="allow_alternates"
+            type="checkbox"
+            checked={config.allow_alternates}
+            onChange={(e) => setConfig(prev => ({
+              ...prev,
+              allow_alternates: e.target.checked,
+              // Clear fields if disabling
+              alternate_price: e.target.checked ? prev.alternate_price : '',
+              alternate_accounting_code: e.target.checked ? prev.alternate_accounting_code : ''
+            }))}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="allow_alternates" className="ml-2 block text-sm text-gray-900">
+            Enable alternates
+          </label>
+        </div>
+
+        {/* Alternate Configuration Fields */}
+        {config.allow_alternates && (
+          <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            {/* Alternate Price */}
+            <div>
+              <label htmlFor="alternate_price" className="block text-xs font-medium text-gray-700">
+                Price (USD)
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                  <span className="text-gray-500 text-sm">$</span>
+                </div>
+                <input
+                  type="number"
+                  id="alternate_price"
+                  value={config.alternate_price}
+                  onChange={(e) => setConfig(prev => ({ ...prev, alternate_price: e.target.value }))}
+                  className="block w-full pl-6 pr-3 py-1 text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  required
+                />
               </div>
-              <input
-                type="number"
-                id="alternate_price"
-                value={config.alternate_price}
-                onChange={(e) => setConfig(prev => ({ ...prev, alternate_price: e.target.value }))}
-                className="block w-full pl-6 pr-3 py-1 text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="0.00"
-                step="0.01"
-                min="0"
+            </div>
+
+            {/* Alternate Accounting Code */}
+            <div>
+              <AccountingCodeInput
+                value={config.alternate_accounting_code}
+                onChange={(value) => setConfig(prev => ({ ...prev, alternate_accounting_code: value }))}
+                label="Accounting Code"
                 required
+                placeholder="Search by code or name..."
+                suggestedAccountType="REVENUE"
+                className="text-sm"
               />
             </div>
           </div>
+        )}
 
-          {/* Alternate Accounting Code */}
-          <div>
-            <AccountingCodeInput
-              value={config.alternate_accounting_code}
-              onChange={(value) => setConfig(prev => ({ ...prev, alternate_accounting_code: value }))}
-              label="Accounting Code"
-              required
-              placeholder="Search by code or name..."
-              suggestedAccountType="REVENUE"
-              className="text-sm"
-            />
-          </div>
+        {/* Action Buttons */}
+        <div className="flex space-x-2">
+          <button
+            onClick={handleSave}
+            disabled={loading || !canSave}
+            className={`px-3 py-1 text-sm font-medium rounded-md ${
+              canSave && !loading
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={loading}
+            className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancel
+          </button>
         </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="flex space-x-2">
-        <button
-          onClick={handleSave}
-          disabled={loading || !canSave}
-          className={`px-3 py-1 text-sm font-medium rounded-md ${
-            canSave && !loading
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-        >
-          {loading ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          onClick={handleCancel}
-          disabled={loading}
-          className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-      </div>
+      </dd>
     </div>
   )
 }

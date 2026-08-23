@@ -3,6 +3,7 @@ import { formatDate } from '@/lib/date-utils'
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { getWelcomeMessage } from '@/lib/organization'
+import { getTestEmailPrefix } from '@/lib/email/environment'
 import { Json } from '@/types/database'
 
 /** The Loops SDK's response types don't model the `id` field the API actually
@@ -83,12 +84,15 @@ class EmailService {
       userId,
       email,
       eventType,
-      subject,
+      subject: rawSubject,
       templateId,
       data = {},
       triggeredBy = 'automated',
       triggeredByUserId
     } = options
+
+    const testEmailPrefix = getTestEmailPrefix()
+    const subject = `${testEmailPrefix}${rawSubject}`
 
     try {
       // If Loops is not configured, log to database and console for development tracking
@@ -106,7 +110,7 @@ class EmailService {
           userId,
           email,
           eventType,
-          subject,
+          subject: rawSubject,
           templateId,
           status: 'failed',
           triggeredBy,
@@ -133,7 +137,7 @@ class EmailService {
         loopsResponse = await this.loops.sendTransactionalEmail({
           transactionalId: templateId,
           email: email,
-          dataVariables: cleanData as TransactionalVariables
+          dataVariables: { ...cleanData, testEmailPrefix } as TransactionalVariables
         })
       } else {
         // Send as a basic contact event (for triggering automations)
@@ -157,7 +161,7 @@ class EmailService {
         userId,
         email,
         eventType,
-        subject,
+        subject: rawSubject,
         templateId,
         status: sendSucceeded ? 'sent' : 'failed',
         triggeredBy,
@@ -194,7 +198,7 @@ class EmailService {
         userId,
         email,
         eventType,
-        subject,
+        subject: rawSubject,
         templateId,
         status: 'pending',
         triggeredBy,

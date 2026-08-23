@@ -207,6 +207,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 The system uses Loops.so for transactional email delivery. Follow these steps to configure email templates:
 
+> **Important:** Every transactional email template's **Subject** field must start with the `{testEmailPrefix}` merge tag, e.g. `{testEmailPrefix}Welcome to the Hockey Association!`. The app sends a `testEmailPrefix` data variable on every send — `[TEST] ` on preview/local deployments, an empty string in production — so preview and production emails stay visually distinguishable even though they share the same templates. Mark `testEmailPrefix` as **optional** when adding the data variable in Loops (this is a safety net only: the app always sends the variable, including an empty string in production, so the template renders correctly whether or not it's marked optional).
+
 ### 1. Create Loops.so Account
 
 1. Sign up at [https://loops.so](https://loops.so)

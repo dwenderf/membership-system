@@ -5,10 +5,6 @@ import { Json } from '../../types/database'
 
 const logger = Logger.getInstance()
 
-if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
-  throw new Error('Missing Xero environment variables')
-}
-
 // Helper function to calculate refresh token expiration (60 days from last refresh)
 export function calculateRefreshTokenExpiration(updatedAt: string): Date {
   return new Date(new Date(updatedAt).getTime() + (60 * 24 * 60 * 60 * 1000))
@@ -27,19 +23,27 @@ export function isRefreshTokenExpired(updatedAt: string): boolean {
 // (runXeroStartupTest() was previously defined here to test the Xero connection
 // on module load; removed as dead code since it was never actually invoked.)
 
-const xero = new XeroClient({
-  clientId: process.env.XERO_CLIENT_ID,
-  clientSecret: process.env.XERO_CLIENT_SECRET,
-  redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
-  scopes: process.env.XERO_SCOPES?.split(' ') || [
-    'accounting.transactions',
-    'accounting.contacts',
-    'accounting.settings',
-    'offline_access'
-  ]
-})
+let xeroInstance: XeroClient | undefined
 
-export { xero }
+function getXeroClient(): XeroClient {
+  if (!process.env.XERO_CLIENT_ID || !process.env.XERO_CLIENT_SECRET) {
+    throw new Error('Missing Xero environment variables')
+  }
+  if (!xeroInstance) {
+    xeroInstance = new XeroClient({
+      clientId: process.env.XERO_CLIENT_ID,
+      clientSecret: process.env.XERO_CLIENT_SECRET,
+      redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
+      scopes: process.env.XERO_SCOPES?.split(' ') || [
+        'accounting.transactions',
+        'accounting.contacts',
+        'accounting.settings',
+        'offline_access'
+      ]
+    })
+  }
+  return xeroInstance
+}
 
 // Request-scoped XeroClient used only for the OAuth handshake (buildConsentUrl /
 // apiCallback). A fresh instance per request avoids racing/mutating the shared
@@ -267,7 +271,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       )
 
       // Set the new token on the client
-      await xero.setTokenSet({
+      await getXeroClient().setTokenSet({
         access_token: refreshedTokens.access_token,
         refresh_token: refreshedTokens.refresh_token,
         expires_at: Math.floor(new Date(refreshedTokens.expires_at).getTime() / 1000),
@@ -276,7 +280,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       })
     } else {
       // Token is still valid, use it
-      await xero.setTokenSet({
+      await getXeroClient().setTokenSet({
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         expires_at: Math.floor(new Date(tokenData.expires_at).getTime() / 1000),
@@ -285,7 +289,7 @@ export async function getAuthenticatedXeroClient(tenantId: string): Promise<Xero
       })
     }
 
-    return xero
+    return getXeroClient()
 
   } catch (error) {
     logger.logXeroSync(
@@ -305,7 +309,7 @@ async function refreshXeroToken(refreshToken: string, tenantId?: string): Promis
   expires_at: string
 } | null> {
   try {
-    const refreshedTokenSet = await xero.refreshWithRefreshToken(
+    const refreshedTokenSet = await getXeroClient().refreshWithRefreshToken(
       process.env.XERO_CLIENT_ID!,
       process.env.XERO_CLIENT_SECRET!,
       refreshToken

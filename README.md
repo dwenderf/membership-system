@@ -193,7 +193,17 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
    # Apply the schema.sql file in your Supabase SQL editor
    ```
 
+   **Note:** `supabase/schema.sql` is a periodically-refreshed snapshot, not auto-generated on every migration — it can lag `supabase/migrations/` by months (tracked in dwenderf/membership-system#256). After applying it, check `supabase/migrations/` for any files dated after schema.sql's own last-modified date (`git log -1 -- supabase/schema.sql`) and apply those too, in filename order, to get a fully current schema. A missing table/column/view during local setup is often this, not a real bug.
+
 4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+
+5. **Fix the magic-link email template** (required — every fresh Supabase project needs this): Supabase's default "Magic Link" email template uses `{{ .ConfirmationURL }}`, which sends a PKCE-flow link (`?code=...`). This app's magic-link confirmation page (`src/app/auth/magic-confirm/page.tsx`) instead expects `?token_hash=...&type=...` and calls `supabase.auth.verifyOtp({ token_hash, type })` — so every magic-link sign-in will silently 404 into `/auth/auth-code-error` until you fix the template. Go to **Authentication** → **Email Templates** → **Magic Link** in the Supabase dashboard and set the link in the template body to:
+
+   ```
+   {{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink
+   ```
+
+   This is a dashboard-only setting with no trace in the repo (tracked in dwenderf/membership-system#265), so it has to be set by hand on every fresh Supabase project.
 
 ### 4. Run Development Server
 

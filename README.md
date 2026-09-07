@@ -298,9 +298,11 @@ One-time, per project:
 
    Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list`.
 
-2. **Create GitHub Environments** named `development` and `production` (Settings → Environments), and add a **required reviewer** to `production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
+2. **Create GitHub Environments** named `supabase-development` and `supabase-production` (Settings → Environments), and add a **required reviewer** to `supabase-production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
 
-3. **Add a `SUPABASE_DB_URL` secret to each Environment** — same name, different value.
+   Deliberately *not* the existing `Production` / `Preview` environments: those belong to the Vercel integration. Adding a required reviewer to `Production` would gate Vercel deployments as well as migrations, and the names are ambiguous besides — `Preview` is a Vercel deployment target, not a database. Leave Vercel's alone.
+
+3. **Add a `SUPABASE_DB_URL` secret to each of those two Environments** — same name, different value. It goes under Settings → Environments → *(the environment)* → **Environment secrets**, not repository secrets: one name resolving to a different value per environment is the whole point, and repository secrets carry no approval gate.
 
    This is a **PostgreSQL connection string**, not the API URL. They are different things and are not interchangeable:
 
@@ -309,7 +311,12 @@ One-time, per project:
    | `NEXT_PUBLIC_SUPABASE_URL` | `https://fogsphzerhmyjckxhalj.supabase.co` | HTTPS endpoint the JS client talks to. Public — it ships in the browser bundle. |
    | `SUPABASE_DB_URL` | `postgresql://postgres.<ref>:<password>@aws-1-us-east-2.pooler.supabase.com:5432/postgres` | Postgres wire-protocol connection, used by `psql` and `supabase db push`. **Contains the database password — secret.** |
 
-   Get it from Dashboard → **Connect** → *Session pooler*, and use that one:
+   | Environment | Value |
+   |---|---|
+   | `supabase-production` | production project (`fogsphzerhmyjckxhalj`) |
+   | `supabase-development` | development project (`qojixnzpfkpteakltdoa`) |
+
+   Get each from Dashboard → **Connect** → *Session pooler*, and use that one:
 
    - **Session pooler, port 5432** ✅ — what to use. Migrations need session mode, and this host is reachable over IPv4.
    - **Transaction pooler, port 6543** ❌ — transaction mode breaks migrations.

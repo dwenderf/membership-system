@@ -23,8 +23,13 @@ name: Apply database migrations
 #   1. Seed the CLI's migration history on both projects, once. The baseline was
 #      applied by hand, and the CLI does not know that yet:
 #        supabase migration repair --status applied 20260907000000 20260907000001
-#   2. Create GitHub Environments named `development` and `production`
-#      (Settings → Environments). Add a required reviewer to `production`.
+#   2. Create GitHub Environments named `supabase-development` and
+#      `supabase-production` (Settings → Environments), and add a required
+#      reviewer to `supabase-production`.
+#
+#      Deliberately NOT the existing `Production`/`Preview` environments: those
+#      belong to the Vercel integration, and adding a reviewer to them would
+#      gate Vercel deployments as well as migrations.
 #   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
 #      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
 #      Dashboard -> Connect -> Session pooler (port 5432), which is session mode
@@ -46,16 +51,16 @@ on:
         required: true
         type: choice
         options:
-          - development
-          - production
+          - supabase-development
+          - supabase-production
       dry_run:
         description: 'Only show what would be applied (recommended first)'
         type: boolean
         default: true
 
   # Applies automatically when a push changes a migration file. A merge to main
-  # starts the job, which then waits for the `production` Environment's required
-  # reviewer before touching anything -- the approval is the gate, rather than
+  # starts the job, which then waits for the `supabase-production` Environment's
+  # required reviewer before touching anything -- the approval is the gate, rather than
   # someone remembering to start this. Merges to development apply to the dev
   # database unattended, which is the point: previews run against it.
   #
@@ -77,8 +82,8 @@ permissions:
 concurrency:
   group: >-
     db-migrate-${{ inputs.target
-                   || (github.ref_name == 'main' && 'production')
-                   || 'development' }}
+                   || (github.ref_name == 'main' && 'supabase-production')
+                   || 'supabase-development' }}
   cancel-in-progress: false
 
 jobs:
@@ -90,11 +95,11 @@ jobs:
     # human approval before the job starts.
     # Manual runs use the chosen target. A push (if the trigger below is
     # enabled) maps branch to database -- without this, a push to main would
-    # fall back to 'development' and quietly apply nothing to production.
+    # fall back to 'supabase-development' and quietly apply nothing to prod.
     environment: >-
       ${{ inputs.target
-          || (github.ref_name == 'main' && 'production')
-          || 'development' }}
+          || (github.ref_name == 'main' && 'supabase-production')
+          || 'supabase-development' }}
 
     steps:
     - name: Checkout code
@@ -110,7 +115,7 @@ jobs:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: |
         if [ -z "$SUPABASE_DB_URL" ]; then
-          echo "::error::SUPABASE_DB_URL is not set for the '${{ inputs.target || 'development' }}' environment. See README 'Automating migrations'."
+          echo "::error::SUPABASE_DB_URL is not set for the '${{ inputs.target || (github.ref_name == 'main' && 'supabase-production') || 'supabase-development' }}' environment. See README 'Automating migrations'."
           exit 1
         fi
 

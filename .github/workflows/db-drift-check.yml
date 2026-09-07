@@ -26,8 +26,8 @@ on:
         required: true
         type: choice
         options:
-          - production
-          - development
+          - supabase-production
+          - supabase-development
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target || 'production' }}
+    environment: ${{ inputs.target || 'supabase-production' }}
 
     steps:
     - name: Checkout code
@@ -44,7 +44,7 @@ jobs:
     - name: Compare migration files against the database
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        TARGET: ${{ inputs.target || 'production' }}
+        TARGET: ${{ inputs.target || 'supabase-production' }}
       run: |
         set -euo pipefail
 

@@ -26,10 +26,10 @@ const schemaContent = fs.readFileSync(schemaPath, 'utf8');
 
 // Extract RLS-related information
 const rlsTables = [];
-const rlsMatches = schemaContent.match(/ALTER TABLE (\w+) ENABLE ROW LEVEL SECURITY;/g) || [];
+const rlsMatches = schemaContent.match(/ALTER TABLE (?:public\.)?(\w+) ENABLE ROW LEVEL SECURITY;/g) || [];
 
 rlsMatches.forEach(match => {
-  const tableMatch = match.match(/ALTER TABLE (\w+) ENABLE ROW LEVEL SECURITY;/);
+  const tableMatch = match.match(/ALTER TABLE (?:public\.)?(\w+) ENABLE ROW LEVEL SECURITY;/);
   if (tableMatch) {
     rlsTables.push(tableMatch[1]);
   }
@@ -84,7 +84,7 @@ migrationFiles.forEach(file => {
     
     // Extract specific RLS changes
     const policyMatches = content.match(/CREATE POLICY[^;]+;/g) || [];
-    const enableMatches = content.match(/ALTER TABLE \w+ ENABLE ROW LEVEL SECURITY;/g) || [];
+    const enableMatches = content.match(/ALTER TABLE (?:public\.)?\w+ ENABLE ROW LEVEL SECURITY;/g) || [];
     
     if (policyMatches.length > 0) {
       console.log(`   📝 ${policyMatches.length} policies created`);
@@ -106,10 +106,10 @@ const policyMatches = schemaContent.match(/CREATE POLICY[^;]+;/g) || [];
 const policies = {};
 
 policyMatches.forEach(match => {
-  const policyMatch = match.match(/CREATE POLICY "([^"]+)" ON (\w+)/);
+  const policyMatch = match.match(/CREATE POLICY (?:"([^"]+)"|(\w+)) ON (?:public\.)?(\w+)/);
   if (policyMatch) {
-    const policyName = policyMatch[1];
-    const tableName = policyMatch[2];
+    const policyName = policyMatch[1] || policyMatch[2];
+    const tableName = policyMatch[3];
     
     if (!policies[tableName]) {
       policies[tableName] = [];

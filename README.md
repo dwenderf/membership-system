@@ -189,11 +189,15 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 
 3. Run the database schema:
 
-   ```bash
-   # Apply the schema.sql file in your Supabase SQL editor
-   ```
+   Open `supabase/schema.sql`, paste it into your Supabase SQL editor, and run it.
+   That single file creates every table, constraint, index, function, trigger,
+   view, RLS policy and comment the app expects — RLS included, so there is no
+   separate policy step.
 
-4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+   `schema.sql` is generated from `supabase/migrations/` (`npm run schema:build`),
+   so it can't fall behind the migrations the way it did before. Migrations use
+   the Supabase CLI's `<timestamp>_name.sql` naming, so `supabase db push` also
+   works against an existing project.
 
 ### 4. Run Development Server
 
@@ -202,6 +206,286 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the application.
+
+## Database Migrations
+
+`supabase/migrations/` holds the schema, as timestamped files the Supabase CLI understands (`YYYYMMDDHHMMSS_name.sql`, UTC). History before 2026-09-07 was collapsed into `20260907000000_baseline_schema.sql`, a snapshot of the production database; the 140 dated files it replaced are in git history.
+
+`supabase/schema.sql` is **generated** from that directory — never edit it directly:
+
+```bash
+npm run schema:build      # regenerate after adding a migration; commit the result
+npm run schema:check      # fails if schema.sql is stale (blocking in CI)
+npm run migrations:lint   # rejects unsafe views and public EXECUTE grants (blocking in CI)
+npm run schema:verify     # applies schema.sql twice to a throwaway database
+```
+
+`schema:verify` needs a reachable PostgreSQL server via the standard `PG*` variables; CI runs it against a service container. It exists because parsing SQL is not enough to catch a broken migration — `COMMENT ON TABLE <a view>` parses cleanly and fails on execution.
+
+### Applying migrations
+
+Migrations are applied deliberately, not as a side effect of merging. Two supported routes:
+
+**Through the workflow — the supported route.** It runs `supabase db push`, which records what it applied in `supabase_migrations.schema_migrations`. Everything downstream depends on that record being true: `db push` skips what's already applied, and the drift check below compares against it.
+
+**By hand, in the SQL editor — only as a fallback, and never on its own.** The editor runs the SQL but writes no tracking row, so the CLI still believes the migration is pending: the next `db push` tries to re-apply it and the drift check reports the database as behind even though the change is live. If you do apply by hand, immediately record it:
+
+```bash
+supabase migration repair --status applied <version> --db-url "postgresql://..."
+```
+
+This is not theoretical — it's why the pre-2026-09-07 history was invisible to the CLI, and why seeding was needed before any of this could work.
+
+The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is only ever changed by a human, and **merging a PR does not apply anything** unless the automatic trigger described below is enabled.
+
+To run it: Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
+
+**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow. Pushes that don't touch migrations trigger nothing. On `main` the job waits for the `production` Environment's required reviewer before applying; on `development` it applies unattended, which is the point — previews run against that database.
+
+**What a failure means.** This workflow runs *after* the push has landed, so it cannot fail the merge or undo it. A red run means the commit is on the branch and the migration is **not** applied — the code is ahead of the database, and nothing was rolled back. Recovery is to fix the migration in a follow-up and let it re-run, or apply by hand and repair the history.
+
+The checks that can genuinely block a bad migration are the **pull request** ones — `schema:check`, `migrations:lint`, and the `schema` job that applies `schema.sql` to a real PostgreSQL container. Those run before merge, where failing them stops it. The apply workflow is downstream of that decision; the drift check is the backstop for a merge whose migration never made it.
+
+**Those checks only block a merge if you require them.** Without a ruleset, a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely — "we always use a PR" is a convention rather than a guarantee.
+
+Settings → **Rules** → **Rulesets** → New branch ruleset. One ruleset covers both branches: under *Target branches* → Include → add `main` and `development`. Set **Enforcement status: Active** — a ruleset can be saved in Disabled or Evaluate mode, where it reports without blocking anything. Leave the **bypass list empty**; adding "Repository admin" makes the whole thing advisory for exactly the person doing the merging.
+
+Rules to enable:
+
+| Rule | Setting |
+|---|---|
+| Require a pull request before merging | On, with **required approvals: 0** |
+| Require status checks to pass | On — add `test` and `schema`, and tick *Require branches to be up to date before merging* |
+| Restrict deletions | On (default) |
+| Block force pushes | On (default) |
+
+Required approvals defaults to 1, and nobody can approve their own pull request — on a repository with effectively one maintainer that setting locks you out of merging your own work. Zero still gives you the pull request and the checks.
+
+Rules to leave off:
+
+- **Require linear history** — it rejects merge commits, and `development` → `main` is a regular merge (see [Git Merge Strategies](#git-merge-strategies)).
+- **Restrict updates** — blocks all pushes to the branch, not just direct ones.
+- **Require signed commits** — rejects commits from any contributor or automation not set up for signing.
+- **Require deployments to succeed** — ties the branch to GitHub Environment deployments, which here are the migration Environments; unrelated, and confusing to tangle together.
+- Restrict creations, code scanning, code quality, coverage, Copilot review — not applicable to this repository.
+
+Two things about the status checks specifically:
+
+- **A check only appears in the picker once it has run at least once.** `schema` is newer than `test`, so it may not be listed until a pull request has exercised it. Add it afterwards rather than typing the name by hand — a ruleset treats an unrecognised check as "never reported" and blocks every merge until something reports it.
+- **Do not require `Apply database migrations` or `Check databases are up to date`.** Neither runs on pull requests, so requiring them would deadlock every merge.
+
+One consequence to expect: with a pull request required on `main`, promoting `development` → `main` becomes a pull request rather than a local merge and push. Same result, one extra step, and the checks run against the exact commit that lands.
+
+This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
+
+### Knowing whether a database is current
+
+*Check databases are up to date* (Actions, or on a weekday schedule) compares the migration files in the repo against what each database reports in `supabase_migrations.schema_migrations`, and fails when a database is behind. It also warns when a database has a migration the repo doesn't — the signature of SQL applied by hand outside the repo.
+
+It exists because merging a PR applies nothing. Without it, a migration can sit unapplied indefinitely while every other signal stays green — which is how `schema.sql` ended up eight months stale in the first place.
+
+### Setting up the workflow
+
+One-time, per project:
+
+1. **Seed the CLI's migration history.** *Already done for the existing dev and production projects on 2026-09-07 — all three of `20260907000000`, `20260907000001` and `20260907000002` are recorded as applied on both. This step only applies to a new project (a personal sandbox, say).*
+
+   Migrations applied by hand are invisible to the CLI: it tracks what it has run in `supabase_migrations.schema_migrations`, and a manual run leaves no row there. Without seeding it, the first `db push` tries to re-apply everything to a database that already has it:
+
+   ```bash
+   supabase migration repair --status applied 20260907000000 20260907000001 20260907000002
+   ```
+
+   Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list`.
+
+2. **Create GitHub Environments** named `supabase-development` and `supabase-production` (Settings → Environments), and add a **required reviewer** to `supabase-production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
+
+   Deliberately *not* the existing `Production` / `Preview` environments: those belong to the Vercel integration. Adding a required reviewer to `Production` would gate Vercel deployments as well as migrations, and the names are ambiguous besides — `Preview` is a Vercel deployment target, not a database. Leave Vercel's alone.
+
+3. **Add a `SUPABASE_DB_URL` secret to each of those two Environments** — same name, different value. It goes under Settings → Environments → *(the environment)* → **Environment secrets**, not repository secrets: one name resolving to a different value per environment is the whole point, and repository secrets carry no approval gate.
+
+   This is a **PostgreSQL connection string**, not the API URL. They are different things and are not interchangeable:
+
+   | Variable | Example | What it is |
+   |---|---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://fogsphzerhmyjckxhalj.supabase.co` | HTTPS endpoint the JS client talks to. Public — it ships in the browser bundle. |
+   | `SUPABASE_DB_URL` | `postgresql://postgres.<ref>:<password>@aws-1-us-east-2.pooler.supabase.com:5432/postgres` | Postgres wire-protocol connection, used by `psql` and `supabase db push`. **Contains the database password — secret.** |
+
+   | Environment | Value |
+   |---|---|
+   | `supabase-production` | production project (`fogsphzerhmyjckxhalj`) |
+   | `supabase-development` | development project (`qojixnzpfkpteakltdoa`) |
+
+   Get each from Dashboard → **Connect** → *Session pooler*. The dialog shows the password as a literal `[YOUR-PASSWORD]` placeholder — it gives you the correct host, port and `postgres.<project-ref>` username, but you have to substitute the real database password yourself.
+
+   That password is **not displayed anywhere in the dashboard**: Supabase shows it once at project creation and never again. If it isn't in your password manager, Settings → Database → *Database password* → **Reset database password** issues a new one, shown once.
+
+   Resetting is safe for the running application — it connects over HTTPS with `NEXT_PUBLIC_SUPABASE_URL` and the API keys, and never opens a Postgres connection. What it does break is any saved copy: `scripts/clone-registration-simple.sh` and the `psql` invocations in [scripts/README.md](scripts/README.md) read a `DATABASE_URL` that developers set locally, so anyone holding the old one needs the new value. Each project has its own password; resetting one does not affect the other.
+
+   Which connection to use:
+
+   - **Session pooler, port 5432** ✅ — what to use. Migrations need session mode, and this host is reachable over IPv4.
+   - **Transaction pooler, port 6543** ❌ — transaction mode breaks migrations.
+   - **Direct connection** (`db.<ref>.supabase.co:5432`) — session mode, but IPv6-only unless the project has the IPv4 add-on, and GitHub-hosted runners are IPv4-only. Fine from a machine with IPv6; don't rely on it in CI.
+
+Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
+
+### Preview deployments share the development database
+
+Preview deploys point at the shared development Supabase project, so a migration applied there is visible to every open preview at once, and to whatever is already merged. Write migrations expand/contract so that's safe:
+
+- Add columns nullable, or with a default; never `NOT NULL` without a backfill in the same file.
+- Don't drop or rename anything until the code that referenced it is gone from `development`.
+- Deploy the code that reads a new column *after* the migration that adds it, never before.
+
+The alternative — a real database per pull request — is Supabase's branching feature. It isn't enabled on this project; it costs per branch and needs the Vercel integration wired to point previews at the branch database. Worth revisiting if two people start colliding on the shared dev database.
+
+## Exposing Data to External Consumers
+
+Someone will eventually want member data in a spreadsheet, a dashboard, or another tool. There is one supported way to do that, and one way that looks easier but publishes your members' data to the internet.
+
+### The rule
+
+**Never create a view or a database function to serve an external consumer. Build an authenticated API route instead.**
+
+Supabase publishes everything in the `public` schema through PostgREST. The moment a view or function exists there, it has a public URL — `/rest/v1/<view>` or `/rest/v1/rpc/<function>` — and the anon key that unlocks it is not a secret: it ships in the browser bundle of every page on the site. Two specific traps:
+
+- A **view without `security_invoker=true`** runs as its owner and ignores the RLS on the tables underneath it, while Supabase's default privileges hand `anon` SELECT on it automatically.
+- A **`SECURITY DEFINER` function** ignores RLS entirely, and (before `20260907000002_revoke_public_function_access.sql`) new functions were granted to `anon` and `authenticated` by default.
+
+This is not hypothetical. Three export helpers — `get_users_data()`, `get_full_data()` and `get_current_data()` — were created directly in the SQL editor to feed a Google Sheet, and explicitly granted to `anon`. For about eleven weeks, anyone on the internet could `POST /rest/v1/rpc/get_users_data` and receive every member's first name, last name, email address and member ID. They were dropped in that migration and replaced by the route described below.
+
+### The pattern
+
+[`src/app/api/admin/exports/members/route.ts`](src/app/api/admin/exports/members/route.ts) is the reference implementation. The shape of it:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { logger } from '@/lib/logging/logger'
+
+function secretMatches(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false   // timingSafeEqual throws on length mismatch
+  return timingSafeEqual(a, b)              // constant time: no character-by-character leak
+}
+
+export async function GET(request: NextRequest) {
+  const expected = process.env.EXPORT_API_SECRET
+
+  // Fail closed. A missing secret must never mean "no authentication required".
+  if (!expected) {
+    return NextResponse.json({ error: 'Not configured' }, { status: 503 })
+  }
+
+  const header = request.headers.get('authorization') ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+  if (!token || !secretMatches(token, expected)) {
+    logger.logAdminAction('export-unauthorized', 'Rejected request', {}, undefined, 'warn')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Only past the gate do we reach for the service-role client.
+  const supabase = createAdminClient()
+  const { data, error } = await supabase.from('users').select('first_name, last_name, email, member_id')
+  if (error) {
+    return NextResponse.json({ error: 'Export failed' }, { status: 500 })  // don't echo the DB error
+  }
+
+  return NextResponse.json({ rows: data }, { headers: { 'Cache-Control': 'no-store' } })
+}
+```
+
+Why each piece matters:
+
+| Practice | Reason |
+|---|---|
+| Fail closed when the secret is unset | A deploy that forgets the env var must break loudly, not serve the data to everyone. Note the existing cron routes use `if (secret && ...)`, which fails *open* — don't copy that. |
+| `timingSafeEqual`, not `===` | String comparison short-circuits on the first wrong byte; response timing then leaks the secret one character at a time. |
+| Service-role client *after* the auth check | The export is deliberately cross-member, which every RLS policy correctly forbids. The route's own auth is what replaces RLS, so it has to come first. |
+| Never log the token | A rejected guess in your logs is still a credential. Log that a header was present, not what it said. |
+| Generic error bodies | `relation "users" does not exist` tells an attacker about your schema. |
+| `Cache-Control: no-store` | Keeps member PII out of intermediary caches. |
+| Paginate | PostgREST caps a response at 1000 rows; without `.range()` looping you silently export a truncated roster. |
+
+### Setting up the secret
+
+1. **Generate one.** Use something with real entropy, not a passphrase:
+   ```bash
+   openssl rand -base64 32
+   ```
+2. **Add it to Vercel.** Project → Settings → Environment Variables → add `EXPORT_API_SECRET`.
+   - Set a **different value per environment** (Production, Preview, Development). A preview secret leaking must not open production.
+   - Mark it **Sensitive** so it can't be read back out of the dashboard. You can overwrite it blind later; you'll never need to read it.
+   - Redeploy — environment variable changes only take effect on a new deployment.
+3. **Add it locally.** Put it in `.env.local` (never committed). `vercel env pull .env.local` brings the Development value down.
+4. **Hand it over out-of-band.** Send it to the consumer through a password manager or a Signal message, not email or Slack, and never in a spreadsheet cell.
+5. **Rotate it** when someone with access leaves, or if it's ever pasted somewhere public: set a new value in Vercel, redeploy, then update the consumer. Rotation is a two-step with a brief window where the old value still works — that's fine and better than a gap.
+
+Never hand out the `SUPABASE_SERVICE_ROLE_KEY` instead. It bypasses RLS on every table in the database; the whole point of a scoped endpoint is that a leaked export credential exposes one dataset, not everything.
+
+### Consuming it
+
+Test with `curl` first:
+
+```bash
+curl -H "Authorization: Bearer $EXPORT_API_SECRET" \
+  "https://your-domain.com/api/admin/exports/members?dataset=members"
+```
+
+For a Google Sheet, use Apps Script (Extensions → Apps Script). Store the secret in Script Properties — Project Settings → Script properties — rather than pasting it into the code, so it isn't visible to anyone with view access to the script:
+
+```javascript
+function refreshMembers() {
+  const secret = PropertiesService.getScriptProperties().getProperty('EXPORT_API_SECRET');
+  const url = 'https://your-domain.com/api/admin/exports/members?dataset=members';
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + secret },
+    muteHttpExceptions: true,
+  });
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error('Export failed: ' + response.getResponseCode() + ' ' + response.getContentText());
+  }
+
+  const rows = JSON.parse(response.getContentText()).rows;
+  const header = ['first_name', 'last_name', 'email', 'member_id'];
+  const values = [header].concat(rows.map(function (r) {
+    return header.map(function (key) { return r[key]; });
+  }));
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Members');
+  sheet.clearContents();
+  sheet.getRange(1, 1, values.length, header.length).setValues(values);
+}
+```
+
+Then Triggers → Add Trigger → `refreshMembers`, time-driven, daily.
+
+`IMPORTDATA` and `IMPORTJSON` can't be used: neither can send an `Authorization` header, which is exactly why the previous approach reached for a public endpoint. That constraint is the point — if a formula can read it without credentials, so can the internet.
+
+### Available datasets
+
+`GET /api/admin/exports/members`
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `dataset` | `members` (default) | One row per member: name, email, member ID |
+| | `memberships` | One row per member per membership type, with the latest expiry |
+| `membership_id` | uuid | Restrict `memberships` to one membership type |
+| `paid_only` | `true` | Count only paid memberships (default: all, including pending and refunded) |
+| `include_deleted` | `true` | Include soft-deleted members (default: excluded) |
+| `format` | `json` (default), `csv` | Response format |
+
+### Before you add another endpoint
+
+- Does it need to be cross-member? If a signed-in user should only see their own data, use the normal authenticated app routes and let RLS do the work — no secret required.
+- Return the narrowest set of columns that answers the question. An export of names and emails is a smaller incident than an export of everything.
+- `npm run migrations:lint` (blocking in CI) rejects views created without `security_invoker=true` and `GRANT EXECUTE` to public roles, so the database-side mistake fails the build.
+- Supabase's Security Advisor (Dashboard → Advisors, or `get_advisors` over MCP) flags anon-executable `SECURITY DEFINER` functions and views that bypass RLS. Check it after any schema change.
 
 ## Email Integration Setup (Loops.so)
 

@@ -1,0 +1,105 @@
+name: Check databases are up to date
+
+# Answers "did anyone actually apply that migration?" without having to
+# remember. Compares the migration files in this repo against what each database
+# reports in supabase_migrations.schema_migrations, and fails when a database is
+# behind.
+#
+# Merging a PR does not apply migrations — nothing in CI touches production, and
+# the deploy is manual — so a migration can sit unapplied indefinitely with
+# every other signal green. This is the check that notices.
+#
+# Read-only: it selects from the migration history table and nothing else.
+#
+# Needs the same per-Environment SUPABASE_DB_URL secret as db-migrate.yml. Until
+# that is configured the run reports "not configured" and passes, rather than
+# failing every morning about setup that hasn't happened yet.
+
+on:
+  schedule:
+    # 13:00 UTC on weekdays — morning in US Eastern, after any overnight work.
+    - cron: '0 13 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database to check'
+        required: true
+        type: choice
+        options:
+          - supabase-production
+          - supabase-development
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target || 'supabase-production' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compare migration files against the database
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        TARGET: ${{ inputs.target || 'supabase-production' }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "${SUPABASE_DB_URL:-}" ]; then
+          echo "::warning::SUPABASE_DB_URL is not configured for '$TARGET'; skipping. See README 'Automating migrations'."
+          echo "### Drift check skipped — \`$TARGET\` has no SUPABASE_DB_URL secret" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        psql --version >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+
+        # Versions this repo carries, from the filename prefix.
+        ls supabase/migrations/*.sql \
+          | xargs -n1 basename \
+          | sed 's/_.*//' \
+          | sort > /tmp/repo_versions
+
+        # Versions the database says it has applied.
+        psql "$SUPABASE_DB_URL" -tAc \
+          "select version from supabase_migrations.schema_migrations order by version" \
+          | sed '/^$/d' | sort > /tmp/db_versions
+
+        unapplied=$(comm -23 /tmp/repo_versions /tmp/db_versions)
+        unknown=$(comm -13 /tmp/repo_versions /tmp/db_versions)
+
+        {
+          echo "## Migration status — \`$TARGET\`"
+          echo
+          echo "- migration files in repo: $(wc -l < /tmp/repo_versions)"
+          echo "- applied in database:     $(wc -l < /tmp/db_versions)"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ -n "$unknown" ]; then
+          {
+            echo
+            echo "### Applied in the database but not in this repo"
+            echo '```'
+            echo "$unknown"
+            echo '```'
+            echo "Someone applied SQL outside the repo, or a migration file was deleted."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::$TARGET has migrations not present in this repo: $(echo $unknown | tr '\n' ' ')"
+        fi
+
+        if [ -n "$unapplied" ]; then
+          {
+            echo
+            echo "### Not yet applied to \`$TARGET\`"
+            echo '```'
+            echo "$unapplied"
+            echo '```'
+            echo "Apply them with the *Apply database migrations* workflow, then re-run this check."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::$TARGET is behind: $(echo $unapplied | tr '\n' ' ')"
+          exit 1
+        fi
+
+        echo "### ✅ \`$TARGET\` is up to date" >> "$GITHUB_STEP_SUMMARY"

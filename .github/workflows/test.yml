@@ -31,6 +31,9 @@ jobs:
     - name: Run lint
       run: npm run lint
 
+    - name: Check generated schema.sql is up to date
+      run: npm run schema:check
+
     - name: Run typecheck
       run: npm run typecheck
 

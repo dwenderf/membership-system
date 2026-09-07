@@ -189,11 +189,15 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 
 3. Run the database schema:
 
-   ```bash
-   # Apply the schema.sql file in your Supabase SQL editor
-   ```
+   Open `supabase/schema.sql`, paste it into your Supabase SQL editor, and run it.
+   That single file creates every table, constraint, index, function, trigger,
+   view, RLS policy and comment the app expects — RLS included, so there is no
+   separate policy step.
 
-4. Set up Row Level Security (RLS) policies as defined in `supabase/schema.sql`
+   `schema.sql` is generated from `supabase/migrations/` (`npm run schema:build`),
+   so it can't fall behind the migrations the way it did before. Migrations use
+   the Supabase CLI's `<timestamp>_name.sql` naming, so `supabase db push` also
+   works against an existing project.
 
 ### 4. Run Development Server
 

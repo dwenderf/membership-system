@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "npx jest",
     "test:watch": "npx jest --watch",
-    "test:coverage": "npx jest --coverage"
+    "test:coverage": "npx jest --coverage",
+    "schema:build": "node scripts/build-schema-sql.js",
+    "schema:check": "node scripts/build-schema-sql.js --check"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

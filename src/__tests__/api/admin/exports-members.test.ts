@@ -24,14 +24,21 @@ interface QueryResult {
 let queryResult: QueryResult = { data: [], error: null }
 
 // Chainable stub matching the postgrest-js builder surface the route uses.
+// Queries are recorded so tests can assert on how they were built.
+const queries: Array<Record<string, jest.Mock>> = []
+
 const makeQuery = () => {
-  const query: Record<string, unknown> = {}
+  const query: Record<string, jest.Mock> = {}
   for (const method of ['select', 'order', 'range', 'is', 'eq']) {
     query[method] = jest.fn(() => query)
   }
   query.overrideTypes = jest.fn(() => Promise.resolve(queryResult))
+  queries.push(query)
   return query
 }
+
+const orderedColumns = (query: Record<string, jest.Mock>) =>
+  query.order.mock.calls.map((call) => call[0])
 
 const mockSupabase = { from: jest.fn(() => makeQuery()) }
 jest.requireMock('@/lib/supabase/admin').createAdminClient = jest.fn(() => mockSupabase)
@@ -48,6 +55,7 @@ describe('/api/admin/exports/members', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    queries.length = 0
     process.env.EXPORT_API_SECRET = SECRET
     queryResult = { data: [], error: null }
   })
@@ -119,6 +127,34 @@ describe('/api/admin/exports/members', () => {
       )
 
       expect(response.status).toBe(400)
+    })
+  })
+
+  describe('pagination', () => {
+    // .range() is OFFSET/LIMIT. Without a total order, PostgreSQL may return
+    // rows in a different order per page, so pages overlap or skip rows and the
+    // export is silently short. Both queries must order by something unique and
+    // non-null.
+    it('orders members by a unique, non-null key', async () => {
+      await GET(request('http://localhost/api/admin/exports/members', SECRET))
+
+      // member_id is UNIQUE but nullable, so id must break ties among NULLs.
+      expect(orderedColumns(queries[0])).toEqual(['member_id', 'id'])
+    })
+
+    it('orders memberships by primary key', async () => {
+      await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      )
+
+      expect(orderedColumns(queries[0])).toContain('id')
+    })
+
+    it('orders before ranging, so every page is a slice of one ordering', async () => {
+      await GET(request('http://localhost/api/admin/exports/members', SECRET))
+
+      expect(queries[0].order).toHaveBeenCalled()
+      expect(queries[0].range).toHaveBeenCalledWith(0, 999)
     })
   })
 

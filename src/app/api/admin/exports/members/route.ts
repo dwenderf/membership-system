@@ -201,10 +201,15 @@ async function fetchMembers(
   const rows: MemberRow[] = []
 
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
+    // Order must be total, not just useful: .range() is OFFSET/LIMIT, and
+    // PostgreSQL gives no row order without ORDER BY, so pages of an unordered
+    // query can overlap or skip rows. member_id is UNIQUE but nullable, which
+    // leaves ties among NULLs -- id (the primary key) breaks them.
     let query = supabase
       .from('users')
       .select('first_name, last_name, email, member_id')
       .order('member_id', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
     if (!includeDeleted) query = query.is('deleted_at', null)
@@ -242,11 +247,14 @@ async function fetchMemberships(
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
     // user_id and membership_id are NOT NULL FKs declared on user_memberships,
     // so both embeds are single objects rather than arrays (see AGENTS.md).
+    // Ordered by primary key so the paged reads are stable; the output order
+    // is imposed after grouping, below.
     let query = supabase
       .from('user_memberships')
       .select(
         'membership_id, valid_until, users(first_name, last_name, email, member_id, deleted_at), memberships(name)'
       )
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
     if (options.membershipId) query = query.eq('membership_id', options.membershipId)

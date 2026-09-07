@@ -373,11 +373,11 @@ export class BatchProcessor {
 
   /**
    * NOTE: Scheduled processing is not used in serverless environment.
-   * Scheduled tasks are handled by cron endpoints:
+   * Scheduled tasks are handled by cron endpoints; see vercel.json for the
+   * authoritative list and schedules:
    * - /api/cron/xero-sync
-   * - /api/cron/email-retry  
-   * - /api/cron/maintenance
-   * - /api/cron/cleanup
+   * - /api/cron/email-sync
+   * - /api/cron/daily-housekeeping
    */
 
   /**

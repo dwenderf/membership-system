@@ -84,11 +84,23 @@ async function expireAbandonedRegistrations(
 /**
  * Mark Xero staging rows for never-completed carts as abandoned.
  *
- * A cart is abandoned when its invoice is still 'staged' (the pre-payment
- * state) with payment_id still null, past the age threshold. payment_id is
- * written back when checkout completes, so the 24-hour window sits far beyond
- * any in-flight checkout and cannot race a payment that succeeded but has not
- * yet been linked.
+ * Targets invoices still 'staged' (the pre-payment state) with payment_id
+ * null, past the age threshold.
+ *
+ * KNOWN LIMITATION — this is narrower than "all abandoned carts". payment_id is
+ * stamped at payment-INTENT creation (create-registration-payment-intent),
+ * not at completion: the completion processor writes payment_id and
+ * sync_status 'pending' together in one update, so any row that completed is
+ * 'pending', never 'staged'. A payment_id IS NULL guard therefore only matches
+ * carts abandoned BEFORE the Stripe step. Carts abandoned at or after it keep
+ * sitting at 'staged' with a payment_id and are not swept here.
+ *
+ * That guard is kept deliberately for now: among the rows it excludes are any
+ * whose payment actually succeeded while the completion processor failed to
+ * promote them (the processor logs those as needing manual reconciliation).
+ * Those are unsynced revenue, not abandoned carts, and must not be marked
+ * abandoned. Widening this sweep requires distinguishing the two by joining to
+ * payments.status first.
  *
  * Order matters. The payments update runs before the invoices update so that a
  * failure on the payments side — for instance if

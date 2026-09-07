@@ -167,11 +167,14 @@ WHERE payment_status = 'awaiting_payment'
   AND registered_at IS NULL
   AND created_at < now() - interval '1 hour';
 
--- Abandoned carts. 'staged' + payment_id IS NULL is the pre-payment state;
--- payment_id is written back at checkout completion, so a 24-hour window sits
--- far beyond any in-flight checkout. Payments are updated before invoices so a
--- constraint failure on the payments side leaves the pair consistent, matching
--- the route's ordering.
+-- Abandoned carts, narrow definition: 'staged' with payment_id still NULL.
+-- NOTE: payment_id is stamped at payment-INTENT creation, not completion, so
+-- this only matches carts abandoned BEFORE the Stripe step. Carts abandoned at
+-- or after it keep a payment_id and are deliberately left alone — some of those
+-- may be payments that succeeded while the completion processor failed to
+-- promote them, which is unsynced revenue rather than an abandoned cart. See
+-- the route's header comment. Payments are updated before invoices so a
+-- constraint failure on the payments side leaves the pair consistent.
 UPDATE xero_payments p
 SET sync_status = 'abandoned',
     sync_error = 'Automatically marked as abandoned - staged over 24 hours without payment completion'

@@ -7,23 +7,23 @@ import { logger } from '@/lib/logging/logger'
  * /api/cron/maintenance routes, which split this work between two ambiguously
  * named endpoints (only one of which was ever declared in vercel.json).
  *
- * Runs two independent sweeps, each reporting its own counters and errors so
+ * Runs three independent sweeps, each reporting its own counters and errors so
  * one failing step never masks another:
  *
  *  1. expireAbandonedRegistrations — awaiting_payment rows the user never paid
- *  2. pruneOldEmailLogs            — email_logs past the 90-day retention window
+ *  2. abandonStaleCarts            — staged Xero rows for carts never paid for
+ *  3. pruneOldEmailLogs            — email_logs past the 90-day retention window
  *
- * The predecessor also swept xero_invoices/xero_payments, filtering
- * sync_status = 'pending' and marking matches 'abandoned' after 24 hours. That
- * step is deliberately NOT carried over: 'pending' is the live Xero sync queue
- * (drained by get_pending_xero_invoices_with_lock every 5 minutes via
- * /api/cron/xero-sync), not the pre-payment cart state, which is 'staged'. The
- * sweep only ever appeared safe because the anon client could not write; under
- * the service-role client it would drop real accounting records — refund credit
- * notes and manually retried failures both enter the queue as 'pending' — out
- * of the sync queue precisely when a sync is stuck and needs attention. An
- * abandoned-cart sweep keyed on 'staged' + payment_id IS NULL may still be
- * wanted; it needs its own decision on semantics and threshold.
+ * NOTE on the cart sweep: the predecessor filtered xero_invoices/xero_payments
+ * on sync_status = 'pending', which is NOT the cart state. 'pending' is the
+ * live Xero sync queue, selected by get_pending_xero_invoices_with_lock and
+ * drained every 5 minutes by /api/cron/xero-sync; refund credit notes and
+ * manually retried failures enter it that way, and a row only lingers there
+ * when a sync is stuck and needs attention. Abandoning those would drop real
+ * accounting records out of the queue. The pre-payment cart state is 'staged'
+ * with payment_id still null, which is what this sweep targets — matching
+ * 2025-10-19-cleanup-old-staged-records.sql, the one-off migration that is the
+ * only thing to have swept these before.
  *
  * Uses the service-role client deliberately. Every table touched here has RLS
  * enabled with policies keyed on auth.uid(), and a cron request carries no
@@ -33,7 +33,11 @@ import { logger } from '@/lib/logging/logger'
  */
 
 const ABANDONED_REGISTRATION_AGE_MS = 60 * 60 * 1000 // 1 hour
+const STALE_CART_AGE_MS = 24 * 60 * 60 * 1000 // 1 day
 const EMAIL_LOG_RETENTION_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
+
+const ABANDONED_CART_REASON =
+  'Automatically marked as abandoned - staged over 24 hours without payment completion'
 
 type Supabase = ReturnType<typeof createAdminClient>
 
@@ -78,6 +82,83 @@ async function expireAbandonedRegistrations(
 }
 
 /**
+ * Mark Xero staging rows for never-completed carts as abandoned.
+ *
+ * A cart is abandoned when its invoice is still 'staged' (the pre-payment
+ * state) with payment_id still null, past the age threshold. payment_id is
+ * written back when checkout completes, so the 24-hour window sits far beyond
+ * any in-flight checkout and cannot race a payment that succeeded but has not
+ * yet been linked.
+ *
+ * Order matters. The payments update runs before the invoices update so that a
+ * failure on the payments side — for instance if
+ * 2026-09-07-restore-abandoned-status-to-xero-payments.sql has not been applied
+ * and the check constraint still rejects 'abandoned' — leaves the invoice
+ * 'staged' rather than stranding an abandoned invoice beside a staged payment.
+ * The reverse order would be the inconsistent one. Both updates are idempotent,
+ * so a partial run simply completes on the next pass.
+ *
+ * Payments are scoped to the invoices selected in this run, unlike the one-off
+ * migration, which matched every abandoned invoice in the table.
+ */
+async function abandonStaleCarts(
+  supabase: Supabase
+): Promise<StepResult & { invoices: number; payments: number }> {
+  const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
+  const staleFilter = `staged_at.lt.${cutoff},and(staged_at.is.null,created_at.lt.${cutoff})`
+
+  const { data: staleInvoices, error: selectError } = await supabase
+    .from('xero_invoices')
+    .select('id')
+    .eq('sync_status', 'staged')
+    .is('payment_id', null)
+    .or(staleFilter)
+
+  if (selectError) {
+    return { success: false, error: `select: ${selectError.message}`, invoices: 0, payments: 0 }
+  }
+
+  const invoiceIds = (staleInvoices || []).map((row: { id: string }) => row.id)
+  if (invoiceIds.length === 0) {
+    return { success: true, error: null, invoices: 0, payments: 0 }
+  }
+
+  const { data: abandonedPayments, error: paymentError } = await supabase
+    .from('xero_payments')
+    .update({ sync_status: 'abandoned', sync_error: ABANDONED_CART_REASON })
+    .in('xero_invoice_id', invoiceIds)
+    .eq('sync_status', 'staged')
+    .select('id')
+
+  if (paymentError) {
+    return { success: false, error: `payments: ${paymentError.message}`, invoices: 0, payments: 0 }
+  }
+
+  const { data: abandonedInvoices, error: invoiceError } = await supabase
+    .from('xero_invoices')
+    .update({ sync_status: 'abandoned', sync_error: ABANDONED_CART_REASON })
+    .in('id', invoiceIds)
+    .eq('sync_status', 'staged')
+    .select('id')
+
+  if (invoiceError) {
+    return {
+      success: false,
+      error: `invoices: ${invoiceError.message}`,
+      invoices: 0,
+      payments: abandonedPayments?.length || 0,
+    }
+  }
+
+  return {
+    success: true,
+    error: null,
+    invoices: abandonedInvoices?.length || 0,
+    payments: abandonedPayments?.length || 0,
+  }
+}
+
+/**
  * Delete email_logs past the retention window.
  *
  * The delete is filtered by the same predicate as the count rather than by the
@@ -113,6 +194,8 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
   const results = {
     registrationsExpired: 0,
+    cartInvoicesAbandoned: 0,
+    cartPaymentsAbandoned: 0,
     emailLogsDeleted: 0,
     errors: [] as string[],
   }
@@ -141,6 +224,19 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+      const carts = await abandonStaleCarts(supabase)
+      results.cartInvoicesAbandoned = carts.invoices
+      results.cartPaymentsAbandoned = carts.payments
+      if (carts.error) {
+        results.errors.push(`Stale cart abandonment error: ${carts.error}`)
+      }
+    } catch (error) {
+      results.errors.push(
+        `Stale cart abandonment error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
+    }
+
+    try {
       const emailLogs = await pruneOldEmailLogs(supabase)
       results.emailLogsDeleted = emailLogs.deleted
       if (emailLogs.error) {
@@ -161,6 +257,8 @@ export async function GET(request: NextRequest) {
       {
         duration,
         registrationsExpired: results.registrationsExpired,
+        cartInvoicesAbandoned: results.cartInvoicesAbandoned,
+        cartPaymentsAbandoned: results.cartPaymentsAbandoned,
         emailLogsDeleted: results.emailLogsDeleted,
         errorCount: results.errors.length,
       },

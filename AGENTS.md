@@ -28,6 +28,8 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 
 - **Write migration files.** This is the deliverable for a schema change, always.
 - **Apply to the development project** (`membership-system-dev`, ref `qojixnzpfkpteakltdoa`), via the Supabase MCP `apply_migration` or the *Apply database migrations* workflow. Preview deployments run against that database, so a schema-dependent change cannot be exercised until the migration is on it. Apply before pushing the branch, then say in your summary what you applied.
+
+  If you *cannot* — no Supabase MCP in your session, no permission to run Actions workflows, or a fork PR where secrets are unavailable — then say so plainly in your summary and in the PR description, naming the file that still needs applying. Do not push a schema-dependent branch and let its preview fail without explanation; a missing column reads as a broken feature, and the next person debugs the wrong thing.
 - **Run read-only queries against either project** — catalog inspection, drift comparison, `pg_stat_statements`, `get_advisors`, logs. Do this liberally; it is how the dev/prod drift and the anonymous data exposure were both found. Reading is not the same as changing.
 
 ### What you must not do
@@ -39,6 +41,8 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 ### How production gets changed
 
 By a human, deliberately: the *Apply database migrations* workflow (the `production` GitHub Environment requires a reviewer) or the Supabase SQL editor. **Merging a PR does not apply migrations** — nothing in CI touches the production database, and the Cloud Run deploy is manual besides. A PR that adds a migration is therefore not finished when it merges: say so explicitly in the PR description, and name the file that still needs applying.
+
+The *Check databases are up to date* workflow runs on a weekday schedule and fails when a database is missing a migration this repo carries, so an unapplied file surfaces on its own rather than waiting to be remembered.
 
 ### Requirements for every migration
 

@@ -232,6 +232,14 @@ The development database is the exception to "deliberately": preview deployments
 
 **Through the workflow** — Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
 
+This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
+
+### Knowing whether a database is current
+
+*Check databases are up to date* (Actions, or on a weekday schedule) compares the migration files in the repo against what each database reports in `supabase_migrations.schema_migrations`, and fails when a database is behind. It also warns when a database has a migration the repo doesn't — the signature of SQL applied by hand outside the repo.
+
+It exists because merging a PR applies nothing. Without it, a migration can sit unapplied indefinitely while every other signal stays green — which is how `schema.sql` ended up eight months stale in the first place.
+
 ### Setting up the workflow
 
 One-time, per project:

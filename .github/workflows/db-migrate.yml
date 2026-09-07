@@ -19,8 +19,11 @@ name: Apply database migrations
 #      Database → Connection string → URI). Use the direct connection, not the
 #      pooler: migrations need a session-mode connection.
 #
-# Once you trust it, this can be switched to fire automatically on pushes to
-# `development` — see the commented trigger below. Leave production manual.
+# The development database is usually already current, because migrations are
+# applied there during feature work so preview deployments can exercise them.
+# This workflow is the catch-up path for it, and the only path for production.
+# The commented push trigger below would apply on merge to `development`, which
+# is later than preview testing needs. Leave production manual regardless.
 
 on:
   workflow_dispatch:

@@ -22,13 +22,46 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 
 ## Database migrations
 
-Migrations are applied by the maintainer — by hand, or through the *Apply database migrations* workflow (see [README § Database Migrations](README.md#database-migrations)). Either way, write the migration file only and let a human run it. Do not run `supabase db push`, `db reset`, `migration up`, or `supabase link` under any circumstances. Do not attempt to verify the migration by connecting to the database. The migration file existing in `supabase/migrations/` is the complete deliverable.
+`supabase/migrations/` is the schema's source of truth, and `supabase/schema.sql` is generated from it. Until 2026-09-07 every migration was applied by hand under filenames the Supabase CLI silently ignores, which is how dev and production drifted apart in both directions. That is fixed: files are CLI-named, `20260907000000_baseline_schema.sql` is a snapshot of production, and both projects' migration history is seeded, so `supabase db push` and `supabase migration list` now report the truth.
 
-Name migrations the way the Supabase CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestamped in UTC. The old `YYYY-MM-DD-name.sql` style is silently skipped by `supabase db push` and `supabase migration list`, which then report "up to date" against a database nothing has been applied to.
+### What you may do
 
-Write migrations idempotently where possible (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP ... IF EXISTS`, etc.) so a migration can be safely re-applied without erroring if it was already partially or fully applied.
+- **Write migration files.** This is the deliverable for a schema change, always.
+- **Apply to the development project** (`membership-system-dev`, ref `qojixnzpfkpteakltdoa`), via the Supabase MCP `apply_migration` or the *Apply database migrations* workflow. Preview deployments run against that database, so a schema-dependent change cannot be exercised until the migration is on it. Apply before pushing the branch, then say in your summary what you applied.
+- **Run read-only queries against either project** — catalog inspection, drift comparison, `pg_stat_statements`, `get_advisors`, logs. Do this liberally; it is how the dev/prod drift and the anonymous data exposure were both found. Reading is not the same as changing.
 
-After adding a migration, run `npm run schema:build` and commit the regenerated `supabase/schema.sql` in the same change. Then run `npm run schema:verify`, which applies `schema.sql` twice to a throwaway database and checks that every table has RLS and every view is `security_invoker` (it needs a reachable PostgreSQL server via the standard `PG*` env vars; CI runs it against a service container). Parsing SQL is not enough to catch a bad migration — `COMMENT ON TABLE <a view>` parses fine and fails on execution. That file is generated (the migrations concatenated in filename order), never hand-edited; `npm run schema:check` fails when the two are out of sync. `supabase/migrations/20260907000000_baseline_schema.sql` is a snapshot of the production database taken on 2026-09-07 that replaced the 140 dated migration files preceding it — read it, not the git history, for the current shape of the schema.
+### What you must not do
+
+- **Never apply anything to production** (`membership-system-prod`, ref `fogsphzerhmyjckxhalj`). Not a migration, not a "quick fix", not a backfill. Hand the maintainer the SQL.
+- **Never run `supabase db reset`**, or anything else that drops or recreates a database.
+- **Never edit a migration file that has already been applied anywhere.** Write a new one; the CLI keys on the version, so an edited file is never re-run and the two databases quietly diverge.
+
+### How production gets changed
+
+By a human, deliberately: the *Apply database migrations* workflow (the `production` GitHub Environment requires a reviewer) or the Supabase SQL editor. **Merging a PR does not apply migrations** — nothing in CI touches the production database, and the Cloud Run deploy is manual besides. A PR that adds a migration is therefore not finished when it merges: say so explicitly in the PR description, and name the file that still needs applying.
+
+### Requirements for every migration
+
+Name it the way the CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestamped in UTC. The old `YYYY-MM-DD-name.sql` style is silently skipped by `db push` and `migration list`, which then report "up to date" against a database nothing has been applied to.
+
+**Make it re-runnable.** `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP ... IF EXISTS`, `DROP POLICY IF EXISTS` before `CREATE POLICY`, and `ALTER TABLE ... ADD CONSTRAINT` wrapped in a `DO` block that checks `pg_constraint` first. `npm run schema:verify` applies the whole schema twice and fails if the second pass errors.
+
+**Make it safe to apply early.** Every open preview shares the one development database, and the migration lands there before the code that needs it:
+
+- New columns are nullable or have a default. Never `SET NOT NULL` without backfilling in the same file, and guard the backfill so it is a no-op on a database that has already run it.
+- Do not drop or rename anything until the code referencing it is gone from `development`.
+- Code that reads a new column deploys *after* the migration that adds it, never in the same breath.
+- Anything destructive is conditional, and called out at the top of the file so a reviewer sees it without reading the SQL.
+
+**Watch for statements that parse but fail on execution.** A syntax check will not catch these:
+
+- `COMMENT ON VIEW` for views — `COMMENT ON TABLE` against a view raises `42809`.
+- `CREATE OR REPLACE VIEW` cannot rename, reorder or drop a column. If the shape changes, drop the dependents and recreate in dependency order.
+- `CREATE OR REPLACE FUNCTION` cannot change a return type; drop it first.
+
+### Before reporting a schema change complete
+
+Run `npm run schema:build` and commit the regenerated `supabase/schema.sql` in the same change — it is generated (the migrations concatenated in filename order) and never hand-edited. Then `npm run schema:check`, `npm run migrations:lint`, and `npm run schema:verify` (needs a reachable PostgreSQL server via the standard `PG*` env vars; CI runs it against a service container). Read `20260907000000_baseline_schema.sql`, not the git history, for the current shape of the schema.
 
 ## Views and functions are public API
 

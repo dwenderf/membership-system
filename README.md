@@ -228,6 +228,8 @@ Migrations are applied deliberately, not as a side effect of merging. Two suppor
 
 **By hand** — paste the migration into the Supabase SQL editor. Fine for a single file, and what the maintainer has historically done. The editor runs the script in one transaction, so a failure rolls the whole thing back.
 
+The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is only ever changed by a human, and **merging a PR does not apply anything**.
+
 **Through the workflow** — Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
 
 ### Setting up the workflow

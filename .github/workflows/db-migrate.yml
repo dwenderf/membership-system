@@ -3,10 +3,21 @@ name: Apply database migrations
 # Applies pending migrations from supabase/migrations/ to one of the Supabase
 # projects, using the Supabase CLI's own migration tracking.
 #
-# Deliberately manual (workflow_dispatch) rather than firing on push. Applying
-# schema changes to a live database is not something to do implicitly on merge,
-# and a migration that drops a column is perfectly idempotent while still being
-# destructive. Run it, read the plan, then apply.
+# Runs on merge (when migration files changed) and on demand.
+#
+# WHAT A FAILURE HERE MEANS: this workflow runs after the push has already
+# landed, so it cannot fail the merge or undo it. A red run means the commit is
+# on the branch and the migration is NOT applied -- the database is behind the
+# code. Nothing is rolled back.
+#
+# The guards that can actually stop a bad migration before it merges are the PR
+# checks: schema:check, migrations:lint, and the `schema` job that applies
+# schema.sql to a real PostgreSQL service container. Those run on the pull
+# request, where failing them blocks the merge.
+#
+# The guard against a merge whose migration silently never applied is the
+# *Check databases are up to date* workflow, which compares each database
+# against the repo on a schedule.
 #
 # SETUP — see README "Automating migrations" before the first run:
 #   1. Seed the CLI's migration history on both projects, once. The baseline was
@@ -40,18 +51,33 @@ on:
         type: boolean
         default: true
 
-  # To apply automatically on merge, uncomment this. With a required reviewer on
-  # the `production` Environment, a merge to main starts the job and it waits for
-  # a human before touching anything: the approval becomes the gate, and the
-  # "someone has to remember" failure mode goes away. The schema applies before
-  # the (manual) Cloud Run deploy, which is the right order for expand/contract.
+  # Applies automatically when a push changes a migration file. A merge to main
+  # starts the job, which then waits for the `production` Environment's required
+  # reviewer before touching anything -- the approval is the gate, rather than
+  # someone remembering to start this. Merges to development apply to the dev
+  # database unattended, which is the point: previews run against it.
   #
-  # push:
-  #   branches: [main, development]
-  #   paths: ['supabase/migrations/**']
+  # The paths filter matters: pushes that don't touch supabase/migrations/ don't
+  # trigger anything.
+  #
+  # This runs AFTER the push has landed. It cannot block or roll back a merge --
+  # see the note on failure below.
+  push:
+    branches: [main, development]
+    paths: ['supabase/migrations/**']
 
 permissions:
   contents: read
+
+# One apply per database at a time. cancel-in-progress is deliberately false:
+# interrupting a run that is partway through `db push` is how you get a database
+# in a state no migration file describes.
+concurrency:
+  group: >-
+    db-migrate-${{ inputs.target
+                   || (github.ref_name == 'main' && 'production')
+                   || 'development' }}
+  cancel-in-progress: false
 
 jobs:
   migrate:

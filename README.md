@@ -240,7 +240,11 @@ The development database is the exception to "deliberately": preview deployments
 
 To run it: Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
 
-**Applying automatically on merge.** The workflow has a commented-out `push` trigger. Uncomment it and a merge to `main` starts the job, which then waits for the `production` Environment's required reviewer before touching anything — the approval becomes the gate instead of someone remembering. The schema applies before the (manual) Cloud Run deploy, which is the correct order for expand/contract migrations. Leave it commented if you would rather choose the moment yourself; the drift check will tell you when production is behind either way.
+**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow. Pushes that don't touch migrations trigger nothing. On `main` the job waits for the `production` Environment's required reviewer before applying; on `development` it applies unattended, which is the point — previews run against that database.
+
+**What a failure means.** This workflow runs *after* the push has landed, so it cannot fail the merge or undo it. A red run means the commit is on the branch and the migration is **not** applied — the code is ahead of the database, and nothing was rolled back. Recovery is to fix the migration in a follow-up and let it re-run, or apply by hand and repair the history.
+
+The checks that can genuinely block a bad migration are the **pull request** ones — `schema:check`, `migrations:lint`, and the `schema` job that applies `schema.sql` to a real PostgreSQL container. Those run before merge, where failing them stops it. The apply workflow is downstream of that decision; the drift check is the backstop for a merge whose migration never made it.
 
 This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
 

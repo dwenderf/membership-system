@@ -4,11 +4,13 @@
  * Initializes and manages background services for the application.
  * 
  * NOTE: This service manager is primarily for development/testing.
- * In production (Vercel), scheduled tasks are handled by Vercel Cron jobs:
- * - Xero sync: /api/cron/xero-sync (daily at 2 AM)
- * - Email retry: /api/cron/email-retry (daily at 4 AM) 
- * - Cleanup: /api/cron/cleanup (daily at 6 AM)
- * - Xero keep-alive: /api/cron/xero-keep-alive (daily at midnight)
+ * In production (Vercel), scheduled tasks are handled by Vercel Cron jobs.
+ * See vercel.json for the authoritative list and schedules:
+ * - /api/cron/xero-sync
+ * - /api/cron/email-sync
+ * - /api/cron/daily-housekeeping
+ * - /api/cron/sync-xero-accounts
+ * - /api/cron/payment-plans
  */
 
 import { logger } from '../logging/logger'

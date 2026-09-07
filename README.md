@@ -1459,7 +1459,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 
 - ✅ **Next.js Build**: Automatic build optimization
 - ✅ **Serverless Functions**: API routes automatically deployed
-- ✅ **Cron Jobs**: Background processing runs daily (Xero operations + maintenance tasks)
+- ✅ **Cron Jobs**: Background processing (Xero sync, email sync, daily housekeeping, payment plans)
 - ✅ **SSL Certificate**: Automatic HTTPS with custom domain support
 - ✅ **CDN**: Global edge network for fast loading
 
@@ -1493,7 +1493,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 - [ ] SSL certificate active and verified
 - [ ] Vercel Pro plan activated (required for cron jobs)
 - [ ] `CRON_SECRET` environment variable configured
-- [ ] Cron jobs verified in Vercel dashboard (4 active jobs)
+- [ ] Cron jobs verified in Vercel dashboard (5 active jobs, matching `vercel.json`)
 
 #### Setting up a personal Vercel project for preview deploys
 
@@ -1525,7 +1525,7 @@ would run more than once per day. Upgrade to the Pro plan to unlock all Cron Job
 | `/api/cron/email-sync` | `* * * * *` | **Admin dashboard** (`/admin`) → *Sync Emails* |
 | `/api/cron/sync-xero-accounts` | `3 2 * * *` | **Admin dashboard** (`/admin`) → *Sync Accounting Codes*, or `/admin/xero-integration` → Accounts |
 | `/api/cron/payment-plans` | `6 2 * * *` | **Payment Plans report** (`/admin/reports/payment-plans`) → *Run Payments* |
-| `/api/cron/cleanup` | `0 2 * * *` | No UI trigger — call the endpoint directly with `Authorization: Bearer $CRON_SECRET` |
+| `/api/cron/daily-housekeeping` | `0 2 * * *` | No UI trigger — call the endpoint directly with `Authorization: Bearer $CRON_SECRET` |
 
 So: deploy to a Hobby project only if you actually need the crons registered (you almost certainly don't — upgrade the project to Pro in that case), and otherwise validate the preview against the shared team project, or exercise the jobs through the admin UI above.
 
@@ -1555,10 +1555,12 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 **3. Verify Cron Jobs in Vercel Dashboard:**
 
 1. Go to **Settings** → **Cron Jobs**
-2. You should see 3 active cron jobs:
+2. You should see 5 active cron jobs, matching `vercel.json`:
    - `xero-sync` - Every 5 minutes (Xero invoice/payment sync)
    - `email-sync` - Every minute (staged email processing + failed email retry, limit 100 per batch)
-   - `cleanup` - Daily at 2 AM (maintenance tasks)
+   - `daily-housekeeping` - Daily at 2 AM (expire abandoned registrations, abandon stale Xero carts, prune email logs past 90-day retention)
+   - `sync-xero-accounts` - Daily at 2:03 AM (refresh Xero chart of accounts)
+   - `payment-plans` - Daily at 2:06 AM (process scheduled payment plan charges)
 
 **Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
 
@@ -1580,8 +1582,8 @@ curl -X GET https://your-domain.vercel.app/api/cron/email-sync \
 curl -X GET https://your-domain.vercel.app/api/cron/xero-sync \
   -H "Authorization: Bearer your-cron-secret"
 
-# Test maintenance operations
-curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
+# Test daily housekeeping operations
+curl -X GET https://your-domain.vercel.app/api/cron/daily-housekeeping \
   -H "Authorization: Bearer your-cron-secret"
 ```
 
@@ -1984,9 +1986,8 @@ Background Email Processing:
 Scheduled Tasks (Cron):
 ┌─────────────────────────────────────┐
 │ Cron Endpoints                      │
-│ ├─ /api/cron/email-retry           │
-│ ├─ /api/cron/maintenance           │
-│ └─ /api/cron/cleanup               │
+│ ├─ /api/cron/email-sync            │
+│ └─ /api/cron/daily-housekeeping    │
 └─────────────────────────────────────┘
 ```
 
@@ -2458,9 +2459,8 @@ Scheduled Tasks (Cron):
 ┌─────────────────────────────────────┐
 │ Cron Endpoints                      │
 │ ├─ /api/cron/xero-sync             │
-│ ├─ /api/cron/email-retry           │
-│ ├─ /api/cron/maintenance           │
-│ └─ /api/cron/cleanup               │
+│ ├─ /api/cron/email-sync            │
+│ └─ /api/cron/daily-housekeeping    │
 └─────────────────────────────────────┘
 
 Batch Processing (Xero Only):

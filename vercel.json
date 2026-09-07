@@ -9,7 +9,7 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/cleanup",
+      "path": "/api/cron/daily-housekeeping",
       "schedule": "0 2 * * *"
     },
     {

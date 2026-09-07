@@ -39,6 +39,8 @@ Supabase publishes everything in the `public` schema through PostgREST, so a new
 
 `SECURITY DEFINER` deserves particular care: such a function ignores RLS entirely, so combining it with a public grant exposes whatever it selects. Three ad-hoc export functions reached production that way and returned every member's name, email and member_id to unauthenticated callers.
 
+When an external consumer (a spreadsheet, a dashboard) needs data, the answer is an authenticated API route, never a view or function — see [README § Exposing Data to External Consumers](README.md#exposing-data-to-external-consumers) and `src/app/api/admin/exports/members/route.ts` for the reference implementation.
+
 ## Supabase relation queries
 
 The Supabase clients in `src/lib/supabase/` (`createServerClient`/`createBrowserClient`/`createClient`) don't pass the generated `Database` type as a generic, so it defaults to `any` — `.select()` results, including embedded relations (joins), are not compiler-checked by default. When postgrest-js can't resolve real foreign-key cardinality from schema metadata, it silently infers **every** embedded relation as an array, even a true one-to-one "belongs-to" join. Don't trust the inferred type's array-ness as a signal of real cardinality, and don't blindly add `[0]` indexing or `Array.isArray()` handling to silence a type error without checking first.

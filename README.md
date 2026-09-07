@@ -207,6 +207,153 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to see the application.
 
+## Exposing Data to External Consumers
+
+Someone will eventually want member data in a spreadsheet, a dashboard, or another tool. There is one supported way to do that, and one way that looks easier but publishes your members' data to the internet.
+
+### The rule
+
+**Never create a view or a database function to serve an external consumer. Build an authenticated API route instead.**
+
+Supabase publishes everything in the `public` schema through PostgREST. The moment a view or function exists there, it has a public URL — `/rest/v1/<view>` or `/rest/v1/rpc/<function>` — and the anon key that unlocks it is not a secret: it ships in the browser bundle of every page on the site. Two specific traps:
+
+- A **view without `security_invoker=true`** runs as its owner and ignores the RLS on the tables underneath it, while Supabase's default privileges hand `anon` SELECT on it automatically.
+- A **`SECURITY DEFINER` function** ignores RLS entirely, and (before `20260907000002_revoke_public_function_access.sql`) new functions were granted to `anon` and `authenticated` by default.
+
+This is not hypothetical. Three export helpers — `get_users_data()`, `get_full_data()` and `get_current_data()` — were created directly in the SQL editor to feed a Google Sheet, and explicitly granted to `anon`. For about eleven weeks, anyone on the internet could `POST /rest/v1/rpc/get_users_data` and receive every member's first name, last name, email address and member ID. They were dropped in that migration and replaced by the route described below.
+
+### The pattern
+
+[`src/app/api/admin/exports/members/route.ts`](src/app/api/admin/exports/members/route.ts) is the reference implementation. The shape of it:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { logger } from '@/lib/logging/logger'
+
+function secretMatches(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false   // timingSafeEqual throws on length mismatch
+  return timingSafeEqual(a, b)              // constant time: no character-by-character leak
+}
+
+export async function GET(request: NextRequest) {
+  const expected = process.env.EXPORT_API_SECRET
+
+  // Fail closed. A missing secret must never mean "no authentication required".
+  if (!expected) {
+    return NextResponse.json({ error: 'Not configured' }, { status: 503 })
+  }
+
+  const header = request.headers.get('authorization') ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+  if (!token || !secretMatches(token, expected)) {
+    logger.logAdminAction('export-unauthorized', 'Rejected request', {}, undefined, 'warn')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Only past the gate do we reach for the service-role client.
+  const supabase = createAdminClient()
+  const { data, error } = await supabase.from('users').select('first_name, last_name, email, member_id')
+  if (error) {
+    return NextResponse.json({ error: 'Export failed' }, { status: 500 })  // don't echo the DB error
+  }
+
+  return NextResponse.json({ rows: data }, { headers: { 'Cache-Control': 'no-store' } })
+}
+```
+
+Why each piece matters:
+
+| Practice | Reason |
+|---|---|
+| Fail closed when the secret is unset | A deploy that forgets the env var must break loudly, not serve the data to everyone. Note the existing cron routes use `if (secret && ...)`, which fails *open* — don't copy that. |
+| `timingSafeEqual`, not `===` | String comparison short-circuits on the first wrong byte; response timing then leaks the secret one character at a time. |
+| Service-role client *after* the auth check | The export is deliberately cross-member, which every RLS policy correctly forbids. The route's own auth is what replaces RLS, so it has to come first. |
+| Never log the token | A rejected guess in your logs is still a credential. Log that a header was present, not what it said. |
+| Generic error bodies | `relation "users" does not exist` tells an attacker about your schema. |
+| `Cache-Control: no-store` | Keeps member PII out of intermediary caches. |
+| Paginate | PostgREST caps a response at 1000 rows; without `.range()` looping you silently export a truncated roster. |
+
+### Setting up the secret
+
+1. **Generate one.** Use something with real entropy, not a passphrase:
+   ```bash
+   openssl rand -base64 32
+   ```
+2. **Add it to Vercel.** Project → Settings → Environment Variables → add `EXPORT_API_SECRET`.
+   - Set a **different value per environment** (Production, Preview, Development). A preview secret leaking must not open production.
+   - Mark it **Sensitive** so it can't be read back out of the dashboard. You can overwrite it blind later; you'll never need to read it.
+   - Redeploy — environment variable changes only take effect on a new deployment.
+3. **Add it locally.** Put it in `.env.local` (never committed). `vercel env pull .env.local` brings the Development value down.
+4. **Hand it over out-of-band.** Send it to the consumer through a password manager or a Signal message, not email or Slack, and never in a spreadsheet cell.
+5. **Rotate it** when someone with access leaves, or if it's ever pasted somewhere public: set a new value in Vercel, redeploy, then update the consumer. Rotation is a two-step with a brief window where the old value still works — that's fine and better than a gap.
+
+Never hand out the `SUPABASE_SERVICE_ROLE_KEY` instead. It bypasses RLS on every table in the database; the whole point of a scoped endpoint is that a leaked export credential exposes one dataset, not everything.
+
+### Consuming it
+
+Test with `curl` first:
+
+```bash
+curl -H "Authorization: Bearer $EXPORT_API_SECRET" \
+  "https://your-domain.com/api/admin/exports/members?dataset=members"
+```
+
+For a Google Sheet, use Apps Script (Extensions → Apps Script). Store the secret in Script Properties — Project Settings → Script properties — rather than pasting it into the code, so it isn't visible to anyone with view access to the script:
+
+```javascript
+function refreshMembers() {
+  const secret = PropertiesService.getScriptProperties().getProperty('EXPORT_API_SECRET');
+  const url = 'https://your-domain.com/api/admin/exports/members?dataset=members';
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + secret },
+    muteHttpExceptions: true,
+  });
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error('Export failed: ' + response.getResponseCode() + ' ' + response.getContentText());
+  }
+
+  const rows = JSON.parse(response.getContentText()).rows;
+  const header = ['first_name', 'last_name', 'email', 'member_id'];
+  const values = [header].concat(rows.map(function (r) {
+    return header.map(function (key) { return r[key]; });
+  }));
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Members');
+  sheet.clearContents();
+  sheet.getRange(1, 1, values.length, header.length).setValues(values);
+}
+```
+
+Then Triggers → Add Trigger → `refreshMembers`, time-driven, daily.
+
+`IMPORTDATA` and `IMPORTJSON` can't be used: neither can send an `Authorization` header, which is exactly why the previous approach reached for a public endpoint. That constraint is the point — if a formula can read it without credentials, so can the internet.
+
+### Available datasets
+
+`GET /api/admin/exports/members`
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `dataset` | `members` (default) | One row per member: name, email, member ID |
+| | `memberships` | One row per member per membership type, with the latest expiry |
+| `membership_id` | uuid | Restrict `memberships` to one membership type |
+| `paid_only` | `true` | Count only paid memberships (default: all, including pending and refunded) |
+| `include_deleted` | `true` | Include soft-deleted members (default: excluded) |
+| `format` | `json` (default), `csv` | Response format |
+
+### Before you add another endpoint
+
+- Does it need to be cross-member? If a signed-in user should only see their own data, use the normal authenticated app routes and let RLS do the work — no secret required.
+- Return the narrowest set of columns that answers the question. An export of names and emails is a smaller incident than an export of everything.
+- `npm run migrations:lint` (blocking in CI) rejects views created without `security_invoker=true` and `GRANT EXECUTE` to public roles, so the database-side mistake fails the build.
+- Supabase's Security Advisor (Dashboard → Advisors, or `get_advisors` over MCP) flags anon-executable `SECURITY DEFINER` functions and views that bypass RLS. Check it after any schema change.
+
 ## Email Integration Setup (Loops.so)
 
 The system uses Loops.so for transactional email delivery. Follow these steps to configure email templates:

@@ -207,10 +207,17 @@ const { data } = await adminSupabase
 - Don't expose internal error details to clients
 
 ```typescript
+import { logger } from '@/lib/logging/logger'
+
 try {
   // Operation
 } catch (error) {
-  console.error('Detailed error for logs:', error)
+  logger.logSystem(
+    'process-request',
+    'Failed to process request',
+    { error },
+    'error'
+  )
   return NextResponse.json(
     { error: 'Failed to process request' },
     { status: 500 }
@@ -359,10 +366,17 @@ Always log errors, even if handling them gracefully:
 try {
   await operation()
 } catch (error) {
-  console.error('Operation failed:', error)  // Always log
-  showError('Failed', 'Please try again')     // Then show to user
+  logger.logSystem('operation-name', 'Operation failed', { error }, 'error')  // Always log
+  showError('Failed', 'Please try again')                                     // Then show to user
 }
 ```
+
+The logger is safe to call from client components as well as server code — in
+the browser it falls back to structured console output. Server-side it also
+appends to `logs/` when running outside a serverless environment, and on
+production and preview (Vercel) deployments it forwards `'error'` entries to
+Sentry. That Sentry reporting is the main reason to prefer it over a bare
+`console.error`.
 
 ---
 

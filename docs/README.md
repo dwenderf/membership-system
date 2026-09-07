@@ -1,16 +1,8 @@
 # Documentation Index
 
-Welcome to the membership system documentation. This directory contains all technical documentation, feature specifications, and guides for the project.
+Welcome to the membership system documentation. This directory contains technical documentation and guides for the project.
 
 ## 📚 Documentation Structure
-
-### 🎯 [Features](./features/)
-Feature-related documentation organized by status:
-- **[Completed](./features/completed/)** - Implemented features with PR references
-- **[Planning](./features/planning/)** - Features being designed or next in pipeline
-- **[Deferred](./features/deferred/)** - Features on hold or postponed
-
-[View Features Documentation →](./features/README.md)
 
 ### 🏗️ [Architecture](./architecture/)
 System-wide technical documentation:
@@ -20,6 +12,13 @@ System-wide technical documentation:
 ### 📖 [Guides](./guides/)
 Setup and operational documentation:
 - **[Development](./guides/development.md)** - Local development setup and workflows
+- **[Coding Standards](./guides/coding-standards.md)** - Conventions for code in this repo
+
+### 🧪 [Testing](./testing/)
+Testing guides for specific subsystems, e.g. **[Payment Plans](./testing/payment-plans-testing-guide.md)**.
+
+### 🔧 [Troubleshooting](./troubleshooting/)
+Write-ups of past incidents and their resolutions.
 
 ### 📋 [PLANNING.md](./PLANNING.md)
 Main project planning document containing:
@@ -28,24 +27,17 @@ Main project planning document containing:
 - Implementation status and roadmap
 - Future enhancements and priorities
 
-## 🔍 Quick Links
+## 🎯 Feature Work and Issue Tracking
 
-### Recently Completed Features
-- [Accounting Code Autocomplete](./features/completed/accounting-code-autocomplete.md) - PR #9 (Oct 27, 2025)
-- [Timezone Configuration](./features/completed/timezone-configuration.md) - PR #8 (Oct 27, 2025)
-- [Waitlist Management](./features/completed/waitlist-feature.md) - PR #5 (Oct 15, 2025)
+**Feature specs, bug reports, and planning live in [GitHub Issues](https://github.com/dwenderf/membership-system/issues), not in this directory.**
 
-### Active Planning
-- [Payment Refactor Proposal](./features/planning/payment-refactor-proposal.md)
-- [Payment Submission Tracking](./features/planning/payment-submission-tracking-enhancement.md)
+Open an issue to propose a feature, report a bug, or track work in progress. Design discussion belongs in the issue thread and its linked pull requests, so that tracking, review, and history stay in one place.
+
+This directory is for durable reference documentation — architecture, setup guides, standards, and troubleshooting — that outlives any single change.
+
+> The former `docs/features/` tree (`planning/`, `completed/`, `deferred/`) was removed in favor of GitHub Issues. Its contents remain in git history if you need them.
 
 ## 🤝 Contributing to Documentation
-
-### Adding New Features
-1. Create planning document in `features/planning/`
-2. When implemented, move to `features/completed/` and add:
-   - Status header with PR number and date
-   - Implementation details
 
 ### Documentation Standards
 - Use clear, descriptive headings
@@ -56,11 +48,4 @@ Main project planning document containing:
 ### File Naming
 - Use lowercase with hyphens: `feature-name.md`
 - Be descriptive but concise
-- Match feature name used in code/PRs
-
-## 📝 Document Templates
-
-See [Features README](./features/README.md) for templates for:
-- Planning documents
-- Completed feature documentation
-- Deferred feature documentation
+- Match the feature name used in code and PRs

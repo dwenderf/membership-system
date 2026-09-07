@@ -40,11 +40,14 @@ on:
         type: boolean
         default: true
 
-  # Uncomment to apply to dev automatically once feature work lands on
-  # `development`. Production stays manual.
+  # To apply automatically on merge, uncomment this. With a required reviewer on
+  # the `production` Environment, a merge to main starts the job and it waits for
+  # a human before touching anything: the approval becomes the gate, and the
+  # "someone has to remember" failure mode goes away. The schema applies before
+  # the (manual) Cloud Run deploy, which is the right order for expand/contract.
   #
   # push:
-  #   branches: [development]
+  #   branches: [main, development]
   #   paths: ['supabase/migrations/**']
 
 permissions:
@@ -57,7 +60,13 @@ jobs:
     # Selects which Environment's SUPABASE_DB_URL is used, and enforces that
     # Environment's protection rules -- this is what makes production require a
     # human approval before the job starts.
-    environment: ${{ inputs.target || 'development' }}
+    # Manual runs use the chosen target. A push (if the trigger below is
+    # enabled) maps branch to database -- without this, a push to main would
+    # fall back to 'development' and quietly apply nothing to production.
+    environment: >-
+      ${{ inputs.target
+          || (github.ref_name == 'main' && 'production')
+          || 'development' }}
 
     steps:
     - name: Checkout code
@@ -83,13 +92,15 @@ jobs:
       run: supabase migration list --db-url "$SUPABASE_DB_URL"
 
     - name: Apply pending migrations
-      if: ${{ inputs.dry_run == false }}
+      # A push carries no inputs, so dry_run is empty: apply. A manual run
+      # applies only when the box was unchecked.
+      if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: supabase db push --db-url "$SUPABASE_DB_URL"
 
     - name: Show migration status after applying
-      if: ${{ inputs.dry_run == false }}
+      if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: supabase migration list --db-url "$SUPABASE_DB_URL"

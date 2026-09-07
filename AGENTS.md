@@ -40,7 +40,7 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 
 ### How production gets changed
 
-By a human, deliberately: the *Apply database migrations* workflow (the `production` GitHub Environment requires a reviewer) or the Supabase SQL editor. **Merging a PR does not apply migrations** — nothing in CI touches the production database, and the Cloud Run deploy is manual besides. A PR that adds a migration is therefore not finished when it merges: say so explicitly in the PR description, and name the file that still needs applying.
+By a human, deliberately, through the *Apply database migrations* workflow (the `production` GitHub Environment requires a reviewer). Do not suggest the SQL editor as an equivalent: it applies the SQL without writing a row to `supabase_migrations.schema_migrations`, so the CLI still thinks the migration is pending and the drift check reports the database as behind. If it is ever used, it has to be followed by `supabase migration repair --status applied <version>`. **Merging a PR does not apply migrations** — nothing in CI touches the production database, and the Cloud Run deploy is manual besides. A PR that adds a migration is therefore not finished when it merges: say so explicitly in the PR description, and name the file that still needs applying.
 
 The *Check databases are up to date* workflow runs on a weekday schedule and fails when a database is missing a migration this repo carries, so an unapplied file surfaces on its own rather than waiting to be remembered.
 

@@ -226,11 +226,21 @@ npm run schema:verify     # applies schema.sql twice to a throwaway database
 
 Migrations are applied deliberately, not as a side effect of merging. Two supported routes:
 
-**By hand** — paste the migration into the Supabase SQL editor. Fine for a single file, and what the maintainer has historically done. The editor runs the script in one transaction, so a failure rolls the whole thing back.
+**Through the workflow — the supported route.** It runs `supabase db push`, which records what it applied in `supabase_migrations.schema_migrations`. Everything downstream depends on that record being true: `db push` skips what's already applied, and the drift check below compares against it.
 
-The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is only ever changed by a human, and **merging a PR does not apply anything**.
+**By hand, in the SQL editor — only as a fallback, and never on its own.** The editor runs the SQL but writes no tracking row, so the CLI still believes the migration is pending: the next `db push` tries to re-apply it and the drift check reports the database as behind even though the change is live. If you do apply by hand, immediately record it:
 
-**Through the workflow** — Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
+```bash
+supabase migration repair --status applied <version> --db-url "postgresql://..."
+```
+
+This is not theoretical — it's why the pre-2026-09-07 history was invisible to the CLI, and why seeding was needed before any of this could work.
+
+The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is only ever changed by a human, and **merging a PR does not apply anything** unless the automatic trigger described below is enabled.
+
+To run it: Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
+
+**Applying automatically on merge.** The workflow has a commented-out `push` trigger. Uncomment it and a merge to `main` starts the job, which then waits for the `production` Environment's required reviewer before touching anything — the approval becomes the gate instead of someone remembering. The schema applies before the (manual) Cloud Run deploy, which is the correct order for expand/contract migrations. Leave it commented if you would rather choose the moment yourself; the drift check will tell you when production is behind either way.
 
 This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
 

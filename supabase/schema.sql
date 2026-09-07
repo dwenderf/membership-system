@@ -1010,8 +1010,6 @@ BEGIN
 END;
 $function$;
 
--- Admin auth audit log reader. Admin access is verified in the API layer; this
--- should only be called via service_role.
 CREATE OR REPLACE FUNCTION public.get_auth_audit_logs(target_user_id uuid DEFAULT NULL::uuid, limit_count integer DEFAULT 50, offset_count integer DEFAULT 0, start_date timestamp with time zone DEFAULT NULL::timestamp with time zone, end_date timestamp with time zone DEFAULT NULL::timestamp with time zone)
  RETURNS TABLE(id uuid, created_at timestamp with time zone, ip_address text, user_id uuid, email text, first_name text, last_name text, action text, payload json)
  LANGUAGE plpgsql
@@ -1019,6 +1017,8 @@ CREATE OR REPLACE FUNCTION public.get_auth_audit_logs(target_user_id uuid DEFAUL
  SET search_path TO 'public'
 AS $function$
 BEGIN
+  -- Admin access is verified in the API layer
+  -- This function should only be called via service_role
   RETURN QUERY
   SELECT
     aal.id,

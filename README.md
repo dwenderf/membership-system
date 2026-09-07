@@ -234,13 +234,15 @@ Migrations are applied deliberately, not as a side effect of merging. Two suppor
 
 One-time, per project:
 
-1. **Seed the CLI's migration history.** The baseline was applied by hand, and the CLI's `supabase_migrations.schema_migrations` table doesn't know that. Without this step the first `db push` would try to apply the baseline to a database that already has everything in it:
+1. **Seed the CLI's migration history.** *Already done for the existing dev and production projects on 2026-09-07 — all three of `20260907000000`, `20260907000001` and `20260907000002` are recorded as applied on both. This step only applies to a new project (a personal sandbox, say).*
+
+   Migrations applied by hand are invisible to the CLI: it tracks what it has run in `supabase_migrations.schema_migrations`, and a manual run leaves no row there. Without seeding it, the first `db push` tries to re-apply everything to a database that already has it:
 
    ```bash
-   supabase migration repair --status applied 20260907000000 20260907000001
+   supabase migration repair --status applied 20260907000000 20260907000001 20260907000002
    ```
 
-   Run it against each project (dev and production) for whichever migrations that database has already received.
+   Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list`.
 
 2. **Create GitHub Environments** named `development` and `production` (Settings → Environments), and add a **required reviewer** to `production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
 

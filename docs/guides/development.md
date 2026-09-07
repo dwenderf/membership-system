@@ -255,7 +255,6 @@ scripts/                   # Dev/admin scripts (flat mix of .sql/.js/.sh files, 
 └── tests/                 # Feature testing scripts
 docs/                      # Project documentation
 ├── architecture/          # System design and database docs
-├── features/              # Feature specs (planning, completed, deferred)
 ├── guides/                # Developer guides (this file)
 ├── testing/               # Testing guides
 └── troubleshooting/       # Incident and troubleshooting write-ups
@@ -319,7 +318,7 @@ const badTime = new Date(invoice.created_at).toLocaleTimeString()  // Inconsiste
 - **Consistent experience** for all users regardless of location or server location
 
 **Configuration:**
-The app timezone is configured via the `NEXT_PUBLIC_APP_TIMEZONE` environment variable. See [docs/timezone-configuration.md](./timezone-configuration.md) for details.
+The app timezone is configured via the `NEXT_PUBLIC_APP_TIMEZONE` environment variable (defaults to `America/New_York`).
 
 **Special cases:**
 - For date-only fields (like `YYYY-MM-DD` strings), use `formatDateString()` to avoid timezone conversion issues
@@ -407,25 +406,61 @@ export async function POST(request: NextRequest) {
 ## 📝 Git Practices
 
 ### Commit Messages
-Use conventional commit format:
+Subjects are written in the imperative mood as plain prose. This repo does
+**not** use conventional-commit prefixes (`type(scope):`).
+
+Two shapes are in use:
+
 ```
-type(scope): brief description
+Fix #266: make Xero client init lazy instead of module-scope
+```
+Use `Fix #N: <description>` when the commit closes a GitHub issue, so the
+issue is linked and closed automatically on merge.
 
-Detailed explanation of changes made and why.
+```
+Remove dead failed-email retry step from email-sync cron
+```
+Use a plain imperative subject for everything else.
 
-- Specific change 1
-- Specific change 2
+The body explains what changed and why, with bullets for specific changes:
+
+```
+Fix #266: make Xero client init lazy instead of module-scope
+
+The module-scope env check ran at import time, so importing this module
+transitively crashed onboarding when Xero wasn't configured.
+
+- Move the env check into getXeroClient()
+- Cache the singleton on first call
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
+Commits authored through Claude Code carry the attribution trailers above;
+Claude Code adds them automatically, so you don't need to write them by hand.
+
 ### Branch Naming
-- `feature/description`: New features
-- `fix/description`: Bug fixes
-- `docs/description`: Documentation updates
-- `refactor/description`: Code refactoring
+Most branches are created by Claude Code and follow `claude/<short-slug>`,
+sometimes with a generated suffix:
+
+```
+claude/xero-client-lazy-init
+claude/development-md-doc-sync
+claude/issue-243-final-piece-6d41d6
+```
+
+Automated dependency branches come from Dependabot as
+`dependabot/npm_and_yarn/<group>`.
+
+If you're branching by hand, a short descriptive slug is enough — match the
+change, not a fixed prefix taxonomy.
+
+### Pull Requests
+Work lands on `main` through pull requests, merged as merge commits
+(`Merge pull request #N from dwenderf/<branch>`). Reference the issue the PR
+closes in the description so it closes on merge.
 
 ### Pre-Commit Checklist
 - [ ] Remove any console.log debugging statements

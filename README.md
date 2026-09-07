@@ -1271,6 +1271,17 @@ Planned additions to the test suite:
 3. **Check Logs**: Monitor `email_logs` table for delivery status
 4. **Commit Changes**: Use descriptive commit messages
 
+### Issues, Bugs, and Feature Requests
+
+**All issue tracking goes through [GitHub Issues](https://github.com/dwenderf/membership-system/issues).**
+
+Open an issue to report a bug, propose a feature, or track work in progress.
+Design discussion belongs in the issue thread and its linked pull requests, so
+that tracking, review, and history stay in one place. Don't add planning or
+feature-spec markdown files to the repo for this purpose — the `docs/`
+directory is for durable reference documentation (architecture, setup guides,
+standards, troubleshooting), not for tracking work.
+
 ## Deployment
 
 ### Vercel Deployment (Recommended)
@@ -1734,9 +1745,10 @@ For direct database access, use the Supabase dashboard:
 
 For questions about the codebase or setup process, refer to:
 
-- **Planning Document**: `PLANNING.md` for detailed architecture
+- **Planning Document**: `docs/PLANNING.md` for detailed architecture
 - **Database Schema**: `supabase/schema.sql` for data models
 - **Email Logs**: Check Supabase `email_logs` table for debugging
+- **Issues**: [GitHub Issues](https://github.com/dwenderf/membership-system/issues) for bugs, feature requests, and work in progress
 
 ---
 

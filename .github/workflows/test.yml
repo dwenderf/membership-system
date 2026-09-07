@@ -34,6 +34,9 @@ jobs:
     - name: Check generated schema.sql is up to date
       run: npm run schema:check
 
+    - name: Lint migrations for unsafe views and grants
+      run: npm run migrations:lint
+
     - name: Run typecheck
       run: npm run typecheck
 

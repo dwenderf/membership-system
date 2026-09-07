@@ -30,6 +30,15 @@ Write migrations idempotently where possible (`ADD COLUMN IF NOT EXISTS`, `CREAT
 
 After adding a migration, run `npm run schema:build` and commit the regenerated `supabase/schema.sql` in the same change. That file is generated (the migrations concatenated in filename order), never hand-edited; `npm run schema:check` fails when the two are out of sync. `supabase/migrations/20260907000000_baseline_schema.sql` is a snapshot of the production database taken on 2026-09-07 that replaced the 140 dated migration files preceding it — read it, not the git history, for the current shape of the schema.
 
+## Views and functions are public API
+
+Supabase publishes everything in the `public` schema through PostgREST, so a new view or function is reachable from the internet with the (public) anon key the moment it exists. Two rules, both enforced by `npm run migrations:lint` (a blocking CI step):
+
+- **Every view must be created `WITH (security_invoker=true)`.** Without it a view runs as its owner and ignores RLS on the tables underneath, while Supabase's default privileges hand `anon` SELECT on it automatically. All nine existing views set this.
+- **Never `GRANT EXECUTE ... TO anon`/`authenticated`/`PUBLIC` without a stated reason.** As of `20260907000002_revoke_public_function_access.sql`, new functions in `public` are no longer granted to those roles by default, so a function is unreachable over `/rest/v1/rpc/` unless a migration grants it explicitly. If a function is only called server-side (every `.rpc()` call in this repo uses `createAdminClient`), it needs no grant at all — `service_role` is unaffected.
+
+`SECURITY DEFINER` deserves particular care: such a function ignores RLS entirely, so combining it with a public grant exposes whatever it selects. Three ad-hoc export functions reached production that way and returned every member's name, email and member_id to unauthenticated callers.
+
 ## Supabase relation queries
 
 The Supabase clients in `src/lib/supabase/` (`createServerClient`/`createBrowserClient`/`createClient`) don't pass the generated `Database` type as a generic, so it defaults to `any` — `.select()` results, including embedded relations (joins), are not compiler-checked by default. When postgrest-js can't resolve real foreign-key cardinality from schema metadata, it silently infers **every** embedded relation as an array, even a true one-to-one "belongs-to" join. Don't trust the inferred type's array-ness as a signal of real cardinality, and don't blindly add `[0]` indexing or `Array.isArray()` handling to silence a type error without checking first.

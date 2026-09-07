@@ -246,6 +246,14 @@ To run it: Actions → *Apply database migrations* → Run workflow, pick `devel
 
 The checks that can genuinely block a bad migration are the **pull request** ones — `schema:check`, `migrations:lint`, and the `schema` job that applies `schema.sql` to a real PostgreSQL container. Those run before merge, where failing them stops it. The apply workflow is downstream of that decision; the drift check is the backstop for a merge whose migration never made it.
 
+**Those checks only block a merge if you require them.** As of this writing neither `main` nor `development` has branch protection, so a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely. Settings → Branches → add a rule for each of `main` and `development`:
+
+- **Require a pull request before merging** — closes the direct-push path
+- **Require status checks to pass**, selecting `test` and `schema`
+- **Require branches to be up to date before merging** — so a migration is validated against the code it will actually land next to
+
+Without that, "we always use a PR" is a convention rather than a guarantee, and the safety of the whole migration flow rests on it.
+
 This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
 
 ### Knowing whether a database is current
@@ -270,7 +278,20 @@ One-time, per project:
 
 2. **Create GitHub Environments** named `development` and `production` (Settings → Environments), and add a **required reviewer** to `production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
 
-3. **Add a `SUPABASE_DB_URL` secret to each Environment** — same name, different value — set to that project's direct connection string (Dashboard → Project Settings → Database → Connection string → URI). Use the direct connection rather than the pooler; migrations need a session-mode connection.
+3. **Add a `SUPABASE_DB_URL` secret to each Environment** — same name, different value.
+
+   This is a **PostgreSQL connection string**, not the API URL. They are different things and are not interchangeable:
+
+   | Variable | Example | What it is |
+   |---|---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://fogsphzerhmyjckxhalj.supabase.co` | HTTPS endpoint the JS client talks to. Public — it ships in the browser bundle. |
+   | `SUPABASE_DB_URL` | `postgresql://postgres.<ref>:<password>@aws-1-us-east-2.pooler.supabase.com:5432/postgres` | Postgres wire-protocol connection, used by `psql` and `supabase db push`. **Contains the database password — secret.** |
+
+   Get it from Dashboard → **Connect** → *Session pooler*, and use that one:
+
+   - **Session pooler, port 5432** ✅ — what to use. Migrations need session mode, and this host is reachable over IPv4.
+   - **Transaction pooler, port 6543** ❌ — transaction mode breaks migrations.
+   - **Direct connection** (`db.<ref>.supabase.co:5432`) — session mode, but IPv6-only unless the project has the IPv4 add-on, and GitHub-hosted runners are IPv4-only. Fine from a machine with IPv6; don't rely on it in CI.
 
 Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
 

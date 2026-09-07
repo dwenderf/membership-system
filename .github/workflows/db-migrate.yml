@@ -26,9 +26,11 @@ name: Apply database migrations
 #   2. Create GitHub Environments named `development` and `production`
 #      (Settings → Environments). Add a required reviewer to `production`.
 #   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
-#      direct connection string (Supabase Dashboard → Project Settings →
-#      Database → Connection string → URI). Use the direct connection, not the
-#      pooler: migrations need a session-mode connection.
+#      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
+#      Dashboard -> Connect -> Session pooler (port 5432), which is session mode
+#      and IPv4-reachable. Not the transaction pooler (6543): transaction mode
+#      breaks migrations. The direct connection is session mode too, but is
+#      IPv6-only without the IPv4 add-on, and GitHub runners are IPv4.
 #
 # The development database is usually already current, because migrations are
 # applied there during feature work so preview deployments can exercise them.

@@ -237,15 +237,16 @@ const { data: profile } = await supabase
 src/
 ├── app/                    # Next.js app router pages and API routes
 ├── components/            # Reusable UI components
+├── config/                # App configuration
+├── contexts/              # React context providers
 ├── lib/                   # Business logic and utilities
 │   ├── services/         # Business services (payment, email, etc.)
 │   ├── logging/          # Centralized logging system
 │   └── supabase/         # Database client configuration
 ├── types/                # TypeScript type definitions
-scripts/                   # Development and administrative scripts
+scripts/                   # Development and administrative scripts (flat mix of .sql/.js/.sh files)
 ├── tests/                # Feature testing scripts
-├── debug/                # Debugging and troubleshooting scripts
-└── admin/                # Administrative and maintenance scripts
+└── debug/                # Debugging and troubleshooting scripts
 docs/                      # Project documentation
 └── logs/                  # Generated log files (gitignored)
 ```
@@ -535,5 +536,5 @@ Document API endpoints with:
 
 ---
 
-*Last updated: October 23, 2025*
+*Last updated: August 22, 2026*
 *This document should be updated as new patterns and practices are established.*

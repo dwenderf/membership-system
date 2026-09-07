@@ -1557,7 +1557,7 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 1. Go to **Settings** → **Cron Jobs**
 2. You should see 5 active cron jobs, matching `vercel.json`:
    - `xero-sync` - Every 5 minutes (Xero invoice/payment sync)
-   - `email-sync` - Every minute (staged email processing + failed email retry, limit 100 per batch)
+   - `email-sync` - Every minute (staged email processing, limit 100 per batch; transient failures stay `pending` and retry on the next run)
    - `daily-housekeeping` - Daily at 2 AM (expire abandoned registrations, abandon stale Xero carts, prune email logs past 90-day retention)
    - `sync-xero-accounts` - Daily at 2:03 AM (refresh Xero chart of accounts)
    - `payment-plans` - Daily at 2:06 AM (process scheduled payment plan charges)

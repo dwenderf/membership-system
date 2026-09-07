@@ -246,13 +246,35 @@ To run it: Actions → *Apply database migrations* → Run workflow, pick `devel
 
 The checks that can genuinely block a bad migration are the **pull request** ones — `schema:check`, `migrations:lint`, and the `schema` job that applies `schema.sql` to a real PostgreSQL container. Those run before merge, where failing them stops it. The apply workflow is downstream of that decision; the drift check is the backstop for a merge whose migration never made it.
 
-**Those checks only block a merge if you require them.** As of this writing neither `main` nor `development` has branch protection, so a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely. Settings → Branches → add a rule for each of `main` and `development`:
+**Those checks only block a merge if you require them.** Without a ruleset, a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely — "we always use a PR" is a convention rather than a guarantee.
 
-- **Require a pull request before merging** — closes the direct-push path
-- **Require status checks to pass**, selecting `test` and `schema`
-- **Require branches to be up to date before merging** — so a migration is validated against the code it will actually land next to
+Settings → **Rules** → **Rulesets** → New branch ruleset. One ruleset covers both branches: under *Target branches* → Include → add `main` and `development`. Set **Enforcement status: Active** — a ruleset can be saved in Disabled or Evaluate mode, where it reports without blocking anything. Leave the **bypass list empty**; adding "Repository admin" makes the whole thing advisory for exactly the person doing the merging.
 
-Without that, "we always use a PR" is a convention rather than a guarantee, and the safety of the whole migration flow rests on it.
+Rules to enable:
+
+| Rule | Setting |
+|---|---|
+| Require a pull request before merging | On, with **required approvals: 0** |
+| Require status checks to pass | On — add `test` and `schema`, and tick *Require branches to be up to date before merging* |
+| Restrict deletions | On (default) |
+| Block force pushes | On (default) |
+
+Required approvals defaults to 1, and nobody can approve their own pull request — on a repository with effectively one maintainer that setting locks you out of merging your own work. Zero still gives you the pull request and the checks.
+
+Rules to leave off:
+
+- **Require linear history** — it rejects merge commits, and `development` → `main` is a regular merge (see [Git Merge Strategies](#git-merge-strategies)).
+- **Restrict updates** — blocks all pushes to the branch, not just direct ones.
+- **Require signed commits** — rejects commits from any contributor or automation not set up for signing.
+- **Require deployments to succeed** — ties the branch to GitHub Environment deployments, which here are the migration Environments; unrelated, and confusing to tangle together.
+- Restrict creations, code scanning, code quality, coverage, Copilot review — not applicable to this repository.
+
+Two things about the status checks specifically:
+
+- **A check only appears in the picker once it has run at least once.** `schema` is newer than `test`, so it may not be listed until a pull request has exercised it. Add it afterwards rather than typing the name by hand — a ruleset treats an unrecognised check as "never reported" and blocks every merge until something reports it.
+- **Do not require `Apply database migrations` or `Check databases are up to date`.** Neither runs on pull requests, so requiring them would deadlock every merge.
+
+One consequence to expect: with a pull request required on `main`, promoting `development` → `main` becomes a pull request rather than a local merge and push. Same result, one extra step, and the checks run against the exact commit that lands.
 
 This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
 

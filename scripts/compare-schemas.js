@@ -29,7 +29,7 @@ const tableMatches = schemaContent.match(/CREATE TABLE [^;]+;/g) || [];
 const tables = {};
 
 tableMatches.forEach(match => {
-  const tableNameMatch = match.match(/CREATE TABLE (\w+)/);
+  const tableNameMatch = match.match(/CREATE TABLE (?:IF NOT EXISTS )?(?:public\.)?(\w+)/);
   if (tableNameMatch) {
     const tableName = tableNameMatch[1];
     tables[tableName] = match;

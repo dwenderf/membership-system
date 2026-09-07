@@ -1,0 +1,139 @@
+name: Apply database migrations
+
+# Applies pending migrations from supabase/migrations/ to one of the Supabase
+# projects, using the Supabase CLI's own migration tracking.
+#
+# Runs on merge (when migration files changed) and on demand.
+#
+# WHAT A FAILURE HERE MEANS: this workflow runs after the push has already
+# landed, so it cannot fail the merge or undo it. A red run means the commit is
+# on the branch and the migration is NOT applied -- the database is behind the
+# code. Nothing is rolled back.
+#
+# The guards that can actually stop a bad migration before it merges are the PR
+# checks: schema:check, migrations:lint, and the `schema` job that applies
+# schema.sql to a real PostgreSQL service container. Those run on the pull
+# request, where failing them blocks the merge.
+#
+# The guard against a merge whose migration silently never applied is the
+# *Check databases are up to date* workflow, which compares each database
+# against the repo on a schedule.
+#
+# SETUP — see README "Automating migrations" before the first run:
+#   1. Seed the CLI's migration history on both projects, once. The baseline was
+#      applied by hand, and the CLI does not know that yet:
+#        supabase migration repair --status applied 20260907000000 20260907000001
+#   2. Create GitHub Environments named `supabase-development` and
+#      `supabase-production` (Settings → Environments), and add a required
+#      reviewer to `supabase-production`.
+#
+#      Deliberately NOT the existing `Production`/`Preview` environments: those
+#      belong to the Vercel integration, and adding a reviewer to them would
+#      gate Vercel deployments as well as migrations.
+#   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
+#      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
+#      Dashboard -> Connect -> Session pooler (port 5432), which is session mode
+#      and IPv4-reachable. Not the transaction pooler (6543): transaction mode
+#      breaks migrations. The direct connection is session mode too, but is
+#      IPv6-only without the IPv4 add-on, and GitHub runners are IPv4.
+#
+# The development database is usually already current, because migrations are
+# applied there during feature work so preview deployments can exercise them.
+# This workflow is the catch-up path for it, and the only path for production.
+# The commented push trigger below would apply on merge to `development`, which
+# is later than preview testing needs. Leave production manual regardless.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database to apply to'
+        required: true
+        type: choice
+        options:
+          - supabase-development
+          - supabase-production
+      dry_run:
+        description: 'Only show what would be applied (recommended first)'
+        type: boolean
+        default: true
+
+  # Applies automatically when a push changes a migration file. A merge to main
+  # starts the job, which then waits for the `supabase-production` Environment's
+  # required reviewer before touching anything -- the approval is the gate, rather than
+  # someone remembering to start this. Merges to development apply to the dev
+  # database unattended, which is the point: previews run against it.
+  #
+  # The paths filter matters: pushes that don't touch supabase/migrations/ don't
+  # trigger anything.
+  #
+  # This runs AFTER the push has landed. It cannot block or roll back a merge --
+  # see the note on failure below.
+  push:
+    branches: [main, development]
+    paths: ['supabase/migrations/**']
+
+permissions:
+  contents: read
+
+# One apply per database at a time. cancel-in-progress is deliberately false:
+# interrupting a run that is partway through `db push` is how you get a database
+# in a state no migration file describes.
+concurrency:
+  group: >-
+    db-migrate-${{ inputs.target
+                   || (github.ref_name == 'main' && 'supabase-production')
+                   || 'supabase-development' }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    # Selects which Environment's SUPABASE_DB_URL is used, and enforces that
+    # Environment's protection rules -- this is what makes production require a
+    # human approval before the job starts.
+    # Manual runs use the chosen target. A push (if the trigger below is
+    # enabled) maps branch to database -- without this, a push to main would
+    # fall back to 'supabase-development' and quietly apply nothing to prod.
+    environment: >-
+      ${{ inputs.target
+          || (github.ref_name == 'main' && 'supabase-production')
+          || 'supabase-development' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Supabase CLI
+      uses: supabase/setup-cli@v1
+      with:
+        version: latest
+
+    - name: Verify the connection string is configured
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: |
+        if [ -z "$SUPABASE_DB_URL" ]; then
+          echo "::error::SUPABASE_DB_URL is not set for the '${{ inputs.target || (github.ref_name == 'main' && 'supabase-production') || 'supabase-development' }}' environment. See README 'Automating migrations'."
+          exit 1
+        fi
+
+    - name: Show migration status
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase migration list --db-url "$SUPABASE_DB_URL"
+
+    - name: Apply pending migrations
+      # A push carries no inputs, so dry_run is empty: apply. A manual run
+      # applies only when the box was unchecked.
+      if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase db push --db-url "$SUPABASE_DB_URL"
+
+    - name: Show migration status after applying
+      if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase migration list --db-url "$SUPABASE_DB_URL"

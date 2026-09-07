@@ -235,20 +235,31 @@ const { data: profile } = await supabase
 ### File Structure
 ```
 src/
-├── app/                    # Next.js app router pages and API routes
+├── __tests__/             # Jest test suites
+├── app/                   # Next.js app router pages and API routes
 ├── components/            # Reusable UI components
 ├── config/                # App configuration
 ├── contexts/              # React context providers
 ├── lib/                   # Business logic and utilities
-│   ├── services/         # Business services (payment, email, etc.)
-│   ├── logging/          # Centralized logging system
-│   └── supabase/         # Database client configuration
-├── types/                # TypeScript type definitions
-scripts/                   # Development and administrative scripts (flat mix of .sql/.js/.sh files)
-├── tests/                # Feature testing scripts
-└── debug/                # Debugging and troubleshooting scripts
+│   ├── email/             # Loops transactional email integration
+│   ├── logging/           # Centralized logging system
+│   ├── services/          # Payment, registration, and waitlist services
+│   ├── stripe/            # Stripe client configuration
+│   ├── supabase/          # Database client configuration
+│   ├── utils/             # Shared helper utilities
+│   └── xero/              # Xero accounting integration
+├── test-helpers/          # Shared test utilities
+└── types/                 # TypeScript type definitions
+scripts/                   # Dev/admin scripts (flat mix of .sql/.js/.sh files, plus README.md)
+├── debug/                 # Debugging and troubleshooting scripts
+└── tests/                 # Feature testing scripts
 docs/                      # Project documentation
-└── logs/                  # Generated log files (gitignored)
+├── architecture/          # System design and database docs
+├── features/              # Feature specs (planning, completed, deferred)
+├── guides/                # Developer guides (this file)
+├── testing/               # Testing guides
+└── troubleshooting/       # Incident and troubleshooting write-ups
+logs/                      # Generated log files (gitignored, repo root)
 ```
 
 ### Import Organization
@@ -536,5 +547,5 @@ Document API endpoints with:
 
 ---
 
-*Last updated: August 22, 2026*
+*Last updated: September 7, 2026*
 *This document should be updated as new patterns and practices are established.*

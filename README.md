@@ -316,7 +316,13 @@ One-time, per project:
    | `supabase-production` | production project (`fogsphzerhmyjckxhalj`) |
    | `supabase-development` | development project (`qojixnzpfkpteakltdoa`) |
 
-   Get each from Dashboard → **Connect** → *Session pooler*, and use that one:
+   Get each from Dashboard → **Connect** → *Session pooler*. The dialog shows the password as a literal `[YOUR-PASSWORD]` placeholder — it gives you the correct host, port and `postgres.<project-ref>` username, but you have to substitute the real database password yourself.
+
+   That password is **not displayed anywhere in the dashboard**: Supabase shows it once at project creation and never again. If it isn't in your password manager, Settings → Database → *Database password* → **Reset database password** issues a new one, shown once.
+
+   Resetting is safe for the running application — it connects over HTTPS with `NEXT_PUBLIC_SUPABASE_URL` and the API keys, and never opens a Postgres connection. What it does break is any saved copy: `scripts/clone-registration-simple.sh` and the `psql` invocations in [scripts/README.md](scripts/README.md) read a `DATABASE_URL` that developers set locally, so anyone holding the old one needs the new value. Each project has its own password; resetting one does not affect the other.
+
+   Which connection to use:
 
    - **Session pooler, port 5432** ✅ — what to use. Migrations need session mode, and this host is reachable over IPv4.
    - **Transaction pooler, port 6543** ❌ — transaction mode breaks migrations.

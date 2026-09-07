@@ -1493,6 +1493,40 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 - [ ] `CRON_SECRET` environment variable configured
 - [ ] Cron jobs verified in Vercel dashboard (4 active jobs)
 
+#### Setting up a personal Vercel project for preview deploys
+
+Contributors normally deploy previews through the shared `nycpha/membership-system` project. If you instead connect a **personal/sandbox** Vercel project to test a preview deploy, two things will bite you:
+
+**Empty placeholder vars silently survive a bulk paste-import.** When you first connect a GitHub repo, Vercel auto-creates empty placeholder environment variables for every key it detects in `.env.example`. A bulk "Import .env" paste into the dashboard silently *skips* any key that already exists — even when the existing value is empty. The result is that `vercel env ls` shows every expected name present while several are still blank, and the failure only surfaces much later as a build crash from a module-level guard (`Error: Missing Xero environment variables`, `Error: supabaseUrl is required.`), one variable at a time.
+
+Editing the value in place through the dashboard did not reliably persist either. Delete and recreate the specific variable instead, piping the value on stdin so the secret doesn't land in your shell history:
+
+```bash
+npx vercel env rm KEY_NAME preview -y
+printf %s "$KEY_NAME" | npx vercel env add KEY_NAME preview
+```
+
+**`vercel.json`'s cron schedules block Hobby-tier deploys.** Two of the crons in `vercel.json` run more often than daily (`/api/cron/xero-sync` every 5 minutes, `/api/cron/email-sync` every minute), which Hobby-tier Vercel accounts don't allow. A personal non-Pro project fails at the "Deploying outputs" step — *after* a full successful build, so every retry burns the build time — with:
+
+```
+Error: Hobby accounts are limited to daily cron jobs. This cron expression (*/5 * * * *)
+would run more than once per day. Upgrade to the Pro plan to unlock all Cron Jobs features on Vercel.
+```
+
+`vercel deploy --local-config <crons-free-vercel.json>` does **not** work around this; the remote build re-reads the real `vercel.json` from the uploaded source tree regardless.
+
+**Don't edit `vercel.json` to get around it.** Dirtying a tracked file to make a deploy succeed is easy to commit by accident, and you don't need the crons anyway: every scheduled job except `cleanup` is also triggerable from the admin UI on a running preview deployment, which is the better way to exercise them.
+
+| Cron path | Schedule | Manual trigger |
+| :--- | :--- | :--- |
+| `/api/cron/xero-sync` | `*/5 * * * *` | **Admin dashboard** (`/admin`) → *Sync Invoices and Payments* |
+| `/api/cron/email-sync` | `* * * * *` | **Admin dashboard** (`/admin`) → *Sync Emails* |
+| `/api/cron/sync-xero-accounts` | `3 2 * * *` | **Admin dashboard** (`/admin`) → *Sync Accounting Codes*, or `/admin/xero-integration` → Accounts |
+| `/api/cron/payment-plans` | `6 2 * * *` | **Payment Plans report** (`/admin/reports/payment-plans`) → *Run Payments* |
+| `/api/cron/cleanup` | `0 2 * * *` | No UI trigger — call the endpoint directly with `Authorization: Bearer $CRON_SECRET` |
+
+So: deploy to a Hobby project only if you actually need the crons registered (you almost certainly don't — upgrade the project to Pro in that case), and otherwise validate the preview against the shared team project, or exercise the jobs through the admin UI above.
+
 #### Setting Up Vercel Cron Jobs (Pro Plan Required)
 
 The application uses Vercel Cron jobs for background processing. **Vercel Pro plan is required** for the advanced cron job scheduling used in this system.
@@ -1555,7 +1589,7 @@ curl -X GET https://your-domain.vercel.app/api/cron/maintenance \
 - Review application logs for cron job activity
 - Monitor admin interface for sync status
 
-**Note:** Cron jobs are included in Vercel Hobby plan but have execution limits. For higher frequency or more complex scheduling, consider upgrading to Vercel Pro.
+**Note:** Vercel Hobby accounts are limited to **daily** cron schedules. Because `vercel.json` declares two sub-daily crons, a Hobby-tier project cannot deploy this repo at all — the deploy fails after the build with `Hobby accounts are limited to daily cron jobs`. See [Setting up a personal Vercel project for preview deploys](#setting-up-a-personal-vercel-project-for-preview-deploys) for how to work with a Hobby project without editing `vercel.json`.
 
 #### Monitoring & Maintenance
 

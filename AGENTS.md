@@ -22,7 +22,7 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 
 ## Database migrations
 
-Migrations are applied manually by the maintainer. Write the migration file only. Do not run `supabase db push`, `db reset`, `migration up`, or `supabase link` under any circumstances. Do not attempt to verify the migration by connecting to the database. The migration file existing in `supabase/migrations/` is the complete deliverable.
+Migrations are applied by the maintainer — by hand, or through the *Apply database migrations* workflow (see [README § Database Migrations](README.md#database-migrations)). Either way, write the migration file only and let a human run it. Do not run `supabase db push`, `db reset`, `migration up`, or `supabase link` under any circumstances. Do not attempt to verify the migration by connecting to the database. The migration file existing in `supabase/migrations/` is the complete deliverable.
 
 Name migrations the way the Supabase CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestamped in UTC. The old `YYYY-MM-DD-name.sql` style is silently skipped by `supabase db push` and `supabase migration list`, which then report "up to date" against a database nothing has been applied to.
 

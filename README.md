@@ -207,6 +207,57 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to see the application.
 
+## Database Migrations
+
+`supabase/migrations/` holds the schema, as timestamped files the Supabase CLI understands (`YYYYMMDDHHMMSS_name.sql`, UTC). History before 2026-09-07 was collapsed into `20260907000000_baseline_schema.sql`, a snapshot of the production database; the 140 dated files it replaced are in git history.
+
+`supabase/schema.sql` is **generated** from that directory — never edit it directly:
+
+```bash
+npm run schema:build      # regenerate after adding a migration; commit the result
+npm run schema:check      # fails if schema.sql is stale (blocking in CI)
+npm run migrations:lint   # rejects unsafe views and public EXECUTE grants (blocking in CI)
+npm run schema:verify     # applies schema.sql twice to a throwaway database
+```
+
+`schema:verify` needs a reachable PostgreSQL server via the standard `PG*` variables; CI runs it against a service container. It exists because parsing SQL is not enough to catch a broken migration — `COMMENT ON TABLE <a view>` parses cleanly and fails on execution.
+
+### Applying migrations
+
+Migrations are applied deliberately, not as a side effect of merging. Two supported routes:
+
+**By hand** — paste the migration into the Supabase SQL editor. Fine for a single file, and what the maintainer has historically done. The editor runs the script in one transaction, so a failure rolls the whole thing back.
+
+**Through the workflow** — Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
+
+### Setting up the workflow
+
+One-time, per project:
+
+1. **Seed the CLI's migration history.** The baseline was applied by hand, and the CLI's `supabase_migrations.schema_migrations` table doesn't know that. Without this step the first `db push` would try to apply the baseline to a database that already has everything in it:
+
+   ```bash
+   supabase migration repair --status applied 20260907000000 20260907000001
+   ```
+
+   Run it against each project (dev and production) for whichever migrations that database has already received.
+
+2. **Create GitHub Environments** named `development` and `production` (Settings → Environments), and add a **required reviewer** to `production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
+
+3. **Add a `SUPABASE_DB_URL` secret to each Environment** — same name, different value — set to that project's direct connection string (Dashboard → Project Settings → Database → Connection string → URI). Use the direct connection rather than the pooler; migrations need a session-mode connection.
+
+Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
+
+### Preview deployments share the development database
+
+Preview deploys point at the shared development Supabase project, so a migration applied there is visible to every open preview at once, and to whatever is already merged. Write migrations expand/contract so that's safe:
+
+- Add columns nullable, or with a default; never `NOT NULL` without a backfill in the same file.
+- Don't drop or rename anything until the code that referenced it is gone from `development`.
+- Deploy the code that reads a new column *after* the migration that adds it, never before.
+
+The alternative — a real database per pull request — is Supabase's branching feature. It isn't enabled on this project; it costs per branch and needs the Vercel integration wired to point previews at the branch database. Worth revisiting if two people start colliding on the shared dev database.
+
 ## Exposing Data to External Consumers
 
 Someone will eventually want member data in a spreadsheet, a dashboard, or another tool. There is one supported way to do that, and one way that looks easier but publishes your members' data to the internet.

@@ -1,0 +1,92 @@
+name: Apply database migrations
+
+# Applies pending migrations from supabase/migrations/ to one of the Supabase
+# projects, using the Supabase CLI's own migration tracking.
+#
+# Deliberately manual (workflow_dispatch) rather than firing on push. Applying
+# schema changes to a live database is not something to do implicitly on merge,
+# and a migration that drops a column is perfectly idempotent while still being
+# destructive. Run it, read the plan, then apply.
+#
+# SETUP — see README "Automating migrations" before the first run:
+#   1. Seed the CLI's migration history on both projects, once. The baseline was
+#      applied by hand, and the CLI does not know that yet:
+#        supabase migration repair --status applied 20260907000000 20260907000001
+#   2. Create GitHub Environments named `development` and `production`
+#      (Settings → Environments). Add a required reviewer to `production`.
+#   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
+#      direct connection string (Supabase Dashboard → Project Settings →
+#      Database → Connection string → URI). Use the direct connection, not the
+#      pooler: migrations need a session-mode connection.
+#
+# Once you trust it, this can be switched to fire automatically on pushes to
+# `development` — see the commented trigger below. Leave production manual.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database to apply to'
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+      dry_run:
+        description: 'Only show what would be applied (recommended first)'
+        type: boolean
+        default: true
+
+  # Uncomment to apply to dev automatically once feature work lands on
+  # `development`. Production stays manual.
+  #
+  # push:
+  #   branches: [development]
+  #   paths: ['supabase/migrations/**']
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    # Selects which Environment's SUPABASE_DB_URL is used, and enforces that
+    # Environment's protection rules -- this is what makes production require a
+    # human approval before the job starts.
+    environment: ${{ inputs.target || 'development' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Supabase CLI
+      uses: supabase/setup-cli@v1
+      with:
+        version: latest
+
+    - name: Verify the connection string is configured
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: |
+        if [ -z "$SUPABASE_DB_URL" ]; then
+          echo "::error::SUPABASE_DB_URL is not set for the '${{ inputs.target || 'development' }}' environment. See README 'Automating migrations'."
+          exit 1
+        fi
+
+    - name: Show migration status
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase migration list --db-url "$SUPABASE_DB_URL"
+
+    - name: Apply pending migrations
+      if: ${{ inputs.dry_run == false }}
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase db push --db-url "$SUPABASE_DB_URL"
+
+    - name: Show migration status after applying
+      if: ${{ inputs.dry_run == false }}
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: supabase migration list --db-url "$SUPABASE_DB_URL"

@@ -2064,15 +2064,15 @@ CREATE POLICY xero_webhooks_admin_only ON public.xero_webhooks FOR ALL TO public
 
 COMMENT ON TABLE public.alternate_registrations IS 'Tracks games/events within registrations that need alternates';
 COMMENT ON TABLE public.alternate_selections IS 'Tracks which users are selected for specific games';
-COMMENT ON TABLE public.discount_usage_computed IS 'Computed view of discount usage derived from xero_invoice_line_items. Provides single source of truth for discount tracking with proper reversal handling for credit notes. Includes user, season, and category details for reporting. RLS is enforced via security_invoker from underlying tables.';
+COMMENT ON VIEW public.discount_usage_computed IS 'Computed view of discount usage derived from xero_invoice_line_items. Provides single source of truth for discount tracking with proper reversal handling for credit notes. Includes user, season, and category details for reporting. RLS is enforced via security_invoker from underlying tables.';
 COMMENT ON TABLE public.email_change_logs IS 'Audit trail for all email change activity. Append-only via API.';
-COMMENT ON TABLE public.membership_analytics_data IS 'Comprehensive view for membership analytics with calculated statistics and member details. ADMIN ACCESS ONLY - This view contains sensitive member data and should only be accessed by admin users.';
-COMMENT ON TABLE public.payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link, with fallback to invoice line item description for orphaned invoices. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
+COMMENT ON VIEW public.membership_analytics_data IS 'Comprehensive view for membership analytics with calculated statistics and member details. ADMIN ACCESS ONLY - This view contains sensitive member data and should only be accessed by admin users.';
+COMMENT ON VIEW public.payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link, with fallback to invoice line item description for orphaned invoices. Uses COALESCE to handle NULL paid_amount when no payments are synced yet.';
 COMMENT ON TABLE public.registration_captains IS 'Tracks captain assignments for registrations';
-COMMENT ON TABLE public.registration_reports_data IS 'Registration financial data with fallback to item_id for alternates that do not have user_registrations entries';
+COMMENT ON VIEW public.registration_reports_data IS 'Registration financial data with fallback to item_id for alternates that do not have user_registrations entries';
 COMMENT ON TABLE public.system_events IS 'Tracks system events like sync operations, maintenance tasks, etc.';
 COMMENT ON TABLE public.user_alternate_registrations IS 'Tracks which users want to be alternates for which registrations';
-COMMENT ON TABLE public.user_memberships_consolidated IS 'Consolidated view of user memberships grouped by membership type. Shows latest expiration date and active status for each membership type per user. Uses SECURITY INVOKER to respect RLS policies on underlying tables.';
+COMMENT ON VIEW public.user_memberships_consolidated IS 'Consolidated view of user memberships grouped by membership type. Shows latest expiration date and active status for each membership type per user. Uses SECURITY INVOKER to respect RLS policies on underlying tables.';
 COMMENT ON TABLE public.user_survey_responses IS 'Reusable survey responses per user, enables pre-fill functionality';
 COMMENT ON TABLE public.xero_accounts IS 'Cached Xero chart of accounts for validation and autocomplete';
 COMMENT ON TABLE public.xero_invoices IS 'Primary table for tracking Xero invoice synchronization status. Replaces legacy xero_synced fields.';

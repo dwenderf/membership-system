@@ -201,7 +201,12 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 
 ### 4. Magic-Link Email Template
 
-A fresh Supabase project's default **Magic Link** template links to `{{ .ConfirmationURL }}`, which produces a PKCE-flow link (`?code=...`). This app never handles that shape: `src/app/auth/magic-confirm/page.tsx` reads `token_hash` and `type` off the query string and calls `supabase.auth.verifyOtp()`. Left at the default, every magic-link sign-in lands on `/auth/auth-code-error`, and nothing in the repo hints at why.
+The login screen offers two ways in — a link or a 6-digit code — but `src/app/auth/login/page.tsx` makes a single `signInWithOtp()` call, so **one email has to carry both**. The choice on screen changes the wording, not the email. That template needs:
+
+- `{{ .Token }}`, the code typed into `/auth/verify-otp`
+- a link to `/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink`, which `src/app/auth/magic-confirm/page.tsx` verifies with `supabase.auth.verifyOtp()`
+
+A fresh project's default **Magic Link** template has neither: it links to `{{ .ConfirmationURL }}`, a PKCE-flow link (`?code=...`) that `magic-confirm` cannot verify, so every magic-link sign-in lands on `/auth/auth-code-error`. A template with only one of the two half-works, which is harder to spot — whichever method the user picks, the email may not contain what it needs.
 
 The template lives at [`supabase/auth-templates/magic-link.html`](supabase/auth-templates/magic-link.html) and is applied through Supabase's Management API:
 
@@ -212,7 +217,7 @@ npm run auth:apply                     # write it to the project
 npm run auth:check                     # confirm the live project matches
 ```
 
-The project is taken from `NEXT_PUBLIC_SUPABASE_URL` in your `.env.local`, so this targets whichever project the rest of your setup points at; pass `--project-ref <ref>` to override. `auth:apply` refuses to overwrite a template that already works — a branded one somebody wrote by hand — unless you pass `--force`, and it prints what it replaced either way. Only the magic-link body is touched; the subject line and every other auth template are left alone.
+`auth:check` prints the project's current template when it fails, so you can see what is actually there without opening the dashboard. The project is taken from `NEXT_PUBLIC_SUPABASE_URL` in your `.env.local`, so this targets whichever project the rest of your setup points at; pass `--project-ref <ref>` to override. `auth:apply` refuses to overwrite a template that already works — a branded one somebody wrote by hand — unless you pass `--force`, and it prints what it replaced either way. Only the magic-link body is touched; the subject line and every other auth template are left alone.
 
 To do it by hand instead, go to **Authentication** → **Email Templates** → **Magic Link** in the dashboard and point the link at:
 

@@ -3,12 +3,18 @@
 /**
  * Keeps Supabase's magic-link email template in step with what this app can verify.
  *
- * src/app/auth/magic-confirm/page.tsx reads `token_hash`/`type` off the query
- * string and calls verifyOtp(). Supabase's default Magic Link template links to
- * {{ .ConfirmationURL }}, a PKCE link (?code=...) that page cannot verify, so on
- * a fresh project every magic-link sign-in lands on /auth/auth-code-error. The
- * template is dashboard-only state with no trace in schema.sql or the
- * migrations, which is why it stays broken until someone knows to look.
+ * One signInWithOtp() call in src/app/auth/login/page.tsx sends one email that
+ * has to serve both sign-in methods the UI offers, so the template needs both:
+ *
+ *   - the 6-digit {{ .Token }}, typed into /auth/verify-otp
+ *   - a link to /auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink
+ *
+ * Supabase's default template has neither: it links to {{ .ConfirmationURL }},
+ * a PKCE link (?code=...) that magic-confirm cannot verify. A template carrying
+ * only one of the two half-works — whichever method the user picks on the login
+ * screen, the email may not contain what that method needs. All of this is
+ * dashboard-only state with no trace in schema.sql or the migrations, which is
+ * why it stays broken until someone knows to look.
  *
  *   npm run auth:verify   # offline: is the template in this repo still valid?
  *   npm run auth:check    # does the live project's template match the rule?
@@ -37,6 +43,8 @@ const ENV_LOCAL_PATH = path.join(__dirname, '../.env.local');
 const REQUIRED_LINK =
   /\/auth\/magic-confirm\?token_hash=\{\{\s*\.TokenHash\s*\}\}&(?:amp;)?type=magiclink/;
 const PKCE_LINK = /\{\{\s*\.ConfirmationURL\s*\}\}/;
+// Not matched by {{ .TokenHash }} — the closing braces have to follow .Token.
+const REQUIRED_CODE = /\{\{\s*\.Token\s*\}\}/;
 
 const REQUIRED_LINK_EXAMPLE =
   '{{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink';
@@ -141,10 +149,13 @@ function problemsWith(content) {
 
   const problems = [];
   if (!REQUIRED_LINK.test(content)) {
-    problems.push(`no link to ${REQUIRED_LINK_EXAMPLE}`);
+    problems.push(`no link to ${REQUIRED_LINK_EXAMPLE} — the "email me a link" path cannot work`);
   }
   if (PKCE_LINK.test(content)) {
     problems.push('links to {{ .ConfirmationURL }}, which is a PKCE link (?code=...) this app cannot verify');
+  }
+  if (!REQUIRED_CODE.test(content)) {
+    problems.push('no {{ .Token }} — the "email me a code" path has nothing to type into /auth/verify-otp');
   }
   return problems;
 }
@@ -168,7 +179,7 @@ function verifyRepoTemplate() {
     );
   }
 
-  console.log('✅ supabase/auth-templates/magic-link.html links to /auth/magic-confirm with token_hash');
+  console.log('✅ supabase/auth-templates/magic-link.html carries both the {{ .Token }} code and the magic-confirm link');
   return template;
 }
 
@@ -180,15 +191,24 @@ async function checkLiveTemplate(projectRef) {
   if (problems.length > 0) {
     console.error(`❌ Project ${projectRef}'s magic-link template is broken:\n`);
     problems.forEach((p) => console.error(`      - ${p}`));
+
+    // Without this you have to open the dashboard to find out what is actually
+    // there, which is most of the work of diagnosing it.
+    console.error(`\n    What the project has now:\n`);
     console.error(
-      '\n    Every magic-link sign-in on this project lands on /auth/auth-code-error.\n' +
-      '    Fix it with:  npm run auth:apply -- --project-ref ' + projectRef + '\n' +
+      live && live.trim()
+        ? live.split('\n').map((l) => `      ${l}`).join('\n')
+        : '      (empty — Supabase\'s default template)'
+    );
+
+    console.error(
+      '\n    Fix it with:  npm run auth:apply -- --project-ref ' + projectRef + '\n' +
       '    or by hand in Authentication → Email Templates → Magic Link.'
     );
     process.exit(1);
   }
 
-  console.log(`✅ Project ${projectRef}'s magic-link template links to /auth/magic-confirm with token_hash`);
+  console.log(`✅ Project ${projectRef}'s template carries both the {{ .Token }} code and the magic-confirm link`);
   return live;
 }
 

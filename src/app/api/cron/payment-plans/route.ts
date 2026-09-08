@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { processDuePayments, sendPreNotifications } from '@/lib/services/payment-plan-processor'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 /**
  * Cron Job: Daily Payment Plan Processing
@@ -20,22 +21,8 @@ import { processDuePayments, sendPreNotifications } from '@/lib/services/payment
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a cron request from Vercel
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.logBatchProcessing(
-        'cron-payment-plans-unauthorized',
-        'Unauthorized cron job attempt',
-        { authHeader },
-        'warn'
-      )
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    const denied = authorizeCronRequest(request, 'payment-plans')
+    if (denied) return denied
 
     logger.logBatchProcessing(
       'cron-payment-plans-start',

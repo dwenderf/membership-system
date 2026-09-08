@@ -206,6 +206,8 @@ The login screen offers two ways in — a link or a 6-digit code — but `src/ap
 - `{{ .Token }}`, the code typed into `/auth/verify-otp`
 - a link to `/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink`, which `src/app/auth/magic-confirm/page.tsx` verifies with `supabase.auth.verifyOtp()`
 
+Two spellings of that link both work, and projects here use both. `{{ .SiteURL }}/auth/magic-confirm?token_hash=...` always lands on the site, whichever deployment asked for the email. `{{ .RedirectTo }}?token_hash=...` honours the `emailRedirectTo` the login page passes, so a magic link requested from a preview deployment comes back to that preview — but only while the preview URL is in the project's **Redirect URLs** allowlist; when it isn't, Supabase falls back to the Site URL and drops the `/auth/magic-confirm` path with it, leaving a link to the site root that verifies nothing. `auth:check` accepts either form.
+
 A fresh project's default **Magic Link** template has neither: it links to `{{ .ConfirmationURL }}`, a PKCE-flow link (`?code=...`) that `magic-confirm` cannot verify, so every magic-link sign-in lands on `/auth/auth-code-error`. A template with only one of the two half-works, which is harder to spot — whichever method the user picks, the email may not contain what it needs.
 
 The template lives at [`supabase/auth-templates/magic-link.html`](supabase/auth-templates/magic-link.html) and is applied through Supabase's Management API:

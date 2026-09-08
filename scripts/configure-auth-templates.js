@@ -40,8 +40,17 @@ const ENV_LOCAL_PATH = path.join(__dirname, '../.env.local');
 
 // The one thing that has to be true. Tolerates {{.TokenHash}} without spaces and
 // an HTML-escaped &amp;, both of which the dashboard editor can produce.
+// Two link forms work, and projects in this org use both:
+//   {{ .SiteURL }}/auth/magic-confirm?token_hash=...  always lands on the site
+//   {{ .RedirectTo }}?token_hash=...                  honours the emailRedirectTo
+//                                                     login passes, so a preview
+//                                                     deployment's link comes back
+//                                                     to that preview — but only if
+//                                                     the URL is in the project's
+//                                                     Redirect URLs allowlist.
+// Neither is wrong, so accept both rather than churning a working project.
 const REQUIRED_LINK =
-  /\/auth\/magic-confirm\?token_hash=\{\{\s*\.TokenHash\s*\}\}&(?:amp;)?type=magiclink/;
+  /(?:\/auth\/magic-confirm|\{\{\s*\.RedirectTo\s*\}\})\?token_hash=\{\{\s*\.TokenHash\s*\}\}&(?:amp;)?type=magiclink/;
 const PKCE_LINK = /\{\{\s*\.ConfirmationURL\s*\}\}/;
 // Not matched by {{ .TokenHash }} — the closing braces have to follow .Token.
 const REQUIRED_CODE = /\{\{\s*\.Token\s*\}\}/;
@@ -149,7 +158,11 @@ function problemsWith(content) {
 
   const problems = [];
   if (!REQUIRED_LINK.test(content)) {
-    problems.push(`no link to ${REQUIRED_LINK_EXAMPLE} — the "email me a link" path cannot work`);
+    problems.push(
+      'no magic-confirm link — the "email me a link" path cannot work. Expected either\n' +
+      `        ${REQUIRED_LINK_EXAMPLE}\n` +
+      '        {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=magiclink'
+    );
   }
   if (PKCE_LINK.test(content)) {
     problems.push('links to {{ .ConfirmationURL }}, which is a PKCE link (?code=...) this app cannot verify');

@@ -113,11 +113,32 @@ jobs:
     - name: Verify the connection string is configured
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        TARGET: >-
+          ${{ inputs.target
+              || (github.ref_name == 'main' && 'supabase-production')
+              || 'supabase-development' }}
       run: |
         if [ -z "$SUPABASE_DB_URL" ]; then
-          echo "::error::SUPABASE_DB_URL is not set for the '${{ inputs.target || (github.ref_name == 'main' && 'supabase-production') || 'supabase-development' }}' environment. See README 'Automating migrations'."
+          echo "::error::SUPABASE_DB_URL is not set for the '$TARGET' environment. See README 'Automating migrations'."
           exit 1
         fi
+
+        trimmed="$(printf '%s' "$SUPABASE_DB_URL" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        if [ "$trimmed" != "$SUPABASE_DB_URL" ]; then
+          echo "::error::SUPABASE_DB_URL for '$TARGET' has leading or trailing whitespace. GitHub's secret field preserves it invisibly -- re-save the secret without it."
+          exit 1
+        fi
+
+        case "$SUPABASE_DB_URL" in
+          postgresql://*|postgres://*) ;;
+          *)
+            echo "::error::SUPABASE_DB_URL for '$TARGET' does not start with postgresql:// or postgres:// -- psql will treat it as a plain database name and try the local Unix socket instead of connecting to Supabase. Check for a copied 'psql ' prefix or surrounding quotes."
+            exit 1
+            ;;
+        esac
+
+        # Neither the username nor the host is secret; the project ref is already in AGENTS.md.
+        echo "user/host: $(printf '%s' "$SUPABASE_DB_URL" | sed -E 's#^[a-z]+://([^:]+):[^@]*@#\1@#')"
 
     - name: Show migration status
       env:

@@ -201,15 +201,33 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
 
 ### 4. Magic-Link Email Template
 
-A fresh Supabase project's default **Magic Link** template links to `{{ .ConfirmationURL }}`, which produces a PKCE-flow link (`?code=...`). This app never handles that shape: `src/app/auth/magic-confirm/page.tsx` reads `token_hash` and `type` off the query string and calls `supabase.auth.verifyOtp()`. Left at the default, every magic-link sign-in lands on `/auth/auth-code-error`, and nothing in the repo hints at why.
+The login screen offers two ways in — a link or a 6-digit code — but `src/app/auth/login/page.tsx` makes a single `signInWithOtp()` call, so **one email has to carry both**. The choice on screen changes the wording, not the email. That template needs:
 
-Go to **Authentication** → **Email Templates** → **Magic Link** in the Supabase dashboard and point the link at:
+- `{{ .Token }}`, the code typed into `/auth/verify-otp`
+- a link to `/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink`, which `src/app/auth/magic-confirm/page.tsx` verifies with `supabase.auth.verifyOtp()`
+
+Two spellings of that link both work, and projects here use both. `{{ .SiteURL }}/auth/magic-confirm?token_hash=...` always lands on the site, whichever deployment asked for the email. `{{ .RedirectTo }}?token_hash=...` honours the `emailRedirectTo` the login page passes, so a magic link requested from a preview deployment comes back to that preview — but only while the preview URL is in the project's **Redirect URLs** allowlist; when it isn't, Supabase falls back to the Site URL and drops the `/auth/magic-confirm` path with it, leaving a link to the site root that verifies nothing. `auth:check` accepts either form.
+
+A fresh project's default **Magic Link** template has neither: it links to `{{ .ConfirmationURL }}`, a PKCE-flow link (`?code=...`) that `magic-confirm` cannot verify, so every magic-link sign-in lands on `/auth/auth-code-error`. A template with only one of the two half-works, which is harder to spot — whichever method the user picks, the email may not contain what it needs.
+
+The template lives at [`supabase/auth-templates/magic-link.html`](supabase/auth-templates/magic-link.html) and is applied through Supabase's Management API:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_...   # https://supabase.com/dashboard/account/tokens
+npm run auth:apply -- --dry-run        # show what would change
+npm run auth:apply                     # write it to the project
+npm run auth:check                     # confirm the live project matches
+```
+
+`auth:check` prints the project's current template when it fails, so you can see what is actually there without opening the dashboard. The project is taken from `NEXT_PUBLIC_SUPABASE_URL` in your `.env.local`, so this targets whichever project the rest of your setup points at; pass `--project-ref <ref>` to override. `auth:apply` refuses to overwrite a template that already works — a branded one somebody wrote by hand — unless you pass `--force`, and it prints what it replaced either way. Only the magic-link body is touched; the subject line and every other auth template are left alone.
+
+To do it by hand instead, go to **Authentication** → **Email Templates** → **Magic Link** in the dashboard and point the link at:
 
 ```text
 {{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink
 ```
 
-This is dashboard-only state with no trace in `schema.sql` or the migrations, so it has to be set by hand on every project — production, development, and any personal sandbox (tracked in [#265](https://github.com/dwenderf/membership-system/issues/265)). It applies to any custom template you write later too; see [Custom SMTP Configuration](#5-custom-smtp-configuration-optional).
+This is dashboard-only state with no trace in `schema.sql` or the migrations, so it has to be set on every project — production, development, and any personal sandbox. `npm run auth:check` is how you find out whether a given project has it; run it against a project whose magic links have stopped working before assuming the bug is in the app. It applies to any custom template you write later too; see [Custom SMTP Configuration](#5-custom-smtp-configuration-optional).
 
 ### 5. Run Development Server
 
@@ -1110,7 +1128,7 @@ By default, Supabase handles authentication emails (magic links, password resets
    </div>
    ```
 
-Keep the `token_hash`/`type` link shape from [Magic-Link Email Template](#4-magic-link-email-template) when you customize — a branded template that falls back to `{{ .ConfirmationURL }}` breaks magic-link sign-in.
+Keep the `token_hash`/`type` link shape from [Magic-Link Email Template](#4-magic-link-email-template) when you customize — a branded template that falls back to `{{ .ConfirmationURL }}` breaks magic-link sign-in. Put the branded version in `supabase/auth-templates/magic-link.html` and re-run `npm run auth:apply`, so the next person's `auth:apply` doesn't reset your work.
 
 **Step 4: Test Configuration**
 

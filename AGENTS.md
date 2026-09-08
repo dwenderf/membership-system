@@ -94,6 +94,12 @@ When adding a new admin page, add it to navigation and verify it's reachable by 
 
 When adding a new Loops transactional email template, prepend `{testEmailPrefix}` to the Subject field in the Loops dashboard (mark it optional as a safety net) — see [README.md § Email Integration Setup (Loops.so)](README.md#email-integration-setup-loopsso). The app already sends `testEmailPrefix` in `dataVariables` on every send (`[TEST] ` on preview/local, `''` in production — see [src/lib/email/environment.ts](src/lib/email/environment.ts)); no code changes are needed for a new template beyond the dashboard edit.
 
+## Supabase auth email templates
+
+Supabase's own auth emails (magic link, recovery, invite) are project settings, not repo state — nothing in `supabase/migrations/` or `schema.sql` touches them. One of them is codified: the magic-link body lives in `supabase/auth-templates/magic-link.html`. Login makes a single `signInWithOtp()` call, so that one email serves both sign-in methods and must carry both the `{{ .Token }}` code (typed into `/auth/verify-otp`) and a link to `/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink` (Supabase's default PKCE link cannot be verified by that page). Drop either one and half the login screen stops working.
+
+`npm run auth:verify` checks that file offline and is a blocking CI step; `npm run auth:check` checks a live project (needs `SUPABASE_ACCESS_TOKEN`); `npm run auth:apply` writes it. If you change how magic-link confirmation works, change the template in the same commit — CI catches a template that no longer points at `/auth/magic-confirm`, but nothing catches a live project until someone tries to sign in. No other auth template is managed; leave the rest alone unless you are extending `scripts/configure-auth-templates.js` deliberately.
+
 ## Before reporting work complete
 
 Run `npm run build` and paste the raw, unfiltered output — including the final success or error lines. Do not summarize, scope, or filter the result (e.g. "0 errors in modified files"). If the build fails, fix it and re-run; do not report completion with a failing build.

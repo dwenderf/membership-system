@@ -362,6 +362,33 @@ One-time, per project:
 
 Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
 
+### The drift check's read-only credential
+
+*Check databases are up to date* (below) must not use the admin `SUPABASE_DB_URL` above for production: that secret lives in the gated `supabase-production` Environment, and a read-only status check has no decision for the required reviewer to make — gating it just means the scheduled run queues as `waiting` and never executes, so a genuinely-behind database produces the same silence as everything being fine.
+
+The fix is a dedicated low-privilege role, not a copy of the admin connection string into an ungated Environment (that would let an unapproved workflow change exfiltrate the very credential the reviewer gate protects):
+
+4. **Apply the `ci_readonly_role` migration** to each project (it's in `supabase/migrations/`, like any other). It creates a `ci_readonly` role that can `SELECT` `supabase_migrations.schema_migrations` and nothing else — no `anon`/`authenticated` membership, no `BYPASSRLS`.
+
+5. **Set its password out-of-band**, once per project, e.g. from the SQL editor or `psql`:
+
+   ```sql
+   ALTER ROLE ci_readonly WITH PASSWORD '<generate one — never reuse the admin password>';
+   ```
+
+   Never put this in a migration file — it would land in git and in `schema.sql`.
+
+6. **Create an ungated `supabase-production-readonly` GitHub Environment** (Settings → Environments) — no required reviewer, since there's nothing for one to approve. Add a `SUPABASE_DB_URL_READONLY` secret to it, built the same way as `SUPABASE_DB_URL` above (Session pooler, port 5432) but with `ci_readonly.<project-ref>` as the username instead of `postgres.<project-ref>` and that role's password.
+
+   Verify the pooler accepts that username on the development project before relying on it — Supavisor's tenant-user format is normally `<role>.<project-ref>`, but this repo hadn't previously used any role but `postgres` through it, so treat it as unconfirmed until you've connected with it once:
+
+   ```bash
+   psql "postgresql://ci_readonly.qojixnzpfkpteakltdoa:<password>@aws-1-us-east-2.pooler.supabase.com:5432/postgres" \
+     -tAc "select version from supabase_migrations.schema_migrations order by version"
+   ```
+
+   `supabase-development` needs no equivalent Environment: it has no required reviewer, so `db-drift-check.yml` keeps reading it through the same `supabase-development` Environment and admin `SUPABASE_DB_URL` that `db-migrate.yml` uses.
+
 ### Preview deployments share the development database
 
 Preview deploys point at the shared development Supabase project, so a migration applied there is visible to every open preview at once, and to whatever is already merged. Write migrations expand/contract so that's safe:

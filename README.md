@@ -432,7 +432,7 @@ Why each piece matters:
 
 | Practice | Reason |
 |---|---|
-| Fail closed when the secret is unset | A deploy that forgets the env var must break loudly, not serve the data to everyone. Note the existing cron routes use `if (secret && ...)`, which fails *open* — don't copy that. |
+| Fail closed when the secret is unset | A deploy that forgets the env var must break loudly, not serve the data to everyone. The `/api/cron/*` routes used to get this wrong in two different ways — see [`src/lib/cron/auth.ts`](src/lib/cron/auth.ts), the shared guard all five now call, for the fixed version. |
 | `timingSafeEqual`, not `===` | String comparison short-circuits on the first wrong byte; response timing then leaks the secret one character at a time. |
 | Service-role client *after* the auth check | The export is deliberately cross-member, which every RLS policy correctly forbids. The route's own auth is what replaces RLS, so it has to come first. |
 | Never log the token | A rejected guess in your logs is still a credential. Log that a header was present, not what it said. |

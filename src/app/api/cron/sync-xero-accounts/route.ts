@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncXeroAccounts } from '@/lib/xero/accounts-sync'
 import { logger } from '@/lib/logging/logger'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 /**
  * Cron Job: Daily Xero Chart of Accounts Sync
@@ -14,22 +15,8 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a cron request from Vercel
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.logAdminAction(
-        'cron-sync-xero-accounts-unauthorized',
-        'Unauthorized cron job attempt',
-        { authHeader },
-        'warn'
-      )
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    const denied = authorizeCronRequest(request, 'sync-xero-accounts')
+    if (denied) return denied
 
     logger.logAdminAction(
       'cron-sync-xero-accounts-start',

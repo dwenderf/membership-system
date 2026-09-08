@@ -37,6 +37,9 @@ jobs:
     - name: Lint migrations for unsafe views and grants
       run: npm run migrations:lint
 
+    - name: Check the magic-link email template is still valid
+      run: npm run auth:verify
+
     - name: Run typecheck
       run: npm run typecheck
 

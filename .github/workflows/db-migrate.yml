@@ -24,12 +24,18 @@ name: Apply database migrations
 #      applied by hand, and the CLI does not know that yet:
 #        supabase migration repair --status applied 20260907000000 20260907000001
 #   2. Create GitHub Environments named `supabase-development` and
-#      `supabase-production` (Settings → Environments), and add a required
-#      reviewer to `supabase-production`.
+#      `supabase-production` (Settings → Environments).
 #
 #      Deliberately NOT the existing `Production`/`Preview` environments: those
-#      belong to the Vercel integration, and adding a reviewer to them would
-#      gate Vercel deployments as well as migrations.
+#      belong to the Vercel integration, and reusing them would tangle Vercel
+#      deployments with migrations.
+#
+#      Neither Environment has a required reviewer. That gate used to live here
+#      (an approval on this workflow's own run, after the push had already
+#      landed on main and Vercel had already deployed the new code -- a real
+#      gap where production ran new code against old schema until someone
+#      clicked approve). It has moved to before the merge instead: see
+#      "How the production gate works now" below.
 #   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
 #      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
 #      Dashboard -> Connect -> Session pooler (port 5432), which is session mode
@@ -37,11 +43,23 @@ name: Apply database migrations
 #      breaks migrations. The direct connection is session mode too, but is
 #      IPv6-only without the IPv4 add-on, and GitHub runners are IPv4.
 #
+# How the production gate works now: this job applies immediately and
+# unattended on push to main, landing in the same moment as Vercel's
+# production deploy -- there is no approval step left to wait for. The human
+# checkpoint moved earlier instead: `.github/CODEOWNERS` names a reviewer for
+# `supabase/migrations/`, so a promotion PR carrying a migration surfaces that
+# in its Files Changed / reviewers panel. This is a documented convention, not
+# a GitHub-enforced block -- branch protection does not require Code Owner
+# review, so nothing stops a merge if it's skipped. (It also can't be made a
+# hard block on a single-maintainer repo: GitHub never lets a PR author
+# satisfy a required review on their own PR, including a Code Owner review,
+# so requiring it here would deadlock every promotion this account opens.)
+# Reading the migration diff before merging is on whoever merges; this
+# workflow no longer enforces that they did.
+#
 # The development database is usually already current, because migrations are
 # applied there during feature work so preview deployments can exercise them.
 # This workflow is the catch-up path for it, and the only path for production.
-# The commented push trigger below would apply on merge to `development`, which
-# is later than preview testing needs. Leave production manual regardless.
 
 on:
   workflow_dispatch:
@@ -58,11 +76,11 @@ on:
         type: boolean
         default: true
 
-  # Applies automatically when a push changes a migration file. A merge to main
-  # starts the job, which then waits for the `supabase-production` Environment's
-  # required reviewer before touching anything -- the approval is the gate, rather than
-  # someone remembering to start this. Merges to development apply to the dev
-  # database unattended, which is the point: previews run against it.
+  # Applies automatically when a push changes a migration file. A merge to
+  # main starts the job, which applies immediately and unattended -- see the
+  # header comment above for why there's no approval step left to wait for.
+  # Merges to development apply to the dev database unattended too, which is
+  # the point: previews run against it.
   #
   # The paths filter matters: pushes that don't touch supabase/migrations/ don't
   # trigger anything.
@@ -90,9 +108,9 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
 
-    # Selects which Environment's SUPABASE_DB_URL is used, and enforces that
-    # Environment's protection rules -- this is what makes production require a
-    # human approval before the job starts.
+    # Selects which Environment's SUPABASE_DB_URL is used. Neither Environment
+    # has a required reviewer (see the header comment for why) -- this job
+    # runs unattended on both.
     # Manual runs use the chosen target. A push (if the trigger below is
     # enabled) maps branch to database -- without this, a push to main would
     # fall back to 'supabase-development' and quietly apply nothing to prod.

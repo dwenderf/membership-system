@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
 import { isWebAuthnSupported, isUserCancelledError, isUnsupportedOriginError } from '@/lib/passkeys'
+import { getAuthErrorMessage, SIGN_IN_EMAIL_ERROR, SIGN_IN_OAUTH_ERROR } from '@/lib/auth-errors'
 import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 
 export default function LoginPage() {
@@ -52,8 +53,9 @@ export default function LoginPage() {
       })
 
       if (error) {
-        setMessage(error.message)
-        showError('Login failed', error.message)
+        const errorMessage = getAuthErrorMessage(error, SIGN_IN_EMAIL_ERROR)
+        setMessage(errorMessage)
+        showError('Login failed', errorMessage)
         setShowMagicLinkWarning(false) // Hide warning on error
       } else {
         const successMessage = authMethod === 'magic'
@@ -73,18 +75,8 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error('Login error:', error)
-      
-      // Handle different types of network errors
-      let errorMessage = 'An error occurred. Please try again.'
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
-          errorMessage = 'Network error. Please check your connection and try again.'
-        } else {
-          errorMessage = error.message
-        }
-      }
-      
+
+      const errorMessage = getAuthErrorMessage(error, SIGN_IN_EMAIL_ERROR)
       setMessage(errorMessage)
       showError('Login failed', errorMessage)
     } finally {
@@ -107,25 +99,16 @@ export default function LoginPage() {
       })
 
       if (error) {
-        setMessage(error.message)
-        showError('Login failed', error.message)
+        const errorMessage = getAuthErrorMessage(error, SIGN_IN_OAUTH_ERROR)
+        setMessage(errorMessage)
+        showError('Login failed', errorMessage)
         setLoading(false) // Only reset on error
       }
       // Note: On success, user will be redirected to Google, so don't reset loading
     } catch (error) {
       console.error('Google login error:', error)
-      
-      // Handle different types of network errors
-      let errorMessage = 'An error occurred. Please try again.'
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
-          errorMessage = 'Network error. Please check your connection and try again.'
-        } else {
-          errorMessage = error.message
-        }
-      }
-      
+
+      const errorMessage = getAuthErrorMessage(error, SIGN_IN_OAUTH_ERROR)
       setMessage(errorMessage)
       showError('Login failed', errorMessage)
       setLoading(false) // Only reset on error

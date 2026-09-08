@@ -7,6 +7,8 @@ A comprehensive membership and registration system for adult hockey associations
 - ✅ Feature branches → development: Squash merge
 - ✅ Development → main: Regular merge
 
+Every promotion PR (`development` → `main`) will show GitHub's "This branch is out-of-date with the base branch" banner, even when it's the very first check after opening the PR and even with only one merge into `development` since the last promotion. This is expected, not a sign of missing work: each promotion creates a merge commit that lives only on `main` (it's never merged back into `development`, since promotion is one-directional), so `main`'s tip is immediately a commit `development` doesn't have in its ancestry — regardless of how many feature merges land in `development` afterward. It recurs on every single promotion. Content-wise the branches stay identical (verify with `git diff main development`, ignoring the promotion PR's own new files, if in doubt); the banner is purely an artifact of merge-commit ancestry. Click "Merge pull request" directly — clicking "Update branch" instead would merge `main` into `development` first, which isn't part of this workflow and adds a pointless extra merge commit, since there's nothing for it to actually bring in.
+
 ## Features
 
 - **User Management**: Passwordless authentication with magic links and Google OAuth

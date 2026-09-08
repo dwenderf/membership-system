@@ -199,7 +199,19 @@ NEXT_PUBLIC_APP_TIMEZONE=America/New_York
    the Supabase CLI's `<timestamp>_name.sql` naming, so `supabase db push` also
    works against an existing project.
 
-### 4. Run Development Server
+### 4. Magic-Link Email Template
+
+A fresh Supabase project's default **Magic Link** template links to `{{ .ConfirmationURL }}`, which produces a PKCE-flow link (`?code=...`). This app never handles that shape: `src/app/auth/magic-confirm/page.tsx` reads `token_hash` and `type` off the query string and calls `supabase.auth.verifyOtp()`. Left at the default, every magic-link sign-in lands on `/auth/auth-code-error`, and nothing in the repo hints at why.
+
+Go to **Authentication** → **Email Templates** → **Magic Link** in the Supabase dashboard and point the link at:
+
+```text
+{{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink
+```
+
+This is dashboard-only state with no trace in `schema.sql` or the migrations, so it has to be set by hand on every project — production, development, and any personal sandbox (tracked in [#265](https://github.com/dwenderf/membership-system/issues/265)). It applies to any custom template you write later too; see [Custom SMTP Configuration](#5-custom-smtp-configuration-optional).
+
+### 5. Run Development Server
 
 ```bash
 npm run dev
@@ -1087,7 +1099,7 @@ By default, Supabase handles authentication emails (magic links, password resets
    </div>
    
    <h2>Welcome to your account!</h2>
-   <p>Please click <a href="{{ .ConfirmationURL }}">this link</a> to log in.</p>
+   <p>Please click <a href="{{ .SiteURL }}/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink">this link</a> to log in.</p>
    
    <br><br>
    
@@ -1097,6 +1109,8 @@ By default, Supabase handles authentication emails (magic links, password resets
           style="max-width: 240px; height: auto; display: block;">
    </div>
    ```
+
+Keep the `token_hash`/`type` link shape from [Magic-Link Email Template](#4-magic-link-email-template) when you customize — a branded template that falls back to `{{ .ConfirmationURL }}` breaks magic-link sign-in.
 
 **Step 4: Test Configuration**
 

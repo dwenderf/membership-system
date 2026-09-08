@@ -100,6 +100,16 @@ Supabase's own auth emails (magic link, recovery, invite) are project settings, 
 
 `npm run auth:verify` checks that file offline and is a blocking CI step; `npm run auth:check` checks a live project (needs `SUPABASE_ACCESS_TOKEN`); `npm run auth:apply` writes it. If you change how magic-link confirmation works, change the template in the same commit — CI catches a template that no longer points at `/auth/magic-confirm`, but nothing catches a live project until someone tries to sign in. No other auth template is managed; leave the rest alone unless you are extending `scripts/configure-auth-templates.js` deliberately.
 
+## Promoting `development` into `main`
+
+Work lands on `development` first, then gets promoted to `main` via a second PR. `main` is the repository's default branch, and **GitHub only auto-closes an issue when the closing keyword appears in a PR whose base is the default branch** (or in a commit message pushed to it). A `Closes #NNN` written in the feature PR — the one merged into `development` — does nothing by itself: the issue stays open through the whole `development` cycle and only closes if the promotion PR body repeats the keyword. A bare `#NNN` (no `closes`/`fixes` before it) creates a cross-reference but is **not** a closing keyword and won't close anything.
+
+When opening a promotion PR:
+
+- **Reference the source PR(s)**, but don't restate their descriptions — the merge commit preserves the history and the link is enough. "Merges `development` into `main`; see #NNN" is fine.
+- **Repeat every closing keyword.** Every `Closes #NNN` / `Fixes #NNN` from the PRs being promoted has to appear in the promotion PR body too, or those issues silently stay open. This is the one part of a promotion PR body that isn't ceremonial — don't drop it for a terser summary.
+- **Use a merge commit, not squash**, so the `development` history is preserved on `main` (see [README § Git Merge Strategies](README.md#git-merge-strategies)).
+
 ## Before reporting work complete
 
 Run `npm run build` and paste the raw, unfiltered output — including the final success or error lines. Do not summarize, scope, or filter the result (e.g. "0 errors in modified files"). If the build fails, fix it and re-run; do not report completion with a failing build.

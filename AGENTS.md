@@ -29,6 +29,15 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 - **Write migration files.** This is the deliverable for a schema change, always.
 - **Apply to the development project** (`membership-system-dev`, ref `qojixnzpfkpteakltdoa`), via the Supabase MCP `apply_migration` or the *Apply database migrations* workflow. Preview deployments run against that database, so a schema-dependent change cannot be exercised until the migration is on it. Apply before pushing the branch, then say in your summary what you applied.
 
+  **If you used `apply_migration`, verify the version it recorded.** That tool stamps `supabase_migrations.schema_migrations.version` with the wall-clock time the call runs, not the filename's leading timestamp — so a migration named `20260908154524_foo.sql` can land in the table as version `20260908155024` or whatever moment the call happened to land on. `supabase db push` (what the *Apply database migrations* workflow runs on every push touching `supabase/migrations/`) treats that as a genuine mismatch and fails with "Remote migration versions not found in local migrations directory" the next time anything pushes to that branch — after the push has already landed, so nothing catches it before merge. Check immediately after applying:
+  ```sql
+  select version, name from supabase_migrations.schema_migrations order by version desc limit 1;
+  ```
+  If `version` doesn't match the filename's timestamp, fix it before pushing the branch — this only realigns the CLI's bookkeeping with the file already in the repo, it doesn't touch the schema:
+  ```sql
+  UPDATE supabase_migrations.schema_migrations SET version = '<filename-timestamp>' WHERE version = '<wrong-version>';
+  ```
+
   If you *cannot* — no Supabase MCP in your session, no permission to run Actions workflows, or a fork PR where secrets are unavailable — then say so plainly in your summary and in the PR description, naming the file that still needs applying. Do not push a schema-dependent branch and let its preview fail without explanation; a missing column reads as a broken feature, and the next person debugs the wrong thing.
 - **Run read-only queries against either project** — catalog inspection, drift comparison, `pg_stat_statements`, `get_advisors`, logs. Do this liberally; it is how the dev/prod drift and the anonymous data exposure were both found. Reading is not the same as changing.
 

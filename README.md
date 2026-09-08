@@ -339,14 +339,14 @@ One-time, per project:
    | Variable | Example | What it is |
    |---|---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | `https://fogsphzerhmyjckxhalj.supabase.co` | HTTPS endpoint the JS client talks to. Public — it ships in the browser bundle. |
-   | `SUPABASE_DB_URL` | `postgresql://postgres.<ref>:<password>@aws-1-us-east-2.pooler.supabase.com:5432/postgres` | Postgres wire-protocol connection, used by `psql` and `supabase db push`. **Contains the database password — secret.** |
+   | `SUPABASE_DB_URL` | `postgresql://postgres.<ref>:<password>@<pooler-host>:5432/postgres` | Postgres wire-protocol connection, used by `psql` and `supabase db push`. **Contains the database password — secret.** |
 
    | Environment | Value |
    |---|---|
    | `supabase-production` | production project (`fogsphzerhmyjckxhalj`) |
    | `supabase-development` | development project (`qojixnzpfkpteakltdoa`) |
 
-   Get each from Dashboard → **Connect** → *Session pooler*. The dialog shows the password as a literal `[YOUR-PASSWORD]` placeholder — it gives you the correct host, port and `postgres.<project-ref>` username, but you have to substitute the real database password yourself.
+   Get each from Dashboard → **Connect** → *Session pooler*. The dialog shows the password as a literal `[YOUR-PASSWORD]` placeholder — it gives you the correct host, port and `postgres.<project-ref>` username, but you have to substitute the real database password yourself. The host's `aws-N-<region>` prefix is assigned per project and isn't derivable from the region, so copy it from the dialog rather than reusing another project's value.
 
    That password is **not displayed anywhere in the dashboard**: Supabase shows it once at project creation and never again. If it isn't in your password manager, Settings → Database → *Database password* → **Reset database password** issues a new one, shown once.
 

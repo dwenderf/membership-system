@@ -1,0 +1,20 @@
+# A migration file is the thing that actually changes production, so a
+# promotion PR (development -> main) that touches one should get a human read
+# before merging -- see AGENTS.md "How production gets changed". This is
+# documentation of that convention, not a GitHub-enforced gate: branch
+# protection does not require Code Owner review, so it never blocks a merge.
+#
+# It also won't notify the reviewer named below if they're the PR's author --
+# GitHub never auto-requests a review from someone on their own PR. On a
+# single-maintainer repo where every promotion PR is opened by that person,
+# this shows up as an informational "Code owners" note on the PR, not an
+# actual review request. Reading the migration diff before merging is still
+# on the merging human; nothing here enforces it.
+#
+# What does enforce something is separate: `Migration applied to target
+# database`, a required status check (#290), blocks the merge outright if the
+# target database is missing a migration this PR carries. That's a required
+# *status check*, not a required *review*, so it isn't subject to the
+# self-approval restriction above -- it's the actual gate; this file is just
+# a pointer to whose eyes belong on the diff.
+supabase/migrations/ @dwenderf

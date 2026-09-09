@@ -272,7 +272,7 @@ The development database is the exception to "deliberately": preview deployments
 
 To run it: Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
 
-**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow. Pushes that don't touch migrations trigger nothing. On `development` it applies unattended, which is the point — previews run against that database. On `main` it should be a no-op by the time it runs: the preflight check below already forced a manual apply before the merge was even allowed. A required reviewer on the `supabase-production` Environment is optional on top of that (see the workflow's own header comment for the tradeoff) — it's no longer what's keeping an unapplied migration from reaching production.
+**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow, and applies immediately and unattended on both branches — neither Environment has a required reviewer (see "Setting up the workflow" below for why, and what replaced it). Pushes that don't touch migrations trigger nothing. On `development` unattended is the point — previews run against that database. On `main` it lands in the same moment as Vercel's production deploy, but should be a no-op by the time it runs: the preflight check below already forced a manual apply before the merge was even allowed.
 
 **What a failure means.** This workflow runs *after* the push has landed, so it cannot fail the merge or undo it. A red run means the commit is on the branch and the migration is **not** applied — the code is ahead of the database, and nothing was rolled back. Recovery is to fix the migration in a follow-up and let it re-run, or apply by hand and repair the history.
 
@@ -334,9 +334,15 @@ One-time, per project:
 
    Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list`.
 
-2. **Create GitHub Environments** named `supabase-development` and `supabase-production` (Settings → Environments), and add a **required reviewer** to `supabase-production`. That approval gate is what makes automation safe — idempotency isn't sufficient, since a `DROP COLUMN` is idempotent and still destructive.
+2. **Create GitHub Environments** named `supabase-development` and `supabase-production` (Settings → Environments). Neither has a required reviewer.
 
-   Deliberately *not* the existing `Production` / `Preview` environments: those belong to the Vercel integration. Adding a required reviewer to `Production` would gate Vercel deployments as well as migrations, and the names are ambiguous besides — `Preview` is a Vercel deployment target, not a database. Leave Vercel's alone.
+   Deliberately *not* the existing `Production` / `Preview` environments: those belong to the Vercel integration, and reusing them would tangle Vercel deployments with migrations, and the names are ambiguous besides — `Preview` is a Vercel deployment target, not a database. Leave Vercel's alone.
+
+   A required reviewer on `supabase-production` used to be the approval gate here, but it ran *after* the push had already landed on `main` — by which point Vercel had already deployed the new application code, independent of this workflow. That left a real window (observed once at over five hours) where production ran new code against old schema before anyone approved the migration. The gate moved earlier instead, to the pull request itself: see "Enforcing it before merge" above, and "CODEOWNERS" just below for a complementary, non-blocking signal.
+
+   ### CODEOWNERS
+
+   `.github/CODEOWNERS` names a reviewer for `supabase/migrations/`, so a promotion PR (`development` → `main`) carrying a migration surfaces that reviewer in its Files Changed / reviewers panel — a useful pointer to whose eyes belong on the diff, on top of the required check above, but not itself a GitHub-enforced block. Branch protection doesn't require Code Owner review here, and it couldn't easily be turned into one on this repository: GitHub never lets a PR author satisfy a required review on their own PR, including a Code Owner review, so requiring it would deadlock every promotion this single-maintainer account opens. `Migration applied to target database` is what actually blocks the merge; CODEOWNERS is just where you'd look to see who should be looking.
 
 3. **Add a `SUPABASE_DB_URL` secret to each of those two Environments** — same name, different value. It goes under Settings → Environments → *(the environment)* → **Environment secrets**, not repository secrets: one name resolving to a different value per environment is the whole point, and repository secrets carry no approval gate.
 
@@ -364,7 +370,7 @@ One-time, per project:
    - **Transaction pooler, port 6543** ❌ — transaction mode breaks migrations.
    - **Direct connection** (`db.<ref>.supabase.co:5432`) — session mode, but IPv6-only unless the project has the IPv4 add-on, and GitHub-hosted runners are IPv4-only. Fine from a machine with IPv6; don't rely on it in CI.
 
-Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
+The `push:` trigger in `.github/workflows/db-migrate.yml` is already live for both `development` and `main` — nothing to uncomment. Both apply unattended; see "Enforcing it before merge" above for where the human decision actually happens for production.
 
 ### The preflight check's read-only credential
 

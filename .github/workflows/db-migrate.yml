@@ -23,25 +23,18 @@ name: Apply database migrations
 # the fact. Detecting drift from anywhere else (SQL applied by hand outside
 # the repo entirely) is a separate, harder problem, tracked in #312.
 #
-# SETUP — see README "Automating migrations" before the first run:
+# SETUP — see README "Database Migrations" before the first run:
 #   1. Seed the CLI's migration history on both projects, once. The baseline was
 #      applied by hand, and the CLI does not know that yet:
 #        supabase migration repair --status applied 20260907000000 20260907000001
 #   2. Create GitHub Environments named `supabase-development` and
-#      `supabase-production` (Settings → Environments).
+#      `supabase-production` (Settings → Environments). Neither has a required
+#      reviewer -- see "Why not a required reviewer" below for why, and what
+#      replaced it.
 #
 #      Deliberately NOT the existing `Production`/`Preview` environments: those
-#      belong to the Vercel integration, and adding a reviewer to them would
-#      gate Vercel deployments as well as migrations.
-#
-#      A required reviewer on `supabase-production` is optional, not load-bearing
-#      -- db-migration-preflight.yml is what actually stops an unapplied
-#      migration from merging. Adding one here layers a second, human checkpoint
-#      *after* merge, at the cost of this job sitting at `waiting` until someone
-#      clicks Approve, silently, with no failure to notice if they don't (this is
-#      exactly what happened before #290: the scheduled drift check this repo
-#      used to run inherited the same gate and queued unnoticed for hours).
-#      Weigh that before turning it on.
+#      belong to the Vercel integration, and reusing them would tangle Vercel
+#      deployments with migrations.
 #   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
 #      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
 #      Dashboard -> Connect -> Session pooler (port 5432), which is session mode
@@ -49,12 +42,32 @@ name: Apply database migrations
 #      breaks migrations. The direct connection is session mode too, but is
 #      IPv6-only without the IPv4 add-on, and GitHub runners are IPv4.
 #
+# Why not a required reviewer: this job used to pause on `main` for a required
+# reviewer on `supabase-production`, after the push had already landed -- too
+# late to matter, since Vercel deploys the new application code immediately
+# and unconditionally on push to `main`, independent of this workflow. That
+# left a real window (observed once at over five hours, on PR #305) where
+# production ran new code against old schema before anyone approved the
+# migration.
+#
+# `.github/CODEOWNERS` names a reviewer for `supabase/migrations/`, so a
+# promotion PR carrying one surfaces that in the Files Changed panel -- useful,
+# but informational only: GitHub never lets a PR author satisfy a required
+# review on their own PR, so a hard "Require review from Code Owners" rule
+# would deadlock every promotion this single-maintainer repo's account opens.
+#
+# db-migration-preflight.yml is what actually enforces this instead: a
+# *required status check*, not a required review, so the self-approval
+# restriction above doesn't apply to it. It fails the pull request itself if
+# the target database is missing a migration this repo carries, which forces
+# this workflow to be run manually before merge rather than approved after.
+# By the time a merge lands and this job's push trigger fires, the migration
+# should already be applied -- this run is then a no-op, and only does real
+# work if the preflight check was somehow bypassed.
+#
 # The development database is usually already current, because migrations are
 # applied there during feature work so preview deployments can exercise them.
-# For production, the expected flow is: apply manually (workflow_dispatch,
-# below) before merging the PR, so the preflight check passes; the push
-# trigger then re-runs after merge and no-ops, since everything is already
-# applied. It only does real work if something bypassed the preflight check.
+# This workflow is the catch-up path for it, and the only path for production.
 
 on:
   workflow_dispatch:
@@ -71,13 +84,12 @@ on:
         type: boolean
         default: true
 
-  # Applies automatically when a push changes a migration file. A merge to
-  # development applies unattended, which is the point: previews run against
-  # that database. A merge to main runs too, but by the time it lands the
-  # preflight check should already have forced a manual apply -- see the
-  # header comment -- so this is a no-op unless that was bypassed, or (if a
-  # required reviewer is configured on `supabase-production`) it waits for
-  # that approval first.
+  # Applies automatically when a push changes a migration file, on both
+  # branches, unattended -- neither Environment has a required reviewer (see
+  # the header comment). On `development` that's the point: previews run
+  # against that database. On `main` it should be a no-op by the time it
+  # runs, since the preflight check already forced a manual apply before the
+  # merge was even allowed.
   #
   # The paths filter matters: pushes that don't touch supabase/migrations/ don't
   # trigger anything.
@@ -105,10 +117,9 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
 
-    # Selects which Environment's SUPABASE_DB_URL is used, and enforces that
-    # Environment's protection rules, if any are configured -- see the header
-    # comment on why a required reviewer here is optional rather than the
-    # thing actually keeping an unapplied migration from merging.
+    # Selects which Environment's SUPABASE_DB_URL is used. Neither Environment
+    # has a required reviewer (see the header comment for why) -- this job
+    # runs unattended on both.
     # Manual runs use the chosen target. A push maps branch to database --
     # without this, a push to main would fall back to 'supabase-development'
     # and quietly apply nothing to prod.

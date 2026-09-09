@@ -62,6 +62,7 @@ export async function POST(
           id,
           name,
           season_id,
+          required_membership_id,
           seasons:season_id (
             name,
             start_date,
@@ -73,6 +74,7 @@ export async function POST(
           custom_name,
           price,
           accounting_code,
+          required_membership_id,
           categories (
             name
           )
@@ -123,6 +125,33 @@ export async function POST(
       return NextResponse.json({
         error: validationResult.error || 'Cannot register for this event'
       }, { status: 400 })
+    }
+
+    // Check membership eligibility using hierarchical validation
+    // Users can qualify with EITHER registration-level OR category-level membership
+    const registrationMembershipId = registration.required_membership_id || null
+    const categoryMembershipId = category.required_membership_id || null
+
+    if (registrationMembershipId || categoryMembershipId) {
+      // The `seasons` relation is a single joined object at runtime; the untyped
+      // client can't infer relation cardinality and types it as an array.
+      const season = registration.seasons as unknown as { end_date: string } | null
+
+      // Use adminSupabase: this checks the WAITLISTED user's memberships, not the
+      // admin's, and RLS would otherwise hide another user's rows.
+      const membershipValidation = await RegistrationValidationService.validateMembershipRequirementAsync(
+        adminSupabase,
+        registrationMembershipId,
+        categoryMembershipId,
+        waitlistEntry.user_id,
+        season?.end_date ?? ''
+      )
+
+      if (!membershipValidation.hasRequiredMembership) {
+        return NextResponse.json({
+          error: membershipValidation.error || 'Required membership not found'
+        }, { status: 400 })
+      }
     }
 
     try {

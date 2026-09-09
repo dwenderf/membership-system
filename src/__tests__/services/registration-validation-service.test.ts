@@ -558,13 +558,17 @@ describe('RegistrationValidationService', () => {
     const today = new Date().toISOString().split('T')[0]
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    // Most tests below aren't about season coverage specifically, so use a
+    // season that ends today - equivalent to the old "is it active right now" check.
+    const seasonEndDate = today
 
     describe('No requirements (membership not required)', () => {
       it('should allow registration when no membership requirements are set', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           null, // No registration-level requirement
           null, // No category-level requirement
-          [] // User has no memberships
+          [], // User has no memberships
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -596,7 +600,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard Adult
           null, // No category requirement
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -626,7 +631,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard Adult
           null,
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(false)
@@ -654,7 +660,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           null, // No registration requirement
           'tournament-membership-id', // Category requires Tournament
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -686,7 +693,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard Adult
           'tournament-membership-id', // Category accepts Tournament
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -715,7 +723,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard Adult
           'tournament-membership-id', // Category accepts Tournament
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -744,7 +753,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard Adult
           'tournament-membership-id', // Category accepts Tournament
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(false)
@@ -781,7 +791,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id',
           'tournament-membership-id',
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -808,7 +819,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id',
           null,
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(false)
@@ -833,7 +845,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id',
           null,
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(false)
@@ -858,7 +871,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id',
           null,
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -869,7 +883,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id',
           null,
-          [] // No memberships
+          [], // No memberships
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(false)
@@ -896,7 +911,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           null, // No registration-level requirement
           'chelsea-challenge-2026-id', // Category requires tournament membership
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -925,7 +941,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           null, // No registration requirement
           'social-membership-id', // Social category requires Social membership
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -950,7 +967,8 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration requires Standard
           'tournament-membership-id', // But tournament membership also accepted
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
@@ -975,12 +993,194 @@ describe('RegistrationValidationService', () => {
         const result = RegistrationValidationService.validateMembershipRequirement(
           'standard-adult-id', // Registration prefers Standard
           'tournament-membership-id', // But tournament accepted
-          userMemberships
+          userMemberships,
+          seasonEndDate
         )
 
         expect(result.hasRequiredMembership).toBe(true)
         expect(result.matchedMembership?.source).toBe('category')
       })
+    })
+
+    describe('Season coverage (membership must last through the season, not just be active today)', () => {
+      const seasonEnd = '2027-02-28' // e.g. Fall/Winter 2026 season end
+
+      it('should deny registration when membership is active today but expires before the season ends', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: '2026-08-01',
+            valid_until: '2026-12-01', // Active right now, but lapses mid-season
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          userMemberships,
+          seasonEnd
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+        expect(result.error).toContain('registration-level membership')
+      })
+
+      it('should allow registration when membership covers through the season end date', () => {
+        const userMemberships = [
+          {
+            id: 'um-1',
+            membership_id: 'standard-adult-id',
+            valid_from: '2026-08-01',
+            valid_until: seasonEnd,
+            payment_status: 'paid' as const,
+            memberships: {
+              id: 'standard-adult-id',
+              name: 'Standard Adult'
+            }
+          }
+        ]
+
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          userMemberships,
+          seasonEnd
+        )
+
+        expect(result.hasRequiredMembership).toBe(true)
+      })
+
+      it('should deny registration when the user has no membership at all, regardless of season', () => {
+        const result = RegistrationValidationService.validateMembershipRequirement(
+          'standard-adult-id',
+          null,
+          [],
+          seasonEnd
+        )
+
+        expect(result.hasRequiredMembership).toBe(false)
+      })
+    })
+  })
+
+  describe('validateMembershipRequirementAsync', () => {
+    const seasonEndDate = '2027-02-28'
+
+    function membershipsQueryResult(result: { data: unknown; error: unknown }) {
+      const gte = jest.fn().mockReturnValue({
+        overrideTypes: jest.fn().mockResolvedValue(result)
+      })
+      const eq2 = jest.fn().mockReturnValue({ gte })
+      const eq1 = jest.fn().mockReturnValue({ eq: eq2 })
+      const select = jest.fn().mockReturnValue({ eq: eq1 })
+      return { select, gte }
+    }
+
+    function membershipNamesQueryResult(result: { data: unknown; error: unknown }) {
+      return {
+        select: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue(result)
+        })
+      }
+    }
+
+    it('should allow registration with no DB query when no requirement is set', async () => {
+      const result = await RegistrationValidationService.validateMembershipRequirementAsync(
+        asClient(mockSupabase),
+        null,
+        null,
+        'user-123',
+        seasonEndDate
+      )
+
+      expect(result.hasRequiredMembership).toBe(true)
+      expect(mockSupabase.from).not.toHaveBeenCalled()
+    })
+
+    it('should deny registration when the user has no membership that covers through the season end date', async () => {
+      // The `.gte('valid_until', seasonEndDate)` filter is applied in the query itself,
+      // so a membership that expires before the season end never comes back here.
+      const membershipsQuery = membershipsQueryResult({ data: [], error: null })
+      mockSupabase.from.mockReturnValueOnce(membershipsQuery)
+      mockSupabase.from.mockReturnValueOnce(membershipNamesQueryResult({
+        data: [{ id: 'standard-adult-id', name: 'Standard Adult' }],
+        error: null
+      }))
+
+      const result = await RegistrationValidationService.validateMembershipRequirementAsync(
+        asClient(mockSupabase),
+        'standard-adult-id',
+        null,
+        'user-123',
+        seasonEndDate
+      )
+
+      expect(result.hasRequiredMembership).toBe(false)
+      expect(result.error).toContain('Standard Adult')
+
+      // The core bug fix: the coverage cutoff passed to the DB must be the
+      // season end date, not "today".
+      expect(membershipsQuery.gte).toHaveBeenCalledWith('valid_until', seasonEndDate)
+    })
+
+    it('should allow registration when the user has a membership covering through the season end date', async () => {
+      mockSupabase.from.mockReturnValueOnce(membershipsQueryResult({
+        data: [{
+          id: 'um-1',
+          membership_id: 'standard-adult-id',
+          valid_from: '2026-01-01',
+          valid_until: '2027-12-31',
+          payment_status: 'paid',
+          memberships: { id: 'standard-adult-id', name: 'Standard Adult' }
+        }],
+        error: null
+      }))
+
+      const result = await RegistrationValidationService.validateMembershipRequirementAsync(
+        asClient(mockSupabase),
+        'standard-adult-id',
+        null,
+        'user-123',
+        seasonEndDate
+      )
+
+      expect(result.hasRequiredMembership).toBe(true)
+      expect(result.matchedMembership).toEqual({
+        id: 'standard-adult-id',
+        name: 'Standard Adult',
+        source: 'registration'
+      })
+    })
+
+    it('should allow registration via category-level membership when registration-level is not held (OR semantics)', async () => {
+      mockSupabase.from.mockReturnValueOnce(membershipsQueryResult({
+        data: [{
+          id: 'um-1',
+          membership_id: 'tournament-membership-id',
+          valid_from: '2026-01-01',
+          valid_until: '2027-12-31',
+          payment_status: 'paid',
+          memberships: { id: 'tournament-membership-id', name: 'Tournament Membership' }
+        }],
+        error: null
+      }))
+
+      const result = await RegistrationValidationService.validateMembershipRequirementAsync(
+        asClient(mockSupabase),
+        'standard-adult-id',
+        'tournament-membership-id',
+        'user-123',
+        seasonEndDate
+      )
+
+      expect(result.hasRequiredMembership).toBe(true)
+      expect(result.matchedMembership?.source).toBe('category')
     })
   })
 })

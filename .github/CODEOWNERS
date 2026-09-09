@@ -10,4 +10,11 @@
 # this shows up as an informational "Code owners" note on the PR, not an
 # actual review request. Reading the migration diff before merging is still
 # on the merging human; nothing here enforces it.
+#
+# What does enforce something is separate: `Migration applied to target
+# database`, a required status check (#290), blocks the merge outright if the
+# target database is missing a migration this PR carries. That's a required
+# *status check*, not a required *review*, so it isn't subject to the
+# self-approval restriction above -- it's the actual gate; this file is just
+# a pointer to whose eyes belong on the diff.
 supabase/migrations/ @dwenderf

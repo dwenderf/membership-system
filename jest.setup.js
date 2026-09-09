@@ -9,28 +9,6 @@ process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_123'
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_123'
 process.env.STRIPE_API_VERSION = '2023-10-16'
 
-// Mock Next.js modules that might cause issues
-jest.mock('next/server', () => ({
-  NextRequest: class MockNextRequest {
-    constructor(url, options = {}) {
-      this.url = url
-      this.method = options.method || 'GET'
-      this.headers = new Map()
-      this._body = options.body
-    }
-    
-    async json() {
-      return JSON.parse(this._body || '{}')
-    }
-  },
-  NextResponse: {
-    json: (data, options = {}) => ({
-      json: () => Promise.resolve(data),
-      status: options.status || 200,
-    }),
-  },
-}))
-
 // Mock console methods to reduce noise during tests
 global.console = {
   ...console,

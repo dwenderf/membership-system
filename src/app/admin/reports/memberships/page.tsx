@@ -248,7 +248,11 @@ export default function MembershipReportsPage() {
         method: 'POST'
       })
       const data = await response.json()
-      setReminderResult(data)
+      setReminderResult({
+        success: data.success ?? false,
+        message: data.message ?? data.error ?? 'Unknown error occurred',
+        results: data.results
+      })
     } catch (error) {
       setReminderResult({
         success: false,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { sendExpirationReminders } from '@/lib/services/membership-reminder-processor'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 /**
  * Cron Job: Daily Membership Expiration Reminders
@@ -17,33 +18,8 @@ import { sendExpirationReminders } from '@/lib/services/membership-reminder-proc
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a cron request from Vercel. Fail closed: a missing
-    // secret must never mean "no authentication required".
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (!cronSecret) {
-      logger.logBatchProcessing(
-        'cron-membership-reminders-not-configured',
-        'CRON_SECRET is not configured',
-        {},
-        'error'
-      )
-      return NextResponse.json({ error: 'Not configured' }, { status: 503 })
-    }
-
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      logger.logBatchProcessing(
-        'cron-membership-reminders-unauthorized',
-        'Unauthorized cron job attempt',
-        {},
-        'warn'
-      )
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    const denied = authorizeCronRequest(request, 'membership-reminders')
+    if (denied) return denied
 
     logger.logBatchProcessing(
       'cron-membership-reminders-start',

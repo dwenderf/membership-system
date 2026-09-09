@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 /**
  * Scheduled email sync — processes staged (status 'pending') email_logs rows.
@@ -23,11 +24,8 @@ import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const denied = authorizeCronRequest(request, 'email-sync')
+    if (denied) return denied
 
     logger.logBatchProcessing('cron-email-sync-start', '🕐 Scheduled email sync started')
 

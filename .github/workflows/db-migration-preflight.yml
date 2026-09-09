@@ -37,6 +37,12 @@ permissions:
 
 jobs:
   check:
+    # Required status checks match on the check-run name, which defaults to
+    # the job id ("check") without this -- not the workflow-level `name:`
+    # above, which only labels the run in the Actions UI. Without it, the
+    # ruleset's required-checks picker would never see "Migration applied to
+    # target database" to add.
+    name: Migration applied to target database
     runs-on: ubuntu-latest
     # PRs into development check against supabase-development (ungated,
     # same credential db-migrate.yml uses there). PRs into main check

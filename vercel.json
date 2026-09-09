@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/payment-plans",
       "schedule": "6 2 * * *"
+    },
+    {
+      "path": "/api/cron/membership-reminders",
+      "schedule": "9 2 * * *"
     }
   ]
 }

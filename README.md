@@ -123,6 +123,7 @@ LOOPS_API_KEY=your_loops_api_key
 LOOPS_EMAIL_BATCH_DELAY_MS=1000
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_membership_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
@@ -616,24 +617,26 @@ The Hockey Association Team
 
 #### Membership Expiration Warning (`LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID`)
 
+Sent by the `/api/cron/membership-reminders` job (see § Cron Jobs) when a membership's `valid_until` is exactly 30, 14, 7, or 1 days away.
+
 **Data Variables:**
 
-- `userName` - Member's full name
-- `membershipName` - Type of membership expiring
-- `expirationDate` - When membership expires
-- `daysUntilExpiration` - Number of days remaining
-- `renewUrl` - Link to renewal page
+- `user_name` - Member's full name
+- `membership_name` - Type of membership expiring
+- `expiration_date` - When membership expires
+- `days_until_expiration` - Number of days remaining (30, 14, 7, or 1)
+- `renew_url` - Link to renewal page
 
 **Template Example:**
 
 ```text
-Hi [userName],
+Hi [user_name],
 
-Your [membershipName] will expire in [daysUntilExpiration] days on [expirationDate].
+Your [membership_name] will expire in [days_until_expiration] days on [expiration_date].
 
 To avoid any interruption to your membership benefits, please renew before the expiration date.
 
-Renew now: [renewUrl]
+Renew now: [renew_url]
 
 Questions about renewal? Reply to this email.
 
@@ -1679,6 +1682,7 @@ LOOPS_API_KEY=your_loops_api_key
 LOOPS_EMAIL_BATCH_DELAY_MS=1000
 LOOPS_WELCOME_TEMPLATE_ID=your_welcome_template_id
 LOOPS_MEMBERSHIP_PURCHASE_TEMPLATE_ID=your_template_id
+LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID=your_membership_expiring_template_id
 LOOPS_PAYMENT_FAILED_TEMPLATE_ID=your_payment_failed_template_id
 LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID=your_payment_method_removed_template_id
 LOOPS_PAYMENT_PLAN_PRE_NOTIFICATION_TEMPLATE_ID=your_payment_plan_pre_notification_template_id
@@ -1820,7 +1824,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 - [ ] SSL certificate active and verified
 - [ ] Vercel Pro plan activated (required for cron jobs)
 - [ ] `CRON_SECRET` environment variable configured
-- [ ] Cron jobs verified in Vercel dashboard (5 active jobs, matching `vercel.json`)
+- [ ] Cron jobs verified in Vercel dashboard (6 active jobs, matching `vercel.json`)
 
 #### Setting up a personal Vercel project for preview deploys
 
@@ -1852,9 +1856,12 @@ would run more than once per day. Upgrade to the Pro plan to unlock all Cron Job
 | `/api/cron/email-sync` | `* * * * *` | **Admin dashboard** (`/admin`) → *Sync Emails* |
 | `/api/cron/sync-xero-accounts` | `3 2 * * *` | **Admin dashboard** (`/admin`) → *Sync Accounting Codes*, or `/admin/xero-integration` → Accounts |
 | `/api/cron/payment-plans` | `6 2 * * *` | **Payment Plans report** (`/admin/reports/payment-plans`) → *Run Payments* |
+| `/api/cron/membership-reminders` | `9 2 * * *` | **Membership Reports** (`/admin/reports/memberships`) → *Send Reminder Emails Now* |
 | `/api/cron/daily-housekeeping` | `0 2 * * *` | No UI trigger — call the endpoint directly with `Authorization: Bearer $CRON_SECRET` |
 
 So: deploy to a Hobby project only if you actually need the crons registered (you almost certainly don't — upgrade the project to Pro in that case), and otherwise validate the preview against the shared team project, or exercise the jobs through the admin UI above.
+
+**Membership expiration reminders.** `/api/cron/membership-reminders` emails a member when their membership's `valid_until` is exactly 30, 14, 7, or 1 days away (`MEMBERSHIP_REMINDER_THRESHOLDS_DAYS` in `src/lib/services/membership-reminder-processor.ts`). These are hardcoded, not admin-configurable, and matched by strict equality rather than `<=` — the same trick the payment-plan pre-notification job uses instead of a dedup table. That means a member gets at most one reminder per threshold, but it also means a day the cron doesn't run is a reminder that's simply never sent (no catch-up on the next run). Keep that in mind before changing the schedule or the threshold list.
 
 #### Setting Up Vercel Cron Jobs (Pro Plan Required)
 
@@ -1882,12 +1889,13 @@ The application uses Vercel Cron jobs for background processing. **Vercel Pro pl
 **3. Verify Cron Jobs in Vercel Dashboard:**
 
 1. Go to **Settings** → **Cron Jobs**
-2. You should see 5 active cron jobs, matching `vercel.json`:
+2. You should see 6 active cron jobs, matching `vercel.json`:
    - `xero-sync` - Every 5 minutes (Xero invoice/payment sync)
    - `email-sync` - Every minute (staged email processing, limit 100 per batch; transient failures stay `pending` and retry on the next run)
    - `daily-housekeeping` - Daily at 2 AM (expire abandoned registrations, abandon stale Xero carts, prune email logs past 90-day retention)
    - `sync-xero-accounts` - Daily at 2:03 AM (refresh Xero chart of accounts)
    - `payment-plans` - Daily at 2:06 AM (process scheduled payment plan charges)
+   - `membership-reminders` - Daily at 2:09 AM (email members whose membership expires in exactly 30, 14, 7, or 1 days)
 
 **Note:** Cron jobs will not appear until the Pro plan is fully active and `CRON_SECRET` is configured.
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 /**
  * Daily housekeeping — replaces the former /api/cron/cleanup and
@@ -196,12 +197,8 @@ async function pruneOldEmailLogs(
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = authorizeCronRequest(request, 'daily-housekeeping')
+  if (denied) return denied
 
   const startTime = Date.now()
   const results = {

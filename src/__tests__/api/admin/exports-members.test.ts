@@ -1,11 +1,5 @@
 // Tests for the authenticated member export that replaced the anon-callable
 // get_users_data() / get_full_data() / get_current_data() database functions.
-//
-// jest.setup.js replaces next/server globally with a stub whose NextRequest
-// drops the headers passed to it and whose NextResponse has no constructor.
-// This suite is about an Authorization header and a CSV response body, so it
-// opts out and exercises the real implementations.
-jest.unmock('next/server')
 
 import { GET } from '@/app/api/admin/exports/members/route'
 import { NextRequest } from 'next/server'

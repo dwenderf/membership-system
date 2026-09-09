@@ -33,7 +33,7 @@
     "flatpickr": "^4.6.13",
     "loops": "^5.0.1",
     "lucide-react": "^0.515.0",
-    "next": "^16.3.0",
+    "next": "^16.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
@@ -54,6 +54,7 @@
     "eslint-config-next": "^16.1.6",
     "jest": "^29.7.0",
     "jest-environment-node": "^29.7.0",
+    "jest-environment-node-single-context": "^29.4.0",
     "tailwindcss": "^4",
     "ts-jest": "^29.4.1",
     "typescript": "^5"

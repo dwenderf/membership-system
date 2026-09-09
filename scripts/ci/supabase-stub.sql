@@ -38,3 +38,13 @@ CREATE TABLE IF NOT EXISTS auth.audit_log_entries (
     ip_address text,
     payload json
 );
+
+-- The Supabase CLI's own migration-tracking schema. Real projects have this
+-- already; the ci_readonly_role migration grants against it.
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+    version text PRIMARY KEY,
+    statements text[],
+    name text
+);

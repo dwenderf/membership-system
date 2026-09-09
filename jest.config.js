@@ -1,7 +1,11 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',
-  testEnvironment: 'node',
+  // Default jest-environment-node runs each file in its own vm context, so
+  // objects from Node's built-in fetch API (used by real next/server
+  // Request/Response, see jest.setup.js) fail instanceof/toEqual checks
+  // despite being structurally identical. This shares the real global context.
+  testEnvironment: 'jest-environment-node-single-context',
   roots: ['<rootDir>/src'],
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',

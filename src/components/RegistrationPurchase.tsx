@@ -808,7 +808,8 @@ export default function RegistrationPurchase({
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                 registration.required_membership_id ?? null,
                 category.required_membership_id ?? null,
-                activeMemberships
+                activeMemberships,
+                registration.season?.end_date ?? ''
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
 
@@ -960,7 +961,8 @@ export default function RegistrationPurchase({
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                 registration.required_membership_id ?? null,
                 category.required_membership_id ?? null,
-                activeMemberships
+                activeMemberships,
+                registration.season?.end_date ?? ''
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
 

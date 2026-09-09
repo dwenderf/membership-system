@@ -192,11 +192,14 @@ export class RegistrationValidationService {
    * Implements hierarchical membership requirements:
    * - Users can qualify with EITHER registration-level OR category-level membership
    * - If no requirements are set at either level, membership is not required
-   * - Membership must be active (valid_until >= today) and paid
+   * - Membership must be paid and valid through at least the end of the
+   *   registration's season (valid_until >= seasonEndDate), not merely active today —
+   *   a membership that lapses mid-season doesn't satisfy the requirement.
    *
    * @param registrationMembershipId - Required membership at registration level (optional)
    * @param categoryMembershipId - Required membership at category level (optional)
    * @param userMemberships - User's active memberships
+   * @param seasonEndDate - End date (YYYY-MM-DD) of the season the registration belongs to
    * @returns Validation result with matched membership details
    *
    * @example
@@ -204,21 +207,24 @@ export class RegistrationValidationService {
    * validateMembershipRequirement(
    *   null, // No registration-level requirement
    *   'tournament-membership-id', // Category requires tournament membership
-   *   userMemberships
-   * ) // Returns true if user has tournament membership
+   *   userMemberships,
+   *   '2026-08-31'
+   * ) // Returns true if user has tournament membership valid through 2026-08-31
    *
    * @example
    * // Standard registration with category alternative
    * validateMembershipRequirement(
    *   'standard-adult-id', // Registration requires Standard Adult
    *   'social-membership-id', // Social category accepts Social membership
-   *   userMemberships
-   * ) // Returns true if user has EITHER Standard Adult OR Social membership
+   *   userMemberships,
+   *   '2026-08-31'
+   * ) // Returns true if user has EITHER Standard Adult OR Social membership valid through 2026-08-31
    */
   static validateMembershipRequirement(
     registrationMembershipId: string | null,
     categoryMembershipId: string | null,
-    userMemberships: UserMembership[]
+    userMemberships: UserMembership[],
+    seasonEndDate: string
   ): MembershipValidationResult {
     // Collect qualifying membership IDs from both levels
     const qualifyingMembershipIds = [
@@ -238,12 +244,10 @@ export class RegistrationValidationService {
       }
     }
 
-    const today = new Date().toISOString().split('T')[0]
-
-    // Filter to active paid memberships
+    // Filter to paid memberships that cover the entire season
     const activeMemberships = userMemberships.filter(m =>
       m.payment_status === 'paid' &&
-      m.valid_until >= today
+      m.valid_until >= seasonEndDate
     )
 
     // Check if user has any of the qualifying memberships
@@ -309,17 +313,22 @@ export class RegistrationValidationService {
    * This version queries the database to get membership names for better error messages.
    * Use this when you want user-friendly error messages with actual membership names.
    *
+   * Membership must be paid and valid through at least the end of the registration's
+   * season (valid_until >= seasonEndDate) — not merely active today.
+   *
    * @param supabase - Supabase client
    * @param registrationMembershipId - Required membership at registration level
    * @param categoryMembershipId - Required membership at category level
    * @param userId - User to check
+   * @param seasonEndDate - End date (YYYY-MM-DD) of the season the registration belongs to
    * @returns Validation result with detailed membership information
    */
   static async validateMembershipRequirementAsync(
     supabase: SupabaseClient,
     registrationMembershipId: string | null,
     categoryMembershipId: string | null,
-    userId: string
+    userId: string,
+    seasonEndDate: string
   ): Promise<MembershipValidationResult> {
     // Collect qualifying membership IDs
     const qualifyingMembershipIds = [
@@ -339,8 +348,6 @@ export class RegistrationValidationService {
       }
     }
 
-    const today = new Date().toISOString().split('T')[0]
-
     // Fetch user's memberships with membership details
     const { data: userMemberships, error } = await supabase
       .from('user_memberships')
@@ -354,7 +361,7 @@ export class RegistrationValidationService {
       `)
       .eq('user_id', userId)
       .eq('payment_status', 'paid')
-      .gte('valid_until', today)
+      .gte('valid_until', seasonEndDate)
       .overrideTypes<Array<{
         id: string
         membership_id: string

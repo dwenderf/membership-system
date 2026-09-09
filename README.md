@@ -258,9 +258,9 @@ npm run schema:verify     # applies schema.sql twice to a throwaway database
 
 Migrations are applied deliberately, not as a side effect of merging. Two supported routes:
 
-**Through the workflow — the supported route.** It runs `supabase db push`, which records what it applied in `supabase_migrations.schema_migrations`. Everything downstream depends on that record being true: `db push` skips what's already applied, and the drift check below compares against it.
+**Through the workflow — the supported route.** It runs `supabase db push`, which records what it applied in `supabase_migrations.schema_migrations`. Everything downstream depends on that record being true: `db push` skips what's already applied, and *Migration applied to target database* (below) compares against it.
 
-**By hand, in the SQL editor — only as a fallback, and never on its own.** The editor runs the SQL but writes no tracking row, so the CLI still believes the migration is pending: the next `db push` tries to re-apply it and the drift check reports the database as behind even though the change is live. If you do apply by hand, immediately record it:
+**By hand, in the SQL editor — only as a fallback, and never on its own.** The editor runs the SQL but writes no tracking row, so the CLI still believes the migration is pending: the next `db push` tries to re-apply it and the preflight check reports the target as behind even though the change is live. If you do apply by hand, immediately record it:
 
 ```bash
 supabase migration repair --status applied <version> --db-url "postgresql://..."
@@ -276,15 +276,17 @@ To run it: Actions → *Apply database migrations* → Run workflow, pick `devel
 
 **What a failure means.** This workflow runs *after* the push has landed, so it cannot fail the merge or undo it. A red run means the commit is on the branch and the migration is **not** applied — the code is ahead of the database, and nothing was rolled back. Recovery is to fix the migration in a follow-up and let it re-run, or apply by hand and repair the history.
 
-Two different questions get answered before merge, by two different checks. Whether a migration is *safe* is `schema:check`, `migrations:lint`, and the `schema` job, which applies `schema.sql` to a real PostgreSQL container — those catch a migration that shouldn't exist. Whether it's *applied yet* is **Migration applied to target database**, below — a required check that fails the pull request outright if its target database is missing anything the repo carries, catching a migration that's perfectly safe but that nobody has run. The apply workflow itself is downstream of both: by the time a merge triggers it, everything should already be in place. The scheduled drift check is the remaining backstop, for drift neither PR check can see — SQL applied by hand outside the repo, or a preflight check that someone bypassed.
+Two different questions get answered before merge, by two different checks. Whether a migration is *safe* is `schema:check`, `migrations:lint`, and the `schema` job, which applies `schema.sql` to a real PostgreSQL container — those catch a migration that shouldn't exist. Whether it's *applied yet* is **Migration applied to target database**, below — a required check that fails the pull request outright if its target database is missing anything the repo carries, catching a migration that's perfectly safe but that nobody has run. The apply workflow itself is downstream of both: by the time a merge triggers it, everything should already be in place.
+
+What neither PR check can see is SQL applied by hand outside the repo entirely — an object created in the SQL editor writes no row to `supabase_migrations.schema_migrations`, so there's nothing here to compare against. That's a separate, harder problem, tracked in #312.
 
 ### Enforcing it before merge
 
-*Migration applied to target database* (`db-migration-preflight.yml`) runs the same comparison as the drift check below, but as a **required PR check** instead of a schedule — on every pull request into `main` or `development`, not just ones that touch `supabase/migrations/` (a required check has to report on every PR, or it blocks merges forever waiting for a run that never comes — see "Two things about the status checks specifically"). It fails the PR if the branch it's merging into is missing a migration this repo carries, with a message telling you to run *Apply database migrations* first.
+*Migration applied to target database* (`db-migration-preflight.yml`) compares `supabase/migrations/` against the target database's `supabase_migrations.schema_migrations`, as a **required PR check** — on every pull request into `main` or `development`, not just ones that touch `supabase/migrations/` (a required check has to report on every PR, or it blocks merges forever waiting for a run that never comes — see "Two things about the status checks specifically"). It fails the PR if the branch it's merging into is missing a migration this repo carries, with a message telling you to run *Apply database migrations* first.
 
 This is what makes "apply before merge" a rule instead of a habit: nothing merges until the target database is caught up, and you control exactly when you run the apply workflow rather than waiting on anyone's approval.
 
-It needs read access to the target database, same as the drift check: `SUPABASE_DB_URL` for `supabase-development` (already configured, ungated), and `SUPABASE_DB_URL_READONLY` for the ungated `supabase-production-readonly` Environment described below — never the gated admin credential, or this check would inherit the same "waits for approval" problem it exists to route around.
+It needs read access to the target database: `SUPABASE_DB_URL` for `supabase-development` (already configured, ungated), and `SUPABASE_DB_URL_READONLY` for the ungated `supabase-production-readonly` Environment described below — never the gated admin credential, or this check would inherit the same "waits for approval" problem it exists to route around.
 
 **Those checks only block a merge if you require them.** Without a ruleset, a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely — "we always use a PR" is a convention rather than a guarantee.
 
@@ -312,17 +314,11 @@ Rules to leave off:
 Two things about the status checks specifically:
 
 - **A check only appears in the picker once it has run at least once.** `schema` is newer than `test`, so it may not be listed until a pull request has exercised it. The same applies to `Migration applied to target database`, which is newer still. Add each afterwards rather than typing the name by hand — a ruleset treats an unrecognised check as "never reported" and blocks every merge until something reports it.
-- **Do require `Migration applied to target database`, but not `Apply database migrations` or `Check databases are up to date`.** The first runs on `pull_request` and is what actually blocks a merge ahead of an unapplied migration (see "Enforcing it before merge" above). The other two never run on pull requests at all, so requiring them would deadlock every merge waiting for a check that can't report.
+- **Do require `Migration applied to target database`, but not `Apply database migrations`.** The former runs on `pull_request` and is what actually blocks a merge ahead of an unapplied migration (see "Enforcing it before merge" above). The latter never runs on pull requests at all, so requiring it would deadlock every merge waiting for a check that can't report.
 
 One consequence to expect: with a pull request required on `main`, promoting `development` → `main` becomes a pull request rather than a local merge and push. Same result, one extra step, and the checks run against the exact commit that lands.
 
 This is the route for contributors who don't hold database credentials: the connection string lives in the GitHub Environment, so anyone with write access to the repository can apply to `development` from the Actions tab without having it locally. Pull requests from forks can't reach repository secrets at all — ask a maintainer to run it.
-
-### Knowing whether a database is current
-
-*Check databases are up to date* (Actions, or on a weekday schedule) compares the migration files in the repo against what each database reports in `supabase_migrations.schema_migrations`, and fails when a database is behind. It also warns when a database has a migration the repo doesn't — the signature of SQL applied by hand outside the repo.
-
-It exists because merging a PR applies nothing. Without it, a migration can sit unapplied indefinitely while every other signal stays green — which is how `schema.sql` ended up eight months stale in the first place.
 
 ### Setting up the workflow
 
@@ -370,11 +366,11 @@ One-time, per project:
 
 Once you trust it, the workflow can fire automatically on pushes to `development` by uncommenting the `push:` trigger in `.github/workflows/db-migrate.yml`. Leave production manual.
 
-### The drift check's read-only credential
+### The preflight check's read-only credential
 
-*Check databases are up to date* (below) must not use the admin `SUPABASE_DB_URL` above for production: that secret lives in the gated `supabase-production` Environment, and a read-only status check has no decision for the required reviewer to make — gating it just means the scheduled run queues as `waiting` and never executes, so a genuinely-behind database produces the same silence as everything being fine.
+*Migration applied to target database* (above) must not use the admin `SUPABASE_DB_URL` for production: that secret lives in the `supabase-production` Environment, which is where a required reviewer would go if you turn one on (see "Setting up the workflow" above) — and this check has to run unattended on every single PR to do its job. Point it at a gated credential and either it inherits the gate (every PR now waits on an approval for a read-only `SELECT`, reintroducing the exact silent-`waiting` problem #290 was about) or you leave `supabase-production` permanently ungated just to keep the check working, which throws away the point of gating the admin credential at all.
 
-The fix is a dedicated low-privilege role, not a copy of the admin connection string into an ungated Environment (that would let an unapproved workflow change exfiltrate the very credential the reviewer gate protects):
+The fix is a dedicated low-privilege role for production, not a copy of the admin connection string into an ungated Environment:
 
 4. **Apply the `ci_readonly_role` migration** to each project (it's in `supabase/migrations/`, like any other). It creates a `ci_readonly` role that can `SELECT` `supabase_migrations.schema_migrations` and nothing else — no `anon`/`authenticated` membership, no `BYPASSRLS`.
 
@@ -395,7 +391,7 @@ The fix is a dedicated low-privilege role, not a copy of the admin connection st
      -tAc "select version from supabase_migrations.schema_migrations order by version"
    ```
 
-   `supabase-development` needs no equivalent Environment: it has no required reviewer, so `db-drift-check.yml` keeps reading it through the same `supabase-development` Environment and admin `SUPABASE_DB_URL` that `db-migrate.yml` uses.
+   `supabase-development` needs no equivalent role or Environment. It's not that development is inherently safe to expose — it's that its admin credential is *already* reachable by an unattended, automatic workflow: `db-migrate.yml` applies to it on every push, no gate, no approval, by design (previews need it current). The preflight check reading through that same already-unattended credential doesn't cross any new line. Production's admin credential is deliberately kept away from anything unattended — that's what the reviewer gate on `db-migrate.yml` is for — so handing it to a check that *has* to run unattended on every PR would be a new, meaningfully larger exposure, not a continuation of an existing one. `ci_readonly` is what lets the preflight check run unattended on production without making that trade.
 
 ### Preview deployments share the development database
 

@@ -16,14 +16,12 @@ name: Apply database migrations
 # request, where failing them blocks the merge.
 #
 # Whether a migration has actually been *applied* yet is a separate question
-# from whether it's *safe*, and two things guard that (#290):
-#   - db-migration-preflight.yml, a required PR check that fails the pull
-#     request itself if the target database is missing a migration this repo
-#     carries -- so merging is blocked until someone runs this workflow, not
-#     just until someone approves it after the fact.
-#   - db-drift-check.yml, on a schedule, for drift from anywhere else (SQL
-#     applied by hand outside the repo, a run of this workflow that failed
-#     partway, etc).
+# from whether it's *safe*, and db-migration-preflight.yml guards that (#290):
+# a required PR check that fails the pull request itself if the target
+# database is missing a migration this repo carries -- so merging is blocked
+# until someone runs this workflow, not just until someone approves it after
+# the fact. Detecting drift from anywhere else (SQL applied by hand outside
+# the repo entirely) is a separate, harder problem, tracked in #312.
 #
 # SETUP — see README "Automating migrations" before the first run:
 #   1. Seed the CLI's migration history on both projects, once. The baseline was
@@ -39,10 +37,11 @@ name: Apply database migrations
 #      A required reviewer on `supabase-production` is optional, not load-bearing
 #      -- db-migration-preflight.yml is what actually stops an unapplied
 #      migration from merging. Adding one here layers a second, human checkpoint
-#      *after* merge, at the cost of this job (and the identically-gated
-#      db-drift-check.yml, before #290) sitting at `waiting` until someone
-#      clicks Approve, silently, with no failure to notice. Weigh that before
-#      turning it on.
+#      *after* merge, at the cost of this job sitting at `waiting` until someone
+#      clicks Approve, silently, with no failure to notice if they don't (this is
+#      exactly what happened before #290: the scheduled drift check this repo
+#      used to run inherited the same gate and queued unnoticed for hours).
+#      Weigh that before turning it on.
 #   3. Add a SUPABASE_DB_URL secret to each Environment, set to that project's
 #      Postgres connection string -- NOT the https://<ref>.supabase.co API URL.
 #      Dashboard -> Connect -> Session pooler (port 5432), which is session mode

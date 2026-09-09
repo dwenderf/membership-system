@@ -17,12 +17,11 @@ name: Migration applied to target database
 # check). The job itself is a couple of lightweight SQL queries, so running
 # it unconditionally costs little.
 #
-# Read-only: shares scripts/ci/check-db-drift.sh with db-drift-check.yml,
-# and the same credentials -- SUPABASE_DB_URL_READONLY (via ci_readonly) for
-# production, the existing SUPABASE_DB_URL for development. See that
-# workflow's header and README "Database Migrations" for how those are set
-# up. Until they exist this reports "not configured" and passes rather than
-# blocking every PR on setup that hasn't happened yet.
+# Read-only: SUPABASE_DB_URL_READONLY (via the ci_readonly role) for
+# production, the existing SUPABASE_DB_URL for development. See README
+# "Database Migrations" for how those are set up. Until they exist this
+# reports "not configured" and passes, rather than blocking every PR on
+# setup that hasn't happened yet.
 #
 # Once this has run at least once, add it to the branch ruleset's required
 # status checks alongside `test` and `schema` -- see README "Two things
@@ -56,4 +55,65 @@ jobs:
         SUPABASE_DB_URL: >-
           ${{ github.base_ref == 'development' && secrets.SUPABASE_DB_URL || secrets.SUPABASE_DB_URL_READONLY }}
         TARGET: ${{ github.base_ref == 'development' && 'supabase-development' || 'supabase-production' }}
-      run: bash scripts/ci/check-db-drift.sh
+      run: |
+        set -euo pipefail
+
+        if [ -z "${SUPABASE_DB_URL:-}" ]; then
+          echo "::warning::SUPABASE_DB_URL is not configured for '$TARGET'; skipping. See README 'Database Migrations'."
+          echo "### Preflight check skipped — \`$TARGET\` has no SUPABASE_DB_URL secret" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        trimmed="$(printf '%s' "$SUPABASE_DB_URL" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        if [ "$trimmed" != "$SUPABASE_DB_URL" ]; then
+          echo "::error::SUPABASE_DB_URL for '$TARGET' has leading or trailing whitespace. GitHub's secret field preserves it invisibly -- re-save the secret without it."
+          exit 1
+        fi
+
+        case "$SUPABASE_DB_URL" in
+          postgresql://*|postgres://*) ;;
+          *)
+            echo "::error::SUPABASE_DB_URL for '$TARGET' does not start with postgresql:// or postgres:// -- psql will treat it as a plain database name and try the local Unix socket instead of connecting to Supabase. Check for a copied 'psql ' prefix or surrounding quotes."
+            exit 1
+            ;;
+        esac
+
+        # Neither the username nor the host is secret; the project ref is already in AGENTS.md.
+        echo "user/host: $(printf '%s' "$SUPABASE_DB_URL" | sed -E 's#^[a-z]+://([^:]+):[^@]*@#\1@#')"
+
+        psql --version >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+
+        # Versions this PR's checkout carries, from the filename prefix.
+        ls supabase/migrations/*.sql \
+          | xargs -n1 basename \
+          | sed 's/_.*//' \
+          | sort > /tmp/repo_versions
+
+        # Versions the database says it has applied.
+        psql "$SUPABASE_DB_URL" -tAc \
+          "select version from supabase_migrations.schema_migrations order by version" \
+          | sed '/^$/d' | sort > /tmp/db_versions
+
+        unapplied=$(comm -23 /tmp/repo_versions /tmp/db_versions)
+
+        {
+          echo "## Migration status — \`$TARGET\`"
+          echo
+          echo "- migration files in this PR: $(wc -l < /tmp/repo_versions)"
+          echo "- applied in database:        $(wc -l < /tmp/db_versions)"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ -n "$unapplied" ]; then
+          {
+            echo
+            echo "### Not yet applied to \`$TARGET\`"
+            echo '```'
+            echo "$unapplied"
+            echo '```'
+            echo "Run the *Apply database migrations* workflow (target: $TARGET), then re-run this check."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::$TARGET is missing migrations this PR carries: $(echo $unapplied | tr '\n' ' ')"
+          exit 1
+        fi
+
+        echo "### ✅ \`$TARGET\` already has every migration in this PR" >> "$GITHUB_STEP_SUMMARY"

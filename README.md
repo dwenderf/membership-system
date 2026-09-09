@@ -268,15 +268,23 @@ supabase migration repair --status applied <version> --db-url "postgresql://..."
 
 This is not theoretical — it's why the pre-2026-09-07 history was invisible to the CLI, and why seeding was needed before any of this could work.
 
-The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is only ever changed by a human, and **merging a PR does not apply anything** unless the automatic trigger described below is enabled.
+The development database is the exception to "deliberately": preview deployments run against it, so a migration is normally applied there during feature work, before the branch is pushed — see [AGENTS.md](AGENTS.md#database-migrations). Production is meant to be applied by a human before the PR that adds it merges — and *Migration applied to target database* (below) is a **required PR check** that enforces exactly that, rather than leaving it to convention.
 
 To run it: Actions → *Apply database migrations* → Run workflow, pick `development` or `production`, and leave *dry run* checked for the first pass. The dry run prints `supabase migration list`, showing which files the target database has and hasn't seen. Re-run with dry run unchecked to apply.
 
-**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow. Pushes that don't touch migrations trigger nothing. On `main` the job waits for the `production` Environment's required reviewer before applying; on `development` it applies unattended, which is the point — previews run against that database.
+**It also runs on merge.** A push to `main` or `development` that changes anything under `supabase/migrations/` starts the workflow. Pushes that don't touch migrations trigger nothing. On `development` it applies unattended, which is the point — previews run against that database. On `main` it should be a no-op by the time it runs: the preflight check below already forced a manual apply before the merge was even allowed. A required reviewer on the `supabase-production` Environment is optional on top of that (see the workflow's own header comment for the tradeoff) — it's no longer what's keeping an unapplied migration from reaching production.
 
 **What a failure means.** This workflow runs *after* the push has landed, so it cannot fail the merge or undo it. A red run means the commit is on the branch and the migration is **not** applied — the code is ahead of the database, and nothing was rolled back. Recovery is to fix the migration in a follow-up and let it re-run, or apply by hand and repair the history.
 
-The checks that can genuinely block a bad migration are the **pull request** ones — `schema:check`, `migrations:lint`, and the `schema` job that applies `schema.sql` to a real PostgreSQL container. Those run before merge, where failing them stops it. The apply workflow is downstream of that decision; the drift check is the backstop for a merge whose migration never made it.
+Two different questions get answered before merge, by two different checks. Whether a migration is *safe* is `schema:check`, `migrations:lint`, and the `schema` job, which applies `schema.sql` to a real PostgreSQL container — those catch a migration that shouldn't exist. Whether it's *applied yet* is **Migration applied to target database**, below — a required check that fails the pull request outright if its target database is missing anything the repo carries, catching a migration that's perfectly safe but that nobody has run. The apply workflow itself is downstream of both: by the time a merge triggers it, everything should already be in place. The scheduled drift check is the remaining backstop, for drift neither PR check can see — SQL applied by hand outside the repo, or a preflight check that someone bypassed.
+
+### Enforcing it before merge
+
+*Migration applied to target database* (`db-migration-preflight.yml`) runs the same comparison as the drift check below, but as a **required PR check** instead of a schedule — on every pull request into `main` or `development`, not just ones that touch `supabase/migrations/` (a required check has to report on every PR, or it blocks merges forever waiting for a run that never comes — see "Two things about the status checks specifically"). It fails the PR if the branch it's merging into is missing a migration this repo carries, with a message telling you to run *Apply database migrations* first.
+
+This is what makes "apply before merge" a rule instead of a habit: nothing merges until the target database is caught up, and you control exactly when you run the apply workflow rather than waiting on anyone's approval.
+
+It needs read access to the target database, same as the drift check: `SUPABASE_DB_URL` for `supabase-development` (already configured, ungated), and `SUPABASE_DB_URL_READONLY` for the ungated `supabase-production-readonly` Environment described below — never the gated admin credential, or this check would inherit the same "waits for approval" problem it exists to route around.
 
 **Those checks only block a merge if you require them.** Without a ruleset, a red pull request can still be merged and anyone can push straight to `main`, skipping the checks entirely — "we always use a PR" is a convention rather than a guarantee.
 
@@ -287,7 +295,7 @@ Rules to enable:
 | Rule | Setting |
 |---|---|
 | Require a pull request before merging | On, with **required approvals: 0** |
-| Require status checks to pass | On — add `test` and `schema`, and tick *Require branches to be up to date before merging* |
+| Require status checks to pass | On — add `test`, `schema`, and `Migration applied to target database`, and tick *Require branches to be up to date before merging* |
 | Restrict deletions | On (default) |
 | Block force pushes | On (default) |
 
@@ -303,8 +311,8 @@ Rules to leave off:
 
 Two things about the status checks specifically:
 
-- **A check only appears in the picker once it has run at least once.** `schema` is newer than `test`, so it may not be listed until a pull request has exercised it. Add it afterwards rather than typing the name by hand — a ruleset treats an unrecognised check as "never reported" and blocks every merge until something reports it.
-- **Do not require `Apply database migrations` or `Check databases are up to date`.** Neither runs on pull requests, so requiring them would deadlock every merge.
+- **A check only appears in the picker once it has run at least once.** `schema` is newer than `test`, so it may not be listed until a pull request has exercised it. The same applies to `Migration applied to target database`, which is newer still. Add each afterwards rather than typing the name by hand — a ruleset treats an unrecognised check as "never reported" and blocks every merge until something reports it.
+- **Do require `Migration applied to target database`, but not `Apply database migrations` or `Check databases are up to date`.** The first runs on `pull_request` and is what actually blocks a merge ahead of an unapplied migration (see "Enforcing it before merge" above). The other two never run on pull requests at all, so requiring them would deadlock every merge waiting for a check that can't report.
 
 One consequence to expect: with a pull request required on `main`, promoting `development` → `main` becomes a pull request rather than a local merge and push. Same result, one extra step, and the checks run against the exact commit that lands.
 

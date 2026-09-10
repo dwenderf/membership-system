@@ -29,6 +29,16 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const overridePrice = body.overridePrice as number | undefined
 
+    // Check if user is admin (captains are authorized further below, once we
+    // know the waitlist entry's registration_id)
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', authUser.id)
+      .single()
+
+    const isAdmin = !!userProfile?.is_admin
+
     // Get waitlist entry details
     const { data: waitlistEntry, error: waitlistError } = await supabase
       .from('waitlists')
@@ -83,14 +93,8 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check if user is admin or a captain of this registration
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    let isAuthorized = !!userProfile?.is_admin
+    // Admins are always authorized; otherwise require a captain of this registration
+    let isAuthorized = isAdmin
 
     if (!isAuthorized) {
       const { data: captainship } = await supabase

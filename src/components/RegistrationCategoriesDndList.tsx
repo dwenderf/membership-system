@@ -62,7 +62,7 @@ export default function RegistrationCategoriesDndList({ categories, registration
             const displayName = category.custom_name || (category.categories?.name ?? category.name) || 'Unnamed Category'
             const priceDisplay = category.price !== undefined && category.price !== null ? `$${(category.price / 100).toFixed(2)}` : null
             const isGated = category.max_capacity === 0
-            const capacityDisplay = isGated ? 'Waitlist only' : category.max_capacity !== null && category.max_capacity !== undefined ? `${category.max_capacity} spots` : 'Unlimited'
+            const capacityDisplay = isGated ? 'Gated' : category.max_capacity !== null && category.max_capacity !== undefined ? `${category.max_capacity} spots` : 'Unlimited'
             return (
               <SortableItem key={category.id} id={category.id}>
                 <div className="flex items-stretch px-0 py-4 bg-white">

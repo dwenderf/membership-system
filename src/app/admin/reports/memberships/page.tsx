@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
-import { formatDate as formatDateUtil } from '@/lib/date-utils'
+import { formatDate as formatDateUtil, formatDateString } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
 import { Database } from '@/types/database'
 import type { MembershipReminderResults } from '@/lib/services/membership-reminder-processor'
@@ -491,7 +491,7 @@ export default function MembershipReportsPage() {
                           {formatDate(member.member_since)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(member.expiration_date)}
+                          {member.expiration_date ? formatDateString(member.expiration_date) : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`font-medium ${getExpirationColor(member.days_to_expiration)}`}>

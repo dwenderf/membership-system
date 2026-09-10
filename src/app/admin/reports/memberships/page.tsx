@@ -58,6 +58,7 @@ export default function MembershipReportsPage() {
   } | null>(null)
   const [reminderCount, setReminderCount] = useState<number | null>(null)
   const [reminderCountLoading, setReminderCountLoading] = useState(true)
+  const [membershipStatusFilter, setMembershipStatusFilter] = useState<'current' | 'expired'>('current')
 
   const searchParams = useSearchParams()
 
@@ -197,7 +198,13 @@ export default function MembershipReportsPage() {
     }
   }, [selectedMembership])
 
-  const filteredMembers = members.filter(member =>
+  const visibleMembers = members.filter(member =>
+    membershipStatusFilter === 'expired'
+      ? member.expiration_status === 'Expired'
+      : member.expiration_status !== 'Expired'
+  )
+
+  const filteredMembers = visibleMembers.filter(member =>
     member.member_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -424,6 +431,30 @@ export default function MembershipReportsPage() {
             </div>
           )}
 
+          {/* Current / Expired Toggle */}
+          <div className="mb-4 flex items-center space-x-2">
+            <button
+              onClick={() => setMembershipStatusFilter('current')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                membershipStatusFilter === 'current'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Current Members
+            </button>
+            <button
+              onClick={() => setMembershipStatusFilter('expired')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                membershipStatusFilter === 'expired'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Expired Members
+            </button>
+          </div>
+
           {/* Search */}
           <div className="mb-4">
             <input
@@ -439,7 +470,7 @@ export default function MembershipReportsPage() {
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Members ({filteredMembers.length} of {members.length})
+                {membershipStatusFilter === 'expired' ? 'Expired Members' : 'Members'} ({filteredMembers.length} of {visibleMembers.length})
               </h3>
             </div>
             

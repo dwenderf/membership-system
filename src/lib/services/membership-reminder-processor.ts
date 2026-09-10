@@ -176,7 +176,7 @@ export async function sendExpirationReminders(today: string): Promise<Membership
           renew_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`,
           // The standard email-footer button component reads this exact
           // (camelCase) key — every template must send it, per AGENTS.md.
-          dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+          dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
         },
         triggered_by: 'automated',
         related_entity_type: 'user_memberships',

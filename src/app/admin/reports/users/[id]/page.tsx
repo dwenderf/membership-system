@@ -136,8 +136,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
     .select(`
       *,
       registrations (
-        name,
-        description
+        name
       ),
       registration_categories (
         name

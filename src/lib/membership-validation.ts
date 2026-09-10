@@ -1,5 +1,7 @@
 // Utility functions for membership validation and season coverage
 
+import { formatDateString } from '@/lib/date-utils'
+
 export interface UserMembership {
   id: string
   membership_id?: string
@@ -106,6 +108,62 @@ export function formatMembershipWarning(validation: MembershipValidationResult):
   const daysText = validation.daysShort === 1 ? 'day' : 'days'
   
   return `Your ${validation.membershipName} expires ${validation.daysShort} ${daysText} before the season ends. You'll need to extend your membership by at least ${validation.monthsNeeded} ${monthsText} to cover the full season.`
+}
+
+export interface MembershipRequirementOption {
+  id: string
+  name: string
+}
+
+interface RequirementUserMembership {
+  membership_id?: string
+  valid_until: string
+}
+
+/**
+ * Build the "Requires: ..." text for a registration category.
+ *
+ * Collapses duplicate requirement options (e.g. a registration-level and
+ * category-level requirement that happen to point at the same membership),
+ * and — when the user already holds one of the required memberships but it
+ * expires before the season ends — appends a note telling them to extend it.
+ * When two *different* memberships would each satisfy the requirement, the
+ * note stays generic since it's ambiguous which one they should extend.
+ */
+export function formatMembershipRequirementText(
+  requirements: MembershipRequirementOption[],
+  userMemberships: RequirementUserMembership[],
+  seasonEndDate?: string | null
+): string {
+  const uniqueRequirements = requirements.filter(
+    (requirement, index) => requirements.findIndex(r => r.id === requirement.id) === index
+  )
+
+  const baseText = uniqueRequirements.map(r => r.name).join(' OR ') || 'Membership'
+
+  if (!seasonEndDate || uniqueRequirements.length === 0) return baseText
+
+  const requirementIds = uniqueRequirements.map(r => r.id)
+  const matchingMemberships = userMemberships.filter(
+    um => um.membership_id && requirementIds.includes(um.membership_id)
+  )
+
+  if (matchingMemberships.length === 0) return baseText
+
+  const latestMatch = matchingMemberships.reduce((latest, current) =>
+    new Date(current.valid_until) > new Date(latest.valid_until) ? current : latest
+  )
+
+  const coversFullSeason = new Date(latestMatch.valid_until) >= new Date(seasonEndDate)
+  if (coversFullSeason) return baseText
+
+  const extensionNote = 'You need to extend your membership in order to register.'
+
+  if (uniqueRequirements.length === 1) {
+    return `${uniqueRequirements[0].name} valid until ${formatDateString(latestMatch.valid_until)}. ${extensionNote}`
+  }
+
+  return `${baseText}. ${extensionNote}`
 }
 
 /**

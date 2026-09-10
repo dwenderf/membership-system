@@ -126,9 +126,12 @@ interface RequirementUserMembership {
  * Collapses duplicate requirement options (e.g. a registration-level and
  * category-level requirement that happen to point at the same membership),
  * and — when the user already holds one of the required memberships but it
- * expires before the season ends — appends a note telling them to extend it.
- * When two *different* memberships would each satisfy the requirement, the
- * note stays generic since it's ambiguous which one they should extend.
+ * doesn't reach the season's end date (the same cutoff PR #319 enforces
+ * server-side) — appends a note telling them to extend it, naming the season
+ * end date itself rather than the membership's own expiration. That date is
+ * the universal cutoff regardless of which membership satisfies the
+ * requirement, so it's shown the same way even when two different
+ * memberships would each qualify.
  */
 export function formatMembershipRequirementText(
   requirements: MembershipRequirementOption[],
@@ -159,11 +162,7 @@ export function formatMembershipRequirementText(
 
   const extensionNote = 'You need to extend your membership in order to register.'
 
-  if (uniqueRequirements.length === 1) {
-    return `${uniqueRequirements[0].name} valid until ${formatDateString(latestMatch.valid_until)}. ${extensionNote}`
-  }
-
-  return `${baseText}. ${extensionNote}`
+  return `${baseText} valid until ${formatDateString(seasonEndDate)}. ${extensionNote}`
 }
 
 /**

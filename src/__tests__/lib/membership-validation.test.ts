@@ -315,7 +315,7 @@ describe('Membership Validation Functions', () => {
       expect(result).toBe('NYCPHA Full Membership')
     })
 
-    it('adds a valid-until date and extension note for a single requirement expiring before season end', () => {
+    it('adds the season end date and extension note for a single requirement expiring before season end', () => {
       const result = formatMembershipRequirementText(
         [{ id: 'mem-123', name: 'NYCPHA Full Membership' }],
         [{ membership_id: 'mem-123', valid_until: '2025-10-01' }],
@@ -323,11 +323,11 @@ describe('Membership Validation Functions', () => {
       )
 
       expect(result).toBe(
-        `NYCPHA Full Membership valid until ${formatDateString('2025-10-01')}. You need to extend your membership in order to register.`
+        `NYCPHA Full Membership valid until ${formatDateString(seasonEndDate)}. You need to extend your membership in order to register.`
       )
     })
 
-    it('adds a generic extension note (no date) when two different requirements are offered and one is short', () => {
+    it('adds the season end date and extension note when two different requirements are offered and one is short', () => {
       const result = formatMembershipRequirementText(
         [
           { id: 'mem-123', name: 'NYCPHA Full Membership' },
@@ -338,11 +338,11 @@ describe('Membership Validation Functions', () => {
       )
 
       expect(result).toBe(
-        'NYCPHA Full Membership OR NYCPHA Social Membership. You need to extend your membership in order to register.'
+        `NYCPHA Full Membership OR NYCPHA Social Membership valid until ${formatDateString(seasonEndDate)}. You need to extend your membership in order to register.`
       )
     })
 
-    it('uses the latest-expiring matching membership when the user holds more than one', () => {
+    it('uses the latest-expiring matching membership to decide coverage, but still shows the season end date', () => {
       const result = formatMembershipRequirementText(
         [{ id: 'mem-123', name: 'NYCPHA Full Membership' }],
         [
@@ -353,8 +353,21 @@ describe('Membership Validation Functions', () => {
       )
 
       expect(result).toBe(
-        `NYCPHA Full Membership valid until ${formatDateString('2025-11-15')}. You need to extend your membership in order to register.`
+        `NYCPHA Full Membership valid until ${formatDateString(seasonEndDate)}. You need to extend your membership in order to register.`
       )
+    })
+
+    it('shows plain requirement text when the latest of several matching memberships covers the full season', () => {
+      const result = formatMembershipRequirementText(
+        [{ id: 'mem-123', name: 'NYCPHA Full Membership' }],
+        [
+          { membership_id: 'mem-123', valid_until: '2025-09-01' },
+          { membership_id: 'mem-123', valid_until: '2026-06-01' },
+        ],
+        seasonEndDate
+      )
+
+      expect(result).toBe('NYCPHA Full Membership')
     })
   })
 

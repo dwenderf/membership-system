@@ -12,6 +12,7 @@ import DiscountAllowanceSection from './DiscountAllowanceSection'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import { parseBreadcrumbs, buildBreadcrumbUrl } from '@/lib/breadcrumb-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { getCategoryDisplayName } from '@/lib/registration-utils'
 
 /** Narrow "as selected" projection of `xero_invoice_line_items` from the `payments.xero_invoices` join below. */
 interface PaymentLineItem {
@@ -136,11 +137,11 @@ export default async function UserDetailPage({ params, searchParams: searchParam
     .select(`
       *,
       registrations (
-        name,
-        description
+        name
       ),
       registration_categories (
-        name
+        custom_name,
+        categories:category_id(name)
       )
     `)
     .eq('user_id', id)
@@ -546,7 +547,9 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                               {registration.registrations?.name || 'Unknown Registration'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {registration.registration_categories?.name || 'No category'}
+                              {registration.registration_categories
+                                ? getCategoryDisplayName(registration.registration_categories)
+                                : 'No category'}
                             </div>
                             <div className="text-xs text-gray-400 mt-1">
                               Registered {registration.registered_at ? formatDate(registration.registered_at) : 'Unknown date'}

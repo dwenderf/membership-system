@@ -29,6 +29,15 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 - **Write migration files.** This is the deliverable for a schema change, always.
 - **Apply to the development project** (`membership-system-dev`, ref `qojixnzpfkpteakltdoa`), via the Supabase MCP `apply_migration` or the *Apply database migrations* workflow. Preview deployments run against that database, so a schema-dependent change cannot be exercised until the migration is on it. Apply before pushing the branch, then say in your summary what you applied.
 
+  **If you used `apply_migration`, verify the version it recorded.** That tool stamps `supabase_migrations.schema_migrations.version` with the wall-clock time the call runs, not the filename's leading timestamp — so a migration named `20260908154524_foo.sql` can land in the table as version `20260908155024` or whatever moment the call happened to land on. `supabase db push` (what the *Apply database migrations* workflow runs on every push touching `supabase/migrations/`) treats that as a genuine mismatch and fails with "Remote migration versions not found in local migrations directory" the next time anything pushes to that branch — after the push has already landed, so nothing catches it before merge. Check immediately after applying:
+  ```sql
+  select version, name from supabase_migrations.schema_migrations order by version desc limit 1;
+  ```
+  If `version` doesn't match the filename's timestamp, fix it before pushing the branch — this only realigns the CLI's bookkeeping with the file already in the repo, it doesn't touch the schema:
+  ```sql
+  UPDATE supabase_migrations.schema_migrations SET version = '<filename-timestamp>' WHERE version = '<wrong-version>';
+  ```
+
   If you *cannot* — no Supabase MCP in your session, no permission to run Actions workflows, or a fork PR where secrets are unavailable — then say so plainly in your summary and in the PR description, naming the file that still needs applying. Do not push a schema-dependent branch and let its preview fail without explanation; a missing column reads as a broken feature, and the next person debugs the wrong thing.
 - **Run read-only queries against either project** — catalog inspection, drift comparison, `pg_stat_statements`, `get_advisors`, logs. Do this liberally; it is how the dev/prod drift and the anonymous data exposure were both found. Reading is not the same as changing.
 
@@ -40,9 +49,11 @@ Deploy previews through the shared `nycpha/membership-system` Vercel project. If
 
 ### How production gets changed
 
-By a human, deliberately, through the *Apply database migrations* workflow (the `production` GitHub Environment requires a reviewer). Do not suggest the SQL editor as an equivalent: it applies the SQL without writing a row to `supabase_migrations.schema_migrations`, so the CLI still thinks the migration is pending and the drift check reports the database as behind. If it is ever used, it has to be followed by `supabase migration repair --status applied <version>`. Merging a PR that touches `supabase/migrations/` now starts that workflow automatically, but on `main` it stops and waits for a human to approve the `production` Environment — so a merge still does not apply anything by itself. The workflow runs after the push has landed and cannot fail or undo a merge: a red run means the code is on the branch and the migration is not applied. Say in the PR description which file needs applying, so whoever approves knows what they are approving.
+By a human, deliberately, through the *Apply database migrations* workflow — which now applies immediately and unattended on push to `main`, with no approval step to wait for. That's new: the workflow used to pause on `main` for a required reviewer on the `production` GitHub Environment, once the push had already landed. That gate ran too late to matter — Vercel deploys the new application code immediately and unconditionally on push to `main`, independent of this workflow — so the old design left a real window (observed once at over five hours) where production served new code against old schema before anyone got around to approving. Neither Environment has a required reviewer now.
 
-The *Check databases are up to date* workflow runs on a weekday schedule and fails when a database is missing a migration this repo carries, so an unapplied file surfaces on its own rather than waiting to be remembered.
+The human checkpoint moved *before* the merge instead of disappearing, and it's now an actual enforced block rather than a click someone could forget: **`Migration applied to target database`, a required PR check, fails a pull request outright if its target branch's database is missing a migration this repo carries.** A migration has to be applied (via *Apply database migrations*, manually, before merging) or the PR can't merge at all (#290). `.github/CODEOWNERS` additionally names a reviewer for `supabase/migrations/`, so a promotion PR carrying one also surfaces that in the Files Changed panel — a useful signal, but informational only, since GitHub never lets a PR author satisfy a required review on their own PR; the required *status check* is what actually blocks the merge on this single-maintainer repo, not the Code Owner review.
+
+Do not suggest the SQL editor as a way to apply a migration: it runs the SQL without writing a row to `supabase_migrations.schema_migrations`, so the CLI still thinks the migration is pending and the next `db push` (or the preflight check above) reports the database as behind. If it is ever used, it has to be followed by `supabase migration repair --status applied <version>`. The apply workflow runs after the push has landed and cannot fail or undo a merge: a red run means the code is on the branch and the migration is not applied. Say in the PR description which file needs applying, so whoever picks it up knows what to run.
 
 ### Requirements for every migration
 
@@ -66,6 +77,30 @@ Name it the way the CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestam
 ### Before reporting a schema change complete
 
 Run `npm run schema:build` and commit the regenerated `supabase/schema.sql` in the same change — it is generated (the migrations concatenated in filename order) and never hand-edited. Then `npm run schema:check`, `npm run migrations:lint`, and `npm run schema:verify` (needs a reachable PostgreSQL server via the standard `PG*` env vars; CI runs it against a service container). Read `20260907000000_baseline_schema.sql`, not the git history, for the current shape of the schema.
+
+## Postgres version upgrades
+
+Distinct from the schema migrations above: this is upgrading the Postgres *engine* version itself (e.g. `17.4.1.054` → `17.6.1.166`) via the Supabase dashboard's "Upgrade project" button (Infrastructure settings). Like all production changes, this is a human's action to take deliberately — see [How production gets changed](#how-production-gets-changed) above for why. Track it as a GitHub issue with a pre-upgrade checklist: downtime window outside cron activity (`vercel.json` has the schedules), in-place vs. pause-and-restore, and confirming a backup point exists.
+
+A quarterly reminder issue is opened automatically — see `.github/workflows/postgres-upgrade-check.yml` — so this doesn't depend on someone noticing a security advisory.
+
+### Post-upgrade checklist — do not skip this
+
+An in-place upgrade changes the collation library the underlying OS provides, but Supabase's automated upgrade only refreshes the recorded collation-version stamp on the project's primary application database — not on the `postgres` and `template1` system databases. Left alone, every connection Postgres's own autovacuum launcher makes to those two (its normal per-database cadence, unrelated to your app's traffic) logs a `database "X" has a collation version mismatch` WARNING. On `membership-system-prod` this took the Postgres log volume from a ~630/day baseline to 10,000+/day within the hour of a September 2026 upgrade, and was the direct cause of a disk-I/O-budget alert two days later.
+
+Run this immediately after every upgrade, against both `membership-system-prod` and `membership-system-dev`:
+
+```sql
+ALTER DATABASE postgres REFRESH COLLATION VERSION;
+ALTER DATABASE template1 REFRESH COLLATION VERSION;
+```
+
+The `template1` statement is expected to fail with `must be owner of database template1` — it's owned by an internal Supabase role, not the `postgres` role you connect as, and can't be fixed from the SQL editor or the Supabase MCP. That's fine: `template1` sees far fewer connections than `postgres` does, so it's a small fraction of the warning volume, and nothing in this app ever connects to it. Leave it rather than filing a support ticket.
+
+Then:
+
+- Re-run **both** the security and performance advisors (`get_advisors`, or the dashboard's Advisors page). The collation-mismatch lint surfaces under performance, not security — a security-only re-check (as issue #289 originally asked for) will report clean while the warning flood is still running.
+- Watch `postgres_logs` volume for the next 24–48h (`query_logs` filtered to `source = 'postgres_logs'`, or the dashboard Logs Explorer) to confirm it's back near baseline, and watch the Disk I/O graph on the project's Health page.
 
 ## Views and functions are public API
 
@@ -94,11 +129,31 @@ When adding a new admin page, add it to navigation and verify it's reachable by 
 
 When adding a new Loops transactional email template, prepend `{testEmailPrefix}` to the Subject field in the Loops dashboard (mark it optional as a safety net) — see [README.md § Email Integration Setup (Loops.so)](README.md#email-integration-setup-loopsso). The app already sends `testEmailPrefix` in `dataVariables` on every send (`[TEST] ` on preview/local, `''` in production — see [src/lib/email/environment.ts](src/lib/email/environment.ts)); no code changes are needed for a new template beyond the dashboard edit.
 
+Every template's footer uses a standard reusable "Dashboard" button component, which reads a `dashboardUrl` data variable (exact camelCase key — some sending code also sets a `dashboard_url` snake_case variant for its own body copy, but the footer button specifically needs `dashboardUrl`). When wiring up code that sends a new template, always include `dashboardUrl: \`${process.env.NEXT_PUBLIC_SITE_URL}/user\`` in `dataVariables`/`email_data` — it's environment-specific, so it can't be hardcoded into the template itself. There is no `/user/dashboard` route (`/user` is the actual user-facing dashboard page); a few existing send sites still use `/user/dashboard`, which 404s. Omitting or mistyping this doesn't fail the send; Loops just renders the footer button with a broken link, and nothing surfaces the mistake until someone clicks it.
+
 ## Supabase auth email templates
 
 Supabase's own auth emails (magic link, recovery, invite) are project settings, not repo state — nothing in `supabase/migrations/` or `schema.sql` touches them. One of them is codified: the magic-link body lives in `supabase/auth-templates/magic-link.html`. Login makes a single `signInWithOtp()` call, so that one email serves both sign-in methods and must carry both the `{{ .Token }}` code (typed into `/auth/verify-otp`) and a link to `/auth/magic-confirm?token_hash={{ .TokenHash }}&type=magiclink` (Supabase's default PKCE link cannot be verified by that page). Drop either one and half the login screen stops working.
 
 `npm run auth:verify` checks that file offline and is a blocking CI step; `npm run auth:check` checks a live project (needs `SUPABASE_ACCESS_TOKEN`); `npm run auth:apply` writes it. If you change how magic-link confirmation works, change the template in the same commit — CI catches a template that no longer points at `/auth/magic-confirm`, but nothing catches a live project until someone tries to sign in. No other auth template is managed; leave the rest alone unless you are extending `scripts/configure-auth-templates.js` deliberately.
+
+## Git workflow
+
+Both `development` and `main` are protected — neither accepts a direct push, so every change goes through a PR:
+
+1. **Feature branch → `development`.** Branch off `development`, commit there, open a PR back into `development`, and **squash merge** it (see [README § Git Merge Strategies](README.md#git-merge-strategies)). This is the PR to write a normal `Closes #NNN` on, and where review/CI for the actual change happens.
+2. **`development` → `main`.** Once enough work has accumulated on `development` (or a specific fix needs to ship), open a second PR promoting `development` into `main` and **merge it with a regular merge commit, not squash**, so `development`'s history is preserved on `main`.
+
+Don't try to push a feature branch, or `development` itself, straight to `main`, and don't push directly to `development` expecting it to land — the branch ruleset rejects it and a PR is required either way.
+
+### Promoting `development` into `main`
+
+`main` is the repository's default branch, and **GitHub only auto-closes an issue when the closing keyword appears in a PR whose base is the default branch** (or in a commit message pushed to it). A `Closes #NNN` written in the feature PR — the one merged into `development` — does nothing by itself: the issue stays open through the whole `development` cycle and only closes if the promotion PR body repeats the keyword. A bare `#NNN` (no `closes`/`fixes` before it) creates a cross-reference but is **not** a closing keyword and won't close anything.
+
+When opening a promotion PR:
+
+- **Reference the source PR(s)**, but don't restate their descriptions — the merge commit preserves the history and the link is enough. "Merges `development` into `main`; see #NNN" is fine.
+- **Repeat every closing keyword.** Every `Closes #NNN` / `Fixes #NNN` from the PRs being promoted has to appear in the promotion PR body too, or those issues silently stay open. This is the one part of a promotion PR body that isn't ceremonial — don't drop it for a terser summary.
 
 ## Before reporting work complete
 

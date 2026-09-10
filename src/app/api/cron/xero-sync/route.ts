@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 import { logger } from '@/lib/logging/logger'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const denied = authorizeCronRequest(request, 'xero-sync')
+    if (denied) return denied
 
     logger.logXeroSync('cron-sync-start', '🕐 Scheduled Xero sync started (every 5 minutes)')
 

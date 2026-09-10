@@ -12,6 +12,9 @@
 --   20260907000000_baseline_schema.sql
 --   20260907000001_reconcile_dev_to_baseline.sql
 --   20260907000002_revoke_public_function_access.sql
+--   20260908154524_cleanup_remaining_function_advisor_findings.sql
+--   20260908224707_ci_readonly_role.sql
+--   20260910145034_include_expired_members_in_analytics_view.sql
 -- =============================================================================
 
 -- >>> 20260907000000_baseline_schema.sql >>>
@@ -2398,3 +2401,199 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM authenticated;
 
 -- <<< 20260907000002_revoke_public_function_access.sql <<<
+
+-- >>> 20260908154524_cleanup_remaining_function_advisor_findings.sql >>>
+
+-- =============================================================================
+-- Clean up the remaining findings from #291 (follow-up to #289 / #290)
+-- =============================================================================
+--
+-- Supabase's advisor still lists four SECURITY DEFINER functions as callable
+-- by anon/authenticated after 20260907000002_revoke_public_function_access.sql.
+-- #291 investigated all four plus two additional anon-executable functions the
+-- advisor doesn't surface (0028/0029 only report SECURITY DEFINER functions),
+-- and confirmed none is currently exploitable. Two real items came out of that
+-- investigation, handled here:
+--
+--   1. notify_payment_completion() is dead code: SECURITY DEFINER, anon/
+--      authenticated executable, and attached to zero triggers (confirmed
+--      against pg_trigger on both projects). Drop it.
+--
+--   2. set_registration_published_at() and
+--      update_user_discount_allowances_updated_at() have a mutable
+--      search_path (lint 0011), unlike every other function in `public`. Set
+--      it explicitly.
+--
+-- Separately, this migration also revokes anon/authenticated EXECUTE on
+-- update_updated_at_column() and set_member_id_on_insert() -- the two
+-- remaining SECURITY DEFINER trigger functions besides is_admin_user(). The
+-- prior migration left these alone out of caution that PostgreSQL might
+-- re-check EXECUTE when a trigger fires. Verified on membership-system-dev
+-- that this concern doesn't hold: PostgreSQL only checks EXECUTE on a trigger
+-- function at CREATE TRIGGER time, not when the trigger fires, so revoking it
+-- here does not affect any of the 8 existing triggers using these two
+-- functions (tested with a real UPDATE as the `authenticated` role inside a
+-- rolled-back transaction, with the grant already revoked -- the trigger
+-- still fired and updated_at still changed).
+--
+-- is_admin_user() is deliberately left untouched. It is referenced by the
+-- "Admins can view all users" RLS policy on public.users (`TO public`), and
+-- RLS policy expressions are evaluated as the querying role -- revoking
+-- EXECUTE there would turn every anon/authenticated read of public.users
+-- into "permission denied for function is_admin_user".
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- 1. Drop the dead-code trigger function
+-- -----------------------------------------------------------------------------
+
+DROP FUNCTION IF EXISTS public.notify_payment_completion();
+
+
+-- -----------------------------------------------------------------------------
+-- 2. Set a fixed search_path on the two functions missing one
+-- -----------------------------------------------------------------------------
+
+ALTER FUNCTION public.set_registration_published_at() SET search_path = public, pg_temp;
+ALTER FUNCTION public.update_user_discount_allowances_updated_at() SET search_path = public, pg_temp;
+
+
+-- -----------------------------------------------------------------------------
+-- 3. Revoke anon/authenticated EXECUTE on the remaining trigger functions
+-- -----------------------------------------------------------------------------
+-- set_member_id_on_insert() and update_updated_at_column() cannot be invoked
+-- directly anyway ("trigger functions can only be called as triggers"), but
+-- removing the grant clears the advisor lint for both and matches the intent
+-- of the original revoke migration.
+
+REVOKE EXECUTE ON FUNCTION public.update_updated_at_column() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.set_member_id_on_insert() FROM PUBLIC, anon, authenticated;
+
+-- <<< 20260908154524_cleanup_remaining_function_advisor_findings.sql <<<
+
+-- >>> 20260908224707_ci_readonly_role.sql >>>
+
+-- =============================================================================
+-- Least-privilege read-only role for CI drift/posture checks (#290 Part 1)
+-- =============================================================================
+--
+-- db-drift-check.yml currently runs with the same admin SUPABASE_DB_URL as
+-- db-migrate.yml, sourced from the `supabase-production` Environment, which
+-- now carries a required reviewer. A read-only status check has no decision
+-- for a reviewer to make, so it inherits an approval gate that just makes it
+-- silently pend forever instead of reporting -- the exact condition it exists
+-- to catch (production behind on migrations) now produces the same silence as
+-- everything being fine.
+--
+-- The fix is a dedicated role, not a copy of the admin connection string into
+-- an ungated environment: that would forfeit the real benefit of the gate,
+-- which is that an unapproved change to a gated workflow can't exfiltrate the
+-- production credential. This role can read migration history and nothing
+-- else, so a leaked credential for it exposes a list of version numbers.
+--
+-- This migration only creates the role and grants; the password is set
+-- out-of-band (never here -- it would land in git and in schema.sql) and the
+-- new `supabase-production-readonly` GitHub Environment/secret is manual
+-- setup. See README "Database Migrations" for both steps.
+-- =============================================================================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ci_readonly') THEN
+    CREATE ROLE ci_readonly LOGIN;
+  END IF;
+END $$;
+
+-- No membership in anon/authenticated, and never BYPASSRLS: this role is a
+-- CI credential, not an application identity.
+GRANT USAGE ON SCHEMA supabase_migrations TO ci_readonly;
+GRANT SELECT ON supabase_migrations.schema_migrations TO ci_readonly;
+
+-- <<< 20260908224707_ci_readonly_role.sql <<<
+
+-- >>> 20260910145034_include_expired_members_in_analytics_view.sql >>>
+
+-- membership_analytics_data previously excluded expired memberships entirely
+-- (latest_memberships filtered um.valid_until >= CURRENT_DATE before the
+-- DISTINCT ON that picks each user's most recent purchase per membership
+-- type), so the view's own 'Expired' expiration_status branch was dead code
+-- and the admin memberships report had no way to list lapsed members.
+--
+-- Drop that filter so a user whose latest purchase has lapsed still shows
+-- (as 'Expired'), while a user who renewed still shows only their current
+-- row (DISTINCT ON ... ORDER BY valid_until DESC already picks the latest
+-- purchase regardless of the filter). membership_stats now scopes its
+-- aggregates (total_members, lgbtq_count, etc.) to valid_until >= CURRENT_DATE
+-- so those figures keep describing the current membership base, not the
+-- newly-included historical/expired rows.
+CREATE OR REPLACE VIEW public.membership_analytics_data WITH (security_invoker=true) AS
+ WITH latest_memberships AS (
+         SELECT DISTINCT ON (um.user_id, um.membership_id) um.user_id,
+            um.membership_id,
+            um.valid_until,
+            um.valid_from,
+            u.member_id,
+            u.first_name,
+            u.last_name,
+            u.email,
+            u.onboarding_completed_at,
+            u.is_lgbtq,
+            u.is_goalie,
+            m.name AS membership_name,
+            m.description AS membership_description
+           FROM user_memberships um
+             JOIN users u ON um.user_id = u.id
+             JOIN memberships m ON um.membership_id = m.id
+          WHERE um.payment_status = 'paid'::text AND u.deleted_at IS NULL
+          ORDER BY um.user_id, um.membership_id, um.valid_until DESC
+        ), membership_stats AS (
+         SELECT latest_memberships.membership_id,
+            latest_memberships.membership_name,
+            latest_memberships.membership_description,
+            count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE) AS total_members,
+            count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_lgbtq = true) AS lgbtq_count,
+            count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_lgbtq IS NULL) AS prefer_not_to_say_count,
+            count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_goalie = true) AS goalie_count,
+                CASE
+                    WHEN (count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE) - count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_lgbtq IS NULL)) > 0 THEN round(count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_lgbtq = true)::numeric / (count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE) - count(*) FILTER (WHERE latest_memberships.valid_until >= CURRENT_DATE AND latest_memberships.is_lgbtq IS NULL))::numeric * 100::numeric, 1)
+                    ELSE 0::numeric
+                END AS lgbtq_percent
+           FROM latest_memberships
+          GROUP BY latest_memberships.membership_id, latest_memberships.membership_name, latest_memberships.membership_description
+        )
+ SELECT lm.user_id,
+    lm.membership_id,
+    lm.valid_until,
+    lm.valid_from,
+    lm.member_id,
+    lm.first_name,
+    lm.last_name,
+    lm.email,
+    lm.onboarding_completed_at,
+    lm.is_lgbtq,
+    lm.is_goalie,
+    lm.membership_name,
+    lm.membership_description,
+    ms.total_members,
+    ms.lgbtq_count,
+    ms.prefer_not_to_say_count,
+    ms.lgbtq_percent,
+    ms.goalie_count,
+    lm.valid_until - CURRENT_DATE AS days_to_expiration,
+        CASE
+            WHEN (lm.valid_until - CURRENT_DATE) < 0 THEN 'Expired'::text
+            WHEN (lm.valid_until - CURRENT_DATE) <= 30 THEN 'Expiring Soon'::text
+            WHEN (lm.valid_until - CURRENT_DATE) <= 90 THEN 'Expiring'::text
+            ELSE 'Active'::text
+        END AS expiration_status,
+        CASE
+            WHEN lm.is_lgbtq = true THEN 'LGBTQ+'::text
+            WHEN lm.is_lgbtq = false THEN 'Ally'::text
+            ELSE 'No Response'::text
+        END AS lgbtq_status
+   FROM latest_memberships lm
+     JOIN membership_stats ms ON lm.membership_id = ms.membership_id
+  ORDER BY lm.membership_id, lm.last_name, lm.first_name;
+
+-- <<< 20260910145034_include_expired_members_in_analytics_view.sql <<<

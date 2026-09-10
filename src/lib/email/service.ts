@@ -297,33 +297,6 @@ class EmailService {
   }
 
   /**
-   * Send membership expiration warning email immediately (bypasses queue)
-   */
-  async sendMembershipExpirationWarning(options: {
-    userId: string
-    email: string
-    userName: string
-    membershipName: string
-    expirationDate: string
-    daysUntilExpiration: number
-  }) {
-    return this.sendEmailImmediately({
-      userId: options.userId,
-      email: options.email,
-      eventType: EMAIL_EVENTS.MEMBERSHIP_EXPIRING,
-      subject: `Your ${options.membershipName} expires in ${options.daysUntilExpiration} days`,
-      triggeredBy: 'automated',
-      data: {
-        userName: options.userName,
-        membershipName: options.membershipName,
-        expirationDate: options.expirationDate,
-        daysUntilExpiration: options.daysUntilExpiration,
-        renewUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`
-      }
-    })
-  }
-
-  /**
    * Send welcome email to new users immediately (bypasses queue)
    */
   async sendWelcomeEmail(options: {

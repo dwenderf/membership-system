@@ -13,7 +13,7 @@ import SavedPaymentConfirmation from './SavedPaymentConfirmation'
 import TallySurveyEmbed, { type TallySubmissionPayload } from './TallySurveyEmbed'
 import { useToast } from '@/contexts/ToastContext'
 import { getCategoryDisplayName } from '@/lib/registration-utils'
-import { validateMembershipCoverage, formatMembershipWarning } from '@/lib/membership-validation'
+import { validateMembershipCoverage, formatMembershipWarning, formatMembershipRequirementText } from '@/lib/membership-validation'
 import { RegistrationValidationService, type UserMembership } from '@/lib/services/registration-validation-service'
 import { getRegistrationStatus, isRegistrationAvailable, type RegistrationWithTiming } from '@/lib/registration-status'
 import type { DiscountValidationResult } from '@/app/api/validate-discount-code/route'
@@ -808,7 +808,8 @@ export default function RegistrationPurchase({
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                 registration.required_membership_id ?? null,
                 category.required_membership_id ?? null,
-                activeMemberships
+                activeMemberships,
+                registration.season?.end_date ?? ''
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
 
@@ -879,20 +880,22 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {(() => {
-                              const requirements = []
-                              if (registration.required_membership_id && registration.memberships?.name) {
-                                requirements.push(registration.memberships.name)
-                              }
-                              if (category.memberships?.name) {
-                                requirements.push(category.memberships.name)
-                              }
-                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
-                            })()}
+                            Requires: {formatMembershipRequirementText(
+                              [
+                                ...(registration.required_membership_id && registration.memberships?.name
+                                  ? [{ id: registration.required_membership_id, name: registration.memberships.name }]
+                                  : []),
+                                ...(category.required_membership_id && category.memberships?.name
+                                  ? [{ id: category.required_membership_id, name: category.memberships.name }]
+                                  : [])
+                              ],
+                              activeMemberships,
+                              registration.season?.end_date
+                            )}
                           </div>
                         )}
                         {isGoalieOnlyCategory && (
-                          <div className="text-xs text-gray-600">
+                          <div className="text-xs font-medium text-red-600">
                             Goalies only
                           </div>
                         )}
@@ -960,7 +963,8 @@ export default function RegistrationPurchase({
               const membershipValidationResult = RegistrationValidationService.validateMembershipRequirement(
                 registration.required_membership_id ?? null,
                 category.required_membership_id ?? null,
-                activeMemberships
+                activeMemberships,
+                registration.season?.end_date ?? ''
               )
               const hasRequiredMembership = membershipValidationResult.hasRequiredMembership
 
@@ -1024,20 +1028,22 @@ export default function RegistrationPurchase({
                         </div>
                         {requiresMembership && (
                           <div className="text-xs text-gray-600">
-                            Requires: {(() => {
-                              const requirements = []
-                              if (registration.required_membership_id && registration.memberships?.name) {
-                                requirements.push(registration.memberships.name)
-                              }
-                              if (category.memberships?.name) {
-                                requirements.push(category.memberships.name)
-                              }
-                              return requirements.length > 0 ? requirements.join(' OR ') : 'Membership'
-                            })()}
+                            Requires: {formatMembershipRequirementText(
+                              [
+                                ...(registration.required_membership_id && registration.memberships?.name
+                                  ? [{ id: registration.required_membership_id, name: registration.memberships.name }]
+                                  : []),
+                                ...(category.required_membership_id && category.memberships?.name
+                                  ? [{ id: category.required_membership_id, name: category.memberships.name }]
+                                  : [])
+                              ],
+                              activeMemberships,
+                              registration.season?.end_date
+                            )}
                           </div>
                         )}
                         {isGoalieOnlyCategory && (
-                          <div className="text-xs text-gray-600">
+                          <div className="text-xs font-medium text-red-600">
                             Goalies only
                           </div>
                         )}

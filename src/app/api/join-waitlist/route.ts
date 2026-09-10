@@ -120,6 +120,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
+    // Get registration-level membership requirement and season end date
+    const { data: registrationRequirements, error: registrationRequirementsError } = await supabase
+      .from('registrations')
+      .select(`
+        required_membership_id,
+        seasons:season_id ( end_date )
+      `)
+      .eq('id', registrationId)
+      .single()
+
+    if (registrationRequirementsError || !registrationRequirements) {
+      return NextResponse.json({ error: 'Registration not found' }, { status: 404 })
+    }
+
+    // Check membership eligibility using hierarchical validation
+    // Users can qualify with EITHER registration-level OR category-level membership
+    const registrationMembershipId = registrationRequirements.required_membership_id || null
+    const categoryMembershipId = category.required_membership_id || null
+
+    if (registrationMembershipId || categoryMembershipId) {
+      // The `seasons` relation is a single joined object at runtime; the untyped
+      // client can't infer relation cardinality and types it as an array.
+      const season = registrationRequirements.seasons as unknown as { end_date: string } | null
+
+      const membershipValidation = await RegistrationValidationService.validateMembershipRequirementAsync(
+        supabase,
+        registrationMembershipId,
+        categoryMembershipId,
+        user.id,
+        season?.end_date ?? ''
+      )
+
+      if (!membershipValidation.hasRequiredMembership) {
+        return NextResponse.json({
+          error: membershipValidation.error || 'Required membership not found'
+        }, { status: 400 })
+      }
+    }
+
     // Check goalie-only eligibility
     const goalieOnlyCategory = category.categories as unknown as { is_goalie_only: boolean } | null
     if (goalieOnlyCategory?.is_goalie_only) {

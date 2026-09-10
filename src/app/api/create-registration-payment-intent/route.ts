@@ -119,6 +119,28 @@ async function handleFreeRegistration({
       }
     }
 
+    // Check membership eligibility using hierarchical validation (same rule as the paid path)
+    // Users can qualify with EITHER registration-level OR category-level membership
+    const freeRegistrationMembershipId = registration.required_membership_id || null
+    const freeCategoryMembershipId = selectedCategory.required_membership_id || null
+
+    if (freeRegistrationMembershipId || freeCategoryMembershipId) {
+      const membershipValidation = await RegistrationValidationService.validateMembershipRequirementAsync(
+        supabase,
+        freeRegistrationMembershipId,
+        freeCategoryMembershipId,
+        user.id,
+        registration.season?.end_date ?? ''
+      )
+
+      if (!membershipValidation.hasRequiredMembership) {
+        capturePaymentError(new Error('Membership required'), paymentContext, 'warning')
+        return NextResponse.json({
+          error: membershipValidation.error || 'Required membership not found'
+        }, { status: 400 })
+      }
+    }
+
     // Get user's active membership for eligibility (if any)
     const { data: activeMembership } = await supabase
       .from('user_memberships')
@@ -629,7 +651,8 @@ export async function POST(request: NextRequest) {
         supabase,
         registrationMembershipId,
         categoryMembershipId,
-        user.id
+        user.id,
+        registration.season?.end_date ?? ''
       )
 
       if (!membershipValidation.hasRequiredMembership) {

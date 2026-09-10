@@ -1518,12 +1518,16 @@ export default function RegistrationPurchase({
         className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
           (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
             ? 'bg-blue-500 cursor-default'
-            : isCategoryAtCapacity 
-            ? (isUserOnWaitlist ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed')
+            : isCategoryAtCapacity
+            ? (isUserOnWaitlist
+                ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed'
+                : selectedCategory?.max_capacity === 0
+                ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
+                : 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed')
             : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
         }`}
       >
-        {isLoading ? 'Processing...' : 
+        {isLoading ? 'Processing...' :
          !selectedCategoryId ? 'Select Category to Continue' :
          (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Registered' :
          (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Registered' :
@@ -1532,6 +1536,7 @@ export default function RegistrationPurchase({
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
          (registration.require_survey && !surveyCompleted) ? 'Complete Survey to Continue' :
          (isCategoryAtCapacity && isUserOnWaitlist) ? 'On Waitlist' :
+         (isCategoryAtCapacity && selectedCategory?.max_capacity === 0) ? 'Request to Join' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
       </button>

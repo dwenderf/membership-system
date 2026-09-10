@@ -78,6 +78,30 @@ Name it the way the CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestam
 
 Run `npm run schema:build` and commit the regenerated `supabase/schema.sql` in the same change — it is generated (the migrations concatenated in filename order) and never hand-edited. Then `npm run schema:check`, `npm run migrations:lint`, and `npm run schema:verify` (needs a reachable PostgreSQL server via the standard `PG*` env vars; CI runs it against a service container). Read `20260907000000_baseline_schema.sql`, not the git history, for the current shape of the schema.
 
+## Postgres version upgrades
+
+Distinct from the schema migrations above: this is upgrading the Postgres *engine* version itself (e.g. `17.4.1.054` → `17.6.1.166`) via the Supabase dashboard's "Upgrade project" button (Infrastructure settings). Like all production changes, this is a human's action to take deliberately — see [How production gets changed](#how-production-gets-changed) above for why. Track it as a GitHub issue with a pre-upgrade checklist: downtime window outside cron activity (`vercel.json` has the schedules), in-place vs. pause-and-restore, and confirming a backup point exists.
+
+A quarterly reminder issue is opened automatically — see `.github/workflows/postgres-upgrade-check.yml` — so this doesn't depend on someone noticing a security advisory.
+
+### Post-upgrade checklist — do not skip this
+
+An in-place upgrade changes the collation library the underlying OS provides, but Supabase's automated upgrade only refreshes the recorded collation-version stamp on the project's primary application database — not on the `postgres` and `template1` system databases. Left alone, every connection Postgres's own autovacuum launcher makes to those two (its normal per-database cadence, unrelated to your app's traffic) logs a `database "X" has a collation version mismatch` WARNING. On `membership-system-prod` this took the Postgres log volume from a ~630/day baseline to 10,000+/day within the hour of a September 2026 upgrade, and was the direct cause of a disk-I/O-budget alert two days later.
+
+Run this immediately after every upgrade, against both `membership-system-prod` and `membership-system-dev`:
+
+```sql
+ALTER DATABASE postgres REFRESH COLLATION VERSION;
+ALTER DATABASE template1 REFRESH COLLATION VERSION;
+```
+
+The `template1` statement is expected to fail with `must be owner of database template1` — it's owned by an internal Supabase role, not the `postgres` role you connect as, and can't be fixed from the SQL editor or the Supabase MCP. That's fine: `template1` sees far fewer connections than `postgres` does, so it's a small fraction of the warning volume, and nothing in this app ever connects to it. Leave it rather than filing a support ticket.
+
+Then:
+
+- Re-run **both** the security and performance advisors (`get_advisors`, or the dashboard's Advisors page). The collation-mismatch lint surfaces under performance, not security — a security-only re-check (as issue #289 originally asked for) will report clean while the warning flood is still running.
+- Watch `postgres_logs` volume for the next 24–48h (`query_logs` filtered to `source = 'postgres_logs'`, or the dashboard Logs Explorer) to confirm it's back near baseline, and watch the Disk I/O graph on the project's Health page.
+
 ## Views and functions are public API
 
 Supabase publishes everything in the `public` schema through PostgREST, so a new view or function is reachable from the internet with the (public) anon key the moment it exists. Two rules, both enforced by `npm run migrations:lint` (a blocking CI step):
@@ -104,6 +128,8 @@ When adding a new admin page, add it to navigation and verify it's reachable by 
 ## Loops email templates
 
 When adding a new Loops transactional email template, prepend `{testEmailPrefix}` to the Subject field in the Loops dashboard (mark it optional as a safety net) — see [README.md § Email Integration Setup (Loops.so)](README.md#email-integration-setup-loopsso). The app already sends `testEmailPrefix` in `dataVariables` on every send (`[TEST] ` on preview/local, `''` in production — see [src/lib/email/environment.ts](src/lib/email/environment.ts)); no code changes are needed for a new template beyond the dashboard edit.
+
+Every template's footer uses a standard reusable "Dashboard" button component, which reads a `dashboardUrl` data variable (exact camelCase key — some sending code also sets a `dashboard_url` snake_case variant for its own body copy, but the footer button specifically needs `dashboardUrl`). When wiring up code that sends a new template, always include `dashboardUrl: \`${process.env.NEXT_PUBLIC_SITE_URL}/user\`` in `dataVariables`/`email_data` — it's environment-specific, so it can't be hardcoded into the template itself. There is no `/user/dashboard` route (`/user` is the actual user-facing dashboard page); a few existing send sites still use `/user/dashboard`, which 404s. Omitting or mistyping this doesn't fail the send; Loops just renders the footer button with a broken link, and nothing surfaces the mistake until someone clicks it.
 
 ## Supabase auth email templates
 

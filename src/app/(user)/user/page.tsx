@@ -148,7 +148,7 @@ export default async function UserDashboardPage() {
       ),
       payment:payments(
         id,
-        amount,
+        total_amount,
         created_at
       )
     `)

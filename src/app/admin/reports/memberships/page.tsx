@@ -6,6 +6,7 @@ import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoa
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
 import { Database } from '@/types/database'
+import type { MembershipReminderResults } from '@/lib/services/membership-reminder-processor'
 
 type MembershipAnalyticsRow = Database['public']['Views']['membership_analytics_data']['Row']
 
@@ -49,6 +50,12 @@ export default function MembershipReportsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<keyof MemberData>('full_name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [sendingReminders, setSendingReminders] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{
+    success: boolean
+    message: string
+    results?: MembershipReminderResults
+  } | null>(null)
 
   const searchParams = useSearchParams()
 
@@ -232,6 +239,30 @@ export default function MembershipReportsPage() {
     return 'text-green-600'
   }
 
+  const handleSendReminders = async () => {
+    setSendingReminders(true)
+    setReminderResult(null)
+
+    try {
+      const response = await fetch('/api/admin/membership-reminders/run', {
+        method: 'POST'
+      })
+      const data = await response.json()
+      setReminderResult({
+        success: data.success ?? false,
+        message: data.message ?? data.error ?? 'Unknown error occurred',
+        results: data.results
+      })
+    } catch (error) {
+      setReminderResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    } finally {
+      setSendingReminders(false)
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Error Display */}
@@ -250,6 +281,60 @@ export default function MembershipReportsPage() {
           </div>
         </div>
       )}
+
+      {/* Expiration Reminder Emails */}
+      <div className="mb-8 bg-white shadow rounded-lg px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Expiration Reminder Emails</h2>
+            <p className="text-sm text-gray-600">
+              Sends a reminder to any member whose membership expires in exactly 30, 14, 7, or 1 days. Runs automatically each night; use this to trigger it on demand.
+            </p>
+          </div>
+          <button
+            onClick={handleSendReminders}
+            disabled={sendingReminders}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors whitespace-nowrap ${
+              sendingReminders
+                ? 'bg-gray-400 text-white cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            {sendingReminders ? 'Sending...' : 'Send Reminder Emails Now'}
+          </button>
+        </div>
+
+        {reminderResult && (
+          <div className={`mt-4 p-4 rounded ${
+            reminderResult.success
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+          }`}>
+            <div className={`text-sm font-medium ${
+              reminderResult.success ? 'text-green-800' : 'text-red-800'
+            }`}>
+              {reminderResult.message}
+            </div>
+            {reminderResult.results && (
+              <div className="mt-2 text-xs space-y-1">
+                <div className="text-green-700">
+                  Reminders sent: <span className="font-medium">{reminderResult.results.remindersSent}</span>
+                </div>
+                {reminderResult.results.errors && reminderResult.results.errors.length > 0 && (
+                  <div className="mt-2 text-red-700">
+                    <div className="font-medium">Errors:</div>
+                    <ul className="list-disc list-inside mt-1">
+                      {reminderResult.results.errors.map((error: string, idx: number) => (
+                        <li key={idx}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Membership Type Tiles */}
       <div className="mb-8">

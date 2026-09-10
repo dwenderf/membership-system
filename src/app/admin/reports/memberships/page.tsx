@@ -56,6 +56,8 @@ export default function MembershipReportsPage() {
     message: string
     results?: MembershipReminderResults
   } | null>(null)
+  const [reminderCount, setReminderCount] = useState<number | null>(null)
+  const [reminderCountLoading, setReminderCountLoading] = useState(true)
 
   const searchParams = useSearchParams()
 
@@ -95,6 +97,24 @@ export default function MembershipReportsPage() {
   useEffect(() => {
     fetchMembershipTypes()
   }, [fetchMembershipTypes])
+
+  const fetchReminderCount = useCallback(async () => {
+    setReminderCountLoading(true)
+    try {
+      const response = await fetch('/api/admin/membership-reminders/count')
+      const data = await response.json()
+      setReminderCount(typeof data.count === 'number' ? data.count : null)
+    } catch (error) {
+      console.error('Error fetching reminder count:', error)
+      setReminderCount(null)
+    } finally {
+      setReminderCountLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchReminderCount()
+  }, [fetchReminderCount])
 
   const fetchMembershipData = async (membershipId: string) => {
     setLoading(true)
@@ -253,6 +273,7 @@ export default function MembershipReportsPage() {
         message: data.message ?? data.error ?? 'Unknown error occurred',
         results: data.results
       })
+      fetchReminderCount()
     } catch (error) {
       setReminderResult({
         success: false,
@@ -289,6 +310,15 @@ export default function MembershipReportsPage() {
             <h2 className="text-lg font-semibold text-gray-900">Expiration Reminder Emails</h2>
             <p className="text-sm text-gray-600">
               Sends a reminder to any member whose membership expires in exactly 30, 14, 7, or 1 days. Runs automatically each night; use this to trigger it on demand.
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {reminderCountLoading
+                ? 'Checking how many would send…'
+                : reminderCount === null
+                  ? 'Could not determine how many would send.'
+                  : reminderCount === 0
+                    ? 'No members are due a reminder right now.'
+                    : `${reminderCount} reminder email${reminderCount === 1 ? '' : 's'} will send right now.`}
             </p>
           </div>
           <button

@@ -29,17 +29,6 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const overridePrice = body.overridePrice as number | undefined
 
-    // Check if user is admin
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
     // Get waitlist entry details
     const { data: waitlistEntry, error: waitlistError } = await supabase
       .from('waitlists')
@@ -90,6 +79,29 @@ export async function POST(
       return NextResponse.json({
         error: 'This waitlist entry has already been processed'
       }, { status: 400 })
+    }
+
+    // Check if user is admin or a captain of this registration
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', authUser.id)
+      .single()
+
+    let isAuthorized = !!userProfile?.is_admin
+
+    if (!isAuthorized) {
+      const { data: captainship } = await supabase
+        .from('registration_captains')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .eq('registration_id', waitlistEntry.registration_id)
+        .maybeSingle()
+      isAuthorized = !!captainship
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Admin or captain access required' }, { status: 403 })
     }
 
     // Extract related data

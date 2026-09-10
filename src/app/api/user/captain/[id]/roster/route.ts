@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { fetchWaitlistReportData } from '@/lib/waitlist-report-data'
 
 export async function GET(
   request: NextRequest,
@@ -83,35 +84,8 @@ export async function GET(
       )
     }
 
-    // Get waitlist details for this registration
-    const { data: waitlistData, error: waitlistError } = await adminSupabase
-      .from('waitlists')
-      .select(`
-        *,
-        users!waitlists_user_id_fkey (
-          id,
-          email,
-          first_name,
-          last_name,
-          is_lgbtq,
-          is_goalie,
-          phone
-        ),
-        registration_categories (
-          id,
-          custom_name,
-          categories (
-            name
-          )
-        )
-      `)
-      .eq('registration_id', registrationId)
-      .is('removed_at', null)
-      .order('position', { ascending: true })
-
-    if (waitlistError) {
-      console.error('Error fetching waitlist data:', waitlistError)
-    }
+    // Fetch enriched active waitlist entries (position, payment-method readiness, discount pricing)
+    const processedWaitlistData = await fetchWaitlistReportData(adminSupabase, registrationId)
 
     // Get ALL users who registered as alternates for this registration
     const { data: userAlternateRegistrations, error: userAlternatesError } = await adminSupabase
@@ -210,28 +184,6 @@ export async function GET(
         is_goalie: user?.is_goalie || false,
         discount_code: discountInfo?.discount_code || null,
         discount_amount_saved: discountInfo?.amount_saved || 0
-      }
-    }) || []
-
-    // Process waitlist data
-    const processedWaitlistData = waitlistData?.map(item => {
-      const user = Array.isArray(item.users) ? item.users[0] : item.users
-      const registrationCategory = Array.isArray(item.registration_categories) ? item.registration_categories[0] : item.registration_categories
-      const category = registrationCategory?.categories ? (Array.isArray(registrationCategory.categories) ? registrationCategory.categories[0] : registrationCategory.categories) : null
-
-      return {
-        id: item.id,
-        user_id: item.user_id,
-        first_name: user?.first_name || '',
-        last_name: user?.last_name || '',
-        email: user?.email || '',
-        phone: user?.phone || null,
-        category_name: category?.name || registrationCategory?.custom_name || 'Unknown Category',
-        category_id: item.registration_category_id || 'unknown',
-        position: item.position,
-        joined_at: item.joined_at,
-        is_lgbtq: user?.is_lgbtq,
-        is_goalie: user?.is_goalie || false,
       }
     }) || []
 

@@ -9,6 +9,7 @@ import { formatDate, formatEventDateTime } from '@/lib/date-utils'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import WaitlistBadge from '@/components/WaitlistBadge'
+import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 import RoleBadge from '@/components/RoleBadge'
 import { Database } from '@/types/database'
 
@@ -457,6 +458,16 @@ export default async function UserRegistrationsPage() {
                             Joined: {formatDate(new Date(waitlistEntry.joined_at))}
                           </p>
                         </div>
+                        <WaitlistRemoveButton
+                          waitlistId={waitlistEntry.id}
+                          confirmTitle="Leave Waitlist"
+                          confirmMessage={
+                            <p>
+                              Are you sure you want to leave the waitlist for <strong>{waitlistEntry.registration?.name}</strong>?
+                              You can rejoin later if the category is still full or gated.
+                            </p>
+                          }
+                        />
                       </div>
                     </div>
                   </div>

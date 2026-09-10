@@ -922,7 +922,7 @@ export default function RegistrationPurchase({
                               }
 
                               if (category.max_capacity === 0) {
-                                return 'Waitlist only'
+                                return 'Requires captain approval'
                               } else if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
@@ -1063,7 +1063,7 @@ export default function RegistrationPurchase({
                               }
 
                               if (category.max_capacity === 0) {
-                                return 'Waitlist only'
+                                return 'Requires captain approval'
                               } else if (remaining <= 0) {
                                 return 'Full - Waitlist only'
                               } else if (remaining === 1) {
@@ -1217,42 +1217,47 @@ export default function RegistrationPurchase({
         </div>
       )}
 
-      {/* Sold Out Warning - Only show when selected category is at capacity */}
-      {selectedCategory && isCategoryAtCapacity && (
-        <div className={`mb-4 p-3 rounded-md ${
-          isUserOnWaitlist 
-            ? 'bg-blue-50 border border-blue-200' 
-            : 'bg-red-50 border border-red-200'
-        }`}>
-          <div className="flex items-center mb-2">
-            {isUserOnWaitlist ? (
-              <svg className="h-5 w-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            ) : (
-              <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            )}
-            <h4 className={`text-sm font-medium ${
-              isUserOnWaitlist ? 'text-blue-800' : 'text-red-800'
-            }`}>
-              {isUserOnWaitlist ? 'You\'re on the Waitlist' : 'Category Sold Out'}
-            </h4>
+      {/* Sold Out / Gated Warning - Only show when selected category is at capacity */}
+      {selectedCategory && isCategoryAtCapacity && (() => {
+        const isGated = !isUserOnWaitlist && selectedCategory.max_capacity === 0
+        const colorClasses = isUserOnWaitlist
+          ? { box: 'bg-blue-50 border border-blue-200', icon: 'text-blue-600', heading: 'text-blue-800', body: 'text-blue-700' }
+          : isGated
+          ? { box: 'bg-amber-50 border border-amber-200', icon: 'text-amber-600', heading: 'text-amber-800', body: 'text-amber-700' }
+          : { box: 'bg-red-50 border border-red-200', icon: 'text-red-600', heading: 'text-red-800', body: 'text-red-700' }
+
+        return (
+          <div className={`mb-4 p-3 rounded-md ${colorClasses.box}`}>
+            <div className="flex items-center mb-2">
+              {isUserOnWaitlist ? (
+                <svg className={`h-5 w-5 ${colorClasses.icon} mr-2`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : isGated ? (
+                <svg className={`h-5 w-5 ${colorClasses.icon} mr-2`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className={`h-5 w-5 ${colorClasses.icon} mr-2`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <h4 className={`text-sm font-medium ${colorClasses.heading}`}>
+                {isUserOnWaitlist ? 'You\'re on the Waitlist' : isGated ? 'Requires Captain Approval' : 'Category Sold Out'}
+              </h4>
+            </div>
+            <p className={`text-sm ${colorClasses.body}`}>
+              {isUserOnWaitlist ? (
+                `You're on the waitlist. If you're selected, you'll be charged at that time.`
+              ) : isGated ? (
+                `This category requires captain approval. Join the waitlist — your captain will review the list and select who gets added to the roster, and you'll only be charged if you're selected.`
+              ) : (
+                `This category is currently full (${selectedCategory.current_count} spots filled). Join the waitlist and you'll be charged only if you're selected.`
+              )}
+            </p>
           </div>
-          <p className={`text-sm ${
-            isUserOnWaitlist ? 'text-blue-700' : 'text-red-700'
-          }`}>
-            {isUserOnWaitlist ? (
-              `You're on the waitlist. If you're selected, you'll be charged at that time.`
-            ) : selectedCategory.max_capacity === 0 ? (
-              `This category is waitlist only — no spots are available for direct registration. Join the waitlist and you'll be charged only if you're selected.`
-            ) : (
-              `This category is currently full (${selectedCategory.current_count} spots filled). Join the waitlist and you'll be charged only if you're selected.`
-            )}
-          </p>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Survey Section */}
       {selectedCategory && registration.require_survey && registration.survey_id && (

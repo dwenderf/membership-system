@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
-import { formatDate as formatDateUtil } from '@/lib/date-utils'
+import { formatDate as formatDateUtil, formatDateString } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
 import { Database } from '@/types/database'
 import type { MembershipReminderResults } from '@/lib/services/membership-reminder-processor'
@@ -56,6 +56,9 @@ export default function MembershipReportsPage() {
     message: string
     results?: MembershipReminderResults
   } | null>(null)
+  const [reminderCount, setReminderCount] = useState<number | null>(null)
+  const [reminderCountLoading, setReminderCountLoading] = useState(true)
+  const [membershipStatusFilter, setMembershipStatusFilter] = useState<'current' | 'expired'>('current')
 
   const searchParams = useSearchParams()
 
@@ -95,6 +98,24 @@ export default function MembershipReportsPage() {
   useEffect(() => {
     fetchMembershipTypes()
   }, [fetchMembershipTypes])
+
+  const fetchReminderCount = useCallback(async () => {
+    setReminderCountLoading(true)
+    try {
+      const response = await fetch('/api/admin/membership-reminders/count')
+      const data = await response.json()
+      setReminderCount(typeof data.count === 'number' ? data.count : null)
+    } catch (error) {
+      console.error('Error fetching reminder count:', error)
+      setReminderCount(null)
+    } finally {
+      setReminderCountLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchReminderCount()
+  }, [fetchReminderCount])
 
   const fetchMembershipData = async (membershipId: string) => {
     setLoading(true)
@@ -177,7 +198,13 @@ export default function MembershipReportsPage() {
     }
   }, [selectedMembership])
 
-  const filteredMembers = members.filter(member =>
+  const visibleMembers = members.filter(member =>
+    membershipStatusFilter === 'expired'
+      ? member.expiration_status === 'Expired'
+      : member.expiration_status !== 'Expired'
+  )
+
+  const filteredMembers = visibleMembers.filter(member =>
     member.member_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -253,6 +280,7 @@ export default function MembershipReportsPage() {
         message: data.message ?? data.error ?? 'Unknown error occurred',
         results: data.results
       })
+      fetchReminderCount()
     } catch (error) {
       setReminderResult({
         success: false,
@@ -289,6 +317,15 @@ export default function MembershipReportsPage() {
             <h2 className="text-lg font-semibold text-gray-900">Expiration Reminder Emails</h2>
             <p className="text-sm text-gray-600">
               Sends a reminder to any member whose membership expires in exactly 30, 14, 7, or 1 days. Runs automatically each night; use this to trigger it on demand.
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {reminderCountLoading
+                ? 'Checking how many would send…'
+                : reminderCount === null
+                  ? 'Could not determine how many would send.'
+                  : reminderCount === 0
+                    ? 'No members are due a reminder right now.'
+                    : `${reminderCount} reminder email${reminderCount === 1 ? '' : 's'} will send right now.`}
             </p>
           </div>
           <button
@@ -394,6 +431,30 @@ export default function MembershipReportsPage() {
             </div>
           )}
 
+          {/* Current / Expired Toggle */}
+          <div className="mb-4 flex items-center space-x-2">
+            <button
+              onClick={() => setMembershipStatusFilter('current')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                membershipStatusFilter === 'current'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Current Members
+            </button>
+            <button
+              onClick={() => setMembershipStatusFilter('expired')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                membershipStatusFilter === 'expired'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Expired Members
+            </button>
+          </div>
+
           {/* Search */}
           <div className="mb-4">
             <input
@@ -409,7 +470,7 @@ export default function MembershipReportsPage() {
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Members ({filteredMembers.length} of {members.length})
+                {membershipStatusFilter === 'expired' ? 'Expired Members' : 'Members'} ({filteredMembers.length} of {visibleMembers.length})
               </h3>
             </div>
             
@@ -491,7 +552,7 @@ export default function MembershipReportsPage() {
                           {formatDate(member.member_since)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(member.expiration_date)}
+                          {member.expiration_date ? formatDateString(member.expiration_date) : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`font-medium ${getExpirationColor(member.days_to_expiration)}`}>

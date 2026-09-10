@@ -10,6 +10,7 @@ import { formatDateString } from '@/lib/date-utils'
  * Used by both:
  * - The daily cron job (/api/cron/membership-reminders)
  * - The manual admin trigger (/api/admin/membership-reminders/run)
+ * - The admin "how many would send" preview (/api/admin/membership-reminders/count)
  *
  * Each threshold is matched against `latest_expiration` with strict equality
  * (not <=), the same trick `sendPreNotifications` in payment-plan-processor.ts
@@ -24,6 +25,10 @@ interface ExpiringMembershipRow {
   membership_id: string
   membership_name: string
   latest_expiration: string
+}
+
+export interface ExpiringMembershipMatch extends ExpiringMembershipRow {
+  thresholdDays: number
 }
 
 export interface MembershipReminderResults {
@@ -41,17 +46,18 @@ function addDays(dateString: string, days: number): string {
 }
 
 /**
- * Stage expiration reminder emails for every membership whose `latest_expiration`
- * falls exactly on one of MEMBERSHIP_REMINDER_THRESHOLDS_DAYS days from today.
+ * Find every membership whose `latest_expiration` falls exactly on one of
+ * MEMBERSHIP_REMINDER_THRESHOLDS_DAYS days from today. Read-only — used both
+ * to actually send reminders and to preview how many would send.
  *
  * @param today - The date to use as "today" (format: YYYY-MM-DD)
  */
-export async function sendExpirationReminders(today: string): Promise<MembershipReminderResults> {
+export async function findExpiringMemberships(
+  today: string
+): Promise<{ matches: ExpiringMembershipMatch[]; errors: string[] }> {
   const adminSupabase = createAdminClient()
-  const results: MembershipReminderResults = {
-    remindersSent: 0,
-    errors: []
-  }
+  const matches: ExpiringMembershipMatch[] = []
+  const errors: string[] = []
 
   for (const thresholdDays of MEMBERSHIP_REMINDER_THRESHOLDS_DAYS) {
     const targetDate = addDays(today, thresholdDays)
@@ -69,87 +75,12 @@ export async function sendExpirationReminders(today: string): Promise<Membership
           { thresholdDays, targetDate, error: queryError.message },
           'error'
         )
-        results.errors.push(`Query error (${thresholdDays}d): ${queryError.message}`)
+        errors.push(`Query error (${thresholdDays}d): ${queryError.message}`)
         continue
       }
 
-      const expiringMemberships = (expiring || []) as ExpiringMembershipRow[]
-
-      if (expiringMemberships.length === 0) {
-        continue
-      }
-
-      logger.logBatchProcessing(
-        'membership-reminder-found',
-        `Found ${expiringMemberships.length} memberships expiring in ${thresholdDays} days`,
-        { thresholdDays, targetDate, count: expiringMemberships.length }
-      )
-
-      const userIds = [...new Set(expiringMemberships.map(m => m.user_id))]
-      const { data: users, error: usersError } = await adminSupabase
-        .from('users')
-        .select('id, email, first_name, last_name')
-        .in('id', userIds)
-
-      if (usersError) {
-        logger.logBatchProcessing(
-          'membership-reminder-users-query-error',
-          `Error fetching users for ${thresholdDays}-day reminders`,
-          { thresholdDays, targetDate, error: usersError.message },
-          'error'
-        )
-        results.errors.push(`Users query error (${thresholdDays}d): ${usersError.message}`)
-        continue
-      }
-
-      const usersById = new Map((users || []).map(u => [u.id, u]))
-
-      for (const membership of expiringMemberships) {
-        const user = usersById.get(membership.user_id)
-        if (!user) {
-          continue
-        }
-
-        const userName = `${user.first_name} ${user.last_name}`
-
-        try {
-          const staged = await emailStagingManager.stageEmail({
-            user_id: membership.user_id,
-            email_address: user.email,
-            event_type: EMAIL_EVENTS.MEMBERSHIP_EXPIRING,
-            subject: `Your ${membership.membership_name} expires in ${thresholdDays} days`,
-            template_id: process.env.LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID,
-            email_data: {
-              user_name: userName,
-              membership_name: membership.membership_name,
-              expiration_date: formatDateString(membership.latest_expiration),
-              days_until_expiration: thresholdDays,
-              renew_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`
-            },
-            triggered_by: 'automated',
-            related_entity_type: 'user_memberships',
-            related_entity_id: membership.membership_id
-          })
-
-          if (staged) {
-            results.remindersSent++
-          } else {
-            results.errors.push(
-              `Failed to stage reminder for user ${membership.user_id} (${thresholdDays}d)`
-            )
-          }
-        } catch (emailError) {
-          logger.logBatchProcessing(
-            'membership-reminder-stage-error',
-            'Failed to stage membership reminder email',
-            {
-              userId: membership.user_id,
-              thresholdDays,
-              error: emailError instanceof Error ? emailError.message : String(emailError)
-            },
-            'warn'
-          )
-        }
+      for (const row of (expiring || []) as ExpiringMembershipRow[]) {
+        matches.push({ ...row, thresholdDays })
       }
     } catch (thresholdError) {
       const errorMessage = thresholdError instanceof Error ? thresholdError.message : String(thresholdError)
@@ -159,7 +90,117 @@ export async function sendExpirationReminders(today: string): Promise<Membership
         { thresholdDays, targetDate, error: errorMessage },
         'error'
       )
-      results.errors.push(`Threshold ${thresholdDays}d: ${errorMessage}`)
+      errors.push(`Threshold ${thresholdDays}d: ${errorMessage}`)
+    }
+  }
+
+  return { matches, errors }
+}
+
+/**
+ * Count how many reminder emails would be sent right now, without staging
+ * or sending anything. Powers the admin "N emails will be sent" preview.
+ *
+ * @param today - The date to use as "today" (format: YYYY-MM-DD)
+ */
+export async function countExpiringMemberships(today: string): Promise<number> {
+  const { matches } = await findExpiringMemberships(today)
+  return matches.length
+}
+
+/**
+ * Stage expiration reminder emails for every membership whose `latest_expiration`
+ * falls exactly on one of MEMBERSHIP_REMINDER_THRESHOLDS_DAYS days from today.
+ *
+ * @param today - The date to use as "today" (format: YYYY-MM-DD)
+ */
+export async function sendExpirationReminders(today: string): Promise<MembershipReminderResults> {
+  const adminSupabase = createAdminClient()
+  const results: MembershipReminderResults = {
+    remindersSent: 0,
+    errors: []
+  }
+
+  const { matches, errors: queryErrors } = await findExpiringMemberships(today)
+  results.errors.push(...queryErrors)
+
+  if (matches.length === 0) {
+    return results
+  }
+
+  logger.logBatchProcessing(
+    'membership-reminder-found',
+    `Found ${matches.length} memberships expiring on a reminder threshold`,
+    { count: matches.length }
+  )
+
+  const userIds = [...new Set(matches.map(m => m.user_id))]
+  const { data: users, error: usersError } = await adminSupabase
+    .from('users')
+    .select('id, email, first_name, last_name')
+    .in('id', userIds)
+
+  if (usersError) {
+    logger.logBatchProcessing(
+      'membership-reminder-users-query-error',
+      'Error fetching users for reminders',
+      { error: usersError.message },
+      'error'
+    )
+    results.errors.push(`Users query error: ${usersError.message}`)
+    return results
+  }
+
+  const usersById = new Map((users || []).map(u => [u.id, u]))
+
+  for (const match of matches) {
+    const user = usersById.get(match.user_id)
+    if (!user) {
+      continue
+    }
+
+    const userName = `${user.first_name} ${user.last_name}`
+
+    try {
+      const staged = await emailStagingManager.stageEmail({
+        user_id: match.user_id,
+        email_address: user.email,
+        event_type: EMAIL_EVENTS.MEMBERSHIP_EXPIRING,
+        subject: `Your ${match.membership_name} expires in ${match.thresholdDays} days`,
+        template_id: process.env.LOOPS_MEMBERSHIP_EXPIRING_TEMPLATE_ID,
+        email_data: {
+          user_name: userName,
+          membership_name: match.membership_name,
+          expiration_date: formatDateString(match.latest_expiration),
+          days_until_expiration: match.thresholdDays,
+          renew_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/memberships`,
+          // The standard email-footer button component reads this exact
+          // (camelCase) key — every template must send it, per AGENTS.md.
+          dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
+        },
+        triggered_by: 'automated',
+        related_entity_type: 'user_memberships',
+        related_entity_id: match.membership_id
+      })
+
+      if (staged) {
+        results.remindersSent++
+      } else {
+        results.errors.push(
+          `Failed to stage reminder for user ${match.user_id} (${match.thresholdDays}d)`
+        )
+      }
+    } catch (emailError) {
+      logger.logBatchProcessing(
+        'membership-reminder-stage-error',
+        'Failed to stage membership reminder email',
+        {
+          userId: match.user_id,
+          thresholdDays: match.thresholdDays,
+          error: emailError instanceof Error ? emailError.message : String(emailError)
+        },
+        'warn'
+      )
     }
   }
 

@@ -1,0 +1,51 @@
+name: Quarterly Postgres upgrade check
+
+# Reminder-only: opens a tracking issue every quarter prompting a human to
+# check the Supabase dashboard for an available Postgres upgrade and, if one
+# is taken, work through the checklist in AGENTS.md § "Postgres version
+# upgrades".
+#
+# Upgrading itself stays a deliberate, manual, human action via the
+# dashboard — same as production migrations, see AGENTS.md § "How production
+# gets changed". This workflow never touches a database; it only opens an
+# issue so the check doesn't depend on someone noticing a security advisory
+# (see #289, which is how the September 2026 upgrade — and the collation
+# warning flood that followed it — got found).
+
+on:
+  schedule:
+    # 13:00 UTC on the 1st of Jan/Apr/Jul/Oct — morning in US Eastern.
+    - cron: '0 13 1 1,4,7,10 *'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  open-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open quarterly tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const period = new Date().toISOString().slice(0, 7)
+            const agentsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/AGENTS.md#postgres-version-upgrades`
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Quarterly Postgres upgrade check — ${period}`,
+              body: [
+                'Recurring reminder (see `.github/workflows/postgres-upgrade-check.yml`) to check both Supabase projects for an available Postgres upgrade, not just react to a security advisory.',
+                '',
+                '## Checklist',
+                '',
+                '- [ ] Check Infrastructure settings on `membership-system-dev` and `membership-system-prod` for an available upgrade.',
+                '- [ ] If one exists, open a dedicated issue for it with a pre-upgrade checklist: downtime window outside cron activity, in-place vs. pause-and-restore, confirm a backup point exists.',
+                '- [ ] Perform the upgrade via the dashboard — dev first, prod deliberately, by a human.',
+                `- [ ] Run the [post-upgrade checklist](${agentsUrl}) — collation refresh on both projects, re-run **both** security and performance advisors, watch \`postgres_logs\` volume and Disk I/O for 24-48h.`,
+                '',
+                `Full detail: [AGENTS.md § Postgres version upgrades](${agentsUrl}).`,
+              ].join('\n'),
+            })

@@ -898,7 +898,6 @@ export default function RegistrationDetailPage() {
                                 </p>
                               }
                               onRemoved={() => fetchRegistrationData(registrationId)}
-                              className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                             />
                           </div>
                         </td>

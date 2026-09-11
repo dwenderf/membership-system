@@ -60,7 +60,7 @@ export default function WaitlistRemoveButton({
       <button
         type="button"
         onClick={() => setDialogOpen(true)}
-        className={className ?? 'text-sm font-medium text-red-600 hover:text-red-500'}
+        className={className ?? 'inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'}
       >
         {label}
       </button>

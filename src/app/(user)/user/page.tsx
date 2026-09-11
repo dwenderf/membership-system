@@ -406,7 +406,7 @@ export default async function UserDashboardPage() {
                           If selected: <span className="font-semibold">${(finalAmount / 100).toFixed(2)}</span>
                           {discountCode && (
                             <span className="text-green-700">
-                              {' '}(code {discountCode.code}: -{discountCode.percentage}%, -${(discountAmount / 100).toFixed(2)})
+                              {' '}(includes {discountCode.code} {discountCode.percentage}% discount subject to season cap)
                             </span>
                           )}
                         </p>

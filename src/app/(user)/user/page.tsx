@@ -350,9 +350,10 @@ export default async function UserDashboardPage() {
         </div>
       </div>
 
+      <div className="max-w-3xl mx-auto space-y-6">
       {/* My Waitlists */}
       {activeWaitlistEntries.length > 0 && (
-        <div className="bg-white overflow-hidden shadow rounded-lg mb-6">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Waitlists
@@ -413,8 +414,7 @@ export default async function UserDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* My Teams */}
+      {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
@@ -596,11 +596,9 @@ export default async function UserDashboardPage() {
           </div>
         </div>
 
-        {/* My Discount Usage */}
-        <DiscountUsage />
+      {/* My Discount Usage */}
+      <DiscountUsage />
       </div>
-
-
 
     </div>
   )

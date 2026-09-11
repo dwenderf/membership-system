@@ -274,7 +274,7 @@ export default async function UserDashboardPage() {
   })
 
   return (
-    <div className="px-4 py-3 sm:px-0">
+    <div className="px-4 py-3 sm:px-0 max-w-3xl mx-auto">
       <PasskeySetupBanner promptPrefs={userProfile?.preferences?.passkeyPrompt ?? null} />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">
@@ -322,7 +322,7 @@ export default async function UserDashboardPage() {
         </div>
 
         {/* Action Tiles - constrained to grid width */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
           <Link
             href="/user/browse-registrations"
             className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
@@ -350,7 +350,7 @@ export default async function UserDashboardPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
       {/* My Waitlists */}
       {activeWaitlistEntries.length > 0 && (
         <div className="bg-white overflow-hidden shadow rounded-lg">

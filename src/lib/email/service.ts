@@ -466,7 +466,6 @@ class EmailService {
         registrationName: options.registrationName,
         categoryName: options.categoryName,
         seasonName: options.seasonName,
-        removedDate: formatDate(new Date()),
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
       }
     })

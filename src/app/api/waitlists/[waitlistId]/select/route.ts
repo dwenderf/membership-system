@@ -29,19 +29,21 @@ export async function POST(
     const body = await request.json().catch(() => ({}))
     const overridePrice = body.overridePrice as number | undefined
 
-    // Check if user is admin
+    // Check if user is admin (captains are authorized further below, once we
+    // know the waitlist entry's registration_id)
     const { data: userProfile } = await supabase
       .from('users')
       .select('is_admin')
       .eq('id', authUser.id)
       .single()
 
-    if (!userProfile?.is_admin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
+    const isAdmin = !!userProfile?.is_admin
 
-    // Get waitlist entry details
-    const { data: waitlistEntry, error: waitlistError } = await supabase
+    // Get waitlist entry details. Uses adminSupabase because a captain (who
+    // is authorized explicitly below via registration_captains) has no RLS
+    // grant to read another user's waitlist row — only the row owner and
+    // admins do.
+    const { data: waitlistEntry, error: waitlistError } = await adminSupabase
       .from('waitlists')
       .select(`
         id,
@@ -92,6 +94,23 @@ export async function POST(
       return NextResponse.json({
         error: 'This waitlist entry has already been processed'
       }, { status: 400 })
+    }
+
+    // Admins are always authorized; otherwise require a captain of this registration
+    let isAuthorized = isAdmin
+
+    if (!isAuthorized) {
+      const { data: captainship } = await supabase
+        .from('registration_captains')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .eq('registration_id', waitlistEntry.registration_id)
+        .maybeSingle()
+      isAuthorized = !!captainship
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Admin or captain access required' }, { status: 403 })
     }
 
     // Extract related data

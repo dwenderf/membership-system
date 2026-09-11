@@ -20,6 +20,7 @@ export const EMAIL_EVENTS = {
   REGISTRATION_COMPLETED: 'registration.completed',
   WAITLIST_ADDED: 'waitlist.added',
   WAITLIST_SELECTED: 'waitlist.selected',
+  WAITLIST_REMOVED: 'waitlist.removed',
   PAYMENT_FAILED: 'payment.failed',
   REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
@@ -436,6 +437,35 @@ class EmailService {
         purchaseDate: formatDate(new Date()), // Loops expects 'purchaseDate' not 'paymentDate'
         paymentIntentId: options.paymentIntentId || 'N/A',
         discountApplied: options.discountApplied || '',
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
+      }
+    })
+  }
+
+  /**
+   * Send waitlist removed notification email immediately (bypasses queue).
+   * Used uniformly whether the removal was self-service, captain-initiated, or admin-initiated.
+   */
+  async sendWaitlistRemovedNotification(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    categoryName: string
+    seasonName: string
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.WAITLIST_REMOVED,
+      subject: `Removed from Waitlist - ${options.registrationName}`,
+      triggeredBy: 'user_action',
+      templateId: process.env.LOOPS_WAITLIST_REMOVED_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        registrationName: options.registrationName,
+        categoryName: options.categoryName,
+        seasonName: options.seasonName,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
       }
     })

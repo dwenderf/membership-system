@@ -62,7 +62,8 @@ export async function POST(
 
     const senderRole = `Captain – ${registration?.name || 'Team'}`
 
-    // Verify recipients are active paid members of this registration
+    // Verify recipients are either active paid members or active waitlist
+    // entries for this registration — never trust the client's recipient list.
     const { data: validMembers } = await adminSupabase
       .from('user_registrations')
       .select('user_id, users!inner(id, email, first_name, last_name)')
@@ -70,18 +71,29 @@ export async function POST(
       .eq('payment_status', 'paid')
       .in('user_id', recipientUserIds)
 
-    if (!validMembers || validMembers.length === 0) {
-      return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 })
-    }
+    const { data: validWaitlisted } = await adminSupabase
+      .from('waitlists')
+      .select('user_id, users!waitlists_user_id_fkey(id, email, first_name, last_name)')
+      .eq('registration_id', registrationId)
+      .is('removed_at', null)
+      .in('user_id', recipientUserIds)
 
-    const recipients = validMembers.map(m => {
+    const recipientMap = new Map<string, { userId: string; email: string; name: string }>()
+    ;[...(validMembers || []), ...(validWaitlisted || [])].forEach(m => {
       const u = Array.isArray(m.users) ? m.users[0] : m.users
-      return {
+      if (!u) return
+      recipientMap.set(m.user_id, {
         userId: m.user_id,
         email: u.email,
         name: `${u.first_name} ${u.last_name}`.trim(),
-      }
+      })
     })
+
+    if (recipientMap.size === 0) {
+      return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 })
+    }
+
+    const recipients = Array.from(recipientMap.values())
 
     // Always CC the sender
     if (senderProfile?.email && !recipients.some(r => r.userId === user.id)) {

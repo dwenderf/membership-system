@@ -193,6 +193,8 @@ export default function EditRegistrationCategoryPage() {
     }
   }
 
+  const isGated = formData.max_capacity === '0'
+
   const canUpdateCategory = (
     (isCustom && formData.custom_name.trim()) || 
     (!isCustom && formData.category_id)
@@ -366,13 +368,37 @@ export default function EditRegistrationCategoryPage() {
                   id="max_capacity"
                   min="0"
                   value={formData.max_capacity}
+                  disabled={isGated}
                   onChange={(e) => setFormData(prev => ({ ...prev, max_capacity: e.target.value }))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="e.g., 20 (use 0 for waitlist-only)"
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  placeholder="e.g., 20"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  Leave empty for unlimited capacity
+                  {isGated
+                    ? 'Gated categories start with 0 direct-registration spots — everyone joins the waitlist and the captain selects who gets charged.'
+                    : 'Leave empty for unlimited capacity'}
                 </p>
+              </div>
+
+              {/* Gated Registration */}
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
+                  <input
+                    id="is_gated"
+                    type="checkbox"
+                    checked={isGated}
+                    onChange={(e) => setFormData(prev => ({ ...prev, max_capacity: e.target.checked ? '0' : '' }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                </div>
+                <div className="ml-3 text-sm">
+                  <label htmlFor="is_gated" className="font-medium text-gray-700">
+                    Gated Registration
+                  </label>
+                  <p className="text-gray-500">
+                    Everyone joins the waitlist; a captain or admin selects who gets charged and added to the roster.
+                  </p>
+                </div>
               </div>
 
               {/* Required Membership */}

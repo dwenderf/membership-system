@@ -9,6 +9,8 @@ import UserLink from '@/components/UserLink'
 import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/lib/date-utils'
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
+import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 
 interface FinancialSummaryData {
   roster_gross: number
@@ -51,13 +53,19 @@ interface WaitlistData {
   first_name: string
   last_name: string
   email: string
-  phone: string | null
   category_name: string
   category_id: string
   position: number
   joined_at: string
   is_lgbtq: boolean | null
   is_goalie: boolean
+  hasValidPaymentMethod: boolean
+  discount_code_id: string | null
+  discount_code: string | null
+  discount_percentage: number | null
+  base_price: number
+  discount_amount: number
+  final_amount: number
 }
 
 interface AlternateData {
@@ -106,10 +114,12 @@ export default function CaptainRosterPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const [lgbtqFilter, setLgbtqFilter] = useState<LgbtqFilter | null>(null)
   const [goalieFilter, setGoalieFilter] = useState<GoalieFilter | null>(null)
-  const [statusFilter, setStatusFilter] = useState<'roster' | 'alternate' | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'roster' | 'alternate' | 'waitlist' | null>(null)
 
   const [showEmailComposer, setShowEmailComposer] = useState(false)
   const [emailAllMembers, setEmailAllMembers] = useState(false)
+  const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistData | null>(null)
+  const [showWaitlistSelectionModal, setShowWaitlistSelectionModal] = useState(false)
 
   useEffect(() => {
     if (registrationId) {
@@ -262,9 +272,15 @@ export default function CaptainRosterPage() {
   const alternateRecipients = alternatesData.map(m => ({
     userId: m.user_id, email: m.email, name: `${m.first_name} ${m.last_name}`.trim(),
   }))
+  const waitlistRecipients = waitlistData.map(w => ({
+    userId: w.user_id, email: w.email, name: `${w.first_name} ${w.last_name}`.trim(),
+  }))
+  // Waitlist members are only selectable for email when the Waitlist chip is
+  // explicitly active — never folded into the default "email everyone" set.
   const filteredEmailRecipients =
     statusFilter === 'roster' ? rosterRecipients
     : statusFilter === 'alternate' ? alternateRecipients
+    : statusFilter === 'waitlist' ? waitlistRecipients
     : [...rosterRecipients, ...alternateRecipients]
 
   const toggleCategoryFilter = (name: string) =>
@@ -461,7 +477,7 @@ export default function CaptainRosterPage() {
             </div>
 
             {/* Status */}
-            {alternatesData.length > 0 && (
+            {(alternatesData.length > 0 || waitlistData.length > 0) && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wider w-20 shrink-0">Status</span>
                 <div className="flex flex-wrap gap-2">
@@ -476,17 +492,32 @@ export default function CaptainRosterPage() {
                     Roster
                     <span className={`font-normal ${statusFilter === 'roster' ? 'opacity-80' : 'opacity-60'}`}>({allActiveMembers.length})</span>
                   </button>
-                  <button
-                    onClick={() => setStatusFilter(statusFilter === 'alternate' ? null : 'alternate')}
-                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      statusFilter === 'alternate'
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
-                    }`}
-                  >
-                    Alternate
-                    <span className={`font-normal ${statusFilter === 'alternate' ? 'opacity-80' : 'opacity-60'}`}>({alternatesData.length})</span>
-                  </button>
+                  {alternatesData.length > 0 && (
+                    <button
+                      onClick={() => setStatusFilter(statusFilter === 'alternate' ? null : 'alternate')}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        statusFilter === 'alternate'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                    >
+                      Alternate
+                      <span className={`font-normal ${statusFilter === 'alternate' ? 'opacity-80' : 'opacity-60'}`}>({alternatesData.length})</span>
+                    </button>
+                  )}
+                  {waitlistData.length > 0 && (
+                    <button
+                      onClick={() => setStatusFilter(statusFilter === 'waitlist' ? null : 'waitlist')}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        statusFilter === 'waitlist'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                    >
+                      Waitlist
+                      <span className={`font-normal ${statusFilter === 'waitlist' ? 'opacity-80' : 'opacity-60'}`}>({waitlistData.length})</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -687,6 +718,9 @@ export default function CaptainRosterPage() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Goalie
                       </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -722,6 +756,37 @@ export default function CaptainRosterPage() {
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getGoalieStatusStyles(waitlist.is_goalie)}`}>
                             {getGoalieStatusLabel(waitlist.is_goalie)}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedWaitlistEntry(waitlist)
+                                setShowWaitlistSelectionModal(true)
+                              }}
+                              disabled={!waitlist.hasValidPaymentMethod}
+                              className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm ${
+                                waitlist.hasValidPaymentMethod
+                                  ? 'text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                              }`}
+                              title={waitlist.hasValidPaymentMethod ? 'Select user from waitlist' : 'User must set up payment method first'}
+                            >
+                              Select
+                            </button>
+                            <WaitlistRemoveButton
+                              waitlistId={waitlist.id}
+                              label="Remove"
+                              confirmTitle="Remove from Waitlist"
+                              confirmMessage={
+                                <p>
+                                  Are you sure you want to remove <strong>{waitlist.first_name} {waitlist.last_name}</strong> from
+                                  the waitlist for <strong>{waitlist.category_name}</strong>? They will be notified by email.
+                                </p>
+                              }
+                              onRemoved={() => fetchRosterData(registrationId)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -887,6 +952,22 @@ export default function CaptainRosterPage() {
           }
           apiEndpoint={`/api/captain/registrations/${registrationId}/send-team-email`}
           onClose={() => setShowEmailComposer(false)}
+        />
+      )}
+
+      {showWaitlistSelectionModal && selectedWaitlistEntry && (
+        <WaitlistSelectionModal
+          waitlistEntry={selectedWaitlistEntry}
+          registrationName={registrationName}
+          onSuccess={() => {
+            setShowWaitlistSelectionModal(false)
+            setSelectedWaitlistEntry(null)
+            fetchRosterData(registrationId)
+          }}
+          onCancel={() => {
+            setShowWaitlistSelectionModal(false)
+            setSelectedWaitlistEntry(null)
+          }}
         />
       )}
     </div>

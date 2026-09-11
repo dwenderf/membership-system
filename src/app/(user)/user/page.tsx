@@ -168,7 +168,8 @@ export default async function UserDashboardPage() {
       registration_category:registration_categories(
         *,
         categories:category_id(name)
-      )
+      ),
+      discount_code:discount_codes(code, percentage)
     `)
     .eq('user_id', user.id)
     .is('removed_at', null)
@@ -366,6 +367,14 @@ export default async function UserDashboardPage() {
                 const isGated = category?.max_capacity === 0
                 const categoryName = category ? getCategoryDisplayName(category) : null
 
+                const discountCode = Array.isArray(waitlistEntry.discount_code) ? waitlistEntry.discount_code[0] : waitlistEntry.discount_code
+                const basePrice = category?.price ?? 0
+                // Estimate only — doesn't apply the seasonal discount cap the actual
+                // charge enforces at selection time, so the real charge could be
+                // slightly higher if this code is near that user's per-season limit.
+                const discountAmount = discountCode ? Math.round((basePrice * discountCode.percentage) / 100) : 0
+                const finalAmount = Math.max(0, basePrice - discountAmount)
+
                 return (
                   <div key={`dashboard-waitlist-${waitlistEntry.id}`} className={`py-3 flex items-start justify-between gap-4 ${index === 0 ? 'pt-0' : ''}`}>
                     <div>
@@ -392,6 +401,16 @@ export default async function UserDashboardPage() {
                       <p className="text-sm text-gray-500 mt-1.5">
                         {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
                       </p>
+                      {basePrice > 0 && (
+                        <p className="text-sm text-gray-700 mt-1.5">
+                          If selected: <span className="font-semibold">${(finalAmount / 100).toFixed(2)}</span>
+                          {discountCode && (
+                            <span className="text-green-700">
+                              {' '}(code {discountCode.code}: -{discountCode.percentage}%, -${(discountAmount / 100).toFixed(2)})
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <div className="shrink-0">
                       <WaitlistRemoveButton

@@ -261,6 +261,18 @@ export default async function UserDashboardPage() {
     return isEventRegistrationType(registration.type)
   })
 
+  // Exclude waitlist entries for past events/scrimmages/tournaments or seasons
+  // that have already ended — being waitlisted for something over doesn't need
+  // the member's attention anymore.
+  const activeWaitlistEntries = (userWaitlistEntries ?? []).filter((entry) => {
+    const registration = entry.registration
+    if (!registration) return false
+    if (isEventRegistrationType(registration.type)) {
+      return !!registration.end_date && new Date(registration.end_date) >= now
+    }
+    return !!registration.season && new Date(registration.season.end_date) >= now
+  })
+
   return (
     <div className="px-4 py-3 sm:px-0">
       <PasskeySetupBanner promptPrefs={userProfile?.preferences?.passkeyPrompt ?? null} />
@@ -339,14 +351,14 @@ export default async function UserDashboardPage() {
       </div>
 
       {/* My Waitlists */}
-      {userWaitlistEntries && userWaitlistEntries.length > 0 && (
+      {activeWaitlistEntries.length > 0 && (
         <div className="bg-white overflow-hidden shadow rounded-lg mb-6">
           <div className="p-5">
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               My Waitlists
             </h3>
             <div className="mt-4 divide-y divide-gray-200">
-              {userWaitlistEntries.map((waitlistEntry, index) => {
+              {activeWaitlistEntries.map((waitlistEntry, index) => {
                 const registration = waitlistEntry.registration
                 if (!registration) return null
                 const category = waitlistEntry.registration_category

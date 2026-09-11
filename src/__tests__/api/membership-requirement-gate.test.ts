@@ -404,12 +404,14 @@ describe('membership requirement gate - route enforcement', () => {
     it('rejects selecting a waitlisted user who has no qualifying membership', async () => {
       const supabaseFrom = jest.fn()
         .mockReturnValueOnce(buildUsersIsAdminLookup()) // admin check
-        .mockReturnValueOnce(buildWaitlistEntryLookup()) // waitlist entry
         .mockReturnValueOnce(buildCanUserRegisterLookup()) // duplicate-registration check
 
-      // The membership check for the WAITLISTED user runs against adminSupabase, not
-      // the admin's own RLS-scoped client - see comment in the route.
+      // The waitlist entry fetch and the membership check for the WAITLISTED
+      // user both run against adminSupabase, not the caller's own RLS-scoped
+      // client - a captain has no RLS grant to read another user's waitlist
+      // row, only admins and the row owner do. See comment in the route.
       const adminFrom = jest.fn()
+        .mockReturnValueOnce(buildWaitlistEntryLookup()) // waitlist entry
         .mockReturnValueOnce(noQualifyingMembership()) // user_memberships
         .mockReturnValueOnce(membershipNamesLookup()) // memberships names
 
@@ -424,10 +426,10 @@ describe('membership requirement gate - route enforcement', () => {
     it('does not block selecting a waitlisted user who has a season-covering membership', async () => {
       const supabaseFrom = jest.fn()
         .mockReturnValueOnce(buildUsersIsAdminLookup())
-        .mockReturnValueOnce(buildWaitlistEntryLookup())
         .mockReturnValueOnce(buildCanUserRegisterLookup())
 
       const adminFrom = jest.fn()
+        .mockReturnValueOnce(buildWaitlistEntryLookup()) // waitlist entry
         .mockReturnValueOnce(qualifyingMembership()) // user_memberships
 
       // Distinguishable stopping point unrelated to the membership gate: make the

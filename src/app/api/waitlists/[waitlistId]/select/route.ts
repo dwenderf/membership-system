@@ -39,8 +39,11 @@ export async function POST(
 
     const isAdmin = !!userProfile?.is_admin
 
-    // Get waitlist entry details
-    const { data: waitlistEntry, error: waitlistError } = await supabase
+    // Get waitlist entry details. Uses adminSupabase because a captain (who
+    // is authorized explicitly below via registration_captains) has no RLS
+    // grant to read another user's waitlist row — only the row owner and
+    // admins do.
+    const { data: waitlistEntry, error: waitlistError } = await adminSupabase
       .from('waitlists')
       .select(`
         id,

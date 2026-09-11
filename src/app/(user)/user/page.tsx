@@ -8,6 +8,7 @@ import PasskeySetupBanner from '@/components/PasskeySetupBanner'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
 import EventCalendarButton from '@/components/EventCalendarButton'
+import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 import { formatEventDateTime } from '@/lib/date-utils'
 import { Database } from '@/types/database'
 
@@ -337,6 +338,69 @@ export default async function UserDashboardPage() {
         </div>
       </div>
 
+      {/* My Waitlists */}
+      {userWaitlistEntries && userWaitlistEntries.length > 0 && (
+        <div className="bg-white overflow-hidden shadow rounded-lg mb-6">
+          <div className="p-5">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              My Waitlists
+            </h3>
+            <div className="mt-4 divide-y divide-gray-200">
+              {userWaitlistEntries.map((waitlistEntry, index) => {
+                const registration = waitlistEntry.registration
+                if (!registration) return null
+                const category = waitlistEntry.registration_category
+                const isGated = category?.max_capacity === 0
+                const categoryName = category ? getCategoryDisplayName(category) : null
+
+                return (
+                  <div key={`dashboard-waitlist-${waitlistEntry.id}`} className={`py-3 flex items-start justify-between gap-4 ${index === 0 ? 'pt-0' : ''}`}>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">
+                        {registration.name}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        <RegistrationTypeBadge type={registration.type as 'team' | 'scrimmage' | 'event' | 'tournament'} />
+                        {categoryName && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            {categoryName}
+                          </span>
+                        )}
+                        {isGated ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                            Awaiting Captain Approval
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Waitlist
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1.5">
+                        {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <WaitlistRemoveButton
+                        waitlistId={waitlistEntry.id}
+                        confirmTitle="Leave Waitlist"
+                        confirmMessage={
+                          <p>
+                            Are you sure you want to leave the waitlist for <strong>{registration.name}</strong>?
+                            You can rejoin later if the category is still full or gated.
+                          </p>
+                        }
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* My Teams */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
@@ -346,14 +410,12 @@ export default async function UserDashboardPage() {
             </h3>
             <div className="mt-4">
               {teamRegistrations.length > 0 ||
-               userAlternateRegistrations?.some(alt => alt.registration?.type === 'team' && alt.registration?.season && new Date(alt.registration.season.end_date) >= now) ||
-               userWaitlistEntries?.some(w => w.registration?.type === 'team' && w.registration?.season && new Date(w.registration.season.end_date) >= now) ? (
+               userAlternateRegistrations?.some(alt => alt.registration?.type === 'team' && alt.registration?.season && new Date(alt.registration.season.end_date) >= now) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show team registrations */}
                   {teamRegistrations.map((registration, index) => {
                     const reg = registration.registration
                     const isAlternate = userAlternateRegistrations?.some(alt => alt.registration?.id === reg?.id)
-                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
                       <div key={`team-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
@@ -370,11 +432,6 @@ export default async function UserDashboardPage() {
                           {isAlternate && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                               Alternate
-                            </span>
-                          )}
-                          {isWaitlist && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              Waitlist
                             </span>
                           )}
                           {captainRegistrationIds.has(reg?.id) && <RoleBadge role="Captain" />}
@@ -397,7 +454,6 @@ export default async function UserDashboardPage() {
                   }).map((alternateReg, index: number) => {
                     const registration = alternateReg.registration
                     if (!registration) return null
-                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === registration.id)
                     const isFirst = teamRegistrations.length === 0 && index === 0
 
                     return (
@@ -410,11 +466,6 @@ export default async function UserDashboardPage() {
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                             Alternate
                           </span>
-                          {isWaitlist && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              Waitlist
-                            </span>
-                          )}
                           {captainRegistrationIds.has(registration.id) && <RoleBadge role="Captain" />}
                         </div>
                         <p className="text-sm text-gray-500 mt-1.5">
@@ -423,52 +474,6 @@ export default async function UserDashboardPage() {
                       </div>
                     )
                   })}
-
-                  {/* Show waitlist-only team registrations */}
-                  {(() => {
-                    const alternateOnlyCount = userAlternateRegistrations?.filter(alt => {
-                      const reg = alt.registration
-                      if (!reg || reg.type !== 'team') return false
-                      if (!reg.season) return false
-                      const seasonEndDate = new Date(reg.season.end_date)
-                      if (seasonEndDate < now) return false
-                      return !teamRegistrations.some((r) => r.registration?.id === reg.id)
-                    }).length || 0
-
-                    return userWaitlistEntries?.filter(waitlist => {
-                      const registration = waitlist.registration
-                      if (!registration || registration.type !== 'team') return false
-                      if (!registration.season) return false
-                      const seasonEndDate = new Date(registration.season.end_date)
-                      if (seasonEndDate < now) return false
-                      // Only show if not already in team registrations or alternates
-                      return !teamRegistrations.some((reg) => reg.registration?.id === registration.id) &&
-                             !userAlternateRegistrations?.some(alt => alt.registration?.id === registration.id)
-                    }).map((waitlistEntry, index: number) => {
-                      const registration = waitlistEntry.registration
-                      if (!registration) return null
-
-                      const isFirst = teamRegistrations.length === 0 && alternateOnlyCount === 0 && index === 0
-
-                      return (
-                        <div key={`team-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
-                          <p className="text-sm font-bold text-gray-900">
-                            {registration.name}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            <RegistrationTypeBadge type="team" />
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              Waitlist
-                            </span>
-                            {captainRegistrationIds.has(registration.id) && <RoleBadge role="Captain" />}
-                          </div>
-                          <p className="text-sm text-gray-500 mt-1.5">
-                            {registration.season?.name}
-                          </p>
-                        </div>
-                      )
-                    })
-                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">
@@ -491,16 +496,11 @@ export default async function UserDashboardPage() {
                  const reg = sel.alternate_registration?.registration
                  const gameDate = sel.alternate_registration?.game_date
                  return reg && isEventRegistrationType(reg.type) && gameDate && new Date(gameDate) >= now
-               }) ||
-               userWaitlistEntries?.some(w => {
-                 const reg = w.registration
-                 return reg && isEventRegistrationType(reg.type) && reg.end_date && new Date(reg.end_date) >= now
                }) ? (
                 <div className="divide-y divide-gray-200">
                   {/* Show event/scrimmage registrations */}
                   {eventRegistrations.map((registration, index) => {
                     const reg = registration.registration
-                    const isWaitlist = userWaitlistEntries?.some(w => w.registration?.id === reg?.id)
 
                     return (
                       <div key={`event-reg-${registration.id}`} className={`py-3 ${index === 0 ? 'pt-0' : ''}`}>
@@ -512,11 +512,6 @@ export default async function UserDashboardPage() {
                           {registration.registration_category && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                               {getCategoryDisplayName(registration.registration_category)}
-                            </span>
-                          )}
-                          {isWaitlist && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              Waitlist
                             </span>
                           )}
                         </div>
@@ -579,58 +574,6 @@ export default async function UserDashboardPage() {
                       </div>
                     )
                   })}
-
-                  {/* Show waitlist-only event registrations */}
-                  {(() => {
-                    const alternateSelectionCount = userAlternateSelections?.filter(sel => {
-                      const altReg = sel.alternate_registration
-                      const reg = altReg?.registration
-                      if (!reg || !isEventRegistrationType(reg.type)) return false
-                      const gameDate = altReg?.game_date
-                      if (!gameDate || new Date(gameDate) < now) return false
-                      return !eventRegistrations.some((r) => r.registration?.id === reg.id)
-                    }).length || 0
-
-                    return userWaitlistEntries?.filter(waitlist => {
-                      const registration = waitlist.registration
-                      if (!registration || !isEventRegistrationType(registration.type)) return false
-                      if (!registration.end_date || new Date(registration.end_date) < now) return false
-                      // Only show if not already in event registrations
-                      return !eventRegistrations.some((reg) => reg.registration?.id === registration.id)
-                    }).map((waitlistEntry, index: number) => {
-                      const registration = waitlistEntry.registration
-                      if (!registration) return null
-
-                      const isFirst = eventRegistrations.length === 0 && alternateSelectionCount === 0 && index === 0
-
-                      return (
-                        <div key={`event-wait-${waitlistEntry.id}`} className={`py-3 ${isFirst ? 'pt-0' : ''}`}>
-                          <p className="text-sm font-bold text-gray-900">
-                            {registration.name}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            <RegistrationTypeBadge type={registration.type as EventRegistrationType} />
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                              Waitlist
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-500 mt-1.5">
-                            {registration.start_date ? formatEventDateTime(registration.start_date) : registration.season?.name}
-                          </p>
-                          {registration.start_date && registration.end_date && (
-                            <div className="mt-1.5">
-                              <EventCalendarButton
-                                eventName={registration.name}
-                                startDate={registration.start_date}
-                                endDate={registration.end_date}
-                                description={`${registration.type.charAt(0).toUpperCase() + registration.type.slice(1)} - Waitlist`}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-gray-600">

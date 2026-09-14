@@ -3,6 +3,7 @@ import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { createAdminClient } from '../supabase/admin'
 import * as Sentry from '@sentry/nextjs'
 import { getXeroValidationMessage, XeroApiError } from './xero-errors'
+import { logger } from '@/lib/logging/logger'
 
 // Helper function to generate contact name following our naming convention
 export function generateContactName(firstName: string, lastName: string, memberId?: number | null): string {
@@ -58,34 +59,30 @@ export async function syncUserToXeroContact(
       
       // Step 1: Search by exact contact name (including member ID if available)
       const expectedContactName = generateContactName(userData.first_name, userData.last_name, userData.member_id)
-      
-      console.log(`🔍 Searching for exact contact name: "${expectedContactName}"`)
-      
+
       try {
         const nameSearchResponse = await xeroApi.accountingApi.getContacts(
           tenantId,
           undefined,
           `Name="${expectedContactName}"`
         )
-        
+
         if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
           foundContacts = nameSearchResponse.body.contacts
           searchMethod = 'exact-name'
-          console.log(`✅ Found ${foundContacts.length} contact(s) with exact name: "${expectedContactName}"`)
-          
+
           // Check if the found contact is archived
           const foundContact = foundContacts[0] // Should be only one with exact name
           const isArchived = foundContact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
-          
+
           if (isArchived) {
-            console.log(`⚠️ Found archived contact with exact name: "${foundContact.name}" (ID: ${foundContact.contactID})`)
-            
+            logger.logXeroSync('contact-search-archived-match', `Found archived contact with exact name: "${foundContact.name}"`, { contactID: foundContact.contactID, expectedContactName }, 'debug')
+
             // Rename the archived contact to avoid conflicts
             if (foundContact.contactID) {
               try {
                 const archivedContactName = `${expectedContactName} - Archived`
-                console.log(`🔄 Renaming archived contact to: "${archivedContactName}"`)
-                
+
                 await xeroApi.accountingApi.updateContact(tenantId, foundContact.contactID, {
                   contacts: [{
                     contactID: foundContact.contactID,
@@ -96,15 +93,15 @@ export async function syncUserToXeroContact(
                     contactStatus: Contact.ContactStatusEnum.ARCHIVED // Keep it archived
                   }]
                 })
-              
-                              console.log(`✅ Successfully renamed archived contact to: "${archivedContactName}"`)
-                
+
+                logger.logXeroSync('contact-archived-renamed', `Renamed archived contact to avoid conflicts: "${archivedContactName}"`, { contactID: foundContact.contactID }, 'info')
+
                 // Don't use this contact - we'll create a new one
                 xeroContactId = undefined
                 isUpdate = false
-                
+
               } catch (renameError) {
-                console.error(`❌ Failed to rename archived contact:`, renameError)
+                logger.logXeroSync('contact-archived-rename-failed', 'Failed to rename archived contact', { contactID: foundContact.contactID, error: renameError instanceof Error ? renameError.message : String(renameError) }, 'warn')
                 // If rename fails, we'll still create a new contact with timestamp
                 xeroContactId = undefined
                 isUpdate = false
@@ -114,17 +111,15 @@ export async function syncUserToXeroContact(
             // Contact is active - use it
             xeroContactId = foundContact.contactID
             isUpdate = true
-            console.log(`✅ Using active exact name match: ${foundContact.name} (ID: ${foundContact.contactID})`)
+            logger.logXeroSync('contact-search-exact-match', `Using active exact name match: ${foundContact.name}`, { contactID: foundContact.contactID }, 'debug')
           }
         }
       } catch (nameSearchError) {
-        console.log(`❌ Name search failed for "${expectedContactName}":`, nameSearchError)
+        logger.logXeroSync('contact-name-search-failed', `Name search failed for "${expectedContactName}"`, { error: nameSearchError instanceof Error ? nameSearchError.message : String(nameSearchError) }, 'debug')
       }
-      
+
       // Step 2: If no exact name match found, fall back to email search
       if (!xeroContactId) {
-        console.log(`🔍 No exact name match found, searching by email: ${userData.email}`)
-        
         try {
           const emailSearchResponse = await xeroApi.accountingApi.getContacts(
             tenantId,
@@ -135,16 +130,19 @@ export async function syncUserToXeroContact(
           if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
             foundContacts = emailSearchResponse.body.contacts
             searchMethod = 'email'
-            
-            console.log(`🔍 Found ${foundContacts.length} contact(s) with email ${userData.email}:`)
-            foundContacts.forEach((contact, index) => {
-              console.log(`  ${index + 1}. Name: "${contact.name}", ID: ${contact.contactID}, Status: ${contact.contactStatus || Contact.ContactStatusEnum.ACTIVE}`)
-            })
-            
+
             if (foundContacts.length > 1) {
               // Multiple contacts found - log warning and attempt name matching
-              console.warn(`⚠️ Multiple Xero contacts found for email ${userData.email} (${foundContacts.length} contacts)`)
-              
+              logger.logXeroSync('contact-search-multiple-email-matches', `Multiple Xero contacts found for email ${userData.email}`, {
+                email: userData.email,
+                contactCount: foundContacts.length,
+                contacts: foundContacts.map((contact: Contact) => ({
+                  name: contact.name,
+                  contactID: contact.contactID,
+                  status: contact.contactStatus || Contact.ContactStatusEnum.ACTIVE
+                }))
+              }, 'warn')
+
               // Send Sentry warning for duplicate email monitoring
               Sentry.captureMessage(`Multiple Xero contacts found with same email during contact sync: ${userData.email}`, {
                 level: 'warning',
@@ -175,56 +173,56 @@ export async function syncUserToXeroContact(
               
               if (exactNameMatch && exactNameMatch.contactID) {
                 xeroContactId = exactNameMatch.contactID
-                console.log(`✅ Found exact name match in email results: "${exactNameMatch.name}" (ID: ${exactNameMatch.contactID})`)
+                logger.logXeroSync('contact-search-email-exact-name', `Found exact name match in email results: "${exactNameMatch.name}"`, { contactID: exactNameMatch.contactID }, 'debug')
               } else {
                 // Try to find partial name match (first/last name without member ID)
-                const partialNameMatch = foundContacts.find((contact: Contact) => 
-                  contact.firstName === userData.first_name && 
+                const partialNameMatch = foundContacts.find((contact: Contact) =>
+                  contact.firstName === userData.first_name &&
                   contact.lastName === userData.last_name
                 )
-                
+
                 if (partialNameMatch && partialNameMatch.contactID) {
                   xeroContactId = partialNameMatch.contactID
-                  console.log(`✅ Found partial name match: "${partialNameMatch.name}" (ID: ${partialNameMatch.contactID})`)
+                  logger.logXeroSync('contact-search-email-partial-name', `Found partial name match: "${partialNameMatch.name}"`, { contactID: partialNameMatch.contactID }, 'debug')
                 } else {
                   // Try to find any non-archived contact as last resort
-                  const nonArchivedContact = foundContacts.find((contact: Contact) => 
+                  const nonArchivedContact = foundContacts.find((contact: Contact) =>
                     contact.contactStatus !== Contact.ContactStatusEnum.ARCHIVED
                   )
-                  
+
                   if (nonArchivedContact && nonArchivedContact.contactID) {
                     xeroContactId = nonArchivedContact.contactID
-                    console.log(`✅ Found non-archived contact: "${nonArchivedContact.name}" (ID: ${nonArchivedContact.contactID})`)
+                    logger.logXeroSync('contact-search-email-non-archived', `Found non-archived contact: "${nonArchivedContact.name}"`, { contactID: nonArchivedContact.contactID }, 'debug')
                   } else {
                     // Fall back to first contact but log the decision
                     xeroContactId = foundContacts[0].contactID
-                    console.warn(`⚠️ No suitable match found, using first contact: ${foundContacts[0].name || 'Unknown'} (ID: ${foundContacts[0].contactID})`)
+                    logger.logXeroSync('contact-search-email-no-match', `No suitable match found, using first contact: ${foundContacts[0].name || 'Unknown'}`, { contactID: foundContacts[0].contactID }, 'warn')
                   }
                 }
               }
             } else {
               // Single contact found - use it
               xeroContactId = foundContacts[0].contactID
-              console.log(`✅ Single contact found for ${userData.email}: "${foundContacts[0].name}" (ID: ${foundContacts[0].contactID})`)
+              logger.logXeroSync('contact-search-email-single-match', `Single contact found for ${userData.email}: "${foundContacts[0].name}"`, { contactID: foundContacts[0].contactID }, 'debug')
             }
-            
+
             if (xeroContactId) {
               isUpdate = true
             }
           }
         } catch (emailSearchError) {
-          console.log('Email search failed, will create new contact:', emailSearchError)
+          logger.logXeroSync('contact-email-search-failed', 'Email search failed, will create new contact', { email: userData.email, error: emailSearchError instanceof Error ? emailSearchError.message : String(emailSearchError) }, 'debug')
         }
       }
-      
+
       // Log the final search result
       if (xeroContactId) {
-        console.log(`📋 Contact search completed:`, {
+        logger.logXeroSync('contact-search-completed', 'Contact search completed', {
           searchMethod,
           foundContactId: xeroContactId,
           expectedName: expectedContactName,
           isUpdate
-        })
+        }, 'debug')
       }
     }
 
@@ -248,11 +246,11 @@ export async function syncUserToXeroContact(
             // There's already a contact with this name - make it unique by adding email
             const emailPart = userData.email.split('@')[0]
             contactName = `${userData.first_name} ${userData.last_name} (${emailPart})`
-            console.log(`⚠️ Creating contact with unique name: ${contactName}`)
+            logger.logXeroSync('contact-name-conflict', `Creating contact with unique name: ${contactName}`, {}, 'debug')
           }
         } catch {
           // If check fails, proceed with original name
-          console.log('Duplicate name check failed, proceeding with original name')
+          logger.logXeroSync('contact-duplicate-check-failed', 'Duplicate name check failed, proceeding with original name', {}, 'debug')
         }
       }
     }
@@ -284,8 +282,8 @@ export async function syncUserToXeroContact(
         // Check if the error is due to archived contact
         const errorMessage = getXeroValidationMessage(updateError) || ''
         if (errorMessage.includes('archived') || errorMessage.includes('un-archived')) {
-          console.log(`⚠️ Contact ${xeroContactId} is archived, checking for other non-archived contacts with same email`)
-          
+          logger.logXeroSync('contact-update-archived', `Contact ${xeroContactId} is archived, checking for other non-archived contacts with same email`, { contactID: xeroContactId, email: userData.email }, 'debug')
+
           // Before creating new contact, check if there's another non-archived contact with same email
           try {
             const emailSearchResponse = await xeroApi.accountingApi.getContacts(
@@ -325,8 +323,8 @@ export async function syncUserToXeroContact(
               )
               
               if (nonArchivedContact && nonArchivedContact.contactID) {
-                console.log(`✅ Found non-archived contact with same email: ${nonArchivedContact.name} (ID: ${nonArchivedContact.contactID})`)
-                
+                logger.logXeroSync('contact-archived-resolution-match', `Found non-archived contact with same email: ${nonArchivedContact.name}`, { contactID: nonArchivedContact.contactID, email: userData.email }, 'debug')
+
                 // Check if the contact name follows our naming convention
                 const expectedNamePrefix = userData.member_id 
                                   ? generateContactName(userData.first_name, userData.last_name, userData.member_id)
@@ -341,9 +339,7 @@ export async function syncUserToXeroContact(
                                     ? `${generateContactName(userData.first_name, userData.last_name, userData.member_id)} (${timestamp})`
                 : `${generateContactName(userData.first_name, userData.last_name)} (${timestamp})`
                   
-                  console.log(`⚠️ Contact name doesn't match our convention, updating to: ${finalContactName}`)
-                } else {
-                  console.log(`✅ Contact name already follows our convention: ${nonArchivedContact.name}`)
+                  logger.logXeroSync('contact-name-convention-mismatch', `Contact name doesn't match our convention, updating to: ${finalContactName}`, { contactID: nonArchivedContact.contactID }, 'debug')
                 }
                 
                 // Update the non-archived contact with correct naming convention
@@ -354,15 +350,15 @@ export async function syncUserToXeroContact(
                   contacts: [contactData]
                 })
                 
-                console.log(`✅ Successfully updated existing non-archived contact: ${nonArchivedContact.contactID} with name: ${finalContactName}`)
+                logger.logXeroSync('contact-archived-resolution-updated', `Successfully updated existing non-archived contact with name: ${finalContactName}`, { contactID: nonArchivedContact.contactID }, 'info')
                 return { success: true, xeroContactId: nonArchivedContact.contactID }
               }
             }
           } catch {
-            console.log('Error searching for non-archived contacts with same email, proceeding to create new contact')
+            logger.logXeroSync('contact-archived-resolution-search-failed', 'Error searching for non-archived contacts with same email, proceeding to create new contact', { email: userData.email }, 'debug')
           }
-          
-          console.log(`⚠️ No non-archived contacts found with email ${userData.email}, creating new contact`)
+
+          logger.logXeroSync('contact-archived-resolution-no-match', `No non-archived contacts found with email ${userData.email}, creating new contact`, { email: userData.email }, 'debug')
           
           // Create a new contact with unique name to avoid the archived contact
           if (userData.member_id) {
@@ -387,10 +383,10 @@ export async function syncUserToXeroContact(
               } else {
                 contactData.name = `${userData.first_name} ${userData.last_name} (${timestamp})`
               }
-              console.log(`⚠️ Name conflict detected, using timestamped name: ${contactData.name}`)
+              logger.logXeroSync('contact-name-conflict-timestamped', `Name conflict detected, using timestamped name: ${contactData.name}`, {}, 'debug')
             }
           } catch {
-            console.log('Name uniqueness check failed, proceeding with generated name')
+            logger.logXeroSync('contact-name-uniqueness-check-failed', 'Name uniqueness check failed, proceeding with generated name', {}, 'debug')
           }
           
           // Remove contactID since we're creating new
@@ -488,12 +484,10 @@ export async function syncUserToXeroContact(
     return { success: true, xeroContactId }
 
   } catch (error) {
-    console.error('Error syncing contact to Xero:', error)
-    
     // Extract meaningful error message from Xero API response
     let errorMessage = 'Unknown error during contact sync'
     let errorCode = 'sync_failed'
-    
+
     if (error instanceof Error) {
       errorMessage = error.message
     } else if (error && typeof error === 'object') {
@@ -515,6 +509,11 @@ export async function syncUserToXeroContact(
         errorCode = 'contact_sync_unknown'
       }
     }
+
+    // Use warn (not error) here: Sentry is already reported explicitly below at
+    // 'warning' severity, since contact sync failures are less critical than invoice
+    // failures - logger.error would auto-report a second, conflicting-severity event.
+    logger.logXeroSync('contact-sync-error', 'Error syncing contact to Xero', { userId, tenantId, errorCode, error: errorMessage }, 'warn')
 
     // Capture contact sync error in Sentry (less critical than invoice errors, but still important)
     Sentry.withScope((scope) => {
@@ -593,20 +592,18 @@ export async function getOrCreateXeroContact(
       .single()
 
     if (existingContact && existingContact.sync_status === 'synced' && existingContact.xero_contact_id) {
-      console.log(`✅ Contact already synced locally, using cached Xero ID: ${existingContact.xero_contact_id}`)
-      
       // SKIP EXPENSIVE VALIDATION: Assume contact is valid since it was synced during onboarding
       // Only validate if explicitly requested or if we suspect issues
       return { success: true, xeroContactId: existingContact.xero_contact_id, apiCallMade: false }
     }
 
     // Only sync if no local contact exists (shouldn't happen since contacts are synced during onboarding)
-    console.log(`⚠️ No local contact found for user ${userId}, syncing to Xero (this should be rare)`)
+    logger.logXeroSync('contact-not-locally-synced', `No local contact found for user ${userId}, syncing to Xero (this should be rare)`, { userId, tenantId }, 'warn')
     const result = await syncUserToXeroContact(userId, tenantId, userData)
     return { ...result, apiCallMade: true }
 
   } catch (error) {
-    console.error('Error getting or creating Xero contact:', error)
+    logger.logXeroSync('get-or-create-contact-error', 'Error getting or creating Xero contact', { userId, tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return { success: false, error: 'Failed to get or create contact' }
   }
 }
@@ -621,11 +618,8 @@ export async function syncContactOnNameChange(
   newLastName: string
 ): Promise<{ success: boolean; xeroContactId?: string; error?: string }> {
   try {
-    console.log(`👤 Name change detected for user ${userId}: "${oldFirstName} ${oldLastName}" → "${newFirstName} ${newLastName}"`)
-    
     // Check if name actually changed
     if (oldFirstName === newFirstName && oldLastName === newLastName) {
-      console.log(`✅ No name change detected, skipping Xero contact sync`)
       return { success: true }
     }
 
@@ -642,13 +636,13 @@ export async function syncContactOnNameChange(
       return { success: false, error: 'User not found' }
     }
 
-    console.log(`🔄 Forcing Xero contact sync due to name change from profile update`)
-    
+    logger.logXeroSync('contact-sync-name-change', `Forcing Xero contact sync due to name change: "${oldFirstName} ${oldLastName}" -> "${newFirstName} ${newLastName}"`, { userId, tenantId }, 'info')
+
     // Force sync to update the contact name in Xero
     return await syncUserToXeroContact(userId, tenantId, userData)
 
   } catch (error) {
-    console.error('Error syncing contact on name change:', error)
+    logger.logXeroSync('contact-sync-name-change-error', 'Error syncing contact on name change', { userId, tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return { success: false, error: 'Failed to sync contact on name change' }
   }
 }
@@ -663,8 +657,6 @@ export async function syncEmailChangeToXero(
   newEmail: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`📧 Email change detected for user ${userId}: "${oldEmail}" → "${newEmail}"`)
-
     const supabase = createAdminClient()
 
     // Get full user data
@@ -686,22 +678,23 @@ export async function syncEmailChangeToXero(
       return { success: false, error: 'No active Xero tenant' }
     }
 
-    console.log(`🔄 Forcing Xero contact sync due to email change`)
+    logger.logXeroSync('contact-sync-email-change', `Forcing Xero contact sync due to email change: "${oldEmail}" -> "${newEmail}"`, { userId, tenantId: activeTenant.tenant_id }, 'info')
 
     // Force sync to update the contact email in Xero
     const syncResult = await syncUserToXeroContact(userId, activeTenant.tenant_id, userData)
 
     if (syncResult.success) {
-      console.log(`✅ Xero contact email updated successfully`)
       return { success: true }
     } else {
-      console.error(`❌ Xero contact email update failed: ${syncResult.error}`)
+      logger.logXeroSync('contact-sync-email-change-failed', `Xero contact email update failed: ${syncResult.error}`, { userId }, 'warn')
       return { success: false, error: syncResult.error }
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('Error syncing email change to Xero:', errorMessage)
+
+    // Use warn (not error): Sentry is already reported explicitly below.
+    logger.logXeroSync('contact-sync-email-change-error', 'Error syncing email change to Xero', { userId, error: errorMessage }, 'warn')
 
     // Log error to Sentry but don't throw
     if (typeof window === 'undefined') {
@@ -824,7 +817,7 @@ export async function bulkSyncMissingContacts(tenantId: string): Promise<{
     }
 
   } catch (error) {
-    console.error('Error in bulk sync:', error)
+    logger.logXeroSync('bulk-contact-sync-error', 'Error in bulk contact sync', { tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return {
       success: false,
       synced: 0,

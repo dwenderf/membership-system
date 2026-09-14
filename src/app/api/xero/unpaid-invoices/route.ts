@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -18,7 +19,7 @@ export async function GET() {
       .eq('user_id', user.id)
 
     if (paymentsError) {
-      console.error('Error fetching payments:', paymentsError)
+      logger.logXeroSync('unpaid-invoices-fetch-payments-failed', 'Error fetching payments', { userId: user.id, error: paymentsError.message }, 'error')
       return NextResponse.json({ hasUnpaid: false, count: 0, totalAmount: 0 })
     }
 
@@ -48,7 +49,7 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (invoicesError) {
-      console.error('Error fetching invoices:', invoicesError)
+      logger.logXeroSync('unpaid-invoices-fetch-invoices-failed', 'Error fetching invoices', { userId: user.id, error: invoicesError.message }, 'error')
       return NextResponse.json({ hasUnpaid: false, count: 0, totalAmount: 0 })
     }
 
@@ -75,7 +76,7 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Error checking unpaid invoices:', error)
+    logger.logXeroSync('unpaid-invoices-check-failed', 'Error checking unpaid invoices', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ hasUnpaid: false, count: 0, totalAmount: 0 })
   }
 } 

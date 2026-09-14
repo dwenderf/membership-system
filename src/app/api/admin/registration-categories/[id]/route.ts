@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/registration-categories/[id] - Get single master category
 export async function GET(
@@ -41,7 +42,7 @@ export async function GET(
 
     return NextResponse.json(category)
   } catch (error) {
-    console.error('Error fetching registration category:', error)
+    logger.logAdminAction('registration-category-fetch-error', 'Error fetching registration category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -111,7 +112,7 @@ export async function PUT(
 
     return NextResponse.json(category)
   } catch (error) {
-    console.error('Error updating registration category:', error)
+    logger.logAdminAction('registration-category-update-error', 'Error updating registration category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

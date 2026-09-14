@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,13 +57,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Error creating category:', error)
+      logger.logAdminAction('registration-category-create-error', 'Error creating registration category', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to create category' }, { status: 500 })
     }
 
     return NextResponse.json(newCategory)
   } catch (error) {
-    console.error('Error in POST /api/admin/registration-categories:', error)
+    logger.logAdminAction('registration-category-create-exception', 'Unexpected error creating registration category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -97,13 +98,13 @@ export async function GET() {
       .order('name')
 
     if (error) {
-      console.error('Error fetching categories:', error)
+      logger.logAdminAction('registration-categories-fetch-error', 'Error fetching registration categories', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 })
     }
 
     return NextResponse.json(categories)
   } catch (error) {
-    console.error('Error in GET /api/admin/registration-categories:', error)
+    logger.logAdminAction('registration-categories-fetch-exception', 'Unexpected error fetching registration categories', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       .lte('invoice_created_at', endDate)
 
     if (membershipsError) {
-      console.error('Error fetching memberships from reports view:', membershipsError)
+      logger.logAdminAction('reports-memberships-fetch-error', 'Error fetching memberships from reports view', { error: membershipsError.message }, undefined, 'warn')
     }
 
     // Group memberships by membership ID and calculate totals
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
       .lte('invoice_created_at', endDate)
 
     if (registrationsError) {
-      console.error('Error fetching registrations from registration reports view:', registrationsError)
+      logger.logAdminAction('reports-registrations-fetch-error', 'Error fetching registrations from registration reports view', { error: registrationsError.message }, undefined, 'warn')
     }
 
     // Get discount usage from reports_financial_data view (only AUTHORISED invoices)
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest) {
       .lte('invoice_created_at', endDate)
 
     if (discountError) {
-      console.error('Error fetching discount usage:', discountError)
+      logger.logAdminAction('reports-discount-usage-fetch-error', 'Error fetching discount usage', { error: discountError.message }, undefined, 'warn')
     }
 
     // Group discount usage by category and code
@@ -251,13 +252,12 @@ export async function GET(request: NextRequest) {
       .lte('invoice_created_at', endDate)
 
     if (donationsError) {
-      console.error('Error fetching donations:', donationsError)
+      logger.logAdminAction('reports-donations-fetch-error', 'Error fetching donations', { error: donationsError.message }, undefined, 'warn')
     }
 
     // Calculate donations from Xero line items
     let donationsReceived = 0
     let donationsGiven = 0
-    let donationTransactionCount = 0
     const donationDetails: Array<{
       id: string,
       customerName: string,
@@ -266,15 +266,6 @@ export async function GET(request: NextRequest) {
       type: 'received' | 'given',
       description: string
     }> = []
-
-    console.log('🔍 Donations data from Xero:', {
-      totalDonations: donationItems?.length || 0,
-      sampleDonation: donationItems?.[0] ? {
-        amount: donationItems[0].line_amount,
-        description: donationItems[0].description,
-        lineItemType: donationItems[0].line_item_type
-      } : null
-    })
 
     // Process donations and assistance
     donationItems?.forEach(item => {
@@ -293,7 +284,6 @@ export async function GET(request: NextRequest) {
           type: 'received',
           description
         })
-        donationTransactionCount++
       } else if (item.line_item_type === 'donation' && amount < 0) {
         // Negative donation = donation given (assistance)
         const absAmount = Math.abs(amount)
@@ -306,24 +296,13 @@ export async function GET(request: NextRequest) {
           type: 'given',
           description
         })
-        donationTransactionCount++
       }
-    })
-
-    console.log('📊 Donation calculation results:', {
-      donationsReceived,
-      donationsGiven,
-      donationTransactionCount,
-      donationDetailsCount: donationDetails.length,
-      sampleDonation: donationDetails[0]
     })
 
     // Sort donation details by date (newest first)
     donationDetails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     // Get recent transactions using the new view
-    console.log('🔍 Querying recent_transactions view with date range:', { startDate, endDate })
-    
     const { data: recentTransactions, error: transactionsError } = await supabase
       .from('recent_transactions')
       .select('*')
@@ -333,24 +312,8 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1)
 
     if (transactionsError) {
-      console.error('❌ Error fetching recent transactions:', transactionsError)
+      logger.logAdminAction('reports-recent-transactions-fetch-error', 'Error fetching recent transactions', { error: transactionsError.message }, undefined, 'warn')
     }
-
-    // Debug: Log what we found
-    console.log('📊 Recent transactions query results:', {
-      found: recentTransactions?.length || 0,
-      error: transactionsError ? transactionsError.message : null,
-      sample: recentTransactions?.[0] ? {
-        transactionId: recentTransactions[0].transaction_id,
-        invoiceNumber: recentTransactions[0].invoice_number,
-        amount: recentTransactions[0].amount,
-        status: recentTransactions[0].status,
-        customerName: `${recentTransactions[0].first_name} ${recentTransactions[0].last_name}`,
-        type: recentTransactions[0].transaction_type,
-        date: recentTransactions[0].transaction_date
-      } : null,
-      allData: recentTransactions?.slice(0, 3) // Show first 3 records for debugging
-    })
 
     // Process recent transactions from the view
     let processedTransactions = recentTransactions?.map(transaction => {
@@ -376,8 +339,8 @@ export async function GET(request: NextRequest) {
 
     // If no transactions found in the view, fall back to payments table
     if (processedTransactions.length === 0) {
-      console.log('No transactions found in view, falling back to payments table')
-      
+      logger.logAdminAction('reports-recent-transactions-fallback', 'No transactions found in recent_transactions view, falling back to payments table', undefined, undefined, 'debug')
+
       const { data: fallbackPayments, error: fallbackError } = await supabase
         .from('payments')
         .select(`
@@ -406,7 +369,7 @@ export async function GET(request: NextRequest) {
         }>, { merge: false }>()
 
       if (fallbackError) {
-        console.error('Error fetching fallback payments:', fallbackError)
+        logger.logAdminAction('reports-fallback-payments-fetch-error', 'Error fetching fallback payments', { error: fallbackError.message }, undefined, 'warn')
       } else {
         processedTransactions = fallbackPayments?.map(payment => {
           const userData = payment.users
@@ -562,7 +525,7 @@ export async function GET(request: NextRequest) {
       .select('*')
 
     if (activeMembersError) {
-      console.error('Error fetching active members:', activeMembersError)
+      logger.logAdminAction('reports-active-members-fetch-error', 'Error fetching active members', { error: activeMembersError.message }, undefined, 'warn')
     }
 
     // Process active members data (already grouped by membership type)
@@ -575,20 +538,6 @@ export async function GET(request: NextRequest) {
     // Data is already sorted by count from the view
     const activeMembersSummary = activeMembersByType
 
-    // Add debugging for active members
-    console.log('Active members data from view:', activeMembers)
-    console.log('Processed active members:', activeMembersSummary)
-
-    // Add some debugging info
-    console.log('Report data generated:', {
-      dateRange: `${startDate} to ${endDate}`,
-      membershipCount: memberships?.length || 0,
-      registrationCount: registrations?.length || 0,
-      discountUsageCount: discountUsage?.length || 0,
-      transactionCount: processedTransactions.length,
-      activeMembersCount: activeMembers?.length || 0
-    })
-
     return NextResponse.json({
       ...reportData,
       activeMembers: activeMembersSummary,
@@ -600,9 +549,9 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error generating reports:', error)
-    return NextResponse.json({ 
-      error: 'Failed to generate reports' 
+    logger.logAdminAction('reports-generation-error', 'Error generating reports', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
+    return NextResponse.json({
+      error: 'Failed to generate reports'
     }, { status: 500 })
   }
-} 
+}

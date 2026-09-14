@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/discount-categories - List all discount categories
 export async function GET() {
@@ -33,14 +34,14 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching discount categories:', error)
+      logger.logAdminAction('discount-categories-fetch-error', 'Error fetching discount categories', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 })
     }
 
     return NextResponse.json({ categories })
-    
+
   } catch (error) {
-    console.error('Error in discount categories API:', error)
+    logger.logAdminAction('discount-categories-fetch-exception', 'Unexpected error in discount categories GET', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -108,14 +109,14 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Accounting code already exists' }, { status: 400 })
         }
       }
-      console.error('Error creating discount category:', error)
+      logger.logAdminAction('discount-category-create-error', 'Error creating discount category', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to create category' }, { status: 500 })
     }
 
     return NextResponse.json({ category }, { status: 201 })
-    
+
   } catch (error) {
-    console.error('Error in discount categories API:', error)
+    logger.logAdminAction('discount-category-create-exception', 'Unexpected error in discount categories POST', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 interface RouteParams {
   params: Promise<{
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .eq('payment_id', paymentId)
 
     if (registrationsError) {
-      console.error('Error fetching registrations for payment:', registrationsError)
+      logger.logAdminAction('payment-registrations-fetch-error', 'Error fetching registrations for payment', { paymentId, error: registrationsError.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch registrations' }, { status: 500 })
     }
 
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
 
   } catch (error) {
-    console.error('Error in payment registrations API:', error)
+    logger.logAdminAction('payment-registrations-fetch-exception', 'Unexpected error in payment registrations API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

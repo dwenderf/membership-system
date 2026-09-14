@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,9 +55,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (updateResult.error) {
-      console.error('Error updating accounting codes:', updateResult.error)
-      return NextResponse.json({ 
-        error: 'Failed to update accounting codes' 
+      logger.logAdminAction('accounting-codes-bulk-update-error', 'Error bulk-updating accounting codes', { category, accountingCode: accounting_code, error: updateResult.error.message }, user.id, 'error')
+      return NextResponse.json({
+        error: 'Failed to update accounting codes'
       }, { status: 500 })
     }
 
@@ -73,8 +74,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in bulk update accounting codes:', error)
-    return NextResponse.json({ 
+    logger.logAdminAction('accounting-codes-bulk-update-exception', 'Unexpected error in bulk update accounting codes', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
+    return NextResponse.json({
       error: 'Internal server error' 
     }, { status: 500 })
   }

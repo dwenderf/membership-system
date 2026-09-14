@@ -79,20 +79,11 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
       expand: ['latest_charge', 'latest_charge.balance_transaction']
     })
 
-    console.log(`🔍 Retrieved payment intent with charge data:`, {
-      hasLatestCharge: !!expandedPaymentIntent.latest_charge,
-      chargeType: typeof expandedPaymentIntent.latest_charge,
-      chargeKeys: expandedPaymentIntent.latest_charge && typeof expandedPaymentIntent.latest_charge === 'object'
-        ? Object.keys(expandedPaymentIntent.latest_charge)
-        : 'N/A'
-    })
-
     if (expandedPaymentIntent.latest_charge &&
       typeof expandedPaymentIntent.latest_charge === 'object' &&
       'id' in expandedPaymentIntent.latest_charge) {
 
       const chargeId = expandedPaymentIntent.latest_charge.id
-      console.log(`🔍 Found charge ID: ${chargeId}, checking for balance transaction...`)
 
       // Check if balance transaction is available in the expanded charge
       if ('balance_transaction' in expandedPaymentIntent.latest_charge &&
@@ -101,25 +92,13 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
         'fee' in expandedPaymentIntent.latest_charge.balance_transaction) {
 
         const stripeFeeAmount = expandedPaymentIntent.latest_charge.balance_transaction.fee
-        console.log(`✅ Retrieved actual Stripe fee from balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+        logger.logPaymentProcessing('stripe-fee-retrieved', `Retrieved actual Stripe fee from balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id, chargeId, stripeFeeAmount }, 'debug')
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
       }
 
       // Fallback: retrieve the charge directly to get the fee
-      console.log(`🔍 Balance transaction not available, retrieving charge directly...`)
       const charge = await getStripe().charges.retrieve(chargeId as string, {
         expand: ['balance_transaction']
-      })
-
-      console.log(`🔍 Retrieved charge data:`, {
-        chargeId: charge.id,
-        hasBalanceTransaction: !!charge.balance_transaction,
-        balanceTransactionKeys: charge.balance_transaction && typeof charge.balance_transaction === 'object'
-          ? Object.keys(charge.balance_transaction)
-          : 'N/A',
-        hasFee: charge.balance_transaction && typeof charge.balance_transaction === 'object' && 'fee' in charge.balance_transaction,
-        feeType: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? typeof charge.balance_transaction.fee : 'undefined',
-        feeValue: charge.balance_transaction && typeof charge.balance_transaction === 'object' ? charge.balance_transaction.fee : undefined
       })
 
       if (charge.balance_transaction &&
@@ -127,19 +106,19 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
         'fee' in charge.balance_transaction &&
         typeof charge.balance_transaction.fee === 'number') {
         const stripeFeeAmount = charge.balance_transaction.fee
-        console.log(`✅ Retrieved actual Stripe fee from charge balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`)
+        logger.logPaymentProcessing('stripe-fee-retrieved', `Retrieved actual Stripe fee from charge balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id, chargeId, stripeFeeAmount }, 'debug')
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
       } else {
-        console.log(`⚠️ Fee not available in balance transaction, setting fee to 0 for payment ${paymentIntent.id}`)
+        logger.logPaymentProcessing('stripe-fee-unavailable', `Fee not available in balance transaction, setting fee to 0 for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id, chargeId }, 'warn')
         return { fee: 0, chargeId: chargeId as string }
       }
     } else {
-      console.log(`⚠️ Charge not available, setting fee to 0 for payment ${paymentIntent.id}`)
+      logger.logPaymentProcessing('stripe-charge-unavailable', `Charge not available, setting fee to 0 for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id }, 'warn')
       return { fee: 0, chargeId: null }
     }
   } catch (feeError) {
     // Fallback to 0 if there's an error retrieving the balance transaction
-    console.error(`❌ Error retrieving Stripe fees, setting fee to 0 for payment ${paymentIntent.id}`, feeError)
+    logger.logPaymentProcessing('stripe-fee-retrieval-error', 'Error retrieving Stripe fees; recording fee as $0', { paymentIntentId: paymentIntent.id, error: feeError instanceof Error ? feeError.message : String(feeError) }, 'error')
     return { fee: 0, chargeId: null }
   }
 }
@@ -164,9 +143,7 @@ async function updatePaymentPlanStatuses(
     .order('installment_number')
 
   if (!allPayments || allPayments.length === 0) {
-    console.error(`❌ No installment payments found for payment plan`, {
-      xeroInvoiceId
-    })
+    logger.logPaymentProcessing('payment-plan-installments-missing', 'No installment payments found for payment plan', { xeroInvoiceId }, 'error')
     return
   }
 
@@ -187,10 +164,7 @@ async function updatePaymentPlanStatuses(
       .eq('sync_status', 'staged')
   }
 
-  console.log(`✅ Updated xero_payments statuses: #1=pending${allPayments.length > 1 ? `, #2-${allPayments.length}=planned` : ' (single payment)'}`, {
-    xeroInvoiceId,
-    installmentCount: allPayments.length
-  })
+  logger.logPaymentProcessing('payment-plan-statuses-updated', 'Updated xero_payments installment statuses', { xeroInvoiceId, installmentCount: allPayments.length }, 'info')
 }
 
 // Handle membership payment processing
@@ -205,11 +179,11 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
   let membershipRecord: UserMembershipRow
 
   if (existingMembership) {
-    console.log('User membership already exists for payment intent:', paymentIntent.id)
+    logger.logPaymentProcessing('membership-already-exists', 'User membership already exists for payment intent', { paymentIntentId: paymentIntent.id }, 'debug')
 
     // Update payment status from 'pending' to 'paid' if needed
     if (existingMembership.payment_status === 'pending') {
-      console.log('Updating existing membership payment status from pending to paid')
+      logger.logPaymentProcessing('membership-status-updating', 'Updating existing membership payment status from pending to paid', { paymentIntentId: paymentIntent.id }, 'debug')
       const { data: updatedMembership, error: updateError } = await supabase
         .from('user_memberships')
         .update({
@@ -222,12 +196,11 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
         .single()
 
       if (updateError) {
-        console.error('Error updating membership payment status:', updateError)
+        logger.logPaymentProcessing('membership-status-update-error', 'Error updating membership payment status', { paymentIntentId: paymentIntent.id, error: updateError.message }, 'error')
         throw new Error('Failed to update membership payment status')
       }
 
       membershipRecord = updatedMembership
-      console.log('Successfully updated membership payment status to paid')
     } else {
       membershipRecord = existingMembership
     }
@@ -274,7 +247,7 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
 
       if (membershipError) {
         if (membershipError.code === '23505') { // Duplicate key error
-          console.log('Membership already exists for payment intent, fetching existing record:', paymentIntent.id)
+          logger.logPaymentProcessing('membership-duplicate-key', 'Membership already exists for payment intent, fetching existing record', { paymentIntentId: paymentIntent.id }, 'debug')
           const { data: existingMembership, error: fetchError } = await supabase
             .from('user_memberships')
             .select('*')
@@ -282,20 +255,19 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
             .single()
 
           if (fetchError || !existingMembership) {
-            console.error('Error fetching existing membership:', fetchError)
+            logger.logPaymentProcessing('membership-fetch-error', 'Error fetching existing membership', { paymentIntentId: paymentIntent.id, error: fetchError?.message }, 'error')
             throw new Error('Failed to fetch existing membership')
           }
 
           membershipRecord = existingMembership
         } else {
-          console.error('Error creating user membership:', membershipError)
+          logger.logPaymentProcessing('membership-create-error', 'Error creating user membership', { paymentIntentId: paymentIntent.id, error: membershipError.message }, 'error')
           throw new Error('Failed to create membership')
         }
       } else {
         membershipRecord = newMembership
       }
-    } catch (error) {
-      console.error('Error in membership creation/fetch:', error)
+    } catch {
       throw new Error('Failed to create or fetch membership')
     }
   }
@@ -317,10 +289,10 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
     .select()
 
   if (paymentUpdateError) {
-    console.error('❌ Webhook: Error updating membership payment record:', paymentUpdateError)
+    logger.logPaymentProcessing('membership-payment-record-update-failed', 'Error updating membership payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error')
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
-    console.log(`✅ Webhook: Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+    logger.logPaymentProcessing('membership-payment-record-updated', `Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, stripeFeeAmount }, 'info')
 
     // Update user_memberships record with payment_id
     const { error: membershipUpdateError } = await adminSupabase
@@ -329,12 +301,10 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
       .eq('id', membershipRecord.id)
 
     if (membershipUpdateError) {
-      console.error('❌ Webhook: Error updating membership record with payment_id:', membershipUpdateError)
-    } else {
-      console.log(`✅ Webhook: Updated membership record with payment_id: ${updatedPayment[0].id}`)
+      logger.logPaymentProcessing('membership-payment-id-link-failed', 'Error updating membership record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: membershipUpdateError.message }, 'error')
     }
   } else {
-    console.error(`❌ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
+    logger.logPaymentProcessing('membership-payment-record-not-found', `No payment record found for payment intent: ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id }, 'error')
     throw new Error('Payment record not found - checkout process may have failed')
   }
 
@@ -342,29 +312,8 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
   // This ensures consistent handling of staging records, emails, and batch sync
 
   // Trigger payment completion processor for emails and post-processing
-  console.log('🔄 About to trigger payment completion processor...')
-  console.log('🔄 Webhook context:', {
-    paymentIntentId: paymentIntent.id,
-    userId,
-    membershipId,
-    durationMonths,
-    membershipRecordId: membershipRecord.id,
-    updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
-    amount: paymentIntent.amount
-  })
-
   try {
-    console.log('🔄 Payment completion processor parameters:', {
-      event_type: 'user_memberships',
-      record_id: membershipRecord.id,
-      user_id: userId,
-      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
-      amount: paymentIntent.amount,
-      trigger_source: 'stripe_webhook_membership'
-    })
-
-    console.log('🔄 Calling paymentProcessor.processPaymentCompletion...')
-    const processorResult = await paymentProcessor.processPaymentCompletion({
+    await paymentProcessor.processPaymentCompletion({
       event_type: 'user_memberships',
       record_id: membershipRecord.id,
       user_id: userId,
@@ -378,18 +327,14 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
         xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
       }
     })
-    console.log('✅ Payment completion processor returned successfully:', processorResult)
-    console.log('✅ Triggered payment completion processor for membership')
   } catch (processorError) {
-    console.error('❌ Failed to trigger payment completion processor for membership:', processorError)
-    console.error('❌ Processor error details:', {
-      message: processorError instanceof Error ? processorError.message : String(processorError),
+    logger.logPaymentProcessing('payment-completion-processor-failed', 'Failed to trigger payment completion processor for membership', {
+      paymentIntentId: paymentIntent.id,
+      error: processorError instanceof Error ? processorError.message : String(processorError),
       stack: processorError instanceof Error ? processorError.stack : undefined
-    })
+    }, 'error')
     // Don't fail the webhook - membership was created successfully
   }
-
-  console.log('Successfully processed membership payment intent:', paymentIntent.id)
 }
 
 // Handle registration payment processing
@@ -409,7 +354,7 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
     .single()
 
   if (existingPaidRegistration) {
-    console.log('Registration already paid, using existing record:', existingPaidRegistration.id)
+    logger.logPaymentProcessing('registration-already-paid', 'Registration already paid, using existing record', { registrationId: existingPaidRegistration.id }, 'debug')
     userRegistration = existingPaidRegistration
   } else {
     // Update user registration record from awaiting_payment/processing to paid
@@ -427,9 +372,6 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
       .single()
 
     if (registrationError || !updatedRegistration) {
-      console.error('Error updating user registration:', registrationError)
-      console.error('Registration update failed for:', { userId, registrationId })
-
       // Try to find any registration record for debugging
       const { data: allRegistrations } = await supabase
         .from('user_registrations')
@@ -437,7 +379,7 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
         .eq('user_id', userId)
         .eq('registration_id', registrationId)
 
-      console.error('All registration records found:', allRegistrations)
+      logger.logPaymentProcessing('registration-update-failed', 'Error updating user registration', { userId, registrationId, error: registrationError?.message, allRegistrationsFound: allRegistrations }, 'error')
       throw new Error('Failed to update registration')
     }
 
@@ -464,10 +406,10 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
     .select()
 
   if (paymentUpdateError) {
-    console.error('❌ Webhook: Error updating payment record:', paymentUpdateError)
+    logger.logPaymentProcessing('registration-payment-record-update-failed', 'Error updating payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error')
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
-    console.log(`✅ Webhook: Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+    logger.logPaymentProcessing('registration-payment-record-updated', `Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, stripeFeeAmount }, 'info')
 
     // Update user_registrations record with payment_id
     const { error: registrationUpdateError } = await supabase
@@ -476,12 +418,10 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
       .eq('id', userRegistration.id)
 
     if (registrationUpdateError) {
-      console.error('❌ Webhook: Error updating registration record with payment_id:', registrationUpdateError)
-    } else {
-      console.log(`✅ Webhook: Updated registration record with payment_id: ${updatedPayment[0].id}`)
+      logger.logPaymentProcessing('registration-payment-id-link-failed', 'Error updating registration record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: registrationUpdateError.message }, 'error')
     }
   } else {
-    console.error(`❌ Webhook: No payment record found for payment intent: ${paymentIntent.id}`)
+    logger.logPaymentProcessing('registration-payment-record-not-found', `No payment record found for payment intent: ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id }, 'error')
     throw new Error('Payment record not found - checkout process may have failed')
   }
 
@@ -489,28 +429,8 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
   // This ensures consistent handling of staging records, emails, and batch sync
 
   // Trigger payment completion processor for emails and post-processing
-  console.log('🔄 About to trigger payment completion processor for registration...')
-  console.log('🔄 Registration webhook context:', {
-    paymentIntentId: paymentIntent.id,
-    userId,
-    registrationId,
-    userRegistrationId: userRegistration.id,
-    updatedPaymentId: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
-    amount: paymentIntent.amount
-  })
-
   try {
-    console.log('🔄 Registration payment completion processor parameters:', {
-      event_type: 'user_registrations',
-      record_id: userRegistration.id,
-      user_id: userId,
-      payment_id: updatedPayment && updatedPayment.length > 0 ? updatedPayment[0].id : null,
-      amount: paymentIntent.amount,
-      trigger_source: 'stripe_webhook_registration'
-    })
-
-    console.log('🔄 Calling paymentProcessor.processPaymentCompletion for registration...')
-    const processorResult = await paymentProcessor.processPaymentCompletion({
+    await paymentProcessor.processPaymentCompletion({
       event_type: 'user_registrations',
       record_id: userRegistration.id,
       user_id: userId,
@@ -524,29 +444,23 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
         xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
       }
     })
-    console.log('✅ Registration payment completion processor returned successfully:', processorResult)
-    console.log('✅ Triggered payment completion processor for registration')
   } catch (processorError) {
-    console.error('❌ Failed to trigger payment completion processor for registration:', processorError)
-    console.error('❌ Registration processor error details:', {
-      message: processorError instanceof Error ? processorError.message : String(processorError),
+    logger.logPaymentProcessing('payment-completion-processor-failed', 'Failed to trigger payment completion processor for registration', {
+      paymentIntentId: paymentIntent.id,
+      error: processorError instanceof Error ? processorError.message : String(processorError),
       stack: processorError instanceof Error ? processorError.stack : undefined
-    })
+    }, 'error')
     // Don't fail the webhook - registration was processed successfully
   }
-
-  console.log('Successfully processed registration payment intent:', paymentIntent.id)
 }
 
 // Handle charge updated events (when balance transaction becomes available)
 async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
-    console.log('🔄 Processing charge updated event for fee update...')
-
     // Get the payment record by payment intent ID
     const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
     if (!paymentIntentId) {
-      console.log('⚠️ No payment intent ID found in charge')
+      logger.logPaymentProcessing('charge-updated-no-payment-intent', 'No payment intent ID found in charge', { chargeId: charge.id }, 'warn')
       return
     }
 
@@ -557,7 +471,7 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
       .single()
 
     if (paymentError || !payment) {
-      console.log('⚠️ No payment record found for charge update:', paymentIntentId)
+      logger.logPaymentProcessing('charge-updated-payment-not-found', 'No payment record found for charge update', { paymentIntentId }, 'warn')
       return
     }
 
@@ -565,12 +479,11 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
     const balanceTransaction = await getStripe().balanceTransactions.retrieve(charge.balance_transaction as string)
 
     if (!balanceTransaction || !balanceTransaction.fee) {
-      console.log('⚠️ No fee found in balance transaction:', charge.balance_transaction)
+      logger.logPaymentProcessing('charge-updated-no-fee', 'No fee found in balance transaction', { paymentIntentId, balanceTransaction: charge.balance_transaction }, 'warn')
       return
     }
 
     const feeAmount = balanceTransaction.fee
-    console.log(`💰 Found fee in balance transaction: $${(feeAmount / 100).toFixed(2)}`)
 
     // Update the payment record with the fee
     const { error: updateError } = await supabase
@@ -582,28 +495,25 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
       .eq('id', payment.id)
 
     if (updateError) {
-      console.error('❌ Error updating payment with fee:', updateError)
+      logger.logPaymentProcessing('charge-updated-fee-update-failed', 'Error updating payment with fee', { paymentId: payment.id, error: updateError.message }, 'error')
       return
     }
 
-    console.log(`✅ Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`)
-    console.log('✅ Successfully processed charge updated event - fee updated in database')
+    logger.logPaymentProcessing('charge-updated-fee-recorded', `Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`, { paymentId: payment.id, feeAmount }, 'info')
 
   } catch (error) {
-    console.error('❌ Error processing charge updated event:', error)
+    logger.logPaymentProcessing('charge-updated-error', 'Error processing charge updated event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error')
   }
 }
 
 // Handle charge refunded events
 async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
-    console.log('🔄 Processing charge refunded event...')
-
     // Get the payment record by payment intent ID
     const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null
 
     if (!paymentIntentId) {
-      console.log('⚠️ No payment intent ID found in refunded charge')
+      logger.logPaymentProcessing('charge-refunded-no-payment-intent', 'No payment intent ID found in refunded charge', { chargeId: charge.id }, 'warn')
       return
     }
 
@@ -614,17 +524,13 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
       .single()
 
     if (paymentError || !payment) {
-      console.log('⚠️ No payment record found for refunded charge:', paymentIntentId)
+      logger.logPaymentProcessing('charge-refunded-payment-not-found', 'No payment record found for refunded charge', { paymentIntentId }, 'warn')
       return
     }
-
-    console.log(`💰 Processing refunds for payment ${payment.id}, charge ${charge.id}`)
 
     // Process each refund in the charge
     if (charge.refunds && charge.refunds.data) {
       for (const stripeRefund of charge.refunds.data) {
-        console.log(`💰 Processing refund ${stripeRefund.id} for amount: $${(stripeRefund.amount / 100).toFixed(2)}`)
-
         // Check if we already have this refund in our database
         const { data: existingRefund } = await supabase
           .from('refunds')
@@ -633,7 +539,7 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
           .single()
 
         if (existingRefund) {
-          console.log(`✅ Refund ${stripeRefund.id} already exists in database`)
+          logger.logPaymentProcessing('refund-already-exists', `Refund ${stripeRefund.id} already exists in database`, { stripeRefundId: stripeRefund.id, refundId: existingRefund.id }, 'debug')
 
           // Update status if needed
           if (existingRefund.status !== 'completed') {
@@ -647,15 +553,11 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingRefund.id)
-
-            console.log(`✅ Updated refund ${existingRefund.id} status to completed`)
           }
 
           // NEW ARCHITECTURE: Check for staging_id in Stripe metadata
           const stagingId = stripeRefund.metadata?.staging_id
           if (stagingId) {
-            console.log(`🔄 Found staging_id ${stagingId} in metadata, updating staging records to pending`)
-
             // Move staging records from 'staged' to 'pending' for batch sync
             await supabase
               .from('xero_invoices')
@@ -675,8 +577,6 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
               .eq('xero_invoice_id', stagingId)
               .eq('sync_status', 'staged')
 
-            console.log(`✅ Updated staging records ${stagingId} to pending status`)
-
             // Note: Discount usage reversal is now tracked automatically via discount_usage_computed view
             // which derives data from credit note line items in xero_invoice_line_items
 
@@ -684,8 +584,6 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
             await stageRefundNotificationEmail(existingRefund.id, payment.user_id, payment.id)
           } else {
             // EXTERNAL REFUND: No staging_id means this was processed outside our system
-            console.log(`⚠️ No staging_id found for refund ${existingRefund.id} - this was likely processed externally`)
-
             // Log alert for manual intervention at ERROR level for Sentry reporting
             logger.logSystem('external-refund-detected', 'External refund requires manual Xero credit note creation', {
               refundId: existingRefund.id,
@@ -695,8 +593,6 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
               source: 'external_stripe_refund',
               action_required: 'Manual Xero credit note creation needed'
             }, 'error')
-
-            console.log(`🚨 MANUAL INTERVENTION REQUIRED: External refund ${stripeRefund.id} detected - admin must manually create Xero credit note`)
           }
 
           continue
@@ -725,11 +621,11 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
           .single()
 
         if (refundError) {
-          console.error(`❌ Error creating refund record for ${stripeRefund.id}:`, refundError)
+          logger.logPaymentProcessing('refund-record-create-failed', `Error creating refund record for ${stripeRefund.id}`, { stripeRefundId: stripeRefund.id, error: refundError.message }, 'error')
           continue
         }
 
-        console.log(`✅ Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`)
+        logger.logPaymentProcessing('refund-record-created', `Created refund record ${newRefund.id} for Stripe refund ${stripeRefund.id}`, { refundId: newRefund.id, stripeRefundId: stripeRefund.id }, 'info')
 
         // Log alert for manual intervention - no automatic Xero credit note creation
         logger.logSystem('external-refund-created', 'External refund detected - manual Xero credit note required', {
@@ -741,8 +637,6 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
           source: 'external_stripe_dashboard',
           action_required: 'Admin must manually create Xero credit note to match this refund'
         }, 'error')
-
-        console.log(`🚨 EXTERNAL REFUND ALERT: Refund ${stripeRefund.id} was processed outside our system - manual Xero credit note creation required`)
       }
     }
 
@@ -766,24 +660,15 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
         })
         .eq('id', payment.id)
 
-      console.log(`✅ Updated payment ${payment.id} status to refunded (total refunded: $${(totalRefunded / 100).toFixed(2)})`)
+      logger.logPaymentProcessing('payment-marked-refunded', `Updated payment ${payment.id} status to refunded (total refunded: $${(totalRefunded / 100).toFixed(2)})`, { paymentId: payment.id, totalRefunded }, 'info')
     }
 
-    console.log('✅ Successfully processed charge refunded event')
-
   } catch (error) {
-    console.error('❌ Error processing charge refunded event:', error)
+    logger.logPaymentProcessing('charge-refunded-error', 'Error processing charge refunded event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error')
   }
 }
 
 export async function POST(request: NextRequest) {
-  // Log webhook receipt immediately for debugging
-  try {
-    console.log('🔄 Webhook POST request received')
-  } catch (logError) {
-    console.error('❌ Failed to log webhook receipt:', logError)
-  }
-
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')!
 
@@ -793,23 +678,22 @@ export async function POST(request: NextRequest) {
     event = getStripe().webhooks.constructEvent(body, signature, endpointSecret)
 
     // Log webhook event immediately after signature verification
-    console.log('🔄 Webhook event received:', {
-      type: event.type,
-      id: event.id,
+    logger.logSystem('webhook-event-received', 'Webhook event received', {
+      eventType: event.type,
+      eventId: event.id,
       created: event.created,
       dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
-    })
+    }, 'debug')
   } catch (err) {
-    console.error('Webhook signature verification failed:', err)
+    logger.logSystem('webhook-signature-verification-failed', 'Webhook signature verification failed', { error: err instanceof Error ? err.message : String(err) }, 'error')
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
   let supabase
   try {
     supabase = createAdminClient()
-    console.log('✅ Database connection created successfully')
   } catch (dbError) {
-    console.error('❌ Failed to create database connection:', dbError)
+    logger.logSystem('webhook-database-connection-failed', 'Failed to create database connection', { error: dbError instanceof Error ? dbError.message : String(dbError) }, 'error')
     return NextResponse.json({ error: 'Database connection failed' }, { status: 500 })
   }
 
@@ -820,22 +704,15 @@ export async function POST(request: NextRequest) {
       case 'charge.updated': {
         const charge = event.data.object as Stripe.Charge
 
-        console.log('🔍 Charge updated webhook received:', {
-          chargeId: charge.id,
-          paymentIntentId: charge.payment_intent,
-          hasBalanceTransaction: !!charge.balance_transaction,
-          balanceTransactionId: charge.balance_transaction
-        })
-
         // Only process if balance transaction is now available
         if (charge.balance_transaction && typeof charge.balance_transaction === 'string') {
           await handleChargeUpdated(supabase, charge)
         } else {
-          console.log('⚠️ Charge updated but no balance transaction available yet:', {
+          // Routine - charge.updated fires multiple times as the balance transaction settles
+          logger.logPaymentProcessing('charge-updated-balance-transaction-pending', 'Charge updated but no balance transaction available yet', {
             chargeId: charge.id,
-            balanceTransaction: charge.balance_transaction,
-            balanceTransactionType: typeof charge.balance_transaction
-          })
+            balanceTransaction: charge.balance_transaction
+          }, 'debug')
         }
         break
       }
@@ -847,13 +724,6 @@ export async function POST(request: NextRequest) {
           expand: ['refunds']
         })
 
-        console.log('🔍 Charge refunded webhook received:', {
-          chargeId: charge.id,
-          paymentIntentId: charge.payment_intent,
-          refunds: charge.refunds?.data?.length || 0,
-          refundIds: charge.refunds?.data?.map(r => r.id) || []
-        })
-
         await handleChargeRefunded(supabase, charge)
         break
       }
@@ -861,21 +731,14 @@ export async function POST(request: NextRequest) {
       case 'setup_intent.succeeded': {
         const setupIntent = event.data.object as Stripe.SetupIntent
 
-        console.log('🔄 Processing setup_intent.succeeded:', {
-          setupIntentId: setupIntent.id,
-          status: setupIntent.status,
-          paymentMethodId: setupIntent.payment_method,
-          metadata: setupIntent.metadata
-        })
-
         const userId = setupIntent.metadata?.supabase_user_id || setupIntent.metadata?.userId
         if (!userId) {
-          console.error('❌ Setup Intent missing userId in metadata:', setupIntent.id)
+          logger.logPaymentProcessing('setup-intent-missing-user-id', 'Setup Intent missing userId in metadata', { setupIntentId: setupIntent.id }, 'error')
           break
         }
 
         if (!setupIntent.payment_method) {
-          console.error('❌ Setup Intent missing payment method:', setupIntent.id)
+          logger.logPaymentProcessing('setup-intent-missing-payment-method', 'Setup Intent missing payment method', { setupIntentId: setupIntent.id }, 'error')
           break
         }
 
@@ -892,36 +755,27 @@ export async function POST(request: NextRequest) {
             .eq('id', userId)
 
           if (updateError) {
-            console.error('❌ Failed to update user with payment method:', updateError)
             throw updateError
           }
 
-          console.log('✅ Successfully updated user with payment method:', {
+          logger.logPaymentProcessing('setup-intent-payment-method-updated', 'Successfully updated user with payment method', {
             userId,
             setupIntentId: setupIntent.id,
             paymentMethodId: setupIntent.payment_method
-          })
+          }, 'info')
         } catch (error) {
-          console.error('❌ Error processing setup_intent.succeeded:', error)
+          logger.logPaymentProcessing('setup-intent-succeeded-error', 'Error processing setup_intent.succeeded', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
           throw error
         }
         break
       }
 
-      
       case 'setup_intent.setup_failed': {
         const setupIntent = event.data.object as Stripe.SetupIntent
 
-        console.log('🔄 Processing setup_intent.setup_failed:', {
-          setupIntentId: setupIntent.id,
-          status: setupIntent.status,
-          lastSetupError: setupIntent.last_setup_error,
-          metadata: setupIntent.metadata
-        })
-
         const userId = setupIntent.metadata?.userId
         if (!userId) {
-          console.error('❌ Setup Intent missing userId in metadata:', setupIntent.id)
+          logger.logPaymentProcessing('setup-intent-missing-user-id', 'Setup Intent missing userId in metadata', { setupIntentId: setupIntent.id }, 'error')
           break
         }
 
@@ -936,16 +790,15 @@ export async function POST(request: NextRequest) {
             .eq('id', userId)
 
           if (updateError) {
-            console.error('❌ Failed to update user with failed setup status:', updateError)
             throw updateError
           }
 
-          console.log('✅ Successfully updated user with failed setup status:', {
+          logger.logPaymentProcessing('setup-intent-failed-status-updated', 'Successfully updated user with failed setup status', {
             userId,
             setupIntentId: setupIntent.id
-          })
+          }, 'info')
         } catch (error) {
-          console.error('❌ Error processing setup_intent.setup_failed:', error)
+          logger.logPaymentProcessing('setup-intent-setup-failed-error', 'Error processing setup_intent.setup_failed', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
           throw error
         }
         break
@@ -953,11 +806,6 @@ export async function POST(request: NextRequest) {
 
       case 'payment_method.detached': {
         const paymentMethod = event.data.object as Stripe.PaymentMethod
-
-        console.log('🔄 Processing payment_method.detached:', {
-          paymentMethodId: paymentMethod.id,
-          customerId: paymentMethod.customer
-        })
 
         try {
           // Find user with this payment method and clean up
@@ -968,7 +816,6 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (userError || !user) {
-            console.log('ℹ️ No user found with this payment method, skipping cleanup')
             break
           }
 
@@ -987,7 +834,6 @@ export async function POST(request: NextRequest) {
             .eq('id', user.id)
 
           if (updateError) {
-            console.error('❌ Failed to update user after payment method detachment:', updateError)
             throw updateError
           }
 
@@ -998,7 +844,7 @@ export async function POST(request: NextRequest) {
             .eq('user_id', user.id)
 
           if (alternateRemovalError) {
-            console.error('❌ Failed to remove user from alternate registrations:', alternateRemovalError)
+            logger.logPaymentProcessing('payment-method-detached-alternate-removal-failed', 'Failed to remove user from alternate registrations', { userId: user.id, error: alternateRemovalError.message }, 'warn')
             // Don't throw - this is not critical
           }
 
@@ -1020,12 +866,12 @@ export async function POST(request: NextRequest) {
             })
           }
 
-          console.log('✅ Successfully cleaned up user data after payment method detachment:', {
+          logger.logPaymentProcessing('payment-method-detached-cleaned-up', 'Successfully cleaned up user data after payment method detachment', {
             userId: user.id,
             paymentMethodId: paymentMethod.id
-          })
+          }, 'info')
         } catch (error) {
-          console.error('❌ Error processing payment_method.detached:', error)
+          logger.logPaymentProcessing('payment-method-detached-error', 'Error processing payment_method.detached', { paymentMethodId: paymentMethod.id, error: error instanceof Error ? error.message : String(error) }, 'error')
           throw error
         }
         break
@@ -1036,12 +882,6 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a waitlist selection payment
         if (paymentIntent.metadata?.purpose === 'waitlist_selection') {
-          console.log('🔄 Processing waitlist selection payment:', {
-            paymentIntentId: paymentIntent.id,
-            userId: paymentIntent.metadata.userId,
-            registrationId: paymentIntent.metadata.registrationId
-          })
-
           try {
             // Get actual Stripe fees and charge ID from the charge
             const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
@@ -1060,10 +900,10 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              console.error('❌ Failed to update waitlist payment record:', paymentUpdateError)
+              logger.logPaymentProcessing('waitlist-payment-record-update-failed', 'Failed to update waitlist payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log(`✅ Successfully updated waitlist payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+            logger.logPaymentProcessing('waitlist-payment-record-updated', `Successfully updated waitlist payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
             // Note: user_registrations record is already created as 'paid' by the waitlist selection API
             // No need to update it here - just verify it exists
@@ -1076,14 +916,11 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (!existingRegistration) {
-              console.warn('⚠️ Waitlist registration record not found - may have been created after webhook')
-            } else {
-              console.log('✅ Verified waitlist registration record exists')
+              logger.logPaymentProcessing('waitlist-registration-not-found', 'Waitlist registration record not found - may have been created after webhook', { paymentIntentId: paymentIntent.id }, 'warn')
             }
 
             // Process through payment completion processor for Xero updates and emails
             try {
-              console.log('🔄 Triggering payment completion processor for waitlist selection...')
               const completionEvent = {
                 event_type: 'user_registrations' as const,
                 record_id: existingRegistration?.id || null,
@@ -1100,13 +937,12 @@ export async function POST(request: NextRequest) {
               }
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
-              console.log('✅ Successfully processed waitlist selection payment completion')
             } catch (processorError) {
-              console.error('❌ Payment completion processor failed for waitlist selection:', processorError)
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for waitlist selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            console.error('❌ Error processing waitlist payment_intent.succeeded:', error)
+            logger.logPaymentProcessing('waitlist-payment-intent-succeeded-error', 'Error processing waitlist payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
             throw error
           }
 
@@ -1115,13 +951,6 @@ export async function POST(request: NextRequest) {
 
         // Check if this is an alternate payment
         if (paymentIntent.metadata?.purpose === 'alternate_selection') {
-          console.log('🔄 Processing alternate selection payment:', {
-            paymentIntentId: paymentIntent.id,
-            userId: paymentIntent.metadata.userId,
-            registrationId: paymentIntent.metadata.registrationId,
-            gameDescription: paymentIntent.metadata.gameDescription
-          })
-
           try {
             // Get actual Stripe fees and charge ID from the charge
             const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
@@ -1140,10 +969,10 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              console.error('❌ Failed to update alternate payment record:', paymentUpdateError)
+              logger.logPaymentProcessing('alternate-payment-record-update-failed', 'Failed to update alternate payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log(`✅ Successfully updated alternate payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+            logger.logPaymentProcessing('alternate-payment-record-updated', `Successfully updated alternate payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
             // Ensure alternate_selections record exists (fallback for failed initial creation)
             const gameId = paymentIntent.metadata.gameId
@@ -1163,17 +992,14 @@ export async function POST(request: NextRequest) {
                 })
 
               if (selectionError) {
-                console.error('❌ Failed to create/update alternate selection record in webhook:', selectionError)
-              } else {
-                console.log('✅ Successfully ensured alternate selection record exists')
+                logger.logPaymentProcessing('alternate-selection-record-failed', 'Failed to create/update alternate selection record in webhook', { paymentIntentId: paymentIntent.id, gameId, error: selectionError.message }, 'warn')
               }
             } else {
-              console.warn('⚠️ No gameId in payment metadata - cannot create alternate selection record')
+              logger.logPaymentProcessing('alternate-selection-missing-game-id', 'No gameId in payment metadata - cannot create alternate selection record', { paymentIntentId: paymentIntent.id }, 'warn')
             }
 
             // Process through payment completion processor for Xero updates and emails
             try {
-              console.log('🔄 Triggering payment completion processor for alternate selection...')
               const completionEvent = {
                 event_type: 'alternate_selections' as const,
                 record_id: null, // Not needed for alternate selections
@@ -1190,13 +1016,12 @@ export async function POST(request: NextRequest) {
               }
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
-              console.log('✅ Successfully processed alternate selection payment completion')
             } catch (processorError) {
-              console.error('❌ Payment completion processor failed for alternate selection:', processorError)
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for alternate selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            console.error('❌ Error processing alternate payment_intent.succeeded:', error)
+            logger.logPaymentProcessing('alternate-payment-intent-succeeded-error', 'Error processing alternate payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
             throw error
           }
           break
@@ -1204,33 +1029,13 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a payment plan installment payment
         if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
-          console.log('🔄 Processing payment plan installment payment:', {
-            paymentIntentId: paymentIntent.id,
-            paymentPlanId: paymentIntent.metadata.paymentPlanId,
-            transactionId: paymentIntent.metadata.transactionId,
-            installmentNumber: paymentIntent.metadata.installmentNumber
-          })
-
-          try {
-            // Update payment record status - already handled by PaymentPlanService
-            // This webhook primarily serves as confirmation
-            console.log('✅ Payment plan installment payment completed via webhook confirmation')
-          } catch (error) {
-            console.error('❌ Error processing payment plan installment webhook:', error)
-            // Don't throw - the payment processing is already handled by the service
-          }
+          // Update payment record status - already handled by PaymentPlanService
+          // This webhook primarily serves as confirmation
           break
         }
 
         // Check if this is a payment plan early payoff
         if (paymentIntent.metadata?.purpose === 'payment_plan_early_payoff') {
-          console.log('🔄 Processing payment plan early payoff:', {
-            paymentIntentId: paymentIntent.id,
-            xeroInvoiceId: paymentIntent.metadata.xeroStagingRecordId,
-            userId: paymentIntent.metadata.userId,
-            paymentId: paymentIntent.metadata.paymentId
-          })
-
           try {
             // Get actual Stripe fees and charge ID from the charge
             const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
@@ -1249,10 +1054,10 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              console.error('❌ Failed to update early payoff payment record:', paymentUpdateError)
+              logger.logPaymentProcessing('early-payoff-payment-record-update-failed', 'Failed to update early payoff payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log(`✅ Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+            logger.logPaymentProcessing('early-payoff-payment-record-updated', `Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
             // Find the staged xero_payment for this invoice
             const { data: stagedPayment, error: stagedPaymentError } = await supabase
@@ -1264,7 +1069,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (stagedPaymentError || !stagedPayment) {
-              console.error('❌ Failed to find staged early payoff xero_payment:', stagedPaymentError)
+              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error')
               throw stagedPaymentError || new Error('No staged payment found')
             }
 
@@ -1283,9 +1088,9 @@ export async function POST(request: NextRequest) {
               })
               .eq('id', stagedPayment.id)
 
-            console.log('✅ Early payoff payment processed successfully via webhook')
+            logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id }, 'info')
           } catch (error) {
-            console.error('❌ Error processing early payoff webhook:', error)
+            logger.logPaymentProcessing('early-payoff-webhook-error', 'Error processing early payoff webhook', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
             throw error // Throw to retry webhook
           }
           break
@@ -1293,14 +1098,6 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a payment plan first payment
         if (paymentIntent.metadata?.isPaymentPlan === 'true') {
-          console.log('🔄 Processing payment plan first payment:', {
-            paymentIntentId: paymentIntent.id,
-            userId: paymentIntent.metadata.userId,
-            registrationId: paymentIntent.metadata.registrationId,
-            totalAmount: paymentIntent.metadata.paymentPlanTotalAmount,
-            installmentAmount: paymentIntent.metadata.paymentPlanInstallmentAmount
-          })
-
           try {
             const { PaymentPlanService } = await import('@/lib/services/payment-plan-service')
             const { savePaymentMethodFromIntent } = await import('@/lib/services/payment-method-service')
@@ -1322,10 +1119,10 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              console.error('❌ Failed to update payment plan payment record:', paymentUpdateError)
+              logger.logPaymentProcessing('payment-plan-payment-record-update-failed', 'Failed to update payment plan payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
               throw paymentUpdateError || new Error('No payment record found')
             }
-            console.log(`✅ Successfully updated payment plan payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`)
+            logger.logPaymentProcessing('payment-plan-payment-record-updated', `Successfully updated payment plan payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
             // Save payment method to user profile (required for future charges)
             await savePaymentMethodFromIntent(paymentIntent, paymentIntent.metadata.userId, supabase)
@@ -1343,7 +1140,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (existingPaidRegistration) {
-              console.log('✅ Payment plan registration already paid (idempotent webhook), using existing record:', existingPaidRegistration.id)
+              logger.logPaymentProcessing('payment-plan-registration-already-paid', 'Payment plan registration already paid (idempotent webhook), using existing record', { paymentIntentId: paymentIntent.id, registrationId: existingPaidRegistration.id }, 'debug')
               userRegistration = existingPaidRegistration
             } else {
               // Update user_registration to paid status and set registered_at timestamp
@@ -1361,12 +1158,6 @@ export async function POST(request: NextRequest) {
                 .single()
 
               if (regError || !updatedRegistration) {
-                console.error('❌ Failed to find user registration record:', regError)
-                console.error('Registration update failed for:', {
-                  userId: paymentIntent.metadata.userId,
-                  registrationId: paymentIntent.metadata.registrationId
-                })
-
                 // Try to find any registration record for debugging
                 const { data: allRegistrations } = await supabase
                   .from('user_registrations')
@@ -1374,7 +1165,13 @@ export async function POST(request: NextRequest) {
                   .eq('user_id', paymentIntent.metadata.userId)
                   .eq('registration_id', paymentIntent.metadata.registrationId)
 
-                console.error('All registration records found:', allRegistrations)
+                logger.logPaymentProcessing('payment-plan-registration-not-found', 'Failed to find user registration record', {
+                  paymentIntentId: paymentIntent.id,
+                  userId: paymentIntent.metadata.userId,
+                  registrationId: paymentIntent.metadata.registrationId,
+                  error: regError?.message,
+                  allRegistrationsFound: allRegistrations
+                }, 'error')
                 throw regError || new Error('User registration not found')
               }
 
@@ -1397,21 +1194,18 @@ export async function POST(request: NextRequest) {
                 .eq('id', userRegistration.id)
 
               if (registrationUpdateError) {
-                console.error('❌ Failed to link registration to payment:', registrationUpdateError)
+                logger.logPaymentProcessing('payment-plan-registration-link-failed', 'Failed to link registration to payment', { paymentIntentId: paymentIntent.id, registrationId: userRegistration.id, error: registrationUpdateError.message }, 'warn')
                 // Don't throw - registration is paid, this is just linking
-              } else {
-                console.log('✅ Linked registration to payment and xero_invoice:', updatedPayment.id, xeroInvoiceId)
               }
             } else if (userRegistration.payment_id !== updatedPayment.id) {
               // Unexpected case: registration already linked to a different payment
-              // This indicates a potential data integrity issue
-              console.error('⚠️ Registration already linked to different payment:', {
+              // This indicates a potential data integrity issue - guaranteed Sentry alert
+              logger.reportWarningToSentry('payment-processing', 'registration-payment-mismatch', 'Registration already linked to different payment - skipping update to preserve existing link, manual review needed', {
                 registrationId: userRegistration.id,
                 existingPaymentId: userRegistration.payment_id,
                 currentPaymentId: updatedPayment.id,
                 paymentIntentId: paymentIntent.id
               })
-              console.log('⚠️ Skipping payment_id update to preserve existing link - manual review may be needed')
             } else {
               // Already linked to correct payment (idempotent webhook delivery)
               // But make sure xero_invoice_id is also set
@@ -1422,12 +1216,9 @@ export async function POST(request: NextRequest) {
                   .eq('id', userRegistration.id)
 
                 if (invoiceLinkError) {
-                  console.error('❌ Failed to link registration to xero_invoice:', invoiceLinkError)
-                } else {
-                  console.log('✅ Linked registration to xero_invoice:', xeroInvoiceId)
+                  logger.logPaymentProcessing('payment-plan-xero-invoice-link-failed', 'Failed to link registration to xero_invoice', { paymentIntentId: paymentIntent.id, xeroInvoiceId, error: invoiceLinkError.message }, 'warn')
                 }
               }
-              console.log('✅ Registration already linked to correct payment:', updatedPayment.id)
             }
 
             // Create payment plan (with idempotency - may already exist if webhook retried)
@@ -1441,7 +1232,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (invoiceError || !xeroInvoice) {
-              console.error('❌ Failed to find xero_invoice:', invoiceError)
+              logger.logXeroSync('payment-plan-xero-invoice-not-found', 'Failed to find xero_invoice', { paymentIntentId: paymentIntent.id, xeroInvoiceId, error: invoiceError?.message }, 'error')
               throw new Error('Xero invoice not found')
             }
 
@@ -1449,7 +1240,7 @@ export async function POST(request: NextRequest) {
 
             // Check if payment plan already exists (idempotent webhook delivery)
             if (xeroInvoice.is_payment_plan) {
-              console.log('✅ Payment plan already exists (idempotent webhook), using existing plan:', paymentPlanId)
+              logger.logPaymentProcessing('payment-plan-already-exists', 'Payment plan already exists (idempotent webhook), using existing plan', { paymentIntentId: paymentIntent.id, paymentPlanId }, 'debug')
 
               // Update payment #1's metadata with payment details
               const { data: firstPayment } = await supabase
@@ -1478,10 +1269,8 @@ export async function POST(request: NextRequest) {
                   .eq('id', firstPayment.id)
 
                 if (metadataUpdateError) {
-                  console.error('❌ Failed to update payment #1 metadata:', metadataUpdateError)
+                  logger.logPaymentProcessing('payment-plan-metadata-update-failed', 'Failed to update payment #1 metadata', { paymentIntentId: paymentIntent.id, error: metadataUpdateError.message }, 'warn')
                   // Don't throw - payment is successful, this is just metadata
-                } else {
-                  console.log('✅ Updated payment #1 metadata with payment details')
                 }
               }
 
@@ -1499,12 +1288,12 @@ export async function POST(request: NextRequest) {
               })
 
               if (!result.success) {
-                console.error('❌ Failed to create payment plan:', result.error)
+                logger.logPaymentProcessing('payment-plan-create-failed', 'Failed to create payment plan', { paymentIntentId: paymentIntent.id, error: result.error }, 'error')
                 throw new Error(`Failed to create payment plan: ${result.error}`)
               }
 
               paymentPlanId = result.paymentPlanId!
-              console.log('✅ Successfully created payment plan xero_payments:', paymentPlanId)
+              logger.logPaymentProcessing('payment-plan-created', 'Successfully created payment plan xero_payments', { paymentIntentId: paymentIntent.id, paymentPlanId }, 'info')
 
               // Now update the xero_payments statuses:
               // Payment #1 → 'pending' (ready to sync to Xero)
@@ -1514,7 +1303,6 @@ export async function POST(request: NextRequest) {
 
             // Process through payment completion processor for Xero updates and emails
             try {
-              console.log('🔄 Triggering payment completion processor for payment plan registration...')
               const completionEvent = {
                 event_type: 'user_registrations' as const,
                 record_id: userRegistration.id,
@@ -1533,13 +1321,12 @@ export async function POST(request: NextRequest) {
               }
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
-              console.log('✅ Successfully processed payment plan registration completion')
             } catch (processorError) {
-              console.error('❌ Payment completion processor failed for payment plan:', processorError)
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for payment plan', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            console.error('❌ Error processing payment plan payment_intent.succeeded:', error)
+            logger.logPaymentProcessing('payment-plan-payment-intent-succeeded-error', 'Error processing payment plan payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
             throw error
           }
           break
@@ -1560,14 +1347,14 @@ export async function POST(request: NextRequest) {
           await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
         }
         else {
-          console.error('❌ Payment intent missing required metadata:', {
+          logger.logPaymentProcessing('payment-intent-missing-metadata', 'Payment intent missing required metadata', {
             paymentIntentId: paymentIntent.id,
             hasUserId: !!userId,
             hasMembershipId: !!membershipId,
             hasRegistrationId: !!registrationId,
             hasDurationMonths: !!durationMonths,
             allMetadata: paymentIntent.metadata
-          })
+          }, 'error')
         }
         break
       }
@@ -1577,13 +1364,6 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent
 
         if (paymentIntent.metadata?.purpose === 'alternate_selection') {
-          console.log('🔄 Processing failed alternate selection payment:', {
-            paymentIntentId: paymentIntent.id,
-            userId: paymentIntent.metadata.userId,
-            registrationId: paymentIntent.metadata.registrationId,
-            gameDescription: paymentIntent.metadata.gameDescription
-          })
-
           try {
             // Update payment record status
             const { error: paymentUpdateError } = await supabase
@@ -1595,16 +1375,13 @@ export async function POST(request: NextRequest) {
               .eq('stripe_payment_intent_id', paymentIntent.id)
 
             if (paymentUpdateError) {
-              console.error('❌ Failed to update failed alternate payment record:', paymentUpdateError)
               throw paymentUpdateError
             }
 
             // TODO: Send notification to captain and alternate about failed payment
             // This could be handled by the payment completion processor
-
-            console.log('✅ Successfully updated failed alternate payment record')
           } catch (error) {
-            console.error('❌ Error processing failed alternate payment:', error)
+            logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
             throw error
           }
           break
@@ -1627,12 +1404,6 @@ export async function POST(request: NextRequest) {
 
         // Release registration reservation if this was a registration payment
         if (registrationId && userId) {
-          console.log('🔓 Releasing registration reservation after payment failure:', {
-            userId,
-            registrationId,
-            paymentIntentId: paymentIntent.id
-          })
-
           await supabase
             .from('user_registrations')
             .update({
@@ -1642,8 +1413,6 @@ export async function POST(request: NextRequest) {
             .eq('user_id', userId)
             .eq('registration_id', registrationId)
             .eq('payment_status', 'awaiting_payment') // Only update if still awaiting payment
-
-          console.log('✅ Registration reservation released')
         }
 
         // Clean up draft invoice if it exists
@@ -1652,8 +1421,6 @@ export async function POST(request: NextRequest) {
           const xeroInvoiceId = paymentIntent.metadata.xeroInvoiceId
 
           if (invoiceNumber && xeroInvoiceId) {
-            console.log(`🗑️ Cleaning up draft invoice ${invoiceNumber} after payment failure`)
-
             // Delete the draft invoice from Xero
             const deleteResult = await deleteXeroDraftInvoice(xeroInvoiceId)
 
@@ -1665,9 +1432,9 @@ export async function POST(request: NextRequest) {
                 .eq('xero_invoice_id', xeroInvoiceId)
                 .eq('sync_status', 'pending') // Only delete if still pending
 
-              console.log(`✅ Fully cleaned up draft invoice ${invoiceNumber} after payment failure`)
+              logger.logXeroSync('draft-invoice-cleaned-up', `Fully cleaned up draft invoice ${invoiceNumber} after payment failure`, { paymentIntentId: paymentIntent.id, invoiceNumber, xeroInvoiceId }, 'info')
             } else {
-              console.warn(`⚠️ Failed to delete invoice from Xero: ${deleteResult.error}`)
+              logger.logXeroSync('draft-invoice-xero-delete-failed', `Failed to delete invoice from Xero: ${deleteResult.error}`, { paymentIntentId: paymentIntent.id, invoiceNumber, xeroInvoiceId, error: deleteResult.error }, 'warn')
               // Still clean up our database tracking even if Xero deletion fails
               await supabase
                 .from('xero_invoices')
@@ -1677,7 +1444,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch (cleanupError) {
-          console.error('⚠️ Error cleaning up draft invoice after payment failure:', cleanupError)
+          logger.logXeroSync('draft-invoice-cleanup-error', 'Error cleaning up draft invoice after payment failure', { paymentIntentId: paymentIntent.id, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) }, 'warn')
           // Don't fail the webhook over cleanup issues
         }
 
@@ -1701,40 +1468,31 @@ export async function POST(request: NextRequest) {
                   failed: true
                 }
               })
-              console.log('✅ Triggered payment completion processor for failed payment')
             }
           }
         } catch (processorError) {
-          console.error('❌ Failed to trigger payment completion processor for failed payment:', processorError)
+          logger.logPaymentProcessing('payment-completion-processor-failed', 'Failed to trigger payment completion processor for failed payment', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
           // Don't fail the webhook - payment failure was already recorded
         }
 
         if (!userId) {
-          console.error('❌ Failed payment intent missing required metadata:', {
+          logger.logPaymentProcessing('failed-payment-intent-missing-metadata', 'Failed payment intent missing required metadata', {
             paymentIntentId: paymentIntent.id,
             hasUserId: !!userId,
             hasMembershipId: !!membershipId,
             hasRegistrationId: !!registrationId,
             allMetadata: paymentIntent.metadata
-          })
+          }, 'error')
         }
         break
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        logger.logPaymentProcessing('unhandled-webhook-event', 'Unhandled Stripe webhook event type', { eventType: event.type }, 'debug')
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Error processing webhook:', error)
-    console.error('Webhook error details:', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      eventType: event.type,
-      paymentIntentId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
-    })
-
     // Report critical webhook error via Logger (automatically sends to Sentry)
     logger.logPaymentProcessing(
       'webhook-processing-error',

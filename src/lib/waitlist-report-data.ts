@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { logger } from '@/lib/logging/logger'
 
 export interface WaitlistReportEntry {
   id: string
@@ -80,7 +81,12 @@ export async function fetchWaitlistReportData(
     .order('position', { ascending: true })
 
   if (waitlistError) {
-    console.error('fetchWaitlistReportData: error fetching waitlist data', { error: waitlistError, registrationId })
+    logger.logSystem(
+      'waitlist-report-fetch-failed',
+      'Error fetching waitlist data for report',
+      { error: waitlistError.message, registrationId },
+      'error'
+    )
     return []
   }
 

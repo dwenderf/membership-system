@@ -117,53 +117,75 @@ export class BatchProcessor {
 
     for (let attempt = 0; attempt <= strategy.maxRetries; attempt++) {
       try {
-        console.log(`🔄 Attempting ${context} (attempt ${attempt + 1}/${strategy.maxRetries + 1})`)
-        
+        logger.logBatchProcessing(
+          'retry-attempt',
+          `Attempting ${context} (attempt ${attempt + 1}/${strategy.maxRetries + 1})`,
+          { context, attempt: attempt + 1, maxAttempts: strategy.maxRetries + 1 },
+          'debug'
+        )
+
         const result = await operation()
-        
+
         if (attempt > 0) {
-          console.log(`✅ ${context} succeeded after ${attempt + 1} attempts`)
+          logger.logBatchProcessing(
+            'retry-succeeded',
+            `${context} succeeded after ${attempt + 1} attempts`,
+            { context, attempts: attempt + 1 }
+          )
         }
-        
+
         return { success: true, result }
-        
+
       } catch (error) {
         lastError = error
-        console.log(`❌ ${context} failed on attempt ${attempt + 1}:`, error instanceof Error ? error.message : error)
-        
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
         // Check for HTTP 429 rate limit error
         const isRateLimitError = this.isRateLimitError(error)
-        
+
         if (isRateLimitError) {
-          console.log(`🚫 Rate limit exceeded for ${context} - this is expected and will be retried`)
-          
           // For rate limit errors, we want to be more aggressive with delays
           // but still respect the max delay from the strategy
           const rateLimitDelay = Math.min(strategy.maxDelayMs, 15000) // Max 15 seconds for rate limits (was 5 seconds)
-          console.log(`⏱️ Rate limit delay: ${Math.round(rateLimitDelay)}ms`)
+          logger.logBatchProcessing(
+            'retry-rate-limited',
+            `Rate limit exceeded for ${context} on attempt ${attempt + 1} - retrying in ${Math.round(rateLimitDelay)}ms`,
+            { context, attempt: attempt + 1, delayMs: Math.round(rateLimitDelay) },
+            'warn'
+          )
           await this.delay(rateLimitDelay)
-          
+
           // Continue to next attempt (don't break on rate limits)
           continue
         }
-        
+
         // If this was the last attempt, don't wait
         if (attempt === strategy.maxRetries) {
           break
         }
-        
+
         // Calculate delay and wait
         const delay = this.calculateRetryDelay(attempt, strategy)
-        console.log(`⏱️ Waiting ${Math.round(delay)}ms before retry...`)
+        logger.logBatchProcessing(
+          'retry-failed-attempt',
+          `${context} failed on attempt ${attempt + 1}, retrying in ${Math.round(delay)}ms: ${errorMessage}`,
+          { context, attempt: attempt + 1, delayMs: Math.round(delay), error: errorMessage },
+          'warn'
+        )
         await this.delay(delay)
       }
     }
 
     const errorMessage = this.formatErrorMessage(lastError, operationType)
-    console.log(`💥 ${context} failed after all retries: ${errorMessage}`)
-    
-    return { 
-      success: false, 
+    logger.logBatchProcessing(
+      'retry-exhausted',
+      `${context} failed after all retries: ${errorMessage}`,
+      { context, error: errorMessage },
+      'error'
+    )
+
+    return {
+      success: false,
       error: errorMessage
     }
   }
@@ -301,7 +323,12 @@ export class BatchProcessor {
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
-      console.log(`📦 Processing batch ${i + 1}/${batches.length} (${batch.length} items)`)
+      logger.logBatchProcessing(
+        'batch-progress',
+        `Processing batch ${i + 1}/${batches.length} (${batch.length} items)`,
+        { batchIndex: i + 1, totalBatches: batches.length, batchItemCount: batch.length },
+        'debug'
+      )
 
       // Process batch with limited concurrency
       const batchPromises = batch.map(async (item) => {
@@ -466,20 +493,23 @@ export class BatchProcessor {
       priorityBreakdown: { high: number; medium: number; low: number }
     }
   }> {
-    console.log('🎯 Processing batch with priority ordering...')
-    
     // Separate items by priority
     const highPriority = items.filter(item => item.priority === 'high')
     const mediumPriority = items.filter(item => item.priority === 'medium')
     const lowPriority = items.filter(item => !item.priority || item.priority === 'low')
-    
+
     const priorityBreakdown = {
       high: highPriority.length,
       medium: mediumPriority.length,
       low: lowPriority.length
     }
-    
-    console.log('📊 Priority breakdown:', priorityBreakdown)
+
+    logger.logBatchProcessing(
+      'priority-batch-start',
+      'Processing batch with priority ordering',
+      priorityBreakdown,
+      'debug'
+    )
     
     // Process in priority order: high -> medium -> low
     const orderedItems = [...highPriority, ...mediumPriority, ...lowPriority]
@@ -521,13 +551,18 @@ export class BatchProcessor {
         created_at: new Date().toISOString()
       }
       
-      // Log to console for now - could be enhanced to write to database
-      console.log('📊 Batch Processing Metrics:', logEntry)
-      
+      // Log for now - could be enhanced to write to database
+      logger.logBatchProcessing('metrics', 'Batch processing metrics', logEntry)
+
       // TODO: Write to processing_metrics table if it exists
-      
+
     } catch (error) {
-      console.error('❌ Error logging processing metrics:', error)
+      logger.logBatchProcessing(
+        'metrics-log-failed',
+        'Error logging processing metrics',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
     }
   }
 

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { getActiveTenant } from '@/lib/xero/client'
 import { redirect } from 'next/navigation'
+import { logger } from '@/lib/logging/logger'
 
 export async function completeOnboarding(formData: FormData) {
   try {
@@ -76,24 +77,32 @@ export async function completeOnboarding(formData: FormData) {
 
     // Sync user to Xero
     try {
-      console.log('🔄 Starting Xero sync for user:', user.email)
-      
       const activeTenant = await getActiveTenant()
       if (activeTenant) {
-        console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_id}`)
-        
         const xeroResult = await getOrCreateXeroContact(user.id, activeTenant.tenant_id)
-        
+
         if (xeroResult.success && xeroResult.xeroContactId) {
-          console.log(`✅ User synced to Xero successfully: ${xeroResult.xeroContactId}`)
+          logger.logSystem(
+            'onboarding-xero-contact-synced',
+            'User synced to Xero successfully during onboarding',
+            { userId: user.id, xeroContactId: xeroResult.xeroContactId }
+          )
         } else {
-          console.warn(`⚠️ Failed to sync user to Xero: ${xeroResult.error}`)
+          logger.logSystem(
+            'onboarding-xero-contact-sync-failed',
+            'Failed to sync user to Xero during onboarding',
+            { userId: user.id, error: xeroResult.error },
+            'warn'
+          )
         }
-      } else {
-        console.log('ℹ️ No active Xero connection found, skipping user sync')
       }
     } catch (xeroError) {
-      console.error('❌ Error during Xero sync:', xeroError)
+      logger.logSystem(
+        'onboarding-xero-sync-error',
+        'Error during Xero sync in onboarding',
+        { userId: user.id, error: xeroError instanceof Error ? xeroError.message : String(xeroError) },
+        'error'
+      )
       // Don't fail onboarding if Xero sync fails
     }
 
@@ -112,7 +121,12 @@ export async function completeOnboarding(formData: FormData) {
     }
 
     // Only log real errors
-    console.error('Error completing onboarding:', error)
+    logger.logSystem(
+      'onboarding-complete-error',
+      'Error completing onboarding',
+      { error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     throw error
   }
 }

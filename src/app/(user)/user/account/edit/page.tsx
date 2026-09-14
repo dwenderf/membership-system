@@ -6,6 +6,7 @@ import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import EmailChangeModal from '@/components/EmailChangeModal'
+import { logger } from '@/lib/logging/logger'
 
 export default function EditProfilePage() {
   const [user, setUser] = useState<User | null>(null)
@@ -136,18 +137,15 @@ export default function EditProfilePage() {
 
       // If contact info changed (name or email), sync to Xero contact  
       if (contactChanged) {
-        console.log('Contact info changed, syncing to Xero contact...')
         try {
           // Import the Xero contact function and client utilities
           const { syncContactOnNameChange } = await import('@/lib/xero/contacts')
           const { getActiveTenant } = await import('@/lib/xero/client')
-          
+
           // Get active Xero tenant using the client utility
           const activeTenant = await getActiveTenant()
 
           if (activeTenant) {
-            console.log(`🔗 Found active Xero tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
-            
             const xeroResult = await syncContactOnNameChange(
               user.id,
               activeTenant.tenant_id,
@@ -156,17 +154,29 @@ export default function EditProfilePage() {
               formData.firstName.trim(),
               formData.lastName.trim()
             )
-            
+
             if (xeroResult.success && xeroResult.xeroContactId) {
-              console.log(`✅ Xero contact synced successfully: ${xeroResult.xeroContactId}`)
+              logger.logSystem(
+                'profile-edit-xero-contact-synced',
+                'Xero contact synced successfully after profile edit',
+                { userId: user.id, xeroContactId: xeroResult.xeroContactId }
+              )
             } else {
-              console.warn(`⚠️ Xero contact sync failed: ${xeroResult.error}`)
+              logger.logSystem(
+                'profile-edit-xero-contact-sync-failed',
+                'Xero contact sync failed after profile edit',
+                { userId: user.id, error: xeroResult.error },
+                'warn'
+              )
             }
-          } else {
-            console.log('ℹ️ No active Xero connection found, skipping contact sync')
           }
         } catch (xeroError) {
-          console.warn('Xero contact sync failed, but profile update succeeded:', xeroError)
+          logger.logSystem(
+            'profile-edit-xero-sync-error',
+            'Xero contact sync failed, but profile update succeeded',
+            { userId: user.id, error: xeroError instanceof Error ? xeroError.message : String(xeroError) },
+            'warn'
+          )
           // Don't fail the entire operation if Xero sync fails
         }
       }
@@ -175,7 +185,12 @@ export default function EditProfilePage() {
       router.push('/user/account')
 
     } catch (error) {
-      console.error('Error updating profile:', error)
+      logger.logSystem(
+        'profile-update-error',
+        'Error updating profile',
+        { userId: user?.id, error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       const errorMessage = error instanceof Error ? error.message : 'Failed to update profile. Please try again.'
       setErrors({ submit: errorMessage })
       showError('Profile update failed', errorMessage)

@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logging/logger'
+
 export interface PaymentFlowData {
   // Common fields
   amount: number // Final amount in cents
@@ -42,7 +44,12 @@ export async function handlePaymentFlow(
       return await handlePaidPaymentFlow(paymentData)
     }
   } catch (error) {
-    console.error('Error in payment flow dispatcher:', error)
+    logger.logPaymentProcessing(
+      'payment-flow-dispatch-failed',
+      'Error in payment flow dispatcher',
+      { error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -105,7 +112,12 @@ async function handleZeroPaymentFlow(
       xeroInvoiceId: responseData.xeroInvoiceId
     }
   } catch (error) {
-    console.error('Error in zero payment flow:', error)
+    logger.logPaymentProcessing(
+      'zero-payment-flow-failed',
+      'Error in zero payment flow',
+      { isRegistration, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to complete free purchase'
@@ -166,7 +178,12 @@ async function handlePaidPaymentFlow(
       paymentIntentId: responseData.paymentIntentId
     }
   } catch (error) {
-    console.error('Error in paid payment flow:', error)
+    logger.logPaymentProcessing(
+      'paid-payment-flow-failed',
+      'Error in paid payment flow',
+      { isRegistration, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create payment intent'

@@ -13,6 +13,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 /** The slice of a user's `preferences` jsonb blob this module reads —
  * not the full shape (which also holds unrelated keys like adminFavorites). */
@@ -44,7 +45,13 @@ async function getOptedInAdmins(
     .eq('is_admin', true)
 
   if (error || !admins) {
-    console.error('admin-notifications: failed to fetch admins', error)
+    logger.logAdminAction(
+      'admin-notifications-fetch-admins-failed',
+      'admin-notifications: failed to fetch admins',
+      { error: error?.message },
+      undefined,
+      'error'
+    )
     return []
   }
 
@@ -77,7 +84,13 @@ export async function stageAdminNewRegistrationNotification(
   amountPaid: number
 ): Promise<void> {
   if (!process.env.LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID) {
-    console.warn('LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID not configured, skipping admin new-registration notification')
+    logger.logAdminAction(
+      'admin-new-registration-template-missing',
+      'LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID not configured, skipping admin new-registration notification',
+      undefined,
+      undefined,
+      'warn'
+    )
     return
   }
 
@@ -93,7 +106,13 @@ export async function stageAdminNewRegistrationNotification(
       .single()
 
     if (regError || !registration) {
-      console.error('stageAdminNewRegistrationNotification: registration not found', { registrationId, error: regError })
+      logger.logAdminAction(
+        'admin-new-registration-registration-not-found',
+        'stageAdminNewRegistrationNotification: registration not found',
+        { registrationId, error: regError?.message },
+        undefined,
+        'error'
+      )
       return
     }
 
@@ -124,7 +143,13 @@ export async function stageAdminNewRegistrationNotification(
       .single()
 
     if (playerError || !player) {
-      console.error('stageAdminNewRegistrationNotification: player not found', { playerUserId, error: playerError })
+      logger.logAdminAction(
+        'admin-new-registration-player-not-found',
+        'stageAdminNewRegistrationNotification: player not found',
+        { playerUserId, error: playerError?.message },
+        undefined,
+        'error'
+      )
       return
     }
 
@@ -162,7 +187,13 @@ export async function stageAdminNewRegistrationNotification(
     }
 
   } catch (error) {
-    console.error('stageAdminNewRegistrationNotification: unexpected error', error)
+    logger.logAdminAction(
+      'admin-new-registration-unexpected-error',
+      'stageAdminNewRegistrationNotification: unexpected error',
+      { registrationId, playerUserId, error: error instanceof Error ? error.message : String(error) },
+      undefined,
+      'error'
+    )
     // Don't throw — notifications must never break the main flow
   }
 }
@@ -184,7 +215,13 @@ export async function stageAdminRefundNotification(
   originalAmountCents: number
 ): Promise<void> {
   if (!process.env.LOOPS_ADMIN_REFUND_TEMPLATE_ID) {
-    console.warn('LOOPS_ADMIN_REFUND_TEMPLATE_ID not configured, skipping admin refund notification')
+    logger.logAdminAction(
+      'admin-refund-template-missing',
+      'LOOPS_ADMIN_REFUND_TEMPLATE_ID not configured, skipping admin refund notification',
+      undefined,
+      undefined,
+      'warn'
+    )
     return
   }
 
@@ -200,7 +237,13 @@ export async function stageAdminRefundNotification(
       .single()
 
     if (playerError || !player) {
-      console.error('stageAdminRefundNotification: player not found', { playerUserId, error: playerError })
+      logger.logAdminAction(
+        'admin-refund-player-not-found',
+        'stageAdminRefundNotification: player not found',
+        { playerUserId, error: playerError?.message },
+        undefined,
+        'error'
+      )
       return
     }
 
@@ -245,7 +288,13 @@ export async function stageAdminRefundNotification(
     }
 
   } catch (error) {
-    console.error('stageAdminRefundNotification: unexpected error', error)
+    logger.logAdminAction(
+      'admin-refund-unexpected-error',
+      'stageAdminRefundNotification: unexpected error',
+      { playerUserId, paymentId, error: error instanceof Error ? error.message : String(error) },
+      undefined,
+      'error'
+    )
     // Don't throw — notifications must never break the main flow
   }
 }

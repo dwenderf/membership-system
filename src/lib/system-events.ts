@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export interface SystemEventData {
   event_type: string
@@ -36,7 +37,12 @@ export async function logSystemEvent(eventData: SystemEventData): Promise<void> 
       })
   } catch (error) {
     // Don't throw - system event logging shouldn't break the main operation
-    console.error('Failed to log system event:', error)
+    logger.logSystem(
+      'system-event-log-failed',
+      'Failed to log system event',
+      { eventType: eventData.event_type, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
   }
 }
 
@@ -72,7 +78,12 @@ export async function getLastSuccessfulSync(eventType: string): Promise<{
       records_failed: data.records_failed || 0
     }
   } catch (error) {
-    console.error('Failed to get last successful sync:', error)
+    logger.logSystem(
+      'last-successful-sync-fetch-failed',
+      'Failed to get last successful sync',
+      { eventType, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     return null
   }
 }

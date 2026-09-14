@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getWelcomeMessage } from '@/lib/organization'
 import { getTestEmailPrefix } from '@/lib/email/environment'
 import { Json } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 /** The Loops SDK's response types don't model the `id` field the API actually
  * returns on success — this reflects the real (undocumented) runtime shape. */
@@ -61,7 +62,12 @@ class EmailService {
   constructor() {
     const apiKey = process.env.LOOPS_API_KEY
     if (!apiKey || apiKey === 'your_loops_api_key') {
-      console.warn('LOOPS_API_KEY not configured. Email sending will be disabled.')
+      logger.logSystem(
+        'loops-not-configured',
+        'LOOPS_API_KEY not configured. Email sending will be disabled.',
+        undefined,
+        'warn'
+      )
       this.loops = null
     } else {
       this.loops = new LoopsClient(apiKey)
@@ -98,12 +104,11 @@ class EmailService {
     try {
       // If Loops is not configured, log to database and console for development tracking
       if (!this.loops) {
-        console.log('📧 Email would be sent (Loops not configured):', {
-          to: email,
-          subject,
-          eventType,
-          data
-        })
+        logger.logSystem(
+          'email-not-sent-loops-unconfigured',
+          'Email would be sent (Loops not configured)',
+          { to: email, subject, eventType, data }
+        )
 
         // Still log to email_logs so developers can track what would have been sent
         // Fire-and-forget to avoid blocking the response
@@ -185,12 +190,22 @@ class EmailService {
       }
 
     } catch (error) {
-      console.error('Email sending failed:', error)
+      const loopsErrorDetails = (error && typeof error === 'object' && 'json' in error)
+        ? (error as { json?: unknown }).json
+        : undefined
 
-      // Log additional error details if available
-      if (error && typeof error === 'object' && 'json' in error) {
-        console.error('Loops.so API error details:', error.json)
-      }
+      logger.logSystem(
+        'email-send-failed',
+        'Email sending failed',
+        {
+          userId,
+          email,
+          eventType,
+          error: error instanceof Error ? error.message : String(error),
+          loopsErrorDetails
+        },
+        'error'
+      )
 
       // Queue as pending so the cron retries it — transient failures (network,
       // socket closed) should recover on the next run without losing the email.
@@ -255,7 +270,12 @@ class EmailService {
           ...(params.status !== 'pending' && { sent_at: new Date().toISOString() })
         })
     } catch (logError) {
-      console.error('Failed to log email to database:', logError)
+      logger.logSystem(
+        'email-log-to-database-failed',
+        'Failed to log email to database',
+        { userId: params.userId, email: params.email, eventType: params.eventType, error: logError instanceof Error ? logError.message : String(logError) },
+        'error'
+      )
       // Don't throw - we don't want to fail the operation just because logging failed
     }
   }

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
 import { completeOnboarding } from './actions'
+import { logger } from '@/lib/logging/logger'
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -130,7 +131,12 @@ export default function OnboardingPage() {
           return
         }
         
-        console.error('Error completing onboarding:', error)
+        logger.logSystem(
+          'onboarding-form-submit-error',
+          'Error completing onboarding',
+          { error: error instanceof Error ? error.message : String(error) },
+          'error'
+        )
         showError('Onboarding failed', error instanceof Error ? error.message : 'An error occurred')
       }
     })

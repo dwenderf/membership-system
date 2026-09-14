@@ -9,6 +9,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { isWebAuthnSupported, isUserCancelledError, isUnsupportedOriginError } from '@/lib/passkeys'
 import { getAuthErrorMessage, SIGN_IN_EMAIL_ERROR, SIGN_IN_OAUTH_ERROR } from '@/lib/auth-errors'
 import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
+import { logger } from '@/lib/logging/logger'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -74,7 +75,12 @@ export default function LoginPage() {
         }, 100)
       }
     } catch (error) {
-      console.error('Login error:', error)
+      logger.logSystem(
+        'login-email-otp-error',
+        'Login error',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
 
       const errorMessage = getAuthErrorMessage(error, SIGN_IN_EMAIL_ERROR)
       setMessage(errorMessage)
@@ -106,7 +112,12 @@ export default function LoginPage() {
       }
       // Note: On success, user will be redirected to Google, so don't reset loading
     } catch (error) {
-      console.error('Google login error:', error)
+      logger.logSystem(
+        'login-google-oauth-error',
+        'Google login error',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
 
       const errorMessage = getAuthErrorMessage(error, SIGN_IN_OAUTH_ERROR)
       setMessage(errorMessage)
@@ -149,7 +160,12 @@ export default function LoginPage() {
         setPasskeyLoading(false)
       }
     } catch (error) {
-      console.error('Passkey login error:', error)
+      logger.logSystem(
+        'login-passkey-error',
+        'Passkey login error',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
 
       if (isUserCancelledError(error)) {
         setPasskeyLoading(false)

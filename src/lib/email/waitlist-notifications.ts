@@ -7,6 +7,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Send a `waitlist.selected` confirmation email to the member who was selected.
@@ -25,7 +26,12 @@ export async function stageWaitlistSelectedEmail(
   amountCharged: number
 ): Promise<void> {
   if (!process.env.LOOPS_WAITLIST_SELECTED_TEMPLATE_ID) {
-    console.warn('LOOPS_WAITLIST_SELECTED_TEMPLATE_ID not configured, skipping waitlist selected notification')
+    logger.logSystem(
+      'waitlist-selected-template-missing',
+      'LOOPS_WAITLIST_SELECTED_TEMPLATE_ID not configured, skipping waitlist selected notification',
+      undefined,
+      'warn'
+    )
     return
   }
 
@@ -40,7 +46,12 @@ export async function stageWaitlistSelectedEmail(
       .single()
 
     if (userError || !user) {
-      console.error('stageWaitlistSelectedEmail: user not found', { userId, error: userError })
+      logger.logSystem(
+        'waitlist-selected-user-not-found',
+        'stageWaitlistSelectedEmail: user not found',
+        { userId, error: userError?.message },
+        'error'
+      )
       return
     }
 
@@ -52,7 +63,12 @@ export async function stageWaitlistSelectedEmail(
       .single()
 
     if (regError || !registration) {
-      console.error('stageWaitlistSelectedEmail: registration not found', { registrationId, error: regError })
+      logger.logSystem(
+        'waitlist-selected-registration-not-found',
+        'stageWaitlistSelectedEmail: registration not found',
+        { registrationId, error: regError?.message },
+        'error'
+      )
       return
     }
 
@@ -94,7 +110,12 @@ export async function stageWaitlistSelectedEmail(
     })
 
   } catch (error) {
-    console.error('stageWaitlistSelectedEmail: unexpected error', error)
+    logger.logSystem(
+      'waitlist-selected-unexpected-error',
+      'stageWaitlistSelectedEmail: unexpected error',
+      { registrationId, userId, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     // Don't throw — notifications must never break the main flow
   }
 }
@@ -114,7 +135,12 @@ export async function stageWaitlistRemovedEmail(
   registrationCategoryId: string
 ): Promise<void> {
   if (!process.env.LOOPS_WAITLIST_REMOVED_TEMPLATE_ID) {
-    console.warn('LOOPS_WAITLIST_REMOVED_TEMPLATE_ID not configured, skipping waitlist removed notification')
+    logger.logSystem(
+      'waitlist-removed-template-missing',
+      'LOOPS_WAITLIST_REMOVED_TEMPLATE_ID not configured, skipping waitlist removed notification',
+      undefined,
+      'warn'
+    )
     return
   }
 
@@ -129,7 +155,12 @@ export async function stageWaitlistRemovedEmail(
       .single()
 
     if (userError || !user) {
-      console.error('stageWaitlistRemovedEmail: user not found', { userId, error: userError })
+      logger.logSystem(
+        'waitlist-removed-user-not-found',
+        'stageWaitlistRemovedEmail: user not found',
+        { userId, error: userError?.message },
+        'error'
+      )
       return
     }
 
@@ -141,7 +172,12 @@ export async function stageWaitlistRemovedEmail(
       .single()
 
     if (regError || !registration) {
-      console.error('stageWaitlistRemovedEmail: registration not found', { registrationId, error: regError })
+      logger.logSystem(
+        'waitlist-removed-registration-not-found',
+        'stageWaitlistRemovedEmail: registration not found',
+        { registrationId, error: regError?.message },
+        'error'
+      )
       return
     }
 
@@ -170,7 +206,12 @@ export async function stageWaitlistRemovedEmail(
     })
 
   } catch (error) {
-    console.error('stageWaitlistRemovedEmail: unexpected error', error)
+    logger.logSystem(
+      'waitlist-removed-unexpected-error',
+      'stageWaitlistRemovedEmail: unexpected error',
+      { registrationId, userId, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     // Don't throw — notifications must never break the main flow
   }
 }

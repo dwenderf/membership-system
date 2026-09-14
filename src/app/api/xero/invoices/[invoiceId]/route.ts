@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getOrCreateXeroContact } from '@/lib/xero/contacts';
 import { getActiveTenant, getAuthenticatedXeroClient } from '@/lib/xero/client';
+import { logger } from '@/lib/logging/logger';
 
 export async function GET(
   request: NextRequest,
@@ -52,13 +53,12 @@ export async function GET(
     let publicUrl = undefined;
     try {
       const onlineInvoiceResponse = await xeroClient.accountingApi.getOnlineInvoice(activeTenant.tenant_id, invoiceId);
-      console.log('Online invoice response:', JSON.stringify(onlineInvoiceResponse.body, null, 2));
       publicUrl = onlineInvoiceResponse.body.onlineInvoices?.[0]?.onlineInvoiceUrl || undefined;
+      logger.logXeroSync('online-invoice-url-fetched', 'Fetched online invoice URL', { invoiceId, publicUrl }, 'debug');
     } catch (error) {
-      console.log('Failed to get online invoice URL:', error);
+      logger.logXeroSync('online-invoice-url-fetch-failed', 'Failed to get online invoice URL', { invoiceId, error: error instanceof Error ? error.message : String(error) }, 'warn');
       // Don't fail the request if we can't get the online URL
     }
-    console.log('Extracted public URL:', publicUrl)
 
     // Format the invoice for the frontend
     const formattedInvoice = {
@@ -93,7 +93,7 @@ export async function GET(
 
     return NextResponse.json(formattedInvoice);
   } catch (error) {
-    console.error('Error fetching invoice:', error);
+    logger.logXeroSync('fetch-invoice-failed', 'Error fetching invoice', { error: error instanceof Error ? error.message : String(error) }, 'error');
     return NextResponse.json(
       { error: 'Failed to fetch invoice' },
       { status: 500 }

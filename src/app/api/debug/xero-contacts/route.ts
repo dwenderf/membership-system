@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Contact } from 'xero-node'
 import { getAuthenticatedXeroClient, getActiveTenant } from '@/lib/xero/client'
+import { logger } from '@/lib/logging/logger'
 
 interface ContactSummary {
   name?: string
@@ -68,12 +69,7 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log('🔍 Xero Contact Search Debug')
-    console.log('============================')
-    if (email) console.log(`Email: ${email}`)
-    if (memberId) console.log(`Member ID: ${memberId}`)
-    if (contactId) console.log(`Contact ID: ${contactId}`)
-    console.log('')
+    logger.logXeroSync('debug-contact-search-start', 'Xero Contact Search Debug', { email, memberId, contactId }, 'debug')
 
     // Get active tenant
     const activeTenant = await getActiveTenant()
@@ -81,8 +77,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No active Xero tenant found' }, { status: 404 })
     }
 
-    console.log(`🏢 Using tenant: ${activeTenant.tenant_name} (${activeTenant.tenant_id})`)
-    console.log('')
+    logger.logXeroSync('debug-contact-search-tenant', 'Using tenant', { tenantName: activeTenant.tenant_name, tenantId: activeTenant.tenant_id }, 'debug')
 
     // Get authenticated Xero client
     const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
@@ -103,8 +98,6 @@ export async function GET(request: NextRequest) {
 
     // Step 0: Search by specific contact ID (if provided)
     if (contactId) {
-      console.log(`🔍 Step 0: Searching for specific contact ID: "${contactId}"`)
-
       try {
         const contactResponse = await xeroApi.accountingApi.getContact(
           activeTenant.tenant_id,
@@ -113,13 +106,6 @@ export async function GET(request: NextRequest) {
 
         if (contactResponse.body.contacts && contactResponse.body.contacts.length > 0) {
           const contact = contactResponse.body.contacts[0]
-          console.log(`✅ Found contact with ID "${contactId}":`)
-          console.log(`  Name: "${contact.name}"`)
-          console.log(`  Status: ${contact.contactStatus || 'ACTIVE'}`)
-          console.log(`  Email: ${contact.emailAddress || 'None'}`)
-          console.log(`  First Name: ${contact.firstName || 'None'}`)
-          console.log(`  Last Name: ${contact.lastName || 'None'}`)
-          console.log('')
 
           results.contactIdSearch = {
             found: true,
@@ -133,13 +119,14 @@ export async function GET(request: NextRequest) {
               isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED
             }
           }
+          logger.logXeroSync('debug-contact-id-search-found', 'Found contact by ID', { contactId, contact: results.contactIdSearch.contact }, 'debug')
         } else {
-          console.log(`❌ No contact found with ID: "${contactId}"`)
+          logger.logXeroSync('debug-contact-id-search-not-found', 'No contact found with ID', { contactId }, 'debug')
           results.contactIdSearch = { found: false }
         }
       } catch (contactError) {
         const message = errorMessage(contactError)
-        console.log(`❌ Contact ID search failed:`, message)
+        logger.logXeroSync('debug-contact-id-search-failed', 'Contact ID search failed', { contactId, error: message }, 'warn')
         results.contactIdSearch = { found: false, error: message }
       }
     }
@@ -149,7 +136,6 @@ export async function GET(request: NextRequest) {
       // Clean the memberId to remove any extra quotes or encoding
       const cleanMemberId = memberId.replace(/"/g, '')
       const expectedContactName = `David Wender - ${cleanMemberId}`
-      console.log(`🔍 Step 1: Searching for exact contact name: "${expectedContactName}"`)
 
       try {
         const nameSearchResponse = await xeroApi.accountingApi.getContacts(
@@ -159,8 +145,6 @@ export async function GET(request: NextRequest) {
         )
 
         if (nameSearchResponse.body.contacts && nameSearchResponse.body.contacts.length > 0) {
-          console.log(`✅ Found ${nameSearchResponse.body.contacts.length} contact(s) with exact name:`)
-
           results.nameSearch = {
             found: true,
             count: nameSearchResponse.body.contacts.length,
@@ -175,34 +159,24 @@ export async function GET(request: NextRequest) {
             }))
           }
 
-          nameSearchResponse.body.contacts.forEach((contact, index) => {
-            console.log(`  ${index + 1}. Name: "${contact.name}"`)
-            console.log(`     ID: ${contact.contactID}`)
-            console.log(`     Status: ${contact.contactStatus || 'ACTIVE'}`)
-            console.log(`     Email: ${contact.emailAddress || 'None'}`)
-            console.log(`     First Name: ${contact.firstName || 'None'}`)
-            console.log(`     Last Name: ${contact.lastName || 'None'}`)
-
-            if (contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
-              console.log(`     ⚠️  ARCHIVED - Would be renamed to "${contact.name} - Archived"`)
-            }
-            console.log('')
-          })
+          logger.logXeroSync('debug-name-search-found', 'Found contact(s) with exact name', {
+            expectedContactName,
+            count: results.nameSearch.count,
+            contacts: results.nameSearch.contacts
+          }, 'debug')
         } else {
-          console.log(`❌ No contacts found with exact name: "${expectedContactName}"`)
+          logger.logXeroSync('debug-name-search-not-found', 'No contacts found with exact name', { expectedContactName }, 'debug')
           results.nameSearch = { found: false, count: 0, contacts: [] }
         }
       } catch (nameSearchError) {
         const message = errorMessage(nameSearchError)
-        console.log(`❌ Name search failed:`, message)
+        logger.logXeroSync('debug-name-search-failed', 'Name search failed', { expectedContactName, error: message }, 'warn')
         results.nameSearch = { found: false, error: message }
       }
     }
 
     // Step 2: Search by email (only if email provided)
     if (email) {
-      console.log(`🔍 Step 2: Searching by email: "${email}"`)
-
       try {
         const emailSearchResponse = await xeroApi.accountingApi.getContacts(
           activeTenant.tenant_id,
@@ -211,8 +185,6 @@ export async function GET(request: NextRequest) {
         )
 
         if (emailSearchResponse.body.contacts && emailSearchResponse.body.contacts.length > 0) {
-          console.log(`✅ Found ${emailSearchResponse.body.contacts.length} contact(s) with email:`)
-
           results.emailSearch = {
             found: true,
             count: emailSearchResponse.body.contacts.length,
@@ -227,15 +199,11 @@ export async function GET(request: NextRequest) {
             }))
           }
 
-          emailSearchResponse.body.contacts.forEach((contact, index) => {
-            console.log(`  ${index + 1}. Name: "${contact.name}"`)
-            console.log(`     ID: ${contact.contactID}`)
-            console.log(`     Status: ${contact.contactStatus || 'ACTIVE'}`)
-            console.log(`     Email: ${contact.emailAddress || 'None'}`)
-            console.log(`     First Name: ${contact.firstName || 'None'}`)
-            console.log(`     Last Name: ${contact.lastName || 'None'}`)
-            console.log('')
-          })
+          logger.logXeroSync('debug-email-search-found', 'Found contact(s) with email', {
+            email,
+            count: results.emailSearch.count,
+            contacts: results.emailSearch.contacts
+          }, 'debug')
 
           // Analyze the results
           const archivedContacts = emailSearchResponse.body.contacts.filter(c => c.contactStatus === Contact.ContactStatusEnum.ARCHIVED)
@@ -247,23 +215,12 @@ export async function GET(request: NextRequest) {
             archived: archivedContacts.length
           }
 
-          console.log('📊 Analysis:')
-          console.log(`  Total contacts: ${emailSearchResponse.body.contacts.length}`)
-          console.log(`  Active contacts: ${activeContacts.length}`)
-          console.log(`  Archived contacts: ${archivedContacts.length}`)
-          console.log('')
-
           if (memberId) {
             const cleanMemberId = memberId.replace(/"/g, '')
             const expectedName = `David Wender - ${cleanMemberId}`
             const exactMatch = emailSearchResponse.body.contacts.find(c => c.name === expectedName)
 
             if (exactMatch) {
-              console.log(`🎯 Exact name match found: "${exactMatch.name}" (${exactMatch.contactID})`)
-              console.log(`   Status: ${exactMatch.contactStatus || 'ACTIVE'}`)
-              if (exactMatch.contactStatus === Contact.ContactStatusEnum.ARCHIVED) {
-                console.log('   ⚠️  WARNING: This contact is archived!')
-              }
               analysis.exactMatch = {
                 found: true,
                 contactID: exactMatch.contactID,
@@ -271,20 +228,21 @@ export async function GET(request: NextRequest) {
                 isArchived: exactMatch.contactStatus === Contact.ContactStatusEnum.ARCHIVED
               }
             } else {
-              console.log(`❌ No exact name match found for: "${expectedName}"`)
               analysis.exactMatch = { found: false }
             }
           }
 
+          logger.logXeroSync('debug-email-search-analysis', 'Analyzed email search results', { email, analysis }, 'debug')
+
           results.analysis = analysis
         } else {
-          console.log(`❌ No contacts found with email: "${email}"`)
+          logger.logXeroSync('debug-email-search-not-found', 'No contacts found with email', { email }, 'debug')
           results.emailSearch = { found: false, count: 0, contacts: [] }
           results.analysis = { total: 0, active: 0, archived: 0 }
         }
       } catch (emailSearchError) {
         const message = errorMessage(emailSearchError)
-        console.log(`❌ Email search failed:`, message)
+        logger.logXeroSync('debug-email-search-failed', 'Email search failed', { email, error: message }, 'warn')
         results.emailSearch = { found: false, error: message }
       }
     }
@@ -292,7 +250,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(results)
 
   } catch (error) {
-    console.error('❌ Debug script failed:', error)
+    logger.logXeroSync('debug-xero-contacts-failed', 'Debug script failed', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { syncUserToXeroContact } from '@/lib/xero/contacts'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result)
 
   } catch (error) {
-    console.error('Error syncing user to Xero:', error)
+    logger.logXeroSync('sync-user-failed', 'Error syncing user to Xero', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       success: false,
       error: 'Failed to sync user to Xero' 

@@ -1,6 +1,6 @@
 /**
  * Xero Batch Sync Manager
- * 
+ *
  * Handles syncing staged records to Xero API with retry logic and error handling
  */
 
@@ -13,6 +13,7 @@ import * as Sentry from '@sentry/nextjs'
 import { getActiveTenant, validateXeroConnection } from './client'
 import { centsToCents, centsToDollars } from '../../types/currency'
 import { asHttpClientError, getXeroErrorStatus, getXeroValidationMessage, parseXeroBatchError } from './xero-errors'
+import { logger } from '@/lib/logging/logger'
 
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
@@ -66,7 +67,7 @@ export class XeroBatchSyncManager {
 
   /**
    * Get pending Xero records with proper database-level locking
-   * 
+   *
    * Uses SELECT FOR UPDATE to lock records before processing, preventing
    * the same record from being processed by multiple concurrent operations.
    * This is the proper way to handle race conditions in database operations.
@@ -75,50 +76,32 @@ export class XeroBatchSyncManager {
     invoices: XeroInvoiceRecord[]
     payments: XeroPaymentRecord[]
   }> {
-    try {
-      console.log('🔒 Getting pending Xero records with proper database locking...')
+    // Use a transaction with SELECT FOR UPDATE to lock records
+    const { data: pendingInvoices, error: invoiceError } = await this.supabase
+      .rpc('get_pending_xero_invoices_with_lock', {
+        limit_count: 50
+      })
 
-      // Use a transaction with SELECT FOR UPDATE to lock records
-      const { data: pendingInvoices, error: invoiceError } = await this.supabase
-        .rpc('get_pending_xero_invoices_with_lock', {
-          limit_count: 50
-        })
+    if (invoiceError) {
+      logger.logXeroSync('get-pending-invoices-failed', 'Error fetching pending invoices with lock', { error: invoiceError }, 'error')
+      throw invoiceError
+    }
 
-      if (invoiceError) {
-        console.error('❌ Error fetching pending invoices with lock:', invoiceError)
-        throw invoiceError
-      }
+    // Use a transaction with SELECT FOR UPDATE to lock records
+    const { data: pendingPayments, error: paymentError } = await this.supabase
+      .rpc('get_pending_xero_payments_with_lock', {
+        limit_count: 50
+      })
 
-      // Use a transaction with SELECT FOR UPDATE to lock records
-      const { data: pendingPayments, error: paymentError } = await this.supabase
-        .rpc('get_pending_xero_payments_with_lock', {
-          limit_count: 50
-        })
+    if (paymentError) {
+      logger.logXeroSync('get-pending-payments-failed', 'Error fetching pending payments with lock', { error: paymentError }, 'error')
+      throw paymentError
+    }
 
-      if (paymentError) {
-        console.error('❌ Error fetching pending payments with lock:', paymentError)
-        throw paymentError
-      }
-
-      console.log(`📊 Found ${pendingInvoices?.length || 0} pending invoices, ${pendingPayments?.length || 0} pending payments`)
-
-      // Records are already locked and marked as processing by the database functions
-      if (pendingInvoices && pendingInvoices.length > 0) {
-        console.log(`🔒 Locked ${pendingInvoices.length} invoices for processing`)
-      }
-
-      if (pendingPayments && pendingPayments.length > 0) {
-        console.log(`🔒 Locked ${pendingPayments.length} payments for processing`)
-      }
-
-      return {
-        invoices: pendingInvoices || [],
-        payments: pendingPayments || []
-      }
-
-    } catch (error) {
-      console.error('❌ Error in getPendingXeroRecords:', error)
-      throw error
+    // Records are already locked and marked as processing by the database functions
+    return {
+      invoices: pendingInvoices || [],
+      payments: pendingPayments || []
     }
   }
 
@@ -170,10 +153,10 @@ export class XeroBatchSyncManager {
     if (!this.lastRunTime) {
       return 0 // No previous run, can start immediately
     }
-    
+
     const timeSinceLastRun = Date.now() - this.lastRunTime.getTime()
     const remainingDelay = this.MIN_DELAY_BETWEEN_SYNCS - timeSinceLastRun
-    
+
     return Math.max(0, remainingDelay)
   }
 
@@ -190,16 +173,18 @@ export class XeroBatchSyncManager {
    */
   forceStop(): void {
     const callId = Math.random().toString(36).substring(2, 8)
-    console.log(`🛑 [${callId}] Force stop requested for Xero batch sync`)
-    
+    const wasRunning = this.isRunning
+
     if (this.isRunning) {
-      console.log(`🛑 [${callId}] Force stopping Xero batch sync...`)
       this.isRunning = false
       this.currentRunPromise = null
-      console.log(`🛑 [${callId}] Force stop completed`)
-    } else {
-      console.log(`ℹ️ [${callId}] Force stop requested but sync was not running`)
     }
+
+    logger.logXeroSync(
+      'force-stop',
+      wasRunning ? 'Force stop: Xero batch sync was running, stopped' : 'Force stop requested but sync was not running',
+      { callId, wasRunning }
+    )
   }
 
   /**
@@ -217,17 +202,17 @@ export class XeroBatchSyncManager {
   }> {
     const callTime = new Date()
     const callId = Math.random().toString(36).substring(2, 8) // Short unique ID for tracking
-    
-    console.log(`🔄 [${callId}] Xero batch sync requested at ${callTime.toISOString()}`)
-    
+
+    logger.logXeroSync('batch-sync-requested', 'Xero batch sync requested', { callId, callTime: callTime.toISOString() }, 'debug')
+
     // Check if sync is already running
     if (this.isRunning) {
-      console.log(`⚠️ [${callId}] Xero batch sync already running - returning existing promise`)
       if (this.currentRunPromise) {
+        logger.logXeroSync('batch-sync-dedup', 'Xero batch sync already running - returning existing promise', { callId }, 'debug')
         return this.currentRunPromise
       }
       // Fallback - shouldn't happen but just in case
-      console.log(`⚠️ [${callId}] No existing promise found, returning empty result`)
+      logger.logXeroSync('batch-sync-inconsistent-state', 'Sync marked as running but no existing promise found - returning empty result', { callId }, 'warn')
       return {
         invoices: { synced: 0, failed: 0 },
         credit_notes: { synced: 0, failed: 0 },
@@ -240,37 +225,33 @@ export class XeroBatchSyncManager {
     if (this.lastRunTime) {
       const timeSinceLastRun = Date.now() - this.lastRunTime.getTime()
       const remainingDelay = this.MIN_DELAY_BETWEEN_SYNCS - timeSinceLastRun
-      
+
       if (remainingDelay > 0) {
-        console.log(`⏳ [${callId}] Rate limit protection: waiting ${remainingDelay}ms before starting sync...`)
-        console.log(`⏳ [${callId}] Last sync was ${timeSinceLastRun}ms ago, minimum delay is ${this.MIN_DELAY_BETWEEN_SYNCS}ms`)
+        logger.logXeroSync(
+          'batch-sync-rate-limit-delay',
+          `Rate limit protection: waiting ${remainingDelay}ms before starting sync`,
+          { callId, remainingDelay, timeSinceLastRun, minDelayBetweenSyncs: this.MIN_DELAY_BETWEEN_SYNCS },
+          'debug'
+        )
         await new Promise(resolve => setTimeout(resolve, remainingDelay))
-        console.log(`✅ [${callId}] Delay completed, proceeding with sync`)
-      } else {
-        console.log(`✅ [${callId}] No delay needed - last sync was ${timeSinceLastRun}ms ago (>= ${this.MIN_DELAY_BETWEEN_SYNCS}ms minimum)`)
       }
-    } else {
-      console.log(`✅ [${callId}] First sync run - no delay needed`)
     }
 
     // Set running state and create promise
-    console.log(`🚀 [${callId}] Starting Xero batch sync...`)
     this.isRunning = true
     this.currentRunPromise = this.performSync()
-    
+
     try {
       const result = await this.currentRunPromise
-      console.log(`✅ [${callId}] Xero batch sync completed successfully`)
       return result
     } catch (error) {
-      console.error(`❌ [${callId}] Xero batch sync failed:`, error)
+      logger.logXeroSync('batch-sync-failed', 'Xero batch sync failed', { callId, error: error instanceof Error ? error.message : String(error) }, 'error')
       throw error
     } finally {
       // Always clean up state
       this.isRunning = false
       this.currentRunPromise = null
       this.lastRunTime = new Date()
-      console.log(`🏁 [${callId}] Sync state cleaned up, lastRunTime updated to ${this.lastRunTime.toISOString()}`)
     }
   }
 
@@ -279,7 +260,6 @@ export class XeroBatchSyncManager {
    */
   private async performSync(): Promise<SyncResult> {
     const startTime = Date.now()
-    console.log('🔄 Starting intelligent batch sync of pending Xero records...')
 
     const results = {
       invoices: { synced: 0, failed: 0 },
@@ -290,98 +270,85 @@ export class XeroBatchSyncManager {
 
     try {
       // Phase 1: Check for pending records using centralized function
-      console.log('📋 Phase 1: Checking for pending records...')
       const { invoices: pendingInvoices, payments: filteredPayments } = await this.getPendingXeroRecords()
 
       const pendingInvoiceCount = pendingInvoices?.length || 0
       const pendingPaymentCount = filteredPayments.length
       const totalPending = pendingInvoiceCount + pendingPaymentCount
 
-      console.log(`📊 Found ${pendingInvoiceCount} pending invoices, ${pendingPaymentCount} eligible payments (${totalPending} total)`)
+      logger.logXeroSync(
+        'pending-records-found',
+        `Found ${pendingInvoiceCount} pending invoices, ${pendingPaymentCount} eligible payments (${totalPending} total)`,
+        { pendingInvoiceCount, pendingPaymentCount, totalPending },
+        'debug'
+      )
 
       // If no pending records, skip Xero connection entirely
       if (totalPending === 0) {
-        console.log('✅ No pending records to sync - skipping Xero connection entirely (no API calls made)')
+        logger.logXeroSync('no-pending-records', 'No pending records to sync - skipping Xero connection entirely (no API calls made)', undefined, 'debug')
         return results
       }
 
-      console.log(`🔄 Proceeding with sync: ${pendingInvoiceCount} invoices + ${pendingPaymentCount} payments = ${totalPending} total records`)
-
       // Phase 2: Connect to Xero (only if we have records to sync)
-      console.log('🔌 Phase 2: Connecting to Xero...')
-      
+
       // Check if Xero is connected before attempting any sync
       const activeTenant = await getActiveTenant()
       if (!activeTenant) {
-        console.log('⚠️ No active Xero tenants found - skipping sync to preserve pending status')
+        logger.logXeroSync('no-active-tenant', 'No active Xero tenants found - skipping sync to preserve pending status', undefined, 'warn')
         results.connectionStatus = 'no_tenant'
         return results
       }
 
-      console.log(`🏢 Found ${activeTenant.tenant_name} active Xero tenant.`)
-
       // Validate connection to at least one tenant (only if we have records to sync)
       const isValid = await validateXeroConnection(activeTenant.tenant_id)
       if (!isValid) {
-        console.log('⚠️ No valid Xero connections found - skipping sync to preserve pending status')
+        logger.logXeroSync('invalid-connection', 'No valid Xero connections found - skipping sync to preserve pending status', { tenantId: activeTenant.tenant_id }, 'warn')
         results.connectionStatus = 'failed'
         return results
       }
       const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
       if (!xeroApi) {
-        console.log('⚠️ No Xero Authenticated Xero Client found - skipping sync to preserve pending status')
+        logger.logXeroSync('no-authenticated-client', 'No authenticated Xero client found - skipping sync to preserve pending status', { tenantId: activeTenant.tenant_id }, 'warn')
         results.connectionStatus = 'failed'
         return results
       }
 
-      console.log(`✅ Valid connection to tenant: ${activeTenant.tenant_name}`)
-
       // Phase 3: Sync invoices and credit notes
       const invoiceStartTime = Date.now()
       if (pendingInvoices?.length) {
-        console.log(`📄 Phase 3: Syncing ${pendingInvoices.length} invoices and credit notes...`)
-        
         // Separate regular invoices from credit notes
         const regularInvoices = pendingInvoices.filter(inv => inv.invoice_type === 'ACCREC')
         const creditNotes = pendingInvoices.filter(inv => inv.invoice_type === 'ACCRECCREDIT')
-        
-        console.log(`📄 Found ${regularInvoices.length} regular invoices and ${creditNotes.length} credit notes`)
-        
+
         const xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[] = []
         const xeroCreditNotesToSync: {xeroCreditNote: CreditNote, invoiceRecord: XeroInvoiceRecord}[] = []
         const xeroInvoicesFailed: XeroInvoiceRecord[] = []
-        
+
         // Process regular invoices
         for (const invoiceRecord of regularInvoices) {
           const xeroInvoice = await this.getXeroInvoiceFromRecord(invoiceRecord)
           if (xeroInvoice) {
-            console.log('✅ Xero invoice created:', xeroInvoice)
             xeroInvoicesToSync.push({xeroInvoice: xeroInvoice, invoiceRecord: invoiceRecord})
           }
           else{
-            console.log('❌ Failed to create Xero invoice:', invoiceRecord)
+            logger.logXeroSync('invoice-object-build-failed', 'Failed to build Xero invoice object from record', { invoiceRecordId: invoiceRecord.id, invoiceNumber: invoiceRecord.invoice_number }, 'warn')
             await this.markItemAsFailed(invoiceRecord.id, 'Failed to create Xero invoice')
             xeroInvoicesFailed.push(invoiceRecord)
           }
         }
-        
+
         // Process credit notes
         for (const creditNoteRecord of creditNotes) {
           const xeroCreditNote = await this.getXeroCreditNoteFromRecord(creditNoteRecord)
           if (xeroCreditNote) {
-            console.log('✅ Xero credit note created:', xeroCreditNote)
             xeroCreditNotesToSync.push({xeroCreditNote: xeroCreditNote, invoiceRecord: creditNoteRecord})
           }
           else{
-            console.log('❌ Failed to create Xero credit note:', creditNoteRecord)
+            logger.logXeroSync('credit-note-object-build-failed', 'Failed to build Xero credit note object from record', { creditNoteRecordId: creditNoteRecord.id }, 'warn')
             await this.markItemAsFailed(creditNoteRecord.id, 'Failed to create Xero credit note')
             xeroInvoicesFailed.push(creditNoteRecord)
           }
         }
-
-        console.log('🔄 Xero invoices to sync:', xeroInvoicesToSync.length)
-        console.log('🔄 Xero credit notes to sync:', xeroCreditNotesToSync.length)
-        console.log('❌ Xero invoices/credit notes failed:', xeroInvoicesFailed.length)
 
         // Sync regular invoices
         let invoiceResult = { success: true, synced: 0, failed: 0 }
@@ -402,68 +369,63 @@ export class XeroBatchSyncManager {
         results.credit_notes.synced = creditNoteResult.synced
         results.credit_notes.failed = creditNoteResult.failed + xeroInvoicesFailed.filter(item => item.invoice_type === 'ACCRECCREDIT').length
 
-        console.log(`📊 Invoice sync completed: ${invoiceResult.synced} synced, ${invoiceResult.failed} failed`)
-        if (xeroCreditNotesToSync.length > 0) {
-          console.log(`📊 Credit note sync completed: ${creditNoteResult.synced} synced, ${creditNoteResult.failed} failed`)
-        }
-
         const invoiceDuration = Date.now() - invoiceStartTime
-        console.log(`📊 Invoice sync completed in ${invoiceDuration}ms:`, {
+        logger.logXeroSync('invoice-phase-completed', `Invoice/credit note sync phase completed in ${invoiceDuration}ms`, {
           total: pendingInvoices.length,
-          successful: results.invoices.synced,
-          failed: results.invoices.failed,
+          regularInvoices: regularInvoices.length,
+          creditNotes: creditNotes.length,
+          invoicesSynced: results.invoices.synced,
+          invoicesFailed: results.invoices.failed,
+          creditNotesSynced: results.credit_notes.synced,
+          creditNotesFailed: results.credit_notes.failed,
           duration: invoiceDuration,
           averageTime: invoiceDuration / pendingInvoices.length
         })
 
         // Log failed invoices for admin review
         if (xeroInvoicesFailed.length > 0) {
-          console.log('❌ Failed invoice syncs:', xeroInvoicesFailed.map(f => ({
-            invoice: f.invoice_number,
-            error: f.sync_status
-          })))
+          logger.logXeroSync(
+            'failed-invoice-syncs',
+            `${xeroInvoicesFailed.length} invoice(s)/credit note(s) failed to sync`,
+            { failed: xeroInvoicesFailed.map(f => ({ invoice: f.invoice_number, error: f.sync_status })) },
+            'warn'
+          )
         }
       }
 
       // Phase 4: Sync payments
       const paymentStartTime = Date.now()
       if (filteredPayments?.length) {
-        console.log(`💰 Phase 4: Syncing ${filteredPayments.length} eligible payments...`)
         const xeroPaymentsToSync: Payment[] = []
         const xeroPaymentsFailed: XeroPaymentRecord[] = []
         for (const payment of filteredPayments) {
           const xeroPayment = await this.getXeroPaymentFromRecord(payment)
           if (xeroPayment) {
-            console.log('✅ Xero payment created:', xeroPayment)
             xeroPaymentsToSync.push(xeroPayment)
           }
           else{
-            console.log('❌ Failed to create Xero payment:', payment)
+            logger.logXeroSync('payment-object-build-failed', 'Failed to build Xero payment object from record', { paymentRecordId: payment.id }, 'warn')
             await this.markPaymentAsFailed(payment.id, 'Failed to create Xero payment')
             xeroPaymentsFailed.push(payment)
           }
         }
 
-        console.log('🔄 Xero payments to sync:', xeroPaymentsToSync.length)
-        console.log('❌ Xero payments failed:', xeroPaymentsFailed.length)
-
         // Sync payments to Xero (if any)
         if (xeroPaymentsToSync.length > 0) {
           const paymentResult = await this.syncXeroPayments(xeroPaymentsToSync, filteredPayments, xeroApi, activeTenant.tenant_id)
-          
+
           if (paymentResult) {
             results.payments.synced = xeroPaymentsToSync.length
-            console.log(`✅ Successfully synced ${xeroPaymentsToSync.length} payments`)
           } else {
             results.payments.failed = xeroPaymentsToSync.length
-            console.log(`❌ Failed to sync ${xeroPaymentsToSync.length} payments`)
+            logger.logXeroSync('payment-batch-sync-failed', `Failed to sync ${xeroPaymentsToSync.length} payment(s)`, { count: xeroPaymentsToSync.length }, 'warn')
           }
         }
-        
+
         results.payments.failed += xeroPaymentsFailed.length
 
         const paymentDuration = Date.now() - paymentStartTime
-        console.log(`📊 Payment sync completed in ${paymentDuration}ms:`, {
+        logger.logXeroSync('payment-phase-completed', `Payment sync phase completed in ${paymentDuration}ms`, {
           total: filteredPayments.length,
           successful: results.payments.synced,
           failed: results.payments.failed,
@@ -473,28 +435,29 @@ export class XeroBatchSyncManager {
 
         // Log failed payments for admin review
         if (xeroPaymentsFailed.length > 0) {
-          console.log('❌ Failed payment syncs:', xeroPaymentsFailed.map(f => ({
-            payment: f.id,
-            error: 'Failed to create Xero payment'
-          })))
+          logger.logXeroSync(
+            'failed-payment-syncs',
+            `${xeroPaymentsFailed.length} payment(s) failed to sync`,
+            { failed: xeroPaymentsFailed.map(f => ({ payment: f.id, error: 'Failed to create Xero payment' })) },
+            'warn'
+          )
         }
       }
 
       const totalDuration = Date.now() - startTime
-      console.log('✅ Intelligent batch sync completed:', {
+      logger.logXeroSync('batch-sync-completed', 'Intelligent batch sync completed', {
         ...results,
         totalDuration,
         totalRecords: (pendingInvoices?.length || 0) + (filteredPayments?.length || 0),
         totalSuccessful: results.invoices.synced + results.credit_notes.synced + results.payments.synced,
         totalFailed: results.invoices.failed + results.credit_notes.failed + results.payments.failed
       })
-      
+
       return results
 
     } catch (error) {
       const totalDuration = Date.now() - startTime
-      console.error('❌ Error in batch sync:', error)
-      console.error(`❌ Batch sync failed after ${totalDuration}ms`)
+      logger.logXeroSync('batch-sync-error', `Error in batch sync (failed after ${totalDuration}ms)`, { totalDuration, error: error instanceof Error ? error.message : String(error) }, 'error')
       await Sentry.captureException(error, {
         tags: { component: 'xero-batch-sync', feature: 'intelligent-batching' }
       })
@@ -510,75 +473,61 @@ export class XeroBatchSyncManager {
    */
   async getXeroInvoiceFromRecord(invoiceRecord: XeroInvoiceRecord): Promise<Invoice | null> {
     let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
-    
-    try {
-      console.log('📄 Syncing invoice to Xero:', {
-        id: invoiceRecord.id,
-        invoiceNumber: invoiceRecord.invoice_number,
-        tenantId: invoiceRecord.tenant_id,
-        syncStatus: invoiceRecord.sync_status,
-        paymentId: invoiceRecord.payment_id,
-        netAmount: invoiceRecord.net_amount
-      })
 
+    try {
       // Get the active tenant for Xero sync
       const { getActiveTenant } = await import('./client')
       activeTenant = await getActiveTenant()
-      
+
       if (!activeTenant) {
-        console.log('❌ No active Xero tenant available for sync')
+        logger.logXeroSync('no-active-tenant', 'No active Xero tenant available for invoice sync', { invoiceRecordId: invoiceRecord.id, invoiceNumber: invoiceRecord.invoice_number }, 'warn')
         // Don't mark as failed - leave as pending for when Xero is reconnected
         return null
       }
-
-      console.log('🏢 Using active tenant for sync:', activeTenant.tenant_name)
 
       // Get authenticated Xero client using active tenant
       const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
       if (!xeroApi) {
         // Don't mark as failed - leave as pending for when Xero is reconnected
-        console.log('⚠️ Unable to authenticate with Xero - leaving invoice as pending:', invoiceRecord.invoice_number)
+        logger.logXeroSync('auth-failed', 'Unable to authenticate with Xero - leaving invoice as pending', { invoiceNumber: invoiceRecord.invoice_number, tenantId: activeTenant.tenant_id }, 'warn')
         return null
       }
 
       // Get or create contact in Xero
       const metadata = invoiceRecord.staging_metadata as XeroStagingMetadata
-      console.log('👤 Getting/creating Xero contact for user:', metadata?.user_id)
       const contactResult = await getOrCreateXeroContact(metadata.user_id!, activeTenant.tenant_id)
-      console.log('👤 Contact result:', contactResult)
-      
+
       // Apply rate limiting delay only if an API call was made
       if (contactResult.apiCallMade) {
-        console.log('⏳ Contact API call was made, applying 100ms rate limiting delay...')
         await new Promise(resolve => setTimeout(resolve, 100))
       }
-      
+
       if (!contactResult.success) {
         // Check if we have a valid xeroContactId despite the failure
         if (contactResult.xeroContactId) {
-          console.log('⚠️ Contact sync failed but we have a valid contact ID, continuing:', contactResult.xeroContactId)
           // Continue with the sync using the existing contact ID
+          logger.logXeroSync('contact-sync-partial-failure', 'Contact sync failed but a valid contact ID was returned, continuing', { xeroContactId: contactResult.xeroContactId, invoiceRecordId: invoiceRecord.id }, 'warn')
         } else {
           // Check if this is a rate limit error (429) - if so, don't fail the batch
-          const isRateLimitError = contactResult.error?.includes('429') || 
+          const isRateLimitError = contactResult.error?.includes('429') ||
                                    contactResult.error?.toLowerCase().includes('rate limit') ||
                                    contactResult.error?.toLowerCase().includes('too many requests')
-          
+
           if (isRateLimitError) {
-            console.log('⚠️ Contact sync hit rate limit (429), skipping this invoice but not failing batch:', contactResult.error)
+            logger.logXeroSync('contact-sync-rate-limited', 'Contact sync hit rate limit (429), skipping this invoice but not failing batch', { error: contactResult.error, invoiceRecordId: invoiceRecord.id }, 'warn')
             // Don't mark as failed, leave as pending so it can be retried later
             return null
           } else {
-            console.log('❌ Contact sync failed with no valid contact ID:', contactResult.error)
+            logger.logXeroSync('contact-sync-failed', 'Contact sync failed with no valid contact ID', { error: contactResult.error, invoiceRecordId: invoiceRecord.id }, 'error')
             await this.markItemAsFailed(invoiceRecord.id, 'Failed to get/create Xero contact')
             return null
           }
         }
       }
-      
+
       // Ensure we have a contact ID to proceed
       if (!contactResult.xeroContactId) {
-        console.log('❌ No Xero contact ID available for invoice sync')
+        logger.logXeroSync('no-contact-id', 'No Xero contact ID available for invoice sync', { invoiceRecordId: invoiceRecord.id }, 'error')
         await this.markItemAsFailed(invoiceRecord.id, 'No Xero contact ID available')
         return null
       }
@@ -589,7 +538,7 @@ export class XeroBatchSyncManager {
         .select('first_name, last_name, member_id')
         .eq('id', metadata.user_id)
         .single()
-      
+
       // eslint-disable-next-line @typescript-eslint/no-unused-vars -- computed for enhanced logging (per comment above) but never consumed; flagged, not removed, since this may indicate a missing log/usage rather than genuinely dead code
       const contactName = userData
         ? generateContactName(userData.first_name, userData.last_name, userData.member_id)
@@ -597,12 +546,11 @@ export class XeroBatchSyncManager {
 
       // Check if this is a zero-value invoice (always AUTHORISED)
       if (invoiceRecord.net_amount === 0) {
-        console.log('✅ Zero-value invoice - marking as AUTHORISED')
         // Zero-value invoices are always AUTHORISED, no need to check payment status
       } else {
         // Non-zero invoices need payment verification
         if (!invoiceRecord.payment_id) {
-          console.log('⚠️ No payment_id on non-zero invoice - skipping sync')
+          logger.logXeroSync('no-payment-id', 'No payment_id on non-zero invoice - skipping sync', { invoiceRecordId: invoiceRecord.id }, 'warn')
           return null
         }
 
@@ -614,19 +562,14 @@ export class XeroBatchSyncManager {
           .single()
 
         if (!payment) {
-          console.log('⚠️ No payment record found - skipping sync')
+          logger.logXeroSync('no-payment-record', 'No payment record found - skipping sync', { invoiceRecordId: invoiceRecord.id, paymentId: invoiceRecord.payment_id }, 'warn')
           return null
         }
 
-        console.log('💰 Payment status:', payment.status, 'for invoice:', invoiceRecord.invoice_number)
-        
         if (payment.status !== 'completed') {
           // Non-zero invoices with pending/failed payments should not be synced
-          console.log('⏸️ Non-zero invoice with pending/failed payment - skipping sync')
           return null
         }
-
-        console.log('✅ Completed payment - marking as AUTHORISED')
       }
 
       // Convert line items to Xero format
@@ -639,8 +582,6 @@ export class XeroBatchSyncManager {
         lineAmount: item.line_amount / 100 // Convert cents to dollars
       }))
 
-      console.log('📋 Line items prepared:', lineItems.length, 'items')
-
       // Calculate invoice due date
       // For payment plans: Due date = final payment date (to prevent "overdue" status before plan completes)
       // For regular invoices: Due date = 30 days from creation
@@ -648,8 +589,6 @@ export class XeroBatchSyncManager {
 
       // Check if this invoice is a payment plan by checking the is_payment_plan flag
       if (invoiceRecord.is_payment_plan) {
-        console.log(`📅 Processing payment plan invoice: ${invoiceRecord.id}`)
-
         // Fetch the actual scheduled date of the final installment from xero_payments
         // This is the source of truth and works regardless of installment interval length
         const { data: finalPayment, error: paymentError } = await this.supabase
@@ -663,23 +602,25 @@ export class XeroBatchSyncManager {
 
         if (paymentError) {
           // Database error querying xero_payments
-          console.error(`❌ Error fetching final payment date for payment plan invoice ${invoiceRecord.id}:`, paymentError)
-          console.warn('⚠️ Falling back to default 30-day due date due to database error')
+          logger.logXeroSync(
+            'final-payment-date-lookup-failed',
+            `Error fetching final payment date for payment plan invoice ${invoiceRecord.id} - falling back to default 30-day due date`,
+            { invoiceRecordId: invoiceRecord.id, error: paymentError },
+            'error'
+          )
           dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
         } else if (!finalPayment) {
           // No payments found (data integrity issue)
-          console.error(`❌ No installment payments found for payment plan invoice ${invoiceRecord.id}`)
-          console.warn('⚠️ Falling back to default 30-day due date - manual review required')
+          logger.logXeroSync(
+            'no-installment-payments',
+            `No installment payments found for payment plan invoice ${invoiceRecord.id} - falling back to default 30-day due date, manual review required`,
+            { invoiceRecordId: invoiceRecord.id },
+            'error'
+          )
           dueDate = calculateDefaultDueDate(invoiceRecord.created_at)
         } else {
           // Use the actual scheduled date of the final installment
           dueDate = finalPayment.planned_payment_date
-
-          console.log(`📅 Payment plan invoice - due date set to final scheduled payment:`, {
-            invoice_id: invoiceRecord.id,
-            final_installment_number: finalPayment.installment_number,
-            final_scheduled_date: dueDate
-          })
         }
       } else {
         // Regular invoice: 30 days from creation
@@ -704,7 +645,7 @@ export class XeroBatchSyncManager {
       return invoice
 
     } catch (error) {
-      console.error('❌ Error getting Xero invoice from record:', error)
+      logger.logXeroSync('invoice-record-error', 'Error getting Xero invoice from record', { invoiceRecordId: invoiceRecord.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       return null
     }
   }
@@ -714,20 +655,14 @@ export class XeroBatchSyncManager {
    */
   async getXeroCreditNoteFromRecord(creditNoteRecord: XeroInvoiceRecord): Promise<CreditNote | null> {
     let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
-    
-    try {
-      console.log('💳 Creating Xero credit note from record:', {
-        id: creditNoteRecord.id,
-        invoiceType: creditNoteRecord.invoice_type,
-        netAmount: creditNoteRecord.net_amount
-      })
 
+    try {
       // Get the active tenant for Xero sync
       const { getActiveTenant } = await import('./client')
       activeTenant = await getActiveTenant()
-      
+
       if (!activeTenant) {
-        console.log('❌ No active Xero tenant available for credit note sync')
+        logger.logXeroSync('no-active-tenant', 'No active Xero tenant available for credit note sync', { creditNoteRecordId: creditNoteRecord.id }, 'warn')
         // Don't mark as failed - leave as pending for when Xero is reconnected
         return null
       }
@@ -735,7 +670,7 @@ export class XeroBatchSyncManager {
       // Parse staging metadata for refund details
       const metadata = creditNoteRecord.staging_metadata as XeroStagingMetadata | null
       if (!metadata || !metadata.refund_id) {
-        console.error('❌ No refund metadata found in credit note record')
+        logger.logXeroSync('no-refund-metadata', 'No refund metadata found in credit note record', { creditNoteRecordId: creditNoteRecord.id }, 'error')
         await this.markItemAsFailed(creditNoteRecord.id, 'No refund metadata available')
         return null
       }
@@ -750,20 +685,19 @@ export class XeroBatchSyncManager {
             .eq('payment_id', creditNoteRecord.payment_id)
             .eq('invoice_type', 'ACCREC')
             .single()
-          
+
           if (originalInvoice?.invoice_number) {
             originalInvoiceNumber = originalInvoice.invoice_number
           }
         } catch {
-          console.log('⚠️ Could not find original invoice number, using fallback')
+          logger.logXeroSync('original-invoice-lookup-failed', 'Could not find original invoice number, using fallback', { creditNoteRecordId: creditNoteRecord.id }, 'debug')
         }
       }
 
       // Get or create Xero contact
-      console.log('👤 Getting/creating Xero contact for credit note user:', metadata.customer?.id || metadata.user_id)
       const contactResult = await getOrCreateXeroContact((metadata.customer?.id || metadata.user_id)!, activeTenant.tenant_id)
       if (!contactResult.success || !contactResult.xeroContactId) {
-        console.error('❌ Failed to get/create Xero contact for credit note')
+        logger.logXeroSync('contact-sync-failed', 'Failed to get/create Xero contact for credit note', { creditNoteRecordId: creditNoteRecord.id }, 'error')
         await this.markItemAsFailed(creditNoteRecord.id, 'Failed to get/create Xero contact')
         return null
       }
@@ -772,12 +706,11 @@ export class XeroBatchSyncManager {
       const lineItems: LineItem[] = []
       if (creditNoteRecord.line_items && Array.isArray(creditNoteRecord.line_items)) {
         // Use staged line items from database
-        console.log(`📋 Using ${creditNoteRecord.line_items.length} staged line items from database`)
         for (const item of creditNoteRecord.line_items) {
           // Line items are stored in cents in database, convert to dollars for Xero
           const unitAmountInCents = centsToCents(item.unit_amount || item.line_amount) // Use unit_amount if available, fallback to line_amount, maintain sign
           const lineAmountInCents = centsToCents(item.line_amount) // Maintain sign for proper accounting
-          
+
           lineItems.push({
             description: item.description || `Refund: ${metadata.reason || 'Refund'}`,
             quantity: item.quantity || 1,
@@ -789,7 +722,7 @@ export class XeroBatchSyncManager {
         }
       } else {
         // Fallback line item (should rarely be used now)
-        console.log('⚠️ No line items found in database, using fallback')
+        logger.logXeroSync('no-line-items', 'No line items found in database for credit note, using fallback', { creditNoteRecordId: creditNoteRecord.id }, 'warn')
         const fallbackAmountInCents = centsToCents(Math.abs(creditNoteRecord.net_amount))
         lineItems.push({
           description: metadata.reason || `Refund for ${originalInvoiceNumber}`,
@@ -814,23 +747,15 @@ export class XeroBatchSyncManager {
         reference: metadata.reason || `Refund for ${originalInvoiceNumber}`
       }
 
-      console.log('✅ Created Xero credit note object:', {
-        type: creditNote.type,
-        contactId: creditNote.contact?.contactID,
-        lineItemsCount: creditNote.lineItems?.length || 0,
-        total: lineItems.reduce((sum, item) => sum + (item.lineAmount || 0), 0),
-        reference: creditNote.reference
-      })
-
       return creditNote
 
     } catch (error) {
-      console.error('❌ Error creating Xero credit note from record:', error)
+      logger.logXeroSync('credit-note-record-error', 'Error creating Xero credit note from record', { creditNoteRecordId: creditNoteRecord.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       await this.markItemAsFailed(creditNoteRecord.id, `Error creating credit note: ${error instanceof Error ? error.message : 'Unknown error'}`)
       return null
     }
   }
-    
+
   async syncXeroInvoices(xeroInvoicesToSync: {xeroInvoice: Invoice, invoiceRecord: XeroInvoiceRecord}[], xeroApi: { accountingApi: AccountingApi }, tenantId: string): Promise<{ success: boolean; synced: number; failed: number }> {
     let syncedCount = 0
     let failedCount = 0
@@ -847,16 +772,16 @@ export class XeroBatchSyncManager {
     for (let i = 0; i < invoicesSynced.length; i++) {
       const xeroInvoice = invoicesSynced[i]
       const originalRecord = xeroInvoicesToSync[i]?.invoiceRecord
-      
+
       if (!originalRecord) {
-        console.error(`❌ No original record found for response index ${i}`)
+        logger.logXeroSync('missing-original-record', `No original record found for response index ${i}`, { index: i, tenantId }, 'error')
         continue
       }
 
       // Check if invoice has validation errors
       if (xeroInvoice.hasErrors || (xeroInvoice.validationErrors && xeroInvoice.validationErrors.length > 0)) {
         const errorMessages = xeroInvoice.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
-        console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
+        logger.logXeroSync('invoice-validation-failed', `Invoice validation failed for record ${originalRecord.id}`, { invoiceRecordId: originalRecord.id, errorMessages }, 'error')
 
         // Mark invoice as failed
         await this.markItemAsFailed(
@@ -933,25 +858,22 @@ export class XeroBatchSyncManager {
       syncedCount++
     }
 
-    console.log(`✅ Xero invoice sync completed: ${syncedCount} synced, ${failedCount} failed`)
+    logger.logXeroSync('invoice-sync-completed', `Xero invoice sync completed: ${syncedCount} synced, ${failedCount} failed`, { syncedCount, failedCount, tenantId })
     return { success: true, synced: syncedCount, failed: failedCount }
     } catch (error: unknown) {
-      console.error('❌ Error syncing Xero invoices:', error)
+      logger.logXeroSync('invoice-batch-sync-error', 'Error syncing Xero invoices', { tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
 
       const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
-        console.log('📋 Processing individual invoice errors from Xero batch response')
-        console.log(`📋 Found ${errorBody.Elements.length} elements in error response`)
-
         // Each Element is an invoice with ValidationErrors directly on it
         for (let i = 0; i < errorBody.Elements.length; i++) {
           const element = errorBody.Elements[i]
           const originalRecord = xeroInvoicesToSync[i]?.invoiceRecord
 
           if (!originalRecord) {
-            console.error(`❌ No original record found for element index ${i}`)
+            logger.logXeroSync('missing-original-record', `No original record found for element index ${i}`, { index: i, tenantId }, 'error')
             continue
           }
 
@@ -959,7 +881,7 @@ export class XeroBatchSyncManager {
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
             const errorMessages = validationErrors.map((e) => e.Message).join('; ')
-            console.error(`❌ Invoice validation failed for record ${originalRecord.id}:`, errorMessages)
+            logger.logXeroSync('invoice-validation-failed', `Invoice validation failed for record ${originalRecord.id}`, { invoiceRecordId: originalRecord.id, errorMessages }, 'error')
 
             // Mark invoice as failed with specific error
             await this.markItemAsFailed(
@@ -985,7 +907,6 @@ export class XeroBatchSyncManager {
             })
             failedCount++
           } else {
-            console.log(`✅ Element ${i} has no validation errors, marking as synced`)
             // This invoice succeeded - mark it as synced
             const xeroInvoiceId = element.InvoiceID
             const xeroInvoiceNumber = element.InvoiceNumber
@@ -1010,7 +931,7 @@ export class XeroBatchSyncManager {
         const errorMessage = httpError?.message
           || (httpError?.response as { statusText?: string } | undefined)?.statusText
           || 'Unknown error'
-        console.error('❌ Batch sync error (no Elements array):', errorMessage)
+        logger.logXeroSync('invoice-batch-generic-error', 'Batch sync error (no Elements array)', { tenantId, errorMessage }, 'error')
 
         for (const item of xeroInvoicesToSync) {
           await this.markItemAsFailed(
@@ -1021,7 +942,7 @@ export class XeroBatchSyncManager {
         }
       }
 
-      console.log(`❌ Xero invoice sync completed with errors: ${syncedCount} synced, ${failedCount} failed`)
+      logger.logXeroSync('invoice-sync-completed-with-errors', `Xero invoice sync completed with errors: ${syncedCount} synced, ${failedCount} failed`, { syncedCount, failedCount, tenantId }, 'warn')
       return { success: false, synced: syncedCount, failed: failedCount }
     }
   }
@@ -1047,14 +968,14 @@ export class XeroBatchSyncManager {
         const originalRecord = xeroCreditNotesToSync[i]?.invoiceRecord
 
         if (!originalRecord) {
-          console.error(`❌ No original record found for response index ${i}`)
+          logger.logXeroSync('missing-original-record', `No original record found for response index ${i}`, { index: i, tenantId }, 'error')
           continue
         }
 
         // Check if credit note has validation errors
         if (xeroCreditNote.hasErrors || (xeroCreditNote.validationErrors && xeroCreditNote.validationErrors.length > 0)) {
           const errorMessages = xeroCreditNote.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
-          console.error(`❌ Credit note validation failed for record ${originalRecord.id}:`, errorMessages)
+          logger.logXeroSync('credit-note-validation-failed', `Credit note validation failed for record ${originalRecord.id}`, { creditNoteRecordId: originalRecord.id, errorMessages }, 'error')
 
           // Mark credit note as failed
           await this.markItemAsFailed(
@@ -1130,13 +1051,16 @@ export class XeroBatchSyncManager {
         } catch (dbError) {
           // Database error while marking as synced - credit note was created in Xero but database update failed
           const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown database error'
-          console.error(`❌ Failed to mark credit note ${originalRecord.id} as synced in database:`, dbError)
-          console.error(
-            `CRITICAL: Credit note ${xeroCreditNote.creditNoteNumber} (${xeroCreditNote.creditNoteID}) was successfully created in Xero, but the database update failed. 
-Admin must manually update the database record with id=${originalRecord.id} and set:
-  xero_invoice_id = '${xeroCreditNote.creditNoteID}',
-  sync_status = 'synced'
-to match Xero. Immediate manual intervention is required to prevent data inconsistency.`
+          logger.logXeroSync(
+            'mark-credit-note-synced-db-failure',
+            `CRITICAL: Credit note ${xeroCreditNote.creditNoteNumber} (${xeroCreditNote.creditNoteID}) was created in Xero but the database update failed - admin must manually set xero_invoice_id and sync_status on record id=${originalRecord.id} to match Xero`,
+            {
+              creditNoteRecordId: originalRecord.id,
+              xeroCreditNoteId: xeroCreditNote.creditNoteID,
+              xeroCreditNoteNumber: xeroCreditNote.creditNoteNumber,
+              errorMessage
+            },
+            'warn'
           )
           // Mark as failed so admin can see it and take action
           await this.markItemAsFailed(
@@ -1166,25 +1090,22 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         }
       }
 
-      console.log(`✅ Xero credit note sync completed: ${syncedCount} synced, ${failedCount} failed`)
+      logger.logXeroSync('credit-note-sync-completed', `Xero credit note sync completed: ${syncedCount} synced, ${failedCount} failed`, { syncedCount, failedCount, tenantId })
       return { success: true, synced: syncedCount, failed: failedCount }
     } catch (error: unknown) {
-      console.error('❌ Error syncing Xero credit notes:', error)
+      logger.logXeroSync('credit-note-batch-sync-error', 'Error syncing Xero credit notes', { tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
 
       const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
-        console.log('📋 Processing individual credit note errors from Xero batch response')
-        console.log(`📋 Found ${errorBody.Elements.length} elements in error response`)
-
         // Each Element is a credit note with ValidationErrors directly on it
         for (let i = 0; i < errorBody.Elements.length; i++) {
           const element = errorBody.Elements[i]
           const originalRecord = xeroCreditNotesToSync[i]?.invoiceRecord
 
           if (!originalRecord) {
-            console.error(`❌ No original record found for element index ${i}`)
+            logger.logXeroSync('missing-original-record', `No original record found for element index ${i}`, { index: i, tenantId }, 'error')
             continue
           }
 
@@ -1192,7 +1113,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
             const errorMessages = validationErrors.map((e) => e.Message).join('; ')
-            console.error(`❌ Credit note validation failed for record ${originalRecord.id}:`, errorMessages)
+            logger.logXeroSync('credit-note-validation-failed', `Credit note validation failed for record ${originalRecord.id}`, { creditNoteRecordId: originalRecord.id, errorMessages }, 'error')
 
             // Mark credit note as failed with specific error
             await this.markItemAsFailed(
@@ -1219,7 +1140,6 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
 
             failedCount++
           } else {
-            console.log(`✅ Element ${i} has no validation errors, marking as synced`)
             // This credit note succeeded - mark it as synced
             const xeroCreditNoteId = element.CreditNoteID
             const xeroCreditNoteNumber = element.CreditNoteNumber
@@ -1256,21 +1176,21 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       )
 
       const paymentsSynced = response.body.payments || []
-      
+
       // Use array index to correlate request with response
       for (let i = 0; i < paymentsSynced.length; i++) {
         const xeroPayment = paymentsSynced[i]
         const originalRecord = paymentRecords[i]
 
         if (!originalRecord) {
-          console.error(`❌ No original payment record found for response index ${i}`)
+          logger.logXeroSync('missing-original-payment-record', `No original payment record found for response index ${i}`, { index: i, tenantId }, 'error')
           continue
         }
 
         // Check for validation errors (like invoice sync does)
         if (xeroPayment.validationErrors && xeroPayment.validationErrors.length > 0) {
           const errorMessages = xeroPayment.validationErrors?.map(e => e.message).join('; ') || 'Unknown validation error'
-          console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
+          logger.logXeroSync('payment-validation-failed', `Payment validation failed for record ${originalRecord.id}`, { paymentRecordId: originalRecord.id, errorMessages }, 'error')
 
           // Mark payment as failed
           try {
@@ -1311,7 +1231,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
                 tenantId
               }
             })
-            console.error(`❌ Failed to mark payment ${originalRecord.id} as failed in database:`, dbError)
+            logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${originalRecord.id} as failed in database`, { paymentRecordId: originalRecord.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
           }
 
           continue // Skip to next payment
@@ -1370,27 +1290,31 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
               tenantId
             }
           })
-          console.error(`❌ Failed to mark payment ${originalRecord.id} as synced in database:`, dbError)
-          console.error(`⚠️ Payment ${xeroPayment.paymentID} was successfully created in Xero but database update failed - manual intervention required`)
+          logger.logXeroSync(
+            'mark-payment-synced-db-failure',
+            `Payment ${xeroPayment.paymentID} was successfully created in Xero but the database update failed - manual intervention required`,
+            { paymentRecordId: originalRecord.id, xeroPaymentId: xeroPayment.paymentID, error: dbError instanceof Error ? dbError.message : String(dbError) },
+            'warn'
+          )
         }
       }
 
-      console.log('✅ Xero payment(s) created:', response.body.payments?.length || 0)
       return true
     } catch (error: unknown) {
-      console.error('❌ Error syncing Xero payments:', error)
+      logger.logXeroSync('payment-batch-sync-error', 'Error syncing Xero payments', { tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
 
       const errorBody = parseXeroBatchError(error)
 
       // Check if we have Elements array (batch error response)
       if (errorBody?.Elements && Array.isArray(errorBody.Elements)) {
-        console.log('📋 Processing individual payment errors from Xero batch response')
-        console.log(`📋 Found ${errorBody.Elements.length} elements in error response`)
-
         // Validate array lengths match to prevent index misalignment
         if (errorBody.Elements.length !== paymentRecords.length) {
-          console.error(`⚠️ Array length mismatch: ${errorBody.Elements.length} elements vs ${paymentRecords.length} payment records`)
-          console.error(`⚠️ Cannot safely correlate errors to payments - marking all as failed`)
+          logger.logXeroSync(
+            'payment-elements-length-mismatch',
+            `Array length mismatch: ${errorBody.Elements.length} elements vs ${paymentRecords.length} payment records - cannot safely correlate errors to payments, marking all as failed`,
+            { elementsLength: errorBody.Elements.length, recordsLength: paymentRecords.length, tenantId },
+            'error'
+          )
 
           // Mark all payments as failed due to ambiguous error state
           for (const record of paymentRecords) {
@@ -1414,7 +1338,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
                   recordsLength: paymentRecords.length
                 }
               })
-              console.error(`❌ Failed to mark payment ${record.id} as failed in database:`, dbError)
+              logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${record.id} as failed in database`, { paymentRecordId: record.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
             }
           }
           return false
@@ -1426,7 +1350,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
           const originalRecord = paymentRecords[i]
 
           if (!originalRecord) {
-            console.error(`❌ No original record found for element index ${i}`)
+            logger.logXeroSync('missing-original-payment-record', `No original record found for element index ${i}`, { index: i, tenantId }, 'error')
             continue
           }
 
@@ -1434,7 +1358,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
           const validationErrors = element.ValidationErrors || []
           if (validationErrors.length > 0) {
             const errorMessages = validationErrors.map((e) => e.Message).join('; ')
-            console.error(`❌ Payment validation failed for record ${originalRecord.id}:`, errorMessages)
+            logger.logXeroSync('payment-validation-failed', `Payment validation failed for record ${originalRecord.id}`, { paymentRecordId: originalRecord.id, errorMessages }, 'error')
 
             // Mark payment as failed with specific error
             try {
@@ -1474,10 +1398,9 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
                   batchIndex: i
                 }
               })
-              console.error(`❌ Failed to mark payment ${originalRecord.id} as failed in database:`, dbError)
+              logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${originalRecord.id} as failed in database`, { paymentRecordId: originalRecord.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
             }
           } else {
-            console.log(`✅ Element ${i} has no validation errors, marking as synced`)
             // This payment succeeded - mark it as synced
             const xeroPaymentId = element.PaymentID
             if (xeroPaymentId && xeroPaymentId !== '00000000-0000-0000-0000-000000000000') {
@@ -1507,7 +1430,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
                     batchIndex: i
                   }
                 })
-                console.error(`❌ Failed to mark payment ${originalRecord.id} as synced in database:`, dbError)
+                logger.logXeroSync('mark-payment-synced-db-failure', `Failed to mark payment ${originalRecord.id} as synced in database`, { paymentRecordId: originalRecord.id, xeroPaymentId, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
               }
             }
           }
@@ -1518,7 +1441,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         const errorMessage = httpError?.message
           || (httpError?.response as { statusText?: string } | undefined)?.statusText
           || 'Unknown error'
-        console.error('❌ Batch sync error (no Elements array):', errorMessage)
+        logger.logXeroSync('payment-batch-generic-error', 'Batch sync error (no Elements array)', { tenantId, errorMessage }, 'error')
 
         for (const record of paymentRecords) {
           try {
@@ -1540,7 +1463,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
                 batchErrorMessage: errorMessage
               }
             })
-            console.error(`❌ Failed to mark payment ${record.id} as failed in database:`, dbError)
+            logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${record.id} as failed in database`, { paymentRecordId: record.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
           }
         }
       }
@@ -1548,22 +1471,14 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       return false
     }
   }
-  
+
   /**
    * Generate a Xero payment object from a payment record
    */
   async getXeroPaymentFromRecord(paymentRecord: XeroPaymentRecord): Promise<Payment | null> {
     let activeTenant: { tenant_id: string; tenant_name: string; expires_at: string } | null = null
-    
-    try {
-      console.log('💰 Syncing payment to Xero:', {
-        id: paymentRecord.id,
-        xeroInvoiceId: paymentRecord.xero_invoice_id,
-        amountPaid: paymentRecord.amount_paid,
-        reference: paymentRecord.reference,
-        bankAccountCode: paymentRecord.bank_account_code
-      })
 
+    try {
       // Get the associated invoice/credit note record
       const { data: invoiceRecord } = await this.supabase
         .from('xero_invoices')
@@ -1572,32 +1487,29 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
         .single()
 
       if (!invoiceRecord || !invoiceRecord.xero_invoice_id) {
-        console.log('❌ Associated invoice not synced to Xero yet - skipping payment')
+        logger.logXeroSync('invoice-not-synced', 'Associated invoice not synced to Xero yet - skipping payment', { paymentRecordId: paymentRecord.id, xeroInvoiceId: paymentRecord.xero_invoice_id }, 'warn')
         await this.markPaymentAsFailed(paymentRecord.id, 'Associated invoice not synced to Xero yet')
         return null
       }
 
       const isInvoice = invoiceRecord.invoice_type === 'ACCREC'
       const isCreditNote = invoiceRecord.invoice_type === 'ACCRECCREDIT'
-      console.log(`📄 Found associated ${isInvoice ? 'invoice' : 'credit note'}:`, invoiceRecord.xero_invoice_id)
 
       // Get the active tenant for Xero sync
       const { getActiveTenant } = await import('./client')
       activeTenant = await getActiveTenant()
-      
+
       if (!activeTenant) {
-        console.log('❌ No active Xero tenant available for sync')
+        logger.logXeroSync('no-active-tenant', 'No active Xero tenant available for payment sync', { paymentRecordId: paymentRecord.id }, 'warn')
         // Don't mark as failed - leave as pending for when Xero is reconnected
         return null
       }
-
-      console.log('🏢 Using active tenant for sync:', activeTenant.tenant_name)
 
       // Get authenticated Xero client using active tenant
       const xeroApi = await getAuthenticatedXeroClient(activeTenant.tenant_id)
       if (!xeroApi) {
         // Don't mark as failed - leave as pending for when Xero is reconnected
-        console.log('⚠️ Unable to authenticate with Xero - leaving payment as pending:', paymentRecord.id)
+        logger.logXeroSync('auth-failed', 'Unable to authenticate with Xero - leaving payment as pending', { paymentRecordId: paymentRecord.id, tenantId: activeTenant.tenant_id }, 'warn')
         return null
       }
 
@@ -1637,7 +1549,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       return payment
 
     } catch (error) {
-      console.error('❌ Error getting Xero payment from record:', error)
+      logger.logXeroSync('payment-record-error', 'Error getting Xero payment from record', { paymentRecordId: paymentRecord.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       return null
     }
   }
@@ -1646,18 +1558,11 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
    * Mark invoice as successfully synced
    */
   private async markItemAsSynced(
-    stagingId: string, 
-    xeroId: string, 
+    stagingId: string,
+    xeroId: string,
     number: string,
     tenantId?: string
   ) {
-    console.log('💾 Marking item as synced:', {
-      stagingId,
-      xeroId,
-      number,
-      tenantId
-    })
-    
     const updateData: Database['public']['Tables']['xero_invoices']['Update'] = {
       xero_invoice_id: xeroId,
       invoice_number: number,
@@ -1671,7 +1576,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
     if (tenantId) {
       updateData.tenant_id = tenantId
     }
-    
+
     const { data, error } = await this.supabase
       .from('xero_invoices')
       .update(updateData)
@@ -1679,7 +1584,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       .select('id, sync_status')
 
     if (error) {
-      console.error('❌ Error marking invoice as synced:', error)
+      logger.logXeroSync('mark-invoice-synced-db-error', 'Error marking invoice as synced', { stagingId, xeroId, invoiceNumber: number, tenantId, error }, 'warn')
 
       // Report to Sentry as critical error - this indicates database infrastructure issue
       Sentry.captureException(error, {
@@ -1701,7 +1606,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
 
       throw new Error(`Failed to mark invoice as synced in database: ${error?.message || String(error)}`)
     } else {
-      console.log('✅ Invoice marked as synced successfully:', data)
+      logger.logXeroSync('invoice-marked-synced', 'Invoice marked as synced successfully', { stagingId, xeroId, invoiceNumber: number, tenantId, resultId: data?.[0]?.id }, 'debug')
     }
   }
 
@@ -1723,12 +1628,6 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
    * Mark payment as successfully synced
    */
   private async markPaymentAsSynced(stagingId: string, xeroPaymentId: string, tenantId?: string) {
-    console.log('💾 Marking payment as synced:', {
-      stagingId,
-      xeroPaymentId,
-      tenantId
-    })
-    
     const updateData: Database['public']['Tables']['xero_payments']['Update'] = {
       xero_payment_id: xeroPaymentId,
       sync_status: 'synced',
@@ -1740,7 +1639,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
     if (tenantId) {
       updateData.tenant_id = tenantId
     }
-    
+
     const { data, error } = await this.supabase
       .from('xero_payments')
       .update(updateData)
@@ -1748,7 +1647,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
       .select('id, sync_status')
 
     if (error) {
-      console.error('❌ Error marking payment as synced:', error)
+      logger.logXeroSync('mark-payment-synced-db-error', 'Error marking payment as synced', { stagingId, xeroPaymentId, tenantId, error }, 'warn')
 
       // Report to Sentry as critical error - this indicates database infrastructure issue
       Sentry.captureException(error, {
@@ -1769,7 +1668,7 @@ to match Xero. Immediate manual intervention is required to prevent data inconsi
 
       throw new Error(`Failed to mark payment as synced in database: ${error?.message || String(error)}`)
     } else {
-      console.log('✅ Payment marked as synced successfully:', data)
+      logger.logXeroSync('payment-marked-synced', 'Payment marked as synced successfully', { stagingId, xeroPaymentId, tenantId, resultId: data?.[0]?.id }, 'debug')
     }
   }
 

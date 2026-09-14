@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(
   request: NextRequest,
@@ -113,7 +114,7 @@ export async function POST(
 
     return NextResponse.json({ queued: recipients.length })
   } catch (error) {
-    console.error('Error in captain send-team-email:', error)
+    logger.logSystem('captain-send-team-email-error', 'Error in captain send-team-email', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -55,7 +55,7 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Error getting service status:', error)
+    logger.logServiceManagement('service-status-error', 'Error getting service status', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Failed to get service status' },
       { status: 500 }
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error in admin service action:', error)
+    logger.logAdminAction('service-action-error', 'Error executing admin service action', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to execute service action' },
       { status: 500 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatDateTime } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface DiscountCodeUsage {
   code: string
@@ -67,7 +68,7 @@ export default function DiscountUsageReportPage() {
       const data = await response.json()
       setReportData(data)
     } catch (err) {
-      console.error('Error fetching discount usage data:', err)
+      logger.logAdminAction('fetch-discount-usage-report', 'Error fetching discount usage data', { error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
       setError('Failed to load discount usage data')
     } finally {
       setLoading(false)

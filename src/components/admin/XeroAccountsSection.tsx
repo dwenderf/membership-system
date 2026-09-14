@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import SyncStatus from './SyncStatus'
+import { logger } from '@/lib/logging/logger'
 
 interface XeroAccount {
   code: string
@@ -99,7 +100,7 @@ export default function XeroAccountsSection() {
         setSyncError('Failed to load accounts')
       }
     } catch (error) {
-      console.error('Failed to fetch Xero accounts:', error)
+      logger.error('admin-action', 'fetch-xero-accounts-error', 'Failed to fetch Xero accounts', { error: error instanceof Error ? error.message : String(error) })
       setSyncError('Failed to load accounts')
     } finally {
       setLoading(false)

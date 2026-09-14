@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
+import { logger } from '@/lib/logging/logger'
 
 export default function NewRegistrationCategoryPage() {
   const router = useRouter()
@@ -41,7 +42,7 @@ export default function NewRegistrationCategoryPage() {
       router.push('/admin/registration-categories')
     } catch (err) {
       setError('An unexpected error occurred')
-      console.error('Error creating category:', err)
+      logger.logAdminAction('create-registration-category', 'Error creating category', { error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
     } finally {
       setLoading(false)
     }

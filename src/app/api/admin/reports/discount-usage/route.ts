@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { resolveEffectiveDiscountLimitsBatch } from '@/lib/services/discount-limit-service'
+import { logger } from '@/lib/logging/logger'
 
 /** Row shape of `discount_usage_computed`, as selected below (not the full view). */
 interface DiscountUsageRow {
@@ -72,7 +73,7 @@ export async function GET() {
       .order('used_at', { ascending: false })
 
     if (usageError) {
-      console.error('Error fetching discount usage:', usageError)
+      logger.logAdminAction('discount-usage-fetch-error', 'Error fetching discount usage', { error: usageError.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch discount usage' }, { status: 500 })
     }
 
@@ -246,7 +247,7 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Error in discount-usage API:', error)
+    logger.logAdminAction('discount-usage-exception', 'Unexpected error in discount-usage API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

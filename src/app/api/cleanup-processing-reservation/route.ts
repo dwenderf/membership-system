@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -28,17 +29,17 @@ export async function DELETE(request: NextRequest) {
       .eq('payment_status', 'awaiting_payment')
       .select()
       
-    console.log(`Cleanup API: Deleted ${deletedRecords?.length || 0} awaiting_payment records for user ${user.id} registration ${registrationId}`)
+    logger.logSystem('cleanup-processing-reservation-deleted', `Deleted ${deletedRecords?.length || 0} awaiting_payment records`, { userId: user.id, registrationId, deletedCount: deletedRecords?.length || 0 }, 'debug')
 
     if (deleteError) {
-      console.error('Error deleting awaiting_payment record:', deleteError)
+      logger.logSystem('cleanup-processing-reservation-delete-error', 'Error deleting awaiting_payment record', { userId: user.id, registrationId, error: deleteError.message }, 'error')
       return NextResponse.json({ error: 'Failed to cleanup reservation' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
     
   } catch (error) {
-    console.error('Error in cleanup processing reservation:', error)
+    logger.logSystem('cleanup-processing-reservation-unexpected-error', 'Error in cleanup processing reservation', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

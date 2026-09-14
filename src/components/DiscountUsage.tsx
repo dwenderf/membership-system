@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { logger } from '@/lib/logging/logger'
 
 interface DiscountCategory {
   categoryName: string
@@ -45,7 +46,7 @@ export default function DiscountUsage({ userId }: DiscountUsageProps) {
         }
       } catch (err) {
         setError('Error loading discount usage')
-        console.error('Error fetching discount usage:', err)
+        logger.logSystem('fetch-discount-usage-error', 'Error fetching discount usage', { userId, error: err instanceof Error ? err.message : String(err) }, 'error')
       } finally {
         setLoading(false)
       }

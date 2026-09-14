@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
+import { logger } from '@/lib/logging/logger'
 
 interface AdminToggleSectionProps {
   userId: string
@@ -41,7 +42,7 @@ export default function AdminToggleSection({
         showError(data.error || 'Failed to update admin status')
       }
     } catch (error) {
-      console.error('Error toggling admin status:', error)
+      logger.logAdminAction('toggle-admin-status', 'Error toggling admin status', { userId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('An unexpected error occurred')
     } finally {
       setIsLoading(false)

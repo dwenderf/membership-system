@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { logger } from '@/lib/logging/logger'
 
 export default async function TestDataPage() {
   const supabase = await createClient()
@@ -43,16 +44,14 @@ export default async function TestDataPage() {
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
-      console.error('No user found')
+      logger.logAdminAction('add-test-membership', 'No user found', undefined, undefined, 'error')
       return
     }
-    
+
     const membershipId = formData.get('membership_id') as string
     const months = parseInt(formData.get('months') as string)
     const startDate = formData.get('start_date') as string
-    
-    console.log('Form data:', { membershipId, months, startDate, userId: user.id })
-    
+
     const validFrom = new Date(startDate)
     const validUntil = new Date(validFrom)
     validUntil.setMonth(validUntil.getMonth() + months)
@@ -65,12 +64,12 @@ export default async function TestDataPage() {
       .single()
     
     if (membershipError) {
-      console.error('Error fetching membership:', membershipError)
+      logger.logAdminAction('add-test-membership', 'Error fetching membership', { membershipId, error: membershipError.message }, user.id, 'error')
       return
     }
-    
+
     if (!membership) {
-      console.error('No membership found with id:', membershipId)
+      logger.logAdminAction('add-test-membership', 'No membership found with id', { membershipId }, user.id, 'error')
       return
     }
     
@@ -87,19 +86,16 @@ export default async function TestDataPage() {
       purchased_at: new Date().toISOString()
     }
     
-    console.log('Inserting data:', insertData)
-    
-    const { data: insertResult, error } = await supabase
+    const { error } = await supabase
       .from('user_memberships')
       .insert(insertData)
       .select()
-    
+
     if (error) {
-      console.error('Error adding test membership:', error)
+      logger.logAdminAction('add-test-membership', 'Error adding test membership', { membershipId, error: error.message }, user.id, 'error')
       return
     }
-    
-    console.log('Successfully inserted:', insertResult)
+
     redirect('/admin/test-data')
   }
 

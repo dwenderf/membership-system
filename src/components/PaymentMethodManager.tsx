@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import ConfirmationDialog from './ConfirmationDialog'
 import { formatPaymentMethodDescription } from '@/lib/payment-method-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentMethod {
   id: string
@@ -36,7 +37,7 @@ export default function PaymentMethodManager() {
         setPaymentMethod(data.paymentMethod)
       }
     } catch (error) {
-      console.error('Error loading payment method:', error)
+      logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
     } finally {
       setLoading(false)
     }

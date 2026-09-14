@@ -6,6 +6,7 @@ import { formatDateString } from '@/lib/date-utils'
 import { filterActivePlans } from '@/lib/payment-plan-utils'
 import type { ProcessingResults } from '@/lib/services/payment-plan-processor'
 import UserLink from '@/components/UserLink'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentPlan {
   id: string
@@ -64,7 +65,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
         setUsers(data.users || [])
       }
     } catch (error) {
-      console.error('Error fetching payment plans:', error)
+      logger.logAdminAction('fetch-payment-plans', 'Error fetching payment plans', { filter, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     } finally {
       setLoading(false)
     }

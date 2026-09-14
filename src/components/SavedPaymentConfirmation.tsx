@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useStripe } from '@stripe/react-stripe-js'
 import { formatPaymentMethodDescription, extractPaymentMethodInfo, type PaymentMethodInfo } from '@/lib/payment-method-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface SavedPaymentConfirmationProps {
   // Common props
@@ -98,7 +99,7 @@ export default function SavedPaymentConfirmation({
         setPaymentInfo({ hasPaymentMethod: false })
       }
     } catch (error) {
-      console.error('Error fetching payment method:', error)
+      logger.logPaymentProcessing('fetch-payment-method-error', 'Error fetching payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
       setPaymentInfo({ hasPaymentMethod: false })
     } finally {
       setLoading(false)
@@ -127,7 +128,7 @@ export default function SavedPaymentConfirmation({
       })
 
       if (error) {
-        console.error('Payment confirmation error:', error)
+        logger.logPaymentProcessing('payment-confirmation-error', 'Payment confirmation error', { error: error.message }, 'error')
         setIsProcessing(false)
         onError(error.message || 'Payment failed. Please try again.')
         return
@@ -135,17 +136,17 @@ export default function SavedPaymentConfirmation({
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
         // Payment succeeded, let webhook handle the rest
-        console.log('✅ Payment confirmed successfully via Stripe')
+        logger.logPaymentProcessing('payment-confirmed', 'Payment confirmed successfully via Stripe', { paymentIntentId: paymentIntent.id }, 'debug')
         setIsProcessing(false)
         onSuccess()
       } else {
-        console.error('Payment intent not in succeeded state:', paymentIntent?.status)
+        logger.logPaymentProcessing('payment-intent-not-succeeded', 'Payment intent not in succeeded state', { status: paymentIntent?.status }, 'error')
         setIsProcessing(false)
         onError('Payment confirmation failed. Please try again.')
       }
-      
+
     } catch (err) {
-      console.error('Payment confirmation error:', err)
+      logger.logPaymentProcessing('payment-confirmation-error', 'Payment confirmation error', { error: err instanceof Error ? err.message : String(err) }, 'error')
       setIsProcessing(false)
       const errorMessage = err instanceof Error ? err.message : 'Payment failed'
       onError(errorMessage)

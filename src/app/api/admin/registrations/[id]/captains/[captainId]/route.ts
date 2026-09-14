@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 // DELETE /api/admin/registrations/[id]/captains/[captainId] - Remove a captain
 export async function DELETE(
@@ -61,7 +62,7 @@ export async function DELETE(
       .eq('registration_id', registrationId)
 
     if (deleteError) {
-      console.error('Error deleting captain:', deleteError)
+      logger.logAdminAction('captain-delete-error', 'Error deleting captain', { registrationId, captainId, error: deleteError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to remove captain' },
         { status: 500 }
@@ -88,7 +89,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error in DELETE captain API:', error)
+    logger.logAdminAction('captain-delete-exception', 'Unexpected error in DELETE captain API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 interface User {
   id: string
@@ -55,7 +56,7 @@ export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
       }, 2000)
 
     } catch (error) {
-      console.error('Account deletion error:', error)
+      logger.logSystem('account-deletion-error', 'Account deletion error', { error: error instanceof Error ? error.message : String(error) }, 'error')
       showError('Account deletion failed', error instanceof Error ? error.message : 'An error occurred while deleting your account')
       setIsDeleting(false)
     }

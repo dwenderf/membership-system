@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/system-accounting-codes - Get all system accounting codes
 export async function GET() {
@@ -30,14 +31,14 @@ export async function GET() {
       .order('code_type')
 
     if (error) {
-      console.error('Error fetching system accounting codes:', error)
+      logger.logAdminAction('system-accounting-codes-fetch-error', 'Error fetching system accounting codes', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch system accounting codes' }, { status: 500 })
     }
 
     return NextResponse.json({ codes })
-    
+
   } catch (error) {
-    console.error('Error in system accounting codes API:', error)
+    logger.logAdminAction('system-accounting-codes-fetch-exception', 'Unexpected error in system accounting codes GET', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -129,7 +130,7 @@ export async function PUT(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error in system accounting codes update API:', error)
+    logger.logAdminAction('system-accounting-codes-update-exception', 'Unexpected error in system accounting codes PUT', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

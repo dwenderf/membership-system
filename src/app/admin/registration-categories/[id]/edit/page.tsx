@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useParams } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface Category {
   id: string
@@ -46,7 +47,7 @@ export default function EditRegistrationCategoryPage() {
         setIsGoalieOnly(data.is_goalie_only ?? false)
       } catch (err) {
         setError('An unexpected error occurred')
-        console.error('Error fetching category:', err)
+        logger.logAdminAction('fetch-registration-category', 'Error fetching category', { categoryId, error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
       } finally {
         setInitialLoading(false)
       }
@@ -83,7 +84,7 @@ export default function EditRegistrationCategoryPage() {
       router.push('/admin/registration-categories')
     } catch (err) {
       setError('An unexpected error occurred')
-      console.error('Error updating category:', err)
+      logger.logAdminAction('update-registration-category', 'Error updating category', { categoryId, error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
     } finally {
       setLoading(false)
     }

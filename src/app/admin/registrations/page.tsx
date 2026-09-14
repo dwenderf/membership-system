@@ -3,6 +3,7 @@ import { getRegistrationStatus, RegistrationWithTiming } from '@/lib/registratio
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import RegistrationsList from '@/components/RegistrationsList'
+import { logger } from '@/lib/logging/logger'
 
 export default async function RegistrationsPage() {
   const supabase = await createClient()
@@ -67,7 +68,7 @@ export default async function RegistrationsPage() {
     }>, { merge: false }>()
 
   if (error) {
-    console.error('Error fetching registrations:', error)
+    logger.logAdminAction('fetch-registrations', 'Error fetching registrations', { error: error.message }, user.id, 'error')
   }
 
   return (

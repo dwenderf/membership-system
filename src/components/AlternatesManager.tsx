@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
+import { logger } from '@/lib/logging/logger'
 import RegistrationAlternatesSection from '@/components/RegistrationAlternatesSection'
 import AllRegistrationsActivityGrid from '@/components/AllRegistrationsActivityGrid'
 import SeasonSelector from '@/components/SeasonSelector'
@@ -97,7 +98,7 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
 
       setRegistrationsWithGames(registrationsWithGamesData)
     } catch (error) {
-      console.error('Error fetching registrations games:', error)
+      logger.error('admin-action', 'fetch-registrations-games-error', 'Error fetching registrations games for alternates overview', { error: error instanceof Error ? error.message : String(error) })
       setRegistrationsWithGames([])
       setOverviewError('Couldn\'t load the activity overview. Please try refreshing the page.')
     } finally {
@@ -107,9 +108,7 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
 
   // Fetch games for the current season's registrations for the overview
   useEffect(() => {
-    fetchRegistrationsGames().catch(err => {
-      console.error('Error in useEffect fetchRegistrationsGames:', err)
-    })
+    fetchRegistrationsGames()
   }, [fetchRegistrationsGames])
 
   return (
@@ -169,10 +168,9 @@ export default function AlternatesManager({ registrations, seasons: rawSeasons, 
           registrations={registrationsWithGames}
           seasonStart={selectedSeason.startDate}
           seasonEnd={selectedSeason.endDate}
-          onRegistrationWeekClick={(registrationId, weekStart) => {
+          onRegistrationWeekClick={(registrationId) => {
             // Auto-select the registration when user clicks on a week
             setSelectedRegistration(registrationId)
-            console.log('Week clicked:', registrationId, weekStart)
           }}
         />
       )}

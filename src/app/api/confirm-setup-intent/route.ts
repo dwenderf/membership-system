@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,13 +54,15 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
 
     if (updateError) {
-      console.error('Failed to update user on confirm-setup-intent:', updateError)
+      logger.logPaymentProcessing('setup-intent-persist-failed', 'Failed to update user on confirm-setup-intent', { userId: user.id, setupIntentId, error: updateError.message }, 'error')
       return NextResponse.json({ error: 'Failed to persist setup intent' }, { status: 500 })
     }
 
+    logger.logPaymentProcessing('setup-intent-confirmed', 'Successfully persisted setup intent payment method', { userId: user.id, setupIntentId }, 'info')
+
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error in confirm-setup-intent:', error)
+    logger.logPaymentProcessing('confirm-setup-intent-error', 'Error in confirm-setup-intent', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     try {
       await getStripe().paymentMethods.retrieve(paymentMethodId)
     } catch (error) {
-      console.error('Saved payment method no longer valid:', error)
+      logger.logPaymentProcessing('saved-payment-method-invalid', 'Saved payment method no longer valid', { userId: user.id, paymentMethodId, error: error instanceof Error ? error.message : String(error) }, 'warn')
       return NextResponse.json({ error: 'Saved payment method is no longer valid' }, { status: 400 })
     }
 
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error getting payment method details:', error)
+    logger.logPaymentProcessing('get-payment-method-details-error', 'Error getting payment method details', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
+import { logger } from '@/lib/logging/logger'
 
 /** Payload passed to Tally's onSubmit handler; Tally does not publish TS types. */
 export interface TallySubmissionPayload {
@@ -89,7 +90,6 @@ export default function TallySurveyEmbed({
       if (response.ok) {
         const { completed } = await response.json()
         if (completed) {
-          console.log('User has already completed this survey')
           setExistingSurveyCompleted(true)
           setIsLoading(false)
           onComplete?.(null) // Notify parent that survey is complete
@@ -97,7 +97,7 @@ export default function TallySurveyEmbed({
         }
       }
     } catch (err) {
-      console.error('Error checking existing survey completion:', err)
+      logger.logSystem('check-existing-survey-completion-error', 'Error checking existing survey completion', { surveyId, error: err instanceof Error ? err.message : String(err) }, 'warn')
     }
     return false
   }
@@ -115,12 +115,10 @@ export default function TallySurveyEmbed({
       })
       
       if (!response.ok) {
-        console.error('Failed to store survey response:', response.status)
-      } else {
-        console.log('Survey response stored successfully')
+        logger.logSystem('store-survey-response-failed', 'Failed to store survey response', { surveyId, status: response.status }, 'error')
       }
     } catch (err) {
-      console.error('Error storing survey response:', err)
+      logger.logSystem('store-survey-response-error', 'Error storing survey response', { surveyId, error: err instanceof Error ? err.message : String(err) }, 'error')
     }
   }
 
@@ -136,33 +134,28 @@ export default function TallySurveyEmbed({
         setIsLoading(true)
         setError(null)
 
-        console.log('Loading Tally script for survey:', surveyId)
-
         // Use Tally popup API for both desktop and mobile
         // Mobile gets full-screen appearance via CSS overrides in globals.css
         if (typeof window !== 'undefined' && !window.Tally) {
-          console.log('Loading Tally embed script...')
           const script = document.createElement('script')
           script.src = 'https://tally.so/widgets/embed.js'
           script.async = true
           script.onload = () => {
-            console.log('Tally embed script loaded successfully')
             openPopupSurvey()
           }
           script.onerror = () => {
             const errorMsg = 'Failed to load Tally embed script'
-            console.error(errorMsg)
+            logger.logSystem('tally-script-load-error', errorMsg, { surveyId }, 'error')
             setError(errorMsg)
             setIsLoading(false)
             onErrorRef.current?.(errorMsg)
           }
           document.body.appendChild(script)
         } else {
-          console.log('Tally script already loaded')
           openPopupSurvey()
         }
       } catch (err) {
-        console.error('Error in loadTallyAndOpenSurvey:', err)
+        logger.logSystem('load-tally-and-open-survey-error', 'Error in loadTallyAndOpenSurvey', { surveyId, error: err instanceof Error ? err.message : String(err) }, 'error')
         const errorMsg = err instanceof Error ? err.message : 'Unknown error loading survey'
         setError(errorMsg)
         setIsLoading(false)
@@ -171,8 +164,6 @@ export default function TallySurveyEmbed({
     }
 
     const openPopupSurvey = () => {
-      console.log('Opening popup survey for survey ID:', surveyId)
-      
       try {
         const hiddenFields = {
           user_id: userId,
@@ -182,8 +173,6 @@ export default function TallySurveyEmbed({
           category: registrationCategory,
           ...(memberNumber && { member_number: memberNumber })
         }
-
-        console.log('Opening popup with hidden fields:', hiddenFields)
 
         const popupOptions = {
           layout: 'modal',
@@ -195,17 +184,15 @@ export default function TallySurveyEmbed({
           },
           hiddenFields,
           onOpen: () => {
-            console.log('Survey popup opened')
             setSurveyOpened(true)
             setIsLoading(false)
           },
           onClose: () => {
-            console.log('Survey popup closed')
             setSurveyOpened(false)
             onCloseRef.current?.()
           },
           onSubmit: async (payload: TallySubmissionPayload) => {
-            console.log('Survey submitted:', payload)
+            logger.logSystem('survey-submitted', 'Survey submitted', { surveyId, respondentId: payload.respondentId }, 'debug')
             setSurveyCompleted(true)
             setSurveyOpened(false)
             await storeSurveyResponse(payload)
@@ -216,7 +203,7 @@ export default function TallySurveyEmbed({
         window.Tally?.openPopup(surveyId, popupOptions)
 
       } catch (err) {
-        console.error('Error opening Tally popup:', err)
+        logger.logSystem('open-tally-popup-error', 'Error opening Tally popup', { surveyId, error: err instanceof Error ? err.message : String(err) }, 'error')
         const errorMsg = err instanceof Error ? err.message : 'Failed to open survey'
         setError(errorMsg)
         setIsLoading(false)

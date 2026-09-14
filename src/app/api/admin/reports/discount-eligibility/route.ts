@@ -4,6 +4,7 @@ import {
   resolveEffectiveDiscountLimitsBatch,
   calculateSeasonalDiscountUsageBatch
 } from '@/lib/services/discount-limit-service'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * GET /api/admin/reports/discount-eligibility
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       .eq('season_id', seasonId)
 
     if (allowancesError) {
-      console.error('Error fetching discount allowances:', allowancesError)
+      logger.logAdminAction('discount-eligibility-fetch-error', 'Error fetching discount allowances', { seasonId, error: allowancesError.message }, currentUser.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch discount allowances' }, { status: 500 })
     }
 
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
       eligibility
     })
   } catch (error) {
-    console.error('Error fetching discount eligibility report:', error)
+    logger.logAdminAction('discount-eligibility-fetch-exception', 'Unexpected error fetching discount eligibility report', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -17,7 +17,11 @@ This document outlines development standards and best practices for the Hockey A
 ## 🪵 Logging Standards
 
 ### ✅ Preferred: Structured Logging
-**Always use the centralized logger over console.log**
+**`console.log` is for temporary scratch debugging only — the centralized logger is required for anything audit-worthy**
+
+`console.log` (and `console.debug`) are fine while actively working a dev/feature cycle, but must be removed before committing. They aren't captured to `logs/`, the admin log viewer, or Sentry, so anything left behind is invisible once the code ships.
+
+Use the centralized logger for anything audit-worthy — warnings, errors, and other notable events. Apply this especially carefully in billing/financial-accounting code (Stripe payment/webhook handling, Xero sync, invoicing) and anything immediately upstream or downstream of it, since that's where dropped signal is most costly.
 
 ```typescript
 // ✅ GOOD: Structured logging with categorization
@@ -49,11 +53,12 @@ Use appropriate categories for different types of operations:
 - `warn`: Warning conditions that should be monitored
 - `error`: Error conditions requiring attention
 
-### Exception: Console.log Usage
-Console.log is acceptable only in these specific cases:
-- **Edge Runtime**: Serverless environments without file system access
-- **Circular Logging Prevention**: Avoiding infinite loops in logger error handling
-- **Development Debugging**: Temporary debugging (must be removed before commit)
+### When console.log Is Still Acceptable in Committed Code
+- **Edge Runtime**: serverless environments without file system access
+- **Circular Logging Prevention**: avoiding infinite loops inside the logger's own error handling (see `reportToSentry` in `src/lib/logging/logger.ts`, and the same pattern in `src/lib/xero/client.ts`'s `logXeroSync` helper)
+- **CLI tooling**: one-off scripts under `scripts/` that print to stdout for a human running them, not for structured log capture
+
+Everything else — including any `console.log` left from debugging — must be deleted before commit or converted to a `logger.*` call. This is enforced (as a warning, not a build failure) by the `no-console` ESLint rule.
 
 ## 🗃️ Database Migrations
 

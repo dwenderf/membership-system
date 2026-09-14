@@ -1,6 +1,7 @@
 import { Payment } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync } from './client'
 import { createClient } from '../supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export interface StripePaymentData {
   payment_id: string
@@ -176,9 +177,8 @@ export async function recordStripePaymentInXero(
     }
 
   } catch (error) {
-    console.error('Error recording Stripe payment in Xero:', error)
-    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.logXeroSync('record-stripe-payment-error', 'Error recording Stripe payment in Xero', { paymentId, tenantId, error: errorMessage }, 'error')
 
     await logXeroSync({
       tenant_id: tenantId,
@@ -206,7 +206,7 @@ async function recordStripeFeeExpense(
     // 2. Use a different expense tracking method
     // 3. Batch fees into periodic journal entries
     
-    console.log(`Recording Stripe fee of $${feeAmount / 100} for payment ${paymentIntentId}`)
+    logger.logXeroSync('record-stripe-fee', `Recording Stripe fee of $${(feeAmount / 100).toFixed(2)} for payment ${paymentIntentId}`, { feeAmount, paymentIntentId, tenantId }, 'info')
     
     // For now, we'll just log this - the actual implementation depends on your accounting preferences
     await logXeroSync({
@@ -220,7 +220,7 @@ async function recordStripeFeeExpense(
     })
 
   } catch (error) {
-    console.error('Error recording Stripe fee expense:', error)
+    logger.logXeroSync('record-stripe-fee-error', 'Error recording Stripe fee expense', { paymentIntentId, tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
     await logXeroSync({
       tenant_id: tenantId,
       operation: 'payment_sync',
@@ -252,7 +252,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
       .single()
 
     if (paymentError || !payment) {
-      console.error('Payment not found:', paymentId)
+      logger.logXeroSync('stripe-payment-data-not-found', 'Payment not found while building Stripe payment data for Xero', { paymentId }, 'warn')
       return null
     }
 
@@ -274,7 +274,7 @@ async function getStripePaymentData(paymentId: string): Promise<StripePaymentDat
     }
 
   } catch (error) {
-    console.error('Error getting Stripe payment data:', error)
+    logger.logXeroSync('stripe-payment-data-error', 'Error getting Stripe payment data', { paymentId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return null
   }
 }
@@ -352,7 +352,7 @@ export async function bulkRecordUnsyncedPayments(
     }
 
   } catch (error) {
-    console.error('Error in bulk payment recording:', error)
+    logger.logXeroSync('bulk-payment-recording-error', 'Error in bulk Stripe payment recording to Xero', { tenantId, bankAccountCode, error: error instanceof Error ? error.message : String(error) }, 'error')
     return {
       success: false,
       recorded: 0,

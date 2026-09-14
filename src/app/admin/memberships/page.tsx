@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { logger } from '@/lib/logging/logger'
 
 function formatCurrency(cents: number) {
   return `$${(cents / 100).toFixed(2)}`
@@ -32,7 +33,7 @@ export default async function MembershipsPage() {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Error fetching memberships:', error)
+    logger.logAdminAction('fetch-memberships', 'Error fetching memberships', { error: error.message }, user.id, 'error')
   }
 
   return (

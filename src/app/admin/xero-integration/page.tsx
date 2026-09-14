@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDate, formatTime } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface XeroConnection {
   tenant_id: string
@@ -46,7 +47,7 @@ export default function XeroIntegrationPage() {
         showError('Failed to fetch Xero status')
       }
     } catch (error) {
-      console.error('Error fetching Xero status:', error)
+      logger.logAdminAction('fetch-xero-status', 'Error fetching Xero status', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error loading Xero integration status')
     } finally {
       setLoading(false)
@@ -67,7 +68,7 @@ export default function XeroIntegrationPage() {
         showError('Failed to initiate Xero connection')
       }
     } catch (error) {
-      console.error('Error connecting to Xero:', error)
+      logger.logAdminAction('connect-xero', 'Error connecting to Xero', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error initiating Xero connection')
     }
   }
@@ -91,7 +92,7 @@ export default function XeroIntegrationPage() {
         showError('Failed to disconnect Xero integration')
       }
     } catch (error) {
-      console.error('Error disconnecting Xero:', error)
+      logger.logAdminAction('disconnect-xero', 'Error disconnecting Xero', { tenantId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error disconnecting Xero integration')
     }
   }
@@ -124,7 +125,7 @@ export default function XeroIntegrationPage() {
         showError(`Failed to sync ${type}`)
       }
     } catch (error) {
-      console.error(`Error syncing ${type}:`, error)
+      logger.logAdminAction('bulk-sync-xero', `Error syncing ${type}`, { type, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError(`Error syncing ${type}`)
     } finally {
       setSyncing(false)

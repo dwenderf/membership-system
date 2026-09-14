@@ -46,5 +46,5 @@ next-env.d.ts
 # logs
 /logs/
 .claude/settings.local.json
-.claude/settings.local.json
+.claude/worktrees/
 .env*.local

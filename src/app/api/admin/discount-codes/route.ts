@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/discount-codes - List all discount codes with category info
 export async function GET(request: NextRequest) {
@@ -47,14 +48,14 @@ export async function GET(request: NextRequest) {
     const { data: codes, error } = await query
 
     if (error) {
-      console.error('Error fetching discount codes:', error)
+      logger.logAdminAction('discount-codes-fetch-error', 'Error fetching discount codes', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch discount codes' }, { status: 500 })
     }
 
     return NextResponse.json({ codes })
-    
+
   } catch (error) {
-    console.error('Error in discount codes API:', error)
+    logger.logAdminAction('discount-codes-fetch-exception', 'Unexpected error in discount codes GET', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -153,14 +154,14 @@ export async function POST(request: NextRequest) {
       if (error.code === '23505') { // Unique constraint violation
         return NextResponse.json({ error: 'Discount code already exists' }, { status: 400 })
       }
-      console.error('Error creating discount code:', error)
+      logger.logAdminAction('discount-code-create-error', 'Error creating discount code', { error: error.message, discountCategoryId: discount_category_id }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to create discount code' }, { status: 500 })
     }
 
     return NextResponse.json({ code: discountCode }, { status: 201 })
-    
+
   } catch (error) {
-    console.error('Error in discount codes API:', error)
+    logger.logAdminAction('discount-code-create-exception', 'Unexpected error in discount codes POST', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

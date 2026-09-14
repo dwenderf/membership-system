@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getActiveTenant } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -33,7 +34,7 @@ export async function GET() {
       }
     })
   } catch (error) {
-    console.error('Error getting active Xero tenant:', error)
+    logger.logXeroSync('get-active-tenant-failed', 'Error getting active Xero tenant', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       success: false, 
       error: 'Internal server error' 

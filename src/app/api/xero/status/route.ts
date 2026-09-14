@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isRefreshTokenExpired } from '@/lib/xero/client'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (connectionsError) {
-      console.error('Error fetching Xero connections:', connectionsError)
+      logger.logXeroSync('status-fetch-connections-failed', 'Error fetching Xero connections', { error: connectionsError.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 })
     }
 
@@ -67,21 +68,19 @@ export async function GET(request: NextRequest) {
       const isValid = !isRefreshExpired
       const status = isRefreshExpired ? 'expired' : 'connected'
       
-      // Add debugging for connection status
-      console.log('Connection status check:', {
+      logger.logXeroSync('status-connection-check', 'Connection status check', {
         tenant_id: connection.tenant_id,
         tenant_name: connection.tenant_name,
         access_token_expires_at: connection.expires_at,
         refresh_token_updated_at: connection.updated_at,
-        now: now.toISOString(),
         isAccessExpired,
         isRefreshExpired,
         isValid,
         status,
         accessTokenTimeUntilExpiry: accessTokenExpiresAt.getTime() - now.getTime(),
         refreshTokenDaysUntilExpiry: Math.floor((new Date(connection.updated_at).getTime() + (60 * 24 * 60 * 60 * 1000) - now.getTime()) / (24 * 60 * 60 * 1000))
-      })
-      
+      }, 'debug')
+
       return {
         tenant_id: connection.tenant_id,
         tenant_name: connection.tenant_name,
@@ -155,11 +154,11 @@ export async function GET(request: NextRequest) {
       .order('staged_at', { ascending: true })
 
     if (pendingInvoicesError) {
-      console.error('Error fetching pending invoices:', pendingInvoicesError)
+      logger.logXeroSync('status-fetch-pending-invoices-failed', 'Error fetching pending invoices', { error: pendingInvoicesError.message }, 'error')
     }
 
     if (pendingCreditNotesError) {
-      console.error('Error fetching pending credit notes:', pendingCreditNotesError)
+      logger.logXeroSync('status-fetch-pending-credit-notes-failed', 'Error fetching pending credit notes', { error: pendingCreditNotesError.message }, 'error')
     }
 
     // Get pending payments with details (only 'pending' - staged payments are not ready)
@@ -191,7 +190,7 @@ export async function GET(request: NextRequest) {
       .order('staged_at', { ascending: true })
 
     if (pendingPaymentsError) {
-      console.error('Error fetching pending payments:', pendingPaymentsError)
+      logger.logXeroSync('status-fetch-pending-payments-failed', 'Error fetching pending payments', { error: pendingPaymentsError.message }, 'error')
     }
 
     // Get failed and ignored invoices with user information - only show retryable ones
@@ -223,7 +222,7 @@ export async function GET(request: NextRequest) {
 
       
     if (failedInvoicesError) {
-      console.error('Error fetching failed invoices:', failedInvoicesError)
+      logger.logXeroSync('status-fetch-failed-invoices-failed', 'Error fetching failed invoices', { error: failedInvoicesError.message }, 'error')
     }
 
     // Filter out invoices that shouldn't be synced (non-zero amounts with non-completed payments)
@@ -238,12 +237,12 @@ export async function GET(request: NextRequest) {
       if (payment.status === 'completed') return true
       
       // Non-zero amount with non-completed payment - don't show for retry
-      console.log('Filtering out invoice for retry:', {
+      logger.logXeroSync('status-invoice-filtered-from-retry', 'Filtering out invoice for retry', {
         invoiceId: invoice.id,
         paymentStatus: payment.status,
         finalAmount: payment.final_amount,
         reason: 'Non-zero amount with non-completed payment'
-      })
+      }, 'debug')
       return false
     }) || []
 
@@ -274,7 +273,7 @@ export async function GET(request: NextRequest) {
       .order('last_synced_at', { ascending: false })
 
     if (failedPaymentsError) {
-      console.error('Error fetching failed payments:', failedPaymentsError)
+      logger.logXeroSync('status-fetch-failed-payments-failed', 'Error fetching failed payments', { error: failedPaymentsError.message }, 'error')
     }
 
     // Separate failed and ignored items
@@ -309,14 +308,6 @@ export async function GET(request: NextRequest) {
       ignored_count: ignoredInvoices.length + ignoredPayments.length
     }
 
-    // Add debugging information
-    console.log('Xero status API response:', {
-      pendingInvoicesCount: pendingInvoices?.length || 0,
-      pendingPaymentsCount: pendingPayments?.length || 0,
-      failedInvoicesCount: filteredFailedInvoices.length,
-      failedPaymentsCount: failedPayments?.length || 0
-    })
-
     const response = {
       connections: connectionsWithStatus,
       stats,
@@ -324,23 +315,10 @@ export async function GET(request: NextRequest) {
       has_active_connection: connectionsWithStatus.some(c => c.status === 'connected')
     }
 
-    // Add debugging for connection status
-    console.log('Final connection status:', {
-      connectionsCount: connectionsWithStatus.length,
-      connections: connectionsWithStatus.map(c => ({
-        tenant_name: c.tenant_name,
-        status: c.status,
-        is_expired: c.is_expired,
-        expires_at: c.expires_at
-      })),
-      is_configured: response.is_configured,
-      has_active_connection: response.has_active_connection
-    })
-
     return NextResponse.json(response)
 
   } catch (error) {
-    console.error('Error fetching Xero status:', error)
+    logger.logXeroSync('status-fetch-failed', 'Error fetching Xero status', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to fetch Xero status' 
     }, { status: 500 })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +30,7 @@ export async function GET(
       .is('removed_at', null)
     
     if (error) {
-      console.error('Error loading waitlist entries:', error)
+      logger.logPaymentProcessing('user-waitlist-entries-load-failed', 'Error loading waitlist entries', { userId: user.id, registrationId, error: error.message }, 'error')
       return NextResponse.json({ error: 'Failed to load waitlist entries' }, { status: 500 })
     }
     
@@ -47,7 +48,7 @@ export async function GET(
     return NextResponse.json({ waitlistEntries: waitlistMap })
     
   } catch (error) {
-    console.error('Error in user waitlists API:', error)
+    logger.logPaymentProcessing('user-waitlists-error', 'Error in user waitlists API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

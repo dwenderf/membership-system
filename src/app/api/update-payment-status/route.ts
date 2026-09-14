@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,30 +51,30 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (error) {
-      console.error('Error updating payment status:', error)
-      return NextResponse.json({ 
-        error: 'Failed to update payment status' 
+      logger.logPaymentProcessing('payment-status-update-failed', 'Error updating payment status', { stripePaymentIntentId, status, userId: user.id, error: error.message }, 'error')
+      return NextResponse.json({
+        error: 'Failed to update payment status'
       }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
-      return NextResponse.json({ 
-        error: 'No payment found to update' 
+      return NextResponse.json({
+        error: 'No payment found to update'
       }, { status: 404 })
     }
 
-    console.log(`✅ Updated payment status to '${status}' for payment intent ${stripePaymentIntentId}`)
+    logger.logPaymentProcessing('payment-status-updated', `Updated payment status to '${status}' for payment intent ${stripePaymentIntentId}`, { stripePaymentIntentId, status, userId: user.id }, 'info')
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       updated: data.length,
       payment: data[0]
     })
-    
+
   } catch (error) {
-    console.error('Error updating payment status:', error)
-    return NextResponse.json({ 
-      error: 'Internal server error' 
+    logger.logPaymentProcessing('update-payment-status-error', 'Error updating payment status', { error: error instanceof Error ? error.message : String(error) }, 'error')
+    return NextResponse.json({
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { formatTime, formatDateTime } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface SyncCounts {
   pendingEmails: number
@@ -109,7 +110,7 @@ export default function SyncButtons() {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch sync counts:', error)
+      logger.error('admin-action', 'fetch-sync-counts-error', 'Failed to fetch sync counts', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setLoadingCounts(false)
     }
@@ -130,10 +131,10 @@ export default function SyncButtons() {
         }))
         await fetchCounts() // Refresh counts
       } else {
-        console.error('Email sync failed')
+        logger.error('admin-action', 'email-sync-failed', 'Email sync failed', { status: response.status })
       }
     } catch (error) {
-      console.error('Email sync error:', error)
+      logger.error('admin-action', 'email-sync-error', 'Email sync error', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setLoading(prev => ({ ...prev, emails: false }))
     }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { logger } from '@/lib/logging/logger'
 
 interface XeroAccount {
   code: string
@@ -104,7 +105,7 @@ export default function AccountingCodeInput({
         }
       }
     } catch (error) {
-      console.error('Failed to fetch accounts:', error)
+      logger.error('admin-action', 'fetch-accounting-codes-error', 'Failed to fetch accounts', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setIsLoading(false)
     }
@@ -139,7 +140,7 @@ export default function AccountingCodeInput({
         }
       }
     } catch (error) {
-      console.error('Validation error:', error)
+      logger.error('admin-action', 'validate-accounting-code-error', 'Accounting code validation error', { code, error: error instanceof Error ? error.message : String(error) })
     }
   }, [suggestedAccountType])
 

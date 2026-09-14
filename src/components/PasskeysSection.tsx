@@ -7,6 +7,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
 import PasskeyRemovalHelpDialog from '@/components/PasskeyRemovalHelpDialog'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 import {
   isWebAuthnSupported,
   isUserCancelledError,
@@ -42,7 +43,7 @@ export default function PasskeysSection() {
     setLoading(true)
     const { data, error } = await supabase.auth.passkey.list()
     if (error) {
-      console.error('Error loading passkeys:', error)
+      logger.logSystem('load-passkeys-error', 'Error loading passkeys', { error: error.message }, 'error')
       setLoadError(true)
     } else {
       setPasskeys(data ?? [])
@@ -81,7 +82,7 @@ export default function PasskeysSection() {
       await loadPasskeys()
     } catch (error) {
       if (!isUserCancelledError(error)) {
-        console.error('Passkey registration error:', error)
+        logger.logSystem('passkey-registration-error', 'Passkey registration error', { error: error instanceof Error ? error.message : String(error) }, 'error')
         showError('Passkey setup failed', 'Something went wrong. Please try again.')
       }
     } finally {

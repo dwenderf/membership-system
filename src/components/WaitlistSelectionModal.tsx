@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { dollarsToCents } from '@/types/currency'
+import { logger } from '@/lib/logging/logger'
 
 interface WaitlistEntry {
   id: string
@@ -133,7 +134,7 @@ export default function WaitlistSelectionModal({
 
       onSuccess()
     } catch (error) {
-      console.error('Error selecting user from waitlist:', error)
+      logger.logPaymentProcessing('select-waitlist-user-error', 'Error selecting user from waitlist', { waitlistEntryId: waitlistEntry.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       showError(
         'Selection Failed',
         error instanceof Error ? error.message : 'Failed to select user from waitlist'

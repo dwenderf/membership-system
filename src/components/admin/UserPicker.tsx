@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { logger } from '@/lib/logging/logger'
 
 interface User {
   id: string
@@ -87,7 +88,7 @@ export default function UserPicker({
         setUsers(data.users || [])
       }
     } catch (error) {
-      console.error('Failed to fetch users:', error)
+      logger.error('admin-action', 'fetch-users-error', 'Failed to fetch users', { error: error instanceof Error ? error.message : String(error) })
     } finally {
       setIsLoading(false)
     }

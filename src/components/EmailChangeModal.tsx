@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 interface EmailChangeModalProps {
   isOpen: boolean
@@ -65,7 +66,7 @@ export default function EmailChangeModal({
         showError('Failed to request email change', data.error)
       }
     } catch (error) {
-      console.error('Error requesting email change:', error)
+      logger.logSystem('email-change-request-error', 'Error requesting email change', { error: error instanceof Error ? error.message : String(error) }, 'error')
       setError('An unexpected error occurred')
       showError('Error', 'An unexpected error occurred')
     } finally {

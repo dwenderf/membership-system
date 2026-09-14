@@ -18,6 +18,7 @@ import { RegistrationValidationService, type UserMembership } from '@/lib/servic
 import { getRegistrationStatus, isRegistrationAvailable, type RegistrationWithTiming } from '@/lib/registration-status'
 import type { DiscountValidationResult } from '@/app/api/validate-discount-code/route'
 import WaitlistBadge from './WaitlistBadge'
+import { logger } from '@/lib/logging/logger'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -103,11 +104,6 @@ export default function RegistrationPurchase({
   const [showSetupIntentForm, setShowSetupIntentForm] = useState(false)
   const [showConfirmationScreen, setShowConfirmationScreen] = useState(false)
   const [userHasSavedPaymentMethod, setUserHasSavedPaymentMethod] = useState<boolean | null>(null)
-  
-  // Debug: Log when setup intent form state changes
-  useEffect(() => {
-    console.log('🔄 showSetupIntentForm state changed:', showSetupIntentForm)
-  }, [showSetupIntentForm])
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -156,7 +152,7 @@ export default function RegistrationPurchase({
           setPaymentPlanEnabled(false)
         }
       } catch (error) {
-        console.error('Error checking payment status:', error)
+        logger.logPaymentProcessing('check-payment-status-error', 'Error checking payment status', { error: error instanceof Error ? error.message : String(error) }, 'error')
         setUserHasSavedPaymentMethod(false)
         setPaymentPlanEligible(false)
         setPaymentPlanEnabled(false)
@@ -173,7 +169,7 @@ export default function RegistrationPurchase({
         method: 'DELETE',
       })
     } catch (error) {
-      console.error('Error cleaning up processing reservation:', error)
+      logger.logPaymentProcessing('cleanup-processing-reservation-error', 'Error cleaning up processing reservation', { registrationId: registration.id, error: error instanceof Error ? error.message : String(error) }, 'warn')
     }
   }
 
@@ -192,9 +188,9 @@ export default function RegistrationPurchase({
             status: 'cancelled'
           }),
         })
-        console.log(`✅ Updated payment ${paymentIntentId} status to cancelled (user closed form)`)
+        logger.logPaymentProcessing('payment-status-updated-cancelled', `Updated payment ${paymentIntentId} status to cancelled (user closed form)`, { paymentIntentId }, 'debug')
       } catch (error) {
-        console.warn('Failed to update payment status to cancelled:', error)
+        logger.logPaymentProcessing('update-payment-status-cancelled-failed', 'Failed to update payment status to cancelled', { paymentIntentId, error: error instanceof Error ? error.message : String(error) }, 'warn')
       }
     }
 
@@ -225,9 +221,9 @@ export default function RegistrationPurchase({
             status: 'cancelled'
           }),
         })
-        console.log(`✅ Updated payment ${paymentIntentId} status to cancelled (timer expired)`)
+        logger.logPaymentProcessing('payment-status-updated-cancelled', `Updated payment ${paymentIntentId} status to cancelled (timer expired)`, { paymentIntentId }, 'debug')
       } catch (error) {
-        console.warn('Failed to update payment status to cancelled on timer expiry:', error)
+        logger.logPaymentProcessing('update-payment-status-cancelled-failed', 'Failed to update payment status to cancelled on timer expiry', { paymentIntentId, error: error instanceof Error ? error.message : String(error) }, 'warn')
       }
     }
 
@@ -309,7 +305,7 @@ export default function RegistrationPurchase({
         const { waitlistEntries } = await response.json()
         setUserWaitlistEntries(waitlistEntries)
       } catch (error) {
-        console.error('Error loading waitlist entries:', error)
+        logger.logPaymentProcessing('load-waitlist-entries-error', 'Error loading waitlist entries', { registrationId: registration.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       }
     }
     
@@ -371,7 +367,7 @@ export default function RegistrationPurchase({
           setSurveyCompleted(false)
         }
       } catch (error) {
-        console.error('Error checking survey completion:', error)
+        logger.logPaymentProcessing('check-survey-completion-error', 'Error checking survey completion', { surveyId: registration.survey_id, error: error instanceof Error ? error.message : String(error) }, 'warn')
         // On error, assume not completed
         setSurveyCompleted(false)
       }
@@ -382,7 +378,7 @@ export default function RegistrationPurchase({
 
   // Handle survey completion
   const handleSurveyComplete = (responseData: TallySubmissionPayload | null) => {
-    console.log('Survey completed with data:', responseData)
+    logger.logPaymentProcessing('survey-completed', 'Survey completed', { registrationId: registration.id, surveyId: registration.survey_id }, 'debug')
     setSurveyResponses(responseData)
     setSurveyCompleted(true)
     setSurveyStarted(false)
@@ -396,7 +392,6 @@ export default function RegistrationPurchase({
 
   // Handle survey being closed without completion
   const handleSurveyClose = () => {
-    console.log('Survey closed without completion - resetting survey state')
     setSurveyStarted(false)
     // Keep showSurvey true so they can restart
   }
@@ -483,7 +478,6 @@ export default function RegistrationPurchase({
           
           // Handle case where user needs to set up payment method
           if (errorData.requiresSetupIntent) {
-            console.log('🔄 Showing setup intent form for payment method setup')
             // Show setup intent form
             setShowSetupIntentForm(true)
             setIsLoading(false)
@@ -669,15 +663,11 @@ export default function RegistrationPurchase({
 
   // Handle saved method payment confirmation setup
   const handleConfirmSavedMethod = async (clientSecretParam: string): Promise<string | null> => {
-    console.log('🔍 [CLIENT] handleConfirmSavedMethod called', { selectedCategoryId, clientSecret: !!clientSecretParam })
-    
     if (!selectedCategoryId || !clientSecretParam) {
-      console.log('🔍 [CLIENT] handleConfirmSavedMethod early return - missing data')
       return null
     }
 
     try {
-      console.log('🔍 [CLIENT] Calling /api/get-payment-method-details')
       const response = await fetch('/api/get-payment-method-details', {
         method: 'POST',
         headers: {
@@ -689,18 +679,16 @@ export default function RegistrationPurchase({
       })
 
       if (!response.ok) {
-        console.log('🔍 [CLIENT] get-payment-method-details failed with status:', response.status)
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to get payment method details')
       }
 
       const result = await response.json()
-      console.log('🔍 [CLIENT] get-payment-method-details success:', { paymentMethodId: result.paymentMethodId })
       setSavedPaymentMethodId(result.paymentMethodId)
       return result.paymentMethodId
-      
+
     } catch (err) {
-      console.log('🔍 [CLIENT] handleConfirmSavedMethod error:', err)
+      logger.logPaymentProcessing('confirm-saved-method-error', 'Error confirming saved payment method', { registrationId: registration.id, categoryId: selectedCategoryId, error: err instanceof Error ? err.message : String(err) }, 'error')
       const errorMessage = err instanceof Error ? err.message : 'Failed to setup payment'
       setError(errorMessage)
       showError('Payment Setup Failed', errorMessage)

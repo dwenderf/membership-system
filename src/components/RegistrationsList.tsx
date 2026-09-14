@@ -6,6 +6,7 @@ import { getRegistrationStatus, getStatusDisplayText, getStatusBadgeStyle, type 
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import { formatEventDateTime } from '@/lib/date-utils'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { logger } from '@/lib/logging/logger'
 
 interface Registration extends RegistrationWithTiming {
   name: string
@@ -198,7 +199,7 @@ export default function RegistrationsList({ registrations }: RegistrationsListPr
       setDeleteDialogOpen(false)
       setRegistrationToDelete(null)
     } catch (err) {
-      console.error('Error deleting registration:', err)
+      logger.error('admin-action', 'delete-registration-error', 'Error deleting registration', { registrationId: registrationToDelete.id, error: err instanceof Error ? err.message : String(err) })
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete registration')
     } finally {
       setDeleting(false)

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { logger } from '@/lib/logging/logger'
 
 interface DeleteRegistrationButtonProps {
   registrationId: string
@@ -34,7 +35,7 @@ export default function DeleteRegistrationButton({
 
       router.push('/admin/registrations')
     } catch (err) {
-      console.error('Error deleting registration:', err)
+      logger.error('admin-action', 'delete-registration-error', 'Error deleting registration', { registrationId, error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Failed to delete registration')
       setDeleting(false)
     }

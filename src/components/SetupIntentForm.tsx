@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useStripe, useElements, CardNumberElement, CardExpiryElement, CardCvcElement } from '@stripe/react-stripe-js'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 interface SetupIntentFormProps {
   onSuccess: () => void
@@ -98,7 +99,7 @@ export default function SetupIntentForm({
             throw new Error(errorData.error || 'Failed to confirm setup intent')
           }
         } catch (persistErr) {
-          console.error('Failed to confirm setup intent:', persistErr)
+          logger.logPaymentProcessing('confirm-setup-intent-error', 'Failed to confirm setup intent', { setupIntentId: setupIntent.id, isUpdate, error: persistErr instanceof Error ? persistErr.message : String(persistErr) }, 'error')
           throw persistErr
         }
 

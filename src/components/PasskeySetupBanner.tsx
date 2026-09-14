@@ -5,6 +5,7 @@ import { KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { logger } from '@/lib/logging/logger'
 import {
   isWebAuthnSupported,
   isUserCancelledError,
@@ -62,7 +63,7 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
       })
     } catch (error) {
       // Non-critical: worst case the banner shows again next visit
-      console.error('Error saving passkey prompt preferences:', error)
+      logger.logSystem('save-passkey-prompt-prefs-error', 'Error saving passkey prompt preferences', { error: error instanceof Error ? error.message : String(error) }, 'warn')
     }
   }
 
@@ -93,7 +94,7 @@ export default function PasskeySetupBanner({ promptPrefs }: PasskeySetupBannerPr
       setVisible(false)
     } catch (error) {
       if (!isUserCancelledError(error)) {
-        console.error('Passkey registration error:', error)
+        logger.logSystem('passkey-registration-error', 'Passkey registration error', { error: error instanceof Error ? error.message : String(error) }, 'error')
         showError('Passkey setup failed', 'Something went wrong. You can try again from your account page.')
       }
     } finally {

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Json } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 type TabType = 'auth' | 'email' | 'oauth'
 
@@ -117,7 +118,7 @@ function SecurityContent() {
           }
         }
       } catch (err) {
-        console.error('Error fetching logs:', err)
+        logger.logAdminAction('fetch-security-logs', 'Error fetching logs', { activeTab, error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
         setError('An unexpected error occurred')
       } finally {
         setLoading(false)

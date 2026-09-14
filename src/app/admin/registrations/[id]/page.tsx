@@ -15,6 +15,7 @@ import EditableSurveyConfiguration from '@/components/EditableSurveyConfiguratio
 import GamesPreview from '@/components/GamesPreview'
 import CaptainManager from '@/components/CaptainManager'
 import DeleteRegistrationButton from '@/components/DeleteRegistrationButton'
+import { logger } from '@/lib/logging/logger'
 
 export default async function RegistrationDetailPage({
   params,
@@ -84,7 +85,7 @@ export default async function RegistrationDetailPage({
   const categoryRegistrationCounts = await getCategoryRegistrationCounts(categoryIds)
 
   if (categoriesError) {
-    console.error('Error fetching categories:', categoriesError)
+    logger.logAdminAction('fetch-registration-categories', 'Error fetching categories', { registrationId: id, error: categoriesError.message }, user.id, 'error')
   }
 
   const season = registration.seasons

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 type UserMembershipWithName = Database['public']['Tables']['user_memberships']['Row'] & {
   membership: Pick<Database['public']['Tables']['memberships']['Row'], 'name'> | null
@@ -22,20 +23,18 @@ export default function SimpleTestDataPage() {
     // Get current user
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     setUser(currentUser)
-    console.log('Current user:', currentUser)
 
     // Get available memberships
-    const { data: membershipData, error: membershipError } = await supabase
+    const { data: membershipData } = await supabase
       .from('memberships')
       .select('*')
       .order('name')
 
-    console.log('Memberships:', membershipData, 'Error:', membershipError)
     setMemberships(membershipData || [])
 
     // Get current user memberships
     if (currentUser) {
-      const { data: userMembershipData, error: userMembershipError } = await supabase
+      const { data: userMembershipData } = await supabase
         .from('user_memberships')
         .select(`
           *,
@@ -44,7 +43,6 @@ export default function SimpleTestDataPage() {
         .eq('user_id', currentUser.id)
         .order('valid_until', { ascending: false })
 
-      console.log('User memberships:', userMembershipData, 'Error:', userMembershipError)
       setCurrentMemberships(userMembershipData || [])
     }
   }
@@ -63,8 +61,6 @@ export default function SimpleTestDataPage() {
     const membershipId = formData.get('membership_id') as string
     const months = parseInt(formData.get('months') as string)
     const startDate = formData.get('start_date') as string
-
-    console.log('Form data:', { membershipId, months, startDate, userId: user?.id })
 
     if (!user) {
       setMessage('Error: No user logged in')
@@ -85,13 +81,11 @@ export default function SimpleTestDataPage() {
         .single()
 
       if (membershipError) {
-        console.error('Error fetching membership:', membershipError)
+        logger.logAdminAction('add-test-membership', 'Error fetching membership', { membershipId, error: membershipError.message }, user.id, 'error')
         setMessage(`Error fetching membership: ${membershipError.message}`)
         setLoading(false)
         return
       }
-
-      console.log('Found membership:', membership)
 
       const amountPaid = months === 12 ? membership.price_annual : membership.price_monthly * months
 
@@ -106,25 +100,22 @@ export default function SimpleTestDataPage() {
         purchased_at: new Date().toISOString()
       }
 
-      console.log('Inserting data:', insertData)
-
-      const { data: insertResult, error } = await supabase
+      const { error } = await supabase
         .from('user_memberships')
         .insert(insertData)
         .select()
 
       if (error) {
-        console.error('Error inserting:', error)
+        logger.logAdminAction('add-test-membership', 'Error inserting test membership', { membershipId, error: error.message }, user.id, 'error')
         setMessage(`Error: ${error.message}`)
       } else {
-        console.log('Success:', insertResult)
         setMessage('Successfully added test membership!')
         loadData() // Refresh the data
         // Reset form
         ;(e.target as HTMLFormElement).reset()
       }
     } catch (err) {
-      console.error('Unexpected error:', err)
+      logger.logAdminAction('add-test-membership', 'Unexpected error adding test membership', { membershipId, error: err instanceof Error ? err.message : String(err) }, user.id, 'error')
       setMessage(`Unexpected error: ${err}`)
     }
 

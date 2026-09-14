@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
 import XeroAccountsSection from '@/components/admin/XeroAccountsSection'
 import AccountingCodeInput from '@/components/admin/AccountingCodeInput'
+import { logger } from '@/lib/logging/logger'
 
 interface SystemAccountingCode {
   id: string // UUID
@@ -107,7 +108,7 @@ export default function AccountingCodesPage() {
         showError('Failed to fetch system accounting codes')
       }
     } catch (error) {
-      console.error('Error fetching system accounting codes:', error)
+      logger.logAdminAction('fetch-system-accounting-codes', 'Error fetching system accounting codes', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error fetching system accounting codes')
     }
   }, [showError])
@@ -132,7 +133,7 @@ export default function AccountingCodesPage() {
         showError('Failed to fetch discount categories')
       }
     } catch (error) {
-      console.error('Error fetching discount categories:', error)
+      logger.logAdminAction('fetch-discount-categories', 'Error fetching discount categories', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error fetching discount categories')
     } finally {
       setLoading(false)
@@ -158,7 +159,7 @@ export default function AccountingCodesPage() {
         showError('Failed to fetch memberships')
       }
     } catch (error) {
-      console.error('Error fetching memberships:', error)
+      logger.logAdminAction('fetch-memberships', 'Error fetching memberships', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error fetching memberships')
     } finally {
       setLoading(false)
@@ -282,7 +283,7 @@ export default function AccountingCodesPage() {
         showError('Failed to update system accounting codes')
       }
     } catch (error) {
-      console.error('Error updating system accounting codes:', error)
+      logger.logAdminAction('update-system-accounting-codes', 'Error updating system accounting codes', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error updating system accounting codes')
     } finally {
       setUpdating(false)
@@ -370,7 +371,7 @@ export default function AccountingCodesPage() {
         showError('Failed to update accounting codes')
       }
     } catch (error) {
-      console.error('Error saving discount categories:', error)
+      logger.logAdminAction('update-discount-category-codes', 'Error saving discount categories', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error saving changes')
     } finally {
       setUpdating(false)
@@ -457,7 +458,7 @@ export default function AccountingCodesPage() {
         showError('Failed to update membership accounting codes')
       }
     } catch (error) {
-      console.error('Error saving memberships:', error)
+      logger.logAdminAction('update-membership-codes', 'Error saving memberships', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Error saving changes')
     } finally {
       setUpdating(false)

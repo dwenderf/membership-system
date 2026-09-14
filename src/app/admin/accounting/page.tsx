@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 import { Json } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 /** Fields we actually read off staging_metadata's jsonb blob; the column itself is untyped Json. */
 interface StagingMetadata {
@@ -351,7 +352,7 @@ export default function AccountingIntegrationPage() {
         return
       }
     } catch (error) {
-      console.error('Error fetching Xero status:', error)
+      logger.logAdminAction('fetch-xero-status', 'Error fetching Xero status', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     } finally {
       setLoading(false)
     }
@@ -378,7 +379,7 @@ export default function AccountingIntegrationPage() {
         showError('Failed to load more sync logs')
       }
     } catch (error) {
-      console.error('Error loading more sync logs:', error)
+      logger.logAdminAction('load-more-sync-logs', 'Error loading more sync logs', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Failed to load more sync logs')
     } finally {
       setLoadingMoreLogs(false)

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import BreadcrumbNav from '@/components/BreadcrumbNav'
 import SeasonSelector from '@/components/SeasonSelector'
 import { formatAmount } from '@/lib/format-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface Season {
   id: string
@@ -64,7 +65,7 @@ export default function DiscountEligibilityReportPage() {
       }
     } catch (err) {
       setError('Error loading discount eligibility report')
-      console.error('Error fetching discount eligibility report:', err)
+      logger.logAdminAction('fetch-discount-eligibility-report', 'Error fetching discount eligibility report', { seasonId, error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
     } finally {
       setLoading(false)
     }

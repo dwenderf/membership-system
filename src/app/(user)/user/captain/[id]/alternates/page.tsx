@@ -3,6 +3,7 @@ import { checkCaptainAccess } from '@/lib/utils/alternates-access'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import RegistrationAlternatesSection from '@/components/RegistrationAlternatesSection'
+import { logger } from '@/lib/logging/logger'
 
 interface CaptainAlternatesPageProps {
   params: Promise<{
@@ -53,7 +54,12 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
     }, { merge: false }>()
 
   if (error || !registration) {
-    console.error('Error fetching registration:', error)
+    logger.logSystem(
+      'captain-alternates-fetch-registration-failed',
+      'Error fetching registration',
+      { registrationId, error: error?.message },
+      'error'
+    )
     notFound()
   }
 

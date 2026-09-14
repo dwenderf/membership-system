@@ -10,6 +10,7 @@ import DeleteAccountSection from '@/components/DeleteAccountSection'
 import RoleBadge from '@/components/RoleBadge'
 import PasskeysSection from '@/components/PasskeysSection'
 import dynamic from 'next/dynamic'
+import { logger } from '@/lib/logging/logger'
 
 const PaymentMethodsSection = dynamic(() => import('@/components/PaymentMethodsSection'), { ssr: false })
 const UserPaymentPlansSection = dynamic(() => import('@/components/UserPaymentPlansSection'), { ssr: false })
@@ -144,7 +145,12 @@ export default function AccountPage() {
       setShowUnlinkConfirm(false)
       showSuccess('Google Account Unlinked', 'You can now only sign in using magic links sent to your email.')
     } catch (error) {
-      console.error('Error unlinking Google account:', error)
+      logger.logSystem(
+        'google-account-unlink-error',
+        'Error unlinking Google account',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       const errorMessage = error instanceof Error ? error.message : 'Failed to unlink Google account. Please try again or contact support.'
       showError('Failed to Unlink', errorMessage)
     } finally {

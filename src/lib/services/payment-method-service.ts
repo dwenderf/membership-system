@@ -39,7 +39,12 @@ export async function savePaymentMethodFromIntent(
   }
 
   try {
-    console.log('💳 Saving payment method for future use:', paymentIntent.payment_method)
+    logger.logPaymentProcessing(
+      'payment-method-save-start',
+      'Saving payment method for future use',
+      { userId, paymentIntentId: paymentIntent.id, paymentMethodId: paymentIntent.payment_method as string },
+      'debug'
+    )
     const adminSupabase = createAdminClient()
 
     // Get user profile to check for Stripe customer ID
@@ -99,8 +104,6 @@ export async function savePaymentMethodFromIntent(
         },
         'info'
       )
-
-      console.log('✅ Successfully saved payment method for user')
     }
   } catch (pmError) {
     logger.logPaymentProcessing(
@@ -113,7 +116,6 @@ export async function savePaymentMethodFromIntent(
       },
       'error'
     )
-    console.error('Error saving payment method:', pmError)
     // Don't throw - this is a non-critical failure
   }
 }

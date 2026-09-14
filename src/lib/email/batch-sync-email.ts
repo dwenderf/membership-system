@@ -35,7 +35,12 @@ export class EmailProcessingManager {
   constructor() {
     const apiKey = process.env.LOOPS_API_KEY
     if (!apiKey || apiKey === 'your_loops_api_key') {
-      console.warn('LOOPS_API_KEY not configured. Email sending will be disabled.')
+      logger.logSystem(
+        'loops-not-configured',
+        'LOOPS_API_KEY not configured. Email sending will be disabled.',
+        undefined,
+        'warn'
+      )
       this.loops = null
     } else {
       this.loops = new LoopsClient(apiKey)
@@ -179,12 +184,11 @@ export class EmailProcessingManager {
 
       // If Loops is not configured, just mark as sent for development
       if (!this.loops) {
-        console.log('📧 Email would be sent (Loops not configured):', {
-          to: emailLog.email_address,
-          subject: prefixedSubject,
-          eventType: emailLog.event_type,
-          data: emailData
-        })
+        logger.logSystem(
+          'email-not-sent-loops-unconfigured',
+          'Email would be sent (Loops not configured)',
+          { to: emailLog.email_address, subject: prefixedSubject, eventType: emailLog.event_type, data: emailData }
+        )
 
         // Update email log status to sent
         await supabase

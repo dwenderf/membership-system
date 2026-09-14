@@ -16,33 +16,27 @@ async function updateRegistrationsToRefunded(
   logger: Logger,
   logPrefix: string
 ): Promise<{ success: boolean; count: number }> {
-  console.log(`[${logPrefix}] Querying user_registrations for paymentId:`, paymentId)
-
   const { data: registrations, error: queryError } = await adminSupabase
     .from('user_registrations')
     .select('id, payment_status, registration_id, user_id')
     .eq('payment_id', paymentId)
 
-  console.log(`[${logPrefix}] Found registrations:`, {
-    count: registrations?.length || 0,
-    registrations,
-    queryError
-  })
-
   if (!registrations || registrations.length === 0) {
-    console.warn(`[${logPrefix}] No registrations found for payment:`, paymentId)
+    if (queryError) {
+      logger.logPaymentProcessing(`${logPrefix}-registration-query-error`,
+        'Failed to query user_registrations for refund', {
+        refundId,
+        paymentId,
+        error: queryError.message
+      }, 'error')
+    }
     return { success: true, count: 0 }
   }
 
   // Filter to only 'paid' registrations
   const paidRegistrations = registrations.filter(r => r.payment_status === 'paid')
-  console.log(`[${logPrefix}] Paid registrations to update:`, {
-    paidCount: paidRegistrations.length,
-    paidIds: paidRegistrations.map(r => r.id)
-  })
 
   if (paidRegistrations.length === 0) {
-    console.warn(`[${logPrefix}] No paid registrations to update`)
     return { success: true, count: 0 }
   }
 
@@ -57,11 +51,6 @@ async function updateRegistrationsToRefunded(
     .select()
 
   if (updateError) {
-    console.error(`[${logPrefix}] Failed to update user_registrations:`, {
-      error: updateError,
-      paymentId,
-      registrationIds: paidRegistrations.map(r => r.id)
-    })
     logger.logSystem(`${logPrefix}-registration-update-error`,
       'Failed to update registration status', {
       refundId,
@@ -71,12 +60,6 @@ async function updateRegistrationsToRefunded(
     })
     return { success: false, count: 0 }
   }
-
-  console.log(`[${logPrefix}] Updated user_registrations:`, {
-    count: updateResult?.length,
-    paymentId,
-    updatedRecords: updateResult
-  })
 
   logger.logSystem(`${logPrefix}-complete`,
     'Registrations updated to refunded status', {
@@ -162,13 +145,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (refundError || !refund) {
-      console.error('[refunds/confirm] Failed to create refund record:', {
-        error: refundError,
+      logger.logPaymentProcessing('refund-record-create-failed', 'Failed to create refund record', {
+        error: refundError?.message,
         refundAmount,
         paymentId,
         userId: payment.user_id,
         isZeroDollar: isZeroDollarRefund
-      })
+      }, 'error')
       return NextResponse.json({
         error: 'Failed to create refund record',
         details: refundError?.message || 'Unknown error'
@@ -188,12 +171,6 @@ export async function POST(request: NextRequest) {
       // For zero-dollar refunds with line items (e.g., $50 registration - $50 discount)
       // Skip Stripe but still process the credit note for accounting
       if (isZeroDollarRefund) {
-        console.log('[zero-dollar-refund] Processing zero-dollar refund:', {
-          refundId: refund.id,
-          paymentId,
-          stagingId
-        })
-
         // Update staging with refund_id AND mark as pending for Xero sync (combined to avoid duplicate updates)
         await supabase
           .from('xero_invoices')
@@ -235,11 +212,6 @@ export async function POST(request: NextRequest) {
           .eq('id', paymentId)
 
         if (paymentUpdateError) {
-          console.error('[zero-dollar-refund] Failed to update payment status:', {
-            error: paymentUpdateError,
-            paymentId
-          })
-
           // Rollback: Revert refund status and registrations since payment status update failed
           await supabase
             .from('refunds')
@@ -271,8 +243,6 @@ export async function POST(request: NextRequest) {
             { status: 500 }
           )
         }
-
-        console.log('[zero-dollar-refund] Payment status updated to refunded:', paymentId)
 
         // Note: Discount usage reversal is now tracked automatically via discount_usage_computed view
         // which derives data from credit note line items in xero_invoice_line_items

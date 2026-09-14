@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenant } from '@/lib/xero/client'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Validate Accounting Code
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error validating account code:', error)
+    logger.logXeroSync('validate-account-code-failed', 'Error validating account code', { error: error instanceof Error ? error.message : String(error) }, 'error')
 
     return NextResponse.json(
       {

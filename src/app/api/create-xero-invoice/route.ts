@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { createXeroInvoiceBeforePayment, PrePaymentInvoiceData } from '@/lib/xero/invoices'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -194,7 +195,7 @@ export async function POST(request: NextRequest) {
             .eq('xero_invoice_id', invoiceResult.xeroInvoiceId)
         }
       } catch (linkError) {
-        console.warn('⚠️ Failed to link invoice to payment:', linkError)
+        logger.logXeroSync('link-invoice-to-payment-failed', 'Failed to link invoice to payment', { paymentIntentId, xeroInvoiceId: invoiceResult.xeroInvoiceId, error: linkError instanceof Error ? linkError.message : String(linkError) }, 'warn')
         // Don't fail the request over this
       }
     }
@@ -206,7 +207,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error creating Xero invoice:', error)
+    logger.logXeroSync('create-invoice-failed', 'Error creating Xero invoice', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Failed to create Xero invoice' },
       { status: 500 }

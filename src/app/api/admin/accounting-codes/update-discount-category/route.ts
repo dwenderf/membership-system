@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
           .select()
 
         if (error) {
-          console.error('Error updating category:', update.category_id, error)
+          logger.logAdminAction('discount-category-accounting-code-update-error', 'Error updating discount category accounting code', { categoryId: update.category_id, error: error.message }, user.id, 'error')
           errorCount++
           results.push({ 
             category_id: update.category_id, 
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
           })
         }
       } catch (error) {
-        console.error('Error processing update for category:', update.category_id, error)
+        logger.logAdminAction('discount-category-accounting-code-update-exception', 'Unexpected error processing discount category accounting code update', { categoryId: update.category_id, error: error instanceof Error ? error.message : String(error) }, user.id, 'error')
         errorCount++
         results.push({ 
           category_id: update.category_id, 
@@ -95,8 +96,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error updating discount category accounting code:', error)
-    return NextResponse.json({ 
+    logger.logAdminAction('discount-category-accounting-codes-update-exception', 'Unexpected error updating discount category accounting codes', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
+    return NextResponse.json({
       error: 'Internal server error' 
     }, { status: 500 })
   }

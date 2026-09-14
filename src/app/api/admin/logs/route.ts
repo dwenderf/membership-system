@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
 
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       // Use safe mapping to prevent format string vulnerabilities
       const safeLogTypeName = LOG_TYPE_NAMES[logType]
-      console.error(`Error fetching ${safeLogTypeName}:`, error)
+      logger.logAdminAction('admin-logs-fetch-error', `Error fetching ${safeLogTypeName}`, { logType: safeLogTypeName, error: error.message }, user.id, 'error')
       return NextResponse.json(
         { error: `Failed to fetch ${safeLogTypeName}` },
         { status: 500 }
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error handling logs request:', error)
+    logger.logAdminAction('admin-logs-request-error', 'Error handling logs request', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
 
     return NextResponse.json(
       { error: 'Failed to retrieve logs' },

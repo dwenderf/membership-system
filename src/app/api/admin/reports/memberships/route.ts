@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
         .order('last_name', { ascending: true })
 
       if (membershipError) {
-        console.error('Error fetching membership data:', membershipError)
+        logger.logAdminAction('reports-membership-data-fetch-error', 'Error fetching membership data', { membershipId, error: membershipError.message }, user.id, 'error')
         return NextResponse.json({ error: 'Failed to fetch membership data' }, { status: 500 })
       }
 
@@ -51,14 +52,14 @@ export async function GET(request: NextRequest) {
         .order('name')
 
       if (typesError) {
-        console.error('Error fetching membership types:', typesError)
+        logger.logAdminAction('reports-membership-types-fetch-error', 'Error fetching membership types', { error: typesError.message }, user.id, 'error')
         return NextResponse.json({ error: 'Failed to fetch membership types' }, { status: 500 })
       }
 
       return NextResponse.json({ data: membershipTypes })
     }
   } catch (error) {
-    console.error('Error in membership reports API:', error)
+    logger.logAdminAction('reports-membership-exception', 'Unexpected error in membership reports API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-} 
+}

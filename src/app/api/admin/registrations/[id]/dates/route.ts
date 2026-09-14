@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function PATCH(
   request: NextRequest,
@@ -54,7 +55,7 @@ export async function PATCH(
       .eq('id', id)
 
     if (updateError) {
-      console.error('Error updating registration dates:', updateError)
+      logger.logAdminAction('registration-dates-update-error', 'Error updating registration dates', { registrationId: id, error: updateError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to update registration dates' },
         { status: 500 }
@@ -63,7 +64,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error in PATCH /api/admin/registrations/[id]/dates:', error)
+    logger.logAdminAction('registration-dates-update-exception', 'Unexpected error updating registration dates', { registrationId: id, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

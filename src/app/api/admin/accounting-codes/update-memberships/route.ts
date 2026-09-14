@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
           .select()
 
         if (error) {
-          console.error('Error updating membership:', update.membership_id, error)
+          logger.logAdminAction('membership-accounting-code-update-error', 'Error updating membership accounting code', { membershipId: update.membership_id, error: error.message }, user.id, 'error')
           errorCount++
           results.push({ 
             membership_id: update.membership_id, 
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
           })
         }
       } catch (error) {
-        console.error('Error processing update for membership:', update.membership_id, error)
+        logger.logAdminAction('membership-accounting-code-update-exception', 'Unexpected error processing membership accounting code update', { membershipId: update.membership_id, error: error instanceof Error ? error.message : String(error) }, user.id, 'error')
         errorCount++
         results.push({ 
           membership_id: update.membership_id, 
@@ -95,8 +96,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error updating membership accounting codes:', error)
-    return NextResponse.json({ 
+    logger.logAdminAction('membership-accounting-codes-update-exception', 'Unexpected error updating membership accounting codes', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
+    return NextResponse.json({
       error: 'Internal server error' 
     }, { status: 500 })
   }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: Request) {
   try {
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       message: 'Payment plan paid in full successfully'
     })
   } catch (error) {
-    console.error('Unexpected error processing early payoff:', error)
+    logger.logPaymentProcessing('early-payoff-unexpected-error', 'Unexpected error processing early payoff', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST() {
   try {
@@ -39,7 +40,7 @@ export async function POST() {
     })
     
   } catch (error) {
-    console.error('Error sending test email:', error)
+    logger.logSystem('test-email-send-error', 'Error sending test email', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Failed to send test email' },
       { status: 500 }

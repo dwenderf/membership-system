@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setupSentryUserContext, captureSentryError, captureSentryMessage } from '@/lib/sentry-helpers'
 import { getSimpleRequestInfo } from '@/lib/request-info'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
     // Extract comprehensive request information
     const simpleInfo = getSimpleRequestInfo(request)
-    
-    console.log('📊 Request Information:', simpleInfo)
-    
+
     // Set up Sentry user context
     await setupSentryUserContext(request)
 
@@ -98,7 +97,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in Sentry test:', error)
+    logger.logSystem('test-sentry-error', 'Error in Sentry test endpoint', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to test Sentry logging' 
     }, { status: 500 })

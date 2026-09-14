@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-service'
+import { logger } from '@/lib/logging/logger'
 
 // Force import server config
 
@@ -116,29 +117,32 @@ export async function POST(request: NextRequest) {
 
       if (membershipError) {
         if (membershipError.code === '23505') { // Duplicate key error
-          console.log('Membership already exists for payment intent, fetching existing record:', paymentIntentId)
+          logger.logPaymentProcessing('membership-duplicate-key', 'Membership already exists for payment intent, fetching existing record', { paymentIntentId }, 'debug')
           const { data: existingMembership, error: fetchError } = await supabase
             .from('user_memberships')
             .select('*')
             .eq('stripe_payment_intent_id', paymentIntentId)
             .single()
-          
+
           if (fetchError || !existingMembership) {
-            console.error('Error fetching existing membership:', fetchError)
+            logger.logPaymentProcessing('membership-fetch-error', 'Error fetching existing membership', { paymentIntentId, error: fetchError?.message }, 'warn')
             throw new Error('Failed to fetch existing membership')
           }
-          
+
           userMembership = existingMembership
         } else {
-          console.error('Error creating user membership:', membershipError)
+          logger.logPaymentProcessing('membership-create-error', 'Error creating user membership', { paymentIntentId, error: membershipError.message }, 'warn')
           throw new Error('Failed to create membership')
         }
       } else {
         userMembership = newMembership
       }
     } catch (error) {
-      console.error('Error in membership creation/fetch:', error)
-      
+      // Payment succeeded but membership creation failed - reported to Sentry below
+      // with full context via captureCriticalPaymentError; logged here at warn to
+      // avoid a duplicate Sentry error report for the same failure.
+      logger.logPaymentProcessing('membership-creation-failed', 'Error in membership creation/fetch after successful payment', { paymentIntentId, membershipId, error: error instanceof Error ? error.message : String(error) }, 'warn')
+
       // THIS IS THE CRITICAL ERROR - Payment succeeded but membership creation failed
       captureCriticalPaymentError(error, paymentContext, [
         {
@@ -175,11 +179,13 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (updateError) {
-      console.error('Error updating payment record:', updateError)
-      // Log warning but don't fail - membership was created successfully
+      // Non-fatal: membership was created successfully; reported to Sentry via
+      // capturePaymentError below, so logged here at warn (not error) to avoid a
+      // duplicate Sentry report.
+      logger.logPaymentProcessing('payment-record-update-failed', 'Error updating payment record', { paymentIntentId, membershipId: userMembership.id, error: updateError.message }, 'warn')
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
-      console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+      logger.logPaymentProcessing('payment-record-updated', `Updated payment record to completed status: ${updatedPayment[0].id}`, { paymentIntentId, paymentId: updatedPayment[0].id }, 'info')
 
       // Update user_memberships record with payment_id
       const { error: membershipUpdateError } = await adminSupabase
@@ -188,13 +194,13 @@ export async function POST(request: NextRequest) {
         .eq('id', userMembership.id)
 
       if (membershipUpdateError) {
-        console.error('Error updating membership record with payment_id:', membershipUpdateError)
+        logger.logPaymentProcessing('membership-payment-id-link-failed', 'Error updating membership record with payment_id', { paymentIntentId, paymentId: updatedPayment[0].id, membershipId: userMembership.id, error: membershipUpdateError.message }, 'warn')
         capturePaymentError(membershipUpdateError, paymentContext, 'warning')
       } else {
-        console.log(`✅ Updated membership record with payment_id: ${updatedPayment[0].id}`)
+        logger.logPaymentProcessing('membership-payment-id-linked', `Updated membership record with payment_id: ${updatedPayment[0].id}`, { paymentIntentId, paymentId: updatedPayment[0].id, membershipId: userMembership.id }, 'info')
       }
     } else {
-      console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
+      logger.logPaymentProcessing('payment-record-not-found', `No payment record found for payment intent: ${paymentIntentId}`, { paymentIntentId }, 'warn')
     }
 
     // Email confirmation is now handled by the payment completion processor
@@ -211,8 +217,10 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error confirming payment:', error)
-    
+    // Reported to Sentry below via capturePaymentError; logged here at warn to
+    // avoid a duplicate Sentry error report for the same failure.
+    logger.logPaymentProcessing('payment-confirmation-error', 'Error confirming payment', { error: error instanceof Error ? error.message : String(error) }, 'warn')
+
     // Capture error in Sentry
     capturePaymentError(error, {
       endpoint: '/api/confirm-payment',

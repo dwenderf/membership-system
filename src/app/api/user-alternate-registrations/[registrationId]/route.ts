@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function DELETE(
   request: NextRequest,
@@ -40,17 +41,17 @@ export async function DELETE(
       .eq('registration_id', registrationId)
 
     if (deleteError) {
-      console.error('Error deleting alternate registration:', deleteError)
+      logger.logPaymentProcessing('alternate-registration-delete-failed', 'Error deleting alternate registration', { userId: user.id, registrationId, error: deleteError.message }, 'error')
       return NextResponse.json({ error: 'Failed to remove alternate registration' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       message: 'Alternate registration removed successfully'
     })
 
   } catch (error) {
-    console.error('Error in DELETE alternate registration:', error)
+    logger.logPaymentProcessing('alternate-registration-delete-error', 'Error in DELETE alternate registration', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

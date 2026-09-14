@@ -481,7 +481,8 @@ export async function revokeXeroTokens(): Promise<boolean> {
               { tenantId: token.tenant_id }
             )
           } else {
-            console.warn(`Token revocation failed with status ${response.status}`)
+            const { logger } = await import('../logging/logger')
+            logger.logXeroSync('token-revocation-failed', `Token revocation failed with status ${response.status}`, { tenantId: token.tenant_id, status: response.status }, 'warn')
           }
 
           // Also try to revoke the refresh token
@@ -505,10 +506,12 @@ export async function revokeXeroTokens(): Promise<boolean> {
               { tenantId: token.tenant_id }
             )
           } else {
-            console.warn(`Refresh token revocation failed with status ${refreshResponse.status}`)
+            const { logger } = await import('../logging/logger')
+            logger.logXeroSync('refresh-token-revocation-failed', `Refresh token revocation failed with status ${refreshResponse.status}`, { tenantId: token.tenant_id, status: refreshResponse.status }, 'warn')
           }
         } catch (revokeMethodError) {
-          console.warn('Token revocation method failed, but continuing:', revokeMethodError)
+          const { logger } = await import('../logging/logger')
+          logger.logXeroSync('token-revocation-method-failed', 'Token revocation method failed, but continuing', { tenantId: token.tenant_id, error: revokeMethodError instanceof Error ? revokeMethodError.message : String(revokeMethodError) }, 'warn')
         }
 
         const { logger } = await import('../logging/logger')

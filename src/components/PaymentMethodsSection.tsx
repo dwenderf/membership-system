@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
 import ConfirmationDialog from './ConfirmationDialog'
 import { formatPaymentMethodDescription } from '@/lib/payment-method-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentMethod {
   id: string
@@ -48,7 +49,7 @@ export default function PaymentMethodsSection() {
         return null
       }
     } catch (error) {
-      console.error('Error loading payment method:', error)
+      logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
       setPaymentMethod(null)
       return null
     }
@@ -64,7 +65,7 @@ export default function PaymentMethodsSection() {
         setAlternateRegs([])
       }
     } catch (error) {
-      console.error('Error loading alternate registrations:', error)
+      logger.logPaymentProcessing('load-alternate-registrations-error', 'Error loading alternate registrations', { error: error instanceof Error ? error.message : String(error) }, 'error')
       setAlternateRegs([])
     }
   }

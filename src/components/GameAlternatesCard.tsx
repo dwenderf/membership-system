@@ -6,6 +6,7 @@ import { formatDate, formatTime } from '@/lib/date-utils'
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import { useToast } from '@/contexts/ToastContext'
 import type { AlternateSelectionResponse } from '@/components/AlternateSelectionInterface'
+import { logger } from '@/lib/logging/logger'
 
 interface Game {
   id: string
@@ -137,7 +138,7 @@ export default function GameAlternatesCard({
       const data = await response.json()
       setAlternates(data.alternates || [])
     } catch (err) {
-      console.error('Error fetching alternates:', err)
+      logger.logPaymentProcessing('fetch-alternates-error', 'Error fetching alternates for game', { gameId: game.id, error: err instanceof Error ? err.message : String(err) }, 'error')
       setError(err instanceof Error ? err.message : 'Failed to load alternates')
     } finally {
       setLoading(false)
@@ -147,9 +148,7 @@ export default function GameAlternatesCard({
   // Fetch alternates when expanded
   useEffect(() => {
     if (isExpanded && alternates.length === 0) {
-      fetchAlternates().catch(err => {
-        console.error('Error in useEffect fetchAlternates:', err)
-      })
+      fetchAlternates()
     }
   }, [isExpanded, alternates.length, fetchAlternates])
 
@@ -223,7 +222,7 @@ export default function GameAlternatesCard({
       }
       
     } catch (err) {
-      console.error('Error selecting alternates:', err)
+      logger.logPaymentProcessing('select-alternates-error', 'Error selecting and charging alternates', { gameId: game.id, error: err instanceof Error ? err.message : String(err) }, 'error')
       const errorMessage = err instanceof Error ? err.message : 'Failed to select alternates'
       setError(errorMessage)
       showError('Selection Failed', errorMessage)
@@ -356,7 +355,7 @@ export default function GameAlternatesCard({
             <div className="text-center py-4">
               <div className="text-red-600 text-sm mb-2">{error}</div>
               <button
-                onClick={() => fetchAlternates().catch(err => console.error('Error retrying fetch:', err))}
+                onClick={() => fetchAlternates()}
                 className="text-blue-600 hover:text-blue-500 text-sm font-medium"
               >
                 Try Again

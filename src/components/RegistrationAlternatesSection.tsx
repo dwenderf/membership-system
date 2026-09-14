@@ -5,6 +5,7 @@ import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import GameAlternatesCard from '@/components/GameAlternatesCard'
 import GameCreationForm from '@/components/GameCreationForm'
 import WeeklyActivityGrid from '@/components/WeeklyActivityGrid'
+import { logger } from '@/lib/logging/logger'
 
 interface Registration {
   id: string
@@ -57,7 +58,7 @@ export default function RegistrationAlternatesSection({
       const data = await response.json()
       setGames(data.games || [])
     } catch (err) {
-      console.error('Error fetching games:', err)
+      logger.logPaymentProcessing('fetch-games-error', 'Error fetching alternate-registration games', { registrationId: registration.id, error: err instanceof Error ? err.message : String(err) }, 'error')
       setError(err instanceof Error ? err.message : 'Failed to load games')
     } finally {
       setLoading(false)
@@ -66,9 +67,7 @@ export default function RegistrationAlternatesSection({
 
   // Fetch games for this registration
   useEffect(() => {
-    fetchGames().catch(err => {
-      console.error('Error in useEffect fetchGames:', err)
-    })
+    fetchGames()
   }, [fetchGames])
 
   const handleGameCreated = (game: Game) => {
@@ -158,9 +157,8 @@ export default function RegistrationAlternatesSection({
           <WeeklyActivityGrid
             games={games}
             registration={registration}
-            onWeekClick={(weekStart) => {
+            onWeekClick={() => {
               // TODO: Could implement filtering by week in the future
-              console.log('Week clicked:', weekStart)
             }}
           />
         </div>
@@ -187,7 +185,7 @@ export default function RegistrationAlternatesSection({
           <div className="text-center py-8">
             <div className="text-red-600 text-sm">{error}</div>
             <button
-              onClick={() => fetchGames().catch(err => console.error('Error retrying fetch:', err))}
+              onClick={() => fetchGames()}
               className="mt-2 text-blue-600 hover:text-blue-500 text-sm font-medium"
             >
               Try Again

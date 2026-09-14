@@ -22,6 +22,7 @@ import {
 } from '@dnd-kit/sortable'
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
 import { CSS } from '@dnd-kit/utilities'
+import { logger } from '@/lib/logging/logger'
 
 interface QuickAction {
   id: string
@@ -143,7 +144,7 @@ export default function AdminDashboardActions({ initialFavorites }: AdminDashboa
       // fresh server data rather than restoring a stale cached render
       router.refresh()
     } catch (err) {
-      console.error('Failed to save preferences:', err)
+      logger.error('admin-action', 'save-dashboard-preferences-error', 'Failed to save admin dashboard favorites', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [router])
 

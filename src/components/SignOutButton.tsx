@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 export default function SignOutButton() {
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -25,7 +26,7 @@ export default function SignOutButton() {
         router.push('/auth/login')
       }
     } catch (error) {
-      console.error('Sign out error:', error)
+      logger.logSystem('sign-out-error', 'Sign out error', { error: error instanceof Error ? error.message : String(error) }, 'error')
       showError('Sign out failed', 'An error occurred while signing out')
       setIsSigningOut(false)
     }

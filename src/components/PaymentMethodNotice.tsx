@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatPaymentMethodDescription, extractPaymentMethodInfo, type PaymentMethodInfo } from '@/lib/payment-method-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentMethodNoticeProps {
   userEmail: string
@@ -39,7 +40,7 @@ export default function PaymentMethodNotice({
         setPaymentInfo({ hasPaymentMethod: false })
       }
     } catch (error) {
-      console.error('Error fetching payment method:', error)
+      logger.logPaymentProcessing('fetch-payment-method-error', 'Error fetching payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
       setPaymentInfo({ hasPaymentMethod: false })
     } finally {
       setLoading(false)

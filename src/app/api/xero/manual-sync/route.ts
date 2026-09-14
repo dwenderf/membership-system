@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
 import { logSyncEvent } from '@/lib/system-events'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST() {
   try {
@@ -25,8 +26,6 @@ export async function POST() {
     }
 
     // Trigger manual sync
-    console.log('🔄 Manual Xero sync triggered by admin:', user.email)
-    
     const startTime = new Date()
     const results = await xeroBatchSyncManager.syncAllPendingRecords()
     
@@ -45,7 +44,7 @@ export async function POST() {
 
     // Check for connection failures
     if (results.connectionStatus === 'failed') {
-      console.log('❌ Manual Xero sync failed: Connection authentication failed')
+      logger.logXeroSync('manual-sync-connection-failed', 'Manual Xero sync failed: Connection authentication failed', { adminEmail: user.email }, 'warn')
       return NextResponse.json({
         success: false,
         error: 'Connection failed',
@@ -56,7 +55,7 @@ export async function POST() {
     }
 
     if (results.connectionStatus === 'no_tenant') {
-      console.log('❌ Manual Xero sync failed: No Xero tenant connected')
+      logger.logXeroSync('manual-sync-no-tenant', 'Manual Xero sync failed: No Xero tenant connected', { adminEmail: user.email }, 'warn')
       return NextResponse.json({
         success: false,
         error: 'No connection',
@@ -66,10 +65,11 @@ export async function POST() {
       }, { status: 400 })
     }
 
-    console.log('✅ Manual Xero sync completed:', {
-      invoices: `${results.invoices.synced} synced, ${results.invoices.failed} failed`,
-      credit_notes: `${results.credit_notes.synced} synced, ${results.credit_notes.failed} failed`,
-      payments: `${results.payments.synced} synced, ${results.payments.failed} failed`,
+    logger.logXeroSync('manual-sync-completed', 'Manual Xero sync completed', {
+      adminEmail: user.email,
+      invoices: results.invoices,
+      credit_notes: results.credit_notes,
+      payments: results.payments,
       connectionStatus: results.connectionStatus
     })
 
@@ -102,8 +102,8 @@ export async function POST() {
     })
 
   } catch (error) {
-    console.error('❌ Manual Xero sync failed:', error)
-    
+    logger.logXeroSync('manual-sync-failed', 'Manual Xero sync failed', { error: error instanceof Error ? error.message : String(error) }, 'error')
+
     // Log failed system event if we have user info
     try {
       const supabase = await createClient()
@@ -119,7 +119,7 @@ export async function POST() {
         )
       }
     } catch (logError) {
-      console.error('Failed to log system event:', logError)
+      logger.logXeroSync('manual-sync-log-event-failed', 'Failed to log system event', { error: logError instanceof Error ? logError.message : String(logError) }, 'warn')
     }
     
     return NextResponse.json({ 

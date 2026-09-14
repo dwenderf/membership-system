@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Log email change event
@@ -43,7 +44,7 @@ async function sendConfirmationEmail(
   const templateId = process.env.LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID
 
   if (!templateId) {
-    console.warn('LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID not configured')
+    logger.logSystem('email-change-confirmation-template-missing', 'LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID not configured', undefined, 'warn')
     return
   }
 
@@ -79,14 +80,14 @@ async function syncToXero(
     const xeroModule = await import('@/lib/xero/contacts')
 
     if (!xeroModule.syncEmailChangeToXero) {
-      console.log('Xero sync function not available, skipping')
+      logger.logSystem('email-change-xero-sync-unavailable', 'Xero sync function not available, skipping', { userId }, 'warn')
       return { success: false, error: 'Xero sync not available' }
     }
 
     return await xeroModule.syncEmailChangeToXero(userId, oldEmail, newEmail)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('Failed to sync email change to Xero:', errorMessage)
+    logger.logSystem('email-change-xero-sync-error', 'Failed to sync email change to Xero', { userId, error: errorMessage }, 'error')
     return { success: false, error: errorMessage }
   }
 }
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
 
     if (dbUpdateError) {
-      console.error('Failed to update email in users table:', dbUpdateError)
+      logger.logSystem('email-change-db-update-failed', 'Failed to update email in users table', { userId: user.id, error: dbUpdateError.message }, 'error')
 
       await logEvent(
         supabase,
@@ -191,7 +192,7 @@ export async function POST(request: NextRequest) {
         request
       )
     } catch (xeroError) {
-      console.error('Xero sync error:', xeroError)
+      logger.logSystem('email-change-xero-sync-unhandled-error', 'Xero sync error during email change', { userId: user.id, error: xeroError instanceof Error ? xeroError.message : String(xeroError) }, 'error')
       // Don't fail the request, Xero sync is non-blocking
     }
 
@@ -211,7 +212,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (oauthError) {
-      console.error('Error checking OAuth status:', oauthError)
+      logger.logSystem('email-change-oauth-check-error', 'Error checking OAuth status during email change', { userId: user.id, error: oauthError instanceof Error ? oauthError.message : String(oauthError) }, 'warn')
       // Don't fail the request, just log
     }
 
@@ -221,7 +222,7 @@ export async function POST(request: NextRequest) {
       await sendConfirmationEmail(oldEmail, userFirstName, oldEmail, newEmail, googleAuthWarning)
       await sendConfirmationEmail(newEmail, userFirstName, oldEmail, newEmail, googleAuthWarning)
     } catch (emailError) {
-      console.error('Error sending confirmation emails:', emailError)
+      logger.logSystem('email-change-confirmation-send-error', 'Error sending confirmation emails for email change', { userId: user.id, error: emailError instanceof Error ? emailError.message : String(emailError) }, 'error')
       // Don't fail the request, just log
     }
 
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
         const adminFirstName = `${userFirstName} (${oldEmail})`
         await sendConfirmationEmail(supportEmail, adminFirstName, oldEmail, newEmail, googleAuthWarning)
       } catch (adminEmailError) {
-        console.error('Error sending admin notification:', adminEmailError)
+        logger.logSystem('email-change-admin-notification-error', 'Error sending admin notification for email change', { userId: user.id, error: adminEmailError instanceof Error ? adminEmailError.message : String(adminEmailError) }, 'warn')
         // Don't fail the request, just log
       }
     }
@@ -243,7 +244,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Unexpected error in sync-change:', error)
+    logger.logSystem('email-sync-change-unexpected-error', 'Unexpected error in sync-change', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

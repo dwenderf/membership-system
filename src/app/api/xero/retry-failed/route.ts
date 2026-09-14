@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { xeroBatchSyncManager } from '@/lib/xero/batch-sync-xero'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,14 +27,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { type, items } = body // type: 'all' | 'selected', items: array of IDs for selected
 
-    console.log('🔄 Retry failed sync triggered by admin:', user.email, { type, itemCount: items?.length || 'all' })
-
     const retryResults = { invoices: 0, payments: 0, errors: [] as string[] }
 
     if (type === 'all') {
       // Reset all failed items to pending and trigger sync
-      console.log('🔄 Resetting all failed items to pending...')
-      
       // Reset failed invoices to pending
       const { data: resetInvoices, error: invoiceError } = await supabase
         .from('xero_invoices')
@@ -64,8 +61,6 @@ export async function POST(request: NextRequest) {
 
     } else if (type === 'selected' && items?.length > 0) {
       // Reset selected items to pending
-      console.log('🔄 Resetting selected items to pending...', items)
-      
       const invoiceIds = items.filter((id: string) => id.startsWith('inv_'))
       const paymentIds = items.filter((id: string) => id.startsWith('pay_'))
 
@@ -101,10 +96,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger immediate sync
-    console.log('🔄 Triggering immediate sync after retry reset...')
     const syncResults = await xeroBatchSyncManager.syncAllPendingRecords()
 
-    console.log('✅ Retry failed sync completed:', {
+    logger.logXeroSync('retry-failed-completed', 'Retry failed sync completed', {
+      adminEmail: user.email,
+      type,
+      itemCount: items?.length || 'all',
       reset: retryResults,
       sync: syncResults
     })
@@ -123,7 +120,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Retry failed sync error:', error)
+    logger.logXeroSync('retry-failed-error', 'Retry failed sync error', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to retry sync',
       details: error instanceof Error ? error.message : String(error)

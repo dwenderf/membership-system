@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       .eq('registration_id', registrationId)
 
     if (error) {
-      console.error('Error checking duplicate registration:', error)
+      logger.logSystem('duplicate-registration-check-error', 'Error checking duplicate registration', { userId: user.id, registrationId, error: error.message }, 'error')
       return NextResponse.json({ error: 'Failed to check registration' }, { status: 500 })
     }
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
             }
           } else {
             // Old processing record without expiration - treat as expired
-            console.log(`Found old processing record without expiration: ${reg.id}`)
+            logger.logSystem('duplicate-registration-check-no-expiration', 'Found old processing record without expiration', { registrationRecordId: reg.id }, 'debug')
           }
         }
       }
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error in duplicate registration check API:', error)
+    logger.logSystem('duplicate-registration-check-unexpected-error', 'Error in duplicate registration check API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

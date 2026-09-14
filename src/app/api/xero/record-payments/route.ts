@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { recordStripePaymentInXero, bulkRecordUnsyncedPayments } from '@/lib/xero/payments'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error in payment recording API:', error)
+    logger.logXeroSync('record-payments-api-failed', 'Error in payment recording API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to record payments' 
     }, { status: 500 })

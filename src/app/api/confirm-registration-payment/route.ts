@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createClient } from '@/lib/supabase/server'
 import { savePaymentMethodFromIntent } from '@/lib/services/payment-method-service'
+import { logger } from '@/lib/logging/logger'
 
 // Force import server config
 
@@ -10,12 +11,12 @@ import { setPaymentContext, captureCriticalPaymentError, capturePaymentError, ca
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
-  
+
   try {
     const supabase = await createClient()
     const { createAdminClient } = await import('@/lib/supabase/server')
     const adminSupabase = createAdminClient()
-    
+
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { paymentIntentId, categoryId } = body
-    
+
     // Set payment context for Sentry
     const paymentContext = {
       userId: user.id,
@@ -37,12 +38,12 @@ export async function POST(request: NextRequest) {
       registrationId: '' // Will be updated after payment intent retrieval
     }
     setPaymentContext(paymentContext)
-    
+
     // Validate required fields
     if (!paymentIntentId || !categoryId) {
       const error = new Error('Missing required fields: paymentIntentId, categoryId')
       capturePaymentError(error, paymentContext, 'warning')
-      
+
       return NextResponse.json(
         { error: 'Missing required fields: paymentIntentId, categoryId' },
         { status: 400 }
@@ -51,11 +52,11 @@ export async function POST(request: NextRequest) {
 
     // Retrieve the payment intent from Stripe
     const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId)
-    
+
     // Update context with payment details
     paymentContext.amountCents = paymentIntent.amount
     paymentContext.registrationId = paymentIntent.metadata.registrationId
-    
+
     if (paymentIntent.status !== 'succeeded') {
       // Clean up processing reservation for failed/cancelled payments
       const reservationId = paymentIntent.metadata.reservationId
@@ -67,17 +68,17 @@ export async function POST(request: NextRequest) {
             .eq('id', reservationId)
             .eq('user_id', user.id)
             .eq('payment_status', 'awaiting_payment')
-          
+
           if (cleanupError) {
-            console.error('Error cleaning up failed payment reservation:', cleanupError)
+            logger.logPaymentProcessing('reservation-cleanup-failed', 'Error cleaning up failed payment reservation', { reservationId, paymentIntentId, error: cleanupError.message }, 'warn')
           } else {
-            console.log(`Cleaned up failed payment reservation: ${reservationId}`)
+            logger.logPaymentProcessing('reservation-cleaned-up', `Cleaned up failed payment reservation: ${reservationId}`, { reservationId, paymentIntentId }, 'debug')
           }
         } catch (cleanupError) {
-          console.error('Error during reservation cleanup:', cleanupError)
+          logger.logPaymentProcessing('reservation-cleanup-error', 'Error during reservation cleanup', { reservationId, paymentIntentId, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) }, 'warn')
         }
       }
-      
+
       // Capture payment failure as business event
       Sentry.captureMessage(`Registration payment confirmation failed - status: ${paymentIntent.status}`, {
         level: 'warning',
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
           reservation_cleaned_up: !!reservationId
         }
       })
-      
+
       return NextResponse.json(
         { error: 'Payment not completed' },
         { status: 400 }
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     if (paymentIntent.metadata.userId !== user.id) {
       const error = new Error('Payment intent does not belong to authenticated user')
       capturePaymentError(error, paymentContext, 'error')
-      
+
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -133,20 +134,18 @@ export async function POST(request: NextRequest) {
     let registrationError
 
     if (reservationId) {
-      console.log(`Attempting to update reservation ${reservationId} to paid status`)
-      
       // First check what exists in the database
       const { data: existingRecord } = await supabase
         .from('user_registrations')
         .select('id, payment_status, user_id, registration_id')
         .eq('id', reservationId)
         .single()
-      
-      console.log(`Existing record for reservation ${reservationId}:`, existingRecord)
-      
+
+      logger.logPaymentProcessing('reservation-existing-record-check', `Checked existing record for reservation ${reservationId}`, { reservationId, existingRecord }, 'debug')
+
       // Check if webhook has already processed this payment
       if (existingRecord?.payment_status === 'paid') {
-        console.log('✅ Payment already processed by webhook, using existing record')
+        logger.logPaymentProcessing('reservation-already-processed-by-webhook', 'Payment already processed by webhook, using existing record', { reservationId }, 'debug')
         userRegistration = existingRecord
         registrationError = null
         // Skip the API call since webhook already handled it
@@ -168,21 +167,19 @@ export async function POST(request: NextRequest) {
               }),
             })
 
-            console.log(`Status update response:`, statusResponse.status)
-            
             if (statusResponse.ok) {
               const statusData = await statusResponse.json()
               userRegistration = statusData.registration
               registrationError = null
-              console.log(`✅ Updated registration to paid via API`)
+              logger.logPaymentProcessing('reservation-updated-via-api', 'Updated registration to paid via update-registration-status API', { reservationId, registrationId }, 'info')
             } else {
               const statusError = await statusResponse.json()
               registrationError = new Error(statusError.error || 'Failed to update status')
-              console.log(`❌ Failed to update status:`, statusError)
+              logger.logPaymentProcessing('reservation-status-update-failed', 'Failed to update registration status via API', { reservationId, registrationId, statusCode: statusResponse.status, error: statusError }, 'warn')
             }
           } catch (apiError) {
             registrationError = apiError as Error
-            console.log(`❌ API call error:`, apiError)
+            logger.logPaymentProcessing('reservation-status-update-api-error', 'Error calling update-registration-status API', { reservationId, registrationId, error: apiError instanceof Error ? apiError.message : String(apiError) }, 'warn')
           }
         }
 
@@ -202,7 +199,7 @@ export async function POST(request: NextRequest) {
           registrationError = null
         } else {
           // Reservation not found (likely cleaned up), fall back to creating new record
-          console.log(`Reservation ${reservationId} not found, will create new registration record`)
+          logger.logPaymentProcessing('reservation-not-found-fallback', `Reservation ${reservationId} not found, falling back to creating new registration record`, { reservationId, registrationId }, 'info')
           // Fall through to creation logic below
         }
       }
@@ -210,15 +207,14 @@ export async function POST(request: NextRequest) {
 
     // Create new registration if reservation update failed or no reservation ID
     if (!userRegistration && (registrationError || !reservationId)) {
-      console.log('🔍 Creating user_registrations record (CONFIRM-REGISTRATION-PAYMENT fallback path)', {
+      logger.logPaymentProcessing('registration-fallback-create-attempt', 'Creating user_registrations record (confirm-registration-payment fallback path)', {
         userId: user.id,
         registrationId,
         categoryId,
         reservationId,
         hadError: !!registrationError,
-        paymentStatus: 'paid',
-        endpoint: 'confirm-registration-payment'
-      })
+        paymentStatus: 'paid'
+      }, 'debug')
       const registrationData = {
         user_id: user.id,
         registration_id: registrationId,
@@ -243,9 +239,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (registrationError) {
-      console.error('Error confirming registration:', registrationError)
-      console.error('Payment intent metadata:', paymentIntent.metadata)
-      
+      // Payment succeeded but registration creation failed - reported to Sentry below
+      // with full context via captureCriticalPaymentError; logged here at warn to
+      // avoid a duplicate Sentry error report for the same failure.
+      logger.logPaymentProcessing('registration-creation-failed', 'Error confirming registration after successful payment', {
+        registrationId,
+        categoryId,
+        paymentIntentId,
+        error: registrationError instanceof Error ? registrationError.message : String(registrationError),
+        paymentIntentMetadata: paymentIntent.metadata
+      }, 'warn')
+
       // THIS IS THE CRITICAL ERROR - Payment succeeded but registration creation failed
       captureCriticalPaymentError(registrationError, paymentContext, [
         {
@@ -260,7 +264,7 @@ export async function POST(request: NextRequest) {
           details: { registrationId, categoryId }
         }
       ])
-      
+
       return NextResponse.json(
         { error: 'Failed to create registration record' },
         { status: 500 }
@@ -282,11 +286,13 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (updateError) {
-      console.error('Error updating payment record:', updateError)
-      // Log warning but don't fail - registration was created successfully
+      // Non-fatal: registration was created successfully; reported to Sentry via
+      // capturePaymentError below, so logged here at warn (not error) to avoid a
+      // duplicate Sentry report.
+      logger.logPaymentProcessing('payment-record-update-failed', 'Error updating payment record', { paymentIntentId, registrationId: userRegistration.id, error: updateError.message }, 'warn')
       capturePaymentError(updateError, paymentContext, 'warning')
     } else if (updatedPayment && updatedPayment.length > 0) {
-      console.log(`✅ Updated payment record to completed status: ${updatedPayment[0].id}`)
+      logger.logPaymentProcessing('payment-record-updated', `Updated payment record to completed status: ${updatedPayment[0].id}`, { paymentIntentId, paymentId: updatedPayment[0].id }, 'info')
 
       // Update user_registrations record with payment_id
       const { error: registrationUpdateError } = await supabase
@@ -295,13 +301,13 @@ export async function POST(request: NextRequest) {
         .eq('id', userRegistration.id)
 
       if (registrationUpdateError) {
-        console.error('Error updating registration record with payment_id:', registrationUpdateError)
+        logger.logPaymentProcessing('registration-payment-id-link-failed', 'Error updating registration record with payment_id', { paymentIntentId, paymentId: updatedPayment[0].id, registrationId: userRegistration.id, error: registrationUpdateError.message }, 'warn')
         capturePaymentError(registrationUpdateError, paymentContext, 'warning')
       } else {
-        console.log(`✅ Updated registration record with payment_id: ${updatedPayment[0].id}`)
+        logger.logPaymentProcessing('registration-payment-id-linked', `Updated registration record with payment_id: ${updatedPayment[0].id}`, { paymentIntentId, paymentId: updatedPayment[0].id, registrationId: userRegistration.id }, 'info')
       }
     } else {
-      console.warn(`⚠️ No payment record found for payment intent: ${paymentIntentId}`)
+      logger.logPaymentProcessing('payment-record-not-found', `No payment record found for payment intent: ${paymentIntentId}`, { paymentIntentId }, 'warn')
     }
 
     // Note: Discount usage is now tracked via discount_usage_computed view
@@ -318,16 +324,18 @@ export async function POST(request: NextRequest) {
       registrationId: userRegistration.id,
       registeredAt: userRegistration.registered_at,
     })
-    
+
   } catch (error) {
-    console.error('Error confirming registration payment:', error)
-    
+    // Reported to Sentry below via capturePaymentError; logged here at warn to
+    // avoid a duplicate Sentry error report for the same failure.
+    logger.logPaymentProcessing('registration-payment-confirmation-error', 'Error confirming registration payment', { error: error instanceof Error ? error.message : String(error) }, 'warn')
+
     // Capture error in Sentry
     capturePaymentError(error, {
       endpoint: '/api/confirm-registration-payment',
       operation: 'registration_payment_confirmation'
     }, 'error')
-    
+
     return NextResponse.json(
       { error: 'Failed to confirm payment' },
       { status: 500 }

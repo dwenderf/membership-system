@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { bulkSyncMissingContacts, syncUserToXeroContact } from '@/lib/xero/contacts'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error in contact sync API:', error)
+    logger.logXeroSync('sync-contacts-api-failed', 'Error in contact sync API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to sync contacts' 
     }, { status: 500 })

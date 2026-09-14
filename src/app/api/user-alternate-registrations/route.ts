@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      console.error('Error creating alternate registration:', insertError)
+      logger.logPaymentProcessing('alternate-registration-create-failed', 'Error creating alternate registration', { userId: user.id, registrationId: registration_id, error: insertError.message }, 'error')
       return NextResponse.json({ error: 'Failed to register as alternate' }, { status: 500 })
     }
 
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       'Alternate',
       now,
       0 // no upfront payment for alternates
-    ).catch((err) => console.warn('user-alternate-registrations: captain notification failed (non-fatal)', err))
+    ).catch((err) => logger.logPaymentProcessing('alternate-captain-notification-failed', 'Captain notification failed for new alternate registration (non-fatal)', { registrationId: registration_id, userId: user.id, error: err instanceof Error ? err.message : String(err) }, 'warn'))
 
     stageAdminNewRegistrationNotification(
       registration_id,
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
       true, // isAlternate
       now,
       0
-    ).catch((err) => console.warn('user-alternate-registrations: admin notification failed (non-fatal)', err))
+    ).catch((err) => logger.logPaymentProcessing('alternate-admin-notification-failed', 'Admin notification failed for new alternate registration (non-fatal)', { registrationId: registration_id, userId: user.id, error: err instanceof Error ? err.message : String(err) }, 'warn'))
 
     return NextResponse.json({
       success: true,
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in alternate registration:', error)
+    logger.logPaymentProcessing('alternate-registration-error', 'Error in alternate registration', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -165,14 +166,14 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching alternate registrations:', error)
+      logger.logPaymentProcessing('alternate-registrations-fetch-failed', 'Error fetching alternate registrations', { userId: user.id, error: error.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch alternate registrations' }, { status: 500 })
     }
 
     return NextResponse.json(alternateRegistrations)
 
   } catch (error) {
-    console.error('Error in GET alternate registrations:', error)
+    logger.logPaymentProcessing('alternate-registrations-get-error', 'Error in GET alternate registrations', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

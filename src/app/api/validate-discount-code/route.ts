@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory, DiscountCategoryInfo } from '@/lib/services/discount-limit-service'
+import { logger } from '@/lib/logging/logger'
 
 /** Row shape of `discount_codes`, joined with its `discount_categories`, as selected below. */
 interface DiscountCodeQueryResult {
@@ -163,11 +164,11 @@ export async function POST(request: NextRequest) {
           .in('sync_status', ['synced', 'pending'])
 
         if (invoiceError) {
-          console.error('[validate-discount-code] Error querying original invoice:', invoiceError)
+          logger.logPaymentProcessing('discount-refund-original-invoice-query-error', 'Error querying original invoice for discount refund', { paymentId, error: invoiceError.message }, 'error')
         }
 
         if (originalInvoices && originalInvoices.length > 1) {
-          console.error('[validate-discount-code] Multiple synced/pending ACCREC invoices found for payment:', paymentId)
+          logger.logPaymentProcessing('discount-refund-multiple-invoices', 'Multiple synced/pending ACCREC invoices found for payment', { paymentId }, 'error')
           return NextResponse.json({ isValid: false, error: 'Multiple original invoices found for payment' })
         }
 
@@ -181,11 +182,11 @@ export async function POST(request: NextRequest) {
             .eq('line_item_type', 'discount')
 
           if (lineError) {
-            console.error('[validate-discount-code] Error querying discount line item:', lineError)
+            logger.logPaymentProcessing('discount-refund-line-item-query-error', 'Error querying discount line item for refund', { xeroInvoiceId, error: lineError.message }, 'error')
           }
 
           if (lineItems && lineItems.length > 1) {
-            console.error('[validate-discount-code] Multiple discount line items found on original invoice:', xeroInvoiceId)
+            logger.logPaymentProcessing('discount-refund-multiple-line-items', 'Multiple discount line items found on original invoice', { xeroInvoiceId }, 'error')
             return NextResponse.json({ isValid: false, error: 'Multiple discount line items found on original invoice' })
           }
 
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
           // table has no user_id (it's the season/event template), so look up the customer via the
           // payment being refunded.
           if (!paymentId) {
-            console.error('[validate-discount-code] Missing paymentId for allowance-driven refund resolution:', { code: discountCode.code })
+            logger.logPaymentProcessing('discount-refund-missing-payment-id', 'Missing paymentId for allowance-driven refund resolution', { code: discountCode.code }, 'error')
             return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
           }
 
@@ -218,7 +219,7 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (paymentError || !payment) {
-            console.error('[validate-discount-code] Payment not found for allowance-driven refund resolution:', { code: discountCode.code, paymentId, error: paymentError })
+            logger.logPaymentProcessing('discount-refund-payment-not-found', 'Payment not found for allowance-driven refund resolution', { code: discountCode.code, paymentId, error: paymentError?.message }, 'error')
             return NextResponse.json({ isValid: false, error: 'Original discount line item not found for refund' })
           }
 
@@ -231,14 +232,14 @@ export async function POST(request: NextRequest) {
           )
 
           if (!effectiveLimit.isEligible) {
-            console.warn('[validate-discount-code] Refund requested for allowance-driven code the customer is not eligible for:', { code: discountCode.code, paymentId, registrationId })
+            logger.logPaymentProcessing('discount-refund-code-ineligible', 'Refund requested for allowance-driven code the customer is not eligible for', { code: discountCode.code, paymentId, registrationId }, 'warn')
             return NextResponse.json({ isValid: false, error: "This code isn't available to this customer's account." })
           }
 
           const pct = resolveDiscountPercentage(discountCode, effectiveLimit)
 
           if (pct == null || isNaN(pct)) {
-            console.error('[validate-discount-code] Percentage unresolvable for retroactive refund application:', { code: discountCode.code, paymentId, registrationId })
+            logger.logPaymentProcessing('discount-refund-percentage-unresolvable', 'Percentage unresolvable for retroactive refund application', { code: discountCode.code, paymentId, registrationId }, 'error')
             return NextResponse.json({ isValid: false, error: "This code isn't available to this customer's account." })
           }
 
@@ -275,9 +276,9 @@ export async function POST(request: NextRequest) {
             discountAmount = requestedDiscountAmount
           }
 
-          console.warn('[validate-discount-code] Retroactively applying allowance-driven code during refund (no original line item found):', { code: discountCode.code, paymentId, registrationId, discountAmount })
+          logger.logPaymentProcessing('discount-refund-allowance-code-retroactive', 'Retroactively applying allowance-driven code during refund (no original line item found)', { code: discountCode.code, paymentId, registrationId, discountAmount }, 'warn')
         } else {
-          console.warn('[validate-discount-code] Original discount line item not found for refund of fixed-percentage code; using percentage fallback:', { code: discountCode.code, paymentId })
+          logger.logPaymentProcessing('discount-refund-line-item-not-found-fallback', 'Original discount line item not found for refund of fixed-percentage code; using percentage fallback', { code: discountCode.code, paymentId }, 'warn')
           const fallbackPct = parseFloat(String(discountCode.percentage)) || 0
           discountAmount = Math.round((amount * fallbackPct) / 100)
         }
@@ -302,7 +303,7 @@ export async function POST(request: NextRequest) {
       const pct = resolveDiscountPercentage(discountCode, effectiveLimit)
 
       if (pct == null || isNaN(pct)) {
-        console.error('[validate-discount-code] Percentage unresolvable:', { code: discountCode.code, uses_user_allowance: discountCode.uses_user_allowance })
+        logger.logPaymentProcessing('discount-percentage-unresolvable', 'Percentage unresolvable for discount code', { code: discountCode.code, uses_user_allowance: discountCode.uses_user_allowance }, 'error')
         return NextResponse.json({
           isValid: false,
           error: "This code isn't available to your account."
@@ -366,7 +367,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result)
     
   } catch (error) {
-    console.error('Error validating discount code:', error)
+    logger.logPaymentProcessing('discount-code-validation-unexpected-error', 'Error validating discount code', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

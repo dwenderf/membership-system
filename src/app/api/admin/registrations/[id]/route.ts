@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 // DELETE /api/admin/registrations/[id] - Delete a never-published registration
 export async function DELETE(
@@ -59,7 +60,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Registration deleted successfully' })
   } catch (error) {
-    console.error('Error deleting registration:', error)
+    logger.logAdminAction('registration-delete-error', 'Error deleting registration', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to delete registration' },
       { status: 500 }

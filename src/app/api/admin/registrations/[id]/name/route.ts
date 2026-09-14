@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function PATCH(
   request: NextRequest,
@@ -45,7 +46,7 @@ export async function PATCH(
       .single()
     
     if (error) {
-      console.error('Error updating registration name:', error)
+      logger.logAdminAction('registration-name-update-error', 'Error updating registration name', { registrationId, error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to update registration name' }, { status: 500 })
     }
     
@@ -59,7 +60,7 @@ export async function PATCH(
     })
     
   } catch (error) {
-    console.error('Error in registration name update API:', error)
+    logger.logAdminAction('registration-name-update-exception', 'Unexpected error in registration name update API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

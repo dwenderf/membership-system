@@ -189,13 +189,13 @@ export async function POST(
       }
 
       // Create user registration record using admin client to bypass RLS
-      console.log('🔍 Creating user_registrations record (WAITLIST selection path)', {
+      logger.logPaymentProcessing('waitlist-registration-create-attempt', 'Creating user_registrations record (waitlist selection path)', {
+        waitlistId,
         userId: waitlistEntry.user_id,
         registrationId: waitlistEntry.registration_id,
         categoryId: waitlistEntry.registration_category_id,
-        paymentStatus: 'paid',
-        endpoint: 'waitlists/select'
-      })
+        paymentStatus: 'paid'
+      }, 'debug')
       const { data: userRegistration, error: registrationError } = await adminSupabase
         .from('user_registrations')
         .insert({

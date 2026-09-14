@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createXeroOAuthClient } from '@/lib/xero/client'
 import { createClient } from '@/lib/supabase/server'
 import { generateXeroOAuthState, setXeroOAuthStateCookie } from '@/lib/xero/oauth-state'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -42,9 +43,9 @@ export async function GET() {
     return response
 
   } catch (error) {
-    console.error('Error initiating Xero OAuth:', error)
-    return NextResponse.json({ 
-      error: 'Failed to initiate Xero authorization' 
+    logger.logXeroSync('oauth-initiation-failed', 'Error initiating Xero OAuth', { error: error instanceof Error ? error.message : String(error) }, 'error')
+    return NextResponse.json({
+      error: 'Failed to initiate Xero authorization'
     }, { status: 500 })
   }
 }

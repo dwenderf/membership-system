@@ -7,6 +7,7 @@ import { formatDate as formatDateUtil, formatDateString } from '@/lib/date-utils
 import UserLink from '@/components/UserLink'
 import { Database } from '@/types/database'
 import type { MembershipReminderResults } from '@/lib/services/membership-reminder-processor'
+import { logger } from '@/lib/logging/logger'
 
 type MembershipAnalyticsRow = Database['public']['Views']['membership_analytics_data']['Row']
 
@@ -90,7 +91,7 @@ export default function MembershipReportsPage() {
         }
       }
     } catch (error) {
-      console.error('Error fetching membership types:', error)
+      logger.logAdminAction('fetch-membership-types', 'Error fetching membership types', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       setError(`Failed to load membership types: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }, [searchParams])
@@ -106,7 +107,7 @@ export default function MembershipReportsPage() {
       const data = await response.json()
       setReminderCount(typeof data.count === 'number' ? data.count : null)
     } catch (error) {
-      console.error('Error fetching reminder count:', error)
+      logger.logAdminAction('fetch-reminder-count', 'Error fetching reminder count', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       setReminderCount(null)
     } finally {
       setReminderCountLoading(false)
@@ -121,8 +122,6 @@ export default function MembershipReportsPage() {
     setLoading(true)
     setError(null)
     try {
-      console.log('Fetching membership data for:', membershipId)
-      
       // Use the API route with admin privileges to access the secured view
       const response = await fetch(`/api/admin/reports/memberships?membershipId=${membershipId}`)
       
@@ -132,8 +131,6 @@ export default function MembershipReportsPage() {
       
       const result = await response.json()
       const membershipData = result.data
-
-      console.log('Membership data received:', membershipData?.length || 0, 'records')
 
       // Process the data - much simpler now since the view handles all the logic
       const membersList: MemberData[] = membershipData?.map((item: MembershipAnalyticsRow) => ({
@@ -152,7 +149,6 @@ export default function MembershipReportsPage() {
         expiration_status: item.expiration_status
       })) || []
 
-      console.log('Processed members:', membersList.length)
       setMembers(membersList)
 
       // Get stats from the first record (they're all the same for a membership type)
@@ -176,7 +172,7 @@ export default function MembershipReportsPage() {
       }
 
     } catch (error) {
-      console.error('Error fetching membership data:', error)
+      logger.logAdminAction('fetch-membership-data', 'Error fetching membership data', { membershipId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       setError(`Failed to load membership data: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // Set empty data on error
       setMembers([])

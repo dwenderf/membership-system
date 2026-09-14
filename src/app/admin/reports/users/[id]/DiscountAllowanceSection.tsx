@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface Allowance {
   id: string
@@ -73,12 +74,12 @@ export default function DiscountAllowanceSection({
         setAvailableOptions(data.availableOptions || [])
         setLoadError(false)
       } else {
-        console.error('Error fetching discount allowances:', data.error)
+        logger.logAdminAction('fetch-discount-allowances', 'Error fetching discount allowances', { userId, error: data.error }, undefined, 'error')
         setLoadError(true)
         showError(data.error || 'Failed to load discount allowances')
       }
     } catch (err) {
-      console.error('Error fetching discount allowances:', err)
+      logger.logAdminAction('fetch-discount-allowances', 'Error fetching discount allowances', { userId, error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
       setLoadError(true)
       showError('Failed to load discount allowances')
     } finally {

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/discount-codes/[id] - Get single discount code
 export async function GET(
@@ -48,7 +49,7 @@ export async function GET(
 
     return NextResponse.json({ code })
   } catch (error) {
-    console.error('Error fetching discount code:', error)
+    logger.logAdminAction('discount-code-fetch-error', 'Error fetching discount code', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to fetch discount code' },
       { status: 500 }
@@ -157,7 +158,7 @@ export async function PUT(
       code: updatedCode 
     })
   } catch (error) {
-    console.error('Error updating discount code:', error)
+    logger.logAdminAction('discount-code-update-error', 'Error updating discount code', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to update discount code' },
       { status: 500 }
@@ -219,7 +220,7 @@ export async function DELETE(
       message: 'Discount code deleted successfully'
     })
   } catch (error) {
-    console.error('Error deleting discount code:', error)
+    logger.logAdminAction('discount-code-delete-error', 'Error deleting discount code', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to delete discount code' },
       { status: 500 }

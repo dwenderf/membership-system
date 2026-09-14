@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (updateError) {
-          console.error('Error updating survey response:', updateError)
+          logger.logSystem('survey-response-update-error', 'Error updating survey response', { userId: user.id, survey_id, error: updateError.message }, 'error')
           return NextResponse.json(
             { error: 'Failed to update survey response' },
             { status: 500 }
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      console.error('Error storing survey response:', error)
+      logger.logSystem('survey-response-store-error', 'Error storing survey response', { userId: user.id, survey_id, error: error.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to store survey response' },
         { status: 500 }
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in survey response storage API:', error)
+    logger.logSystem('survey-response-storage-unexpected-error', 'Error in survey response storage API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

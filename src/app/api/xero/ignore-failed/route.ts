@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,14 +26,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { type, items } = body // type: 'all' | 'selected', items: array of IDs for selected
 
-    console.log('🚫 Ignore failed sync triggered by admin:', user.email, { type, itemCount: items?.length || 'all' })
-
     const ignoreResults = { invoices: 0, payments: 0, errors: [] as string[] }
 
     if (type === 'all') {
       // Mark all failed items as ignored
-      console.log('🚫 Marking all failed items as ignored...')
-      
       // Mark failed invoices as ignored
       const { data: ignoredInvoices, error: invoiceError } = await supabase
         .from('xero_invoices')
@@ -61,8 +58,6 @@ export async function POST(request: NextRequest) {
 
     } else if (type === 'selected' && items?.length > 0) {
       // Mark selected items as ignored
-      console.log('🚫 Marking selected items as ignored...', items)
-      
       const invoiceIds = items.filter((id: string) => id.startsWith('inv_'))
       const paymentIds = items.filter((id: string) => id.startsWith('pay_'))
 
@@ -95,7 +90,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('✅ Ignore failed sync completed:', ignoreResults)
+    logger.logXeroSync('ignore-failed-completed', 'Ignore failed sync completed', {
+      adminEmail: user.email,
+      type,
+      itemCount: items?.length || 'all',
+      results: ignoreResults
+    })
 
     return NextResponse.json({
       success: true,
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Ignore failed sync error:', error)
+    logger.logXeroSync('ignore-failed-error', 'Ignore failed sync error', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to ignore items',
       details: error instanceof Error ? error.message : String(error)

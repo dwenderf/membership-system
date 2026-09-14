@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 interface Membership {
   id: string
@@ -78,7 +79,7 @@ export default function EditMembershipPage({ params }: { params: Promise<{ id: s
           setExistingMemberships(membershipsData)
         }
       } catch (error) {
-        console.error('Error fetching data:', error)
+        logger.logAdminAction('fetch-membership-edit-data', 'Error fetching data', { membershipId: resolvedParams.id, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
         showError('Error loading membership')
         router.push('/admin/memberships')
       } finally {

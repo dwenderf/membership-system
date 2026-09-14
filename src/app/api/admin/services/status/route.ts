@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { serviceManager } from '@/lib/services/startup'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -47,8 +48,8 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Error fetching service status:', error)
-    return NextResponse.json({ 
+    logger.logServiceManagement('service-status-fetch-error', 'Error fetching service status', { error: error instanceof Error ? error.message : String(error) }, 'error')
+    return NextResponse.json({
       error: 'Failed to fetch service status',
       details: error instanceof Error ? error.message : String(error)
     }, { status: 500 })

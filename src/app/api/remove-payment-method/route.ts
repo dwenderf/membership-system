@@ -72,7 +72,6 @@ export async function DELETE() {
       },
       'error'
     )
-    console.error('Error removing payment method:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

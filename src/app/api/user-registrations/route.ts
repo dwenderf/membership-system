@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -34,14 +35,14 @@ export async function GET() {
       .order('registered_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching user registrations:', error)
+      logger.logSystem('user-registrations-fetch-error', 'Error fetching user registrations', { userId: user.id, error: error.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch registrations' }, { status: 500 })
     }
 
     return NextResponse.json(userRegistrations || [])
 
   } catch (error) {
-    console.error('Error in user registrations API:', error)
+    logger.logSystem('user-registrations-unexpected-error', 'Error in user registrations API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

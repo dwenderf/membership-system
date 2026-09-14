@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // PUT /api/admin/memberships/[id] - Update a specific membership
 export async function PUT(
@@ -84,7 +85,7 @@ export async function PUT(
           return NextResponse.json({ error: 'Membership name already exists' }, { status: 400 })
         }
       }
-      console.error('Error updating membership:', error)
+      logger.logAdminAction('membership-update-error', 'Error updating membership', { membershipId: id, error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to update membership' }, { status: 500 })
     }
 
@@ -95,7 +96,7 @@ export async function PUT(
     return NextResponse.json({ membership })
     
   } catch (error) {
-    console.error('Error in membership update API:', error)
+    logger.logAdminAction('membership-update-exception', 'Unexpected error in membership update API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

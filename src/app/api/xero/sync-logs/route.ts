@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1)
 
     if (syncLogsError) {
-      console.error('Error fetching sync logs:', syncLogsError)
+      logger.logXeroSync('fetch-sync-logs-failed', 'Error fetching sync logs', { error: syncLogsError.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch sync logs' }, { status: 500 })
     }
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in sync logs API:', error)
+    logger.logXeroSync('sync-logs-api-failed', 'Error in sync logs API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to fetch sync logs' 
     }, { status: 500 })

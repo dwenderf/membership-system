@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface XeroToken {
   tenant_id: string
@@ -41,7 +42,7 @@ function XeroIntegrationContent() {
         setPendingSyncCount(data.stats?.total_pending || 0)
       }
     } catch (error) {
-      console.error('Error fetching Xero status:', error)
+      logger.logAdminAction('fetch-xero-status', 'Error fetching Xero status', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     } finally {
       setLoading(false)
     }

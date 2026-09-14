@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 /** Row shape of `discount_usage_computed`, as selected below (not the full view). */
 interface DiscountUsageRow {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       .gte('season_end_date', new Date().toISOString().split('T')[0])
 
     if (usageError) {
-      console.error('Error fetching discount usage:', usageError)
+      logger.logSystem('user-discount-usage-fetch-error', 'Error fetching discount usage', { userId, error: usageError.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch discount usage' }, { status: 500 })
     }
 
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error in user-discount-usage API:', error)
+    logger.logSystem('user-discount-usage-unexpected-error', 'Error in user-discount-usage API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

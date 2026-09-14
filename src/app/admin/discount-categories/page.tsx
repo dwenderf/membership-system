@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { DiscountCategoryRow } from '@/lib/discount-types'
+import { logger } from '@/lib/logging/logger'
 
 type DiscountCategoryWithCodeCount = DiscountCategoryRow & { discount_codes: { count: number }[] }
 
@@ -34,7 +35,7 @@ export default async function DiscountCategoriesPage() {
     .order('name', { ascending: true })
 
   if (error) {
-    console.error('Error fetching discount categories:', error)
+    logger.logAdminAction('fetch-discount-categories', 'Error fetching discount categories', { error: error.message }, user.id, 'error')
   }
 
   return (

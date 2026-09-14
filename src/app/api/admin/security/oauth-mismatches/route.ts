@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -36,7 +37,7 @@ export async function GET() {
     )
 
     if (mismatchError) {
-      console.error('Error fetching OAuth mismatches:', mismatchError)
+      logger.logAdminAction('oauth-mismatches-fetch-error', 'Error fetching OAuth mismatches', { error: mismatchError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch OAuth mismatches', details: mismatchError.message },
         { status: 500 }
@@ -49,7 +50,7 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Unexpected error in oauth-mismatches:', error)
+    logger.logAdminAction('oauth-mismatches-exception', 'Unexpected error in oauth-mismatches', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

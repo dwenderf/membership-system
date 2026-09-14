@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 export default async function RegistrationCategoriesPage() {
   const supabase = await createClient()
@@ -24,7 +25,7 @@ export default async function RegistrationCategoriesPage() {
     .order('category_type', { ascending: true })
     .order('name', { ascending: true })
   if (error) {
-    console.error('Error fetching categories:', error)
+    logger.logAdminAction('fetch-registration-categories', 'Error fetching categories', { error: error.message }, user.id, 'error')
   }
   const systemCategories = categories?.filter((cat) => cat.category_type === 'system') || []
   const userCategories = categories?.filter((cat) => cat.category_type === 'user') || []

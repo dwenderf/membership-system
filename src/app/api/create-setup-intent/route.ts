@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
 
       if (updateError) {
-        console.error('Failed to store customer ID:', updateError)
+        logger.logPaymentProcessing('setup-intent-customer-id-store-failed', 'Failed to store Stripe customer ID', { userId: user.id, customerId, error: updateError.message }, 'error')
       }
     }
 
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error creating setup intent:', error)
+    logger.logPaymentProcessing('create-setup-intent-error', 'Error creating setup intent', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

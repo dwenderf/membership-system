@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Validate email format
@@ -25,7 +26,7 @@ async function checkRateLimit(supabase: SupabaseClient, userId: string): Promise
     .gte('created_at', oneHourAgo.toISOString())
 
   if (error) {
-    console.error('Error checking rate limit:', error)
+    logger.logSystem('email-change-rate-limit-check-error', 'Error checking rate limit for email change request', { userId, error: error.message }, 'error')
     throw error
   }
 
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
     )
 
     if (updateError) {
-      console.error('Error requesting email change:', updateError)
+      logger.logSystem('email-change-request-error', 'Error requesting email change', { userId: user.id, error: updateError.message }, 'error')
 
       await logEvent(
         supabase,
@@ -203,7 +204,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Unexpected error in request-change:', error)
+    logger.logSystem('email-request-change-unexpected-error', 'Unexpected error in request-change', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

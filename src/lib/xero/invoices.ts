@@ -4,6 +4,7 @@ import { getOrCreateXeroContact } from './contacts'
 import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import { getXeroValidationMessage, XeroApiError } from './xero-errors'
+import { logger } from '@/lib/logging/logger'
 
 // Helper function to get system accounting codes
 async function getSystemAccountingCode(codeType: string): Promise<string | null> {
@@ -16,13 +17,13 @@ async function getSystemAccountingCode(codeType: string): Promise<string | null>
       .single()
     
     if (error || !data) {
-      console.warn(`System accounting code not found for type: ${codeType}`)
+      logger.logXeroSync('system-accounting-code-not-found', `System accounting code not found for type: ${codeType}`, { codeType }, 'warn')
       return null
     }
-    
+
     return data.accounting_code
   } catch (error) {
-    console.error('Error fetching system accounting code:', error)
+    logger.logXeroSync('system-accounting-code-error', 'Error fetching system accounting code', { codeType, error: error instanceof Error ? error.message : String(error) }, 'error')
     return null
   }
 }
@@ -82,7 +83,6 @@ export async function createXeroInvoiceBeforePayment(
   options?: { markAsAuthorised?: boolean }
 ): Promise<{ success: boolean; xeroInvoiceId?: string; invoiceNumber?: string; error?: string }> {
   try {
-    console.log('🚀 createXeroInvoiceBeforePayment called with:', { user_id: invoiceData.user_id, total_amount: invoiceData.total_amount })
     const activeTenant = await getActiveTenant()
     if (!activeTenant) {
       return { success: false, error: 'No active Xero tenant configured' }
@@ -94,12 +94,10 @@ export async function createXeroInvoiceBeforePayment(
     }
 
     // Ensure contact exists in Xero
-    console.log('👤 Getting/creating Xero contact for user:', invoiceData.user_id)
     const contactResult = await getOrCreateXeroContact(invoiceData.user_id, activeTenant.tenant_id)
-    console.log('👤 Contact result:', contactResult)
     if (!contactResult.success || !contactResult.xeroContactId) {
-      console.error('❌ Contact sync failed:', contactResult.error)
-      return { 
+      logger.logXeroSync('invoice-pre-payment-contact-sync-failed', 'Contact sync failed while creating pre-payment invoice', { userId: invoiceData.user_id, tenantId: activeTenant.tenant_id, error: contactResult.error }, 'error')
+      return {
         success: false, 
         error: `Failed to sync contact: ${contactResult.error}` 
       }
@@ -154,13 +152,11 @@ export async function createXeroInvoiceBeforePayment(
 
     let response
     try {
-      console.log('📄 Creating Xero invoice with data:', JSON.stringify(xeroInvoiceData, null, 2))
+      logger.logXeroSync('invoice-pre-payment-create-attempt', 'Creating Xero invoice', { userId: invoiceData.user_id, invoiceData: xeroInvoiceData }, 'debug')
       response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
         invoices: [xeroInvoiceData]
       })
-      console.log('✅ Invoice creation successful')
     } catch (invoiceError: unknown) {
-      console.error('❌ Invoice creation failed:', invoiceError)
       // Check if the error is due to archived contact
       const errorMessage = getXeroValidationMessage(invoiceError) || ''
 
@@ -168,21 +164,21 @@ export async function createXeroInvoiceBeforePayment(
       // Check if this is an archived contact error
       const fullErrorString = JSON.stringify(invoiceError)
       if (errorMessage.includes('archived') || errorMessage.includes('un-archived') || fullErrorString.includes('archived') || fullErrorString.includes('un-archived')) {
-        console.log(`⚠️ Contact ${contactResult.xeroContactId} is archived, using contact resolution strategy`)
-        
+        logger.logXeroSync('invoice-pre-payment-archived-contact', `Contact ${contactResult.xeroContactId} is archived, using contact resolution strategy`, { contactID: contactResult.xeroContactId }, 'debug')
+
         // Use the existing contact resolution strategy from contacts.ts
         const resolvedContactResult = await getOrCreateXeroContact(invoiceData.user_id, activeTenant.tenant_id)
         if (!resolvedContactResult.success || !resolvedContactResult.xeroContactId) {
           throw new Error(`Failed to resolve contact: ${resolvedContactResult.error}`)
         }
-        
+
         // Use the resolved contact for invoice
         xeroInvoiceData.contact = { contactID: resolvedContactResult.xeroContactId }
         response = await xeroApi.accountingApi.createInvoices(activeTenant.tenant_id, {
           invoices: [xeroInvoiceData]
         })
-        
-        console.log(`✅ Successfully created invoice with resolved contact: ${resolvedContactResult.xeroContactId}`)
+
+        logger.logXeroSync('invoice-pre-payment-archived-contact-resolved', `Successfully created invoice with resolved contact: ${resolvedContactResult.xeroContactId}`, { contactID: resolvedContactResult.xeroContactId }, 'info')
       } else {
         throw invoiceError // Re-throw other errors
       }
@@ -256,12 +252,10 @@ export async function createXeroInvoiceBeforePayment(
     }
 
   } catch (error) {
-    console.error('Error creating Xero invoice before payment:', error)
-    
     // Extract meaningful error message from Xero API response
     let errorMessage = 'Unknown error during pre-payment invoice creation'
     let errorCode = 'invoice_creation_failed'
-    
+
     if (error instanceof Error) {
       errorMessage = error.message
     } else if (error && typeof error === 'object') {
@@ -281,7 +275,11 @@ export async function createXeroInvoiceBeforePayment(
         errorMessage = `Xero error: ${JSON.stringify(xeroError).substring(0, 200)}...`
       }
     }
-    
+
+    // Use warn (not error) here: this is captured explicitly below via Sentry.withScope
+    // with richer context - logger.error would auto-report a second, less detailed event.
+    logger.logXeroSync('invoice-pre-payment-create-error', 'Error creating Xero invoice before payment', { userId: invoiceData.user_id, errorCode, error: errorMessage }, 'warn')
+
     // Capture critical invoice creation error in Sentry
     Sentry.withScope((scope) => {
       scope.setTag('integration', 'xero')
@@ -356,8 +354,8 @@ export async function deleteXeroDraftInvoice(
     return { success: true }
 
   } catch (error) {
-    console.error('Error deleting Xero draft invoice:', error)
-    
+    logger.logXeroSync('invoice-draft-delete-error', 'Error deleting Xero draft invoice', { xeroInvoiceId, error: error instanceof Error ? error.message : String(error) }, 'error')
+
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
       await logXeroSync({
@@ -613,9 +611,8 @@ export async function createXeroInvoiceForPayment(
     }
 
   } catch (error) {
-    console.error('Error creating Xero invoice:', error)
-    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    logger.logXeroSync('invoice-create-error', 'Error creating Xero invoice', { paymentId, tenantId, error: errorMessage }, 'error')
 
     // Update sync status
     const supabase = await createClient()
@@ -662,7 +659,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
       .single()
 
     if (paymentError || !payment) {
-      console.error('Payment not found:', paymentId)
+      logger.logXeroSync('invoice-payment-not-found', 'Payment not found while building invoice data', { paymentId }, 'warn')
       return null
     }
 
@@ -752,7 +749,7 @@ async function getPaymentInvoiceData(paymentId: string): Promise<PaymentInvoiceD
     }
 
   } catch (error) {
-    console.error('Error getting payment invoice data:', error)
+    logger.logXeroSync('invoice-payment-data-error', 'Error getting payment invoice data', { paymentId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return null
   }
 }
@@ -844,7 +841,7 @@ export async function bulkSyncUnsyncedInvoices(tenantId: string): Promise<{
     }
 
   } catch (error) {
-    console.error('Error in bulk invoice sync:', error)
+    logger.logXeroSync('bulk-invoice-sync-error', 'Error in bulk invoice sync', { tenantId, error: error instanceof Error ? error.message : String(error) }, 'error')
     return {
       success: false,
       synced: 0,

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -32,7 +33,7 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Error fetching payment method:', error)
+    logger.logPaymentProcessing('user-payment-method-fetch-error', 'Error fetching payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

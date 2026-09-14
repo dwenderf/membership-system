@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { fetchWaitlistReportData } from '@/lib/waitlist-report-data'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(
   request: NextRequest,
@@ -77,7 +78,7 @@ export async function GET(
       .order('registered_at', { ascending: false })
 
     if (registrationError) {
-      console.error('Error fetching registration data:', registrationError)
+      logger.logSystem('captain-roster-fetch-error', 'Error fetching registration data for captain roster', { registrationId, userId: user.id, error: registrationError.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch registration data' },
         { status: 500 }
@@ -108,7 +109,7 @@ export async function GET(
       .eq('registration_id', registrationId)
 
     if (userAlternatesError) {
-      console.error('Error fetching user alternates:', userAlternatesError)
+      logger.logSystem('captain-roster-alternates-fetch-error', 'Error fetching user alternates for captain roster', { registrationId, error: userAlternatesError.message }, 'warn')
     }
 
     // Get alternate selections to calculate times_played and total_paid
@@ -130,7 +131,7 @@ export async function GET(
       .order('selected_at', { ascending: false })
 
     if (alternatesError) {
-      console.error('Error fetching alternates selections:', alternatesError)
+      logger.logSystem('captain-roster-alternate-selections-fetch-error', 'Error fetching alternate selections for captain roster', { registrationId, error: alternatesError.message }, 'warn')
     }
 
     // Fetch discount usage for roster members to populate the discount column
@@ -289,7 +290,7 @@ export async function GET(
       isAdmin,
     })
   } catch (error) {
-    console.error('Error in captain roster API:', error)
+    logger.logSystem('captain-roster-unexpected-error', 'Error in captain roster API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

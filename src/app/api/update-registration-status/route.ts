@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,19 +67,19 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (error) {
-      console.error('Error updating registration status:', error)
-      return NextResponse.json({ 
-        error: 'Failed to update registration status' 
+      logger.logSystem('registration-status-update-error', 'Error updating registration status', { userId: user.id, registrationId, categoryId, status, error: error.message }, 'error')
+      return NextResponse.json({
+        error: 'Failed to update registration status'
       }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
-      return NextResponse.json({ 
-        error: 'No registration found to update' 
+      return NextResponse.json({
+        error: 'No registration found to update'
       }, { status: 404 })
     }
 
-    console.log(`✅ Updated registration status to '${status}' for user ${user.id}`)
+    logger.logSystem('registration-status-updated', `Updated registration status to '${status}'`, { userId: user.id, registrationId, categoryId, status }, 'debug')
 
     return NextResponse.json({ 
       success: true, 
@@ -87,9 +88,9 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error updating registration status:', error)
-    return NextResponse.json({ 
-      error: 'Internal server error' 
+    logger.logSystem('registration-status-update-unexpected-error', 'Unexpected error updating registration status', { error: error instanceof Error ? error.message : String(error) }, 'error')
+    return NextResponse.json({
+      error: 'Internal server error'
     }, { status: 500 })
   }
 }

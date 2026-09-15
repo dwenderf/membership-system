@@ -18,7 +18,8 @@ export const organizationConfig = {
     logo: {
       main: "/images/logo.png",           // Main logo
       small: "/images/logo-small.png",    // Small logo for navigation
-      icon: "/images/icon.png"            // Favicon/app icon
+      icon: "/images/icon.png",           // Favicon/app icon
+      crest: "/images/nycpha-logo-crest.svg" // Full crest logo, e.g. footer
     },
     colors: {
       // From Brand_Guideline_LibertyTide.pdf. Not wired into Tailwind — see

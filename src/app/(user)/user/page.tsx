@@ -329,14 +329,20 @@ export default async function UserDashboardPage() {
           )}
         </div>
 
-        {/* Action Tiles - constrained to grid width */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
+        {/* Primary action: registrations are a recurring, per-season action. Memberships
+            are typically a once-a-year purchase/renewal, already surfaced above as an
+            alert with its own link when it's actually relevant (no active membership,
+            expiring, or expired) — so it stays a plain link here rather than a second CTA. */}
+        <div className="mb-6 flex flex-wrap items-center gap-4">
           <PrimaryCta href="/user/browse-registrations" icon="🏒">
             Browse Registrations
           </PrimaryCta>
-          <PrimaryCta href="/user/browse-memberships" icon="🎫">
+          <Link
+            href="/user/browse-memberships"
+            className="text-sm font-medium text-gray-600 hover:text-brand-ink underline underline-offset-2"
+          >
             Browse Memberships
-          </PrimaryCta>
+          </Link>
         </div>
       </div>
 

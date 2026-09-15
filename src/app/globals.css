@@ -32,7 +32,12 @@
 body {
   background-color: #f9fafb !important;
   color: var(--foreground);
-  font-family: var(--font-sans);
+  /* --font-montserrat is the raw variable next/font sets on <body> in layout.tsx.
+     --font-sans (below) only exists inside the @theme inline block, which Tailwind
+     inlines directly into generated utilities like `font-sans` rather than
+     publishing as a real :root custom property - referencing it here resolves to
+     nothing and silently falls back to the browser default font. */
+  font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
 }
 
 html {

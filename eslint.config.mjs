@@ -11,13 +11,15 @@ const eslintConfig = [
   ...nextCoreWebVitals,
   ...nextTypescript,
   {
-    // console.log is fine for temporary scratch debugging (see
-    // docs/guides/development.md#logging-standards) but must not be
-    // committed; anything audit-worthy belongs in the centralized logger
-    // (src/lib/logging/logger.ts). Warning, not error, while the
-    // pre-existing console.* call sites are swept incrementally.
+    // console.* is disallowed outright: anything audit-worthy belongs in
+    // the centralized logger (src/lib/logging/logger.ts), and scratch
+    // debugging must not be committed (see
+    // docs/guides/development.md#logging-standards). The pre-existing
+    // console.* call sites have all been swept (epic #334); a small number
+    // of files carry a targeted eslint-disable-next-line for a deliberate,
+    // documented exception rather than a blanket override.
     rules: {
-      "no-console": "warn",
+      "no-console": "error",
     },
   },
   {

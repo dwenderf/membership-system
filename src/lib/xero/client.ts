@@ -773,6 +773,7 @@ export async function logXeroSync(
     }
   } catch (error) {
     // Avoid circular logging - use console for logger errors
+    // eslint-disable-next-line no-console -- deliberate: logging a failure of the logger itself must not call back into the logger
     console.error('Error logging Xero sync:', error)
   }
 }

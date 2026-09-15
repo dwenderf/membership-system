@@ -296,43 +296,23 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
 
       {/* Conditional Membership Warning - Only show if memberships are expiring soon */}
       {hasExpiringSoonMemberships && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center mb-3">
-            <svg className="h-5 w-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <h3 className="text-sm font-medium text-yellow-800">
-              Membership Expiring Soon
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {expiringSoonMemberships.map((consolidatedMembership) => {
-              const validUntil = new Date(consolidatedMembership.validUntil)
-              const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        <div className="mb-6 text-sm">
+          {expiringSoonMemberships.map((consolidatedMembership) => {
+            const validUntil = new Date(consolidatedMembership.validUntil)
+            const daysUntilExpiration = Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
-              return (
-                <div key={String(consolidatedMembership.membershipId)} className="text-sm">
-                  <span className="font-medium text-yellow-900">
-                    {consolidatedMembership.membership?.name}
-                  </span>
-                  <span className="text-yellow-700 ml-2">
-                    expires {formatDate(validUntil)} ({daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''} remaining)
-                  </span>
-                </div>
-              )
-            })}
-            <div className="mt-4">
-              <Link
-                href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-800 bg-blue-100 hover:bg-blue-200 hover:border-blue-400 transition-colors"
-              >
-                Extend Membership
-                <svg className="ml-2 -mr-1 w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </Link>
-            </div>
-          </div>
+            return (
+              <p key={String(consolidatedMembership.membershipId)} className="text-amber-600">
+                ⚠️ Your {consolidatedMembership.membership?.name} expires in {daysUntilExpiration} day{daysUntilExpiration !== 1 ? 's' : ''}.{' '}
+                <Link
+                  href={`/user/browse-memberships?from=/user/browse-registrations/${registration.id}`}
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
+                  Click here to extend
+                </Link>
+              </p>
+            )
+          })}
         </div>
       )}
 

@@ -5,6 +5,7 @@ interface PrimaryCtaButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElem
   children: ReactNode
   className?: string
   fullWidth?: boolean
+  emphasis?: 'default' | 'amber'
 }
 
 /**
@@ -18,6 +19,7 @@ export default function PrimaryCtaButton({
   className = '',
   fullWidth = true,
   disabled,
+  emphasis = 'default',
   type = 'button',
   ...rest
 }: PrimaryCtaButtonProps) {
@@ -25,7 +27,7 @@ export default function PrimaryCtaButton({
     <button
       type={type}
       disabled={disabled}
-      className={`${primaryCtaClassName({ fullWidth, disabled })} justify-center ${className}`}
+      className={`${primaryCtaClassName({ fullWidth, disabled, emphasis })} justify-center ${className}`}
       {...rest}
     >
       {children}

@@ -19,6 +19,7 @@ import { getRegistrationStatus, isRegistrationAvailable, type RegistrationWithTi
 import type { DiscountValidationResult } from '@/app/api/validate-discount-code/route'
 import WaitlistBadge from './WaitlistBadge'
 import { logger } from '@/lib/logging/logger'
+import PrimaryCtaButton from './ui/PrimaryCtaButton'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -1500,20 +1501,10 @@ export default function RegistrationPurchase({
       )}
 
       {/* Register Button */}
-      <button
+      <PrimaryCtaButton
         onClick={handlePurchase}
         disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}
-        className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors text-white ${
-          (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate)))
-            ? 'bg-blue-500 cursor-default'
-            : isCategoryAtCapacity
-            ? (isUserOnWaitlist
-                ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed'
-                : selectedCategory?.max_capacity === 0
-                ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
-                : 'bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed')
-            : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed'
-        }`}
+        emphasis={isCategoryAtCapacity && !isUserOnWaitlist ? 'amber' : 'default'}
       >
         {isLoading ? 'Processing...' :
          !selectedCategoryId ? 'Select Category to Continue' :
@@ -1527,7 +1518,7 @@ export default function RegistrationPurchase({
          (isCategoryAtCapacity && selectedCategory?.max_capacity === 0) ? 'Request to Join' :
          isCategoryAtCapacity ? 'Join Waitlist' :
          'Register Now'}
-      </button>
+      </PrimaryCtaButton>
 
       {/* Setup Intent Form Modal */}
       {showSetupIntentForm && (

@@ -89,7 +89,7 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
               </span>
             </Link>
 
-            <div className="hidden md:ml-6 md:flex md:space-x-6">
+            <div className="hidden xl:ml-6 xl:flex xl:space-x-6">
               {navigation.map((item) => (
                 <div key={item.name} className="relative flex items-center">
                   {item.submenu ? (
@@ -158,7 +158,7 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
             </div>
           </div>
 
-          <div className="hidden md:flex md:items-center space-x-4">
+          <div className="hidden xl:flex xl:items-center space-x-4">
             {user?.is_admin && (
               <div className="flex items-center space-x-1 bg-gray-100 rounded-md p-1">
                 {isAdminView ? (
@@ -186,7 +186,7 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
             </Link>
           </div>
 
-          <div className="md:hidden flex items-center">
+          <div className="xl:hidden flex items-center">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
@@ -209,7 +209,7 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
       {/* Mobile menu — a scrollable full-panel overlay below the fixed top bar,
           so a long list (e.g. admin's grouped items) scrolls instead of overflowing. */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 z-40 bg-white overflow-y-auto border-t border-gray-200">
+        <div className="xl:hidden fixed inset-x-0 top-16 bottom-0 z-40 bg-white overflow-y-auto border-t border-gray-200">
           <div className="pt-2 pb-3 space-y-1">
             {navigation.map((item) => (
               <div key={item.name}>

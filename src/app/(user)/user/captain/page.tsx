@@ -152,7 +152,7 @@ export default function CaptainDashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Teams</h1>
+      <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900 mb-8">My Teams</h1>
 
       {/* Show Past Teams Checkbox - only show if user has teams */}
       {!hasNoTeams && (

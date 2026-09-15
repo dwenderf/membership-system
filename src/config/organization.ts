@@ -17,9 +17,10 @@ export const organizationConfig = {
       icon: "/images/icon.png"            // Favicon/app icon
     },
     colors: {
-      // Future brand colors can be added here
-      primary: "#3B82F6",    // Blue
-      secondary: "#10B981"   // Green
+      // From Brand_Guideline_LibertyTide.pdf. Not wired into Tailwind — see
+      // the brand tokens in src/app/globals.css, which are the source of truth.
+      primary: "#6DCCC8",    // Liberty Tide
+      secondary: "#296163"   // Deep Green
     }
   },
   features: {

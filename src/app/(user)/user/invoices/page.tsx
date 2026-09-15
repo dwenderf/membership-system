@@ -297,7 +297,7 @@ export default async function UserInvoicesPage() {
         </Link>
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Invoices</h1>
+            <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">My Invoices</h1>
             <p className="text-gray-600 mt-1">
               View and manage your invoices from {getOrganizationName()}
             </p>

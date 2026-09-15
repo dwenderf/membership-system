@@ -128,7 +128,7 @@ export default function EmailChangedPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Email Change Failed</h1>
+          <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-center text-gray-900 mb-2">Email Change Failed</h1>
           <p className="text-center text-gray-600 mb-6">{error}</p>
           <button
             onClick={() => router.push('/user/account/edit')}
@@ -151,7 +151,7 @@ export default function EmailChangedPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-center text-gray-900 mb-4">One More Step!</h1>
+          <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-center text-gray-900 mb-4">One More Step!</h1>
 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
             <p className="text-sm text-blue-900 mb-3">
@@ -205,7 +205,7 @@ export default function EmailChangedPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Email Updated Successfully!</h1>
+          <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-center text-gray-900 mb-2">Email Updated Successfully!</h1>
           <div className="text-center text-gray-600 mb-4">
             <p className="mb-2">Your email address has been changed from:</p>
             <p className="text-sm"><span className="line-through text-gray-400">{oldEmail}</span></p>
@@ -230,7 +230,7 @@ export default function EmailChangedPage() {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Processing Email Change</h1>
+        <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-center text-gray-900 mb-2">Processing Email Change</h1>
         <p className="text-center text-gray-600">
           Please wait while we verify your email change...
         </p>

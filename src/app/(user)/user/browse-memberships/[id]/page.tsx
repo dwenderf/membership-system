@@ -127,7 +127,7 @@ export default async function MembershipDetailPage({ params, searchParams }: Pag
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
-                <h1 className="text-xl font-semibold text-gray-900">
+                <h1 className="text-xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">
                   {membership.name}
                 </h1>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${membershipStatus.className}`}>

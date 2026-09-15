@@ -49,8 +49,8 @@ export default function RootLayout({
         style={{ background: '#f9fafb' }}
       >
         <ToastProvider>
-          <div className="flex flex-col h-screen">
-            <div className="flex-1 overflow-auto">
+          <div className="flex flex-col min-h-screen">
+            <div className="flex-1">
               {children}
             </div>
             <Footer />

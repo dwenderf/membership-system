@@ -79,14 +79,17 @@ export async function register() {
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {
-    // Edge runtime doesn't support file system operations, so we'll use console
+    // Edge runtime doesn't support file system operations, so the
+    // fs-based logger (src/lib/logging/logger.ts) can't run here -
+    // console is the only option in this branch.
+    // eslint-disable-next-line no-console -- deliberate: logger needs Node's fs, unavailable in Edge runtime
     console.log('🌟 Next.js Edge Runtime starting up')
-    
+
     try {
       Sentry.init({
         dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
         tracesSampleRate: 1.0,
-        
+
         // Error filtering
         beforeSend(event) {
           // Don't send events in development
@@ -95,11 +98,13 @@ export async function register() {
           }
           return event;
         },
-        
+
         debug: process.env.NODE_ENV === 'development',
       });
+      // eslint-disable-next-line no-console -- deliberate: logger needs Node's fs, unavailable in Edge runtime
       console.log('🔍 Sentry Edge monitoring initialized')
     } catch (error) {
+      // eslint-disable-next-line no-console -- deliberate: logger needs Node's fs, unavailable in Edge runtime
       console.error('❌ Error initializing Edge runtime:', error)
       throw error
     }

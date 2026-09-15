@@ -19,7 +19,7 @@ This document outlines development standards and best practices for the Hockey A
 ### ✅ Preferred: Structured Logging
 **`console.log` is for temporary scratch debugging only — the centralized logger is required for anything audit-worthy**
 
-`console.log` (and `console.debug`) are fine while actively working a dev/feature cycle, but must be removed before committing. They aren't captured to `logs/`, the admin log viewer, or Sentry, so anything left behind is invisible once the code ships.
+`console.log` (and `console.debug`) are fine while actively working a dev/feature cycle, but must be removed before committing — CI enforces this (a `console.*` left in committed code fails the build, not just a lint warning). They aren't captured to `logs/`, the admin log viewer, or Sentry, so anything left behind is invisible once the code ships.
 
 Use the centralized logger for anything audit-worthy — warnings, errors, and other notable events. Apply this especially carefully in billing/financial-accounting code (Stripe payment/webhook handling, Xero sync, invoicing) and anything immediately upstream or downstream of it, since that's where dropped signal is most costly.
 
@@ -58,7 +58,7 @@ Use appropriate categories for different types of operations:
 - **Circular Logging Prevention**: avoiding infinite loops inside the logger's own error handling (see `reportToSentry` in `src/lib/logging/logger.ts`, and the same pattern in `src/lib/xero/client.ts`'s `logXeroSync` helper)
 - **CLI tooling**: one-off scripts under `scripts/` that print to stdout for a human running them, not for structured log capture
 
-Everything else — including any `console.log` left from debugging — must be deleted before commit or converted to a `logger.*` call. This is enforced (as a warning, not a build failure) by the `no-console` ESLint rule.
+Everything else — including any `console.log` left from debugging — must be deleted before commit or converted to a `logger.*` call. The `no-console` ESLint rule enforces this as a build failure, not just a warning; a genuinely new exception needs a targeted `eslint-disable-next-line no-console` with a reason comment, not a suppressed or widened rule.
 
 ## 🗃️ Database Migrations
 

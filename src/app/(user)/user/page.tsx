@@ -11,6 +11,7 @@ import EventCalendarButton from '@/components/EventCalendarButton'
 import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 import { formatEventDateTime } from '@/lib/date-utils'
 import { Database } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 type EventRegistrationType = 'event' | 'scrimmage' | 'tournament'
 const isEventRegistrationType = (type: string | undefined | null): type is EventRegistrationType =>
@@ -107,7 +108,12 @@ export default async function UserDashboardPage() {
       userRegistrations = activeRegistrations.slice(0, 5) // Limit to 5 for dashboard
     }
   } catch (error) {
-    console.error('Error fetching user registrations:', error)
+    logger.logSystem(
+      'user-dashboard-fetch-registrations-error',
+      'Error fetching user registrations',
+      { error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
   }
 
   // Get user's alternate registrations

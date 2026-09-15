@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * GET /api/user/payment-plans
@@ -30,7 +31,7 @@ export async function GET() {
       .eq('status', 'active')
 
     if (error) {
-      console.error('Error fetching payment plans:', error)
+      logger.logPaymentProcessing('payment-plans-fetch-error', 'Error fetching payment plans', { userId: user.id, error: error.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch payment plans' },
         { status: 500 }
@@ -39,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json({ paymentPlans: paymentPlans || [] })
   } catch (error) {
-    console.error('Error in payment plans API:', error)
+    logger.logPaymentProcessing('payment-plans-unexpected-error', 'Error in payment plans API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

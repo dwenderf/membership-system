@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -23,7 +24,7 @@ export async function GET() {
       .single()
 
     if (userError) {
-      console.error('Error fetching user:', userError)
+      logger.logPaymentProcessing('payment-plan-eligibility-user-fetch-error', 'Error fetching user for payment plan eligibility check', { userId: authUser.id, error: userError.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch user data' },
         { status: 500 }
@@ -42,7 +43,7 @@ export async function GET() {
       hasSavedPaymentMethod
     })
   } catch (error) {
-    console.error('Unexpected error checking payment plan eligibility:', error)
+    logger.logPaymentProcessing('payment-plan-eligibility-unexpected-error', 'Unexpected error checking payment plan eligibility', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

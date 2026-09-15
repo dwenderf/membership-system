@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateString, formatDate } from '@/lib/date-utils'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { logger } from '@/lib/logging/logger'
 
 export default async function SeasonsPage() {
   const supabase = await createClient()
@@ -29,7 +30,7 @@ export default async function SeasonsPage() {
     .order('start_date', { ascending: false })
 
   if (error) {
-    console.error('Error fetching seasons:', error)
+    logger.logAdminAction('fetch-seasons', 'Error fetching seasons', { error: error.message }, user.id, 'error')
   }
 
   return (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { formatDate as formatDateUtil } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 
 interface Alternate {
@@ -118,6 +119,7 @@ export default function AlternateSelectionInterface({
       setSummary(data.summary)
       
     } catch (err) {
+      logger.logPaymentProcessing('fetch-alternates-error', 'Error fetching alternates for game', { gameId, error: err instanceof Error ? err.message : String(err) }, 'error')
       setError(err instanceof Error ? err.message : 'Failed to load alternates')
     } finally {
       setLoading(false)
@@ -125,9 +127,7 @@ export default function AlternateSelectionInterface({
   }, [gameId])
 
   useEffect(() => {
-    fetchAlternates().catch(err => {
-      console.error('Error in useEffect fetchAlternates:', err)
-    })
+    fetchAlternates()
   }, [fetchAlternates])
 
   const handleAlternateToggle = (alternateId: string) => {

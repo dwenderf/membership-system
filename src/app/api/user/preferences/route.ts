@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * PUT /api/user/preferences
@@ -26,7 +27,7 @@ export async function PUT(request: Request) {
       .single()
 
     if (fetchError) {
-      console.error('Error fetching user preferences:', fetchError)
+      logger.logSystem('preferences-fetch-error', 'Error fetching user preferences', { userId: user.id, error: fetchError.message }, 'error')
       return NextResponse.json({ error: 'Failed to fetch preferences' }, { status: 500 })
     }
 
@@ -38,13 +39,13 @@ export async function PUT(request: Request) {
       .eq('id', user.id)
 
     if (updateError) {
-      console.error('Error updating user preferences:', updateError)
+      logger.logSystem('preferences-update-error', 'Error updating user preferences', { userId: user.id, error: updateError.message }, 'error')
       return NextResponse.json({ error: 'Failed to update preferences' }, { status: 500 })
     }
 
     return NextResponse.json({ preferences: merged })
   } catch (error) {
-    console.error('Error in preferences API:', error)
+    logger.logSystem('preferences-unexpected-error', 'Error in preferences API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

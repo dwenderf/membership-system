@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User as SupabaseAuthUser } from '@supabase/supabase-js'
 import UsersTable from './UsersTable'
+import { logger } from '@/lib/logging/logger'
 
 interface User {
   id: string
@@ -56,13 +57,13 @@ export default function UsersPage() {
           .order('last_name', { ascending: true })
 
         if (usersError) {
-          console.error('Error fetching users:', usersError)
+          logger.logAdminAction('fetch-users', 'Error fetching users', { error: usersError.message }, undefined, 'error')
           setError('There was a problem retrieving the user list. Please try again later or contact support if the issue persists.')
         } else {
           setUsers(usersData || [])
         }
       } catch (err) {
-        console.error('Error:', err)
+        logger.logAdminAction('fetch-users', 'Unexpected error fetching users', { error: err instanceof Error ? err.message : String(err) }, undefined, 'error')
         setError('An unexpected error occurred. Please try again.')
       } finally {
         setLoading(false)

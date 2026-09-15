@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
+import { logger } from '@/lib/logging/logger'
 
 type PageState = 'loading' | 'pending' | 'complete' | 'error'
 
@@ -95,7 +96,12 @@ export default function EmailChangedPage() {
         }
 
       } catch (err) {
-        console.error('Error processing email change:', err)
+        logger.logSystem(
+          'email-change-processing-error',
+          'Error processing email change',
+          { error: err instanceof Error ? err.message : String(err) },
+          'error'
+        )
         setError('An unexpected error occurred')
         showError('Error', 'An unexpected error occurred')
         setState('error')

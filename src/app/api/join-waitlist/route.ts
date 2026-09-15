@@ -6,6 +6,7 @@ import { emailService } from '@/lib/email'
 import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-service'
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logging/logger'
 
 
 // Force import server config
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
       .eq('payment_status', 'paid')
 
     if (countError) {
-      console.error('Error checking category capacity:', countError)
+      logger.logPaymentProcessing('waitlist-capacity-check-failed', 'Error checking category capacity', { userId: user.id, registrationId, categoryId, error: countError.message }, 'error')
       return NextResponse.json({ error: 'Failed to check category capacity' }, { status: 500 })
     }
 
@@ -258,7 +259,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (reactivateError) {
-        console.error('Error reactivating waitlist entry:', reactivateError)
+        logger.logPaymentProcessing('waitlist-reactivate-failed', 'Error reactivating waitlist entry', { userId: user.id, registrationId, categoryId, waitlistId: existingWaitlist.id, error: reactivateError.message }, 'error')
         return NextResponse.json({ error: 'Failed to rejoin waitlist' }, { status: 500 })
       }
 
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
         discount_code_id: validatedDiscountCodeId
       }
 
-      console.log('Attempting to insert waitlist entry:', waitlistData)
+      logger.logPaymentProcessing('waitlist-insert-attempt', 'Attempting to insert waitlist entry', { waitlistData }, 'debug')
 
       const { data: newEntry, error: waitlistError } = await supabase
         .from('waitlists')
@@ -285,8 +286,9 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (waitlistError) {
-        console.error('Error adding to waitlist:', waitlistError)
-        console.error('Failed waitlist data:', waitlistData)
+        // Reported to Sentry below via captureException; logged here at warn to
+        // avoid a duplicate Sentry error report for the same failure.
+        logger.logPaymentProcessing('waitlist-insert-failed', 'Error adding to waitlist', { waitlistData, error: waitlistError.message }, 'warn')
         Sentry.captureException(waitlistError, {
           tags: {
             operation: 'waitlist_join',
@@ -361,8 +363,10 @@ export async function POST(request: NextRequest) {
           position: nextPosition
         })
       } catch (emailError) {
-        // Log email error but don't fail the waitlist join
-        console.error('Failed to send waitlist email:', emailError)
+        // Log email error but don't fail the waitlist join. Reported to Sentry
+        // below via captureException, so logged here at warn to avoid a
+        // duplicate Sentry error report.
+        logger.logPaymentProcessing('waitlist-email-failed', 'Failed to send waitlist email', { userId: user.id, registrationId, categoryId, error: emailError instanceof Error ? emailError.message : String(emailError) }, 'warn')
         Sentry.captureException(emailError, {
           tags: {
             operation: 'waitlist_email_failed',
@@ -393,8 +397,10 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error joining waitlist:', error)
-    
+    // Reported to Sentry below via captureException; logged here at warn to
+    // avoid a duplicate Sentry error report for the same failure.
+    logger.logPaymentProcessing('waitlist-join-error', 'Error joining waitlist', { error: error instanceof Error ? error.message : String(error) }, 'warn')
+
     Sentry.captureException(error, {
       tags: {
         operation: 'waitlist_join_error'

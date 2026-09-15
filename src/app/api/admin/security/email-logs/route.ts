@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
     const { data: logs, error: logsError, count } = await query
 
     if (logsError) {
-      console.error('Error fetching email change logs:', logsError)
+      logger.logAdminAction('email-change-logs-fetch-error', 'Error fetching email change logs', { error: logsError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch email change logs', details: logsError.message },
         { status: 500 }
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Unexpected error in email-logs:', error)
+    logger.logAdminAction('email-change-logs-exception', 'Unexpected error in email-logs', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

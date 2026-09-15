@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/memberships - List all memberships
 export async function GET() {
@@ -30,14 +31,14 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching memberships:', error)
+      logger.logAdminAction('memberships-fetch-error', 'Error fetching memberships', { error: error.message }, user.id, 'error')
       return NextResponse.json({ error: 'Failed to fetch memberships' }, { status: 500 })
     }
 
     return NextResponse.json({ memberships })
-    
+
   } catch (error) {
-    console.error('Error in memberships API:', error)
+    logger.logAdminAction('memberships-fetch-exception', 'Unexpected error in memberships API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import UserPicker from '@/components/admin/UserPicker'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { logger } from '@/lib/logging/logger'
 
 interface Captain {
   id: string
@@ -42,7 +43,7 @@ export default function CaptainManager({
       const data = await response.json()
       setCaptains(data.captains || [])
     } catch (err) {
-      console.error('Error fetching captains:', err)
+      logger.error('admin-action', 'fetch-captains-error', 'Error fetching captains', { registrationId, error: err instanceof Error ? err.message : String(err) })
       setError('Failed to load captains. Please try again.')
     } finally {
       setLoading(false)
@@ -84,7 +85,7 @@ export default function CaptainManager({
       setConfirmDialogOpen(false)
       setSelectedUser(null)
     } catch (err) {
-      console.error('Error adding captain:', err)
+      logger.error('admin-action', 'add-captain-error', 'Error adding captain', { registrationId, userId: selectedUser.id, error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Failed to add captain')
     } finally {
       setAdding(false)
@@ -126,7 +127,7 @@ export default function CaptainManager({
       setRemoveDialogOpen(false)
       setCaptainToRemove(null)
     } catch (err) {
-      console.error('Error removing captain:', err)
+      logger.error('admin-action', 'remove-captain-error', 'Error removing captain', { registrationId, captainId: captainToRemove.id, error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Failed to remove captain')
     } finally {
       setRemovingId(null)

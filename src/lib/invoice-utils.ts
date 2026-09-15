@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatAmount, getDaysUntilDue } from '@/lib/format-utils'
+import { logger } from '@/lib/logging/logger'
 
 export interface UnpaidInvoiceInfo {
   count: number
@@ -39,7 +40,12 @@ export async function getUserUnpaidInvoices(userId: string): Promise<UnpaidInvoi
     .eq('user_id', userId)
 
   if (paymentsError) {
-    console.error('Error fetching payments:', paymentsError)
+    logger.logSystem(
+      'unpaid-invoices-fetch-payments-failed',
+      'Error fetching payments',
+      { userId, error: paymentsError.message },
+      'error'
+    )
     return { count: 0, totalAmount: 0, invoices: [] }
   }
 
@@ -69,7 +75,12 @@ export async function getUserUnpaidInvoices(userId: string): Promise<UnpaidInvoi
     .order('created_at', { ascending: false })
 
   if (invoicesError) {
-    console.error('Error fetching invoices:', invoicesError)
+    logger.logSystem(
+      'unpaid-invoices-fetch-invoices-failed',
+      'Error fetching invoices',
+      { userId, error: invoicesError.message },
+      'error'
+    )
     return { count: 0, totalAmount: 0, invoices: [] }
   }
 

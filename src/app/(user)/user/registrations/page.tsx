@@ -12,6 +12,7 @@ import WaitlistBadge from '@/components/WaitlistBadge'
 import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 import RoleBadge from '@/components/RoleBadge'
 import { Database } from '@/types/database'
+import { logger } from '@/lib/logging/logger'
 
 interface ActivityCheckRegistration {
   type: string
@@ -76,7 +77,12 @@ export default async function UserRegistrationsPage() {
       userRegistrations = await registrationsResponse.json() as UserRegistrationRow[]
     }
   } catch (error) {
-    console.error('Error fetching user registrations:', error)
+    logger.logSystem(
+      'user-registrations-fetch-error',
+      'Error fetching user registrations',
+      { userId: user.id, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
   }
 
   // Get user's current waitlist entries
@@ -116,7 +122,12 @@ export default async function UserRegistrationsPage() {
 
   // Log errors only
   if (alternateRegsError) {
-    console.error('Error fetching alternate registrations:', alternateRegsError)
+    logger.logSystem(
+      'user-alternate-registrations-fetch-error',
+      'Error fetching alternate registrations',
+      { userId: user.id, error: alternateRegsError.message },
+      'error'
+    )
   }
 
   // Get user's alternate selections (games they've been selected for and billed)
@@ -145,7 +156,12 @@ export default async function UserRegistrationsPage() {
 
   // Log errors only
   if (alternateSelectionsError) {
-    console.error('Error fetching alternate selections:', alternateSelectionsError)
+    logger.logSystem(
+      'user-alternate-selections-fetch-error',
+      'Error fetching alternate selections',
+      { userId: user.id, error: alternateSelectionsError.message },
+      'error'
+    )
   }
 
   // Get the registration IDs for which this user is a captain

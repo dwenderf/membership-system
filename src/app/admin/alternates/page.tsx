@@ -3,6 +3,7 @@ import { checkAlternatesAccess } from '@/lib/utils/alternates-access'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import AlternatesManager from '@/components/AlternatesManager'
+import { logger } from '@/lib/logging/logger'
 
 export default async function AlternatesPage() {
   // Check access permissions
@@ -58,7 +59,7 @@ export default async function AlternatesPage() {
     }>, { merge: false }>()
 
   if (error) {
-    console.error('Error fetching registrations:', error)
+    logger.logAdminAction('fetch-alternates-registrations', 'Error fetching registrations', { error: error.message }, undefined, 'error')
     notFound()
   }
 

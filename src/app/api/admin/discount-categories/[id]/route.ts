@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/discount-categories/[id] - Get single discount category
 export async function GET(
@@ -43,7 +44,7 @@ export async function GET(
 
     return NextResponse.json({ category })
   } catch (error) {
-    console.error('Error fetching discount category:', error)
+    logger.logAdminAction('discount-category-fetch-error', 'Error fetching discount category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to fetch discount category' },
       { status: 500 }
@@ -143,7 +144,7 @@ export async function PUT(
       category 
     })
   } catch (error) {
-    console.error('Error updating discount category:', error)
+    logger.logAdminAction('discount-category-update-error', 'Error updating discount category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to update discount category' },
       { status: 500 }
@@ -205,7 +206,7 @@ export async function DELETE(
       message: 'Discount category deleted successfully'
     })
   } catch (error) {
-    console.error('Error deleting discount category:', error)
+    logger.logAdminAction('discount-category-delete-error', 'Error deleting discount category', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Failed to delete discount category' },
       { status: 500 }

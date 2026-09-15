@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { formatDateTime } from '@/lib/date-utils'
 import UserLink from '@/components/UserLink'
 import InvoiceDetailLink from '@/components/InvoiceDetailLink'
+import { logger } from '@/lib/logging/logger'
 
 interface ReportData {
   dateRange: {
@@ -151,7 +152,7 @@ export default function ReportsPage() {
         setPagination(data.pagination || { offset: 0, limit: 50, hasMore: false })
       }
     } catch (error) {
-      console.error('Error fetching report data:', error)
+      logger.logAdminAction('fetch-financial-report', 'Error fetching report data', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('Failed to load report data')
     } finally {
       setLoading(false)

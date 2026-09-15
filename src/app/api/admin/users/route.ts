@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
 
     if (usersError) {
-      console.error('Error fetching users:', usersError)
+      logger.logAdminAction('users-fetch-error', 'Error fetching users', { error: usersError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch users' },
         { status: 500 }
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users: users || [] })
   } catch (error) {
-    console.error('Error in GET users API:', error)
+    logger.logAdminAction('users-fetch-exception', 'Unexpected error in GET users API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

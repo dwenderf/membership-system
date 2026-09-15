@@ -152,13 +152,17 @@ async function handleFreeRegistration({
       .single()
 
     // Create user registration record (free registration - mark as paid immediately)
-    console.log('🔍 Creating user_registrations record (FREE registration path)', {
-      userId: user.id,
-      registrationId,
-      categoryId,
-      isFree: true,
-      paymentStatus: 'paid'
-    })
+    logger.logPaymentProcessing(
+      'create-user-registration',
+      'Creating user_registrations record (FREE registration path)',
+      {
+        userId: user.id,
+        registrationId,
+        categoryId,
+        isFree: true,
+        paymentStatus: 'paid'
+      }
+    )
     const { data: reservationData, error: reservationError } = await adminSupabase
       .from('user_registrations')
       .insert({
@@ -1048,12 +1052,16 @@ export async function POST(request: NextRequest) {
     // STEP 3: Create reservation record (for ALL categories, not just those with max_capacity)
     // This ensures the webhook can find and update the record when payment succeeds
     if (!reservationId) {
-      console.log('🔍 Creating user_registrations record (payment intent creation)', {
-        userId: user.id,
-        registrationId,
-        categoryId,
-        hasMaxCapacity: !!selectedCategory.max_capacity
-      })
+      logger.logPaymentProcessing(
+        'create-user-registration',
+        'Creating user_registrations record (payment intent creation)',
+        {
+          userId: user.id,
+          registrationId,
+          categoryId,
+          hasMaxCapacity: !!selectedCategory.max_capacity
+        }
+      )
 
       // Create processing reservation (5 minute expiration)
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now

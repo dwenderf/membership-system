@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { revokeXeroTokens } from '@/lib/xero/client'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST() {
   try {
@@ -24,7 +25,6 @@ export async function POST() {
     }
 
     // Single tenant model: revoke OAuth connections on Xero's side first
-    console.log('Revoking Xero OAuth connections...')
     await revokeXeroTokens()
 
     // Then disconnect all active tokens in our database
@@ -37,19 +37,18 @@ export async function POST() {
       .eq('is_active', true)
 
     if (deactivateError) {
-      console.error('Error deactivating Xero token:', deactivateError)
+      logger.logXeroSync('disconnect-deactivate-failed', 'Error deactivating Xero token', { error: deactivateError.message }, 'error')
       return NextResponse.json({ error: 'Failed to disconnect Xero' }, { status: 500 })
     }
 
-    // Log the disconnection
-    console.log('Xero integration disconnected by admin')
+    logger.logXeroSync('disconnected', 'Xero integration disconnected by admin', { userId: user.id })
 
-    return NextResponse.json({ 
-      message: 'Xero integration disconnected successfully' 
+    return NextResponse.json({
+      message: 'Xero integration disconnected successfully'
     })
 
   } catch (error) {
-    console.error('Error disconnecting Xero:', error)
+    logger.logXeroSync('disconnect-failed', 'Error disconnecting Xero', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to disconnect Xero integration' 
     }, { status: 500 })

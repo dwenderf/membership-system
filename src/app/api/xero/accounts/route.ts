@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenant } from '@/lib/xero/client'
 import { getFrequentlyUsedAccountingCodes } from '@/lib/accounting-codes'
 import { getLastSyncInfo } from '@/lib/xero/accounts-sync'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Fetch Xero Accounts
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
     const { data: accounts, error } = await query
 
     if (error) {
-      console.error('Error fetching Xero accounts:', error)
+      logger.logXeroSync('fetch-accounts-failed', 'Error fetching Xero accounts', { error: error.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch accounts' },
         { status: 500 }
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error fetching Xero accounts:', error)
+    logger.logXeroSync('fetch-accounts-failed', 'Error fetching Xero accounts', { error: error instanceof Error ? error.message : String(error) }, 'error')
 
     return NextResponse.json(
       { error: 'Error fetching accounts' },

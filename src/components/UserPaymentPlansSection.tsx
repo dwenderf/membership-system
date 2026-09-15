@@ -6,6 +6,7 @@ import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
+import { logger } from '@/lib/logging/logger'
 
 interface Installment {
   planned_payment_date: string
@@ -46,14 +47,14 @@ export default function UserPaymentPlansSection() {
       const response = await fetch('/api/user/payment-plans')
 
       if (!response.ok) {
-        console.error('Error fetching payment plans:', response.statusText)
+        logger.logPaymentProcessing('fetch-payment-plans-error', 'Error fetching payment plans', { statusText: response.statusText }, 'error')
         return
       }
 
       const data = await response.json()
       setPaymentPlans(data.paymentPlans || [])
     } catch (error) {
-      console.error('Error fetching payment plans:', error)
+      logger.logPaymentProcessing('fetch-payment-plans-error', 'Error fetching payment plans', { error: error instanceof Error ? error.message : String(error) }, 'error')
     } finally {
       setLoading(false)
     }
@@ -89,7 +90,7 @@ export default function UserPaymentPlansSection() {
         showError('Payment Failed', data.error || 'Failed to process early payoff')
       }
     } catch (error) {
-      console.error('Error paying off plan:', error)
+      logger.logPaymentProcessing('pay-off-plan-error', 'Error paying off plan', { planId: selectedPlan.id, error: error instanceof Error ? error.message : String(error) }, 'error')
       showError('Payment Failed', 'An unexpected error occurred')
     } finally {
       setPayingOff(null)

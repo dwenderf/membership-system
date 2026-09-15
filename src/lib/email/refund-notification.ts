@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/date-utils'
 import { emailStagingManager } from '@/lib/email/staging'
 import { stageAdminRefundNotification } from '@/lib/email/admin-notifications'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { logger } from '@/lib/logging/logger'
 
 /**
  * Stage a refund notification email for batch processing
@@ -36,7 +37,12 @@ export async function stageRefundNotificationEmail(
       .single()
 
     if (userError || !user) {
-      console.error(`Failed to fetch user details for refund email:`, userError)
+      logger.logSystem(
+        'refund-email-fetch-user-failed',
+        'Failed to fetch user details for refund email',
+        { userId, refundId, error: userError?.message },
+        'error'
+      )
       return
     }
 
@@ -48,7 +54,12 @@ export async function stageRefundNotificationEmail(
       .single()
 
     if (refundError || !refund) {
-      console.error(`Failed to fetch refund details for email:`, refundError)
+      logger.logSystem(
+        'refund-email-fetch-refund-failed',
+        'Failed to fetch refund details for email',
+        { refundId, userId, error: refundError?.message },
+        'error'
+      )
       return
     }
 
@@ -60,7 +71,12 @@ export async function stageRefundNotificationEmail(
       .single()
 
     if (paymentError || !payment) {
-      console.error(`Failed to fetch payment details for refund email:`, paymentError)
+      logger.logSystem(
+        'refund-email-fetch-payment-failed',
+        'Failed to fetch payment details for refund email',
+        { paymentId, refundId, error: paymentError?.message },
+        'error'
+      )
       return
     }
 
@@ -75,7 +91,12 @@ export async function stageRefundNotificationEmail(
     const invoiceNumber = invoice?.invoice_number || 'N/A'
 
     if (!process.env.LOOPS_REFUND_TEMPLATE_ID) {
-      console.warn('LOOPS_REFUND_TEMPLATE_ID not configured, skipping refund email')
+      logger.logSystem(
+        'refund-template-missing',
+        'LOOPS_REFUND_TEMPLATE_ID not configured, skipping refund email',
+        undefined,
+        'warn'
+      )
       return
     }
 
@@ -103,7 +124,12 @@ export async function stageRefundNotificationEmail(
       payment_id: paymentId
     })
 
-    console.log(`Staged refund notification email for ${user.email} for refund ${refundId}`)
+    logger.logSystem(
+      'refund-email-staged',
+      `Staged refund notification email for ${user.email} for refund ${refundId}`,
+      { userId, refundId, paymentId },
+      'debug'
+    )
 
     // Notify opted-in admins of the refund (fire-and-forget)
     stageAdminRefundNotification(
@@ -111,7 +137,12 @@ export async function stageRefundNotificationEmail(
       paymentId,
       refund.amount,
       payment.final_amount
-    ).catch((err) => console.warn('stageRefundNotificationEmail: admin notification failed (non-fatal)', err))
+    ).catch((err) => logger.logSystem(
+      'refund-admin-notification-failed',
+      'stageRefundNotificationEmail: admin notification failed (non-fatal)',
+      { userId, paymentId, error: err instanceof Error ? err.message : String(err) },
+      'warn'
+    ))
 
     // Notify captain(s) that the player has left (fire-and-forget)
     // Resolve the registrationId from the refunded user_registration record
@@ -138,11 +169,21 @@ export async function stageRefundNotificationEmail(
         categoryName,
         refund.created_at,
         refund.amount
-      ).catch((err) => console.warn('stageRefundNotificationEmail: captain notification failed (non-fatal)', err))
+      ).catch((err) => logger.logSystem(
+        'refund-captain-notification-failed',
+        'stageRefundNotificationEmail: captain notification failed (non-fatal)',
+        { userId, registrationId: userReg.registration_id, error: err instanceof Error ? err.message : String(err) },
+        'warn'
+      ))
     }
 
   } catch (error) {
-    console.error('Error staging refund notification email:', error)
+    logger.logSystem(
+      'refund-email-staging-failed',
+      'Error staging refund notification email',
+      { refundId, userId, paymentId, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     // Don't throw - we don't want to fail the operation for email errors
   }
 }

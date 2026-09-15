@@ -2,19 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { xeroStagingManager } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
+import { logger } from '@/lib/logging/logger'
 
 // POST /api/admin/refunds/preview - Preview refund line items and amounts
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  console.log('[refunds/preview] POST called')
 
   try {
     // Check if current user is admin
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  console.log('[refunds/preview] Auth user:', authUser)
-    
+
     if (!authUser) {
-      console.warn('[refunds/preview] Unauthorized: no auth user')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -23,23 +21,19 @@ export async function POST(request: NextRequest) {
       .select('is_admin')
       .eq('id', authUser.id)
       .single()
-    console.log('[refunds/preview] Current user:', currentUser)
 
     if (!currentUser?.is_admin) {
-      console.warn('[refunds/preview] Forbidden: user is not admin')
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Parse request body
   const body = await request.json()
-  console.log('[refunds/preview] Request body:', body)
   const { paymentId, refundType, amount, discountValidation } = body
 
     // Validate required fields
     if (!paymentId || !refundType) {
-      console.warn('[refunds/preview] Missing paymentId or refundType:', { paymentId, refundType })
-      return NextResponse.json({ 
-        error: 'Payment ID and refund type are required' 
+      return NextResponse.json({
+        error: 'Payment ID and refund type are required'
       }, { status: 400 })
     }
 
@@ -49,19 +43,16 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('id', paymentId)
       .single()
-    console.log('[refunds/preview] Payment:', payment)
-    if (paymentError) console.error('[refunds/preview] Payment error:', paymentError)
 
     if (paymentError || !payment) {
-      console.warn('[refunds/preview] Payment not found:', { paymentError, payment })
+      logger.logPaymentProcessing('refund-preview-payment-not-found', 'Payment not found for refund preview', { paymentId, error: paymentError?.message }, 'warn')
       return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
     }
 
     // Validate payment status
     if (payment.status !== 'completed') {
-      console.warn('[refunds/preview] Payment not completed:', payment.status)
-      return NextResponse.json({ 
-        error: 'Can only refund completed payments' 
+      return NextResponse.json({
+        error: 'Can only refund completed payments'
       }, { status: 400 })
     }
 
@@ -71,7 +62,6 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('payment_id', paymentId)
     const isRegistrationPayment = registrations && registrations.length > 0
-    console.log('[refunds/preview] Is registration payment:', isRegistrationPayment)
 
     // Check available refund amount
     const { data: existingRefunds } = await supabase
@@ -79,11 +69,9 @@ export async function POST(request: NextRequest) {
       .select('amount')
       .eq('payment_id', paymentId)
       .in('status', ['completed', 'processing', 'pending'])
-    console.log('[refunds/preview] Existing refunds:', existingRefunds)
 
   const totalExistingRefunds = existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0
   const availableForRefund = payment.final_amount - totalExistingRefunds
-  console.log('[refunds/preview] Available for refund:', availableForRefund)
 
   let refundData
 
@@ -91,17 +79,14 @@ export async function POST(request: NextRequest) {
       // Allow zero-dollar refunds for registration payments (to cancel free registrations)
       const minAllowed = isRegistrationPayment ? 0 : 0.01
       if (amount === null || amount === undefined || amount < minAllowed) {
-        console.warn('[refunds/preview] Invalid amount for proportional refund:', amount)
         return NextResponse.json({
           error: 'Positive refund amount required for proportional refunds'
         }, { status: 400 })
       }
 
       const amountInCents = Math.round(amount * 100)
-      console.log('[refunds/preview] Proportional refund amount in cents:', amountInCents)
 
       if (amountInCents > availableForRefund) {
-        console.warn('[refunds/preview] Refund amount exceeds available:', { amountInCents, availableForRefund })
         return NextResponse.json({
           error: `Cannot refund $${amount.toFixed(2)}. Only $${(availableForRefund / 100).toFixed(2)} available.`
         }, { status: 400 })
@@ -109,29 +94,22 @@ export async function POST(request: NextRequest) {
 
       // For zero-dollar refunds, still create Xero staging (credit notes can be $0)
       // Zero-dollar credit notes will sync to Xero just like zero-dollar invoices do
-      if (amountInCents === 0) {
-        console.log('[refunds/preview] Zero-dollar refund - creating credit note staging')
-      }
-
       refundData = {
         amount: centsToCents(amountInCents)
       }
 
     } else if (refundType === 'discount_code') {
       if (!discountValidation?.isValid) {
-        console.warn('[refunds/preview] Invalid discount code validation:', discountValidation)
-        return NextResponse.json({ 
-          error: 'Valid discount code validation required' 
+        return NextResponse.json({
+          error: 'Valid discount code validation required'
         }, { status: 400 })
       }
 
       const discountAmount = discountValidation.discountAmount || 0
-      console.log('[refunds/preview] Discount amount:', discountAmount)
-      
+
       if (discountAmount > availableForRefund) {
-        console.warn('[refunds/preview] Discount amount exceeds available:', { discountAmount, availableForRefund })
-        return NextResponse.json({ 
-          error: `Discount amount $${(discountAmount / 100).toFixed(2)} exceeds available refund amount $${(availableForRefund / 100).toFixed(2)}` 
+        return NextResponse.json({
+          error: `Discount amount $${(discountAmount / 100).toFixed(2)} exceeds available refund amount $${(availableForRefund / 100).toFixed(2)}`
         }, { status: 400 })
       }
 
@@ -145,26 +123,24 @@ export async function POST(request: NextRequest) {
       }
 
     } else {
-      console.warn('[refunds/preview] Invalid refund type:', refundType)
-      return NextResponse.json({ 
-        error: 'Invalid refund type. Must be "proportional" or "discount_code"' 
+      return NextResponse.json({
+        error: 'Invalid refund type. Must be "proportional" or "discount_code"'
       }, { status: 400 })
     }
 
     // Create Xero staging records only (no refund table record until submission)
     // The refund table record will be created when user confirms the refund
-    console.log('[refunds/preview] Calling xeroStagingManager.createRefundStaging', { paymentId, refundType, refundData })
     const stagingId = await xeroStagingManager.createRefundStaging(
       null, // No refund ID during preview - will be set during confirmation
       paymentId,
       refundType,
       refundData
     )
-    console.log('[refunds/preview] Staging result:', stagingId)
 
     if (!stagingId) {
-      return NextResponse.json({ 
-        error: 'Failed to create staging records. This may be because the original invoice has not been synced to Xero yet, or there was an issue with the payment record.' 
+      logger.logPaymentProcessing('refund-preview-staging-failed', 'Failed to create refund staging records', { paymentId, refundType }, 'error')
+      return NextResponse.json({
+        error: 'Failed to create staging records. This may be because the original invoice has not been synced to Xero yet, or there was an issue with the payment record.'
       }, { status: 500 })
     }
 
@@ -186,7 +162,6 @@ export async function POST(request: NextRequest) {
       .eq('id', stagingId)
       .single()
 
-    console.log('[refunds/preview] Success, returning staging response')
     return NextResponse.json({
       success: true,
       staging: {
@@ -211,7 +186,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[refunds/preview] Exception:', error)
+    logger.logPaymentProcessing('refund-preview-exception', 'Unexpected error generating refund preview', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Failed to generate refund preview' }, { status: 500 })
   }
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import CategoryFilter from './CategoryFilter'
 import { formatDate } from '@/lib/date-utils'
 import { DiscountCategoryRow, DiscountCodeWithCategoryJoin } from '@/lib/discount-types'
+import { logger } from '@/lib/logging/logger'
 
 type CategorySummary = Pick<DiscountCategoryRow, 'id' | 'name' | 'accounting_code' | 'max_discount_per_user_per_season'>
 
@@ -59,7 +60,7 @@ export default async function DiscountCodesPage({ searchParams: searchParamsProm
   const { data: codes, error } = await codesQuery
 
   if (error) {
-    console.error('Error fetching discount codes:', error)
+    logger.logAdminAction('fetch-discount-codes', 'Error fetching discount codes', { error: error.message }, user.id, 'error')
   }
 
   // Get selected category name for display

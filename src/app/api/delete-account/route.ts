@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { emailService } from '@/lib/email'
 import { captureCriticalAccountDeletionError, captureAccountDeletionWarning } from '@/lib/sentry-helpers'
+import { logger } from '@/lib/logging/logger'
 
 interface DeletionContext {
   userId?: string
@@ -81,7 +82,9 @@ export async function POST() {
       .eq('status', 'active')
 
     if (paymentPlansError) {
-      console.error('Error checking payment plans:', paymentPlansError)
+      // Sentry reporting is handled explicitly below via captureAccountDeletionWarning;
+      // use 'warn' here (not 'error') to avoid double-reporting the same event to Sentry.
+      logger.logSystem('account-deletion-payment-plans-check-error', 'Error checking payment plans during account deletion', { userId: user.id, error: paymentPlansError.message }, 'warn')
       captureAccountDeletionWarning(
         'Failed to check payment plans during deletion',
         deletionErrorContext(deletionContext, 'payment_plan_check', paymentPlansError)
@@ -120,7 +123,7 @@ export async function POST() {
       emailSent = true
       deletionContext.emailSent = true
     } catch (emailError) {
-      console.error('Failed to send account deletion confirmation email:', emailError)
+      logger.logSystem('account-deletion-confirmation-email-failed', 'Failed to send account deletion confirmation email', { userId: user.id, error: emailError instanceof Error ? emailError.message : String(emailError) }, 'warn')
       captureAccountDeletionWarning(
         'Account deletion email failed to send',
         deletionErrorContext({ ...deletionContext, emailSent: false }, 'email_send', emailError)
@@ -141,7 +144,7 @@ export async function POST() {
       .eq('id', user.id)
 
     if (updateError) {
-      console.error('Failed to mark user as deleted:', updateError)
+      logger.logSystem('account-deletion-mark-deleted-failed', 'Failed to mark user as deleted', { userId: user.id, error: updateError.message }, 'warn')
       captureCriticalAccountDeletionError(
         updateError,
         deletionErrorContext({ ...deletionContext, emailSent }, 'database_update')
@@ -153,7 +156,7 @@ export async function POST() {
     try {
       await supabase.auth.signOut()
     } catch (signOutError) {
-      console.error('Failed to sign out user before deletion:', signOutError)
+      logger.logSystem('account-deletion-signout-failed', 'Failed to sign out user before deletion', { userId: user.id, error: signOutError instanceof Error ? signOutError.message : String(signOutError) }, 'warn')
       // Continue with deletion - sign out failure shouldn't block the process
     }
 
@@ -167,7 +170,7 @@ export async function POST() {
     const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id)
 
     if (deleteUserError) {
-      console.error('Failed to delete auth.users record:', deleteUserError)
+      logger.logSystem('account-deletion-auth-delete-failed', 'Failed to delete auth.users record', { userId: user.id, error: deleteUserError.message }, 'warn')
       captureCriticalAccountDeletionError(
         deleteUserError,
         deletionErrorContext({ ...deletionContext, emailSent }, 'auth_delete')
@@ -175,7 +178,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Failed to complete account deletion' }, { status: 500 })
     }
 
-    console.log('Successfully deleted auth.users record while preserving business data for user:', user.id)
+    logger.logSystem('account-deletion-completed', 'Successfully deleted auth.users record while preserving business data', { userId: user.id })
 
     return NextResponse.json({ 
       success: true, 
@@ -183,7 +186,7 @@ export async function POST() {
     })
 
   } catch (error) {
-    console.error('Account deletion error:', error)
+    logger.logSystem('account-deletion-unexpected-error', 'Account deletion error', { userId: deletionContext.userId, error: error instanceof Error ? error.message : String(error) }, 'warn')
 
     // Capture critical error with all available context
     captureCriticalAccountDeletionError(

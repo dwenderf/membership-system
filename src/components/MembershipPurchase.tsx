@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatcher'
 import { calculateMembershipDates, isMembershipExtension } from '@/lib/membership-utils'
 import { validateAssistanceAmount } from '@/lib/membership-validation'
+import { logger } from '@/lib/logging/logger'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -78,7 +79,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
           setUserHasSavedPaymentMethod(false)
         }
       } catch (error) {
-        console.error('Error checking saved payment method:', error)
+        logger.logPaymentProcessing('check-saved-payment-method-error', 'Error checking saved payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
         setUserHasSavedPaymentMethod(false)
       }
     }

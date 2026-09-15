@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractRequestInfo, getSimpleRequestInfo } from '@/lib/request-info'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error extracting request info:', error)
+    logger.logSystem('debug-request-info-error', 'Error extracting request info', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ 
       error: 'Failed to extract request information',
       details: error instanceof Error ? error.message : 'Unknown error'

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -55,7 +56,7 @@ export async function GET() {
       }, { status: 500 })
     }
   } catch (error) {
-    console.error('Error testing Xero discovery:', error)
+    logger.logXeroSync('test-discovery-failed', 'Error testing Xero discovery', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({
       error: 'Failed to test Xero discovery',
       details: error instanceof Error ? error.message : String(error)

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,15 +9,20 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
 
-  console.log('🔍 Auth callback debug:', {
-    origin,
-    next,
-    code: code ? 'present' : 'missing',
-    forwardedHost: request.headers.get('x-forwarded-host'),
-    host: request.headers.get('host'),
-    NODE_ENV: process.env.NODE_ENV,
-    VERCEL_URL: process.env.VERCEL_URL
-  })
+  logger.logSystem(
+    'auth-callback-received',
+    'Auth callback received',
+    {
+      origin,
+      next,
+      code: code ? 'present' : 'missing',
+      forwardedHost: request.headers.get('x-forwarded-host'),
+      host: request.headers.get('host'),
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_URL: process.env.VERCEL_URL
+    },
+    'debug'
+  )
 
   if (code) {
     const supabase = await createClient()
@@ -36,16 +42,25 @@ export async function GET(request: Request) {
         redirectUrl = `${origin}${next}`
       }
 
-      console.log('✅ Auth success, redirecting to:', redirectUrl)
+      logger.logSystem('auth-callback-success', 'Auth success, redirecting', { redirectUrl })
       return NextResponse.redirect(redirectUrl)
     } else {
-      console.log('❌ Auth error:', error)
+      logger.logSystem(
+        'auth-callback-exchange-failed',
+        'Auth callback: failed to exchange code for session',
+        { error: error?.message },
+        'error'
+      )
     }
   } else {
-    console.log('❌ No auth code provided')
+    logger.logSystem(
+      'auth-callback-no-code',
+      'Auth callback: no auth code provided',
+      undefined,
+      'warn'
+    )
   }
 
   const errorUrl = `${origin}/auth/auth-code-error`
-  console.log('❌ Auth failed, redirecting to:', errorUrl)
   return NextResponse.redirect(errorUrl)
 }

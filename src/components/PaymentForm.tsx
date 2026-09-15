@@ -6,6 +6,7 @@ import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js'
 // Force import client config
 import '../../instrumentation-client'
 import * as Sentry from '@sentry/nextjs'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentFormProps {
   // For memberships
@@ -145,7 +146,7 @@ export default function PaymentForm({
             }),
           })
         } catch (statusError) {
-          console.warn('Failed to update registration status to processing:', statusError)
+          logger.logPaymentProcessing('update-registration-status-processing-failed', 'Failed to update registration status to processing', { registrationId, categoryId, paymentIntentId: paymentIntent.id, error: statusError instanceof Error ? statusError.message : String(statusError) }, 'warn')
           // Continue anyway - the main flow should still work
         }
       }
@@ -189,7 +190,7 @@ export default function PaymentForm({
               }),
             })
           } catch (statusError) {
-            console.warn('Failed to update registration status to failed:', statusError)
+            logger.logPaymentProcessing('update-registration-status-failed-failed', 'Failed to update registration status to failed', { registrationId, categoryId, error: statusError instanceof Error ? statusError.message : String(statusError) }, 'warn')
           }
         }
 
@@ -209,12 +210,12 @@ export default function PaymentForm({
                 status: 'failed'
               }),
             })
-            console.log(`✅ Updated payment ${intentId} status to failed`)
+            logger.logPaymentProcessing('payment-status-updated-failed', `Updated payment ${intentId} status to failed`, { paymentIntentId: intentId }, 'debug')
           } catch (paymentError) {
-            console.warn('Failed to update payment status to failed:', paymentError)
+            logger.logPaymentProcessing('update-payment-status-failed-failed', 'Failed to update payment status to failed', { paymentIntentId: intentId, error: paymentError instanceof Error ? paymentError.message : String(paymentError) }, 'warn')
           }
         } else {
-          console.warn('No payment intent ID available to update payment status to failed')
+          logger.logPaymentProcessing('payment-status-update-missing-intent-id', 'No payment intent ID available to update payment status to failed', {}, 'warn')
         }
 
         onError(error.message || 'Payment failed')

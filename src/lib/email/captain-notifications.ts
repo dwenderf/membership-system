@@ -9,6 +9,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 /** The slice of a user's `preferences` jsonb blob this module reads —
  * not the full shape (which also holds unrelated keys like adminFavorites). */
@@ -51,7 +52,12 @@ export async function stageCaptainRosterChangeNotification(
   amountPaid: number
 ): Promise<void> {
   if (!process.env.LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID) {
-    console.warn('LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID not configured, skipping captain notification')
+    logger.logSystem(
+      'captain-roster-change-template-missing',
+      'LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID not configured, skipping captain notification',
+      undefined,
+      'warn'
+    )
     return
   }
 
@@ -66,7 +72,12 @@ export async function stageCaptainRosterChangeNotification(
       .single()
 
     if (regError || !registration) {
-      console.error('stageCaptainRosterChangeNotification: registration not found', { registrationId, error: regError })
+      logger.logSystem(
+        'captain-roster-change-registration-not-found',
+        'stageCaptainRosterChangeNotification: registration not found',
+        { registrationId, error: regError?.message },
+        'error'
+      )
       return
     }
 
@@ -82,7 +93,12 @@ export async function stageCaptainRosterChangeNotification(
       .single()
 
     if (playerError || !player) {
-      console.error('stageCaptainRosterChangeNotification: player not found', { playerUserId, error: playerError })
+      logger.logSystem(
+        'captain-roster-change-player-not-found',
+        'stageCaptainRosterChangeNotification: player not found',
+        { playerUserId, error: playerError?.message },
+        'error'
+      )
       return
     }
 
@@ -95,7 +111,12 @@ export async function stageCaptainRosterChangeNotification(
       .eq('registration_id', registrationId)
 
     if (captainError) {
-      console.error('stageCaptainRosterChangeNotification: error fetching captains', { registrationId, error: captainError })
+      logger.logSystem(
+        'captain-roster-change-fetch-captains-failed',
+        'stageCaptainRosterChangeNotification: error fetching captains',
+        { registrationId, error: captainError.message },
+        'error'
+      )
       return
     }
 
@@ -140,7 +161,12 @@ export async function stageCaptainRosterChangeNotification(
     }
 
   } catch (error) {
-    console.error('stageCaptainRosterChangeNotification: unexpected error', error)
+    logger.logSystem(
+      'captain-roster-change-unexpected-error',
+      'stageCaptainRosterChangeNotification: unexpected error',
+      { registrationId, playerUserId, error: error instanceof Error ? error.message : String(error) },
+      'error'
+    )
     // Don't throw — notifications must never break the main flow
   }
 }

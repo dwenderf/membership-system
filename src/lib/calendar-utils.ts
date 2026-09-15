@@ -3,6 +3,8 @@
  * for event and scrimmage registrations
  */
 
+import { logger } from '@/lib/logging/logger'
+
 /**
  * App-wide timezone configuration
  * Falls back to America/New_York if not set
@@ -101,9 +103,11 @@ function generateVTimezone(): string[] {
     return Array.isArray(vtimezoneBlock) ? vtimezoneBlock : [vtimezoneBlock]
   } catch {
     // Fallback: If library is not available (shouldn't happen in production)
-    console.warn(
-      `Warning: timezones-ical-library not available for timezone ${APP_TIMEZONE}. ` +
-      `Using fallback America/New_York timezone definition.`
+    logger.logSystem(
+      'vtimezone-fallback',
+      `timezones-ical-library not available for timezone ${APP_TIMEZONE}. Using fallback America/New_York timezone definition.`,
+      { timezone: APP_TIMEZONE },
+      'warn'
     )
 
     // Return America/New_York as fallback

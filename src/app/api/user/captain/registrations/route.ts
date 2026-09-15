@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
 
     if (captainshipsError) {
-      console.error('Error fetching captain assignments:', captainshipsError)
+      logger.logSystem('captain-registrations-assignments-fetch-error', 'Error fetching captain assignments', { userId: user.id, error: captainshipsError.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch captain assignments' },
         { status: 500 }
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
       }>, { merge: false }>()
 
     if (registrationsError) {
-      console.error('Error fetching registrations:', registrationsError)
+      logger.logSystem('captain-registrations-fetch-error', 'Error fetching registrations for captain', { userId: user.id, error: registrationsError.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch registrations' },
         { status: 500 }
@@ -250,7 +251,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: filteredRegistrations })
   } catch (error) {
-    console.error('Error in captain registrations API:', error)
+    logger.logSystem('captain-registrations-unexpected-error', 'Error in captain registrations API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

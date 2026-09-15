@@ -346,7 +346,7 @@ logger.logBatchProcessing(
 
 ### console.log vs. the Logger
 
-`console.log` is fine for temporary, scratch debugging while actively working a feature — but remove it before committing. It isn't captured to `logs/`, the admin log viewer, or Sentry, so anything left in place is invisible once the code ships.
+`console.log` is fine for temporary, scratch debugging while actively working a feature — but remove it before committing; CI enforces this (a `console.*` left in committed code fails the build, not just a lint warning). It isn't captured to `logs/`, the admin log viewer, or Sentry, so anything left in place is invisible once the code ships.
 
 Use the centralized logger for anything audit-worthy instead — warnings, errors, and other notable events. Be especially careful not to drop signal in billing/financial-accounting code (Stripe payment/webhook handling, Xero sync, invoicing) and anything immediately upstream or downstream of it. See [`docs/guides/development.md`](./development.md#logging-standards) for the full logger API and the narrow list of cases where `console.*` remains acceptable in committed code.
 

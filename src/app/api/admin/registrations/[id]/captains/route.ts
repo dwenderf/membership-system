@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { emailService, EMAIL_EVENTS } from '@/lib/email/service'
+import { logger } from '@/lib/logging/logger'
 
 // GET /api/admin/registrations/[id]/captains - List captains for a registration
 export async function GET(
@@ -43,7 +44,7 @@ export async function GET(
       .eq('registration_id', registrationId)
 
     if (captainsError) {
-      console.error('Error fetching captains:', captainsError)
+      logger.logAdminAction('captains-fetch-error', 'Error fetching captains', { registrationId, error: captainsError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch captains' },
         { status: 500 }
@@ -64,7 +65,7 @@ export async function GET(
 
     return NextResponse.json({ captains: processedCaptains })
   } catch (error) {
-    console.error('Error in GET captains API:', error)
+    logger.logAdminAction('captains-get-error', 'Unexpected error in GET captains API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -142,7 +143,7 @@ export async function POST(
       .single()
 
     if (insertError) {
-      console.error('Error adding captain:', insertError)
+      logger.logAdminAction('captain-add-error', 'Error adding captain', { registrationId, userId, error: insertError.message }, user.id, 'error')
       return NextResponse.json(
         { error: 'Failed to add captain' },
         { status: 500 }
@@ -179,7 +180,7 @@ export async function POST(
       }
     })
   } catch (error) {
-    console.error('Error in POST captains API:', error)
+    logger.logAdminAction('captains-post-error', 'Unexpected error in POST captains API', { error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

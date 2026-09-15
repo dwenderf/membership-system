@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
+import { logger } from '@/lib/logging/logger'
 
 interface PaymentPlan {
   id: string
@@ -47,10 +48,10 @@ export default function PaymentPlanSection({
       if (response.ok) {
         setPaymentPlans(data.plans || [])
       } else {
-        console.error('Error fetching payment plans:', data.error)
+        logger.logAdminAction('fetch-payment-plans', 'Error fetching payment plans', { userId, error: data.error }, undefined, 'error')
       }
     } catch (error) {
-      console.error('Error fetching payment plans:', error)
+      logger.logAdminAction('fetch-payment-plans', 'Error fetching payment plans', { userId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
     } finally {
       setPlansLoading(false)
     }
@@ -83,7 +84,7 @@ export default function PaymentPlanSection({
         showError(data.error || 'Failed to update payment plan eligibility')
       }
     } catch (error) {
-      console.error('Error toggling payment plan eligibility:', error)
+      logger.logAdminAction('toggle-payment-plan-eligibility', 'Error toggling payment plan eligibility', { userId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       showError('An unexpected error occurred')
     } finally {
       setIsLoading(false)

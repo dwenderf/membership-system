@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { NextRequest } from 'next/server'
 import { createClient } from './supabase/server'
 import { extractRequestInfo } from './request-info'
+import { logger } from './logging/logger'
 
 interface SentryUserInfo {
   id: string
@@ -76,7 +77,12 @@ export async function captureSentryError(
       }
     } catch (userError) {
       // Silently fail user context - don't let it break error reporting
-      console.warn('Failed to get user context for Sentry:', userError)
+      logger.logSystem(
+        'sentry-user-context-failed',
+        'Failed to get user context for Sentry',
+        { error: userError instanceof Error ? userError.message : String(userError) },
+        'warn'
+      )
     }
   }
 
@@ -155,7 +161,12 @@ export async function captureSentryMessage(
       }
     } catch (userError) {
       // Silently fail user context - don't let it break error reporting
-      console.warn('Failed to get user context for Sentry:', userError)
+      logger.logSystem(
+        'sentry-user-context-failed',
+        'Failed to get user context for Sentry',
+        { error: userError instanceof Error ? userError.message : String(userError) },
+        'warn'
+      )
     }
   }
 
@@ -228,7 +239,12 @@ export async function setupSentryUserContext(request?: NextRequest) {
     }
   } catch (error) {
     // Silently fail - don't let it break the application
-    console.warn('Failed to setup Sentry user context:', error)
+    logger.logSystem(
+      'sentry-setup-user-context-failed',
+      'Failed to setup Sentry user context',
+      { error: error instanceof Error ? error.message : String(error) },
+      'warn'
+    )
   }
 }
 

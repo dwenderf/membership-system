@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getOrganizationName } from '@/lib/organization'
+import { logger } from '@/lib/logging/logger'
 
 interface User {
   id: string
@@ -41,7 +42,7 @@ export default function UserNavigation({ user }: UserNavigationProps) {
         .then(res => res.json())
         .then(data => setHasUnpaid(data.hasUnpaid))
         .catch(error => {
-          console.error('Error checking unpaid invoices:', error)
+          logger.logSystem('check-unpaid-invoices-error', 'Error checking unpaid invoices', { userId: user?.id, error: error instanceof Error ? error.message : String(error) }, 'error')
           setHasUnpaid(false)
         })
     }
@@ -54,7 +55,7 @@ export default function UserNavigation({ user }: UserNavigationProps) {
         .then(res => res.json())
         .then(data => setIsCaptain(data.data && data.data.length > 0))
         .catch(error => {
-          console.error('Error checking captain status:', error)
+          logger.logSystem('check-captain-status-error', 'Error checking captain status', { userId: user?.id, error: error instanceof Error ? error.message : String(error) }, 'error')
           setIsCaptain(false)
         })
     }

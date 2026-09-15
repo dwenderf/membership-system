@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Error checking survey completion:', error)
+      logger.logSystem('survey-completion-check-error', 'Error checking survey completion', { userId: user.id, survey_id, error: error.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to check survey completion' },
         { status: 500 }
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ completed })
 
   } catch (error) {
-    console.error('Error in survey completion check API:', error)
+    logger.logSystem('survey-completion-check-unexpected-error', 'Error in survey completion check API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

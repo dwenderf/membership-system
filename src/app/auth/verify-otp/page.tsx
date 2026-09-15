@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/contexts/ToastContext'
 import Link from 'next/link'
+import { logger } from '@/lib/logging/logger'
 
 export default function VerifyOTPPage() {
   const [email, setEmail] = useState('')
@@ -27,16 +28,12 @@ export default function VerifyOTPPage() {
     const storedEmail = sessionStorage.getItem('otp_email')
     const storedMethod = sessionStorage.getItem('auth_method_preference') as 'magic' | 'otp'
     
-    console.log('Stored email:', storedEmail) // Debug
-    console.log('Stored method:', storedMethod) // Debug
-    
     if (storedEmail) {
       setEmail(storedEmail)
       setPreferredMethod(storedMethod || 'otp')
-      
+
       // Show OTP input immediately if user chose OTP method
       if (storedMethod === 'otp') {
-        console.log('Setting showOtpInput to true') // Debug
         setShowOtpInput(true)
         // Focus first input after a short delay to ensure DOM is ready
         setTimeout(() => {
@@ -44,11 +41,8 @@ export default function VerifyOTPPage() {
             otpInputs.current[0].focus()
           }
         }, 200)
-      } else {
-        console.log('Method is magic, not showing OTP input yet') // Debug
       }
     } else {
-      console.log('No stored email, redirecting to login') // Debug
       // Redirect back to login if no email stored
       router.push('/auth/login')
     }
@@ -133,7 +127,12 @@ export default function VerifyOTPPage() {
         router.push('/user')
       }
     } catch (error) {
-      console.error('OTP verification error:', error)
+      logger.logSystem(
+        'otp-verification-error',
+        'OTP verification error',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.'
       setMessage(errorMessage)
       showError('Verification failed', errorMessage)
@@ -163,7 +162,12 @@ export default function VerifyOTPPage() {
         otpInputs.current[0]?.focus()
       }
     } catch (error) {
-      console.error('Resend error:', error)
+      logger.logSystem(
+        'otp-resend-error',
+        'Resend error',
+        { error: error instanceof Error ? error.message : String(error) },
+        'error'
+      )
       const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.'
       setMessage(errorMessage)
       showError('Resend failed', errorMessage)

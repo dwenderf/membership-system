@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
@@ -35,7 +36,7 @@ export async function GET() {
       vercelUrl: process.env.VERCEL_URL
     })
   } catch (error) {
-    console.error('Error checking Xero config:', error)
+    logger.logXeroSync('debug-config-check-failed', 'Error checking Xero config', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({
       error: 'Failed to check configuration',
       details: error instanceof Error ? error.message : String(error)

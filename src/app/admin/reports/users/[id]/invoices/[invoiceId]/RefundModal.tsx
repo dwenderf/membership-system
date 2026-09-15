@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { formatAmount } from '@/lib/format-utils'
+import { logger } from '@/lib/logging/logger'
 
 type RefundType = 'proportional' | 'discount_code'
 
@@ -103,7 +104,7 @@ export default function RefundModal({
         setIsRegistrationPayment(false)
       }
     } catch (error) {
-      console.error('Error checking payment type:', error)
+      logger.logAdminAction('check-registration-payment-type', 'Error checking payment type', { paymentId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       setIsRegistrationPayment(false)
     }
   }
@@ -142,10 +143,10 @@ export default function RefundModal({
           })
         })
       } catch (error) {
-        console.error('Failed to cancel staged refund:', error)
+        logger.logAdminAction('cancel-staged-refund', 'Failed to cancel staged refund', { paymentId, stagingId: stagingData.staging_id, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       }
     }
-    
+
     // Reset all state
     setIsOpen(false)
     setRefundType('proportional')
@@ -357,10 +358,10 @@ export default function RefundModal({
           })
         })
       } catch (error) {
-        console.error('Failed to cancel staged refund:', error)
+        logger.logAdminAction('cancel-staged-refund', 'Failed to cancel staged refund', { paymentId, stagingId: stagingData.staging_id, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       }
     }
-    
+
     // Reset to form state
     setStagingData(null)
     setError('')

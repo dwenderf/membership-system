@@ -285,7 +285,7 @@ export default async function UserDashboardPage() {
     <div className="px-4 py-3 sm:px-0 max-w-3xl mx-auto">
       <PasskeySetupBanner promptPrefs={userProfile?.preferences?.passkeyPrompt ?? null} />
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">
+        <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900 mb-6">
           Welcome back, {userProfile?.first_name}!
         </h1>
 

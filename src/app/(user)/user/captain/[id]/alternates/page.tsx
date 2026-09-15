@@ -92,7 +92,7 @@ export default async function CaptainAlternatesPage({ params }: CaptainAlternate
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Manage Alternates</h1>
+            <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">Manage Alternates</h1>
             <p className="mt-2 text-sm text-gray-600">
               Select alternates for upcoming games
             </p>

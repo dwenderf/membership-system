@@ -308,7 +308,7 @@ export default function CaptainRosterPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-gray-900">{registrationName}</h1>
+          <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">{registrationName}</h1>
           {allActiveMembers.length > 0 && (
             <button
               onClick={() => { setEmailAllMembers(true); setShowEmailComposer(true) }}

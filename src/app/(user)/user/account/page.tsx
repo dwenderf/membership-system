@@ -204,7 +204,7 @@ export default function AccountPage() {
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Account Settings</h1>
+        <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">Account Settings</h1>
         <p className="mt-2 text-sm text-gray-600">
           Manage your personal information and account preferences
         </p>

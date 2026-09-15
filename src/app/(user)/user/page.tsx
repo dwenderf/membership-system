@@ -325,24 +325,31 @@ export default async function UserDashboardPage() {
                   </Link>
                 </p>
               ))}
+
+              {/* Membership is active and not expiring soon: no alert needed, but keep a
+                  low-key way to reach memberships since purchasing/extending is a once-a-year
+                  action that otherwise has no other entry point on this page. */}
+              {expiringSoonMemberships.length === 0 && recentlyExpired.length === 0 && (
+                <p>
+                  <Link
+                    href="/user/browse-memberships"
+                    className="text-sm font-medium text-gray-600 hover:text-brand-ink underline underline-offset-2"
+                  >
+                    Purchase or Extend a Membership
+                  </Link>
+                </p>
+              )}
             </>
           )}
         </div>
 
-        {/* Primary action: registrations are a recurring, per-season action. Memberships
-            are typically a once-a-year purchase/renewal, already surfaced above as an
-            alert with its own link when it's actually relevant (no active membership,
-            expiring, or expired) — so it stays a plain link here rather than a second CTA. */}
-        <div className="mb-6 flex flex-wrap items-center gap-4">
-          <PrimaryCta href="/user/browse-registrations" icon="🏒">
+        {/* Primary action: registrations are a recurring, per-season action, so they get
+            the full-width CTA treatment. Memberships are once-a-year and are surfaced
+            above instead, as an alert or plain link depending on urgency. */}
+        <div className="mb-6">
+          <PrimaryCta href="/user/browse-registrations" icon="🏒" fullWidth>
             Browse Registrations
           </PrimaryCta>
-          <Link
-            href="/user/browse-memberships"
-            className="text-sm font-medium text-gray-600 hover:text-brand-ink underline underline-offset-2"
-          >
-            Browse Memberships
-          </Link>
         </div>
       </div>
 

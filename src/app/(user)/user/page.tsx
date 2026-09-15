@@ -4,6 +4,7 @@ import { getCategoryDisplayName, type RegistrationCategory } from '@/lib/registr
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
+import PrimaryCta from '@/components/ui/PrimaryCta'
 import PasskeySetupBanner from '@/components/PasskeySetupBanner'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
@@ -330,30 +331,12 @@ export default async function UserDashboardPage() {
 
         {/* Action Tiles - constrained to grid width */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
-          <Link
-            href="/user/browse-registrations"
-            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
-          >
-            <div className="flex items-center">
-              <span className="mr-3 text-2xl">🏒</span>
-              <span className="text-base font-medium text-gray-900">Browse Registrations</span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-          <Link
-            href="/user/browse-memberships"
-            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
-          >
-            <div className="flex items-center">
-              <span className="mr-3 text-2xl">🎫</span>
-              <span className="text-base font-medium text-gray-900">Browse Memberships</span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
+          <PrimaryCta href="/user/browse-registrations" icon="🏒">
+            Browse Registrations
+          </PrimaryCta>
+          <PrimaryCta href="/user/browse-memberships" icon="🎫">
+            Browse Memberships
+          </PrimaryCta>
         </div>
       </div>
 

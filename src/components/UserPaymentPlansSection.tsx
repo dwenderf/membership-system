@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
 import { logger } from '@/lib/logging/logger'
+import PrimaryCtaButton from './ui/PrimaryCtaButton'
 
 interface Installment {
   planned_payment_date: string
@@ -194,21 +195,15 @@ export default function UserPaymentPlansSection() {
 
                 {/* Pay Remaining Button */}
                 {remainingBalance > 0 && (
-                  <button
-                    type="button"
+                  <PrimaryCtaButton
                     onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
                     disabled={payingOff === plan.invoice_id}
-                    className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      payingOff === plan.invoice_id
-                        ? 'bg-gray-400 text-white cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
                   >
                     {payingOff === plan.invoice_id
                       ? 'Processing...'
                       : `Pay Remaining Balance (${formatAmount(remainingBalance)})`
                     }
-                  </button>
+                  </PrimaryCtaButton>
                 )}
               </div>
             )

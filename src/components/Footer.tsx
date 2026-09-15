@@ -4,11 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getCopyrightText } from '@/lib/organization'
+import { getCopyrightText, getOrganizationContact } from '@/lib/organization'
 
 export default function Footer() {
   const pathname = usePathname()
   const [canAccessDashboard, setCanAccessDashboard] = useState(false)
+  const contact = getOrganizationContact()
   
   // Check if user can access dashboard (authenticated + onboarding complete)
   useEffect(() => {
@@ -40,47 +41,115 @@ export default function Footer() {
 
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
-      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
-          {/* Copyright */}
+      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Useful Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <a
+                  href="https://nycpha.org/code-of-conduct/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Code of Conduct
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://nycpha.org/concussion-information/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Concussion Policy
+                </a>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Terms & Conditions
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/privacy-policy"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Social Media</h3>
+            <ul className="space-y-2">
+              <li>
+                <a
+                  href="https://www.facebook.com/nycpha/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Facebook
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.instagram.com/nycpha/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Instagram
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://linktr.ee/nycgha"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                >
+                  Linktree
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact Us</h3>
+            <p className="text-sm text-gray-500">
+              {contact.address.line1}
+              <br />
+              {contact.address.line2}
+            </p>
+            <a
+              href={`mailto:${contact.email}`}
+              className="text-sm text-gray-500 hover:text-gray-700 underline transition-colors duration-200"
+            >
+              {contact.email}
+            </a>
+          </div>
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
           <div className="text-sm text-gray-500">
             {getCopyrightText()}
           </div>
 
-          {/* Navigation and Legal Links */}
-          <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-6">
-            {showBackToDashboard && (
-              <>
-                <Link 
-                  href="/user" 
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
-                >
-                  ← Back to Dashboard
-                </Link>
-                <div className="hidden sm:block w-px h-4 bg-gray-300"></div>
-              </>
-            )}
-            <div className="flex space-x-4 sm:space-x-6">
-              <Link 
-                href="/terms" 
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              >
-                Terms & Conditions
-              </Link>
-              <Link 
-                href="/privacy-policy" 
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              >
-                Privacy Policy
-              </Link>
-              <Link 
-                href="/code-of-conduct" 
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              >
-                Code of Conduct
-              </Link>
-            </div>
-          </div>
+          {showBackToDashboard && (
+            <Link
+              href="/user"
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
+            >
+              ← Back to Dashboard
+            </Link>
+          )}
         </div>
       </div>
     </footer>

@@ -7,7 +7,11 @@ export const organizationConfig = {
   contact: {
     email: "finance@nycpha.org",
     phone: "",
-    website: "www.nycpha.org"
+    website: "www.nycpha.org",
+    address: {
+      line1: "99 Wall St #2158",
+      line2: "New York, NY 10005"
+    }
   },
   branding: {
     // Future logo paths can be added here

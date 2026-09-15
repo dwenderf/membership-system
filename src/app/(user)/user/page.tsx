@@ -4,6 +4,7 @@ import { getCategoryDisplayName, type RegistrationCategory } from '@/lib/registr
 import { headers } from 'next/headers'
 import { getBaseUrl } from '@/lib/url-utils'
 import DiscountUsage from '@/components/DiscountUsage'
+import PrimaryCta from '@/components/ui/PrimaryCta'
 import PasskeySetupBanner from '@/components/PasskeySetupBanner'
 import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
@@ -284,7 +285,7 @@ export default async function UserDashboardPage() {
     <div className="px-4 py-3 sm:px-0 max-w-3xl mx-auto">
       <PasskeySetupBanner promptPrefs={userProfile?.preferences?.passkeyPrompt ?? null} />
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">
+        <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900 mb-6">
           Welcome back, {userProfile?.first_name}!
         </h1>
 
@@ -324,36 +325,31 @@ export default async function UserDashboardPage() {
                   </Link>
                 </p>
               ))}
+
+              {/* Membership is active and not expiring soon: no alert needed, but keep a
+                  low-key way to reach memberships since purchasing/extending is a once-a-year
+                  action that otherwise has no other entry point on this page. */}
+              {expiringSoonMemberships.length === 0 && recentlyExpired.length === 0 && (
+                <p>
+                  <Link
+                    href="/user/browse-memberships"
+                    className="text-sm font-medium text-gray-600 hover:text-brand-ink underline underline-offset-2"
+                  >
+                    Purchase or Extend a Membership
+                  </Link>
+                </p>
+              )}
             </>
           )}
         </div>
 
-        {/* Action Tiles - constrained to grid width */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-6">
-          <Link
-            href="/user/browse-registrations"
-            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
-          >
-            <div className="flex items-center">
-              <span className="mr-3 text-2xl">🏒</span>
-              <span className="text-base font-medium text-gray-900">Browse Registrations</span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-          <Link
-            href="/user/browse-memberships"
-            className="group bg-white overflow-hidden shadow rounded-lg p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
-          >
-            <div className="flex items-center">
-              <span className="mr-3 text-2xl">🎫</span>
-              <span className="text-base font-medium text-gray-900">Browse Memberships</span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
+        {/* Primary action: registrations are a recurring, per-season action, so they get
+            the full-width CTA treatment. Memberships are once-a-year and are surfaced
+            above instead, as an alert or plain link depending on urgency. */}
+        <div className="mb-6">
+          <PrimaryCta href="/user/browse-registrations" icon="🏒" fullWidth>
+            Browse Registrations
+          </PrimaryCta>
         </div>
       </div>
 

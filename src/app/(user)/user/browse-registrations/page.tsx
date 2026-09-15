@@ -167,7 +167,7 @@ export default async function BrowseRegistrationsPage() {
             <span>Back to My Registrations</span>
           </Link>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">Browse Registrations</h1>
+        <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">Browse Registrations</h1>
       </div>
 
       {/* Conditional Membership Warning - Only show if memberships are expiring soon */}

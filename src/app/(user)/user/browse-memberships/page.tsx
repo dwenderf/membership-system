@@ -49,7 +49,7 @@ export default async function BrowseMembershipsPage({ searchParams }: PageProps)
             <span>Back to My Memberships</span>
           </Link>
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">Browse Memberships</h1>
+        <h1 className="text-3xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">Browse Memberships</h1>
       </div>
 
       {/* Available Memberships */}

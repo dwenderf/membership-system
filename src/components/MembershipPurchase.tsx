@@ -15,6 +15,7 @@ import { handlePaymentFlow, PaymentFlowData } from '@/lib/payment-flow-dispatche
 import { calculateMembershipDates, isMembershipExtension } from '@/lib/membership-utils'
 import { validateAssistanceAmount } from '@/lib/membership-validation'
 import { logger } from '@/lib/logging/logger'
+import PrimaryCtaButton from './ui/PrimaryCtaButton'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -721,10 +722,9 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       )}
 
       {/* Purchase Button */}
-      <button
+      <PrimaryCtaButton
         onClick={handlePurchase}
         disabled={isLoading || !selectedDuration || !paymentOption || !!getAssistanceValidationError()}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
       >
         {isLoading
           ? 'Processing...'
@@ -736,7 +736,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
                 ? 'Enter a Valid Amount to Continue'
                 : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
         }
-      </button>
+      </PrimaryCtaButton>
 
       {/* Payment Form Modal */}
       {showPaymentForm && (

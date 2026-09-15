@@ -92,30 +92,19 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
             <div className="hidden md:ml-6 md:flex md:space-x-6">
               {navigation.map((item) => (
                 <div key={item.name} className="relative flex items-center">
-                  <Link
-                    href={item.href}
-                    className={`${
-                      item.current
-                        ? 'border-brand-tide text-brand-ink'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-16`}
-                  >
-                    {item.name}
-                    {item.badge && (
-                      <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
-                  </Link>
-                  {item.submenu && (
+                  {item.submenu ? (
                     <button
                       type="button"
                       aria-haspopup="true"
                       aria-expanded={openDropdown === item.name}
                       onClick={() => setOpenDropdown(openDropdown === item.name ? null : item.name)}
-                      className="p-1 text-gray-400 hover:text-gray-600"
+                      className={`${
+                        item.current
+                          ? 'border-brand-tide text-brand-ink'
+                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      } inline-flex items-center gap-1 px-1 pt-1 border-b-2 text-sm font-medium h-16`}
                     >
-                      <span className="sr-only">Toggle {item.name} submenu</span>
+                      {item.name}
                       <svg
                         className={`w-4 h-4 transition-transform ${openDropdown === item.name ? 'rotate-180' : ''}`}
                         fill="none"
@@ -125,6 +114,22 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={`${
+                        item.current
+                          ? 'border-brand-tide text-brand-ink'
+                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium h-16`}
+                    >
+                      {item.name}
+                      {item.badge && (
+                        <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
                   )}
 
                   {item.submenu && openDropdown === item.name && (
@@ -208,12 +213,31 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
           <div className="pt-2 pb-3 space-y-1">
             {navigation.map((item) => (
               <div key={item.name}>
-                <div className="flex items-center justify-between pl-3 pr-2">
+                {item.submenu ? (
+                  <button
+                    type="button"
+                    aria-expanded={openAccordion === item.name}
+                    onClick={() => setOpenAccordion(openAccordion === item.name ? null : item.name)}
+                    className={`${
+                      item.current ? 'text-brand-ink font-semibold' : 'text-gray-600'
+                    } w-full pl-3 pr-2 py-2 text-base font-medium flex items-center justify-between`}
+                  >
+                    <span>{item.name}</span>
+                    <svg
+                      className={`w-4 h-4 text-gray-400 transition-transform ${openAccordion === item.name ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                ) : (
                   <Link
                     href={item.href}
                     className={`${
                       item.current ? 'text-brand-ink font-semibold' : 'text-gray-600'
-                    } flex-1 py-2 text-base font-medium flex items-center justify-between`}
+                    } pl-3 pr-2 py-2 text-base font-medium flex items-center justify-between`}
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <span>{item.name}</span>
@@ -223,25 +247,7 @@ export default function NavBar({ navigation, user, isAdminView, homeHref }: NavB
                       </span>
                     )}
                   </Link>
-                  {item.submenu && (
-                    <button
-                      type="button"
-                      aria-expanded={openAccordion === item.name}
-                      onClick={() => setOpenAccordion(openAccordion === item.name ? null : item.name)}
-                      className="p-2 text-gray-400 hover:text-gray-600"
-                    >
-                      <span className="sr-only">Toggle {item.name} submenu</span>
-                      <svg
-                        className={`w-4 h-4 transition-transform ${openAccordion === item.name ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+                )}
                 {item.submenu && openAccordion === item.name && (
                   <div className="mx-3 mb-2 rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
                     {item.submenu.map((subItem) => {

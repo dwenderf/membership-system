@@ -167,7 +167,7 @@ describe('membership requirement gate - route enforcement', () => {
 
       const request = new NextRequest('http://localhost/api/create-registration-payment-intent', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-1', categoryId: 'cat-goalie', amount: 0 })
+        body: JSON.stringify({ registrationId: 'reg-1', categoryId: 'cat-goalie', amount: 0, policiesAccepted: true })
       })
 
       const { POST } = await import('@/app/api/create-registration-payment-intent/route')
@@ -179,7 +179,9 @@ describe('membership requirement gate - route enforcement', () => {
         .mockReturnValueOnce(buildRegistrationLookup()) // registrations select
         .mockReturnValueOnce(noQualifyingMembership()) // user_memberships (validateMembershipRequirementAsync)
         .mockReturnValueOnce(membershipNamesLookup()) // memberships names for error message
-      ;(createAdminClient as jest.Mock).mockReturnValue({ from: jest.fn() })
+      ;(createAdminClient as jest.Mock).mockReturnValue({
+        from: jest.fn().mockReturnValue({ insert: jest.fn().mockResolvedValue({ error: null }) }) // policy_acceptance_logs insert
+      })
 
       const response = await callFreeRegistration(supabaseFrom)
       const body = await response.json()
@@ -275,12 +277,14 @@ describe('membership requirement gate - route enforcement', () => {
         auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-1', email: 'user@example.com' } }, error: null }) },
         from: supabaseFrom
       })
-      ;(createAdminClient as jest.Mock).mockReturnValue({ from: jest.fn() })
+      ;(createAdminClient as jest.Mock).mockReturnValue({
+        from: jest.fn().mockReturnValue({ insert: jest.fn().mockResolvedValue({ error: null }) }) // policy_acceptance_logs insert
+      })
       ;(getUserSavedPaymentMethodId as jest.Mock).mockResolvedValue('pm_123')
 
       const request = new NextRequest('http://localhost/api/join-waitlist', {
         method: 'POST',
-        body: JSON.stringify({ registrationId: 'reg-1', categoryId: 'cat-skater' })
+        body: JSON.stringify({ registrationId: 'reg-1', categoryId: 'cat-skater', policiesAccepted: true })
       })
 
       const { POST } = await import('@/app/api/join-waitlist/route')

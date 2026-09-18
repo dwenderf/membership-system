@@ -332,6 +332,26 @@ export type Database = {
           created_at?: string
         }
       }
+      policy_acceptance_logs: {
+        Row: {
+          id: string
+          user_id: string
+          accepted_at: string
+          source: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          accepted_at?: string
+          source: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          accepted_at?: string
+          source?: string
+        }
+      }
       payments: {
         Row: {
           id: string

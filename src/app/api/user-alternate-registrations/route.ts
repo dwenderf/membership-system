@@ -4,6 +4,7 @@ import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 import { logger } from '@/lib/logging/logger'
+import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,13 +18,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registration_id, discount_code_id } = body
-
-
+    const { registration_id, discount_code_id, policiesAccepted } = body
 
     if (!registration_id) {
       return NextResponse.json({ error: 'Registration ID is required' }, { status: 400 })
     }
+
+    if (policiesAccepted !== true) {
+      return NextResponse.json(
+        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { status: 400 }
+      )
+    }
+
+    const adminSupabase = createAdminClient()
+    await logPolicyAcceptance(adminSupabase, user.id, 'alternate_registration')
 
     // Check if registration exists and allows alternates
     const { data: registration, error: regError } = await supabase
@@ -69,7 +78,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has a saved payment method (Setup Intent) using admin client to bypass RLS
-    const adminSupabase = createAdminClient()
     const { data: userProfile } = await adminSupabase
       .from('users')
       .select('stripe_payment_method_id, setup_intent_status')

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/contexts/ToastContext'
 import { getOrganizationName } from '@/lib/organization'
 import { completeOnboarding } from './actions'
 import { logger } from '@/lib/logging/logger'
+import PolicyAcceptanceCheckbox from '@/components/PolicyAcceptanceCheckbox'
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -305,37 +305,12 @@ export default function OnboardingPage() {
             </div>
 
             {/* Terms Acceptance */}
-            <div className="space-y-3">
-              <div className="flex items-start">
-                <input
-                  id="termsAccepted"
-                  type="checkbox"
-                  checked={formData.termsAccepted}
-                  onChange={(e) => setFormData(prev => ({ ...prev, termsAccepted: e.target.checked }))}
-                  className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${
-                    errors.termsAccepted ? 'border-red-300' : ''
-                  }`}
-                />
-                <label htmlFor="termsAccepted" className="ml-3 text-sm text-gray-700">
-                  I agree to the{' '}
-                  <Link href="/terms" target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-                    Terms and Conditions
-                  </Link>
-                  ,{' '}
-                  <Link href="/code-of-conduct" target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-                    Code of Conduct
-                  </Link>
-                  , and{' '}
-                  <Link href="/privacy-policy" target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-                    Privacy Policy
-                  </Link>
-                  {' *'}
-                </label>
-              </div>
-              {errors.termsAccepted && (
-                <p className="text-sm text-red-600">{errors.termsAccepted}</p>
-              )}
-            </div>
+            <PolicyAcceptanceCheckbox
+              id="termsAccepted"
+              checked={formData.termsAccepted}
+              onChange={(checked) => setFormData(prev => ({ ...prev, termsAccepted: checked }))}
+              error={errors.termsAccepted}
+            />
 
             {/* Membership Interest */}
             <div className="bg-blue-50 p-4 rounded-lg">

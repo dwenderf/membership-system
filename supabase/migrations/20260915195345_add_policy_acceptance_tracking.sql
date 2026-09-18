@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS public.policy_acceptance_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_policy_acceptance_logs_user_id ON public.policy_acceptance_logs(user_id);
+-- Matches the indexed-sort-column pattern used by every other log table
+-- (idx_system_events_completed_at, idx_xero_sync_logs_created_at, ...):
+-- /api/admin/logs sorts this table by accepted_at DESC with a limit.
+CREATE INDEX IF NOT EXISTS idx_policy_acceptance_logs_accepted_at ON public.policy_acceptance_logs(accepted_at);
 
 ALTER TABLE public.policy_acceptance_logs ENABLE ROW LEVEL SECURITY;
 

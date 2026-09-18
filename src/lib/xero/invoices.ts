@@ -5,6 +5,7 @@ import { createClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import { getXeroValidationMessage, XeroApiError } from './xero-errors'
 import { logger } from '@/lib/logging/logger'
+import { scheduleSentryFlush } from '@/lib/sentry-flush'
 
 // Helper function to get system accounting codes
 async function getSystemAccountingCode(codeType: string): Promise<string | null> {
@@ -301,7 +302,8 @@ export async function createXeroInvoiceBeforePayment(
         Sentry.captureMessage(`Critical Xero invoice creation failure: ${errorMessage}`, 'error')
       }
     })
-    
+    scheduleSentryFlush()
+
     const activeTenant = await getActiveTenant()
     if (activeTenant) {
       await logXeroSync({

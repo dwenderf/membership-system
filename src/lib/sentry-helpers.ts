@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs'
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { createClient } from './supabase/server'
 import { extractRequestInfo } from './request-info'
 import { logger } from './logging/logger'
@@ -33,167 +33,211 @@ interface SentryErrorContext extends SentryContextBase {
 
 /**
  * Enhanced Sentry error capture with automatic user context
+ *
+ * Callers across the app invoke this (and the payment/account-deletion helpers
+ * built on it) without awaiting it - it's meant to fire from a catch block
+ * without blocking the response. To stay reliable under that usage, the whole
+ * body (including the async user-context lookup) runs inside next/server's
+ * after(), which is registered synchronously the instant this function is
+ * called, so Vercel won't freeze the invocation before it completes - whether
+ * or not the caller awaits this promise (see #368).
  */
 export async function captureSentryError(
   error: Error | string,
   context?: SentryErrorContext
-) {
-  const scope = new Sentry.Scope()
+): Promise<void> {
+  const doCapture = async () => {
+    const scope = new Sentry.Scope()
 
-  if (context?.level) {
-    scope.setLevel(context.level)
-  }
-
-  // Add user context if available
-  if (context?.user) {
-    scope.setUser({
-      id: context.user.id,
-      email: context.user.email,
-      username: `${context.user.first_name} ${context.user.last_name}`,
-      member_id: context.user.member_id,
-      is_admin: context.user.is_admin
-    })
-  } else {
-    // Try to get user from current session
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        // Get additional user profile data
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('first_name, last_name, member_id, is_admin')
-          .eq('id', user.id)
-          .single()
-        
-        scope.setUser({
-          id: user.id,
-          email: user.email,
-          username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
-          member_id: userProfile?.member_id,
-          is_admin: userProfile?.is_admin
-        })
-      }
-    } catch (userError) {
-      // Silently fail user context - don't let it break error reporting
-      logger.logSystem(
-        'sentry-user-context-failed',
-        'Failed to get user context for Sentry',
-        { error: userError instanceof Error ? userError.message : String(userError) },
-        'warn'
-      )
+    if (context?.level) {
+      scope.setLevel(context.level)
     }
-  }
 
-  // Add request context if available
-  if (context?.request) {
-    scope.setContext('request', {
-      url: context.request.url,
-      method: context.request.method,
-      headers: context.request.headers,
-      ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
-      userAgent: context.request.headers?.['user-agent']
+    // Add user context if available
+    if (context?.user) {
+      scope.setUser({
+        id: context.user.id,
+        email: context.user.email,
+        username: `${context.user.first_name} ${context.user.last_name}`,
+        member_id: context.user.member_id,
+        is_admin: context.user.is_admin
+      })
+    } else {
+      // Try to get user from current session
+      try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          // Get additional user profile data
+          const { data: userProfile } = await supabase
+            .from('users')
+            .select('first_name, last_name, member_id, is_admin')
+            .eq('id', user.id)
+            .single()
+
+          scope.setUser({
+            id: user.id,
+            email: user.email,
+            username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
+            member_id: userProfile?.member_id,
+            is_admin: userProfile?.is_admin
+          })
+        }
+      } catch (userError) {
+        // Silently fail user context - don't let it break error reporting
+        logger.logSystem(
+          'sentry-user-context-failed',
+          'Failed to get user context for Sentry',
+          { error: userError instanceof Error ? userError.message : String(userError) },
+          'warn'
+        )
+      }
+    }
+
+    // Add request context if available
+    if (context?.request) {
+      scope.setContext('request', {
+        url: context.request.url,
+        method: context.request.method,
+        headers: context.request.headers,
+        ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
+        userAgent: context.request.headers?.['user-agent']
+      })
+    }
+
+    // Add tags
+    if (context?.tags) {
+      Object.entries(context.tags).forEach(([key, value]) => {
+        scope.setTag(key, value)
+      })
+    }
+
+    // Add extra context
+    if (context?.extra) {
+      scope.setExtras(context.extra)
+    }
+
+    // Capture the error
+    if (typeof error === 'string') {
+      Sentry.captureMessage(error, scope)
+    } else {
+      Sentry.captureException(error, scope)
+    }
+
+    // Make sure the event actually reaches Sentry before Vercel freezes this
+    // invocation - captureException/captureMessage only enqueue it (see #368).
+    await Sentry.flush(2000).catch(() => {
+      // eslint-disable-next-line no-console -- deliberate: reporting a failure of the Sentry pathway itself must not depend on that same pathway
+      console.warn('Sentry flush failed')
     })
   }
 
-  // Add tags
-  if (context?.tags) {
-    Object.entries(context.tags).forEach(([key, value]) => {
-      scope.setTag(key, value)
-    })
-  }
-
-  // Add extra context
-  if (context?.extra) {
-    scope.setExtras(context.extra)
-  }
-
-  // Capture the error
-  if (typeof error === 'string') {
-    Sentry.captureMessage(error, scope)
-  } else {
-    Sentry.captureException(error, scope)
+  try {
+    after(doCapture)
+  } catch {
+    // Not in a request scope (e.g. called from outside a route/action) -
+    // after() throws synchronously in that case, so fall back to running
+    // inline, best-effort.
+    await doCapture()
   }
 }
 
 /**
  * Enhanced Sentry message capture with automatic user context
+ *
+ * See captureSentryError() above for why the body runs inside after() -
+ * same reasoning applies here.
  */
 export async function captureSentryMessage(
   message: string,
   level: Sentry.SeverityLevel = 'info',
   context?: SentryContextBase
-) {
-  const scope = new Sentry.Scope()
-  scope.setLevel(level)
+): Promise<void> {
+  const doCapture = async () => {
+    const scope = new Sentry.Scope()
+    scope.setLevel(level)
 
-  // Add user context if available
-  if (context?.user) {
-    scope.setUser({
-      id: context.user.id,
-      email: context.user.email,
-      username: `${context.user.first_name} ${context.user.last_name}`,
-      member_id: context.user.member_id,
-      is_admin: context.user.is_admin
-    })
-  } else {
-    // Try to get user from current session
-    try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        // Get additional user profile data
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('first_name, last_name, member_id, is_admin')
-          .eq('id', user.id)
-          .single()
-        
-        scope.setUser({
-          id: user.id,
-          email: user.email,
-          username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
-          member_id: userProfile?.member_id,
-          is_admin: userProfile?.is_admin
-        })
+    // Add user context if available
+    if (context?.user) {
+      scope.setUser({
+        id: context.user.id,
+        email: context.user.email,
+        username: `${context.user.first_name} ${context.user.last_name}`,
+        member_id: context.user.member_id,
+        is_admin: context.user.is_admin
+      })
+    } else {
+      // Try to get user from current session
+      try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          // Get additional user profile data
+          const { data: userProfile } = await supabase
+            .from('users')
+            .select('first_name, last_name, member_id, is_admin')
+            .eq('id', user.id)
+            .single()
+
+          scope.setUser({
+            id: user.id,
+            email: user.email,
+            username: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'Unknown',
+            member_id: userProfile?.member_id,
+            is_admin: userProfile?.is_admin
+          })
+        }
+      } catch (userError) {
+        // Silently fail user context - don't let it break error reporting
+        logger.logSystem(
+          'sentry-user-context-failed',
+          'Failed to get user context for Sentry',
+          { error: userError instanceof Error ? userError.message : String(userError) },
+          'warn'
+        )
       }
-    } catch (userError) {
-      // Silently fail user context - don't let it break error reporting
-      logger.logSystem(
-        'sentry-user-context-failed',
-        'Failed to get user context for Sentry',
-        { error: userError instanceof Error ? userError.message : String(userError) },
-        'warn'
-      )
     }
-  }
 
-  // Add request context if available
-  if (context?.request) {
-    scope.setContext('request', {
-      url: context.request.url,
-      method: context.request.method,
-      headers: context.request.headers,
-      ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
-      userAgent: context.request.headers?.['user-agent']
+    // Add request context if available
+    if (context?.request) {
+      scope.setContext('request', {
+        url: context.request.url,
+        method: context.request.method,
+        headers: context.request.headers,
+        ip: context.request.ip || context.request.headers?.['x-forwarded-for'] || 'unknown',
+        userAgent: context.request.headers?.['user-agent']
+      })
+    }
+
+    // Add tags
+    if (context?.tags) {
+      Object.entries(context.tags).forEach(([key, value]) => {
+        scope.setTag(key, value)
+      })
+    }
+
+    // Add extra context
+    if (context?.extra) {
+      scope.setExtras(context.extra)
+    }
+
+    Sentry.captureMessage(message, scope)
+
+    // Make sure the event actually reaches Sentry before Vercel freezes this
+    // invocation - captureMessage only enqueues it (see #368).
+    await Sentry.flush(2000).catch(() => {
+      // eslint-disable-next-line no-console -- deliberate: reporting a failure of the Sentry pathway itself must not depend on that same pathway
+      console.warn('Sentry flush failed')
     })
   }
 
-  // Add tags
-  if (context?.tags) {
-    Object.entries(context.tags).forEach(([key, value]) => {
-      scope.setTag(key, value)
-    })
+  try {
+    after(doCapture)
+  } catch {
+    await doCapture()
   }
-
-  // Add extra context
-  if (context?.extra) {
-    scope.setExtras(context.extra)
-  }
-
-  Sentry.captureMessage(message, scope)
 }
 
 /**

@@ -1802,7 +1802,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 1. Generate a secret: `openssl rand -hex 32` — this becomes `PREVIEW_AUTH_SECRET`.
 2. In the Vercel dashboard: **Project Settings → Environment Variables** → add `PREVIEW_AUTH_SECRET`, `PREVIEW_TEST_USER_EMAIL`, `PREVIEW_TEST_USER_PASSWORD` (and optionally `PREVIEW_TEST_ADMIN_EMAIL`/`PREVIEW_TEST_ADMIN_PASSWORD` for admin-page testing), checking **only the "Preview" environment box**. Leave Production unchecked — double-check by filtering the env var list to Production and confirming these keys are absent.
 3. Create the matching test user(s) in the **preview** Supabase project's Auth (confirm you're targeting the preview project, not production — they're separate projects): Dashboard → Authentication → Users → Add user, with "Auto Confirm User" on and a password matching `PREVIEW_TEST_USER_PASSWORD`.
-4. Create the matching row in the app `users` table (preview project), with `onboarding_completed_at` and `terms_accepted_at` set and `is_admin` set appropriately. Simplest way: log in once as the test user through the real magic-link UI and complete onboarding normally.
+4. Create the matching row in the app `users` table (preview project), with `onboarding_completed_at` set and `is_admin` set appropriately. Simplest way: log in once as the test user through the real magic-link UI and complete onboarding normally.
 5. Rotate `PREVIEW_AUTH_SECRET` (regenerate, update the Preview-scoped env var, redeploy) any time it might have leaked.
 6. **Redeploy** the preview after adding/changing these — Vercel doesn't retroactively apply new env vars to a deployment that's already running.
 

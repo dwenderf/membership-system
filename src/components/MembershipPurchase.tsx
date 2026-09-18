@@ -16,6 +16,7 @@ import { calculateMembershipDates, isMembershipExtension } from '@/lib/membershi
 import { validateAssistanceAmount } from '@/lib/membership-validation'
 import { logger } from '@/lib/logging/logger'
 import PrimaryCtaButton from './ui/PrimaryCtaButton'
+import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -64,7 +65,8 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
   const [userHasSavedPaymentMethod, setUserHasSavedPaymentMethod] = useState<boolean | null>(null)
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<string | null>(null)
   const [, setPaymentIntentId] = useState<string | null>(null)
-  
+  const [policiesAccepted, setPoliciesAccepted] = useState(false)
+
   const { showSuccess, showError } = useToast()
   const router = useRouter()
 
@@ -171,6 +173,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       return
     }
 
+    if (!policiesAccepted) {
+      setError('Please agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy before purchasing')
+      return
+    }
+
     const assistanceError = getAssistanceValidationError()
     if (assistanceError) {
       setError(assistanceError)
@@ -191,8 +198,9 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],
         expectedValidUntil: endDate.toISOString().split('T')[0],
+        policiesAccepted,
       }
-      
+
       const result = await handlePaymentFlow(paymentData)
 
       if (!result.success) {
@@ -329,6 +337,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         savePaymentMethod: shouldSavePaymentMethod,
         expectedValidFrom: startDate.toISOString().split('T')[0],
         expectedValidUntil: endDate.toISOString().split('T')[0],
+        policiesAccepted,
       }
 
       const result = await handlePaymentFlow(paymentData)
@@ -714,6 +723,16 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
         </div>
       )}
 
+      {/* Policy Acceptance */}
+      {selectedDuration && (
+        <div className="mb-4">
+          <PolicyAcceptanceCheckbox
+            checked={policiesAccepted}
+            onChange={setPoliciesAccepted}
+          />
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -724,7 +743,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
       {/* Purchase Button */}
       <PrimaryCtaButton
         onClick={handlePurchase}
-        disabled={isLoading || !selectedDuration || !paymentOption || !!getAssistanceValidationError()}
+        disabled={isLoading || !selectedDuration || !paymentOption || !policiesAccepted || !!getAssistanceValidationError()}
       >
         {isLoading
           ? 'Processing...'
@@ -732,9 +751,11 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             ? 'Select Duration to Continue'
             : !paymentOption
               ? 'Select Payment Option to Continue'
-              : getAssistanceValidationError()
-                ? 'Enter a Valid Amount to Continue'
-                : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
+              : !policiesAccepted
+                ? 'Accept Policies to Continue'
+                : getAssistanceValidationError()
+                  ? 'Enter a Valid Amount to Continue'
+                  : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`
         }
       </PrimaryCtaButton>
 

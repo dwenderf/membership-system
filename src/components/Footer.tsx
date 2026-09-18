@@ -38,7 +38,7 @@ export default function Footer() {
   }, [pathname])
 
   // Show "Back to Dashboard" link only on legal pages AND if user can access dashboard
-  const isOnLegalPage = ['/terms', '/privacy-policy', '/code-of-conduct'].includes(pathname)
+  const isOnLegalPage = ['/terms', '/privacy-policy', '/code-of-conduct', '/concussion-policy'].includes(pathname)
   const showBackToDashboard = isOnLegalPage && canAccessDashboard
 
   return (
@@ -50,24 +50,20 @@ export default function Footer() {
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Useful Links</h3>
               <ul className="space-y-2">
                 <li>
-                  <a
-                    href="https://nycpha.org/code-of-conduct/"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href="/code-of-conduct"
                     className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
                   >
                     Code of Conduct
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="https://nycpha.org/concussion-information/"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href="/concussion-policy"
                     className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
                   >
                     Concussion Policy
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <Link

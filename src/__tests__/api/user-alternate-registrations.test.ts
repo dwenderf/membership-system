@@ -91,6 +91,11 @@ describe('/api/user-alternate-registrations', () => {
         data: { user: { id: 'user-123' } }
       })
 
+      // Mock policy acceptance log insert
+      mockSupabase.from.mockReturnValueOnce({
+        insert: jest.fn(() => Promise.resolve({ error: null }))
+      })
+
       // Mock registration lookup - alternates not allowed
       mockSupabase.from.mockReturnValueOnce({
         select: jest.fn(() => ({
@@ -105,7 +110,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registration_id: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123', policiesAccepted: true })
       })
 
       const response = await POST(request)
@@ -118,6 +123,11 @@ describe('/api/user-alternate-registrations', () => {
     it('should prevent duplicate alternate registration', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-123' } }
+      })
+
+      // Mock policy acceptance log insert
+      mockSupabase.from.mockReturnValueOnce({
+        insert: jest.fn(() => Promise.resolve({ error: null }))
       })
 
       // Mock registration lookup - alternates allowed
@@ -154,7 +164,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registration_id: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123', policiesAccepted: true })
       })
 
       const response = await POST(request)
@@ -167,6 +177,11 @@ describe('/api/user-alternate-registrations', () => {
     it('should successfully register as alternate with valid payment method', async () => {
       mockSupabase.auth.getUser.mockResolvedValue({
         data: { user: { id: 'user-123' } }
+      })
+
+      // Mock policy acceptance log insert
+      mockSupabase.from.mockReturnValueOnce({
+        insert: jest.fn(() => Promise.resolve({ error: null }))
       })
 
       // Mock registration lookup
@@ -233,7 +248,7 @@ describe('/api/user-alternate-registrations', () => {
 
       const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
         method: 'POST',
-        body: JSON.stringify({ registration_id: 'reg-123' })
+        body: JSON.stringify({ registration_id: 'reg-123', policiesAccepted: true })
       })
 
       const response = await POST(request)

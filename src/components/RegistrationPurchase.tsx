@@ -20,6 +20,7 @@ import type { DiscountValidationResult } from '@/app/api/validate-discount-code/
 import WaitlistBadge from './WaitlistBadge'
 import { logger } from '@/lib/logging/logger'
 import PrimaryCtaButton from './ui/PrimaryCtaButton'
+import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 
 // Force import client config
 import '../../instrumentation-client'
@@ -125,6 +126,7 @@ export default function RegistrationPurchase({
   const [, setShowSurvey] = useState(false)
   const [surveyCompleted, setSurveyCompleted] = useState(false)
   const [surveyStarted, setSurveyStarted] = useState(false)
+  const [policiesAccepted, setPoliciesAccepted] = useState(false)
   const { showSuccess, showError } = useToast()
   const router = useRouter()
 
@@ -457,6 +459,11 @@ export default function RegistrationPurchase({
       return
     }
 
+    if (!policiesAccepted) {
+      setError('Please agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy before continuing')
+      return
+    }
+
     // Handle alternate registration differently
     if (isAlternateSelected) {
       setIsLoading(true)
@@ -471,6 +478,7 @@ export default function RegistrationPurchase({
           body: JSON.stringify({
             registration_id: registration.id,
             discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
+            policiesAccepted,
           }),
         })
 
@@ -544,6 +552,7 @@ export default function RegistrationPurchase({
             registrationId: registration.id,
             categoryId: selectedCategoryId,
             discountCodeId: discountValidation?.discountCodeId || null,
+            policiesAccepted,
           }),
         })
 
@@ -603,6 +612,7 @@ export default function RegistrationPurchase({
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
           savePaymentMethod: shouldSavePaymentMethod,
           usePaymentPlan: usePaymentPlan,
+          policiesAccepted,
         }),
       })
 
@@ -747,6 +757,7 @@ export default function RegistrationPurchase({
           discountCode: discountValidation?.isValid ? discountCode.trim() : null,
           savePaymentMethod: shouldSavePaymentMethod,
           usePaymentPlan: usePaymentPlan,
+          policiesAccepted,
         }),
       })
 
@@ -1493,6 +1504,16 @@ export default function RegistrationPurchase({
         </div>
       )}
 
+      {/* Policy Acceptance */}
+      {selectedCategoryId && (
+        <div className="mb-4">
+          <PolicyAcceptanceCheckbox
+            checked={policiesAccepted}
+            onChange={setPoliciesAccepted}
+          />
+        </div>
+      )}
+
       {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -1503,13 +1524,14 @@ export default function RegistrationPurchase({
       {/* Register Button */}
       <PrimaryCtaButton
         onClick={handlePurchase}
-        disabled={isLoading || !selectedCategoryId || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}
+        disabled={isLoading || !selectedCategoryId || !policiesAccepted || !isCategoryEligible || !hasSeasonCoverage || !isTimingAvailable || (isCategoryAtCapacity && isUserOnWaitlist) || (selectedCategory && ((selectedCategory.id !== 'alternate' && isAlreadyRegistered) || (selectedCategory.id === 'alternate' && isUserAlreadyAlternate))) || (registration.require_survey && !surveyCompleted)}
         emphasis={isCategoryAtCapacity && !isUserOnWaitlist ? 'amber' : 'default'}
       >
         {isLoading ? 'Processing...' :
          !selectedCategoryId ? 'Select Category to Continue' :
          (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Registered' :
          (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Registered' :
+         !policiesAccepted ? 'Accept Policies to Continue' :
          !isCategoryEligible ? (isGoalieOnlySelectedCategory && !isGoalieEligibleForSelected ? 'Goalies Only' : 'Membership Required') :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :
@@ -1562,6 +1584,7 @@ export default function RegistrationPurchase({
                       body: JSON.stringify({
                         registration_id: registration.id,
                         discount_code_id: discountValidation?.isValid ? discountValidation.discountCode?.id : null,
+                        policiesAccepted,
                       }),
                     })
                     if (!response.ok) {
@@ -1591,6 +1614,7 @@ export default function RegistrationPurchase({
                         registrationId: registration.id,
                         categoryId: selectedCategoryId,
                         discountCodeId: discountValidation?.discountCodeId || null,
+                        policiesAccepted,
                       }),
                     })
                     if (!response.ok) {

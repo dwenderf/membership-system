@@ -114,15 +114,24 @@ export default async function UserDetailPage({ params, searchParams: searchParam
     .single()
 
   if (userError || !user) {
-    logger.logSystem('user-detail-error', 'Error fetching user details', { 
+    logger.logSystem('user-detail-error', 'Error fetching user details', {
       userId: id,
-      error: userError?.message 
+      error: userError?.message
     })
     redirect('/admin/reports/users')
   }
 
   // Check if current user is viewing their own profile
   const isViewingOwnProfile = authUser.id === id
+
+  // Fetch the user's most recent policy acceptance (onboarding, purchase, registration, etc.)
+  const { data: latestPolicyAcceptance } = await adminSupabase
+    .from('policy_acceptance_logs')
+    .select('accepted_at')
+    .eq('user_id', id)
+    .order('accepted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   // Fetch user's consolidated memberships (both active and expired)
   const { data: userMemberships } = await adminSupabase
@@ -400,6 +409,12 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Phone Number</dt>
                       <dd className="mt-1 text-sm text-gray-900">{user.phone || 'Not provided'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Policies Accepted</dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        {latestPolicyAcceptance ? formatDateTime(latestPolicyAcceptance.accepted_at) : 'Never'}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Plays Goalie</dt>

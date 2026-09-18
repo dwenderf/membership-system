@@ -13,12 +13,15 @@ export interface PaymentFlowData {
   donationAmount?: number
   expectedValidFrom?: string // Expected start date (YYYY-MM-DD)
   expectedValidUntil?: string // Expected end date (YYYY-MM-DD)
-  
+
   // For registrations
   registrationId?: string
   categoryId?: string
   presaleCode?: string
   discountCode?: string
+
+  // Acceptance of Terms & Conditions / Code of Conduct / Concussion Policy / Privacy Policy
+  policiesAccepted?: boolean
 }
 
 export interface PaymentFlowResult {
@@ -74,7 +77,8 @@ async function handleZeroPaymentFlow(
           categoryId: paymentData.categoryId,
           amount: 0,
           presaleCode: paymentData.presaleCode,
-          discountCode: paymentData.discountCode
+          discountCode: paymentData.discountCode,
+          policiesAccepted: paymentData.policiesAccepted
         }
       : {
           membershipId: paymentData.membershipId,
@@ -84,7 +88,8 @@ async function handleZeroPaymentFlow(
           assistanceAmount: paymentData.assistanceAmount,
           donationAmount: paymentData.donationAmount,
           expectedValidFrom: paymentData.expectedValidFrom,
-          expectedValidUntil: paymentData.expectedValidUntil
+          expectedValidUntil: paymentData.expectedValidUntil,
+          policiesAccepted: paymentData.policiesAccepted
         }
 
     const response = await fetch(endpoint, {
@@ -143,7 +148,8 @@ async function handlePaidPaymentFlow(
           amount: paymentData.amount,
           presaleCode: paymentData.presaleCode,
           discountCode: paymentData.discountCode,
-          savePaymentMethod: paymentData.savePaymentMethod
+          savePaymentMethod: paymentData.savePaymentMethod,
+          policiesAccepted: paymentData.policiesAccepted
         }
       : {
           membershipId: paymentData.membershipId,
@@ -154,7 +160,8 @@ async function handlePaidPaymentFlow(
           donationAmount: paymentData.donationAmount,
           expectedValidFrom: paymentData.expectedValidFrom,
           expectedValidUntil: paymentData.expectedValidUntil,
-          savePaymentMethod: paymentData.savePaymentMethod
+          savePaymentMethod: paymentData.savePaymentMethod,
+          policiesAccepted: paymentData.policiesAccepted
         }
 
     const response = await fetch(endpoint, {

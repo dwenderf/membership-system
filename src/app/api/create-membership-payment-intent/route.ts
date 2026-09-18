@@ -7,6 +7,7 @@ import { logger } from '@/lib/logging/logger'
 import { xeroStagingManager, StagingPaymentData } from '@/lib/xero/staging'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { centsToCents } from '@/types/currency'
+import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 
 // Force import server config
 
@@ -427,7 +428,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil, savePaymentMethod } = body
+    const { membershipId, durationMonths, amount: amountToCharge, paymentOption, assistanceAmount, donationAmount, expectedValidFrom, expectedValidUntil, savePaymentMethod, policiesAccepted } = body
 
     // Set payment context for Sentry
     const paymentContext: PaymentContext = {
@@ -451,6 +452,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    if (policiesAccepted !== true) {
+      const error = new Error('Policies not accepted')
+      capturePaymentError(error, paymentContext, 'warning')
+      return NextResponse.json(
+        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { status: 400 }
+      )
+    }
+
+    await logPolicyAcceptance(adminSupabase, user.id, 'membership_purchase')
 
     // Handle free membership (amount = 0) - no Stripe payment needed
     if (amountToCharge === 0) {

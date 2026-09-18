@@ -12,6 +12,7 @@ import { logger } from '@/lib/logging/logger'
 // Force import server config
 
 import * as Sentry from '@sentry/nextjs'
+import { scheduleSentryFlush } from '@/lib/sentry-flush'
 
 /** Row shape of `waitlists`, as inserted/updated below (not in generated Supabase types). */
 interface WaitlistRow {
@@ -301,6 +302,7 @@ export async function POST(request: NextRequest) {
             errorDetails: waitlistError
           }
         })
+        scheduleSentryFlush()
         return NextResponse.json({
           error: 'Failed to join waitlist',
           details: process.env.NODE_ENV === 'development' ? waitlistError.message : undefined
@@ -375,6 +377,7 @@ export async function POST(request: NextRequest) {
             category_id: categoryId
           }
         })
+        scheduleSentryFlush()
       }
     }
 
@@ -406,7 +409,8 @@ export async function POST(request: NextRequest) {
         operation: 'waitlist_join_error'
       }
     })
-    
+    scheduleSentryFlush()
+
     return NextResponse.json(
       { error: 'Failed to join waitlist' },
       { status: 500 }

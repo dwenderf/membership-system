@@ -398,6 +398,10 @@ export class Logger {
 
   /**
    * Log an error message
+   *
+   * @param error The original caught error (if any), reported to Sentry with its
+   *   real stack/type. `metadata.error` remains the human-readable string for
+   *   console/file/admin-log display; this is a separate channel for Sentry only.
    */
   error(
     category: LogCategory,
@@ -405,28 +409,38 @@ export class Logger {
     message: string,
     metadata?: LogMetadata,
     userId?: string,
-    requestId?: string
+    requestId?: string,
+    error?: unknown
   ): void {
     const entry = this.createLogEntry('error', category, operation, message, metadata, userId, requestId)
     console.error(this.formatConsoleOutput(entry))
     this.writeToFile(entry)
-    
+
     // Automatically report errors to Sentry
-    this.reportToSentry(entry)
+    this.reportToSentry(entry, error)
   }
 
   /**
    * Report error to Sentry with enhanced context
    */
-  private reportToSentry(entry: LogEntry): void {
+  private reportToSentry(entry: LogEntry, error?: unknown): void {
     try {
       // Only import Sentry if it's available (to avoid issues in local development)
       // Include both production and preview deployments (Vercel)
       if (typeof window === 'undefined' && (process.env.NODE_ENV === 'production' || process.env.VERCEL)) {
-        import('@sentry/nextjs').then((Sentry) => {
-          // Create error object from log entry
-          const error = new Error(entry.message)
-          
+        // Use the real caught value when the call site has one - an Error gives
+        // Sentry a real stack/type/cause chain, and even a non-Error (e.g. a
+        // Supabase PostgrestError) still carries more detail than a bare message
+        // string. Otherwise capture a stack right here, synchronously - by the
+        // time the dynamic import below resolves we're in a later microtask and
+        // the stack would point at that continuation instead of the call site.
+        const hasRealError = error !== undefined
+        const reportedError: unknown = hasRealError ? error : new Error(entry.message)
+        if (!hasRealError) {
+          Error.captureStackTrace?.(reportedError as Error, this.reportToSentry)
+        }
+
+        Promise.all([import('@sentry/nextjs'), import('@/lib/sentry-flush')]).then(([Sentry, { scheduleSentryFlush }]) => {
           // Set Sentry context with log entry details
           Sentry.setContext('log_entry', {
             category: entry.category,
@@ -447,7 +461,7 @@ export class Logger {
           Sentry.setTag('log_level', entry.level)
 
           // Report to Sentry
-          Sentry.captureException(error, {
+          Sentry.captureException(reportedError, {
             level: 'error',
             tags: {
               source: 'logger',
@@ -455,13 +469,17 @@ export class Logger {
               operation: entry.operation
             }
           })
+
+          // Make sure the event actually reaches Sentry before Vercel freezes
+          // this invocation - captureException only enqueues it (see #368).
+          scheduleSentryFlush()
         }).catch(() => {
           // Silently fail if Sentry is not available
         })
       }
-    } catch (error) {
+    } catch (err) {
       // Don't let Sentry reporting break the logging
-      console.warn('Failed to report to Sentry:', error)
+      console.warn('Failed to report to Sentry:', err)
     }
   }
 
@@ -475,13 +493,14 @@ export class Logger {
     message: string,
     metadata?: LogMetadata,
     userId?: string,
-    requestId?: string
+    requestId?: string,
+    error?: unknown
   ): void {
     // Only report warnings for critical categories
     const criticalCategories: LogCategory[] = ['payment-processing', 'xero-sync', 'system']
-    
+
     if (criticalCategories.includes(category)) {
-      this.reportToSentryManual('warn', category, operation, message, metadata, userId, requestId)
+      this.reportToSentryManual('warn', category, operation, message, metadata, userId, requestId, error)
     }
   }
 
@@ -496,13 +515,21 @@ export class Logger {
     message: string,
     metadata?: LogMetadata,
     userId?: string,
-    requestId?: string
+    requestId?: string,
+    error?: unknown
   ): void {
     try {
       if (typeof window === 'undefined' && (process.env.NODE_ENV === 'production' || process.env.VERCEL)) {
-        import('@sentry/nextjs').then((Sentry) => {
-          const error = new Error(`${level.toUpperCase()}: ${message}`)
-          
+        // See reportToSentry() above for why this is captured synchronously
+        // rather than inside the .then() below, and why non-Error values are
+        // still passed through as-is.
+        const hasRealError = error !== undefined
+        const reportedError: unknown = hasRealError ? error : new Error(`${level.toUpperCase()}: ${message}`)
+        if (!hasRealError) {
+          Error.captureStackTrace?.(reportedError as Error, this.reportToSentryManual)
+        }
+
+        Promise.all([import('@sentry/nextjs'), import('@/lib/sentry-flush')]).then(([Sentry, { scheduleSentryFlush }]) => {
           Sentry.setContext('log_entry', {
             category,
             operation,
@@ -520,7 +547,7 @@ export class Logger {
           Sentry.setTag('log_level', level)
           Sentry.setTag('source', 'logger')
 
-          Sentry.captureException(error, {
+          Sentry.captureException(reportedError, {
             level: level === 'error' ? 'error' : level === 'warn' ? 'warning' : 'info',
             tags: {
               source: 'logger',
@@ -528,86 +555,132 @@ export class Logger {
               operation
             }
           })
+
+          // Make sure the event actually reaches Sentry before Vercel freezes
+          // this invocation - captureException only enqueues it (see #368).
+          scheduleSentryFlush()
         }).catch(() => {
           // Silently fail if Sentry is not available
         })
       }
-    } catch (error) {
-      console.warn('Failed to report to Sentry manually:', error)
+    } catch (err) {
+      console.warn('Failed to report to Sentry manually:', err)
     }
   }
 
   /**
    * Log payment processing events
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logPaymentProcessing(
     operation: string,
     message: string,
     metadata?: LogMetadata,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('payment-processing', operation, message, metadata)
+    if (level === 'error') {
+      this.error('payment-processing', operation, message, metadata, undefined, undefined, error)
+    } else {
+      this[level]('payment-processing', operation, message, metadata)
+    }
   }
 
   /**
    * Log Xero sync events
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logXeroSync(
     operation: string,
     message: string,
     metadata?: LogMetadata,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('xero-sync', operation, message, metadata)
+    if (level === 'error') {
+      this.error('xero-sync', operation, message, metadata, undefined, undefined, error)
+    } else {
+      this[level]('xero-sync', operation, message, metadata)
+    }
   }
 
   /**
    * Log batch processing events
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logBatchProcessing(
     operation: string,
     message: string,
     metadata?: LogMetadata,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('batch-processing', operation, message, metadata)
+    if (level === 'error') {
+      this.error('batch-processing', operation, message, metadata, undefined, undefined, error)
+    } else {
+      this[level]('batch-processing', operation, message, metadata)
+    }
   }
 
   /**
    * Log service management events
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logServiceManagement(
     operation: string,
     message: string,
     metadata?: LogMetadata,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('service-management', operation, message, metadata)
+    if (level === 'error') {
+      this.error('service-management', operation, message, metadata, undefined, undefined, error)
+    } else {
+      this[level]('service-management', operation, message, metadata)
+    }
   }
 
   /**
    * Log admin actions
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logAdminAction(
     operation: string,
     message: string,
     metadata?: LogMetadata,
     userId?: string,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('admin-action', operation, message, metadata, userId)
+    if (level === 'error') {
+      this.error('admin-action', operation, message, metadata, userId, undefined, error)
+    } else {
+      this[level]('admin-action', operation, message, metadata, userId)
+    }
   }
 
   /**
    * Log system events
+   *
+   * @param error The original caught error, forwarded to Sentry when level is 'error'.
    */
   logSystem(
     operation: string,
     message: string,
     metadata?: LogMetadata,
-    level: LogLevel = 'info'
+    level: LogLevel = 'info',
+    error?: unknown
   ): void {
-    this[level]('system', operation, message, metadata)
+    if (level === 'error') {
+      this.error('system', operation, message, metadata, undefined, undefined, error)
+    } else {
+      this[level]('system', operation, message, metadata)
+    }
   }
 
   /**

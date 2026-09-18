@@ -1233,7 +1233,33 @@ Generate this token from Sentry's Settings → Auth Tokens with the **Source Map
 
 The system automatically uses `NODE_ENV` to separate development and production events into different environments within the same project.
 
-### 3. Critical Error Scenarios Monitored
+### 3. How to Report Errors (and Why It's Reliable on Vercel)
+
+There are two ways to send an error to Sentry, and a rule about a third:
+
+- **`logger.error(...)` / the category helpers** (`logger.logPaymentProcessing(..., 'error')`, `logXeroSync`, `logSystem`, etc. — see [`src/lib/logging/logger.ts`](src/lib/logging/logger.ts)) — the default choice for normal error logging. `'error'`-level calls are automatically reported to Sentry; `info`/`warn`/`debug` are not, unless the call site explicitly uses `logger.reportWarningToSentry(...)`. When you're in a `catch` block and have the real caught value, pass it as the last argument so Sentry gets the real stack/type instead of a synthetic one built from the message string:
+
+  ```ts
+  } catch (error) {
+    logger.logPaymentProcessing(
+      'operation-name',
+      'Human-readable message',
+      { paymentIntentId, error: error instanceof Error ? error.message : String(error) }, // for console/file/admin-log display
+      'error',
+      error // the real caught value, for Sentry - can be omitted if there isn't one (e.g. a business-rule check with no exception)
+    )
+  }
+  ```
+
+  `metadata.error` (the string) and the trailing `error` argument (the real value) serve different consumers — don't conflate them. Setting `metadata.error` to the raw error object instead of `.message` will silently blank it out in console/file/admin-log output, since `JSON.stringify(new Error(...))` serializes to `{}`.
+
+- **`src/lib/sentry-helpers.ts`** (`captureSentryError`, `captureSentryMessage`, and the payment/account-deletion wrappers built on them) — use this instead of the logger when you need automatic user/session context (it looks up the current Supabase user and profile) or request context (browser/OS/device/IP) attached to the event. This is what the two "payment succeeded but database write failed" call sites use, since that's the highest-stakes error path in the app.
+
+- **Never call `Sentry.captureException`/`captureMessage` directly.** Always go through one of the two paths above. If you have a specific reason you must call the Sentry SDK directly, call `scheduleSentryFlush()` from [`src/lib/sentry-flush.ts`](src/lib/sentry-flush.ts) immediately afterward.
+
+**Why the last rule matters:** `Sentry.captureException`/`captureMessage` only *enqueue* an event on an internal transport; the actual network send happens asynchronously and isn't awaited by those calls. On Vercel, the serverless function is frozen as soon as the response is sent - if the send hasn't completed by then, it's silently cut off and the event never arrives, no error thrown. This isn't hypothetical: it's what caused #368, where `logger.error` calls in the Stripe webhook routinely never reached Sentry. `scheduleSentryFlush()` calls `Sentry.flush()` (which waits for delivery) inside Next.js's `after()` (which keeps the invocation alive long enough for that wait, without delaying the response itself). Both `logger.ts` and `sentry-helpers.ts` already do this for you - it's only direct `Sentry.*` calls that need to opt in manually.
+
+### 4. Critical Error Scenarios Monitored
 
 The system automatically captures and alerts on:
 
@@ -1242,7 +1268,7 @@ The system automatically captures and alerts on:
 - **Email delivery failures after successful purchases**
 - **Stripe API errors and timeout issues**
 
-### 4. Alert Configuration
+### 5. Alert Configuration
 
 **Development Environment**: Minimal alerts for testing
 **Production Environment**:
@@ -1251,7 +1277,7 @@ The system automatically captures and alerts on:
 - Real-time monitoring of payment inconsistencies
 - Performance tracking for payment operations
 
-### 5. Testing Error Monitoring
+### 6. Testing Error Monitoring
 
 1. **Test with payment failure cards** to verify error capture
 2. **Check Sentry dashboard** for error events

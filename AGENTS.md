@@ -137,6 +137,10 @@ Supabase's own auth emails (magic link, recovery, invite) are project settings, 
 
 `npm run auth:verify` checks that file offline and is a blocking CI step; `npm run auth:check` checks a live project (needs `SUPABASE_ACCESS_TOKEN`); `npm run auth:apply` writes it. If you change how magic-link confirmation works, change the template in the same commit — CI catches a template that no longer points at `/auth/magic-confirm`, but nothing catches a live project until someone tries to sign in. No other auth template is managed; leave the rest alone unless you are extending `scripts/configure-auth-templates.js` deliberately.
 
+## Error reporting (Sentry)
+
+Report errors through `logger.error`/the category helpers (`src/lib/logging/logger.ts`) or `src/lib/sentry-helpers.ts` — never call `Sentry.captureException`/`captureMessage` directly. See [README.md § How to Report Errors](README.md#3-how-to-report-errors-and-why-its-reliable-on-vercel) for which of the two to use, how to pass a real caught error through the logger so Sentry gets a real stack, and why bypassing both (an un-flushed direct Sentry call) can silently drop the event on Vercel (#368).
+
 ## Git workflow
 
 Both `development` and `main` are protected — neither accepts a direct push, so every change goes through a PR:

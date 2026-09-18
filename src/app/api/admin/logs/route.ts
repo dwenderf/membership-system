@@ -70,10 +70,17 @@ export async function GET(request: NextRequest) {
     // Use indexed column for sorting to improve performance
     const sortColumn = LOG_TYPE_SORT_COLUMNS[logType]
 
+    // policy_acceptance_logs only stores user_id; join the user's current name/email
+    // for display since (unlike the other log tables) it has no identifying info of
+    // its own. Other log types already store an email/identifier directly.
+    const selectColumns = logType === 'policy_acceptance_logs'
+      ? '*, users(first_name, last_name, email)'
+      : '*'
+
     // Query the appropriate log table
-    const { data: logs, error } = await adminSupabase
+    const { data: rawLogs, error } = await adminSupabase
       .from(logType)
-      .select('*')
+      .select(selectColumns)
       .order(sortColumn, { ascending: false })
       .limit(limit)
 
@@ -86,6 +93,16 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Flatten the joined user (a single-object relation via the user_id FK, not an
+    // array - the untyped admin client just can't infer that) into flat display fields.
+    const logs = logType === 'policy_acceptance_logs'
+      ? (rawLogs as unknown as Array<Record<string, unknown> & { users: { first_name: string; last_name: string; email: string } | null }>).map(({ users, ...log }) => ({
+          ...log,
+          user_name: users ? `${users.first_name} ${users.last_name}` : 'Unknown user',
+          user_email: users?.email ?? 'Unknown user'
+        }))
+      : rawLogs
 
     return NextResponse.json({
       logs,

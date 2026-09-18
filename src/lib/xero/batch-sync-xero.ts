@@ -14,6 +14,7 @@ import { getActiveTenant, validateXeroConnection } from './client'
 import { centsToCents, centsToDollars } from '../../types/currency'
 import { asHttpClientError, getXeroErrorStatus, getXeroValidationMessage, parseXeroBatchError } from './xero-errors'
 import { logger } from '@/lib/logging/logger'
+import { scheduleSentryFlush } from '@/lib/sentry-flush'
 
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
@@ -458,9 +459,10 @@ export class XeroBatchSyncManager {
     } catch (error) {
       const totalDuration = Date.now() - startTime
       logger.logXeroSync('batch-sync-error', `Error in batch sync (failed after ${totalDuration}ms)`, { totalDuration, error: error instanceof Error ? error.message : String(error) }, 'error')
-      await Sentry.captureException(error, {
+      Sentry.captureException(error, {
         tags: { component: 'xero-batch-sync', feature: 'intelligent-batching' }
       })
+      scheduleSentryFlush()
       // Mark as failed so the API route knows something went wrong
       results.connectionStatus = 'failed'
       return results
@@ -1068,7 +1070,7 @@ export class XeroBatchSyncManager {
             `Credit note synced to Xero (${xeroCreditNote.creditNoteNumber}) but database update failed: ${errorMessage}`
           )
 
-          await Sentry.captureException(dbError, {
+          Sentry.captureException(dbError, {
             level: 'error',
             tags: {
               component: 'xero-batch-sync',
@@ -1085,6 +1087,7 @@ export class XeroBatchSyncManager {
               errorMessage: errorMessage
             }
           })
+          scheduleSentryFlush()
 
           failedCount++
         }
@@ -1231,6 +1234,7 @@ export class XeroBatchSyncManager {
                 tenantId
               }
             })
+            scheduleSentryFlush()
             logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${originalRecord.id} as failed in database`, { paymentRecordId: originalRecord.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
           }
 
@@ -1290,6 +1294,7 @@ export class XeroBatchSyncManager {
               tenantId
             }
           })
+          scheduleSentryFlush()
           logger.logXeroSync(
             'mark-payment-synced-db-failure',
             `Payment ${xeroPayment.paymentID} was successfully created in Xero but the database update failed - manual intervention required`,
@@ -1338,6 +1343,7 @@ export class XeroBatchSyncManager {
                   recordsLength: paymentRecords.length
                 }
               })
+              scheduleSentryFlush()
               logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${record.id} as failed in database`, { paymentRecordId: record.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
             }
           }
@@ -1398,6 +1404,7 @@ export class XeroBatchSyncManager {
                   batchIndex: i
                 }
               })
+              scheduleSentryFlush()
               logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${originalRecord.id} as failed in database`, { paymentRecordId: originalRecord.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
             }
           } else {
@@ -1430,6 +1437,7 @@ export class XeroBatchSyncManager {
                     batchIndex: i
                   }
                 })
+                scheduleSentryFlush()
                 logger.logXeroSync('mark-payment-synced-db-failure', `Failed to mark payment ${originalRecord.id} as synced in database`, { paymentRecordId: originalRecord.id, xeroPaymentId, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
               }
             }
@@ -1463,6 +1471,7 @@ export class XeroBatchSyncManager {
                 batchErrorMessage: errorMessage
               }
             })
+            scheduleSentryFlush()
             logger.logXeroSync('mark-payment-failed-db-error', `Failed to mark payment ${record.id} as failed in database`, { paymentRecordId: record.id, error: dbError instanceof Error ? dbError.message : String(dbError) }, 'warn')
           }
         }
@@ -1603,6 +1612,7 @@ export class XeroBatchSyncManager {
           errorCode: error?.code || 'UNKNOWN'
         }
       })
+      scheduleSentryFlush()
 
       throw new Error(`Failed to mark invoice as synced in database: ${error?.message || String(error)}`)
     } else {
@@ -1665,6 +1675,7 @@ export class XeroBatchSyncManager {
           errorCode: error?.code || 'UNKNOWN'
         }
       })
+      scheduleSentryFlush()
 
       throw new Error(`Failed to mark payment as synced in database: ${error?.message || String(error)}`)
     } else {

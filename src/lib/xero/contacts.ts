@@ -4,6 +4,7 @@ import { createAdminClient } from '../supabase/admin'
 import * as Sentry from '@sentry/nextjs'
 import { getXeroValidationMessage, XeroApiError } from './xero-errors'
 import { logger } from '@/lib/logging/logger'
+import { scheduleSentryFlush } from '@/lib/sentry-flush'
 
 // Helper function to generate contact name following our naming convention
 export function generateContactName(firstName: string, lastName: string, memberId?: number | null): string {
@@ -165,7 +166,8 @@ export async function syncUserToXeroContact(
                   expectedContactName
                 }
               })
-              
+              scheduleSentryFlush()
+
               // Try to find exact name match first (should match our expected name)
               const exactNameMatch = foundContacts.find((contact: Contact) => 
                 contact.name === expectedContactName
@@ -314,8 +316,9 @@ export async function syncUserToXeroContact(
                     searchContext: 'archived-contact-resolution'
                   }
                 })
+                scheduleSentryFlush()
               }
-              
+
               // Look for any non-archived contact with same email
               const nonArchivedContact = emailSearchResponse.body.contacts.find((contact: Contact) => 
                 contact.contactID !== xeroContactId && // Exclude the archived one we just tried
@@ -537,6 +540,7 @@ export async function syncUserToXeroContact(
         Sentry.captureMessage(`Xero contact sync failure: ${errorMessage}`, 'warning')
       }
     })
+    scheduleSentryFlush()
 
     // Update sync status to failed
     const supabase = createAdminClient()
@@ -702,6 +706,7 @@ export async function syncEmailChangeToXero(
         tags: { context: 'xero_email_sync' },
         extra: { userId, oldEmail, newEmail }
       })
+      scheduleSentryFlush()
     }
 
     return { success: false, error: errorMessage }

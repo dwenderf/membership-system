@@ -118,7 +118,7 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
     }
   } catch (feeError) {
     // Fallback to 0 if there's an error retrieving the balance transaction
-    logger.logPaymentProcessing('stripe-fee-retrieval-error', 'Error retrieving Stripe fees; recording fee as $0', { paymentIntentId: paymentIntent.id, error: feeError instanceof Error ? feeError.message : String(feeError) }, 'error')
+    logger.logPaymentProcessing('stripe-fee-retrieval-error', 'Error retrieving Stripe fees; recording fee as $0', { paymentIntentId: paymentIntent.id, error: feeError instanceof Error ? feeError.message : String(feeError) }, 'error', feeError)
     return { fee: 0, chargeId: null }
   }
 }
@@ -196,7 +196,7 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
         .single()
 
       if (updateError) {
-        logger.logPaymentProcessing('membership-status-update-error', 'Error updating membership payment status', { paymentIntentId: paymentIntent.id, error: updateError.message }, 'error')
+        logger.logPaymentProcessing('membership-status-update-error', 'Error updating membership payment status', { paymentIntentId: paymentIntent.id, error: updateError.message }, 'error', updateError)
         throw new Error('Failed to update membership payment status')
       }
 
@@ -255,13 +255,13 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
             .single()
 
           if (fetchError || !existingMembership) {
-            logger.logPaymentProcessing('membership-fetch-error', 'Error fetching existing membership', { paymentIntentId: paymentIntent.id, error: fetchError?.message }, 'error')
+            logger.logPaymentProcessing('membership-fetch-error', 'Error fetching existing membership', { paymentIntentId: paymentIntent.id, error: fetchError?.message }, 'error', fetchError)
             throw new Error('Failed to fetch existing membership')
           }
 
           membershipRecord = existingMembership
         } else {
-          logger.logPaymentProcessing('membership-create-error', 'Error creating user membership', { paymentIntentId: paymentIntent.id, error: membershipError.message }, 'error')
+          logger.logPaymentProcessing('membership-create-error', 'Error creating user membership', { paymentIntentId: paymentIntent.id, error: membershipError.message }, 'error', membershipError)
           throw new Error('Failed to create membership')
         }
       } else {
@@ -289,7 +289,7 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
     .select()
 
   if (paymentUpdateError) {
-    logger.logPaymentProcessing('membership-payment-record-update-failed', 'Error updating membership payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error')
+    logger.logPaymentProcessing('membership-payment-record-update-failed', 'Error updating membership payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error', paymentUpdateError)
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     logger.logPaymentProcessing('membership-payment-record-updated', `Updated membership payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, stripeFeeAmount }, 'info')
@@ -301,7 +301,7 @@ async function handleMembershipPayment(supabase: SupabaseClient, adminSupabase: 
       .eq('id', membershipRecord.id)
 
     if (membershipUpdateError) {
-      logger.logPaymentProcessing('membership-payment-id-link-failed', 'Error updating membership record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: membershipUpdateError.message }, 'error')
+      logger.logPaymentProcessing('membership-payment-id-link-failed', 'Error updating membership record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: membershipUpdateError.message }, 'error', membershipUpdateError)
     }
   } else {
     logger.logPaymentProcessing('membership-payment-record-not-found', `No payment record found for payment intent: ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id }, 'error')
@@ -379,7 +379,7 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
         .eq('user_id', userId)
         .eq('registration_id', registrationId)
 
-      logger.logPaymentProcessing('registration-update-failed', 'Error updating user registration', { userId, registrationId, error: registrationError?.message, allRegistrationsFound: allRegistrations }, 'error')
+      logger.logPaymentProcessing('registration-update-failed', 'Error updating user registration', { userId, registrationId, error: registrationError?.message, allRegistrationsFound: allRegistrations }, 'error', registrationError)
       throw new Error('Failed to update registration')
     }
 
@@ -406,7 +406,7 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
     .select()
 
   if (paymentUpdateError) {
-    logger.logPaymentProcessing('registration-payment-record-update-failed', 'Error updating payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error')
+    logger.logPaymentProcessing('registration-payment-record-update-failed', 'Error updating payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError.message }, 'error', paymentUpdateError)
     throw new Error('Failed to update payment record')
   } else if (updatedPayment && updatedPayment.length > 0) {
     logger.logPaymentProcessing('registration-payment-record-updated', `Updated payment record to completed: ${updatedPayment[0].id} (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, stripeFeeAmount }, 'info')
@@ -418,7 +418,7 @@ async function handleRegistrationPayment(supabase: SupabaseClient, paymentIntent
       .eq('id', userRegistration.id)
 
     if (registrationUpdateError) {
-      logger.logPaymentProcessing('registration-payment-id-link-failed', 'Error updating registration record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: registrationUpdateError.message }, 'error')
+      logger.logPaymentProcessing('registration-payment-id-link-failed', 'Error updating registration record with payment_id', { paymentIntentId: paymentIntent.id, paymentId: updatedPayment[0].id, error: registrationUpdateError.message }, 'error', registrationUpdateError)
     }
   } else {
     logger.logPaymentProcessing('registration-payment-record-not-found', `No payment record found for payment intent: ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id }, 'error')
@@ -495,14 +495,14 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
       .eq('id', payment.id)
 
     if (updateError) {
-      logger.logPaymentProcessing('charge-updated-fee-update-failed', 'Error updating payment with fee', { paymentId: payment.id, error: updateError.message }, 'error')
+      logger.logPaymentProcessing('charge-updated-fee-update-failed', 'Error updating payment with fee', { paymentId: payment.id, error: updateError.message }, 'error', updateError)
       return
     }
 
     logger.logPaymentProcessing('charge-updated-fee-recorded', `Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`, { paymentId: payment.id, feeAmount }, 'info')
 
   } catch (error) {
-    logger.logPaymentProcessing('charge-updated-error', 'Error processing charge updated event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+    logger.logPaymentProcessing('charge-updated-error', 'Error processing charge updated event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
   }
 }
 
@@ -621,7 +621,7 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
           .single()
 
         if (refundError) {
-          logger.logPaymentProcessing('refund-record-create-failed', `Error creating refund record for ${stripeRefund.id}`, { stripeRefundId: stripeRefund.id, error: refundError.message }, 'error')
+          logger.logPaymentProcessing('refund-record-create-failed', `Error creating refund record for ${stripeRefund.id}`, { stripeRefundId: stripeRefund.id, error: refundError.message }, 'error', refundError)
           continue
         }
 
@@ -664,7 +664,7 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
     }
 
   } catch (error) {
-    logger.logPaymentProcessing('charge-refunded-error', 'Error processing charge refunded event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+    logger.logPaymentProcessing('charge-refunded-error', 'Error processing charge refunded event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
   }
 }
 
@@ -685,7 +685,7 @@ export async function POST(request: NextRequest) {
       dataObjectId: event.data?.object && 'id' in event.data.object ? event.data.object.id : 'unknown'
     }, 'debug')
   } catch (err) {
-    logger.logSystem('webhook-signature-verification-failed', 'Webhook signature verification failed', { error: err instanceof Error ? err.message : String(err) }, 'error')
+    logger.logSystem('webhook-signature-verification-failed', 'Webhook signature verification failed', { error: err instanceof Error ? err.message : String(err) }, 'error', err)
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
@@ -693,7 +693,7 @@ export async function POST(request: NextRequest) {
   try {
     supabase = createAdminClient()
   } catch (dbError) {
-    logger.logSystem('webhook-database-connection-failed', 'Failed to create database connection', { error: dbError instanceof Error ? dbError.message : String(dbError) }, 'error')
+    logger.logSystem('webhook-database-connection-failed', 'Failed to create database connection', { error: dbError instanceof Error ? dbError.message : String(dbError) }, 'error', dbError)
     return NextResponse.json({ error: 'Database connection failed' }, { status: 500 })
   }
 
@@ -764,7 +764,7 @@ export async function POST(request: NextRequest) {
             paymentMethodId: setupIntent.payment_method
           }, 'info')
         } catch (error) {
-          logger.logPaymentProcessing('setup-intent-succeeded-error', 'Error processing setup_intent.succeeded', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+          logger.logPaymentProcessing('setup-intent-succeeded-error', 'Error processing setup_intent.succeeded', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
           throw error
         }
         break
@@ -798,7 +798,7 @@ export async function POST(request: NextRequest) {
             setupIntentId: setupIntent.id
           }, 'info')
         } catch (error) {
-          logger.logPaymentProcessing('setup-intent-setup-failed-error', 'Error processing setup_intent.setup_failed', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+          logger.logPaymentProcessing('setup-intent-setup-failed-error', 'Error processing setup_intent.setup_failed', { userId, setupIntentId: setupIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
           throw error
         }
         break
@@ -871,7 +871,7 @@ export async function POST(request: NextRequest) {
             paymentMethodId: paymentMethod.id
           }, 'info')
         } catch (error) {
-          logger.logPaymentProcessing('payment-method-detached-error', 'Error processing payment_method.detached', { paymentMethodId: paymentMethod.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+          logger.logPaymentProcessing('payment-method-detached-error', 'Error processing payment_method.detached', { paymentMethodId: paymentMethod.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
           throw error
         }
         break
@@ -900,7 +900,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              logger.logPaymentProcessing('waitlist-payment-record-update-failed', 'Failed to update waitlist payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
+              logger.logPaymentProcessing('waitlist-payment-record-update-failed', 'Failed to update waitlist payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
             logger.logPaymentProcessing('waitlist-payment-record-updated', `Successfully updated waitlist payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
@@ -938,11 +938,11 @@ export async function POST(request: NextRequest) {
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
             } catch (processorError) {
-              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for waitlist selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for waitlist selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error', processorError)
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            logger.logPaymentProcessing('waitlist-payment-intent-succeeded-error', 'Error processing waitlist payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+            logger.logPaymentProcessing('waitlist-payment-intent-succeeded-error', 'Error processing waitlist payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
           }
 
@@ -969,7 +969,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              logger.logPaymentProcessing('alternate-payment-record-update-failed', 'Failed to update alternate payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
+              logger.logPaymentProcessing('alternate-payment-record-update-failed', 'Failed to update alternate payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
             logger.logPaymentProcessing('alternate-payment-record-updated', `Successfully updated alternate payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
@@ -1017,11 +1017,11 @@ export async function POST(request: NextRequest) {
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
             } catch (processorError) {
-              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for alternate selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for alternate selection', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error', processorError)
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            logger.logPaymentProcessing('alternate-payment-intent-succeeded-error', 'Error processing alternate payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+            logger.logPaymentProcessing('alternate-payment-intent-succeeded-error', 'Error processing alternate payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
           }
           break
@@ -1054,7 +1054,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              logger.logPaymentProcessing('early-payoff-payment-record-update-failed', 'Failed to update early payoff payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
+              logger.logPaymentProcessing('early-payoff-payment-record-update-failed', 'Failed to update early payoff payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
             logger.logPaymentProcessing('early-payoff-payment-record-updated', `Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
@@ -1069,7 +1069,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (stagedPaymentError || !stagedPayment) {
-              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error')
+              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error', stagedPaymentError)
               throw stagedPaymentError || new Error('No staged payment found')
             }
 
@@ -1090,7 +1090,7 @@ export async function POST(request: NextRequest) {
 
             logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id }, 'info')
           } catch (error) {
-            logger.logPaymentProcessing('early-payoff-webhook-error', 'Error processing early payoff webhook', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+            logger.logPaymentProcessing('early-payoff-webhook-error', 'Error processing early payoff webhook', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error // Throw to retry webhook
           }
           break
@@ -1119,7 +1119,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (paymentUpdateError || !updatedPayment) {
-              logger.logPaymentProcessing('payment-plan-payment-record-update-failed', 'Failed to update payment plan payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error')
+              logger.logPaymentProcessing('payment-plan-payment-record-update-failed', 'Failed to update payment plan payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error', paymentUpdateError)
               throw paymentUpdateError || new Error('No payment record found')
             }
             logger.logPaymentProcessing('payment-plan-payment-record-updated', `Successfully updated payment plan payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
@@ -1232,7 +1232,7 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (invoiceError || !xeroInvoice) {
-              logger.logXeroSync('payment-plan-xero-invoice-not-found', 'Failed to find xero_invoice', { paymentIntentId: paymentIntent.id, xeroInvoiceId, error: invoiceError?.message }, 'error')
+              logger.logXeroSync('payment-plan-xero-invoice-not-found', 'Failed to find xero_invoice', { paymentIntentId: paymentIntent.id, xeroInvoiceId, error: invoiceError?.message }, 'error', invoiceError)
               throw new Error('Xero invoice not found')
             }
 
@@ -1322,11 +1322,11 @@ export async function POST(request: NextRequest) {
 
               await paymentProcessor.processPaymentCompletion(completionEvent)
             } catch (processorError) {
-              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for payment plan', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
+              logger.logPaymentProcessing('payment-completion-processor-failed', 'Payment completion processor failed for payment plan', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error', processorError)
               // Don't throw - payment succeeded, this is just post-processing
             }
           } catch (error) {
-            logger.logPaymentProcessing('payment-plan-payment-intent-succeeded-error', 'Error processing payment plan payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+            logger.logPaymentProcessing('payment-plan-payment-intent-succeeded-error', 'Error processing payment plan payment_intent.succeeded', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
           }
           break
@@ -1381,7 +1381,7 @@ export async function POST(request: NextRequest) {
             // TODO: Send notification to captain and alternate about failed payment
             // This could be handled by the payment completion processor
           } catch (error) {
-            logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error')
+            logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
           }
           break
@@ -1471,7 +1471,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch (processorError) {
-          logger.logPaymentProcessing('payment-completion-processor-failed', 'Failed to trigger payment completion processor for failed payment', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error')
+          logger.logPaymentProcessing('payment-completion-processor-failed', 'Failed to trigger payment completion processor for failed payment', { paymentIntentId: paymentIntent.id, error: processorError instanceof Error ? processorError.message : String(processorError) }, 'error', processorError)
           // Don't fail the webhook - payment failure was already recorded
         }
 
@@ -1504,7 +1504,8 @@ export async function POST(request: NextRequest) {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined
       },
-      'error'
+      'error',
+      error
     )
 
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })

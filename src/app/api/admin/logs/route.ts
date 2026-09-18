@@ -11,13 +11,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
-type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs'
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs' | 'policy_acceptance_logs'
 
 // Safe display names to prevent format string vulnerabilities
 const LOG_TYPE_NAMES: Record<LogType, string> = {
   'email_logs': 'email_logs',
   'email_change_logs': 'email_change_logs',
-  'xero_sync_logs': 'xero_sync_logs'
+  'xero_sync_logs': 'xero_sync_logs',
+  'policy_acceptance_logs': 'policy_acceptance_logs'
+} as const
+
+// email_logs sorts by sent_at, policy_acceptance_logs by accepted_at; everything else by created_at
+const LOG_TYPE_SORT_COLUMNS: Record<LogType, string> = {
+  'email_logs': 'sent_at',
+  'email_change_logs': 'created_at',
+  'xero_sync_logs': 'created_at',
+  'policy_acceptance_logs': 'accepted_at'
 } as const
 
 export async function GET(request: NextRequest) {
@@ -50,7 +59,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(limitParam, 1), 1000) // Clamp between 1 and 1000
 
     // Validate logType against whitelist to prevent SQL injection
-    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs']
+    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs', 'policy_acceptance_logs']
     const logType = validLogTypes.includes(logTypeParam as LogType)
       ? (logTypeParam as LogType)
       : 'email_logs'
@@ -59,8 +68,7 @@ export async function GET(request: NextRequest) {
     const adminSupabase = createAdminClient()
 
     // Use indexed column for sorting to improve performance
-    // email_logs has an index on sent_at, others use created_at
-    const sortColumn = logType === 'email_logs' ? 'sent_at' : 'created_at'
+    const sortColumn = LOG_TYPE_SORT_COLUMNS[logType]
 
     // Query the appropriate log table
     const { data: logs, error } = await adminSupabase

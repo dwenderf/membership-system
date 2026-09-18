@@ -7,6 +7,7 @@ import { getUserSavedPaymentMethodId } from '@/lib/services/payment-method-servi
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logging/logger'
+import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 
 
 // Force import server config
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, discountCodeId } = body
+    const { registrationId, categoryId, discountCodeId, policiesAccepted } = body
 
     // Validate required fields
     if (!registrationId || !categoryId) {
@@ -61,6 +62,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    if (policiesAccepted !== true) {
+      return NextResponse.json(
+        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { status: 400 }
+      )
+    }
+
+    await logPolicyAcceptance(adminSupabase, user.id, 'waitlist_join')
 
     // Check if user has a saved payment method (required for waitlist)
     const paymentMethodId = await getUserSavedPaymentMethodId(user.id, adminSupabase)

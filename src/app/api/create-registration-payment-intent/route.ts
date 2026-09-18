@@ -10,6 +10,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { centsToCents } from '@/types/currency'
 import { Cents } from '@/types/currency'
 import { RegistrationValidationService } from '@/lib/services/registration-validation-service'
+import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 
 // Force import server config
 
@@ -63,7 +64,7 @@ async function handleFreeRegistration({
   request: NextRequest
 }) {
   let freeStagingRecord: { id: string } | null = null
-  
+
   try {
     const adminSupabase = createAdminClient()
 
@@ -546,7 +547,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan } = body
+    const { registrationId, categoryId, amount, presaleCode, discountCode, usePaymentPlan, policiesAccepted } = body
 
     // Validate payment plan eligibility if requested
     if (usePaymentPlan) {
@@ -584,6 +585,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    if (policiesAccepted !== true) {
+      const error = new Error('Policies not accepted')
+      capturePaymentError(error, paymentContext, 'warning')
+      return NextResponse.json(
+        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { status: 400 }
+      )
+    }
+
+    await logPolicyAcceptance(adminSupabase, user.id, 'registration')
 
     // Handle free registration (amount = 0) - no Stripe payment needed
     if (amount === 0) {

@@ -1,10 +1,11 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getOrCreateXeroContact } from '@/lib/xero/contacts'
 import { getActiveTenant } from '@/lib/xero/client'
 import { redirect } from 'next/navigation'
 import { logger } from '@/lib/logging/logger'
+import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 
 export async function completeOnboarding(formData: FormData) {
   try {
@@ -46,8 +47,6 @@ export async function completeOnboarding(formData: FormData) {
       is_lgbtq: isLgbtq,
       is_admin: false,
       onboarding_completed_at: new Date().toISOString(),
-      terms_accepted_at: new Date().toISOString(),
-      terms_version: 'v1.0',
     }
 
     if (existingUser) {
@@ -60,8 +59,6 @@ export async function completeOnboarding(formData: FormData) {
           is_goalie: userData.is_goalie,
           is_lgbtq: userData.is_lgbtq,
           onboarding_completed_at: userData.onboarding_completed_at,
-          terms_accepted_at: userData.terms_accepted_at,
-          terms_version: userData.terms_version,
         })
         .eq('id', user.id)
 
@@ -74,6 +71,8 @@ export async function completeOnboarding(formData: FormData) {
 
       if (error) throw error
     }
+
+    await logPolicyAcceptance(createAdminClient(), user.id, 'onboarding')
 
     // Sync user to Xero
     try {

@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Montserrat, Sora } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/contexts/ToastContext";
 import Footer from "@/components/Footer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["700", "800"],
 });
 
 const geistMono = Geist_Mono({
@@ -39,12 +45,12 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 force-light-mode`}
+        className={`${montserrat.variable} ${sora.variable} ${geistMono.variable} antialiased bg-gray-50 force-light-mode`}
         style={{ background: '#f9fafb' }}
       >
         <ToastProvider>
-          <div className="flex flex-col h-screen">
-            <div className="flex-1 overflow-auto">
+          <div className="flex flex-col min-h-screen">
+            <div className="flex-1">
               {children}
             </div>
             <Footer />

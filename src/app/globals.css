@@ -3,12 +3,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* NYCPHA brand tokens (from Brand_Guideline_LibertyTide.pdf) */
+  --color-brand-tide: #6DCCC8;        /* Liberty Tide - primary accent + CTA color */
+  --color-brand-deep-green: #296163;  /* Deep Green - secondary accent, used sparingly */
+  --color-brand-ink: #000000;         /* Jet Black - button borders/shadows/brand chrome */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-brand-tide: var(--color-brand-tide);
+  --color-brand-deep-green: var(--color-brand-deep-green);
+  --color-brand-ink: var(--color-brand-ink);
+  --font-sans: var(--font-montserrat);
+  --font-heading: var(--font-sora);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -23,7 +32,12 @@
 body {
   background-color: #f9fafb !important;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* --font-montserrat is the raw variable next/font sets on <body> in layout.tsx.
+     --font-sans (below) only exists inside the @theme inline block, which Tailwind
+     inlines directly into generated utilities like `font-sans` rather than
+     publishing as a real :root custom property - referencing it here resolves to
+     nothing and silently falls back to the browser default font. */
+  font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
 }
 
 html {

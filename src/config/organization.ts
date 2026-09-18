@@ -7,19 +7,25 @@ export const organizationConfig = {
   contact: {
     email: "finance@nycpha.org",
     phone: "",
-    website: "www.nycpha.org"
+    website: "www.nycpha.org",
+    address: {
+      line1: "99 Wall St #2158",
+      line2: "New York, NY 10005"
+    }
   },
   branding: {
     // Future logo paths can be added here
     logo: {
       main: "/images/logo.png",           // Main logo
       small: "/images/logo-small.png",    // Small logo for navigation
-      icon: "/images/icon.png"            // Favicon/app icon
+      icon: "/images/icon.png",           // Favicon/app icon
+      crest: "/images/nycpha-logo-crest.svg" // Full crest logo, e.g. footer
     },
     colors: {
-      // Future brand colors can be added here
-      primary: "#3B82F6",    // Blue
-      secondary: "#10B981"   // Green
+      // From Brand_Guideline_LibertyTide.pdf. Not wired into Tailwind — see
+      // the brand tokens in src/app/globals.css, which are the source of truth.
+      primary: "#6DCCC8",    // Liberty Tide
+      secondary: "#296163"   // Deep Green
     }
   },
   features: {

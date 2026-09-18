@@ -174,7 +174,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           </Link>
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-heading font-extrabold tracking-[-0.06em] text-gray-900">
                 Invoice #{invoice.number || 'Pending'}
               </h1>
               <p className="text-gray-600 mt-1">

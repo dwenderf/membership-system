@@ -551,7 +551,8 @@ export default function AccountPage() {
 
               <div className="mt-3 pt-3 border-t border-blue-200">
                 <p className="text-sm text-blue-700">
-                  To delete your account and permanently remove all of your personal information,{' '}
+                  To delete your account and remove your personal details (anonymized payment and
+                  registration history is kept for financial records),{' '}
                   <button
                     type="button"
                     onClick={() => setShowDeleteAccount(true)}

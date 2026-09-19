@@ -85,13 +85,18 @@ export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
               </h3>
               <p className="text-sm text-red-700 mb-4">
                 This action will <strong>permanently delete your account</strong> and cannot be undone.
-                All your personal information will be anonymized and you will lose access to:
+                Your personal details (name, email, phone, and other profile information) will be
+                removed, and you will lose access to:
               </p>
               <ul className="text-sm text-red-700 mb-6 list-disc list-inside space-y-1">
                 <li>All current memberships and registrations</li>
                 <li>Account history and preferences</li>
                 <li>Access to the hockey association system</li>
               </ul>
+              <p className="text-sm text-red-700 mb-6">
+                Your payment and registration history is kept in anonymized form for financial
+                record-keeping.
+              </p>
               
               <div className="mb-4">
                 <label htmlFor="confirmation" className="block text-sm font-medium text-red-800 mb-2">
@@ -146,9 +151,9 @@ export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
                 ⚠️ Delete Your Account
               </h3>
               <p className="text-sm text-yellow-700 mb-4">
-                This will permanently delete your account and all associated data.
+                This will permanently delete your account and remove your personal details.
               </p>
-              
+
               <div className="mb-4">
                 <p className="text-sm font-medium text-yellow-800 mb-2">You will lose access to:</p>
                 <ul className="text-sm text-yellow-700 list-disc list-inside space-y-1">
@@ -160,7 +165,12 @@ export default function DeleteAccountSection({}: DeleteAccountSectionProps) {
               </div>
 
               <p className="text-sm text-yellow-700 mb-6">
-                <strong>This action cannot be undone.</strong> If you want to use this system again in the future, 
+                Your payment and registration history is kept in anonymized form for financial
+                record-keeping; everything else identifying you is removed.
+              </p>
+
+              <p className="text-sm text-yellow-700 mb-6">
+                <strong>This action cannot be undone.</strong> If you want to use this system again in the future,
                 you&apos;ll need to create a completely new account.
               </p>
 

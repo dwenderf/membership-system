@@ -52,14 +52,31 @@ export async function proxy(request: NextRequest) {
     '/', // home page
   ]
 
-  // Check onboarding for all authenticated users except whitelisted pages
-  if (user && !allowedWithoutOnboarding.some(path => request.nextUrl.pathname.startsWith(path))) {
+  // `startsWith` is deliberate for '/auth/login' etc. (so nested paths are covered too),
+  // but '/' must match exactly - `startsWith('/')` is true for every path and would
+  // disable this whole check.
+  const isAllowedWithoutOnboarding = allowedWithoutOnboarding.some(path =>
+    path === '/' ? request.nextUrl.pathname === '/' : request.nextUrl.pathname.startsWith(path)
+  )
+
+  // Check onboarding/deletion status for all authenticated users except whitelisted pages
+  if (user && !isAllowedWithoutOnboarding) {
     const { data: userProfile } = await supabase
       .from('users')
-      .select('onboarding_completed_at')
+      .select('onboarding_completed_at, deleted_at')
       .eq('id', user.id)
       .single()
-    
+
+    // Defense in depth: public.users.deleted_at is set only once the linked
+    // auth.users record has already been deleted (see src/app/api/delete-account/route.ts),
+    // so a live session should never see it set here. If one ever does - stale
+    // auth data, a bug, manual DB edits - force it out rather than trusting the
+    // session. See issue #295.
+    if (userProfile?.deleted_at) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/auth/login', request.url))
+    }
+
     // If user doesn't exist in our users table OR hasn't completed onboarding, redirect to onboarding
     if (!userProfile || !userProfile.onboarding_completed_at) {
       return NextResponse.redirect(new URL('/onboarding', request.url))

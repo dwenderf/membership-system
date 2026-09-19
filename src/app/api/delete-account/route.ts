@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { emailService } from '@/lib/email'
 import { getStripe } from '@/lib/stripe/server-client'
+import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { captureCriticalAccountDeletionError, captureAccountDeletionWarning } from '@/lib/sentry-helpers'
 import { logger } from '@/lib/logging/logger'
 
@@ -102,31 +103,19 @@ export async function POST() {
       return NextResponse.json({ error: 'Account already deleted' }, { status: 400 })
     }
 
-    // Check for active payment plans with outstanding balance
-    const { data: activePaymentPlans, error: paymentPlansError } = await supabase
-      .from('payment_plans')
-      .select('id, total_amount, paid_amount')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
+    // Check for an outstanding payment plan balance. This used to query a
+    // `payment_plans` table that doesn't exist in this schema (renamed/replaced
+    // by the Xero-invoice-based tracking below), so the block never actually
+    // triggered - fixed by reusing the same canonical check remove-payment-method
+    // already relies on.
+    const hasOutstandingBalance = await PaymentPlanService.hasOutstandingBalance(user.id)
 
-    if (paymentPlansError) {
-      // Sentry reporting is handled explicitly below via captureAccountDeletionWarning;
-      // use 'warn' here (not 'error') to avoid double-reporting the same event to Sentry.
-      logger.logSystem('account-deletion-payment-plans-check-error', 'Error checking payment plans during account deletion', { userId: user.id, error: paymentPlansError.message }, 'warn')
-      captureAccountDeletionWarning(
-        'Failed to check payment plans during deletion',
-        deletionErrorContext(deletionContext, 'payment_plan_check', paymentPlansError)
-      )
-      // Continue with deletion despite error
-    } else if (activePaymentPlans && activePaymentPlans.length > 0) {
-      // Calculate total outstanding balance
-      const totalOutstanding = activePaymentPlans.reduce((sum, plan) => {
-        return sum + (plan.total_amount - plan.paid_amount)
-      }, 0)
+    if (hasOutstandingBalance) {
+      const totalOutstanding = await PaymentPlanService.getTotalOutstandingBalance(user.id)
 
       if (totalOutstanding > 0) {
         return NextResponse.json({
-          error: `Cannot delete account with outstanding payment plan balance. You have ${activePaymentPlans.length} active payment plan(s) with a total outstanding balance of $${(totalOutstanding / 100).toFixed(2)}. Please pay off your payment plans before deleting your account, or contact ${PRIVACY_EMAIL} for assistance.`,
+          error: `Cannot delete account with an outstanding payment plan balance of $${(totalOutstanding / 100).toFixed(2)}. Please pay off your payment plan before deleting your account, or contact ${PRIVACY_EMAIL} for assistance.`,
           hasActivePaymentPlans: true,
           outstandingBalance: totalOutstanding
         }, { status: 400 })

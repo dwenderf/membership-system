@@ -7,6 +7,7 @@ import { POST } from '@/app/api/delete-account/route'
 jest.mock('@/lib/supabase/server')
 jest.mock('@/lib/email')
 jest.mock('@/lib/stripe/server-client')
+jest.mock('@/lib/services/payment-plan-service')
 jest.mock('@/lib/sentry-helpers')
 jest.mock('@/lib/logging/logger')
 
@@ -34,6 +35,12 @@ const mockStripe = {
 }
 jest.requireMock('@/lib/stripe/server-client').getStripe = jest.fn(() => mockStripe)
 
+const mockPaymentPlanService = {
+  hasOutstandingBalance: jest.fn().mockResolvedValue(false),
+  getTotalOutstandingBalance: jest.fn().mockResolvedValue(0),
+}
+jest.requireMock('@/lib/services/payment-plan-service').PaymentPlanService = mockPaymentPlanService
+
 interface UserProfile {
   email: string
   first_name: string
@@ -42,17 +49,9 @@ interface UserProfile {
   stripe_customer_id: string | null
 }
 
-interface PaymentPlan {
-  id: string
-  total_amount: number
-  paid_amount: number
-}
-
 let authUser: { id: string; email: string } | null
 let userProfile: UserProfile | null
 let profileError: { message: string } | null
-let paymentPlans: PaymentPlan[]
-let paymentPlansError: { message: string } | null
 let deleteUserError: { message: string } | null
 let usersUpdateError: { message: string } | null
 let surveyDeleteError: { message: string } | null
@@ -76,15 +75,6 @@ const mockSupabase = {
         select: () => ({
           eq: () => ({
             single: () => Promise.resolve({ data: userProfile, error: profileError }),
-          }),
-        }),
-      }
-    }
-    if (table === 'payment_plans') {
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => Promise.resolve({ data: paymentPlans, error: paymentPlansError }),
           }),
         }),
       }
@@ -146,8 +136,6 @@ describe('/api/delete-account', () => {
       stripe_customer_id: null,
     }
     profileError = null
-    paymentPlans = []
-    paymentPlansError = null
     deleteUserError = null
     usersUpdateError = null
     surveyDeleteError = null
@@ -188,7 +176,8 @@ describe('/api/delete-account', () => {
   })
 
   it('blocks deletion when a payment plan has an outstanding balance', async () => {
-    paymentPlans = [{ id: 'pp-1', total_amount: 10000, paid_amount: 4000 }]
+    mockPaymentPlanService.hasOutstandingBalance.mockResolvedValueOnce(true)
+    mockPaymentPlanService.getTotalOutstandingBalance.mockResolvedValueOnce(6000)
 
     const response = await POST()
     const body = await response.json()

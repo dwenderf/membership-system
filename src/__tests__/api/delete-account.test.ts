@@ -224,12 +224,14 @@ describe('/api/delete-account', () => {
     expect(authDeleteIndex).toBeGreaterThanOrEqual(0)
     expect(anonymizeIndex).toBeGreaterThan(authDeleteIndex)
 
-    // Full field reset, not just name/email/phone.
+    // Full field reset, not just name/email/phone - is_admin included so a
+    // deleted admin's row doesn't keep telling anyone it used to be one.
     expect(usersUpdatePayload).toMatchObject({
       first_name: 'Deleted',
       last_name: 'User',
       email: 'deleted_user_user-1@deleted.local',
       phone: null,
+      is_admin: false,
       is_lgbtq: null,
       is_goalie: false,
       tags: [],

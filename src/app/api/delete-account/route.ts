@@ -245,6 +245,7 @@ export async function POST() {
         last_name: 'User',
         email: `deleted_user_${user.id}@deleted.local`,
         phone: null,
+        is_admin: false,
         is_lgbtq: null,
         is_goalie: false,
         tags: [],

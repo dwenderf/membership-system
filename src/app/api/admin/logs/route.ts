@@ -5,28 +5,33 @@
  * - email_logs: Email sending history
  * - email_change_logs: Email change audit trail
  * - xero_sync_logs: Xero synchronization logs
+ * - policy_acceptance_logs: Policy bundle acceptance history
+ * - account_deletion_logs: Completed account deletions (not a real table - see below)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
-type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs' | 'policy_acceptance_logs'
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs' | 'policy_acceptance_logs' | 'account_deletion_logs'
 
 // Safe display names to prevent format string vulnerabilities
 const LOG_TYPE_NAMES: Record<LogType, string> = {
   'email_logs': 'email_logs',
   'email_change_logs': 'email_change_logs',
   'xero_sync_logs': 'xero_sync_logs',
-  'policy_acceptance_logs': 'policy_acceptance_logs'
+  'policy_acceptance_logs': 'policy_acceptance_logs',
+  'account_deletion_logs': 'account_deletion_logs'
 } as const
 
-// email_logs sorts by sent_at, policy_acceptance_logs by accepted_at; everything else by created_at
+// email_logs sorts by sent_at, policy_acceptance_logs/account_deletion_logs by
+// [accepted_at]/[deleted_at]; everything else by created_at
 const LOG_TYPE_SORT_COLUMNS: Record<LogType, string> = {
   'email_logs': 'sent_at',
   'email_change_logs': 'created_at',
   'xero_sync_logs': 'created_at',
-  'policy_acceptance_logs': 'accepted_at'
+  'policy_acceptance_logs': 'accepted_at',
+  'account_deletion_logs': 'deleted_at'
 } as const
 
 export async function GET(request: NextRequest) {
@@ -59,7 +64,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(limitParam, 1), 1000) // Clamp between 1 and 1000
 
     // Validate logType against whitelist to prevent SQL injection
-    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs', 'policy_acceptance_logs']
+    const validLogTypes: LogType[] = ['email_logs', 'email_change_logs', 'xero_sync_logs', 'policy_acceptance_logs', 'account_deletion_logs']
     const logType = validLogTypes.includes(logTypeParam as LogType)
       ? (logTypeParam as LogType)
       : 'email_logs'
@@ -75,12 +80,24 @@ export async function GET(request: NextRequest) {
     // its own. Other log types already store an email/identifier directly.
     const selectColumns = logType === 'policy_acceptance_logs'
       ? '*, users(first_name, last_name, email)'
+      : logType === 'account_deletion_logs'
+      ? 'user_id:id, deleted_at'
       : '*'
 
-    // Query the appropriate log table
-    const { data: rawLogs, error } = await adminSupabase
-      .from(logType)
+    // account_deletion_logs isn't its own table - it's just public.users filtered to
+    // deleted rows (id/deleted_at only; a deleted user's name/email are already
+    // anonymized garbage by that point, see src/app/api/delete-account/route.ts, so
+    // there's nothing else worth showing here, and no separate log to drift out of
+    // sync with the real deletion).
+    let query = adminSupabase
+      .from(logType === 'account_deletion_logs' ? 'users' : logType)
       .select(selectColumns)
+
+    if (logType === 'account_deletion_logs') {
+      query = query.not('deleted_at', 'is', null)
+    }
+
+    const { data: rawLogs, error } = await query
       .order(sortColumn, { ascending: false })
       .limit(limit)
 

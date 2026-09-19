@@ -178,9 +178,9 @@ export async function POST() {
       }
     }
 
-    // Step 2: Delete the Loops contact
+    // Step 2: Delete the Loops contact (identified by email - see deleteLoopsContact)
     try {
-      await emailService.deleteLoopsContact(user.id)
+      await emailService.deleteLoopsContact(originalEmail)
     } catch (loopsError) {
       logger.logSystem('account-deletion-loops-cleanup-failed', 'Failed to delete Loops contact during account deletion', { userId: user.id, error: loopsError instanceof Error ? loopsError.message : String(loopsError) }, 'warn')
       captureCriticalAccountDeletionError(

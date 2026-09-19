@@ -216,7 +216,7 @@ describe('/api/delete-account', () => {
     expect(mockStripe.customers.del).toHaveBeenCalledWith('cus_123')
 
     // Loops contact removed.
-    expect(mockEmailService.deleteLoopsContact).toHaveBeenCalledWith('user-1')
+    expect(mockEmailService.deleteLoopsContact).toHaveBeenCalledWith('real@example.com')
 
     // The critical ordering fix: auth.users is deleted before public.users is touched.
     const authDeleteIndex = callOrder.indexOf('auth_delete')

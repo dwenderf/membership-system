@@ -1,4 +1,4 @@
-import { LoopsClient, EventProperties, TransactionalVariables } from 'loops'
+import { LoopsClient, EventProperties, TransactionalVariables, APIError } from 'loops'
 import { formatDate } from '@/lib/date-utils'
 
 import { createAdminClient } from '@/lib/supabase/server'
@@ -357,10 +357,32 @@ class EmailService {
       data: {
         userName: options.userName,
         deletedAt: formatDate(new Date(options.deletedAt)),
-        supportEmail: options.supportEmail || 'support@hockeyassociation.org',
-        loginUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/login`
+        supportEmail: options.supportEmail || 'privacy@nycpha.org',
+        loginUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/login`,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
+  }
+
+  /**
+   * Delete a contact from Loops during account deletion. Contacts here are
+   * only ever created implicitly (via sendTransactionalEmail/sendEvent) and
+   * are identified by email - this app never sets a userId property on them -
+   * so deletion has to key on email too, or it silently 404s and never
+   * deletes anything. Treats a contact that's already gone (e.g. a retried
+   * deletion) as success.
+   */
+  async deleteLoopsContact(email: string): Promise<void> {
+    if (!this.loops) return
+
+    try {
+      await this.loops.deleteContact({ email })
+    } catch (error) {
+      if (error instanceof APIError && error.statusCode === 404) {
+        return
+      }
+      throw error
+    }
   }
 
   /**

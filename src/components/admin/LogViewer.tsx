@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
-type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs' | 'policy_acceptance_logs'
+type LogType = 'email_logs' | 'email_change_logs' | 'xero_sync_logs' | 'policy_acceptance_logs' | 'account_deletion_logs'
 
 interface LogFilters {
   logType: LogType
@@ -96,7 +96,8 @@ export default function LogViewer() {
       'email_logs': '📧 Emails Sent',
       'email_change_logs': '✉️ Email Changes',
       'xero_sync_logs': '📊 Xero Sync',
-      'policy_acceptance_logs': '📝 Policy Acceptances'
+      'policy_acceptance_logs': '📝 Policy Acceptances',
+      'account_deletion_logs': '🗑️ Deleted Accounts'
     }
     return names[logType]
   }
@@ -220,6 +221,7 @@ export default function LogViewer() {
               <option value="email_change_logs">✉️ Email Changes</option>
               <option value="xero_sync_logs">📊 Xero Sync</option>
               <option value="policy_acceptance_logs">📝 Policy Acceptances</option>
+              <option value="account_deletion_logs">🗑️ Deleted Accounts</option>
             </select>
           </div>
 

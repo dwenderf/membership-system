@@ -27,6 +27,7 @@ interface Game {
   registrationId: string
   gameDescription: string
   gameDate: string | null
+  gameEndTime?: string | null
   createdAt: string
   selectedCount?: number
   availableCount?: number
@@ -93,6 +94,24 @@ export default function RegistrationAlternatesSection({
         ? { ...game, selectedCount: selectedCount, availableCount: availableCount }
         : game
     ))
+  }
+
+  const handleGameUpdated = (gameId: string, updates: { gameDate: string | null; gameEndTime: string | null }) => {
+    setGames(prev => {
+      const updated = prev.map(game =>
+        game.id === gameId
+          ? { ...game, gameDate: updates.gameDate, gameEndTime: updates.gameEndTime }
+          : game
+      )
+
+      // Re-sort by gameDate (descending, like the API), nulls last
+      return updated.sort((a, b) => {
+        if (!a.gameDate && !b.gameDate) return 0
+        if (!a.gameDate) return 1
+        if (!b.gameDate) return -1
+        return new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime()
+      })
+    })
   }
 
   const getGameDateTag = (gameDate: string | null) => {
@@ -208,6 +227,7 @@ export default function RegistrationAlternatesSection({
                 dateTag={getGameDateTag(game.gameDate)}
                 userAccess={userAccess}
                 onCountsUpdated={handleCountsUpdated}
+                onGameUpdated={handleGameUpdated}
               />
             ))}
           </div>

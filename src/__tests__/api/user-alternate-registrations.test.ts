@@ -4,7 +4,6 @@ import { NextRequest } from 'next/server'
 
 // Mock dependencies
 jest.mock('@/lib/supabase/server')
-jest.mock('@/lib/services/setup-intent-service')
 jest.mock('@/lib/logging/logger')
 
 type MockSupabaseClient = {
@@ -33,10 +32,6 @@ const mockSupabase: MockSupabaseClient = {
   }))
 }
 
-const mockSetupIntentService = {
-  createSetupIntent: jest.fn()
-}
-
 const mockLogger = {
   logPaymentProcessing: jest.fn(),
   logSystem: jest.fn()
@@ -45,7 +40,6 @@ const mockLogger = {
 // Mock the modules
 jest.requireMock('@/lib/supabase/server').createClient = jest.fn(() => Promise.resolve(mockSupabase))
 jest.requireMock('@/lib/supabase/server').createAdminClient = jest.fn(() => mockSupabase)
-jest.requireMock('@/lib/services/setup-intent-service').setupIntentService = mockSetupIntentService
 jest.requireMock('@/lib/logging/logger').logger = mockLogger
 
 describe('/api/user-alternate-registrations', () => {

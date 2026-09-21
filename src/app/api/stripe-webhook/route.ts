@@ -109,7 +109,11 @@ async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent
         logger.logPaymentProcessing('stripe-fee-retrieved', `Retrieved actual Stripe fee from charge balance transaction: $${(stripeFeeAmount / 100).toFixed(2)} for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id, chargeId, stripeFeeAmount }, 'debug')
         return { fee: stripeFeeAmount, chargeId: chargeId as string }
       } else {
-        logger.logPaymentProcessing('stripe-fee-unavailable', `Fee not available in balance transaction, setting fee to 0 for payment ${paymentIntent.id}`, { paymentIntentId: paymentIntent.id, chargeId }, 'warn')
+        // Expected, not an error: Stripe attaches the balance transaction to the charge
+        // asynchronously, so it's routinely still missing at payment_intent.succeeded time.
+        // The charge.updated handler below (handleChargeUpdated) corrects stripe_fee_amount
+        // once the balance transaction settles, so this is a temporary $0 placeholder.
+        logger.logPaymentProcessing('stripe-fee-pending', `Balance transaction not yet settled, temporarily recording fee as $0 for payment ${paymentIntent.id} (will self-correct via charge.updated)`, { paymentIntentId: paymentIntent.id, chargeId }, 'debug')
         return { fee: 0, chargeId: chargeId as string }
       }
     } else {
@@ -500,6 +504,26 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
     }
 
     logger.logPaymentProcessing('charge-updated-fee-recorded', `Updated payment ${payment.id} with fee: $${(feeAmount / 100).toFixed(2)}`, { paymentId: payment.id, feeAmount }, 'info')
+
+    // Also correct the Xero staging record, which is created with stripe_fee_amount
+    // hardcoded to 0 (the fee isn't known until the balance transaction settles here).
+    // Scoped to payment_type='full' since installment rows can share the checkout's
+    // original payment_intent_id in staging_metadata until each is individually charged,
+    // and matching on it here would risk stamping a fee onto an uncharged installment.
+    const { error: xeroPaymentUpdateError } = await supabase
+      .from('xero_payments')
+      .update({
+        stripe_fee_amount: feeAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('staging_metadata->>stripe_payment_intent_id', paymentIntentId)
+      .eq('payment_type', 'full')
+
+    if (xeroPaymentUpdateError) {
+      logger.logPaymentProcessing('charge-updated-xero-fee-update-failed', 'Error updating Xero payment staging record with fee', { paymentIntentId, error: xeroPaymentUpdateError.message }, 'warn')
+    } else {
+      logger.logPaymentProcessing('charge-updated-xero-fee-recorded', `Updated Xero payment staging record with fee: $${(feeAmount / 100).toFixed(2)}`, { paymentIntentId, feeAmount }, 'info')
+    }
 
   } catch (error) {
     logger.logPaymentProcessing('charge-updated-error', 'Error processing charge updated event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)

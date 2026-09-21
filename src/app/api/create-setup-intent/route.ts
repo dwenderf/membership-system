@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         logger.logPaymentProcessing('setup-intent-customer-id-store-failed', 'Failed to store Stripe customer ID', { userId: user.id, customerId, error: updateError.message }, 'error')
+        throw new Error(`Failed to store Stripe customer ID: ${updateError.message}`)
       }
     }
 

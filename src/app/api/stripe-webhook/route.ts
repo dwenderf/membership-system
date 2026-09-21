@@ -768,13 +768,18 @@ export async function POST(request: NextRequest) {
 
         try {
           // Update user record with payment method
+          const customerId = typeof setupIntent.customer === 'string'
+            ? setupIntent.customer
+            : setupIntent.customer?.id
+
           const { error: updateError } = await supabase
             .from('users')
             .update({
               stripe_payment_method_id: setupIntent.payment_method as string,
               stripe_setup_intent_id: setupIntent.id,
               setup_intent_status: 'succeeded',
-              payment_method_updated_at: new Date().toISOString()
+              payment_method_updated_at: new Date().toISOString(),
+              ...(customerId && { stripe_customer_id: customerId })
             })
             .eq('id', userId)
 

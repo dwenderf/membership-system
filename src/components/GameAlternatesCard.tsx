@@ -1,22 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { formatDate, formatTime } from '@/lib/date-utils'
+import { formatDate, formatTime, convertToNYTimezone, convertFromUTCToNYDateTimeLocal } from '@/lib/date-utils'
 
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import { useToast } from '@/contexts/ToastContext'
 import type { AlternateSelectionResponse } from '@/components/AlternateSelectionInterface'
 import { logger } from '@/lib/logging/logger'
+import EventDateTimeInput from '@/components/EventDateTimeInput'
 
 interface Game {
   id: string
   registrationId: string
   gameDescription: string
   gameDate: string | null
+  gameEndTime?: string | null
   createdAt: string
   selectedCount?: number
   availableCount?: number
 }
+
+const DEFAULT_GAME_DURATION_MINUTES = '90'
 
 interface Registration {
   id: string
@@ -57,13 +61,15 @@ interface GameAlternatesCardProps {
   dateTag: { text: string; isUrgent: boolean } | null
   userAccess: AlternatesAccessResult
   onCountsUpdated?: (gameId: string, selectedCount: number, availableCount: number) => void
+  onGameUpdated?: (gameId: string, updates: { gameDate: string | null; gameEndTime: string | null }) => void
 }
 
 export default function GameAlternatesCard({
   game,
   dateTag,
   userAccess,
-  onCountsUpdated
+  onCountsUpdated,
+  onGameUpdated
 }: GameAlternatesCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [alternates, setAlternates] = useState<Alternate[]>([])
@@ -122,6 +128,81 @@ export default function GameAlternatesCard({
   const handleDescriptionKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleDescriptionSave()
     else if (e.key === 'Escape') handleDescriptionCancel()
+  }
+
+  const getInitialDuration = () => {
+    if (game.gameDate && game.gameEndTime) {
+      const minutes = Math.round(
+        (new Date(game.gameEndTime).getTime() - new Date(game.gameDate).getTime()) / 60000
+      )
+      if (minutes > 0) return String(minutes)
+    }
+    return DEFAULT_GAME_DURATION_MINUTES
+  }
+
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false)
+  const [displayGameDate, setDisplayGameDate] = useState(game.gameDate)
+  const [editStartDate, setEditStartDate] = useState(
+    game.gameDate ? convertFromUTCToNYDateTimeLocal(game.gameDate) : ''
+  )
+  const [editDurationMinutes, setEditDurationMinutes] = useState(getInitialDuration())
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [scheduleError, setScheduleError] = useState('')
+
+  const handleScheduleEditStart = () => {
+    setEditStartDate(displayGameDate ? convertFromUTCToNYDateTimeLocal(displayGameDate) : '')
+    setEditDurationMinutes(getInitialDuration())
+    setScheduleError('')
+    setIsEditingSchedule(true)
+  }
+
+  const handleScheduleCancel = () => {
+    setIsEditingSchedule(false)
+    setScheduleError('')
+  }
+
+  const handleScheduleSave = async () => {
+    if (!editStartDate) {
+      setScheduleError('Game date and time is required')
+      return
+    }
+
+    if (!editDurationMinutes) {
+      setScheduleError('Duration is required')
+      return
+    }
+
+    setSavingSchedule(true)
+    setScheduleError('')
+
+    try {
+      const gameDateUTC = convertToNYTimezone(editStartDate)
+      const startDate = new Date(gameDateUTC)
+      const endDate = new Date(startDate.getTime() + parseInt(editDurationMinutes) * 60 * 1000)
+      const gameEndTimeUTC = endDate.toISOString()
+
+      const response = await fetch(`/api/alternate-registrations/${game.id}/schedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameDate: gameDateUTC, gameEndTime: gameEndTimeUTC })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to update game date and time')
+      }
+
+      setDisplayGameDate(gameDateUTC)
+      setIsEditingSchedule(false)
+      showSuccess('Game date and time updated')
+      onGameUpdated?.(game.id, { gameDate: gameDateUTC, gameEndTime: gameEndTimeUTC })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred'
+      setScheduleError(message)
+      showError('Failed to update date and time', message)
+    } finally {
+      setSavingSchedule(false)
+    }
   }
 
   const fetchAlternates = useCallback(async () => {
@@ -317,12 +398,58 @@ export default function GameAlternatesCard({
                 </>
               )}
             </div>
-            {game.gameDate ? (
-              <p className="text-sm text-gray-600 mt-1">
-                {formatGameDateTime(game.gameDate)}
-              </p>
+            {isEditingSchedule ? (
+              <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                <EventDateTimeInput
+                  startDate={editStartDate}
+                  durationMinutes={editDurationMinutes}
+                  onStartDateChange={setEditStartDate}
+                  onDurationChange={setEditDurationMinutes}
+                  registrationType="game"
+                  required={true}
+                  disabled={savingSchedule}
+                />
+                {scheduleError && (
+                  <p className="mt-1 text-xs text-red-600">{scheduleError}</p>
+                )}
+                <div className="flex items-center space-x-2 mt-2">
+                  <button
+                    onClick={handleScheduleSave}
+                    disabled={savingSchedule || !editStartDate || !editDurationMinutes}
+                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {savingSchedule ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={handleScheduleCancel}
+                    disabled={savingSchedule}
+                    className="text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500 mt-1">No date specified</p>
+              <div className="flex items-center space-x-2 mt-1">
+                {displayGameDate ? (
+                  <p className="text-sm text-gray-600">
+                    {formatGameDateTime(displayGameDate)}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500">No date specified</p>
+                )}
+                {(userAccess.isAdmin || userAccess.isCaptain) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleScheduleEditStart() }}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                    title="Edit game date and time"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             )}
             <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
               <span>{availableCount} available</span>

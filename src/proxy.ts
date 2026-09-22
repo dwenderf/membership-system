@@ -1,5 +1,10 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  isRefreshTokenAlreadyUsedError,
+  REFRESH_RETRY_GUARD_COOKIE,
+  REFRESH_RETRY_GUARD_MAX_AGE_SECONDS,
+} from '@/lib/supabase/refresh-token-race'
 
 export async function proxy(request: NextRequest) {
   // Handle CORS preflight requests early
@@ -42,7 +47,32 @@ export async function proxy(request: NextRequest) {
   )
 
   // This will refresh session if expired - required for Server Components
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  // A refresh-token rotation race (see refresh-token-race.ts) isn't a real
+  // logout: give this navigation one soft retry against the browser's
+  // current cookies before treating it as unauthenticated.
+  if (error && isRefreshTokenAlreadyUsedError(error)) {
+    const alreadyRetried = request.cookies.get(REFRESH_RETRY_GUARD_COOKIE)
+
+    if (!alreadyRetried) {
+      const retryResponse = NextResponse.redirect(request.url)
+      retryResponse.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '1', {
+        maxAge: REFRESH_RETRY_GUARD_MAX_AGE_SECONDS,
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+      })
+      return retryResponse
+    }
+
+    // Retried once and still racing - fall through as unauthenticated
+    // (matches today's behavior) and clear the guard so it doesn't linger.
+    response.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '', { maxAge: 0, path: '/' })
+  } else if (request.cookies.get(REFRESH_RETRY_GUARD_COOKIE)) {
+    // Succeeded (on retry or otherwise) - clear a leftover guard cookie.
+    response.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '', { maxAge: 0, path: '/' })
+  }
 
   // Pages that don't require onboarding (whitelist approach for security)
   const allowedWithoutOnboarding = [

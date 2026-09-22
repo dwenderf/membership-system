@@ -21,7 +21,11 @@ export async function register() {
       // Initialize Sentry
       Sentry.init({
         dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-        environment: process.env.NODE_ENV,
+        // NODE_ENV is always "production" for a `next build` output, on both
+        // Preview and Production Vercel deployments - it can't distinguish them.
+        // VERCEL_ENV ("production" | "preview" | "development") can; it's unset
+        // outside Vercel, where NODE_ENV is the right fallback.
+        environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
         tracesSampleRate: 1.0,
         
         // Enhanced error context and user information
@@ -88,6 +92,7 @@ export async function register() {
     try {
       Sentry.init({
         dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+        environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
         tracesSampleRate: 1.0,
 
         // Error filtering

@@ -2,7 +2,10 @@ import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  environment: process.env.NODE_ENV,
+  // NODE_ENV is always "production" in a client build, on both Preview and
+  // Production Vercel deployments - it can't distinguish them. Vercel exposes
+  // the real distinction to the browser only via the NEXT_PUBLIC_ prefix.
+  environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV,
   tracesSampleRate: 1.0,
   
   // Enhanced error filtering for development

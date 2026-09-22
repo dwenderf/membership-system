@@ -49,29 +49,35 @@ export async function proxy(request: NextRequest) {
   // This will refresh session if expired - required for Server Components
   const { data: { user }, error } = await supabase.auth.getUser()
 
+  const hasRetryGuard = Boolean(request.cookies.get(REFRESH_RETRY_GUARD_COOKIE))
+  const isRefreshRace = Boolean(error) && isRefreshTokenAlreadyUsedError(error)
+
   // A refresh-token rotation race (see refresh-token-race.ts) isn't a real
   // logout: give this navigation one soft retry against the browser's
   // current cookies before treating it as unauthenticated.
-  if (error && isRefreshTokenAlreadyUsedError(error)) {
-    const alreadyRetried = request.cookies.get(REFRESH_RETRY_GUARD_COOKIE)
+  if (isRefreshRace && !hasRetryGuard) {
+    const retryResponse = NextResponse.redirect(request.url)
+    retryResponse.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '1', {
+      maxAge: REFRESH_RETRY_GUARD_MAX_AGE_SECONDS,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+    })
+    return retryResponse
+  }
 
-    if (!alreadyRetried) {
-      const retryResponse = NextResponse.redirect(request.url)
-      retryResponse.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '1', {
-        maxAge: REFRESH_RETRY_GUARD_MAX_AGE_SECONDS,
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-      })
-      return retryResponse
+  // Every response from here on should shed a guard cookie the browser is
+  // still carrying - either the retry raced again and failed, or there was
+  // nothing to retry and a leftover cookie from an earlier retry is still
+  // within its TTL. Every return site below goes through this so the clear
+  // isn't lost when a route (e.g. /admin, /dashboard) returns a fresh
+  // NextResponse.redirect() instead of the mutable `response` above.
+  const clearGuardCookie = (res: NextResponse): NextResponse => {
+    if (hasRetryGuard) {
+      res.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '', { maxAge: 0, path: '/' })
     }
-
-    // Retried once and still racing - fall through as unauthenticated
-    // (matches today's behavior) and clear the guard so it doesn't linger.
-    response.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '', { maxAge: 0, path: '/' })
-  } else if (request.cookies.get(REFRESH_RETRY_GUARD_COOKIE)) {
-    // Succeeded (on retry or otherwise) - clear a leftover guard cookie.
-    response.cookies.set(REFRESH_RETRY_GUARD_COOKIE, '', { maxAge: 0, path: '/' })
+    return res
   }
 
   // Pages that don't require onboarding (whitelist approach for security)
@@ -104,41 +110,41 @@ export async function proxy(request: NextRequest) {
     // session. See issue #295.
     if (userProfile?.deleted_at) {
       await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return clearGuardCookie(NextResponse.redirect(new URL('/auth/login', request.url)))
     }
 
     // If user doesn't exist in our users table OR hasn't completed onboarding, redirect to onboarding
     if (!userProfile || !userProfile.onboarding_completed_at) {
-      return NextResponse.redirect(new URL('/onboarding', request.url))
+      return clearGuardCookie(NextResponse.redirect(new URL('/onboarding', request.url)))
     }
   }
 
   // Protect admin routes
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (!user) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return clearGuardCookie(NextResponse.redirect(new URL('/auth/login', request.url)))
     }
-    
+
     // Check if user is admin
     const { data: userProfile } = await supabase
       .from('users')
       .select('is_admin')
       .eq('id', user.id)
       .single()
-    
+
     if (!userProfile?.is_admin) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      return clearGuardCookie(NextResponse.redirect(new URL('/dashboard', request.url)))
     }
   }
 
   // Protect dashboard routes
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     if (!user) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return clearGuardCookie(NextResponse.redirect(new URL('/auth/login', request.url)))
     }
   }
 
-  return response
+  return clearGuardCookie(response)
 }
 
 export const config = {

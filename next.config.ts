@@ -2,6 +2,15 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  env: {
+    // Inlined at build time so instrumentation-client.ts can tag Sentry events
+    // with the real deployment environment. Relying on the "Automatically
+    // expose System Environment Variables" project toggle for this would be
+    // silent and easy to leave off; setting it here works unconditionally,
+    // since VERCEL_ENV is always present in the build step regardless of
+    // that toggle (which only governs its default NEXT_PUBLIC_ exposure).
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV,
+  },
   webpack: (config) => {
     // Suppress Supabase realtime warnings
     config.ignoreWarnings = [

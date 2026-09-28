@@ -1244,6 +1244,38 @@ Keep the `token_hash`/`type` link shape from [Magic-Link Email Template](#4-magi
 5. Confirm the email was received with proper variable substitution
 6. Test both authentication emails (via SMTP) and transactional emails (via Loops)
 
+### 7. Never Fire-and-Forget an Email (lint rule)
+
+On Vercel the function is frozen as soon as a route returns, so any email promise left floating after the response is silently dropped some of the time (#395, fixed in #398). The local ESLint rule `local/no-floating-email-send` (`scripts/eslint-rules/no-floating-email-send.js`) fails `npm run lint` (and CI) when one of these is neither awaited, returned, nor handed to something that owns it:
+
+- email notifier calls: `stage*Notification(s)` / `stage*Email(s)`, `send*Notification(s)` / `send*Confirmation` / `send*Email(s)`, `sendEmailImmediately`, `stageEmail`, `logEmailToDatabase`, and any `emailService.send*` / `emailService.stage*` / `emailStagingManager.*` / `emailProcessor.*` send or stage call
+- `email_logs` writes: `.from('email_logs').insert(...)` / `.upsert(...)`
+
+It applies to `src/app/api/**/route.ts`, `src/lib/email/**`, `src/lib/services/**` and `src/lib/**/*processor*.ts`. It's a syntactic check, so it stays quiet about everything else.
+
+**How to comply:**
+
+```ts
+// Needed before responding: await it
+await emailService.sendWaitlistAddedNotification({ ... })
+
+// Post-response work: schedule it so Vercel keeps the invocation alive
+runAfterResponse('my-notifications', async () => {
+  await Promise.all([
+    stageCaptainRosterChangeNotification(...).catch((err) => logger.logSystem(..., 'warn')),
+    stageAdminNewRegistrationNotification(...),
+  ])
+})
+```
+
+A `.catch()` on its own doesn't count: the promise still floats. Assigning the promise to a variable is treated as handled, so make sure you await it later.
+
+**Escape hatch** (rare; always say why):
+
+```ts
+// eslint-disable-next-line local/no-floating-email-send -- <reason this is safe>
+```
+
 ## Error Monitoring Setup (Sentry)
 
 The application uses Sentry for error monitoring and alerting, particularly for critical payment issues where payments succeed but database operations fail.

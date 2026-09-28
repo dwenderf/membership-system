@@ -3,6 +3,7 @@ import { POST, GET } from '@/app/api/user-alternate-registrations/route'
 import { NextRequest } from 'next/server'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { stageAlternateRegistrationConfirmationEmail } from '@/lib/email/alternate-notifications'
 import { runAfterResponse } from '@/lib/run-after-response'
 
 const mockRunAfterResponse = runAfterResponse as jest.MockedFunction<typeof runAfterResponse>
@@ -15,6 +16,9 @@ jest.mock('@/lib/email/captain-notifications', () => ({
 }))
 jest.mock('@/lib/email/admin-notifications', () => ({
   stageAdminNewRegistrationNotification: jest.fn(() => Promise.resolve()),
+}))
+jest.mock('@/lib/email/alternate-notifications', () => ({
+  stageAlternateRegistrationConfirmationEmail: jest.fn(() => Promise.resolve()),
 }))
 
 jest.mock('@/lib/run-after-response', () => ({
@@ -184,6 +188,9 @@ describe('/api/user-alternate-registrations', () => {
 
       expect(response.status).toBe(400)
       expect(data.error).toBe('You are already registered as an alternate for this registration')
+      // No notifications (and no member confirmation) for a rejected duplicate
+      expect(mockRunAfterResponse).not.toHaveBeenCalled()
+      expect(stageAlternateRegistrationConfirmationEmail).not.toHaveBeenCalled()
     })
 
     it('should successfully register as alternate with valid payment method', async () => {
@@ -250,7 +257,7 @@ describe('/api/user-alternate-registrations', () => {
                 id: 'alt-reg-123',
                 user_id: 'user-123',
                 registration_id: 'reg-123',
-                registered_at: new Date().toISOString()
+                created_at: '2026-09-20T02:00:00.000Z'
               },
               error: null
             }))
@@ -298,6 +305,79 @@ describe('/api/user-alternate-registrations', () => {
         expect.any(String),
         0
       )
+      // Member confirmation (#397) is scheduled in the same deferred batch
+      // `now` comes from the inserted row's created_at
+      expect(stageAlternateRegistrationConfirmationEmail).toHaveBeenCalledWith(
+        'reg-123',
+        'user-123',
+        '2026-09-20T02:00:00.000Z'
+      )
+    })
+
+    it('should not send any notifications when the alternate insert fails', async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({
+        data: { user: { id: 'user-123' } }
+      })
+
+      // Policy acceptance log insert
+      mockSupabase.from.mockReturnValueOnce({
+        insert: jest.fn(() => Promise.resolve({ error: null }))
+      })
+      // Registration lookup - alternates allowed
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            single: jest.fn(() => Promise.resolve({
+              data: { id: 'reg-123', name: 'Test Registration', allow_alternates: true, alternate_price: 5000, alternate_accounting_code: 'ALT001' },
+              error: null
+            }))
+          }))
+        }))
+      })
+      // Existing alternate check - none
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            eq: jest.fn(() => ({
+              single: jest.fn(() => Promise.resolve({ data: null, error: null }))
+            }))
+          }))
+        }))
+      })
+      // User profile with payment method
+      mockSupabase.from.mockReturnValueOnce({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            single: jest.fn(() => Promise.resolve({
+              data: { id: 'user-123', stripe_payment_method_id: 'pm_123', setup_intent_status: 'succeeded' },
+              error: null
+            }))
+          }))
+        }))
+      })
+      // Insert fails
+      mockSupabase.from.mockReturnValueOnce({
+        insert: jest.fn(() => ({
+          select: jest.fn(() => ({
+            single: jest.fn(() => Promise.resolve({ data: null, error: { message: 'duplicate key' } }))
+          }))
+        }))
+      })
+
+      const request = new NextRequest('http://localhost/api/user-alternate-registrations', {
+        method: 'POST',
+        body: JSON.stringify({ registration_id: 'reg-123', policiesAccepted: true })
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(500)
+      expect(data.error).toBe('Failed to register as alternate')
+      expect(mockRunAfterResponse).not.toHaveBeenCalled()
+      expect(stageAlternateRegistrationConfirmationEmail).not.toHaveBeenCalled()
+      expect(stageCaptainRosterChangeNotification).not.toHaveBeenCalled()
+      expect(stageAdminNewRegistrationNotification).not.toHaveBeenCalled()
     })
   })
 

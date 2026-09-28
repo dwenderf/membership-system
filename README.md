@@ -136,6 +136,7 @@ LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_alternate_registration_confirmation_template_id
 LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
 LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id
@@ -863,6 +864,47 @@ Thanks for being part of the team!
 The Hockey Association Team
 ```
 
+#### Alternate Registration Confirmation Template (`LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID`)
+
+Sent to the member when they sign up as an alternate for a registration (event type `alternate.registered`). Always sent (not gated on email preferences). If the template ID is not configured, the send is skipped with a warning and the sign-up still succeeds.
+
+**Data Variables:**
+
+- `userName` - Member's full name
+- `registrationName` - Name of registration (e.g., "NYCPHA Recreational League")
+- `seasonName` - Season name (e.g., "Fall/Winter 2026")
+- `categoryName` - Always "Alternate"
+- `registrationDate` - Sign-up date in Eastern Time, same format as the registration confirmation (e.g., "9/19/2026")
+- `alternatePrice` - Per-game alternate price before any discounts, as a formatted number (e.g., "25.00"); charged only if selected for a game
+- `dashboardUrl` - Link to user dashboard (`/user`)
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+You're signed up as an alternate for [registrationName] ([seasonName]).
+
+ALTERNATE DETAILS:
+- Registration: [registrationName]
+- Season: [seasonName]
+- Role: [categoryName]
+- Signed Up: [registrationDate]
+- Price per Game (before any discounts, charged only if selected): $[alternatePrice]
+
+WHAT BEING AN ALTERNATE MEANS:
+• Captains or admins may select you to fill in for specific games
+• You're only charged (using your saved payment method) when you're selected for a game
+• You'll get a separate confirmation each time you're selected
+
+CHANGE OR WITHDRAW:
+• To withdraw or change your alternate sign-up, reply to this email or contact the league admins
+• View your registrations anytime: [dashboardUrl]
+
+Thanks for being part of the team!
+The Hockey Association Team
+```
+
 #### Payment Method Removed Notification Template (`LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID`)
 
 **Data Variables:**
@@ -1201,6 +1243,38 @@ Keep the `token_hash`/`type` link shape from [Magic-Link Email Template](#4-magi
 4. Check the `email_logs` table in Supabase to verify delivery status
 5. Confirm the email was received with proper variable substitution
 6. Test both authentication emails (via SMTP) and transactional emails (via Loops)
+
+### 7. Never Fire-and-Forget an Email (lint rule)
+
+On Vercel the function is frozen as soon as a route returns, so any email promise left floating after the response is silently dropped some of the time (#395, fixed in #398). The local ESLint rule `local/no-floating-email-send` (`scripts/eslint-rules/no-floating-email-send.js`) fails `npm run lint` (and CI) when one of these is neither awaited, returned, nor handed to something that owns it:
+
+- email notifier calls: `stage*Notification(s)` / `stage*Email(s)`, `send*Notification(s)` / `send*Confirmation` / `send*Email(s)`, `sendEmailImmediately`, `stageEmail`, `logEmailToDatabase`, and any `emailService.send*` / `emailService.stage*` / `emailStagingManager.*` / `emailProcessor.*` send or stage call
+- `email_logs` writes: `.from('email_logs').insert(...)` / `.upsert(...)`
+
+It applies to `src/app/api/**/route.ts`, `src/lib/email/**`, `src/lib/services/**` and `src/lib/**/*processor*.ts`. It's a syntactic check, so it stays quiet about everything else.
+
+**How to comply:**
+
+```ts
+// Needed before responding: await it
+await emailService.sendWaitlistAddedNotification({ ... })
+
+// Post-response work: schedule it so Vercel keeps the invocation alive
+runAfterResponse('my-notifications', async () => {
+  await Promise.all([
+    stageCaptainRosterChangeNotification(...).catch((err) => logger.logSystem(..., 'warn')),
+    stageAdminNewRegistrationNotification(...),
+  ])
+})
+```
+
+A `.catch()` on its own doesn't count: the promise still floats. Assigning the promise to a variable is treated as handled, so make sure you await it later.
+
+**Escape hatch** (rare; always say why):
+
+```ts
+// eslint-disable-next-line local/no-floating-email-send -- <reason this is safe>
+```
 
 ## Error Monitoring Setup (Sentry)
 
@@ -1758,6 +1832,7 @@ LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_alternate_registration_confirmation_template_id
 LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
 LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id

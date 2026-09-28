@@ -22,6 +22,7 @@ export const EMAIL_EVENTS = {
   WAITLIST_ADDED: 'waitlist.added',
   WAITLIST_SELECTED: 'waitlist.selected',
   WAITLIST_REMOVED: 'waitlist.removed',
+  ALTERNATE_REGISTERED: 'alternate.registered',
   PAYMENT_FAILED: 'payment.failed',
   REFUND_PROCESSED: 'refund.processed',
   WELCOME: 'user.welcome',
@@ -529,6 +530,40 @@ class EmailService {
         categoryName: options.categoryName,
         seasonName: options.seasonName,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
+      }
+    })
+  }
+
+  /**
+   * Send alternate registration confirmation email immediately (bypasses queue).
+   * Sent to the member who signed up as an alternate (#397). Not gated on
+   * email preferences — like waitlist confirmations, this is a transactional
+   * receipt for the member's own action.
+   */
+  async sendAlternateRegistrationConfirmation(options: {
+    userId: string
+    email: string
+    userName: string
+    registrationName: string
+    seasonName: string
+    registeredAt: string
+    alternatePrice: number
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.userId,
+      email: options.email,
+      eventType: EMAIL_EVENTS.ALTERNATE_REGISTERED,
+      subject: `Alternate Registration Confirmed - ${options.registrationName}`,
+      triggeredBy: 'user_action',
+      templateId: process.env.LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID,
+      data: {
+        userName: options.userName,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        categoryName: 'Alternate',
+        registrationDate: formatDate(new Date(options.registeredAt)),
+        alternatePrice: (options.alternatePrice / 100).toFixed(2),
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }

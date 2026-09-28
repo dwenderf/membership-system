@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { stageAlternateRegistrationConfirmationEmail } from '@/lib/email/alternate-notifications'
 import { logger } from '@/lib/logging/logger'
 import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 import { runAfterResponse } from '@/lib/run-after-response'
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to register as alternate' }, { status: 500 })
     }
 
-    // Notify opted-in captains and admins after the response (#395).
+    // Notify opted-in captains and admins, and confirm to the member (#397),
+    // after the response (#395).
     // Vercel freezes the function once we return, so fire-and-forget
     // promises here were being dropped (~21% of captain/admin emails).
     const now = alternateRegistration.created_at ?? new Date().toISOString()
@@ -139,6 +141,11 @@ export async function POST(request: NextRequest) {
             now,
             0
           ).catch((err) => logger.logPaymentProcessing('alternate-admin-notification-failed', 'Admin notification failed for new alternate registration (non-fatal)', { registrationId, userId, error: err instanceof Error ? err.message : String(err) }, 'warn')),
+          stageAlternateRegistrationConfirmationEmail(
+            registrationId,
+            userId,
+            now
+          ).catch((err) => logger.logPaymentProcessing('alternate-member-confirmation-failed', 'Member confirmation email failed for new alternate registration (non-fatal)', { registrationId, userId, error: err instanceof Error ? err.message : String(err) }, 'warn')),
         ])
       },
       { registrationId, userId }

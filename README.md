@@ -875,7 +875,7 @@ Sent to the member when they sign up as an alternate for a registration (event t
 - `seasonName` - Season name (e.g., "Fall/Winter 2026")
 - `categoryName` - Always "Alternate"
 - `registrationDate` - Sign-up date in Eastern Time, same format as the registration confirmation (e.g., "9/19/2026")
-- `alternatePrice` - Per-game alternate price as formatted number (e.g., "25.00"); charged only if selected for a game
+- `alternatePrice` - Per-game alternate price before any discounts, as a formatted number (e.g., "25.00"); charged only if selected for a game
 - `dashboardUrl` - Link to user dashboard (`/user`)
 
 **Template Example:**
@@ -890,7 +890,7 @@ ALTERNATE DETAILS:
 - Season: [seasonName]
 - Role: [categoryName]
 - Signed Up: [registrationDate]
-- Price per Game (if selected): $[alternatePrice]
+- Price per Game (before any discounts, charged only if selected): $[alternatePrice]
 
 WHAT BEING AN ALTERNATE MEANS:
 • Captains or admins may select you to fill in for specific games
@@ -898,7 +898,8 @@ WHAT BEING AN ALTERNATE MEANS:
 • You'll get a separate confirmation each time you're selected
 
 CHANGE OR WITHDRAW:
-• You can withdraw your alternate sign-up anytime from My Registrations: [dashboardUrl]
+• To withdraw or change your alternate sign-up, reply to this email or contact the league admins
+• View your registrations anytime: [dashboardUrl]
 
 Thanks for being part of the team!
 The Hockey Association Team

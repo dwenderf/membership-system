@@ -75,7 +75,7 @@ export async function stageAlternateRegistrationConfirmationEmail(
     const season = Array.isArray(registration.season) ? registration.season[0] : registration.season
     const seasonName = season?.name ?? ''
 
-    await emailService.sendAlternateRegistrationConfirmation({
+    const result = await emailService.sendAlternateRegistrationConfirmation({
       userId: user.id,
       email: user.email,
       userName: `${user.first_name} ${user.last_name}`,
@@ -84,6 +84,17 @@ export async function stageAlternateRegistrationConfirmationEmail(
       registeredAt,
       alternatePrice: registration.alternate_price ?? 0,
     })
+
+    if (!result.success) {
+      // IDs only (no email/name). The service has already written the
+      // email_logs row (failed, or pending for cron retry on transient errors).
+      logger.logSystem(
+        'alternate-registration-confirmation-send-failed',
+        'stageAlternateRegistrationConfirmationEmail: send reported failure (non-fatal)',
+        { registrationId, userId, reason: result.error },
+        'warn'
+      )
+    }
 
   } catch (error) {
     logger.logSystem(

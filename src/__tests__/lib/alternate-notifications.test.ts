@@ -86,7 +86,8 @@ describe('stageAlternateRegistrationConfirmationEmail', () => {
     mockSendTransactionalEmail.mockResolvedValue({ success: true, id: 'loops-evt-1' })
     const stage = await load()
 
-    await stage('reg-123', 'user-123', '2026-09-19T22:49:24Z')
+    // 02:00 UTC on 9/20 is still 9/19 in America/New_York — proves ET conversion
+    await stage('reg-123', 'user-123', '2026-09-20T02:00:00Z')
 
     expect(mockSendTransactionalEmail).toHaveBeenCalledTimes(1)
     const call = mockSendTransactionalEmail.mock.calls[0][0]
@@ -115,6 +116,38 @@ describe('stageAlternateRegistrationConfirmationEmail', () => {
       triggered_by: 'user_action',
       loops_event_id: 'loops-evt-1',
     }))
+  })
+
+  it('does not throw or send when the registration is not found', async () => {
+    process.env.LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID = 'tmpl-alt-reg'
+    tableResults.registrations = { data: null, error: { message: 'not found' } }
+    const stage = await load()
+
+    await expect(stage('reg-404', 'user-123', '2026-09-20T02:00:00Z')).resolves.toBeUndefined()
+    expect(mockSendTransactionalEmail).not.toHaveBeenCalled()
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockLogSystem).toHaveBeenCalledWith(
+      'alternate-registration-confirmation-registration-not-found',
+      expect.any(String),
+      expect.objectContaining({ registrationId: 'reg-404' }),
+      'error'
+    )
+  })
+
+  it('logs a warning (IDs only) when the send reports failure, without throwing', async () => {
+    process.env.LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID = 'tmpl-alt-reg'
+    mockSendTransactionalEmail.mockResolvedValue({ success: false })
+    const stage = await load()
+
+    await expect(stage('reg-123', 'user-123', '2026-09-20T02:00:00Z')).resolves.toBeUndefined()
+
+    const warnCall = mockLogSystem.mock.calls.find((c) => c[0] === 'alternate-registration-confirmation-send-failed')
+    expect(warnCall).toBeDefined()
+    expect(warnCall![3]).toBe('warn')
+    expect(warnCall![2]).toEqual({ registrationId: 'reg-123', userId: 'user-123', reason: 'Failed to send via Loops' })
+    // No PII in the warning payload
+    expect(JSON.stringify(warnCall![2])).not.toContain('vinny@example.com')
+    expect(JSON.stringify(warnCall![2])).not.toContain('Losinno')
   })
 
   it('does not throw when the user lookup fails', async () => {

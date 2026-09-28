@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/date-utils'
 import { emailStagingManager } from '@/lib/email/staging'
 import { stageAdminRefundNotification } from '@/lib/email/admin-notifications'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { runAfterResponse } from '@/lib/run-after-response'
 import { logger } from '@/lib/logging/logger'
 
 /**
@@ -131,21 +132,8 @@ export async function stageRefundNotificationEmail(
       'debug'
     )
 
-    // Notify opted-in admins of the refund (fire-and-forget)
-    stageAdminRefundNotification(
-      userId,
-      paymentId,
-      refund.amount,
-      payment.final_amount
-    ).catch((err) => logger.logSystem(
-      'refund-admin-notification-failed',
-      'stageRefundNotificationEmail: admin notification failed (non-fatal)',
-      { userId, paymentId, error: err instanceof Error ? err.message : String(err) },
-      'warn'
-    ))
-
-    // Notify captain(s) that the player has left (fire-and-forget)
     // Resolve the registrationId from the refunded user_registration record
+    // before scheduling deferred notification work (#395).
     const { data: userReg } = await supabase
       .from('user_registrations')
       .select('registration_id, registration_category_id, registration_category:registration_categories(custom_name, category:categories(name))')
@@ -153,6 +141,7 @@ export async function stageRefundNotificationEmail(
       .eq('user_id', userId)
       .single()
 
+    let categoryName: string | null = null
     if (userReg?.registration_id) {
       const category = userReg.registration_category
         ? (Array.isArray(userReg.registration_category) ? userReg.registration_category[0] : userReg.registration_category)
@@ -160,22 +149,51 @@ export async function stageRefundNotificationEmail(
       const masterCategory = category?.category
         ? (Array.isArray(category.category) ? category.category[0] : category.category)
         : null
-      const categoryName = category?.custom_name || masterCategory?.name || 'Standard'
-
-      stageCaptainRosterChangeNotification(
-        userReg.registration_id,
-        userId,
-        'left',
-        categoryName,
-        refund.created_at,
-        refund.amount
-      ).catch((err) => logger.logSystem(
-        'refund-captain-notification-failed',
-        'stageRefundNotificationEmail: captain notification failed (non-fatal)',
-        { userId, registrationId: userReg.registration_id, error: err instanceof Error ? err.message : String(err) },
-        'warn'
-      ))
+      categoryName = category?.custom_name || masterCategory?.name || 'Standard'
     }
+
+    const refundAmount = refund.amount
+    const paymentFinalAmount = payment.final_amount
+    const refundCreatedAt = refund.created_at
+    const registrationId = userReg?.registration_id ?? null
+
+    // Admin + captain notifications after the response so Vercel doesn't freeze
+    // the send loops mid-flight (#395). The user-facing refund email above is
+    // already staged (queued) and does not need after().
+    runAfterResponse(
+      'refund-notifications',
+      async () => {
+        await Promise.all([
+          stageAdminRefundNotification(
+            userId,
+            paymentId,
+            refundAmount,
+            paymentFinalAmount
+          ).catch((err) => logger.logSystem(
+            'refund-admin-notification-failed',
+            'stageRefundNotificationEmail: admin notification failed (non-fatal)',
+            { userId, paymentId, error: err instanceof Error ? err.message : String(err) },
+            'warn'
+          )),
+          (registrationId && categoryName
+            ? stageCaptainRosterChangeNotification(
+                registrationId,
+                userId,
+                'left',
+                categoryName,
+                refundCreatedAt,
+                refundAmount
+              ).catch((err) => logger.logSystem(
+                'refund-captain-notification-failed',
+                'stageRefundNotificationEmail: captain notification failed (non-fatal)',
+                { userId, registrationId, error: err instanceof Error ? err.message : String(err) },
+                'warn'
+              ))
+            : Promise.resolve()),
+        ])
+      },
+      { userId, paymentId, registrationId }
+    )
 
   } catch (error) {
     logger.logSystem(

@@ -5,6 +5,7 @@ import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifi
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 import { logger } from '@/lib/logging/logger'
 import { logPolicyAcceptance } from '@/lib/policy-acceptance'
+import { runAfterResponse } from '@/lib/run-after-response'
 
 export async function POST(request: NextRequest) {
   try {
@@ -111,26 +112,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to register as alternate' }, { status: 500 })
     }
 
-    // Notify opted-in captains and admins of the new alternate sign-up (fire-and-forget)
+    // Notify opted-in captains and admins after the response (#395).
+    // Vercel freezes the function once we return, so fire-and-forget
+    // promises here were being dropped (~21% of captain/admin emails).
     const now = alternateRegistration.created_at ?? new Date().toISOString()
-    stageCaptainRosterChangeNotification(
-      registration_id,
-      user.id,
-      'alternate joined',
-      'Alternate',
-      now,
-      0 // no upfront payment for alternates
-    ).catch((err) => logger.logPaymentProcessing('alternate-captain-notification-failed', 'Captain notification failed for new alternate registration (non-fatal)', { registrationId: registration_id, userId: user.id, error: err instanceof Error ? err.message : String(err) }, 'warn'))
-
-    stageAdminNewRegistrationNotification(
-      registration_id,
-      user.id,
-      null, // no payment ID for alternate sign-ups
-      null, // no category for alternate sign-ups
-      true, // isAlternate
-      now,
-      0
-    ).catch((err) => logger.logPaymentProcessing('alternate-admin-notification-failed', 'Admin notification failed for new alternate registration (non-fatal)', { registrationId: registration_id, userId: user.id, error: err instanceof Error ? err.message : String(err) }, 'warn'))
+    const registrationId = registration_id
+    const userId = user.id
+    runAfterResponse(
+      'alternate-registration-notifications',
+      async () => {
+        await Promise.all([
+          stageCaptainRosterChangeNotification(
+            registrationId,
+            userId,
+            'alternate joined',
+            'Alternate',
+            now,
+            0 // no upfront payment for alternates
+          ).catch((err) => logger.logPaymentProcessing('alternate-captain-notification-failed', 'Captain notification failed for new alternate registration (non-fatal)', { registrationId, userId, error: err instanceof Error ? err.message : String(err) }, 'warn')),
+          stageAdminNewRegistrationNotification(
+            registrationId,
+            userId,
+            null, // no payment ID for alternate sign-ups
+            null, // no category for alternate sign-ups
+            true, // isAlternate
+            now,
+            0
+          ).catch((err) => logger.logPaymentProcessing('alternate-admin-notification-failed', 'Admin notification failed for new alternate registration (non-fatal)', { registrationId, userId, error: err instanceof Error ? err.message : String(err) }, 'warn')),
+        ])
+      },
+      { registrationId, userId }
+    )
 
     return NextResponse.json({
       success: true,

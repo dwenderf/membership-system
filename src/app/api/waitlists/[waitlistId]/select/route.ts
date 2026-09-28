@@ -7,6 +7,7 @@ import { logger } from '@/lib/logging/logger'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 import { stageWaitlistSelectedEmail } from '@/lib/email/waitlist-notifications'
+import { runAfterResponse } from '@/lib/run-after-response'
 
 // POST /api/waitlists/[waitlistId]/select - Select a user from waitlist
 export async function POST(
@@ -242,34 +243,45 @@ export async function POST(
         })
       }
 
-      // Notify opted-in admins and captain(s) about the roster addition (fire-and-forget)
+      // Notify after the response so Vercel doesn't freeze mid-send (#395)
       const now = new Date().toISOString()
-      stageCaptainRosterChangeNotification(
-        waitlistEntry.registration_id,
-        waitlistEntry.user_id,
-        'selected from waitlist',
-        categoryName,
-        now,
-        chargeResult.amountCharged
-      ).catch((err) => logger.logSystem('waitlist-selection-captain-notify', 'Captain notification failed (non-fatal)', { error: err?.message }))
-
-      stageAdminNewRegistrationNotification(
-        waitlistEntry.registration_id,
-        waitlistEntry.user_id,
-        chargeResult.paymentId ?? null,
-        waitlistEntry.registration_category_id,
-        false,
-        now,
-        chargeResult.amountCharged
-      ).catch((err) => logger.logSystem('waitlist-selection-admin-notify', 'Admin notification failed (non-fatal)', { error: err?.message }))
-
-      stageWaitlistSelectedEmail(
-        waitlistEntry.registration_id,
-        waitlistEntry.user_id,
-        chargeResult.paymentId ?? null,
-        waitlistEntry.registration_category_id,
-        chargeResult.amountCharged
-      ).catch((err) => logger.logSystem('waitlist-selection-member-notify', 'Member notification failed (non-fatal)', { error: err?.message }))
+      const registrationId = waitlistEntry.registration_id
+      const selectedUserId = waitlistEntry.user_id
+      const paymentId = chargeResult.paymentId ?? null
+      const categoryId = waitlistEntry.registration_category_id
+      const amountCharged = chargeResult.amountCharged
+      runAfterResponse(
+        'waitlist-selection-notifications',
+        async () => {
+          await Promise.all([
+            stageCaptainRosterChangeNotification(
+              registrationId,
+              selectedUserId,
+              'selected from waitlist',
+              categoryName,
+              now,
+              amountCharged
+            ).catch((err) => logger.logSystem('waitlist-selection-captain-notify', 'Captain notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
+            stageAdminNewRegistrationNotification(
+              registrationId,
+              selectedUserId,
+              paymentId,
+              categoryId,
+              false,
+              now,
+              amountCharged
+            ).catch((err) => logger.logSystem('waitlist-selection-admin-notify', 'Admin notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
+            stageWaitlistSelectedEmail(
+              registrationId,
+              selectedUserId,
+              paymentId,
+              categoryId,
+              amountCharged
+            ).catch((err) => logger.logSystem('waitlist-selection-member-notify', 'Member notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
+          ])
+        },
+        { registrationId, userId: selectedUserId, waitlistId }
+      )
       logger.logSystem('waitlist-selection-success', 'Successfully selected user from waitlist', {
         waitlistId,
         userId: waitlistEntry.user_id,

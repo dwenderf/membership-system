@@ -1,10 +1,28 @@
 // Test file for user alternate registrations API endpoints
 import { POST, GET } from '@/app/api/user-alternate-registrations/route'
 import { NextRequest } from 'next/server'
+import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { runAfterResponse } from '@/lib/run-after-response'
+
+const mockRunAfterResponse = runAfterResponse as jest.MockedFunction<typeof runAfterResponse>
 
 // Mock dependencies
 jest.mock('@/lib/supabase/server')
 jest.mock('@/lib/logging/logger')
+jest.mock('@/lib/email/captain-notifications', () => ({
+  stageCaptainRosterChangeNotification: jest.fn(() => Promise.resolve()),
+}))
+jest.mock('@/lib/email/admin-notifications', () => ({
+  stageAdminNewRegistrationNotification: jest.fn(() => Promise.resolve()),
+}))
+
+jest.mock('@/lib/run-after-response', () => ({
+  runAfterResponse: jest.fn((operation: string, work: () => Promise<unknown>) => {
+    // Run deferred work inline so assertions can observe the scheduled calls
+    void work()
+  }),
+}))
 
 type MockSupabaseClient = {
   auth: { getUser: jest.Mock }
@@ -252,6 +270,34 @@ describe('/api/user-alternate-registrations', () => {
       expect(data.success).toBe(true)
       expect(data.alternateRegistration.registration_id).toBe('reg-123')
       expect(data.setupIntent).toBeUndefined() // No setup intent needed
+
+      // Notifications must be scheduled through runAfterResponse (#395), not
+      // fired as bare promises that Vercel would freeze after the response.
+      expect(mockRunAfterResponse).toHaveBeenCalledTimes(1)
+      expect(mockRunAfterResponse).toHaveBeenCalledWith(
+        'alternate-registration-notifications',
+        expect.any(Function),
+        expect.objectContaining({ registrationId: 'reg-123', userId: 'user-123' })
+      )
+      // Let the inline work settle
+      await Promise.resolve()
+      expect(stageCaptainRosterChangeNotification).toHaveBeenCalledWith(
+        'reg-123',
+        'user-123',
+        'alternate joined',
+        'Alternate',
+        expect.any(String),
+        0
+      )
+      expect(stageAdminNewRegistrationNotification).toHaveBeenCalledWith(
+        'reg-123',
+        'user-123',
+        null,
+        null,
+        true,
+        expect.any(String),
+        0
+      )
     })
   })
 

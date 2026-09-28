@@ -111,8 +111,7 @@ class EmailService {
         )
 
         // Still log to email_logs so developers can track what would have been sent
-        // Fire-and-forget to avoid blocking the response
-        this.logEmailToDatabase({
+        await this.logEmailToDatabase({
           userId,
           email,
           eventType,
@@ -161,9 +160,10 @@ class EmailService {
       const sendSucceeded = loopsResponse && 'success' in loopsResponse && loopsResponse.success
       const loopsEventId = sendSucceeded ? (loopsResponse as LoopsResponseWithId).id : undefined
 
-      // Log to email_logs for tracking (even for immediate sends)
-      // Fire-and-forget to avoid blocking the response
-      this.logEmailToDatabase({
+      // Log to email_logs for tracking (even for immediate sends).
+      // Awaited so the insert isn't cut off when the caller returns (#395).
+      // A log failure does not fail the send — see logEmailToDatabase.
+      await this.logEmailToDatabase({
         userId,
         email,
         eventType,
@@ -209,8 +209,7 @@ class EmailService {
 
       // Queue as pending so the cron retries it — transient failures (network,
       // socket closed) should recover on the next run without losing the email.
-      // Fire-and-forget to avoid blocking the response
-      this.logEmailToDatabase({
+      await this.logEmailToDatabase({
         userId,
         email,
         eventType,
@@ -251,7 +250,7 @@ class EmailService {
   }): Promise<void> {
     try {
       const supabase = createAdminClient()
-      await supabase
+      const { error } = await supabase
         .from('email_logs')
         .insert({
           user_id: params.userId,
@@ -269,14 +268,35 @@ class EmailService {
           // explicitly passing null would violate the NOT NULL constraint.
           ...(params.status !== 'pending' && { sent_at: new Date().toISOString() })
         })
+
+      if (error) {
+        // Loudly report — a missing email_logs row is how we lose visibility
+        // into delivery (#395) — but do not throw. The Loops send (if any)
+        // already happened; failing the caller over a log insert would turn a
+        // successful delivery into an error response and risk retries/dupes.
+        logger.logSystem(
+          'email-log-to-database-failed',
+          'Failed to log email to database',
+          {
+            userId: params.userId,
+            email: params.email,
+            eventType: params.eventType,
+            status: params.status,
+            error: error.message,
+            code: error.code,
+          },
+          'error'
+        )
+      }
     } catch (logError) {
       logger.logSystem(
         'email-log-to-database-failed',
         'Failed to log email to database',
         { userId: params.userId, email: params.email, eventType: params.eventType, error: logError instanceof Error ? logError.message : String(logError) },
-        'error'
+        'error',
+        logError
       )
-      // Don't throw - we don't want to fail the operation just because logging failed
+      // Don't throw - we don't want to fail a successful send just because logging failed
     }
   }
 

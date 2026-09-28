@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logger } from '@/lib/logging/logger'
 import { stageWaitlistRemovedEmail } from '@/lib/email/waitlist-notifications'
+import { runAfterResponse } from '@/lib/run-after-response'
 
 // DELETE /api/waitlists/[waitlistId] - Remove a waitlist entry (leave, or captain/admin removal)
 export async function DELETE(
@@ -76,11 +77,20 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to remove waitlist entry' }, { status: 500 })
     }
 
-    stageWaitlistRemovedEmail(
-      waitlistEntry.registration_id,
-      waitlistEntry.user_id,
-      waitlistEntry.registration_category_id
-    ).catch((err) => logger.logSystem('waitlist-removal-notify', 'Waitlist removed notification failed (non-fatal)', { error: err?.message }))
+    const registrationId = waitlistEntry.registration_id
+    const removedUserId = waitlistEntry.user_id
+    const categoryId = waitlistEntry.registration_category_id
+    runAfterResponse(
+      'waitlist-removal-notification',
+      async () => {
+        await stageWaitlistRemovedEmail(
+          registrationId,
+          removedUserId,
+          categoryId
+        ).catch((err) => logger.logSystem('waitlist-removal-notify', 'Waitlist removed notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn'))
+      },
+      { registrationId, userId: removedUserId, waitlistId }
+    )
 
     logger.logSystem('waitlist-removal-success', 'Successfully removed waitlist entry', {
       waitlistId,

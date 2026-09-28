@@ -136,6 +136,7 @@ LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_alternate_registration_confirmation_template_id
 LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
 LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id
@@ -858,6 +859,46 @@ WHAT'S NEXT:
 • You're now on the alternate list for this game
 • You'll be contacted if a spot becomes available
 • Check your status anytime: [dashboardUrl]
+
+Thanks for being part of the team!
+The Hockey Association Team
+```
+
+#### Alternate Registration Confirmation Template (`LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID`)
+
+Sent to the member when they sign up as an alternate for a registration (event type `alternate.registered`). Always sent (not gated on email preferences). If the template ID is not configured, the send is skipped with a warning and the sign-up still succeeds.
+
+**Data Variables:**
+
+- `userName` - Member's full name
+- `registrationName` - Name of registration (e.g., "NYCPHA Recreational League")
+- `seasonName` - Season name (e.g., "Fall/Winter 2026")
+- `categoryName` - Always "Alternate"
+- `registrationDate` - Sign-up date in Eastern Time, same format as the registration confirmation (e.g., "9/19/2026")
+- `alternatePrice` - Per-game alternate price as formatted number (e.g., "25.00"); charged only if selected for a game
+- `dashboardUrl` - Link to user dashboard (`/user`)
+
+**Template Example:**
+
+```text
+Hi [userName],
+
+You're signed up as an alternate for [registrationName] ([seasonName]).
+
+ALTERNATE DETAILS:
+- Registration: [registrationName]
+- Season: [seasonName]
+- Role: [categoryName]
+- Signed Up: [registrationDate]
+- Price per Game (if selected): $[alternatePrice]
+
+WHAT BEING AN ALTERNATE MEANS:
+• Captains or admins may select you to fill in for specific games
+• You're only charged (using your saved payment method) when you're selected for a game
+• You'll get a separate confirmation each time you're selected
+
+CHANGE OR WITHDRAW:
+• You can withdraw your alternate sign-up anytime from My Registrations: [dashboardUrl]
 
 Thanks for being part of the team!
 The Hockey Association Team
@@ -1758,6 +1799,7 @@ LOOPS_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_registration_template_id
 LOOPS_WAITLIST_ADDED_TEMPLATE_ID=your_waitlist_template_id
 LOOPS_WAITLIST_SELECTED_TEMPLATE_ID=your_waitlist_selected_template_id
 LOOPS_ALTERNATE_SELECTION_TEMPLATE_ID=your_alternate_selection_template_id
+LOOPS_ALTERNATE_REGISTRATION_CONFIRMATION_TEMPLATE_ID=your_alternate_registration_confirmation_template_id
 LOOPS_EMAIL_CHANGE_CONFIRMED_TEMPLATE_ID=your_email_change_confirmed_template_id
 LOOPS_REFUND_TEMPLATE_ID=your_refund_template_id
 LOOPS_TEAM_MESSAGE_TEMPLATE_ID=your_team_message_template_id

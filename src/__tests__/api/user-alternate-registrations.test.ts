@@ -3,6 +3,7 @@ import { POST, GET } from '@/app/api/user-alternate-registrations/route'
 import { NextRequest } from 'next/server'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
+import { stageAlternateRegistrationConfirmationEmail } from '@/lib/email/alternate-notifications'
 import { runAfterResponse } from '@/lib/run-after-response'
 
 const mockRunAfterResponse = runAfterResponse as jest.MockedFunction<typeof runAfterResponse>
@@ -15,6 +16,9 @@ jest.mock('@/lib/email/captain-notifications', () => ({
 }))
 jest.mock('@/lib/email/admin-notifications', () => ({
   stageAdminNewRegistrationNotification: jest.fn(() => Promise.resolve()),
+}))
+jest.mock('@/lib/email/alternate-notifications', () => ({
+  stageAlternateRegistrationConfirmationEmail: jest.fn(() => Promise.resolve()),
 }))
 
 jest.mock('@/lib/run-after-response', () => ({
@@ -297,6 +301,12 @@ describe('/api/user-alternate-registrations', () => {
         true,
         expect.any(String),
         0
+      )
+      // Member confirmation (#397) is scheduled in the same deferred batch
+      expect(stageAlternateRegistrationConfirmationEmail).toHaveBeenCalledWith(
+        'reg-123',
+        'user-123',
+        expect.any(String)
       )
     })
   })

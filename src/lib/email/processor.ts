@@ -18,6 +18,7 @@ import { centsToDollars } from '@/types/currency'
 import { formatDate, formatTime, toNYDateString, formatDateTime } from '@/lib/date-utils'
 import { stageAdminNewRegistrationNotification } from '@/lib/email/admin-notifications'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
+import { runAfterResponse } from '@/lib/run-after-response'
 import { Json } from '@/types/database'
 import type { createAdminClient } from '../supabase/server'
 import { getBaseUrl } from '@/lib/url-utils'
@@ -460,25 +461,41 @@ export class EmailProcessor {
         email: user.email
       })
 
-      // Notify opted-in admins and captains of the new registration (fire-and-forget)
-      stageAdminNewRegistrationNotification(
-        registration.registration.id,
-        event.user_id,
-        event.payment_id,
-        registration.registration_category_id ?? null,
-        false, // not an alternate
-        registration.registered_at || registration.created_at || new Date().toISOString(),
-        registration.amount_paid ?? 0
-      ).catch((err) => this.logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Admin notification failed (non-fatal)', { error: err?.message }, 'warn'))
-
-      stageCaptainRosterChangeNotification(
-        registration.registration.id,
-        event.user_id,
-        'joined',
-        categoryName,
-        registration.registered_at || registration.created_at || new Date().toISOString(),
-        registration.amount_paid ?? 0
-      ).catch((err) => this.logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Captain notification failed (non-fatal)', { error: err?.message }, 'warn'))
+      // Notify opted-in admins and captains after the response (#395).
+      // Same Vercel freeze problem as alternate registrations: fire-and-forget
+      // after the webhook/route returns drops the send loops mid-flight.
+      const registrationId = registration.registration.id
+      const userId = event.user_id
+      const paymentId = event.payment_id
+      const categoryId = registration.registration_category_id ?? null
+      const registeredAt = registration.registered_at || registration.created_at || new Date().toISOString()
+      const amountPaid = registration.amount_paid ?? 0
+      const logger = this.logger
+      runAfterResponse(
+        'paid-registration-notifications',
+        async () => {
+          await Promise.all([
+            stageAdminNewRegistrationNotification(
+              registrationId,
+              userId,
+              paymentId,
+              categoryId,
+              false, // not an alternate
+              registeredAt,
+              amountPaid
+            ).catch((err) => logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Admin notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
+            stageCaptainRosterChangeNotification(
+              registrationId,
+              userId,
+              'joined',
+              categoryName,
+              registeredAt,
+              amountPaid
+            ).catch((err) => logger.logPaymentProcessing('stage-registration-confirmation-email', '⚠️ Captain notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
+          ])
+        },
+        { registrationId, userId }
+      )
 
     } catch (error) {
       this.logger.logPaymentProcessing('stage-registration-confirmation-email', '❌ Failed to stage registration email', { error: error instanceof Error ? error.message : 'Unknown error' }, 'error')

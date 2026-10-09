@@ -33,7 +33,7 @@
     "flatpickr": "^4.6.13",
     "loops": "^5.0.1",
     "lucide-react": "^0.515.0",
-    "next": "^16.3.4",
+    "next": "^16.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
@@ -65,7 +65,7 @@
     "lightningcss-linux-x64-gnu": "1.30.1"
   },
   "overrides": {
-    "js-yaml": "^5.2.3"
+    "js-yaml": "^5.4.2"
   },
   "//overrides": "Temporary overrides to force patched versions of transitive deps with security vulnerabilities. Remove each entry once the upstream package has updated. See dependency-overrides.md for details."
 }

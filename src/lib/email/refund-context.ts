@@ -17,7 +17,6 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
-import { formatDateString } from '@/lib/date-utils'
 import { getRegistrationDateLabel } from '@/lib/registration-date-label'
 
 export interface RefundEmailContext {
@@ -48,6 +47,16 @@ function fromRegistration(reg: RegistrationShape | null, startDateOverride?: str
   })
   if (!registrationName || !seasonName) return null
   return { registrationName, seasonName }
+}
+
+/**
+ * Format a DATE column (YYYY-MM-DD) as M/D/YYYY with no timezone conversion.
+ * (formatDateString builds a local-midnight Date and then formats it in
+ * America/New_York, which shifts it a day back on UTC hosts such as Vercel.)
+ */
+function formatDateOnly(value: string): string {
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number)
+  return y && m && d ? `${m}/${d}/${y}` : value
 }
 
 const REG_SELECT = 'name, type, start_date, season:seasons(name)'
@@ -92,7 +101,7 @@ export async function resolveRefundEmailContext(
   if (membershipName && userMembership?.valid_until) {
     return {
       registrationName: membershipName,
-      seasonName: `Valid through ${formatDateString(userMembership.valid_until)}`,
+      seasonName: `Valid through ${formatDateOnly(userMembership.valid_until)}`,
       source: 'membership',
     }
   }

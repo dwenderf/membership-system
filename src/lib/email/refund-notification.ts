@@ -9,6 +9,7 @@ import { emailStagingManager } from '@/lib/email/staging'
 import { stageAdminRefundNotification } from '@/lib/email/admin-notifications'
 import { stageCaptainRosterChangeNotification } from '@/lib/email/captain-notifications'
 import { runAfterResponse } from '@/lib/run-after-response'
+import { resolveRefundEmailContext } from '@/lib/email/refund-context'
 import { logger } from '@/lib/logging/logger'
 
 /**
@@ -101,6 +102,20 @@ export async function stageRefundNotificationEmail(
       return
     }
 
+    // registrationName / seasonName (season for teams, event/scrimmage date for
+    // events). The refund email itself must still go out if we can't resolve
+    // them (it is the member's financial notice), so in that case we omit the
+    // two keys rather than send empty/generic values, and report a warning.
+    const refundContext = await resolveRefundEmailContext(supabase, userId, paymentId)
+    if (!refundContext) {
+      logger.reportWarningToSentry(
+        'system',
+        'refund-email-context-missing',
+        'Could not resolve registration/season for refunded payment; member refund email staged without registrationName/seasonName',
+        { refundId, paymentId }
+      )
+    }
+
     // Stage the refund notification email for batch processing
     await emailStagingManager.stageEmail({
       user_id: userId,
@@ -117,7 +132,10 @@ export async function stageRefundNotificationEmail(
         invoiceNumber: invoiceNumber,
         refundDate: formatDate(new Date(refund.created_at)),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`,
+        ...(refundContext
+          ? { registrationName: refundContext.registrationName, seasonName: refundContext.seasonName }
+          : {})
       },
       triggered_by: 'automated',
       related_entity_type: 'payments',

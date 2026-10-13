@@ -10,6 +10,13 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { LoopsClient, EventProperties } from 'loops'
 import { getTestEmailPrefix } from '@/lib/email/environment'
 import { Json } from '@/types/database'
+import {
+  StagedEmailFailure,
+  classifyLoopsError,
+  flushStagedEmailReports,
+  reportStagedEmailHardFailure,
+  reportTransientFailureSummary,
+} from '@/lib/email/staged-email-sentry'
 
 /** Row shape of `email_logs` as read/updated by this processor — not the full DB
  * row, just the fields queried and accessed downstream. */
@@ -97,6 +104,8 @@ export class EmailProcessingManager {
       }
 
       results.processed = pendingEmails.length
+      const transientFailures: StagedEmailFailure[] = []
+      let reportedToSentry = false
 
       // Process each pending email with delays to prevent overwhelming the email service
       for (let i = 0; i < pendingEmails.length; i++) {
@@ -113,17 +122,29 @@ export class EmailProcessingManager {
             }
           )
           
-          const success = await this.sendStagedEmail(emailLog)
+          const outcome = await this.sendStagedEmail(emailLog)
           
-          if (success) {
+          if (outcome.ok) {
             results.successful++
           } else {
             results.failed++
             results.errors.push(`Failed to send email ${emailLog.id}`)
+            if (outcome.failure.kind === 'transient') {
+              transientFailures.push(outcome.failure)
+            } else if (reportStagedEmailHardFailure(outcome.failure)) {
+              reportedToSentry = true
+            }
           }
         } catch (emailError) {
           results.failed++
           results.errors.push(`Error processing email ${emailLog.id}: ${emailError instanceof Error ? emailError.message : String(emailError)}`)
+          transientFailures.push({
+            emailLogId: emailLog.id,
+            eventType: emailLog.event_type,
+            templateId: emailLog.template_id,
+            kind: 'transient',
+            errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
+          })
         }
         
         // Add delay between emails to prevent overwhelming the email service
@@ -141,6 +162,9 @@ export class EmailProcessingManager {
           await this.delay(delayMs)
         }
       }
+
+      if (reportTransientFailureSummary(transientFailures)) reportedToSentry = true
+      if (reportedToSentry) await flushStagedEmailReports()
 
       logger.logBatchProcessing(
         'email-processing-complete',
@@ -175,7 +199,9 @@ export class EmailProcessingManager {
   /**
    * Send a specific staged email directly to Loops and update the existing log record
    */
-  private async sendStagedEmail(emailLog: StagedEmailLog): Promise<boolean> {
+  private async sendStagedEmail(
+    emailLog: StagedEmailLog
+  ): Promise<{ ok: true } | { ok: false; failure: StagedEmailFailure }> {
     try {
       const supabase = createAdminClient()
       const emailData = emailLog.email_data || {}
@@ -199,7 +225,7 @@ export class EmailProcessingManager {
           })
           .eq('id', emailLog.id)
 
-        return true
+        return { ok: true }
       }
 
       // Send email directly to Loops
@@ -267,7 +293,7 @@ export class EmailProcessingManager {
           }
         )
 
-        return true
+        return { ok: true }
       } else {
         // Update email log status to failed
         await supabase
@@ -277,41 +303,76 @@ export class EmailProcessingManager {
             bounce_reason: 'Loops API error'
           })
           .eq('id', emailLog.id)
+
+        logger.logPaymentProcessing(
+          'email-staged-failed',
+          'Loops returned an unsuccessful response for staged email (marked failed)',
+          { emailLogId: emailLog.id, eventType: emailLog.event_type, templateId: emailLog.template_id, userId: emailLog.user_id },
+          'warn'
+        )
         
-        return false
+        return {
+          ok: false,
+          failure: {
+            emailLogId: emailLog.id,
+            eventType: emailLog.event_type,
+            templateId: emailLog.template_id,
+            kind: 'loops_unsuccessful',
+            errorMessage: 'Loops API returned success=false',
+          },
+        }
       }
 
     } catch (error) {
-      // Keep as pending on transient network/socket errors so the next cron
-      // run retries automatically. Only hard failures (Loops API errors) are
-      // marked failed in the success:false branch above.
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      // Loops 4xx (bad request, e.g. "Missing required data variable(s)") is a
+      // hard failure: retrying sends the same payload and fails again, so mark
+      // it 'failed'. Network/socket errors, 5xx and 429 stay 'pending' so the
+      // next cron run retries automatically.
+      const { kind, statusCode } = classifyLoopsError(error)
       try {
         const supabase = createAdminClient()
         await supabase
           .from('email_logs')
           .update({
-            status: 'pending',
-            bounce_reason: error instanceof Error ? error.message : String(error)
+            status: kind === 'transient' ? 'pending' : 'failed',
+            bounce_reason: errorMessage
           })
           .eq('id', emailLog.id)
       } catch {
         // Ignore update errors
       }
 
+      // 'warn', not 'error': the logger's automatic Sentry report would put the
+      // metadata (incl. recipient) in Sentry and group every failure together.
+      // Sentry reporting is done by processStagedEmails via staged-email-sentry.
       logger.logPaymentProcessing(
         'email-staged-failed',
-        'Failed to send staged email',
+        kind === 'transient'
+          ? 'Failed to send staged email (transient, will retry)'
+          : 'Failed to send staged email (rejected by Loops, marked failed)',
         { 
           emailLogId: emailLog.id,
           eventType: emailLog.event_type,
-          templateId: emailLog.template_id, // Include template_id in error logging
-          email: emailLog.email_address,
-          error: error instanceof Error ? error.message : String(error)
+          templateId: emailLog.template_id,
+          userId: emailLog.user_id,
+          statusCode,
+          error: errorMessage
         },
-        'error'
+        'warn'
       )
 
-      return false
+      return {
+        ok: false,
+        failure: {
+          emailLogId: emailLog.id,
+          eventType: emailLog.event_type,
+          templateId: emailLog.template_id,
+          kind,
+          statusCode,
+          errorMessage,
+        },
+      }
     }
   }
 

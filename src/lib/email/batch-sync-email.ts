@@ -16,6 +16,8 @@ import {
   flushStagedEmailReports,
   reportStagedEmailHardFailure,
   reportTransientFailureSummary,
+  reportLoopsConfigFailures,
+  isRetryableKind,
 } from '@/lib/email/staged-email-sentry'
 
 /** Row shape of `email_logs` as read/updated by this processor — not the full DB
@@ -105,6 +107,7 @@ export class EmailProcessingManager {
 
       results.processed = pendingEmails.length
       const transientFailures: StagedEmailFailure[] = []
+      const configFailures: StagedEmailFailure[] = []
       let reportedToSentry = false
 
       // Process each pending email with delays to prevent overwhelming the email service
@@ -131,6 +134,8 @@ export class EmailProcessingManager {
             results.errors.push(`Failed to send email ${emailLog.id}`)
             if (outcome.failure.kind === 'transient') {
               transientFailures.push(outcome.failure)
+            } else if (outcome.failure.kind === 'loops_config') {
+              configFailures.push(outcome.failure)
             } else if (reportStagedEmailHardFailure(outcome.failure)) {
               reportedToSentry = true
             }
@@ -163,6 +168,7 @@ export class EmailProcessingManager {
         }
       }
 
+      if (reportLoopsConfigFailures(configFailures)) reportedToSentry = true
       if (reportTransientFailureSummary(transientFailures)) reportedToSentry = true
       if (reportedToSentry) await flushStagedEmailReports()
 
@@ -335,7 +341,7 @@ export class EmailProcessingManager {
         await supabase
           .from('email_logs')
           .update({
-            status: kind === 'transient' ? 'pending' : 'failed',
+            status: isRetryableKind(kind) ? 'pending' : 'failed',
             bounce_reason: errorMessage
           })
           .eq('id', emailLog.id)
@@ -348,8 +354,8 @@ export class EmailProcessingManager {
       // Sentry reporting is done by processStagedEmails via staged-email-sentry.
       logger.logPaymentProcessing(
         'email-staged-failed',
-        kind === 'transient'
-          ? 'Failed to send staged email (transient, will retry)'
+        isRetryableKind(kind)
+          ? `Failed to send staged email (${kind}, left pending to retry)`
           : 'Failed to send staged email (rejected by Loops, marked failed)',
         { 
           emailLogId: emailLog.id,

@@ -12,6 +12,10 @@ import { runAfterResponse } from '@/lib/run-after-response'
 import { resolveRefundEmailContext } from '@/lib/email/refund-context'
 import { logger } from '@/lib/logging/logger'
 
+/** Neutral, non-empty values used only when the refunded item can't be resolved. */
+export const REFUND_FALLBACK_REGISTRATION_NAME = 'Your purchase'
+export const REFUND_FALLBACK_SEASON_NAME = 'See invoice for details'
+
 /**
  * Stage a refund notification email for batch processing
  *
@@ -104,14 +108,15 @@ export async function stageRefundNotificationEmail(
 
     // registrationName / seasonName (season for teams, event/scrimmage date for
     // events). The refund email itself must still go out if we can't resolve
-    // them (it is the member's financial notice), so in that case we omit the
-    // two keys rather than send empty/generic values, and report a warning.
+    // them (it is the member's financial notice), so in that case we send
+    // neutral, non-empty fallbacks (Loops rejects empty required variables)
+    // and report a warning so the gap is visible.
     const refundContext = await resolveRefundEmailContext(supabase, userId, paymentId)
     if (!refundContext) {
       logger.reportWarningToSentry(
         'system',
         'refund-email-context-missing',
-        'Could not resolve registration/season for refunded payment; member refund email staged without registrationName/seasonName',
+        'Could not resolve registration/season for refunded payment; member refund email staged with neutral fallback registrationName/seasonName',
         { refundId, paymentId }
       )
     }
@@ -133,9 +138,8 @@ export async function stageRefundNotificationEmail(
         refundDate: formatDate(new Date(refund.created_at)),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`,
-        ...(refundContext
-          ? { registrationName: refundContext.registrationName, seasonName: refundContext.seasonName }
-          : {})
+        registrationName: refundContext?.registrationName ?? REFUND_FALLBACK_REGISTRATION_NAME,
+        seasonName: refundContext?.seasonName ?? REFUND_FALLBACK_SEASON_NAME
       },
       triggered_by: 'automated',
       related_entity_type: 'payments',

@@ -1,4 +1,4 @@
-import { formatEventDateTime } from '@/lib/date-utils'
+import { getRegistrationDateLabel } from '@/lib/registration-date-label'
 
 interface RegistrationDateDisplayProps {
   type: 'team' | 'event' | 'scrimmage'
@@ -28,17 +28,9 @@ export default function RegistrationDateDisplay({
   seasonName,
   className = 'text-sm text-gray-500'
 }: RegistrationDateDisplayProps) {
-  if ((type === 'event' || type === 'scrimmage') && startDate) {
-    return (
-      <p className={className}>
-        {formatEventDateTime(startDate)}
-      </p>
-    )
-  }
-
   return (
     <p className={className}>
-      {seasonName || 'No season'}
+      {getRegistrationDateLabel({ type, startDate, seasonName }) ?? 'No season'}
     </p>
   )
 }

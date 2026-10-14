@@ -13,6 +13,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { formatDateTime } from '@/lib/date-utils'
 import { emailService } from '@/lib/email/service'
+import { resolveRefundEmailContext } from '@/lib/email/refund-context'
 import { logger } from '@/lib/logging/logger'
 
 /** The slice of a user's `preferences` jsonb blob this module reads —
@@ -249,20 +250,22 @@ export async function stageAdminRefundNotification(
 
     const playerName = `${player.first_name} ${player.last_name}`
 
-    // Resolve the registration name from the refunded payment
-    const { data: userReg } = await supabase
-      .from('user_registrations')
-      .select('registration:registrations(name, season:seasons(name))')
-      .eq('payment_id', paymentId)
-      .eq('user_id', playerUserId)
-      .single()
-
-    const reg = userReg?.registration
-      ? (Array.isArray(userReg.registration) ? userReg.registration[0] : userReg.registration)
-      : null
-    const registrationName = reg?.name ?? 'Registration'
-    const regSeason = reg?.season ? (Array.isArray(reg.season) ? reg.season[0] : reg.season) : null
-    const seasonName = regSeason?.name ?? ''
+    // Resolve what was refunded. Loops rejects empty required variables, and a
+    // generic "Registration" label is useless to admins, so if we can't find the
+    // item we skip the admin email and report it (Sentry via logger 'error')
+    // rather than stage an email that can never send correctly.
+    const context = await resolveRefundEmailContext(supabase, playerUserId, paymentId)
+    if (!context) {
+      logger.logAdminAction(
+        'admin-refund-context-missing',
+        'stageAdminRefundNotification: could not resolve registration/season for refunded payment; admin refund email not staged',
+        { playerUserId, paymentId },
+        undefined,
+        'error'
+      )
+      return
+    }
+    const { registrationName, seasonName } = context
 
     const refundAmount = (refundAmountCents / 100).toFixed(2)
     const originalAmount = (originalAmountCents / 100).toFixed(2)

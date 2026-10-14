@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
-import { formatDate } from '@/lib/date-utils'
+import { formatDateString } from '@/lib/date-utils'
 import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
 import { logger } from '@/lib/logging/logger'
@@ -180,7 +180,7 @@ export default function UserPaymentPlansSection() {
                   <div className="mb-3 p-2 bg-gray-50 rounded text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Next Payment:</span>
-                      <span className="font-medium">{formatDate(new Date(plan.next_payment_date))}</span>
+                      <span className="font-medium">{formatDateString(plan.next_payment_date)}</span>
                     </div>
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-gray-600">Amount:</span>

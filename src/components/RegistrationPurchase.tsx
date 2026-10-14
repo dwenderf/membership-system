@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatDate } from '@/lib/date-utils'
+import { formatDateString } from '@/lib/date-utils'
 
 import { Elements } from '@stripe/react-stripe-js'
 import { stripePromise } from '@/lib/stripe-client'
@@ -25,16 +25,6 @@ import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 // Force import client config
 import '../../instrumentation-client'
 
-// Helper function to safely parse date strings without timezone conversion
-function formatDateString(dateString: string): string {
-  if (!dateString) return 'N/A'
-  
-  // Parse the date components manually to avoid timezone issues
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day) // month is 0-indexed
-  
-  return formatDate(date)
-}
 
 interface RegistrationCategory {
   id: string

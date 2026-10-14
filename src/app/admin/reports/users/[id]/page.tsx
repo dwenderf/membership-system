@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatAmount } from '@/lib/format-utils'
 import { Logger } from '@/lib/logging/logger'
-import { formatDate, formatDateTime } from '@/lib/date-utils'
+import { formatDate, formatDateTime, formatDateString } from '@/lib/date-utils'
 import AdminToggleSection from './AdminToggleSection'
 import DiscountUsage from '@/components/DiscountUsage'
 import RoleBadge from '@/components/RoleBadge'
@@ -518,10 +518,10 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                               {membership.membership_name}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Expires: {formatDate(membership.latest_expiration)}
+                              Expires: {formatDateString(membership.latest_expiration)}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Member since: {formatDate(membership.member_since)}
+                              Member since: {formatDateString(membership.member_since)}
                             </div>
                           </div>
                           <div className="text-right">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { formatDate } from '@/lib/date-utils'
+import { formatDateString } from '@/lib/date-utils'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
@@ -362,7 +362,7 @@ export async function POST(request: NextRequest) {
         // client can't infer relation cardinality and types it as an array.
         const season = registration.seasons as unknown as { name: string; start_date: string; end_date: string } | null
         const seasonName = season
-          ? `${season.name} (${formatDate(new Date(season.start_date))} - ${formatDate(new Date(season.end_date))})`
+          ? `${season.name} (${formatDateString(season.start_date)} - ${formatDateString(season.end_date)})`
           : 'Unknown Season'
 
         await emailService.sendWaitlistAddedNotification({

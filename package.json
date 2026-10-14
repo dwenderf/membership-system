@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npx jest",
+    "test": "TZ=UTC npx jest",
     "test:watch": "npx jest --watch",
     "test:coverage": "npx jest --coverage",
     "schema:build": "node scripts/build-schema-sql.js",

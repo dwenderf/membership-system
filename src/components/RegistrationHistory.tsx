@@ -1,20 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { formatDate, formatTime } from '@/lib/date-utils'
+import { formatDate, formatDateString, formatTime } from '@/lib/date-utils'
 
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
 // Helper function to safely parse date strings without timezone conversion
-function formatDateString(dateString: string): string {
-  if (!dateString) return 'N/A'
-  
-  // Parse the date components manually to avoid timezone issues
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day) // month is 0-indexed
-  
-  return formatDate(date)
-}
 
 interface UserRegistration {
   id: string

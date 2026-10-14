@@ -4,16 +4,28 @@
  */
 const APP_TIMEZONE = process.env.NEXT_PUBLIC_APP_TIMEZONE || 'America/New_York'
 
-/**
- * Formats a date string (YYYY-MM-DD) to localized date display
- * without timezone conversion issues
- */
-export function formatDateString(dateString: string): string {
-  // Split the date string and create date in local timezone
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day) // month is 0-indexed
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
-  return date.toLocaleDateString('en-US', { timeZone: APP_TIMEZONE })
+/**
+ * Formats a calendar date for display as M/D/YYYY.
+ *
+ * - Plain `YYYY-MM-DD` values (Postgres DATE columns: season start/end,
+ *   membership valid_from/valid_until, planned/next payment dates) are a
+ *   calendar day, not an instant: they are formatted from their parts with NO
+ *   timezone conversion, so the result is the same on every host (UTC on
+ *   Vercel/CI, America/New_York, anywhere). See #410.
+ * - Anything else (a full timestamp, e.g. `2026-11-11T03:00:00Z`) is a real
+ *   instant and is shown as the calendar day in APP_TIMEZONE via formatDate().
+ * - Empty/null -> 'N/A'.
+ */
+export function formatDateString(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A'
+  const match = DATE_ONLY_RE.exec(dateString.trim())
+  if (match) {
+    const [, year, month, day] = match
+    return `${Number(month)}/${Number(day)}/${year}`
+  }
+  return formatDate(dateString)
 }
 
 /**

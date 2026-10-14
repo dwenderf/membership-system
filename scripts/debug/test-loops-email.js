@@ -81,7 +81,7 @@ async function testLoopsEmail() {
       validUntil: '2026-07-30',
       paymentIntentId: 'pi_test_' + Date.now(),
       purchaseDate: new Date().toLocaleDateString(),
-      dashboardUrl: 'https://hockeyassociation.org/user/dashboard'
+      dashboardUrl: 'https://hockeyassociation.org/user'
     }
     
     console.log('📧 Email data:', emailData)

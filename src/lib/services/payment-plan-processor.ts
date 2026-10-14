@@ -208,8 +208,8 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                 next_payment_date: planSummary.next_payment_date ? formatDate(new Date(planSummary.next_payment_date)) : 'None',
                 is_final_payment: isFinalPayment,
                 account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`,
-                dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`,
-                dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+                dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+                dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
               },
               triggered_by: 'automated',
               related_entity_type: 'payments',
@@ -232,8 +232,8 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
                   total_installments: planSummary.total_installments,
                   plan_start_date: formatDate(new Date(payment.staging_metadata?.payment_plan_created_at || payment.created_at)),
                   completion_date: formatDate(new Date()),
-                  dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`,
-                  dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+                  dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+                  dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
                 },
                 triggered_by: 'automated',
                 related_entity_type: 'payments',

@@ -332,7 +332,7 @@ class EmailService {
         validUntil: options.validUntil,
         paymentIntentId: options.paymentIntentId,
         purchaseDate: formatDate(new Date()),
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }
@@ -435,7 +435,7 @@ class EmailService {
         amount: (options.amount / 100).toFixed(2),
         registrationDate: formatDate(new Date()),
         paymentIntentId: options.paymentIntentId,
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }
@@ -465,7 +465,7 @@ class EmailService {
         categoryName: options.categoryName,
         seasonName: options.seasonName,
         waitlistDate: formatDate(new Date()),
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }
@@ -598,7 +598,7 @@ class EmailService {
         invoiceNumber: options.invoiceNumber || 'N/A',
         refundDate: options.refundDate || formatDate(new Date()),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }
@@ -677,7 +677,7 @@ class EmailService {
           ? formatDate(new Date(options.nextPaymentDate))
           : 'No more payments due',
         is_final_payment: options.isFinalPayment,
-        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }
@@ -859,7 +859,7 @@ class EmailService {
         total_installments: options.totalInstallments,
         plan_start_date: formatDate(new Date(options.planStartDate)),
         completion_date: formatDate(new Date(options.completionDate)),
-        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`
+        dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
       }
     })
   }

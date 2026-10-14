@@ -38,6 +38,13 @@ describe('member refund email registration/season', () => {
     expect(mockWarn).not.toHaveBeenCalled()
   })
 
+  it('links the dashboard button to /user (there is no /user/dashboard route)', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://site.test'
+    mockResolve.mockResolvedValueOnce(null)
+    await stageRefundNotificationEmail('r1', 'u1', 'p1')
+    expect(data().dashboardUrl).toBe('https://site.test/user')
+  })
+
   it('sends neutral non-empty fallbacks and warns when the item cannot be resolved', async () => {
     mockResolve.mockResolvedValueOnce(null)
     await stageRefundNotificationEmail('r1', 'u1', 'p1')

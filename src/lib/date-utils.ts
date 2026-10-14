@@ -14,8 +14,11 @@ const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
  *   calendar day, not an instant: they are formatted from their parts with NO
  *   timezone conversion, so the result is the same on every host (UTC on
  *   Vercel/CI, America/New_York, anywhere). See #410.
+ * - Impossible dates (month 13, Feb 30, ...) -> 'Invalid Date'.
  * - Anything else (a full timestamp, e.g. `2026-11-11T03:00:00Z`) is a real
  *   instant and is shown as the calendar day in APP_TIMEZONE via formatDate().
+ *   Pass timestamps WITH an offset (Supabase always does); an offset-less
+ *   `2026-11-11T00:00:00` is parsed in the host timezone by JS.
  * - Empty/null -> 'N/A'.
  */
 export function formatDateString(dateString: string | null | undefined): string {
@@ -23,7 +26,13 @@ export function formatDateString(dateString: string | null | undefined): string 
   const match = DATE_ONLY_RE.exec(dateString.trim())
   if (match) {
     const [, year, month, day] = match
-    return `${Number(month)}/${Number(day)}/${year}`
+    const y = Number(year)
+    const m = Number(month)
+    const d = Number(day)
+    // Range check: reject impossible calendar dates (e.g. 2026-13-45, 2026-02-30).
+    const daysInMonth = m >= 1 && m <= 12 ? new Date(Date.UTC(y, m, 0)).getUTCDate() : 0
+    if (d < 1 || d > daysInMonth) return 'Invalid Date'
+    return `${m}/${d}/${year}`
   }
   return formatDate(dateString)
 }

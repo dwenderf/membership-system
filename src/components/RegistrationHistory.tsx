@@ -5,7 +5,6 @@ import { formatDate, formatDateString, formatTime } from '@/lib/date-utils'
 
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
-// Helper function to safely parse date strings without timezone conversion
 
 interface UserRegistration {
   id: string

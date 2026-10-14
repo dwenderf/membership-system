@@ -25,7 +25,6 @@ import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 // Force import client config
 import '../../instrumentation-client'
 
-// Helper function to safely parse date strings without timezone conversion
 
 interface RegistrationCategory {
   id: string

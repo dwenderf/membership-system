@@ -521,7 +521,7 @@ export default async function UserDetailPage({ params, searchParams: searchParam
                               Expires: {formatDateString(membership.latest_expiration)}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Member since: {formatDate(membership.member_since)}
+                              Member since: {formatDateString(membership.member_since)}
                             </div>
                           </div>
                           <div className="text-right">

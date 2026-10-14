@@ -45,3 +45,14 @@ describe.each(ZONES)('formatDateString with host TZ=%s', (zone) => {
     expect(formatDateString(undefined)).toBe('N/A')
   })
 })
+
+describe('formatDateString range check', () => {
+  it.each(['2026-13-01', '2026-00-10', '2026-02-30', '2027-02-29', '2026-04-31', '2026-01-00'])(
+    'rejects impossible date %s', (input) => {
+      expect(formatDateString(input)).toBe('Invalid Date')
+    }
+  )
+  it('accepts a real leap day', () => {
+    expect(formatDateString('2028-02-29')).toBe('2/29/2028')
+  })
+})

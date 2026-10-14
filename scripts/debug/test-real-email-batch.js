@@ -90,7 +90,7 @@ async function testRealEmailBatch() {
          const enrichedData = {
            ...cleanData,
            purchaseDate: new Date().toLocaleDateString(),
-           dashboardUrl: 'https://hockeyassociation.org/user/dashboard'
+           dashboardUrl: 'https://hockeyassociation.org/user'
          }
          
          console.log('📧 Sending with enriched data:', enrichedData)

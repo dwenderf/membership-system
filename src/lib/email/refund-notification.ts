@@ -137,7 +137,7 @@ export async function stageRefundNotificationEmail(
         invoiceNumber: invoiceNumber,
         refundDate: formatDate(new Date(refund.created_at)),
         supportEmail: process.env.SUPPORT_EMAIL || 'support@example.com',
-        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/dashboard`,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
         registrationName: refundContext?.registrationName ?? REFUND_FALLBACK_REGISTRATION_NAME,
         seasonName: refundContext?.seasonName ?? REFUND_FALLBACK_SEASON_NAME
       },

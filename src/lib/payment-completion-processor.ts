@@ -258,7 +258,10 @@ export class PaymentCompletionProcessor {
         .from('xero_invoices')
         .select('*')
         .eq('id', event.metadata.xero_staging_record_id)
-        .in('sync_status', ['staged', 'pending', 'synced'])
+        // 'abandoned' is included on purpose: the daily housekeeping sweep abandons carts whose payment
+        // stayed pending for a long time, and a payment that completes after that must still find its
+        // invoice. It is promoted to 'pending' like any staged invoice (see updateXeroStagingRecords).
+        .in('sync_status', ['staged', 'pending', 'synced', 'abandoned'])
         .limit(1)
 
       if (idError) {
@@ -282,6 +285,15 @@ export class PaymentCompletionProcessor {
           message: 'Staging record ID was in Stripe metadata but does not exist in database. Possible data corruption or deletion.'
         }, 'error')
         return null
+      }
+
+      if (invoiceById[0].sync_status === 'abandoned') {
+        this.logger.logPaymentProcessing('find-existing-staging-records', '♻️ Reviving an abandoned staging record: its payment completed after the cart was swept', {
+          xero_staging_record_id: invoiceById[0].id,
+          payment_id: event.payment_id,
+          user_id: event.user_id,
+          abandoned_reason: invoiceById[0].sync_error
+        }, 'warn')
       }
 
       // Success - found the exact staging record
@@ -381,7 +393,7 @@ export class PaymentCompletionProcessor {
           .select('staging_metadata')
           .eq('xero_invoice_id', existingRecords.id)
           .eq('staging_metadata->>payment_id', event.payment_id)
-          .eq('sync_status', 'staged')
+          .in('sync_status', ['staged', 'abandoned']) // abandoned: see findExistingStagingRecords
           .single()
         
         const updatedPaymentMetadata = {

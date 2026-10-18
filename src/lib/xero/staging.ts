@@ -14,6 +14,7 @@ import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '../service
 import { toDateString } from '../date-utils'
 import { Database } from '../../types/database'
 import { XeroLineItemRow } from './xero-types'
+import { UNPROMOTED_INVOICE_STATUSES_FILTER } from '@/lib/xero/invoice-status'
 
 type XeroInvoiceStagingRow = Database['public']['Tables']['xero_invoices']['Row']
 
@@ -953,6 +954,7 @@ export class XeroStagingManager {
         .select('invoice_number')
         .eq('payment_id', paymentId)
         .eq('invoice_type', 'ACCREC')
+        .not('sync_status', 'in', UNPROMOTED_INVOICE_STATUSES_FILTER) // never a stale cart sharing this payment_id
         .single()
 
       // Create single line item for discount refund
@@ -1169,6 +1171,7 @@ export class XeroStagingManager {
         `)
         .eq('payment_id', paymentId)
         .eq('invoice_type', 'ACCREC')
+        .not('sync_status', 'in', UNPROMOTED_INVOICE_STATUSES_FILTER) // never a stale cart sharing this payment_id
         .single()
       
       const invoiceLineItems = originalInvoice?.xero_invoice_line_items as XeroLineItemRow[] | undefined

@@ -16,10 +16,20 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const STALE_CART_AGE_MS = 24 * 60 * 60 * 1000 // 1 day
 
+/**
+ * A 'pending' payment is not proof of abandonment (a slow payment method can take days, and a left-open
+ * checkout can still be completed), so these carts wait much longer than cancelled/failed ones. If one
+ * completes after being swept anyway, the completion processor and the Stripe webhook revive the
+ * abandoned records (see findExistingStagingRecords / updatePaymentPlanStatuses).
+ */
+export const STALE_PENDING_PAYMENT_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
 export const ABANDONED_CART_REASON =
   'Automatically marked as abandoned - staged over 24 hours without payment completion'
 export const ABANDONED_CART_WITH_PAYMENT_REASON =
   'Automatically marked as abandoned - staged with a payment that never completed'
+export const ABANDONED_CART_PENDING_PAYMENT_REASON =
+  'Automatically marked as abandoned - payment still pending after 7 days'
 export const ABANDONED_CART_ON_SETTLED_PAYMENT_REASON =
   'Automatically marked as abandoned - old cart stamped with a payment that completed for another invoice'
 
@@ -65,6 +75,8 @@ export interface CartWithPaymentSweepResult extends CartSweepResult {
    * purchase's payment that completed and is fully carried by promoted invoices.
    */
   abandonedOnSettledPayment: number
+  /** How many of the abandoned invoices (included in `invoices`) had a payment still pending after 7 days. */
+  abandonedPendingPayment: number
 }
 
 function chunk<T>(items: T[], size = CHUNK_SIZE): T[][] {
@@ -136,6 +148,7 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
     .from('xero_invoices')
     .select('id')
     .eq('sync_status', 'staged')
+    .eq('invoice_type', 'ACCREC') // never credit notes: see abandonCartsWithPayment
     .is('payment_id', null)
     .or(staleFilter(cutoff))
 
@@ -154,12 +167,15 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
 /**
  * Branch 2: invoices still 'staged' WITH a payment_id.
  *
- * Only DRAFT invoices are considered: a completed checkout sets the invoice to AUTHORISED, so an
- * AUTHORISED invoice stuck at 'staged' is not a cart and is left for manual review. Of those, an
- * invoice (older than STALE_CART_AGE_MS) is abandoned in exactly two cases:
+ * Only ACCREC DRAFT invoices are considered. Credit notes (ACCRECCREDIT) are also staged DRAFT with
+ * the original payment's id while a refund waits for Stripe, so they must never be swept as carts.
+ * A completed checkout sets the invoice to AUTHORISED, so an AUTHORISED invoice stuck at 'staged' is
+ * not a cart and is left for manual review. Of the candidates, an invoice (older than
+ * STALE_CART_AGE_MS) is abandoned in exactly three cases:
  *
  *  1. its payment ended without success (cancelled/failed);
- *  2. its payment COMPLETED but is already fully carried by promoted invoices: the sum of the
+ *  2. its payment is still 'pending' and the invoice is older than STALE_PENDING_PAYMENT_AGE_MS;
+ *  3. its payment COMPLETED but is already fully carried by promoted invoices: the sum of the
  *     promoted (pending/processing/synced) invoices' net_amount for that payment_id is at least the
  *     payment's final_amount. Such a staged invoice is an old abandoned cart (usually another item,
  *     another price) that the payment-intent routes stamped with a LATER purchase's payment_id,
@@ -172,13 +188,14 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
  * the Xero queue. It is never abandoned and is counted in `needsReconciliation`.
  */
 export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartWithPaymentSweepResult> {
-  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, abandonedOnSettledPayment: 0 }
+  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, abandonedOnSettledPayment: 0, abandonedPendingPayment: 0 }
   const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
 
   const { data: candidates, error: selectError } = await supabase
     .from('xero_invoices')
     .select('id, payment_id, staged_at, created_at')
     .eq('sync_status', 'staged')
+    .eq('invoice_type', 'ACCREC')
     .eq('invoice_status', 'DRAFT')
     .not('payment_id', 'is', null)
     .or(staleFilter(cutoff))
@@ -235,7 +252,9 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
     }
   }
 
+  const pendingCutoff = Date.now() - STALE_PENDING_PAYMENT_AGE_MS
   const endedPaymentIds: string[] = []
+  const stalePendingIds: string[] = []
   const settledPaymentIds: string[] = []
   let needsReconciliation = 0
 
@@ -249,27 +268,46 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
       else needsReconciliation++
     } else if (ENDED_PAYMENT_STATUSES.includes(payment.status)) {
       endedPaymentIds.push(row.id)
+    } else if (payment.status === 'pending') {
+      const stagedAt = new Date(row.staged_at ?? row.created_at).getTime()
+      if (stagedAt < pendingCutoff) stalePendingIds.push(row.id)
     }
-    // Anything else is left alone: pending (see ENDED_PAYMENT_STATUSES) or refunded.
+    // Anything else is left alone: refunded, or a pending payment younger than the pending threshold.
   }
 
+  const none = { success: true, error: null, invoices: 0, payments: 0 }
   const ended = endedPaymentIds.length > 0
     ? await abandonInvoices(supabase, endedPaymentIds, ABANDONED_CART_WITH_PAYMENT_REASON)
-    : { success: true, error: null, invoices: 0, payments: 0 }
+    : none
   if (!ended.success) {
-    return { ...ended, needsReconciliation, abandonedOnSettledPayment: 0 }
+    return { ...ended, needsReconciliation, abandonedOnSettledPayment: 0, abandonedPendingPayment: 0 }
+  }
+
+  const pending = stalePendingIds.length > 0
+    ? await abandonInvoices(supabase, stalePendingIds, ABANDONED_CART_PENDING_PAYMENT_REASON)
+    : none
+  if (!pending.success) {
+    return {
+      ...pending,
+      invoices: ended.invoices + pending.invoices,
+      payments: ended.payments + pending.payments,
+      needsReconciliation,
+      abandonedOnSettledPayment: 0,
+      abandonedPendingPayment: pending.invoices,
+    }
   }
 
   const settled = settledPaymentIds.length > 0
     ? await abandonInvoices(supabase, settledPaymentIds, ABANDONED_CART_ON_SETTLED_PAYMENT_REASON)
-    : { success: true, error: null, invoices: 0, payments: 0 }
+    : none
 
   return {
     success: settled.success,
     error: settled.error,
-    invoices: ended.invoices + settled.invoices,
-    payments: ended.payments + settled.payments,
+    invoices: ended.invoices + pending.invoices + settled.invoices,
+    payments: ended.payments + pending.payments + settled.payments,
     needsReconciliation,
     abandonedOnSettledPayment: settled.invoices,
+    abandonedPendingPayment: pending.invoices,
   }
 }

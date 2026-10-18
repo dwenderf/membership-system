@@ -132,7 +132,8 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 /**
  * Update payment plan installment statuses
  * Sets first installment to 'pending' and remaining to 'planned'
- * Only updates payments that are still in 'staged' status (idempotent)
+ * Only updates payments that are still in 'staged' status (idempotent), or 'abandoned': the daily
+ * housekeeping sweep may have abandoned the cart before a late payment completed, and it is revived here.
  * Flexible - works with any number of installments
  */
 async function updatePaymentPlanStatuses(
@@ -154,18 +155,18 @@ async function updatePaymentPlanStatuses(
   // Update first payment to 'pending' (only if still staged)
   await supabase
     .from('xero_payments')
-    .update({ sync_status: 'pending' })
+    .update({ sync_status: 'pending', sync_error: null })
     .eq('id', allPayments[0].id)
-    .eq('sync_status', 'staged')
+    .in('sync_status', ['staged', 'abandoned'])
 
   // Update remaining payments to 'planned' (only if still staged)
   if (allPayments.length > 1) {
     const plannedPaymentIds = allPayments.slice(1).map(p => p.id)
     await supabase
       .from('xero_payments')
-      .update({ sync_status: 'planned' })
+      .update({ sync_status: 'planned', sync_error: null })
       .in('id', plannedPaymentIds)
-      .eq('sync_status', 'staged')
+      .in('sync_status', ['staged', 'abandoned'])
   }
 
   logger.logPaymentProcessing('payment-plan-statuses-updated', 'Updated xero_payments installment statuses', { xeroInvoiceId, installmentCount: allPayments.length }, 'info')

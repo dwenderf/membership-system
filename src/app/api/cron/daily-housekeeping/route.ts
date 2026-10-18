@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { authorizeCronRequest } from '@/lib/cron/auth'
+import { abandonCartsBeforePayment, abandonCartsWithPayment } from '@/lib/cron/abandon-carts'
 
 /**
  * Daily housekeeping — replaces the former /api/cron/cleanup and
@@ -12,19 +13,11 @@ import { authorizeCronRequest } from '@/lib/cron/auth'
  * one failing step never masks another:
  *
  *  1. expireAbandonedRegistrations — awaiting_payment rows the user never paid
- *  2. abandonStaleCarts            — staged Xero rows for carts never paid for
+ *  2. abandonStaleCarts            — staged Xero rows for carts never paid for (src/lib/cron/abandon-carts.ts)
  *  3. pruneOldEmailLogs            — email_logs past the 90-day retention window
  *
- * NOTE on the cart sweep: the predecessor filtered xero_invoices/xero_payments
- * on sync_status = 'pending', which is NOT the cart state. 'pending' is the
- * live Xero sync queue, selected by get_pending_xero_invoices_with_lock and
- * drained every 5 minutes by /api/cron/xero-sync; refund credit notes and
- * manually retried failures enter it that way, and a row only lingers there
- * when a sync is stuck and needs attention. Abandoning those would drop real
- * accounting records out of the queue. The pre-payment cart state is 'staged'
- * with payment_id still null, which is what this sweep targets — matching
- * 2025-10-19-cleanup-old-staged-records.sql, the one-off migration that is the
- * only thing to have swept these before.
+ * NOTE on the cart sweep: see src/lib/cron/abandon-carts.ts. It targets the pre-payment
+ * cart state ('staged') and NEVER the 'pending' state, which is the live Xero sync queue.
  *
  * Uses the service-role client deliberately. Every table touched here has RLS
  * enabled with policies keyed on auth.uid(), and a cron request carries no
@@ -34,11 +27,7 @@ import { authorizeCronRequest } from '@/lib/cron/auth'
  */
 
 const ABANDONED_REGISTRATION_AGE_MS = 60 * 60 * 1000 // 1 hour
-const STALE_CART_AGE_MS = 24 * 60 * 60 * 1000 // 1 day
 const EMAIL_LOG_RETENTION_MS = 90 * 24 * 60 * 60 * 1000 // 90 days
-
-const ABANDONED_CART_REASON =
-  'Automatically marked as abandoned - staged over 24 hours without payment completion'
 
 type Supabase = ReturnType<typeof createAdminClient>
 
@@ -83,91 +72,24 @@ async function expireAbandonedRegistrations(
 }
 
 /**
- * Mark Xero staging rows for never-completed carts as abandoned.
- *
- * Targets invoices still 'staged' (the pre-payment state) with payment_id
- * null, past the age threshold.
- *
- * KNOWN LIMITATION — this is narrower than "all abandoned carts". payment_id is
- * stamped at payment-INTENT creation (create-registration-payment-intent),
- * not at completion: the completion processor writes payment_id and
- * sync_status 'pending' together in one update, so any row that completed is
- * 'pending', never 'staged'. A payment_id IS NULL guard therefore only matches
- * carts abandoned BEFORE the Stripe step. Carts abandoned at or after it keep
- * sitting at 'staged' with a payment_id and are not swept here.
- *
- * That guard is kept deliberately for now: among the rows it excludes are any
- * whose payment actually succeeded while the completion processor failed to
- * promote them (the processor logs those as needing manual reconciliation).
- * Those are unsynced revenue, not abandoned carts, and must not be marked
- * abandoned. Widening this sweep requires distinguishing the two by joining to
- * payments.status first.
- *
- * Order matters. The payments update runs before the invoices update so that a
- * failure on the payments side — for instance if
- * 2026-09-07-restore-abandoned-status-to-xero-payments.sql has not been applied
- * and the check constraint still rejects 'abandoned' — leaves the invoice
- * 'staged' rather than stranding an abandoned invoice beside a staged payment.
- * The reverse order would be the inconsistent one. Both updates are idempotent,
- * so a partial run simply completes on the next pass.
- *
- * Payments are scoped to the invoices selected in this run, unlike the one-off
- * migration, which matched every abandoned invoice in the table.
+ * Mark Xero staging rows for never-completed carts as abandoned, in two branches (before the
+ * Stripe step, and at/after it with a payment that provably never succeeded). Each reports its
+ * own counters; one failing never hides the other. See src/lib/cron/abandon-carts.ts.
  */
-async function abandonStaleCarts(
-  supabase: Supabase
-): Promise<StepResult & { invoices: number; payments: number }> {
-  const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
-  const staleFilter = `staged_at.lt.${cutoff},and(staged_at.is.null,created_at.lt.${cutoff})`
+async function abandonStaleCarts(supabase: Supabase) {
+  const [beforePayment, withPayment] = await Promise.all([
+    abandonCartsBeforePayment(supabase).catch(toFailedSweep),
+    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0 })),
+  ])
+  return { beforePayment, withPayment }
+}
 
-  const { data: staleInvoices, error: selectError } = await supabase
-    .from('xero_invoices')
-    .select('id')
-    .eq('sync_status', 'staged')
-    .is('payment_id', null)
-    .or(staleFilter)
-
-  if (selectError) {
-    return { success: false, error: `select: ${selectError.message}`, invoices: 0, payments: 0 }
-  }
-
-  const invoiceIds = (staleInvoices || []).map((row: { id: string }) => row.id)
-  if (invoiceIds.length === 0) {
-    return { success: true, error: null, invoices: 0, payments: 0 }
-  }
-
-  const { data: abandonedPayments, error: paymentError } = await supabase
-    .from('xero_payments')
-    .update({ sync_status: 'abandoned', sync_error: ABANDONED_CART_REASON })
-    .in('xero_invoice_id', invoiceIds)
-    .eq('sync_status', 'staged')
-    .select('id')
-
-  if (paymentError) {
-    return { success: false, error: `payments: ${paymentError.message}`, invoices: 0, payments: 0 }
-  }
-
-  const { data: abandonedInvoices, error: invoiceError } = await supabase
-    .from('xero_invoices')
-    .update({ sync_status: 'abandoned', sync_error: ABANDONED_CART_REASON })
-    .in('id', invoiceIds)
-    .eq('sync_status', 'staged')
-    .select('id')
-
-  if (invoiceError) {
-    return {
-      success: false,
-      error: `invoices: ${invoiceError.message}`,
-      invoices: 0,
-      payments: abandonedPayments?.length || 0,
-    }
-  }
-
+function toFailedSweep(error: unknown) {
   return {
-    success: true,
-    error: null,
-    invoices: abandonedInvoices?.length || 0,
-    payments: abandonedPayments?.length || 0,
+    success: false,
+    error: error instanceof Error ? error.message : 'Unknown error',
+    invoices: 0,
+    payments: 0,
   }
 }
 
@@ -205,6 +127,9 @@ export async function GET(request: NextRequest) {
     registrationsExpired: 0,
     cartInvoicesAbandoned: 0,
     cartPaymentsAbandoned: 0,
+    cartInvoicesAbandonedBeforePayment: 0,
+    cartInvoicesAbandonedWithPayment: 0,
+    cartsNeedingReconciliation: 0,
     emailLogsDeleted: 0,
     errors: [] as string[],
   }
@@ -233,11 +158,26 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const carts = await abandonStaleCarts(supabase)
-      results.cartInvoicesAbandoned = carts.invoices
-      results.cartPaymentsAbandoned = carts.payments
-      if (carts.error) {
-        results.errors.push(`Stale cart abandonment error: ${carts.error}`)
+      const { beforePayment, withPayment } = await abandonStaleCarts(supabase)
+      results.cartInvoicesAbandonedBeforePayment = beforePayment.invoices
+      results.cartInvoicesAbandonedWithPayment = withPayment.invoices
+      results.cartInvoicesAbandoned = beforePayment.invoices + withPayment.invoices
+      results.cartPaymentsAbandoned = beforePayment.payments + withPayment.payments
+      results.cartsNeedingReconciliation = withPayment.needsReconciliation
+      if (beforePayment.error) {
+        results.errors.push(`Stale cart abandonment error: ${beforePayment.error}`)
+      }
+      if (withPayment.error) {
+        results.errors.push(`Stale cart (with payment) abandonment error: ${withPayment.error}`)
+      }
+      if (withPayment.needsReconciliation > 0) {
+        // Not an error: these are never touched by the sweep, but someone should look.
+        logger.logBatchProcessing(
+          'cron-housekeeping-carts-need-reconciliation',
+          `${withPayment.needsReconciliation} staged invoice(s) have a completed payment and were never promoted for Xero sync; they need manual reconciliation`,
+          { count: withPayment.needsReconciliation },
+          'warn'
+        )
       }
     } catch (error) {
       results.errors.push(
@@ -268,6 +208,9 @@ export async function GET(request: NextRequest) {
         registrationsExpired: results.registrationsExpired,
         cartInvoicesAbandoned: results.cartInvoicesAbandoned,
         cartPaymentsAbandoned: results.cartPaymentsAbandoned,
+        cartInvoicesAbandonedBeforePayment: results.cartInvoicesAbandonedBeforePayment,
+        cartInvoicesAbandonedWithPayment: results.cartInvoicesAbandonedWithPayment,
+        cartsNeedingReconciliation: results.cartsNeedingReconciliation,
         emailLogsDeleted: results.emailLogsDeleted,
         errorCount: results.errors.length,
       },

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { filterActivePlans, isStartedPlan, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { filterActivePlans, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
+import { fetchStartedPlanSummaries } from '@/lib/payment-plan-queries'
 
 /**
  * GET /api/admin/payment-plans
@@ -63,23 +64,20 @@ export async function GET(request: NextRequest) {
     // UUID per user exceeds the URL length limit, which made this query fail and
     // the report show no plans at all. Plans are few; match them to users below.
     let plansData: PaymentPlanSummaryRow[] = []
-    const { data: plans, error: plansError } = await adminSupabase
-      .from('payment_plan_summary')
-      .select('*')
-      .in('status', ['active', 'completed', 'failed'])
-      .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
+    const { plans, error: plansError } = await fetchStartedPlanSummaries(adminSupabase, {
+      statuses: ['active', 'completed', 'failed']
+    })
 
     if (plansError) {
       logger.logAdminAction(
         'get-payment-plans-report-plans-error',
         'Error fetching payment plans for report',
-        { error: plansError.message },
+        { error: plansError },
         undefined,
         'error'
       )
     } else {
-      // Drop abandoned checkouts (see isStartedPlan)
-      plansData = (plans || []).filter(isStartedPlan)
+      plansData = plans
     }
 
     // Organize plans by user (contact_id is the user_id in payment_plan_summary)

@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import PaymentPlansTable from './PaymentPlansTable'
-import { PaymentPlanSummaryRow, isStartedPlan } from '@/lib/payment-plan-utils'
+import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { fetchStartedPlanSummaries } from '@/lib/payment-plan-queries'
 import { logger } from '@/lib/logging/logger'
 
 export default async function PaymentPlansReportPage() {
@@ -41,24 +42,21 @@ export default async function PaymentPlansReportPage() {
   // PostgREST puts the list in the URL, and one UUID per user pushes the request
   // past the URL length limit, which made this query fail and the report show no
   // plans at all. Plans are few, so fetch them all and match to users below.
-  const { data: plans, error: plansError } = await adminSupabase
-    .from('payment_plan_summary')
-    .select('*')
-    .in('status', ['active', 'completed', 'failed'])
-    .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
+  const { plans, error: plansError } = await fetchStartedPlanSummaries(adminSupabase, {
+    statuses: ['active', 'completed', 'failed']
+  })
 
   if (plansError) {
     logger.logAdminAction(
       'payment-plans-report-plans-error',
       'Error fetching payment plans for report',
-      { error: plansError.message },
+      { error: plansError },
       undefined,
       'error'
     )
   }
 
-  // Drop abandoned checkouts (see isStartedPlan)
-  const plansData: PaymentPlanSummaryRow[] = (plans || []).filter(isStartedPlan)
+  const plansData: PaymentPlanSummaryRow[] = plans
 
   // Organize plans by user
   const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()

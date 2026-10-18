@@ -111,17 +111,3 @@ export function planNeedsAttention(
     return status === 'failing' || status === 'exhausted'
   })
 }
-
-/**
- * Whether a plan was actually started, as opposed to an abandoned checkout.
- *
- * Starting a plan checkout stages an invoice plus four 'staged' installments, and that
- * invoice is flagged is_payment_plan before anything is paid. If the member never completes
- * checkout it stays DRAFT with every installment 'staged' and no registration attached, yet
- * payment_plan_summary still reports it as 'active' (it counts 'staged' as upcoming). A started
- * plan has at least one installment paid, or the remaining ones promoted to 'planned' once the
- * first payment succeeds.
- */
-export function isStartedPlan(plan: Pick<PaymentPlanSummaryRow, 'installments_paid' | 'installments'>): boolean {
-  return plan.installments_paid > 0 || (plan.installments ?? []).some(i => i.sync_status === 'planned')
-}

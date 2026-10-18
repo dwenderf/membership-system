@@ -811,8 +811,10 @@ export class PaymentPlanService {
       // Note: contact_id doesn't exist as column, it's in staging_metadata
       const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id, staging_metadata')
+        .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
+        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 
       if (!allInvoices || allInvoices.length === 0) {
         return false
@@ -833,9 +835,7 @@ export class PaymentPlanService {
         .from('xero_payments')
         .select('id')
         .in('xero_invoice_id', invoiceIds)
-        // Only 'planned' installments are owed. 'staged' ones belong to a checkout that was
-        // never completed and must not block removing a card or deleting the account.
-        .eq('sync_status', 'planned')
+        .in('sync_status', ['planned', 'staged'])
         .limit(1)
 
       if (paymentsError) {
@@ -868,8 +868,10 @@ export class PaymentPlanService {
       // Note: contact_id doesn't exist as column, it's in staging_metadata
       const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id, staging_metadata')
+        .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
+        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 
       if (!allInvoices || allInvoices.length === 0) {
         return 0
@@ -886,12 +888,12 @@ export class PaymentPlanService {
 
       const invoiceIds = userInvoices.map(inv => inv.id)
 
-      // Sum up all planned payments (not 'staged': see hasOutstandingBalance)
+      // Sum up all planned payments
       const { data: payments, error } = await supabase
         .from('xero_payments')
         .select('amount_paid')
         .in('xero_invoice_id', invoiceIds)
-        .eq('sync_status', 'planned')
+        .in('sync_status', ['planned', 'staged'])
 
       if (error || !payments) {
         return 0

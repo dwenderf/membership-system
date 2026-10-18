@@ -18,6 +18,7 @@ import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentC
 import { SupabaseClient, User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import Stripe from 'stripe'
+import { linkPaymentToStagingInvoice } from '@/lib/xero/link-payment'
 
 type RegistrationRow = Database['public']['Tables']['registrations']['Row']
 type SeasonRow = Database['public']['Tables']['seasons']['Row']
@@ -1516,12 +1517,12 @@ export async function POST(request: NextRequest) {
         'info'
       )
 
-      const { error: stagingPaymentUpdateError } = await adminSupabase
-        .from('xero_invoices')
-        .update({ payment_id: paymentRecord.id })
-        .eq('staging_metadata->>user_id', user.id)
-        .eq('sync_status', 'staged')
-        .is('payment_id', null)
+      // Only this checkout's own invoice: see linkPaymentToStagingInvoice
+      const { error: stagingPaymentUpdateError } = await linkPaymentToStagingInvoice(
+        adminSupabase,
+        stagingRecord.id,
+        paymentRecord.id
+      )
 
       if (stagingPaymentUpdateError) {
         logger.logPaymentProcessing(

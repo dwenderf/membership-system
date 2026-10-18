@@ -115,7 +115,10 @@ concurrency:
 
 jobs:
   migrate:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: GitHub moves that label to Ubuntu 26 starting 2026-10-19, and this job
+    # applies migrations to the production database. Move to a newer image deliberately, after a
+    # dry run on it, rather than having a runner-image change land in the middle of a migration.
+    runs-on: ubuntu-24.04
 
     # Selects which Environment's SUPABASE_DB_URL is used. Neither Environment
     # has a required reviewer (see the header comment for why) -- this job

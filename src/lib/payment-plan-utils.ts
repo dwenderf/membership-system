@@ -69,3 +69,45 @@ export function isActivePlanStatus(status: string): boolean {
 export function filterActivePlans<T extends { status: string }>(plans: T[]): T[] {
   return plans.filter(plan => isActivePlanStatus(plan.status))
 }
+
+/**
+ * Display state of a single installment, derived from xero_payments fields.
+ *
+ * A failed charge sends the row back to sync_status 'planned' (so it can be retried)
+ * and records failure_reason + attempt_count, so "failing" is not a sync_status of its own.
+ * `payment_plan_summary.status` therefore stays 'active' while an installment is failing.
+ */
+export type InstallmentDisplayStatus = 'paid' | 'scheduled' | 'failing' | 'exhausted' | 'sync_failed'
+
+export function getInstallmentDisplayStatus(
+  installment: Pick<PaymentPlanInstallment, 'sync_status' | 'attempt_count' | 'failure_reason'>,
+  maxAttempts: number
+): InstallmentDisplayStatus {
+  switch (installment.sync_status) {
+    case 'synced':
+    case 'pending':
+    case 'processing':
+      return 'paid'
+    case 'failed':
+      // sync_status 'failed' is NOT a failed charge: it is set when the Xero accounting sync
+      // fails (the member may already have paid) or when a plan is cancelled. Never present
+      // it as a payment failure.
+      return 'sync_failed'
+    default:
+      if (installment.attempt_count > 0 && installment.failure_reason) {
+        return installment.attempt_count >= maxAttempts ? 'exhausted' : 'failing'
+      }
+      return 'scheduled'
+  }
+}
+
+/** True if any installment's charge to the member's card failed and still needs resolving. */
+export function planNeedsAttention(
+  plan: { installments?: PaymentPlanInstallment[] | null },
+  maxAttempts: number
+): boolean {
+  return (plan.installments ?? []).some(i => {
+    const status = getInstallmentDisplayStatus(i, maxAttempts)
+    return status === 'failing' || status === 'exhausted'
+  })
+}

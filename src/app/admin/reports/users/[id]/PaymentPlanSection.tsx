@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDate } from '@/lib/date-utils'
 import { logger } from '@/lib/logging/logger'
+import {
+  getInstallmentDisplayStatus,
+  type PaymentPlanInstallment
+} from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 
 interface PaymentPlan {
   id: string
@@ -19,6 +25,8 @@ interface PaymentPlan {
   installmentsPaid: number
   nextPaymentDate: string | null
   status: string
+  needsAttention: boolean
+  installments: PaymentPlanInstallment[]
   createdAt: string
 }
 
@@ -37,6 +45,8 @@ export default function PaymentPlanSection({
   const [paymentPlanEnabled, setPaymentPlanEnabled] = useState(initialPaymentPlanEnabled)
   const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([])
   const [plansLoading, setPlansLoading] = useState(true)
+  const [retryTarget, setRetryTarget] = useState<{ installment: PaymentPlanInstallment; registrationName: string } | null>(null)
+  const [retryingId, setRetryingId] = useState<string | null>(null)
   const { showSuccess, showError } = useToast()
   const router = useRouter()
 
@@ -88,6 +98,34 @@ export default function PaymentPlanSection({
       showError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleConfirmRetry = async () => {
+    if (!retryTarget) return
+    const { installment } = retryTarget
+    setRetryTarget(null)
+    setRetryingId(installment.id)
+
+    try {
+      const response = await fetch('/api/admin/payment-plans/retry-installment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ installmentId: installment.id })
+      })
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        showSuccess('Payment processed', `Installment ${installment.installment_number} was charged successfully`)
+      } else {
+        showError('Payment failed', data.error || 'The payment could not be processed')
+      }
+      await fetchPaymentPlans()
+    } catch (error) {
+      logger.logAdminAction('retry-installment', 'Error retrying installment', { userId, installmentId: installment.id, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
+      showError('Payment failed', 'An unexpected error occurred')
+    } finally {
+      setRetryingId(null)
     }
   }
 
@@ -151,9 +189,15 @@ export default function PaymentPlanSection({
                           <p className="text-xs text-gray-500">{plan.seasonName}</p>
                         )}
                       </div>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        Active
-                      </span>
+                      {plan.needsAttention ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Payment failing
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Active
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -175,9 +219,42 @@ export default function PaymentPlanSection({
                       </div>
                     </div>
 
+                    {(plan.installments ?? [])
+                      .filter(i => ['failing', 'exhausted'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS)))
+                      .map((installment) => {
+                        const status = getInstallmentDisplayStatus(installment, MAX_PAYMENT_ATTEMPTS)
+                        return (
+                          <div key={installment.id} className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="text-sm text-red-800">
+                                <span className="font-medium">
+                                  Installment {installment.installment_number} ({formatAmount(installment.amount)}) failed
+                                </span>
+                                <span className="ml-2">
+                                  {installment.attempt_count} of {MAX_PAYMENT_ATTEMPTS} attempts
+                                  {status === 'failing' ? ' – will retry automatically' : ' – automatic retries used up'}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setRetryTarget({ installment, registrationName: plan.registrationName })}
+                                disabled={retryingId === installment.id}
+                                className="px-3 py-1 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                              >
+                                {retryingId === installment.id ? 'Retrying...' : 'Retry payment'}
+                              </button>
+                            </div>
+                            {installment.failure_reason && (
+                              <p className="mt-1 text-xs text-red-700">Reason: {installment.failure_reason}</p>
+                            )}
+                          </div>
+                        )
+                      })}
+
                     {plan.nextPaymentDate && (
                       <div className="mt-2 pt-2 border-t border-gray-200">
-                        <span className="text-xs text-gray-500">Next Payment:</span>
+                        <span className="text-xs text-gray-500">
+                          {plan.needsAttention ? 'Next Payment (failed, see above):' : 'Next Payment:'}
+                        </span>
                         <span className="ml-2 text-xs font-medium">{formatDate(new Date(plan.nextPaymentDate))}</span>
                       </div>
                     )}
@@ -195,6 +272,28 @@ export default function PaymentPlanSection({
           )}
         </div>
       </div>
+
+      <ConfirmationDialog
+        isOpen={retryTarget !== null}
+        title="Retry Payment?"
+        message={
+          <div className="space-y-3">
+            <p>
+              This will immediately charge {userName}&apos;s saved payment method{' '}
+              {retryTarget ? formatAmount(retryTarget.installment.amount) : ''} for installment{' '}
+              {retryTarget?.installment.installment_number} of {retryTarget?.registrationName}.
+            </p>
+            <p className="text-sm text-gray-600">
+              Only do this once they have updated their card, or you expect the charge to go through.
+            </p>
+          </div>
+        }
+        confirmText="Charge Now"
+        cancelText="Cancel"
+        onConfirm={handleConfirmRetry}
+        onCancel={() => setRetryTarget(null)}
+        variant="info"
+      />
     </div>
   )
 }

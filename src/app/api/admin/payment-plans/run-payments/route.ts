@@ -14,7 +14,10 @@ import { processDuePayments, sendPreNotifications } from '@/lib/services/payment
  * Authorization: Requires authenticated admin user
  *
  * This processes all payments that are due today (or overdue) based on their
- * planned_payment_date in the xero_payments table.
+ * planned_payment_date in the xero_payments table. Unlike the daily cron, it also
+ * retries payments that have used up their automatic attempts, since an admin
+ * pressing the button is the deliberate "try again" (e.g. after the member
+ * replaced their card).
  */
 export async function POST() {
   try {
@@ -49,7 +52,7 @@ export async function POST() {
 
     // Process due payments using shared processor
     // This ensures manual runs and cron job use identical logic
-    const results = await processDuePayments(today)
+    const results = await processDuePayments(today, { includeExhausted: true })
 
     // Send pre-notifications for payments due in 3 days (same as cron job)
     const preNotificationsSent = await sendPreNotifications(preNotificationDate)

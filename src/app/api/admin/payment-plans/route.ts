@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { filterActivePlans, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { filterActivePlans, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
  * GET /api/admin/payment-plans
  * Get all users and their payment plans
  *
  * Query parameters:
- * - filter: 'all' | 'active' (default: 'all')
- *   - 'all': Show all users
- *   - 'active': Show only users with active payment plans (remaining balance > 0)
+ * - filter: 'open' | 'attention' | 'eligible' (default: 'open')
+ *   - 'open': Users with an open plan (active or failed), i.e. a balance still owing
+ *   - 'attention': Users with an installment whose charge failed
+ *   - 'eligible': Users allowed to use payment plans
  */
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Get filter from query params
     const searchParams = request.nextUrl.searchParams
-    const filter = searchParams.get('filter') || 'all'
+    const filter = searchParams.get('filter') || 'open'
 
     // Build query for users (exclude deleted users)
     const { data: users, error: usersError } = await adminSupabase
@@ -56,28 +58,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
-    // Get all payment plans for these users using the payment_plan_summary view
-    const userIds = users?.map(u => u.id) || []
-
+    // Fetch payment plans from the view (includes registration data). Not filtered
+    // with .in('contact_id', userIds): PostgREST puts the list in the URL, and one
+    // UUID per user exceeds the URL length limit, which made this query fail and
+    // the report show no plans at all. Plans are few; match them to users below.
     let plansData: PaymentPlanSummaryRow[] = []
-    if (userIds.length > 0) {
-      // Fetch payment plans from view (includes registration data)
-      const { data: plans, error: plansError } = await adminSupabase
-        .from('payment_plan_summary')
-        .select('*')
-        .in('contact_id', userIds)
-        .in('status', ['active', 'completed', 'failed'])
+    const { data: plans, error: plansError } = await adminSupabase
+      .from('payment_plan_summary')
+      .select('*')
+      .in('status', ['active', 'completed', 'failed'])
+      .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
 
-      if (plansError) {
-        logger.logAdminAction(
-          'get-payment-plans-report-plans-error',
-          'Error fetching payment plans for report',
-          { error: plansError.message },
-          'error'
-        )
-      } else {
-        plansData = plans || []
-      }
+    if (plansError) {
+      logger.logAdminAction(
+        'get-payment-plans-report-plans-error',
+        'Error fetching payment plans for report',
+        { error: plansError.message },
+        undefined,
+        'error'
+      )
+    } else {
+      plansData = plans || []
     }
 
     // Organize plans by user (contact_id is the user_id in payment_plan_summary)
@@ -136,6 +137,7 @@ export async function GET(request: NextRequest) {
         memberId: user.member_id,
         paymentPlanEnabled: user.payment_plan_enabled || false,
         activePlansCount: activePlans.length,
+        needsAttention: activePlans.some(p => planNeedsAttention(p, MAX_PAYMENT_ATTEMPTS)),
         totalPlansCount: userPlans.length,
         totalAmount,
         paidAmount,
@@ -194,10 +196,13 @@ export async function GET(request: NextRequest) {
 
     // Apply filters if requested
     let filteredResult = result
-    if (filter === 'active') {
-      filteredResult = result.filter(u => u.remainingBalance > 0)
-    } else if (filter === 'eligible') {
+    if (filter === 'eligible') {
       filteredResult = result.filter(u => u.paymentPlanEnabled)
+    } else if (filter === 'attention') {
+      filteredResult = result.filter(u => u.needsAttention)
+    } else {
+      // 'open' (default). Includes users who are no longer eligible but still owe on a plan.
+      filteredResult = result.filter(u => u.activePlansCount > 0)
     }
 
     return NextResponse.json({

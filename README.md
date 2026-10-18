@@ -145,6 +145,7 @@ LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID=your_captain_removal_template_id
 LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID=your_captain_roster_change_template_id
 LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID=your_admin_new_registration_template_id
 LOOPS_ADMIN_REFUND_TEMPLATE_ID=your_admin_refund_template_id
+LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID=your_admin_payment_plan_failure_template_id
 
 # Error Monitoring
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
@@ -1062,6 +1063,42 @@ Questions? Reply to this email anytime.
 The Hockey Association Team
 ```
 
+#### Admin Payment Plan Failure Template (`LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID`)
+
+Sent to every admin (unless they opted out via `preferences.emailNotifications.paymentPlanFailures = false`) each time a payment plan installment fails to charge. Subject: `{testEmailPrefix}Payment Plan Failure: {playerName} – {registrationName}` (mark the prefix optional).
+
+**Data Variables:**
+
+- `adminName` - Admin's full name
+- `playerName` - Member whose installment failed
+- `registrationName` - Name of registration
+- `seasonName` - Season name ("N/A" if the registration has no season)
+- `installmentNumber` - Which installment failed (2, 3, or 4)
+- `totalInstallments` - Installments in the plan (4)
+- `installmentAmount` - Amount that failed, e.g. "$25.00"
+- `failureReason` - Stripe's decline reason
+- `attemptSummary` - e.g. "Attempt 2 of 3 failed. 1 automatic retry remaining." or, on the last attempt, a note that retries are exhausted and **Run Payments** must be used after the member updates their card
+- `userUrl` - Link to the member's admin page
+- `dashboardUrl` - Link to the dashboard footer button (`/user`)
+- `testEmailPrefix` - Added automatically on every send (`[TEST] ` outside production); use it in the Subject
+
+**Template Example:**
+
+```text
+Hi [adminName],
+
+A payment plan installment failed for [playerName].
+
+- Registration: [registrationName] [seasonName]
+- Installment: [installmentNumber] of [totalInstallments]
+- Amount: [installmentAmount]
+- Reason: [failureReason]
+
+[attemptSummary]
+
+View member: [userUrl]
+```
+
 #### Payment Plan Completed Template (`LOOPS_PAYMENT_PLAN_COMPLETED_TEMPLATE_ID`)
 
 **Data Variables:**
@@ -1841,6 +1878,7 @@ LOOPS_CAPTAIN_REMOVAL_NOTIFICATION_TEMPLATE_ID=your_captain_removal_template_id
 LOOPS_CAPTAIN_ROSTER_CHANGE_TEMPLATE_ID=your_captain_roster_change_template_id
 LOOPS_ADMIN_NEW_REGISTRATION_TEMPLATE_ID=your_admin_new_registration_template_id
 LOOPS_ADMIN_REFUND_TEMPLATE_ID=your_admin_refund_template_id
+LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID=your_admin_payment_plan_failure_template_id
 NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_here
 SENTRY_ORG=your_sentry_org
 SENTRY_PROJECT=membership-system

@@ -5,7 +5,8 @@
  */
 const mockStageEmail = jest.fn((..._args: unknown[]) => Promise.resolve(true))
 jest.mock('@/lib/email/staging', () => ({ emailStagingManager: { stageEmail: (...a: unknown[]) => mockStageEmail(...a) } }))
-jest.mock('@/lib/logging/logger', () => ({ logger: { logBatchProcessing: jest.fn(), logSystem: jest.fn() } }))
+jest.mock('@/lib/logging/logger', () => ({ logger: { logBatchProcessing: jest.fn(), logSystem: jest.fn(), reportWarningToSentry: jest.fn() } }))
+jest.mock('@/lib/email/admin-notifications', () => ({ stageAdminPaymentPlanFailureNotification: jest.fn() }))
 const mockProcessTxn = jest.fn()
 jest.mock('@/lib/services/payment-plan-service', () => ({
   PaymentPlanService: { processPaymentPlanTransaction: (...a: unknown[]) => mockProcessTxn(...a) },

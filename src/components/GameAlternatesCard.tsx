@@ -496,11 +496,20 @@ export default function GameAlternatesCard({
             <div className="space-y-4">
               {/* Selection Actions */}
               {selectedAlternates.size > 0 && (
-                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-md">
-                  <span className="text-sm font-medium text-blue-900">
-                    {selectedAlternates.size} alternate{selectedAlternates.size !== 1 ? 's' : ''} selected
-                  </span>
-                  <div className="flex items-center space-x-2">
+                <div className="flex flex-col gap-3 p-3 bg-blue-50 border border-blue-200 rounded-md sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-blue-900">
+                      {selectedAlternates.size} alternate{selectedAlternates.size !== 1 ? 's' : ''} selected
+                    </span>
+                    <div className="mt-1 max-h-24 overflow-y-auto text-sm text-blue-900 break-words">
+                      {alternates
+                        .filter(alternate => selectedAlternates.has(alternate.id))
+                        .map(alternate => `${alternate.firstName} ${alternate.lastName}`)
+                        .sort((a, b) => a.localeCompare(b))
+                        .join(', ')}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:flex-shrink-0">
                     <button
                       onClick={() => setSelectedAlternates(new Set())}
                       className="text-xs text-blue-600 hover:text-blue-500"

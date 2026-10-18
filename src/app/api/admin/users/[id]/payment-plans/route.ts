@@ -3,7 +3,6 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 import { PaymentPlanSummaryRow, planNeedsAttention } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
-import { fetchStartedPlanSummaries } from '@/lib/payment-plan-queries'
 
 /**
  * GET /api/admin/users/[id]/payment-plans
@@ -38,8 +37,11 @@ export async function GET(
 
     // Get all payment plans for the user using payment_plan_summary view
     // View includes registration data directly (registration_name, season_name)
-    // (abandoned checkouts are excluded, see fetchStartedPlanSummaries)
-    const { plans, error } = await fetchStartedPlanSummaries(adminSupabase, { contactId: id })
+    // (The view already excludes abandoned checkouts.)
+    const { data: plans, error } = await adminSupabase
+      .from('payment_plan_summary')
+      .select('*')
+      .eq('contact_id', id)
 
     if (error) {
       logger.logAdminAction(
@@ -47,7 +49,7 @@ export async function GET(
         'Error fetching user payment plans',
         {
           userId: id,
-          error
+          error: error.message
         },
         undefined,
         'error'
@@ -56,7 +58,7 @@ export async function GET(
     }
 
     // Format the response
-    const formattedPlans = plans.map((plan: PaymentPlanSummaryRow) => {
+    const formattedPlans = (plans || []).map((plan: PaymentPlanSummaryRow) => {
       // Calculate installment amount (total / number of installments)
       const installmentAmount = plan.total_installments > 0
         ? Math.round(plan.total_amount / plan.total_installments)

@@ -4,7 +4,6 @@ import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import PaymentPlansTable from './PaymentPlansTable'
 import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
-import { fetchStartedPlanSummaries } from '@/lib/payment-plan-queries'
 import { logger } from '@/lib/logging/logger'
 
 export default async function PaymentPlansReportPage() {
@@ -42,21 +41,24 @@ export default async function PaymentPlansReportPage() {
   // PostgREST puts the list in the URL, and one UUID per user pushes the request
   // past the URL length limit, which made this query fail and the report show no
   // plans at all. Plans are few, so fetch them all and match to users below.
-  const { plans, error: plansError } = await fetchStartedPlanSummaries(adminSupabase, {
-    statuses: ['active', 'completed', 'failed']
-  })
+  // (The view already excludes abandoned checkouts.)
+  const { data: plans, error: plansError } = await adminSupabase
+    .from('payment_plan_summary')
+    .select('*')
+    .in('status', ['active', 'completed', 'failed'])
+    .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
 
   if (plansError) {
     logger.logAdminAction(
       'payment-plans-report-plans-error',
       'Error fetching payment plans for report',
-      { error: plansError },
+      { error: plansError.message },
       undefined,
       'error'
     )
   }
 
-  const plansData: PaymentPlanSummaryRow[] = plans
+  const plansData: PaymentPlanSummaryRow[] = plans || []
 
   // Organize plans by user
   const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()

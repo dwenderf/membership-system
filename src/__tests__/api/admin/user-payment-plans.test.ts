@@ -9,11 +9,6 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 // Mock Supabase
 jest.mock('@/lib/supabase/server')
-// Abandoned-checkout filtering is covered in payment-plan-queries.test.ts
-const mockFetchStartedPlans = jest.fn()
-jest.mock('@/lib/payment-plan-queries', () => ({
-  fetchStartedPlanSummaries: (...args: unknown[]) => mockFetchStartedPlans(...args)
-}))
 jest.mock('@/lib/logging/logger', () => ({
   logger: {
     logAdminAction: jest.fn()
@@ -113,8 +108,13 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      // Second call: payment plans from payment_plan_summary (started plans only)
-      mockFetchStartedPlans.mockResolvedValueOnce({ plans: mockPaymentPlans, error: null })
+      // Second call: get payment plans from payment_plan_summary view (uses admin client)
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
+        data: mockPaymentPlans,
+        error: null
+      })
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
@@ -143,8 +143,13 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      // Payment plans query
-      mockFetchStartedPlans.mockResolvedValueOnce({ plans: [], error: null })
+      // Payment plans query (uses admin client)
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
+        data: [],
+        error: null
+      })
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })
@@ -169,8 +174,13 @@ describe('/api/admin/users/[id]/payment-plans', () => {
       })
       mockSupabase.from.mockReturnValueOnce(adminCheckChain)
 
-      // Payment plans query with error
-      mockFetchStartedPlans.mockResolvedValueOnce({ plans: [], error: 'Database error' })
+      // Payment plans query with error (uses admin client)
+      const paymentPlansChain = createMockQueryChain()
+      paymentPlansChain.eq = jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'Database error' }
+      })
+      mockAdminSupabase.from.mockReturnValueOnce(paymentPlansChain)
 
       const request = new NextRequest('http://localhost:3000/api/admin/users/target-user-id/payment-plans')
       const response = await GET(request, { params: Promise.resolve({ id: 'target-user-id' }) })

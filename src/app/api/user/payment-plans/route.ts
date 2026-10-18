@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { fetchStartedPlanSummaries } from '@/lib/payment-plan-queries'
 
 /**
  * GET /api/user/payment-plans
@@ -25,21 +24,22 @@ export async function GET() {
 
     // Use admin client to query the restricted view
     const adminSupabase = await createAdminClient()
-    // (abandoned checkouts are excluded, see fetchStartedPlanSummaries)
-    const { plans: paymentPlans, error } = await fetchStartedPlanSummaries(adminSupabase, {
-      contactId: user.id,
-      statuses: ['active']
-    })
+    // (The view already excludes abandoned checkouts.)
+    const { data: paymentPlans, error } = await adminSupabase
+      .from('payment_plan_summary')
+      .select('*')
+      .eq('contact_id', user.id)
+      .eq('status', 'active')
 
     if (error) {
-      logger.logPaymentProcessing('payment-plans-fetch-error', 'Error fetching payment plans', { userId: user.id, error }, 'error')
+      logger.logPaymentProcessing('payment-plans-fetch-error', 'Error fetching payment plans', { userId: user.id, error: error.message }, 'error')
       return NextResponse.json(
         { error: 'Failed to fetch payment plans' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ paymentPlans })
+    return NextResponse.json({ paymentPlans: paymentPlans || [] })
   } catch (error) {
     logger.logPaymentProcessing('payment-plans-unexpected-error', 'Error in payment plans API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(

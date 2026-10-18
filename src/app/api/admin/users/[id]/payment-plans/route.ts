@@ -37,6 +37,7 @@ export async function GET(
 
     // Get all payment plans for the user using payment_plan_summary view
     // View includes registration data directly (registration_name, season_name)
+    // (The view already excludes abandoned checkouts.)
     const { data: plans, error } = await adminSupabase
       .from('payment_plan_summary')
       .select('*')

@@ -79,7 +79,7 @@ async function expireAbandonedRegistrations(
 async function abandonStaleCarts(supabase: Supabase) {
   const [beforePayment, withPayment] = await Promise.all([
     abandonCartsBeforePayment(supabase).catch(toFailedSweep),
-    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, staleCartsOnSettledPayment: 0 })),
+    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, abandonedOnSettledPayment: 0 })),
   ])
   return { beforePayment, withPayment }
 }
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     cartInvoicesAbandonedBeforePayment: 0,
     cartInvoicesAbandonedWithPayment: 0,
     cartsNeedingReconciliation: 0,
-    cartsOnSettledPayment: 0,
+    cartInvoicesAbandonedOnSettledPayment: 0,
     emailLogsDeleted: 0,
     errors: [] as string[],
   }
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       results.cartInvoicesAbandoned = beforePayment.invoices + withPayment.invoices
       results.cartPaymentsAbandoned = beforePayment.payments + withPayment.payments
       results.cartsNeedingReconciliation = withPayment.needsReconciliation
-      results.cartsOnSettledPayment = withPayment.staleCartsOnSettledPayment
+      results.cartInvoicesAbandonedOnSettledPayment = withPayment.abandonedOnSettledPayment
       if (beforePayment.error) {
         results.errors.push(`Stale cart abandonment error: ${beforePayment.error}`)
       }
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
         // Not an error: these are never touched by the sweep, but someone should look.
         logger.logBatchProcessing(
           'cron-housekeeping-carts-need-reconciliation',
-          `${withPayment.needsReconciliation} completed payment(s) have no invoice promoted for Xero sync; they need manual reconciliation`,
+          `${withPayment.needsReconciliation} staged invoice(s) belong to a completed payment that promoted invoices do not fully cover; they need manual reconciliation`,
           { count: withPayment.needsReconciliation },
           'warn'
         )
@@ -213,7 +213,7 @@ export async function GET(request: NextRequest) {
         cartInvoicesAbandonedBeforePayment: results.cartInvoicesAbandonedBeforePayment,
         cartInvoicesAbandonedWithPayment: results.cartInvoicesAbandonedWithPayment,
         cartsNeedingReconciliation: results.cartsNeedingReconciliation,
-        cartsOnSettledPayment: results.cartsOnSettledPayment,
+        cartInvoicesAbandonedOnSettledPayment: results.cartInvoicesAbandonedOnSettledPayment,
         emailLogsDeleted: results.emailLogsDeleted,
         errorCount: results.errors.length,
       },

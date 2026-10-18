@@ -44,18 +44,33 @@ const invoice = (id: string, payment_id: string, stagedHoursAgo = 48) => ({
 })
 
 describe('abandonCartsWithPayment', () => {
-  function run(candidates: unknown[], paymentStatuses: Record<string, string>, promotedPaymentIds: string[] = []) {
+  /**
+   * @param paymentStatuses payment id -> status
+   * @param promoted        payment id -> net_amount of each promoted invoice carrying it
+   * @param finalAmounts    payment id -> final_amount (default 5000)
+   */
+  function run(
+    candidates: unknown[],
+    paymentStatuses: Record<string, string>,
+    promoted: Record<string, number[]> = {},
+    finalAmounts: Record<string, number> = {}
+  ) {
     return fakeClient(call => {
       if (call.table === 'xero_invoices' && call.op === 'select') {
-        // the promoted-sibling lookup filters by payment_id; the candidate select does not
+        // the promoted lookup filters by payment_id; the candidate select does not
         if (call.filters.some(f => f[0] === 'in' && f[1] === 'payment_id')) {
-          return { data: idsOf(call).filter(id => promotedPaymentIds.includes(id)).map(payment_id => ({ payment_id })) }
+          return {
+            data: idsOf(call).flatMap(payment_id => (promoted[payment_id] ?? []).map(net_amount => ({ payment_id, net_amount }))),
+          }
         }
         return { data: candidates }
       }
       if (call.table === 'payments') {
         const ids = idsOf(call)
-        return { data: ids.filter(id => id in paymentStatuses).map(id => ({ id, status: paymentStatuses[id] })) }
+        return {
+          data: ids.filter(id => id in paymentStatuses)
+            .map(id => ({ id, status: paymentStatuses[id], final_amount: finalAmounts[id] ?? 5000 })),
+        }
       }
       return { data: (idsOf(call) ?? []).map(id => ({ id })) } // updates echo the ids they touched
     })
@@ -77,21 +92,60 @@ describe('abandonCartsWithPayment', () => {
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, staleCartsOnSettledPayment: 0 })
+    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, abandonedOnSettledPayment: 0 })
     expect(updates(calls, 'xero_invoices').flatMap(idsOf).sort()).toEqual(['inv-cancelled', 'inv-failed'])
   })
 
-  it('does not flag an old cart stamped with a payment that a promoted invoice already carries', async () => {
+  it('abandons an old cart stamped with a completed payment that promoted invoices fully carry', async () => {
     const { client, calls } = run(
-      [invoice('inv-dup', 'p-synced'), invoice('inv-missing', 'p-unsynced')],
-      { 'p-synced': 'completed', 'p-unsynced': 'completed' },
-      ['p-synced']
+      [invoice('inv-old-cart', 'p-settled')],
+      { 'p-settled': 'completed' },
+      { 'p-settled': [5000] }
     )
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ invoices: 0, needsReconciliation: 1, staleCartsOnSettledPayment: 1 })
-    expect(calls.some(c => c.op === 'update')).toBe(false) // neither is abandoned
+    expect(result).toMatchObject({ success: true, invoices: 1, abandonedOnSettledPayment: 1, needsReconciliation: 0 })
+    expect(updates(calls, 'xero_invoices').flatMap(idsOf)).toEqual(['inv-old-cart'])
+    expect(updates(calls, 'xero_invoices')[0].values).toMatchObject({
+      sync_status: 'abandoned',
+      sync_error: expect.stringContaining('completed for another invoice'),
+    })
+  })
+
+  it('counts several promoted invoices toward covering one payment', async () => {
+    const { client } = run(
+      [invoice('inv-old-cart', 'p1')],
+      { p1: 'completed' },
+      { p1: [3000, 2000] }
+    )
+    expect(await abandonCartsWithPayment(client)).toMatchObject({ invoices: 1, abandonedOnSettledPayment: 1 })
+  })
+
+  it('never abandons a staged invoice whose completed payment is not fully covered', async () => {
+    const { client, calls } = run(
+      [
+        invoice('inv-no-promoted', 'p-none'),
+        invoice('inv-partly-covered', 'p-partial'),
+      ],
+      { 'p-none': 'completed', 'p-partial': 'completed' },
+      { 'p-partial': [2000] } // 2000 of 5000 carried: the rest may be this invoice's revenue
+    )
+
+    const result = await abandonCartsWithPayment(client)
+
+    expect(result).toMatchObject({ invoices: 0, abandonedOnSettledPayment: 0, needsReconciliation: 2 })
+    expect(calls.some(c => c.op === 'update')).toBe(false)
+  })
+
+  it('abandons a zero-amount payment already carried by a promoted zero-amount invoice', async () => {
+    const { client } = run(
+      [invoice('inv-free-old-cart', 'p-free')],
+      { 'p-free': 'completed' },
+      { 'p-free': [0] },
+      { 'p-free': 0 }
+    )
+    expect(await abandonCartsWithPayment(client)).toMatchObject({ invoices: 1, abandonedOnSettledPayment: 1 })
   })
 
   it('only selects DRAFT staged invoices that have a payment_id', async () => {

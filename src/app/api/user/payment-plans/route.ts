@@ -24,6 +24,7 @@ export async function GET() {
 
     // Use admin client to query the restricted view
     const adminSupabase = await createAdminClient()
+    // (The view already excludes abandoned checkouts.)
     const { data: paymentPlans, error } = await adminSupabase
       .from('payment_plan_summary')
       .select('*')

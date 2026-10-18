@@ -41,6 +41,7 @@ export default async function PaymentPlansReportPage() {
   // PostgREST puts the list in the URL, and one UUID per user pushes the request
   // past the URL length limit, which made this query fail and the report show no
   // plans at all. Plans are few, so fetch them all and match to users below.
+  // (The view already excludes abandoned checkouts.)
   const { data: plans, error: plansError } = await adminSupabase
     .from('payment_plan_summary')
     .select('*')

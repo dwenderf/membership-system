@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
     // UUID per user exceeds the URL length limit, which made this query fail and
     // the report show no plans at all. Plans are few; match them to users below.
     let plansData: PaymentPlanSummaryRow[] = []
+    // (The view already excludes abandoned checkouts.)
     const { data: plans, error: plansError } = await adminSupabase
       .from('payment_plan_summary')
       .select('*')

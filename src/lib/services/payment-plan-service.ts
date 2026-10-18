@@ -811,8 +811,10 @@ export class PaymentPlanService {
       // Note: contact_id doesn't exist as column, it's in staging_metadata
       const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id, staging_metadata')
+        .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
+        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 
       if (!allInvoices || allInvoices.length === 0) {
         return false
@@ -866,8 +868,10 @@ export class PaymentPlanService {
       // Note: contact_id doesn't exist as column, it's in staging_metadata
       const { data: allInvoices } = await supabase
         .from('xero_invoices')
-        .select('id, staging_metadata')
+        .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
+        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 
       if (!allInvoices || allInvoices.length === 0) {
         return 0

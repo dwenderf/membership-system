@@ -57,7 +57,7 @@ jobs:
 
     steps:
     - name: Checkout PR head
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Compare this PR's migrations against the target database
       env:

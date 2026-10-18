@@ -79,7 +79,7 @@ async function expireAbandonedRegistrations(
 async function abandonStaleCarts(supabase: Supabase) {
   const [beforePayment, withPayment] = await Promise.all([
     abandonCartsBeforePayment(supabase).catch(toFailedSweep),
-    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, abandonedOnSettledPayment: 0 })),
+    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, abandonedOnSettledPayment: 0, abandonedPendingPayment: 0 })),
   ])
   return { beforePayment, withPayment }
 }
@@ -131,6 +131,7 @@ export async function GET(request: NextRequest) {
     cartInvoicesAbandonedWithPayment: 0,
     cartsNeedingReconciliation: 0,
     cartInvoicesAbandonedOnSettledPayment: 0,
+    cartInvoicesAbandonedPendingPayment: 0,
     emailLogsDeleted: 0,
     errors: [] as string[],
   }
@@ -166,6 +167,7 @@ export async function GET(request: NextRequest) {
       results.cartPaymentsAbandoned = beforePayment.payments + withPayment.payments
       results.cartsNeedingReconciliation = withPayment.needsReconciliation
       results.cartInvoicesAbandonedOnSettledPayment = withPayment.abandonedOnSettledPayment
+      results.cartInvoicesAbandonedPendingPayment = withPayment.abandonedPendingPayment
       if (beforePayment.error) {
         results.errors.push(`Stale cart abandonment error: ${beforePayment.error}`)
       }
@@ -214,6 +216,7 @@ export async function GET(request: NextRequest) {
         cartInvoicesAbandonedWithPayment: results.cartInvoicesAbandonedWithPayment,
         cartsNeedingReconciliation: results.cartsNeedingReconciliation,
         cartInvoicesAbandonedOnSettledPayment: results.cartInvoicesAbandonedOnSettledPayment,
+        cartInvoicesAbandonedPendingPayment: results.cartInvoicesAbandonedPendingPayment,
         emailLogsDeleted: results.emailLogsDeleted,
         errorCount: results.errors.length,
       },

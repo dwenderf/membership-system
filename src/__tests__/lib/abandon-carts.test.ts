@@ -76,24 +76,43 @@ describe('abandonCartsWithPayment', () => {
     })
   }
 
-  it('abandons cancelled and failed payments; never completed, pending or refunded ones', async () => {
+  it('abandons cancelled and failed payments; never completed ones, young pending ones or refunded ones', async () => {
     const { client, calls } = run(
       [
         invoice('inv-cancelled', 'p1'),
         invoice('inv-failed', 'p2'),
-        invoice('inv-pending-ancient', 'p3', 24 * 400), // a pending payment can still complete late
         invoice('inv-pending-recent', 'p4', 48),
         invoice('inv-completed', 'p5'),
         invoice('inv-refunded', 'p6'),
         invoice('inv-no-payment-row', 'p-missing'),
       ],
-      { p1: 'cancelled', p2: 'failed', p3: 'pending', p4: 'pending', p5: 'completed', p6: 'refunded' }
+      { p1: 'cancelled', p2: 'failed', p4: 'pending', p5: 'completed', p6: 'refunded' }
     )
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, abandonedOnSettledPayment: 0 })
+    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, abandonedOnSettledPayment: 0, abandonedPendingPayment: 0 })
     expect(updates(calls, 'xero_invoices').flatMap(idsOf).sort()).toEqual(['inv-cancelled', 'inv-failed'])
+  })
+
+  it('abandons a cart whose payment has been pending for more than 7 days, but not one pending for less', async () => {
+    const { client, calls } = run(
+      [
+        invoice('inv-pending-old', 'p-old', 24 * 7 + 2),
+        invoice('inv-pending-ancient', 'p-ancient', 24 * 400),
+        invoice('inv-pending-6d', 'p-6d', 24 * 6),
+      ],
+      { 'p-old': 'pending', 'p-ancient': 'pending', 'p-6d': 'pending' }
+    )
+
+    const result = await abandonCartsWithPayment(client)
+
+    expect(result).toMatchObject({ success: true, invoices: 2, abandonedPendingPayment: 2 })
+    expect(updates(calls, 'xero_invoices').flatMap(idsOf).sort()).toEqual(['inv-pending-ancient', 'inv-pending-old'])
+    expect(updates(calls, 'xero_invoices')[0].values).toMatchObject({
+      sync_status: 'abandoned',
+      sync_error: expect.stringContaining('still pending after 7 days'),
+    })
   })
 
   it('abandons an old cart stamped with a completed payment that promoted invoices fully carry', async () => {
@@ -148,6 +167,13 @@ describe('abandonCartsWithPayment', () => {
     expect(await abandonCartsWithPayment(client)).toMatchObject({ invoices: 1, abandonedOnSettledPayment: 1 })
   })
 
+  it('never selects credit notes: only ACCREC invoices are candidates', async () => {
+    const { client, calls } = run([], {})
+    await abandonCartsWithPayment(client)
+    const select = calls.find(c => c.table === 'xero_invoices')!
+    expect(select.filters).toEqual(expect.arrayContaining([['eq', 'invoice_type', 'ACCREC']]))
+  })
+
   it('only selects DRAFT staged invoices that have a payment_id', async () => {
     const { client, calls } = run([], {})
     await abandonCartsWithPayment(client)
@@ -199,7 +225,10 @@ describe('abandonCartsBeforePayment', () => {
     })
     const result = await abandonCartsBeforePayment(client)
     expect(result).toMatchObject({ success: true, invoices: 2, payments: 2 })
-    expect(calls[0].filters).toEqual(expect.arrayContaining([['is', 'payment_id', null]]))
+    expect(calls[0].filters).toEqual(expect.arrayContaining([
+      ['is', 'payment_id', null],
+      ['eq', 'invoice_type', 'ACCREC'],
+    ]))
   })
 
   it('returns early without writing when nothing is stale', async () => {

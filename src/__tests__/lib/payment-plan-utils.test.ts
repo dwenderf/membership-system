@@ -34,8 +34,8 @@ describe('getInstallmentDisplayStatus', () => {
     ).toBe('exhausted')
   })
 
-  it('reports an explicit failed sync_status as failed', () => {
-    expect(getInstallmentDisplayStatus(inst({ sync_status: 'failed' }), 3)).toBe('failed')
+  it('reports sync_status failed as an accounting sync failure, not a payment failure', () => {
+    expect(getInstallmentDisplayStatus(inst({ sync_status: 'failed' }), 3)).toBe('sync_failed')
   })
 })
 
@@ -48,6 +48,10 @@ describe('planNeedsAttention', () => {
     expect(
       planNeedsAttention({ installments: [inst({ attempt_count: 1, failure_reason: 'declined' })] }, 3)
     ).toBe(true)
+  })
+
+  it('is false when only the Xero sync failed (the member may have paid)', () => {
+    expect(planNeedsAttention({ installments: [inst({ sync_status: 'failed', attempt_count: 1 })] }, 3)).toBe(false)
   })
 
   it('tolerates a missing installments array', () => {

@@ -128,7 +128,7 @@ export default function UserPaymentPlansSection() {
             const registrationName = plan.registration_name || 'Unknown Registration'
             const seasonName = plan.season_name
             const failedInstallments = (plan.installments ?? []).filter(i =>
-              ['failing', 'exhausted', 'failed'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS))
+              ['failing', 'exhausted'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS))
             )
             const hasFailedPayment = failedInstallments.length > 0
 

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logging/logger'
 /**
  * GET /api/user/payment-plans
  *
- * Fetches active (including failed-but-open) payment plans for the authenticated user.
+ * Fetches active payment plans for the authenticated user.
  * Uses service_role to query payment_plan_summary view (which is restricted to service_role only).
  */
 export async function GET() {
@@ -28,7 +28,7 @@ export async function GET() {
       .from('payment_plan_summary')
       .select('*')
       .eq('contact_id', user.id)
-      .in('status', ['active', 'failed'])
+      .eq('status', 'active')
 
     if (error) {
       logger.logPaymentProcessing('payment-plans-fetch-error', 'Error fetching payment plans', { userId: user.id, error: error.message }, 'error')

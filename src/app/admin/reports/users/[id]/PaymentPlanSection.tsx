@@ -8,7 +8,6 @@ import { formatDate } from '@/lib/date-utils'
 import { logger } from '@/lib/logging/logger'
 import {
   getInstallmentDisplayStatus,
-  isActivePlanStatus,
   type PaymentPlanInstallment
 } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
@@ -130,7 +129,7 @@ export default function PaymentPlanSection({
     }
   }
 
-  const activePlans = paymentPlans.filter(p => isActivePlanStatus(p.status))
+  const activePlans = paymentPlans.filter(p => p.status === 'active')
   const completedPlans = paymentPlans.filter(p => p.status === 'completed')
 
   return (
@@ -221,7 +220,7 @@ export default function PaymentPlanSection({
                     </div>
 
                     {(plan.installments ?? [])
-                      .filter(i => ['failing', 'exhausted', 'failed'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS)))
+                      .filter(i => ['failing', 'exhausted'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS)))
                       .map((installment) => {
                         const status = getInstallmentDisplayStatus(installment, MAX_PAYMENT_ATTEMPTS)
                         return (

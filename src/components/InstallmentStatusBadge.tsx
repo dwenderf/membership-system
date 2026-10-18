@@ -5,7 +5,7 @@ const BADGES: Record<InstallmentDisplayStatus, { label: string; className: strin
   scheduled: { label: 'Scheduled', className: 'bg-gray-100 text-gray-700' },
   failing: { label: 'Failing – will retry', className: 'bg-orange-100 text-orange-800' },
   exhausted: { label: 'Failed – retries used up', className: 'bg-red-100 text-red-800' },
-  failed: { label: 'Failed', className: 'bg-red-100 text-red-800' }
+  sync_failed: { label: 'Accounting sync failed', className: 'bg-yellow-100 text-yellow-800' }
 }
 
 export default function InstallmentStatusBadge({ status }: { status: InstallmentDisplayStatus }) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { filterActivePlans, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { filterActivePlans, isStartedPlan, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
@@ -78,7 +78,8 @@ export async function GET(request: NextRequest) {
         'error'
       )
     } else {
-      plansData = plans || []
+      // Drop abandoned checkouts (see isStartedPlan)
+      plansData = (plans || []).filter(isStartedPlan)
     }
 
     // Organize plans by user (contact_id is the user_id in payment_plan_summary)

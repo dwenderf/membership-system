@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import PaymentPlansTable from './PaymentPlansTable'
-import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { PaymentPlanSummaryRow, isStartedPlan } from '@/lib/payment-plan-utils'
 import { logger } from '@/lib/logging/logger'
 
 export default async function PaymentPlansReportPage() {
@@ -57,7 +57,8 @@ export default async function PaymentPlansReportPage() {
     )
   }
 
-  const plansData: PaymentPlanSummaryRow[] = plans || []
+  // Drop abandoned checkouts (see isStartedPlan)
+  const plansData: PaymentPlanSummaryRow[] = (plans || []).filter(isStartedPlan)
 
   // Organize plans by user
   const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()

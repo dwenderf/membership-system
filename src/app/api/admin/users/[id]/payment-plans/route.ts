@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { PaymentPlanSummaryRow, planNeedsAttention } from '@/lib/payment-plan-utils'
+import { PaymentPlanSummaryRow, isStartedPlan, planNeedsAttention } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
@@ -57,7 +57,8 @@ export async function GET(
     }
 
     // Format the response
-    const formattedPlans = (plans || []).map((plan: PaymentPlanSummaryRow) => {
+    // Skip abandoned checkouts (see isStartedPlan)
+    const formattedPlans = (plans || []).filter(isStartedPlan).map((plan: PaymentPlanSummaryRow) => {
       // Calculate installment amount (total / number of installments)
       const installmentAmount = plan.total_installments > 0
         ? Math.round(plan.total_amount / plan.total_installments)

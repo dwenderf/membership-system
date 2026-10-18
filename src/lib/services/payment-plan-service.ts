@@ -833,7 +833,9 @@ export class PaymentPlanService {
         .from('xero_payments')
         .select('id')
         .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
+        // Only 'planned' installments are owed. 'staged' ones belong to a checkout that was
+        // never completed and must not block removing a card or deleting the account.
+        .eq('sync_status', 'planned')
         .limit(1)
 
       if (paymentsError) {
@@ -884,12 +886,12 @@ export class PaymentPlanService {
 
       const invoiceIds = userInvoices.map(inv => inv.id)
 
-      // Sum up all planned payments
+      // Sum up all planned payments (not 'staged': see hasOutstandingBalance)
       const { data: payments, error } = await supabase
         .from('xero_payments')
         .select('amount_paid')
         .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
+        .eq('sync_status', 'planned')
 
       if (error || !payments) {
         return 0

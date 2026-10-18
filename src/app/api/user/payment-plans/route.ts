@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { isStartedPlan, type PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
 
 /**
  * GET /api/user/payment-plans
@@ -29,6 +30,7 @@ export async function GET() {
       .select('*')
       .eq('contact_id', user.id)
       .eq('status', 'active')
+      .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
 
     if (error) {
       logger.logPaymentProcessing('payment-plans-fetch-error', 'Error fetching payment plans', { userId: user.id, error: error.message }, 'error')
@@ -38,7 +40,8 @@ export async function GET() {
       )
     }
 
-    return NextResponse.json({ paymentPlans: paymentPlans || [] })
+    // Hide abandoned checkouts (see isStartedPlan)
+    return NextResponse.json({ paymentPlans: (paymentPlans || []).filter(isStartedPlan) })
   } catch (error) {
     logger.logPaymentProcessing('payment-plans-unexpected-error', 'Error in payment plans API', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(

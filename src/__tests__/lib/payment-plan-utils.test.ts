@@ -1,4 +1,4 @@
-import { getInstallmentDisplayStatus, planNeedsAttention } from '@/lib/payment-plan-utils'
+import { getInstallmentDisplayStatus, isStartedPlan, planNeedsAttention } from '@/lib/payment-plan-utils'
 
 const inst = (over: Partial<{ sync_status: string; attempt_count: number; failure_reason: string | null }> = {}) => ({
   id: 'i1',
@@ -56,5 +56,24 @@ describe('planNeedsAttention', () => {
 
   it('tolerates a missing installments array', () => {
     expect(planNeedsAttention({}, 3)).toBe(false)
+  })
+})
+
+describe('isStartedPlan', () => {
+  it('rejects an abandoned checkout: nothing paid and every installment still staged', () => {
+    const installments = [1, 2, 3, 4].map(n => ({ ...inst({ sync_status: 'staged' }), installment_number: n }))
+    expect(isStartedPlan({ installments_paid: 0, installments })).toBe(false)
+  })
+
+  it('accepts a plan with a paid installment', () => {
+    expect(isStartedPlan({ installments_paid: 1, installments: [inst({ sync_status: 'synced' }), inst({ sync_status: 'staged' })] })).toBe(true)
+  })
+
+  it('accepts a plan whose remaining installments are planned', () => {
+    expect(isStartedPlan({ installments_paid: 0, installments: [inst()] })).toBe(true)
+  })
+
+  it('tolerates a missing installments array', () => {
+    expect(isStartedPlan({ installments_paid: 0, installments: undefined as never })).toBe(false)
   })
 })

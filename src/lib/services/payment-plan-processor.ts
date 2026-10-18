@@ -53,11 +53,13 @@ export interface ProcessingResults {
  * @param options.includeExhausted - Admin-initiated runs only. Also attempt payments that have
  *   used up MAX_PAYMENT_ATTEMPTS or are inside the retry interval. The daily cron never sets this,
  *   so a card that keeps failing is not charged forever without a person deciding to try again.
+ * @param options.onlyPaymentIds - Restrict the run to these xero_payments ids (used by the admin
+ *   "retry this installment" button).
  * @returns Processing results with counts and any errors
  */
 export async function processDuePayments(
   today: string,
-  options: { includeExhausted?: boolean } = {}
+  options: { includeExhausted?: boolean; onlyPaymentIds?: string[] } = {}
 ): Promise<ProcessingResults> {
   const adminSupabase = createAdminClient()
 
@@ -72,7 +74,7 @@ export async function processDuePayments(
   }
 
   // Find xero_payments due for processing
-  const { data: duePayments, error: dueError } = await adminSupabase
+  let dueQuery = adminSupabase
     .from('xero_payments')
     .select(`
       *,
@@ -87,6 +89,12 @@ export async function processDuePayments(
     .eq('payment_type', 'installment')
     .eq('sync_status', 'planned')
     .lte('planned_payment_date', today)
+
+  if (options.onlyPaymentIds) {
+    dueQuery = dueQuery.in('id', options.onlyPaymentIds)
+  }
+
+  const { data: duePayments, error: dueError } = await dueQuery
 
   if (dueError) {
     logger.logBatchProcessing(
@@ -295,7 +303,7 @@ export async function processDuePayments(
       if (user) {
         const userName = `${user.first_name} ${user.last_name}`
         const registrationName = userReg.registration?.name || 'Registration'
-        const remainingRetries = MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1)
+        const remainingRetries = Math.max(0, MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1))
 
         // Get payment plan summary for balances
         const { data: planSummary } = await adminSupabase
@@ -345,41 +353,25 @@ export async function processDuePayments(
 
       const attemptNumber = payment.attempt_count + 1
       const retriesExhausted = attemptNumber >= MAX_PAYMENT_ATTEMPTS
-      const failureMetadata = {
-        xeroPaymentId: payment.id,
-        userId: userReg.user_id,
-        installmentNumber: payment.installment_number,
-        attemptCount: attemptNumber,
-        maxAttempts: MAX_PAYMENT_ATTEMPTS,
-        retriesExhausted,
-        error: result.error
-      }
 
-      if (retriesExhausted) {
-        // Logged as an error so it reaches Sentry: nothing retries this installment
-        // automatically any more, so a person has to act.
-        logger.logBatchProcessing(
-          'payment-processor-payment-retries-exhausted',
-          'Payment plan installment failed and automatic retries are exhausted',
-          failureMetadata,
-          'error'
-        )
-      } else {
-        logger.logBatchProcessing(
-          'payment-processor-payment-failed',
-          'Payment processing failed',
-          failureMetadata,
-          'warn'
-        )
-        // Plain warnings are not sent to Sentry; a failed charge is worth seeing there.
-        logger.reportWarningToSentry(
-          'payment-processing',
-          'payment-processor-payment-failed',
-          'Payment plan installment failed to charge',
-          failureMetadata,
-          userReg.user_id
-        )
-      }
+      // Logged as a warning, not an error: a declined card is an expected outcome and
+      // admins are told by email (below) rather than through Sentry.
+      logger.logBatchProcessing(
+        retriesExhausted ? 'payment-processor-payment-retries-exhausted' : 'payment-processor-payment-failed',
+        retriesExhausted
+          ? 'Payment plan installment failed and automatic retries are exhausted'
+          : 'Payment processing failed',
+        {
+          xeroPaymentId: payment.id,
+          userId: userReg.user_id,
+          installmentNumber: payment.installment_number,
+          attemptCount: attemptNumber,
+          maxAttempts: MAX_PAYMENT_ATTEMPTS,
+          retriesExhausted,
+          error: result.error
+        },
+        'warn'
+      )
 
       await stageAdminPaymentPlanFailureNotification({
         playerUserId: userReg.user_id,

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { PaymentPlanSummaryRow, planNeedsAttention } from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
  * GET /api/admin/users/[id]/payment-plans
@@ -49,6 +50,7 @@ export async function GET(
           userId: id,
           error: error.message
         },
+        undefined,
         'error'
       )
       return NextResponse.json({ error: 'Failed to fetch payment plans' }, { status: 500 })
@@ -74,6 +76,8 @@ export async function GET(
         nextPaymentDate: plan.next_payment_date,
         finalPaymentDate: plan.final_payment_date,
         status: plan.status,
+        needsAttention: planNeedsAttention(plan, MAX_PAYMENT_ATTEMPTS),
+        installments: plan.installments,
         createdAt: null, // payment_plan_summary doesn't include created_at
         updatedAt: null
       }

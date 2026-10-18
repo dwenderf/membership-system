@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
-import { filterActivePlans, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { filterActivePlans, planNeedsAttention, PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 /**
  * GET /api/admin/payment-plans
  * Get all users and their payment plans
  *
  * Query parameters:
- * - filter: 'all' | 'active' (default: 'all')
- *   - 'all': Show all users
- *   - 'active': Show only users with active payment plans (remaining balance > 0)
+ * - filter: 'open' | 'attention' | 'eligible' (default: 'open')
+ *   - 'open': Users with an open plan (active or failed), i.e. a balance still owing
+ *   - 'attention': Users with an installment whose charge failed
+ *   - 'eligible': Users allowed to use payment plans
  */
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Get filter from query params
     const searchParams = request.nextUrl.searchParams
-    const filter = searchParams.get('filter') || 'all'
+    const filter = searchParams.get('filter') || 'open'
 
     // Build query for users (exclude deleted users)
     const { data: users, error: usersError } = await adminSupabase
@@ -135,6 +137,7 @@ export async function GET(request: NextRequest) {
         memberId: user.member_id,
         paymentPlanEnabled: user.payment_plan_enabled || false,
         activePlansCount: activePlans.length,
+        needsAttention: activePlans.some(p => planNeedsAttention(p, MAX_PAYMENT_ATTEMPTS)),
         totalPlansCount: userPlans.length,
         totalAmount,
         paidAmount,
@@ -193,10 +196,13 @@ export async function GET(request: NextRequest) {
 
     // Apply filters if requested
     let filteredResult = result
-    if (filter === 'active') {
-      filteredResult = result.filter(u => u.remainingBalance > 0)
-    } else if (filter === 'eligible') {
+    if (filter === 'eligible') {
       filteredResult = result.filter(u => u.paymentPlanEnabled)
+    } else if (filter === 'attention') {
+      filteredResult = result.filter(u => u.needsAttention)
+    } else {
+      // 'open' (default). Includes users who are no longer eligible but still owe on a plan.
+      filteredResult = result.filter(u => u.activePlansCount > 0)
     }
 
     return NextResponse.json({

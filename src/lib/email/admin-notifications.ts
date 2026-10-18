@@ -356,7 +356,9 @@ export async function stageAdminPaymentPlanFailureNotification(options: {
     }
 
     const retriesLeft = options.maxAttempts - options.attemptNumber
-    const attemptSummary = retriesLeft > 0
+    const attemptSummary = options.attemptNumber > options.maxAttempts
+      ? `Manual retry (attempt ${options.attemptNumber}) failed. Once the member has updated their card, retry the installment again from their admin page or with Run Payments.`
+      : retriesLeft > 0
       ? `Attempt ${options.attemptNumber} of ${options.maxAttempts} failed. ${retriesLeft} automatic ${retriesLeft === 1 ? 'retry' : 'retries'} remaining.`
       : `Attempt ${options.attemptNumber} of ${options.maxAttempts} failed. Automatic retries are exhausted: once the member has updated their card, use Run Payments on the Payment Plans report to charge it again.`
 

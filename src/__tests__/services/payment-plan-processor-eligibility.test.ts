@@ -23,8 +23,7 @@ jest.mock('@/lib/supabase/server', () => ({
 jest.mock('@/lib/logging/logger', () => ({
   logger: {
     logBatchProcessing: jest.fn(),
-    logPaymentProcessing: jest.fn(),
-    reportWarningToSentry: jest.fn()
+    logPaymentProcessing: jest.fn()
   }
 }))
 jest.mock('@/lib/services/payment-plan-service', () => ({

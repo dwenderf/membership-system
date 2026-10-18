@@ -79,14 +79,14 @@ export default function ConfirmationDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm overflow-y-auto h-full w-full z-50"
+      className="fixed inset-0 bg-gray-500 bg-opacity-25 backdrop-blur-sm overflow-y-auto h-full w-full z-50 whitespace-normal"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
       aria-labelledby="dialog-title"
     >
       <div
-        className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white"
+        className="relative top-20 mx-auto p-5 border w-96 max-w-[calc(100vw-2rem)] shadow-lg rounded-md bg-white"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-start mb-4">
@@ -108,7 +108,7 @@ export default function ConfirmationDialog({
         </div>
 
         <div className={hideButtons ? '' : 'mb-6'}>
-          <div className="text-sm text-gray-700">
+          <div className="text-sm text-gray-700 break-words">
             {message}
           </div>
         </div>

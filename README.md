@@ -1072,7 +1072,7 @@ Sent to every admin (unless they opted out via `preferences.emailNotifications.p
 - `adminName` - Admin's full name
 - `playerName` - Member whose installment failed
 - `registrationName` - Name of registration
-- `seasonName` - Season name (may be empty)
+- `seasonName` - Season name ("N/A" if the registration has no season)
 - `installmentNumber` - Which installment failed (2, 3, or 4)
 - `totalInstallments` - Installments in the plan (4)
 - `installmentAmount` - Amount that failed, e.g. "$25.00"
@@ -1080,6 +1080,7 @@ Sent to every admin (unless they opted out via `preferences.emailNotifications.p
 - `attemptSummary` - e.g. "Attempt 2 of 3 failed. 1 automatic retry remaining." or, on the last attempt, a note that retries are exhausted and **Run Payments** must be used after the member updates their card
 - `userUrl` - Link to the member's admin page
 - `dashboardUrl` - Link to the dashboard footer button (`/user`)
+- `testEmailPrefix` - Added automatically on every send (`[TEST] ` outside production); use it in the Subject
 
 **Template Example:**
 

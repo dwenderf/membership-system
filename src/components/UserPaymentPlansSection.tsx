@@ -8,11 +8,8 @@ import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
 import { logger } from '@/lib/logging/logger'
 import PrimaryCtaButton from './ui/PrimaryCtaButton'
-
-interface Installment {
-  planned_payment_date: string
-  amount: number
-}
+import { getInstallmentDisplayStatus, type PaymentPlanInstallment } from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 
 interface PaymentPlan {
   invoice_id: string
@@ -27,7 +24,7 @@ interface PaymentPlan {
   registration_id: string | null
   registration_name: string | null
   season_name: string | null
-  installments: Installment[]
+  installments: PaymentPlanInstallment[]
 }
 
 export default function UserPaymentPlansSection() {
@@ -130,6 +127,10 @@ export default function UserPaymentPlansSection() {
             const remainingBalance = plan.total_amount - plan.paid_amount
             const registrationName = plan.registration_name || 'Unknown Registration'
             const seasonName = plan.season_name
+            const failedInstallments = (plan.installments ?? []).filter(i =>
+              ['failing', 'exhausted', 'failed'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS))
+            )
+            const hasFailedPayment = failedInstallments.length > 0
 
             return (
               <div key={plan.invoice_id} className="border border-gray-200 rounded-lg p-4">
@@ -140,10 +141,37 @@ export default function UserPaymentPlansSection() {
                       <p className="text-xs text-gray-500">{seasonName}</p>
                     )}
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Active
-                  </span>
+                  {hasFailedPayment ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Payment failed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Active
+                    </span>
+                  )}
                 </div>
+
+                {/* Failed payment notice */}
+                {failedInstallments.map((installment) => {
+                  const willRetry = getInstallmentDisplayStatus(installment, MAX_PAYMENT_ATTEMPTS) === 'failing'
+                  return (
+                    <div key={installment.id} className="mb-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                      <p className="font-medium">
+                        Your payment of {formatAmount(installment.amount)} didn&apos;t go through.
+                      </p>
+                      {installment.failure_reason && (
+                        <p className="mt-1 text-xs">Reason: {installment.failure_reason}</p>
+                      )}
+                      <p className="mt-1">
+                        Please update your payment method in the Payment Methods section above.{' '}
+                        {willRetry
+                          ? "We'll try again automatically."
+                          : 'Automatic retries have stopped, so let us know once it is updated and we will retry the payment.'}
+                      </p>
+                    </div>
+                  )
+                })}
 
                 {/* Progress Bar */}
                 <div className="mb-3">

@@ -373,7 +373,8 @@ export async function stageAdminPaymentPlanFailureNotification(options: {
         adminName: `${admin.first_name} ${admin.last_name}`,
         playerName: `${player.first_name} ${player.last_name}`,
         registrationName: options.registrationName,
-        seasonName: options.seasonName,
+        // Loops rejects empty variables, so never send an empty season
+        seasonName: options.seasonName || 'N/A',
         installmentNumber: options.installmentNumber,
         totalInstallments: options.totalInstallments,
         installmentAmount: `$${(options.installmentAmountCents / 100).toFixed(2)}`,

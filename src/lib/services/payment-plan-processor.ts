@@ -231,7 +231,7 @@ export async function processDuePayments(
                 remaining_balance: formatAmount(planSummary.total_amount - planSummary.paid_amount),
                 next_payment_date: planSummary.next_payment_date ? formatDateString(planSummary.next_payment_date) : 'None',
                 is_final_payment: isFinalPayment,
-                account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`,
+                account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/account`,
                 dashboard_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
                 dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
               },
@@ -331,7 +331,7 @@ export async function processDuePayments(
               remaining_retries: remainingRetries,
               amount_paid: formatAmount(planSummary?.paid_amount || 0),
               remaining_balance: formatAmount(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0),
-              account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+              account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/account`
             },
             triggered_by: 'automated',
             related_entity_type: 'payments',
@@ -476,7 +476,7 @@ export async function sendPreNotifications(preNotificationDate: string): Promise
             next_payment_date: formatDateString(payment.planned_payment_date),
             amount_paid: formatAmount(planSummary?.paid_amount || 0),
             remaining_balance: formatAmount(planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0),
-            account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/account/settings`
+            account_settings_url: `${process.env.NEXT_PUBLIC_SITE_URL}/user/account`
           },
           triggered_by: 'automated',
           related_entity_type: 'payments',

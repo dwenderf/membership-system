@@ -5,9 +5,37 @@ import { formatDate, formatTime, convertToNYTimezone, convertFromUTCToNYDateTime
 
 import { AlternatesAccessResult } from '@/lib/utils/alternates-access'
 import { useToast } from '@/contexts/ToastContext'
-import type { AlternateSelectionResponse } from '@/components/AlternateSelectionInterface'
 import { logger } from '@/lib/logging/logger'
 import EventDateTimeInput from '@/components/EventDateTimeInput'
+
+/** Result of a single alternate selection, from POST /api/alternate-registrations/[gameId]/select. */
+export interface AlternateSelectionResult {
+  userId: string
+  userName: string
+  success: boolean
+  error?: string
+  paymentId?: string
+  amountCharged?: number
+}
+
+export interface AlternateSelectionResponse {
+  success: boolean
+  message: string
+  summary: {
+    totalProcessed: number
+    totalSelected: number
+    successfulSelections: number
+    failedSelections: number
+    totalAmountCharged: number
+    alreadySelected: number
+  }
+  results: AlternateSelectionResult[]
+  game: {
+    id: string
+    description: string
+    registrationName: string | undefined
+  }
+}
 
 interface Game {
   id: string
@@ -42,11 +70,17 @@ interface Alternate {
   discountCode?: {
     id: string
     code: string
-    percentage: number
+    percentage: number | null
     discountAmount: number
     categoryName?: string
     isIneligible?: boolean
     isOverLimit: boolean
+    usageStatus?: {
+      currentUsage: number
+      limit: number
+      wouldExceed: boolean
+      remainingAmount: number
+    } | null
   } | null
   pricing: {
     basePrice: number
@@ -245,6 +279,14 @@ export default function GameAlternatesCard({
     })
   }
 
+  // Already-selected alternates and those without a valid payment method can't be charged
+  const isSelectable = (alternate: Alternate) =>
+    !alternate.isAlreadySelected && alternate.hasValidPaymentMethod
+
+  const handleSelectAllAvailable = () => {
+    setSelectedAlternates(new Set(alternates.filter(isSelectable).map(alternate => alternate.id)))
+  }
+
   const handleSelectAlternates = async () => {
     if (selectedAlternates.size === 0) return
 
@@ -316,6 +358,10 @@ export default function GameAlternatesCard({
   const availableAlternates = alternates.filter(alt => !alt.isAlreadySelected)
   const selectedCount = game.selectedCount ?? alternates.filter(alt => alt.isAlreadySelected).length
   const availableCount = game.availableCount ?? availableAlternates.length
+  const selectableCount = alternates.filter(isSelectable).length
+  const selectedList = alternates.filter(alternate => selectedAlternates.has(alternate.id))
+  const selectedTotalCents = selectedList.reduce((sum, alternate) => sum + alternate.pricing.finalAmount, 0)
+  const selectedOverLimitCount = selectedList.filter(alternate => alternate.discountCode?.isOverLimit).length
 
   const formatGameDateTime = (dateStr: string | null) => {
     if (!dateStr) return ''
@@ -494,20 +540,38 @@ export default function GameAlternatesCard({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Select All Available */}
+              {selectableCount > 0 && selectedAlternates.size < selectableCount && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSelectAllAvailable}
+                    disabled={selecting}
+                    className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 disabled:opacity-50"
+                  >
+                    Select All Available ({selectableCount})
+                  </button>
+                </div>
+              )}
+
               {/* Selection Actions */}
               {selectedAlternates.size > 0 && (
                 <div className="flex flex-col gap-3 p-3 bg-blue-50 border border-blue-200 rounded-md sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <span className="text-sm font-medium text-blue-900">
                       {selectedAlternates.size} alternate{selectedAlternates.size !== 1 ? 's' : ''} selected
+                      {' • '}Total: ${(selectedTotalCents / 100).toFixed(2)}
                     </span>
                     <div className="mt-1 max-h-24 overflow-y-auto text-sm text-blue-900 break-words">
-                      {alternates
-                        .filter(alternate => selectedAlternates.has(alternate.id))
+                      {selectedList
                         .map(alternate => `${alternate.firstName} ${alternate.lastName}`)
                         .sort((a, b) => a.localeCompare(b))
                         .join(', ')}
                     </div>
+                    {selectedOverLimitCount > 0 && (
+                      <div className="mt-1 text-sm text-orange-600">
+                        ⚠️ {selectedOverLimitCount} selection{selectedOverLimitCount !== 1 ? 's' : ''} will exceed discount limits
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center space-x-2 sm:flex-shrink-0">
                     <button
@@ -535,6 +599,8 @@ export default function GameAlternatesCard({
                     <div key={alternate.id} className={`flex items-center justify-between p-3 border rounded-md ${
                       alternate.isAlreadySelected 
                         ? 'bg-green-50 border-green-200' 
+                        : !alternate.hasValidPaymentMethod
+                        ? 'bg-gray-50 border-gray-200'
                         : 'border-gray-200'
                     }`}>
                       <div className="flex items-center space-x-3">
@@ -542,17 +608,35 @@ export default function GameAlternatesCard({
                           type="checkbox"
                           checked={alternate.isAlreadySelected || selectedAlternates.has(alternate.id)}
                           onChange={() => handleAlternateToggle(alternate.id)}
-                          disabled={alternate.isAlreadySelected || selecting}
+                          disabled={!isSelectable(alternate) || selecting}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
                         />
                         <div>
-                          <div className="font-medium text-gray-900">
-                            {alternate.firstName} {alternate.lastName}
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-medium text-gray-900">
+                              {alternate.firstName} {alternate.lastName}
+                            </span>
+                            {!alternate.isAlreadySelected && !alternate.hasValidPaymentMethod && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                No Payment Method
+                              </span>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-500">{alternate.email}</div>
+                          <div className="text-sm text-gray-500 break-all">{alternate.email}</div>
                           {alternate.discountCode && (
-                            <div className="text-xs text-purple-600">
-                              {alternate.discountCode.code} (-{alternate.discountCode.percentage}%)
+                            <div className={`text-xs ${
+                              alternate.discountCode.isIneligible
+                                ? 'text-red-600'
+                                : alternate.discountCode.isOverLimit
+                                ? 'text-orange-600'
+                                : 'text-purple-600'
+                            }`}>
+                              {alternate.discountCode.code}
+                              {alternate.discountCode.isIneligible
+                                ? ' (Ineligible for this discount category)'
+                                : alternate.discountCode.isOverLimit
+                                ? ` (-${alternate.discountCode.percentage}%) ⚠️ Would exceed discount limit`
+                                : ` (-${alternate.discountCode.percentage}%)`}
                             </div>
                           )}
                         </div>

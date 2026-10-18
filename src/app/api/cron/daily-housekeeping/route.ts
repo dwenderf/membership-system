@@ -79,7 +79,7 @@ async function expireAbandonedRegistrations(
 async function abandonStaleCarts(supabase: Supabase) {
   const [beforePayment, withPayment] = await Promise.all([
     abandonCartsBeforePayment(supabase).catch(toFailedSweep),
-    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, duplicatesOfPromotedInvoice: 0 })),
+    abandonCartsWithPayment(supabase).catch(e => ({ ...toFailedSweep(e), needsReconciliation: 0, staleCartsOnSettledPayment: 0 })),
   ])
   return { beforePayment, withPayment }
 }
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     cartInvoicesAbandonedBeforePayment: 0,
     cartInvoicesAbandonedWithPayment: 0,
     cartsNeedingReconciliation: 0,
-    cartsDuplicateOfPromotedInvoice: 0,
+    cartsOnSettledPayment: 0,
     emailLogsDeleted: 0,
     errors: [] as string[],
   }
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       results.cartInvoicesAbandoned = beforePayment.invoices + withPayment.invoices
       results.cartPaymentsAbandoned = beforePayment.payments + withPayment.payments
       results.cartsNeedingReconciliation = withPayment.needsReconciliation
-      results.cartsDuplicateOfPromotedInvoice = withPayment.duplicatesOfPromotedInvoice
+      results.cartsOnSettledPayment = withPayment.staleCartsOnSettledPayment
       if (beforePayment.error) {
         results.errors.push(`Stale cart abandonment error: ${beforePayment.error}`)
       }
@@ -213,7 +213,7 @@ export async function GET(request: NextRequest) {
         cartInvoicesAbandonedBeforePayment: results.cartInvoicesAbandonedBeforePayment,
         cartInvoicesAbandonedWithPayment: results.cartInvoicesAbandonedWithPayment,
         cartsNeedingReconciliation: results.cartsNeedingReconciliation,
-        cartsDuplicateOfPromotedInvoice: results.cartsDuplicateOfPromotedInvoice,
+        cartsOnSettledPayment: results.cartsOnSettledPayment,
         emailLogsDeleted: results.emailLogsDeleted,
         errorCount: results.errors.length,
       },

@@ -55,8 +55,11 @@ export interface CartSweepResult extends StepResult {
 export interface CartWithPaymentSweepResult extends CartSweepResult {
   /** Staged invoices whose payment completed and has NO promoted invoice: unsynced revenue, needs a person. */
   needsReconciliation: number
-  /** Staged invoices whose completed payment is already carried by a promoted sibling invoice (stale duplicate carts). */
-  duplicatesOfPromotedInvoice: number
+  /**
+   * Staged invoices whose completed payment is already carried by a promoted invoice. These are old
+   * abandoned carts (often for other items) that were stamped with a later purchase's payment_id.
+   */
+  staleCartsOnSettledPayment: number
 }
 
 function chunk<T>(items: T[], size = CHUNK_SIZE): T[][] {
@@ -155,12 +158,14 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
  *  - the payment has no promoted invoice at all: the "completion processor failed to promote it"
  *    case, collected money that never reached the Xero queue. Counted in `needsReconciliation`
  *    so the cron response and log make them visible.
- *  - another invoice carrying the same payment_id was promoted: a stale duplicate cart (the user
- *    opened checkout several times and every cart was stamped with the shared PaymentIntent's
- *    payment). The revenue is already in Xero; counted in `duplicatesOfPromotedInvoice` only.
+ *  - another invoice carrying the same payment_id was promoted: an old abandoned cart (usually for a
+ *    different item, at a different price) that the payment-intent routes stamped with a LATER
+ *    purchase's payment_id, because they link the new payment to ALL of the user's staged invoices
+ *    with payment_id NULL rather than just the invoice created for that checkout. The revenue is
+ *    already in Xero via the promoted invoice; counted in `staleCartsOnSettledPayment` only.
  */
 export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartWithPaymentSweepResult> {
-  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, duplicatesOfPromotedInvoice: 0 }
+  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, staleCartsOnSettledPayment: 0 }
   const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
 
   const { data: candidates, error: selectError } = await supabase
@@ -222,12 +227,12 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
 
   const eligibleIds: string[] = []
   let needsReconciliation = 0
-  let duplicatesOfPromotedInvoice = 0
+  let staleCartsOnSettledPayment = 0
 
   for (const row of rows) {
     const status = statusByPayment.get(row.payment_id)
     if (status === 'completed') {
-      if (promotedPaymentIds.has(row.payment_id)) duplicatesOfPromotedInvoice++
+      if (promotedPaymentIds.has(row.payment_id)) staleCartsOnSettledPayment++
       else needsReconciliation++
     } else if (status && ENDED_PAYMENT_STATUSES.includes(status)) {
       eligibleIds.push(row.id)
@@ -236,9 +241,9 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
   }
 
   if (eligibleIds.length === 0) {
-    return { success: true, error: null, ...empty, needsReconciliation, duplicatesOfPromotedInvoice }
+    return { success: true, error: null, ...empty, needsReconciliation, staleCartsOnSettledPayment }
   }
 
   const abandoned = await abandonInvoices(supabase, eligibleIds, ABANDONED_CART_WITH_PAYMENT_REASON)
-  return { ...abandoned, needsReconciliation, duplicatesOfPromotedInvoice }
+  return { ...abandoned, needsReconciliation, staleCartsOnSettledPayment }
 }

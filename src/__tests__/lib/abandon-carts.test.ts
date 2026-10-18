@@ -77,11 +77,11 @@ describe('abandonCartsWithPayment', () => {
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, duplicatesOfPromotedInvoice: 0 })
+    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, staleCartsOnSettledPayment: 0 })
     expect(updates(calls, 'xero_invoices').flatMap(idsOf).sort()).toEqual(['inv-cancelled', 'inv-failed'])
   })
 
-  it('does not flag a stale duplicate cart whose payment is already carried by a promoted invoice', async () => {
+  it('does not flag an old cart stamped with a payment that a promoted invoice already carries', async () => {
     const { client, calls } = run(
       [invoice('inv-dup', 'p-synced'), invoice('inv-missing', 'p-unsynced')],
       { 'p-synced': 'completed', 'p-unsynced': 'completed' },
@@ -90,7 +90,7 @@ describe('abandonCartsWithPayment', () => {
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ invoices: 0, needsReconciliation: 1, duplicatesOfPromotedInvoice: 1 })
+    expect(result).toMatchObject({ invoices: 0, needsReconciliation: 1, staleCartsOnSettledPayment: 1 })
     expect(calls.some(c => c.op === 'update')).toBe(false) // neither is abandoned
   })
 

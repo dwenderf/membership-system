@@ -228,6 +228,9 @@ export default function AlternateSelectionInterface({
   }
 
   const totals = calculateTotals()
+  const selectedNames = alternates
+    .filter(alt => selectedAlternates.has(alt.id))
+    .map(alt => `${alt.firstName} ${alt.lastName}`)
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg">
@@ -418,11 +421,14 @@ export default function AlternateSelectionInterface({
           </div>
         )}
         
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-gray-600 min-w-0">
             {totals.count > 0 ? (
               <>
                 {totals.count} selected • Total: {formatCurrency(totals.totalAmount)}
+                <div className="mt-1 max-h-24 overflow-y-auto text-gray-900 break-words">
+                  {selectedNames.join(', ')}
+                </div>
                 {totals.overLimitWarnings > 0 && (
                   <div className="text-orange-600 mt-1">
                     ⚠️ {totals.overLimitWarnings} selection(s) will exceed discount limits
@@ -433,8 +439,8 @@ export default function AlternateSelectionInterface({
               'No alternates selected'
             )}
           </div>
-          
-          <div className="flex space-x-3">
+
+          <div className="flex space-x-3 sm:flex-shrink-0 sm:justify-end">
             <button
               onClick={onCancel}
               disabled={processing}

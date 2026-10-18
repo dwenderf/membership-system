@@ -355,6 +355,9 @@ export class PaymentPlanService {
             sync_status: 'pending',
             staging_metadata: {
               ...(xeroPayment.staging_metadata || {}),
+              // Re-state the intent ID: this update replaces the whole jsonb column, and
+              // xeroPayment.staging_metadata predates the update that recorded it (#382).
+              stripe_payment_intent_id: paymentIntent.id,
               payment_id: paymentRecord.id,
               processed_at: new Date().toISOString()
             }

@@ -20,6 +20,8 @@ export const ABANDONED_CART_REASON =
   'Automatically marked as abandoned - staged over 24 hours without payment completion'
 export const ABANDONED_CART_WITH_PAYMENT_REASON =
   'Automatically marked as abandoned - staged with a payment that never completed'
+export const ABANDONED_CART_ON_SETTLED_PAYMENT_REASON =
+  'Automatically marked as abandoned - old cart stamped with a payment that completed for another invoice'
 
 /** Invoice states that mean checkout completed and the invoice entered (or finished) the Xero sync queue. */
 const PROMOTED_INVOICE_STATUSES = ['pending', 'processing', 'synced']
@@ -53,13 +55,16 @@ export interface CartSweepResult extends StepResult {
 }
 
 export interface CartWithPaymentSweepResult extends CartSweepResult {
-  /** Staged invoices whose payment completed and has NO promoted invoice: unsynced revenue, needs a person. */
+  /**
+   * Staged invoices whose payment completed but is NOT fully covered by promoted invoices: possible
+   * unsynced revenue, never abandoned, needs a person.
+   */
   needsReconciliation: number
   /**
-   * Staged invoices whose completed payment is already carried by a promoted invoice. These are old
-   * abandoned carts (often for other items) that were stamped with a later purchase's payment_id.
+   * How many of the abandoned invoices (included in `invoices`) were old carts stamped with a later
+   * purchase's payment that completed and is fully carried by promoted invoices.
    */
-  staleCartsOnSettledPayment: number
+  abandonedOnSettledPayment: number
 }
 
 function chunk<T>(items: T[], size = CHUNK_SIZE): T[][] {
@@ -149,23 +154,25 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
 /**
  * Branch 2: invoices still 'staged' WITH a payment_id.
  *
- * Abandoned only when ALL of these hold, so successful payments are never touched:
- *  - the invoice is DRAFT: a completed checkout sets it to AUTHORISED, so an AUTHORISED invoice
- *    stuck at 'staged' is not a cart and is left for manual review;
- *  - its payment is cancelled/failed (the invoice is also older than STALE_CART_AGE_MS).
+ * Only DRAFT invoices are considered: a completed checkout sets the invoice to AUTHORISED, so an
+ * AUTHORISED invoice stuck at 'staged' is not a cart and is left for manual review. Of those, an
+ * invoice (older than STALE_CART_AGE_MS) is abandoned in exactly two cases:
  *
- * Staged invoices whose payment COMPLETED are never abandoned. Two kinds exist:
- *  - the payment has no promoted invoice at all: the "completion processor failed to promote it"
- *    case, collected money that never reached the Xero queue. Counted in `needsReconciliation`
- *    so the cron response and log make them visible.
- *  - another invoice carrying the same payment_id was promoted: an old abandoned cart (usually for a
- *    different item, at a different price) that the payment-intent routes stamped with a LATER
- *    purchase's payment_id, because they link the new payment to ALL of the user's staged invoices
- *    with payment_id NULL rather than just the invoice created for that checkout. The revenue is
- *    already in Xero via the promoted invoice; counted in `staleCartsOnSettledPayment` only.
+ *  1. its payment ended without success (cancelled/failed);
+ *  2. its payment COMPLETED but is already fully carried by promoted invoices: the sum of the
+ *     promoted (pending/processing/synced) invoices' net_amount for that payment_id is at least the
+ *     payment's final_amount. Such a staged invoice is an old abandoned cart (usually another item,
+ *     another price) that the payment-intent routes stamped with a LATER purchase's payment_id,
+ *     because they used to link the new payment to ALL of the user's staged invoices with
+ *     payment_id NULL rather than only the invoice created for that checkout. The revenue is already
+ *     in Xero, so nothing is lost by abandoning it.
+ *
+ * A completed payment that is NOT fully covered (no promoted invoice, or only part of the amount) is
+ * the "completion processor failed to promote it" case: possibly collected money that never reached
+ * the Xero queue. It is never abandoned and is counted in `needsReconciliation`.
  */
 export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartWithPaymentSweepResult> {
-  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, staleCartsOnSettledPayment: 0 }
+  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, abandonedOnSettledPayment: 0 }
   const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
 
   const { data: candidates, error: selectError } = await supabase
@@ -189,61 +196,80 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
     created_at: string
   }>
 
-  // Look up each candidate's payment status (chunked: see CHUNK_SIZE)
-  const statusByPayment = new Map<string, string>()
+  // Look up each candidate's payment status and amount (chunked: see CHUNK_SIZE)
+  const paymentById = new Map<string, { status: string; finalAmount: number }>()
   for (const ids of chunk([...new Set(rows.map(r => r.payment_id))])) {
     const { data: payments, error: paymentsError } = await supabase
       .from('payments')
-      .select('id, status')
+      .select('id, status, final_amount')
       .in('id', ids)
 
     if (paymentsError) {
       return { success: false, error: `payments lookup: ${paymentsError.message}`, ...empty }
     }
-    for (const p of (payments || []) as Array<{ id: string; status: string }>) {
-      statusByPayment.set(p.id, p.status)
+    for (const p of (payments || []) as Array<{ id: string; status: string; final_amount: number | string | null }>) {
+      paymentById.set(p.id, { status: p.status, finalAmount: Number(p.final_amount ?? 0) })
     }
   }
 
-  // Which completed payments are already carried by a promoted invoice?
+  // How much of each completed payment is carried by promoted invoices?
   const completedPaymentIds = [...new Set(
-    rows.filter(r => statusByPayment.get(r.payment_id) === 'completed').map(r => r.payment_id)
+    rows.filter(r => paymentById.get(r.payment_id)?.status === 'completed').map(r => r.payment_id)
   )]
-  const promotedPaymentIds = new Set<string>()
+  const promotedNetByPayment = new Map<string, number>()
   for (const ids of chunk(completedPaymentIds)) {
     const { data: promoted, error: promotedError } = await supabase
       .from('xero_invoices')
-      .select('payment_id')
+      .select('payment_id, net_amount')
       .in('payment_id', ids)
       .in('sync_status', PROMOTED_INVOICE_STATUSES)
 
     if (promotedError) {
       return { success: false, error: `promoted lookup: ${promotedError.message}`, ...empty }
     }
-    for (const row of (promoted || []) as Array<{ payment_id: string }>) {
-      promotedPaymentIds.add(row.payment_id)
+    for (const row of (promoted || []) as Array<{ payment_id: string; net_amount: number | string | null }>) {
+      promotedNetByPayment.set(
+        row.payment_id,
+        (promotedNetByPayment.get(row.payment_id) ?? 0) + Number(row.net_amount ?? 0)
+      )
     }
   }
 
-  const eligibleIds: string[] = []
+  const endedPaymentIds: string[] = []
+  const settledPaymentIds: string[] = []
   let needsReconciliation = 0
-  let staleCartsOnSettledPayment = 0
 
   for (const row of rows) {
-    const status = statusByPayment.get(row.payment_id)
-    if (status === 'completed') {
-      if (promotedPaymentIds.has(row.payment_id)) staleCartsOnSettledPayment++
+    const payment = paymentById.get(row.payment_id)
+    if (!payment) continue // no payment row: leave alone
+
+    if (payment.status === 'completed') {
+      const promotedNet = promotedNetByPayment.get(row.payment_id)
+      if (promotedNet !== undefined && promotedNet >= payment.finalAmount) settledPaymentIds.push(row.id)
       else needsReconciliation++
-    } else if (status && ENDED_PAYMENT_STATUSES.includes(status)) {
-      eligibleIds.push(row.id)
+    } else if (ENDED_PAYMENT_STATUSES.includes(payment.status)) {
+      endedPaymentIds.push(row.id)
     }
-    // Anything else is left alone: pending (see ENDED_PAYMENT_STATUSES), refunded, or no payment row.
+    // Anything else is left alone: pending (see ENDED_PAYMENT_STATUSES) or refunded.
   }
 
-  if (eligibleIds.length === 0) {
-    return { success: true, error: null, ...empty, needsReconciliation, staleCartsOnSettledPayment }
+  const ended = endedPaymentIds.length > 0
+    ? await abandonInvoices(supabase, endedPaymentIds, ABANDONED_CART_WITH_PAYMENT_REASON)
+    : { success: true, error: null, invoices: 0, payments: 0 }
+  if (!ended.success) {
+    return { ...ended, needsReconciliation, abandonedOnSettledPayment: 0 }
   }
 
-  const abandoned = await abandonInvoices(supabase, eligibleIds, ABANDONED_CART_WITH_PAYMENT_REASON)
-  return { ...abandoned, needsReconciliation, staleCartsOnSettledPayment }
+  const settled = settledPaymentIds.length > 0
+    ? await abandonInvoices(supabase, settledPaymentIds, ABANDONED_CART_ON_SETTLED_PAYMENT_REASON)
+    : { success: true, error: null, invoices: 0, payments: 0 }
+
+  return {
+    success: settled.success,
+    error: settled.error,
+    invoices: ended.invoices + settled.invoices,
+    payments: ended.payments + settled.payments,
+    needsReconciliation,
+    abandonedOnSettledPayment: settled.invoices,
+  }
 }

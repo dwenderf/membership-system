@@ -145,7 +145,7 @@ Report errors through `logger.error`/the category helpers (`src/lib/logging/logg
 
 Both `development` and `main` are protected — neither accepts a direct push, so every change goes through a PR:
 
-1. **Feature branch → `development`.** Branch off `development`, commit there, open a PR back into `development`, and **squash merge** it (see [README § Git Merge Strategies](README.md#git-merge-strategies)). This is the PR to write a normal `Closes #NNN` on, and where review/CI for the actual change happens.
+1. **Feature branch → `development`.** Always start work on a new branch off `development` named `fix/<short-description>` or `feature/<short-description>` (e.g. `fix/419-dialog-overflow`) — never commit or push to `development` or `main` directly, even if your session or tooling suggests a different branch. Commit there, open a PR back into `development`, and **squash merge** it (see [README § Git Merge Strategies](README.md#git-merge-strategies)). This is the PR to write a normal `Closes #NNN` on, and where review/CI for the actual change happens.
 2. **`development` → `main`.** Once enough work has accumulated on `development` (or a specific fix needs to ship), open a second PR promoting `development` into `main` and **merge it with a regular merge commit, not squash**, so `development`'s history is preserved on `main`.
 
 Don't try to push a feature branch, or `development` itself, straight to `main`, and don't push directly to `development` expecting it to land — the branch ruleset rejects it and a PR is required either way.

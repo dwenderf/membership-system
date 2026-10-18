@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { formatDate, formatTime } from '@/lib/date-utils'
+import { formatDate, formatTime, formatDateString } from '@/lib/date-utils'
 
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 
@@ -105,13 +105,13 @@ export default function PurchaseHistory({ userMemberships }: PurchaseHistoryProp
                       <div>
                         <span className="text-gray-500">Valid From:</span>
                         <span className="ml-1 text-gray-900">
-                          {formatDate(new Date(userMembership.valid_from))}
+                          {formatDateString(userMembership.valid_from)}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Valid Until:</span>
                         <span className="ml-1 text-gray-900">
-                          {formatDate(new Date(userMembership.valid_until))}
+                          {formatDateString(userMembership.valid_until)}
                         </span>
                       </div>
                     </div>

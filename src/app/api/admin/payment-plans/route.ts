@@ -56,28 +56,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
-    // Get all payment plans for these users using the payment_plan_summary view
-    const userIds = users?.map(u => u.id) || []
-
+    // Fetch payment plans from the view (includes registration data). Not filtered
+    // with .in('contact_id', userIds): PostgREST puts the list in the URL, and one
+    // UUID per user exceeds the URL length limit, which made this query fail and
+    // the report show no plans at all. Plans are few; match them to users below.
     let plansData: PaymentPlanSummaryRow[] = []
-    if (userIds.length > 0) {
-      // Fetch payment plans from view (includes registration data)
-      const { data: plans, error: plansError } = await adminSupabase
-        .from('payment_plan_summary')
-        .select('*')
-        .in('contact_id', userIds)
-        .in('status', ['active', 'completed', 'failed'])
+    const { data: plans, error: plansError } = await adminSupabase
+      .from('payment_plan_summary')
+      .select('*')
+      .in('status', ['active', 'completed', 'failed'])
+      .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
 
-      if (plansError) {
-        logger.logAdminAction(
-          'get-payment-plans-report-plans-error',
-          'Error fetching payment plans for report',
-          { error: plansError.message },
-          'error'
-        )
-      } else {
-        plansData = plans || []
-      }
+    if (plansError) {
+      logger.logAdminAction(
+        'get-payment-plans-report-plans-error',
+        'Error fetching payment plans for report',
+        { error: plansError.message },
+        undefined,
+        'error'
+      )
+    } else {
+      plansData = plans || []
     }
 
     // Organize plans by user (contact_id is the user_id in payment_plan_summary)

@@ -23,3 +23,10 @@ export const INSTALLMENT_INTERVAL_DAYS = 30
  * Hours to wait before retrying a failed payment
  */
 export const RETRY_INTERVAL_HOURS = 24
+
+/**
+ * Tolerance applied to RETRY_INTERVAL_HOURS. The daily cron runs at a fixed time but
+ * attempts are timestamped a few seconds into each run, so consecutive runs are
+ * sometimes just under 24h apart. Without this a retry would slip a full day.
+ */
+export const RETRY_INTERVAL_GRACE_HOURS = 1

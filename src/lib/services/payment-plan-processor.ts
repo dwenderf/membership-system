@@ -3,7 +3,8 @@ import { logger } from '@/lib/logging/logger'
 import { PaymentPlanService } from './payment-plan-service'
 import { emailStagingManager } from '@/lib/email/staging'
 import { EMAIL_EVENTS } from '@/lib/email/service'
-import { MAX_PAYMENT_ATTEMPTS, RETRY_INTERVAL_HOURS } from './payment-plan-config'
+import { MAX_PAYMENT_ATTEMPTS, PAYMENT_PLAN_INSTALLMENTS, RETRY_INTERVAL_HOURS, RETRY_INTERVAL_GRACE_HOURS } from './payment-plan-config'
+import { stageAdminPaymentPlanFailureNotification } from '@/lib/email/admin-notifications'
 import { formatDate, formatDateString } from '@/lib/date-utils'
 import { formatAmount } from '@/lib/format-utils'
 
@@ -49,9 +50,15 @@ export interface ProcessingResults {
  * 5. Sending completion emails when final payment is made
  *
  * @param today - The date to use as "today" for queries (format: YYYY-MM-DD)
+ * @param options.includeExhausted - Admin-initiated runs only. Also attempt payments that have
+ *   used up MAX_PAYMENT_ATTEMPTS or are inside the retry interval. The daily cron never sets this,
+ *   so a card that keeps failing is not charged forever without a person deciding to try again.
  * @returns Processing results with counts and any errors
  */
-export async function processDuePayments(today: string): Promise<ProcessingResults> {
+export async function processDuePayments(
+  today: string,
+  options: { includeExhausted?: boolean } = {}
+): Promise<ProcessingResults> {
   const adminSupabase = createAdminClient()
 
   const results: ProcessingResults = {
@@ -111,6 +118,12 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
 
   // Filter payments based on retry eligibility
   const processablePayments = duePayments.filter(payment => {
+    // Admin "Run Payments": retry everything that is due, including payments that
+    // have exhausted their automatic attempts
+    if (options.includeExhausted) {
+      return true
+    }
+
     // Never attempted (first time)
     if (payment.attempt_count === 0) {
       return true
@@ -123,7 +136,10 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
         const lastAttempt = new Date(payment.last_attempt_at)
         const now = new Date()
         const hoursSinceLastAttempt = (now.getTime() - lastAttempt.getTime()) / (1000 * 60 * 60)
-        return hoursSinceLastAttempt >= RETRY_INTERVAL_HOURS
+        // The cron fires at the same time every day but each attempt is stamped a few
+        // seconds after it starts, so the next run can land just under 24h later and
+        // would otherwise skip a whole day. The grace window absorbs that drift.
+        return hoursSinceLastAttempt >= RETRY_INTERVAL_HOURS - RETRY_INTERVAL_GRACE_HOURS
       }
       // If no last_attempt_at, allow processing
       return true
@@ -327,17 +343,55 @@ export async function processDuePayments(today: string): Promise<ProcessingResul
         }
       }
 
-      logger.logBatchProcessing(
-        'payment-processor-payment-failed',
-        `Payment processing failed`,
-        {
-          xeroPaymentId: payment.id,
-          installmentNumber: payment.installment_number,
-          attemptCount: payment.attempt_count + 1,
-          error: result.error
-        },
-        'warn'
-      )
+      const attemptNumber = payment.attempt_count + 1
+      const retriesExhausted = attemptNumber >= MAX_PAYMENT_ATTEMPTS
+      const failureMetadata = {
+        xeroPaymentId: payment.id,
+        userId: userReg.user_id,
+        installmentNumber: payment.installment_number,
+        attemptCount: attemptNumber,
+        maxAttempts: MAX_PAYMENT_ATTEMPTS,
+        retriesExhausted,
+        error: result.error
+      }
+
+      if (retriesExhausted) {
+        // Logged as an error so it reaches Sentry: nothing retries this installment
+        // automatically any more, so a person has to act.
+        logger.logBatchProcessing(
+          'payment-processor-payment-retries-exhausted',
+          'Payment plan installment failed and automatic retries are exhausted',
+          failureMetadata,
+          'error'
+        )
+      } else {
+        logger.logBatchProcessing(
+          'payment-processor-payment-failed',
+          'Payment processing failed',
+          failureMetadata,
+          'warn'
+        )
+        // Plain warnings are not sent to Sentry; a failed charge is worth seeing there.
+        logger.reportWarningToSentry(
+          'payment-processing',
+          'payment-processor-payment-failed',
+          'Payment plan installment failed to charge',
+          failureMetadata,
+          userReg.user_id
+        )
+      }
+
+      await stageAdminPaymentPlanFailureNotification({
+        playerUserId: userReg.user_id,
+        registrationName: userReg.registration?.name || 'Registration',
+        seasonName: userReg.registration?.season?.name || '',
+        installmentNumber: payment.installment_number,
+        totalInstallments: PAYMENT_PLAN_INSTALLMENTS,
+        installmentAmountCents: payment.amount_paid,
+        failureReason: result.error || 'Payment declined',
+        attemptNumber,
+        maxAttempts: MAX_PAYMENT_ATTEMPTS
+      })
 
       results.errors.push(`Payment ${payment.id}: ${result.error}`)
     }

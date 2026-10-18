@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
-import { filterActivePlans } from '@/lib/payment-plan-utils'
+import {
+  filterActivePlans,
+  getInstallmentDisplayStatus,
+  planNeedsAttention,
+  type InstallmentDisplayStatus,
+  type PaymentPlanInstallment
+} from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 import type { ProcessingResults } from '@/lib/services/payment-plan-processor'
 import UserLink from '@/components/UserLink'
 import { logger } from '@/lib/logging/logger'
@@ -21,6 +28,15 @@ interface PaymentPlan {
   nextPaymentDate: string | null
   status: string
   createdAt: string
+  installments: PaymentPlanInstallment[]
+}
+
+const INSTALLMENT_STATUS_BADGES: Record<InstallmentDisplayStatus, { label: string; className: string }> = {
+  paid: { label: 'Paid', className: 'bg-green-100 text-green-800' },
+  scheduled: { label: 'Scheduled', className: 'bg-gray-100 text-gray-700' },
+  failing: { label: 'Failing – will retry', className: 'bg-orange-100 text-orange-800' },
+  exhausted: { label: 'Failed – retries used up', className: 'bg-red-100 text-red-800' },
+  failed: { label: 'Failed', className: 'bg-red-100 text-red-800' }
 }
 
 interface User {
@@ -283,6 +299,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.activePlansCount > 0 ? (
+                        <>
                         <button
                           onClick={() => toggleRow(user.userId)}
                           className="text-blue-600 hover:text-blue-900 font-medium"
@@ -290,6 +307,12 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                           {user.activePlansCount} {user.activePlansCount === 1 ? 'plan' : 'plans'}
                           <span className="ml-1">{expandedRows.has(user.userId) ? '▼' : '▶'}</span>
                         </button>
+                        {user.plans.some(p => planNeedsAttention(p, MAX_PAYMENT_ATTEMPTS)) && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                            Payment failing
+                          </span>
+                        )}
+                        </>
                       ) : (
                         <span className="text-gray-400">None</span>
                       )}
@@ -339,6 +362,9 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                                 Next Payment
                               </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Installments
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -357,7 +383,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                                       Paid
                                     </span>
-                                  ) : plan.status === 'failed' ? (
+                                  ) : plan.status === 'failed' || planNeedsAttention(plan, MAX_PAYMENT_ATTEMPTS) ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                                       Failed
                                     </span>
@@ -384,6 +410,31 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                                 </td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {plan.nextPaymentDate ? formatDateString(plan.nextPaymentDate) : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <ul className="space-y-1">
+                                    {(plan.installments ?? []).map((installment) => {
+                                      const status = getInstallmentDisplayStatus(installment, MAX_PAYMENT_ATTEMPTS)
+                                      const badge = INSTALLMENT_STATUS_BADGES[status]
+                                      return (
+                                        <li key={installment.id} className="flex flex-wrap items-center gap-x-2">
+                                          <span className="text-gray-700">
+                                            #{installment.installment_number} · {formatAmount(installment.amount)}
+                                            {installment.planned_payment_date && ` · ${formatDateString(installment.planned_payment_date)}`}
+                                          </span>
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}>
+                                            {badge.label}
+                                          </span>
+                                          {(status === 'failing' || status === 'exhausted') && (
+                                            <span className="text-xs text-red-700">
+                                              attempt {installment.attempt_count}/{MAX_PAYMENT_ATTEMPTS}
+                                              {installment.failure_reason && ` – ${installment.failure_reason}`}
+                                            </span>
+                                          )}
+                                        </li>
+                                      )
+                                    })}
+                                  </ul>
                                 </td>
                               </tr>
                             ))}

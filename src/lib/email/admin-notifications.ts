@@ -4,10 +4,12 @@
  * Notifies opted-in admins of:
  * - New registrations (regular + alternate sign-ups)
  * - Refunds processed
+ * - Payment plan installments that fail to charge
  *
  * Respects each admin's opt-out preferences:
  *   preferences.emailNotifications.newRegistrations  (default: opted in)
  *   preferences.emailNotifications.refunds           (default: opted in)
+ *   preferences.emailNotifications.paymentPlanFailures (default: opted in)
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
@@ -22,6 +24,7 @@ interface UserEmailPreferences {
   emailNotifications?: {
     newRegistrations?: boolean
     refunds?: boolean
+    paymentPlanFailures?: boolean
   }
 }
 
@@ -36,7 +39,7 @@ const getEmailDelayMs = () => {
 
 /** Returns all admins who have not opted out of a given notification key */
 async function getOptedInAdmins(
-  prefKey: 'newRegistrations' | 'refunds'
+  prefKey: 'newRegistrations' | 'refunds' | 'paymentPlanFailures'
 ): Promise<Array<{ id: string; email: string; first_name: string; last_name: string }>> {
   const supabase = createAdminClient()
 
@@ -295,6 +298,94 @@ export async function stageAdminRefundNotification(
       'admin-refund-unexpected-error',
       'stageAdminRefundNotification: unexpected error',
       { playerUserId, paymentId, error: error instanceof Error ? error.message : String(error) },
+      undefined,
+      'error'
+    )
+    // Don't throw — notifications must never break the main flow
+  }
+}
+
+// ─── Payment plan failure notification ─────────────────────────────────────────
+
+/**
+ * Notify opted-in admins when a payment plan installment fails to charge.
+ * Sent on every failed attempt so admins hear about it on the first failure,
+ * not only after automatic retries run out.
+ */
+export async function stageAdminPaymentPlanFailureNotification(options: {
+  playerUserId: string
+  registrationName: string
+  seasonName: string
+  installmentNumber: number
+  totalInstallments: number
+  installmentAmountCents: number
+  failureReason: string
+  attemptNumber: number
+  maxAttempts: number
+}): Promise<void> {
+  if (!process.env.LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID) {
+    logger.logAdminAction(
+      'admin-payment-plan-failure-template-missing',
+      'LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID not configured, skipping admin payment plan failure notification',
+      undefined,
+      undefined,
+      'warn'
+    )
+    return
+  }
+
+  try {
+    const supabase = createAdminClient()
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+    const { data: player, error: playerError } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', options.playerUserId)
+      .single()
+
+    if (playerError || !player) {
+      logger.logAdminAction(
+        'admin-payment-plan-failure-player-not-found',
+        'stageAdminPaymentPlanFailureNotification: player not found',
+        { playerUserId: options.playerUserId, error: playerError?.message },
+        undefined,
+        'error'
+      )
+      return
+    }
+
+    const retriesLeft = options.maxAttempts - options.attemptNumber
+    const attemptSummary = retriesLeft > 0
+      ? `Attempt ${options.attemptNumber} of ${options.maxAttempts} failed. ${retriesLeft} automatic ${retriesLeft === 1 ? 'retry' : 'retries'} remaining.`
+      : `Attempt ${options.attemptNumber} of ${options.maxAttempts} failed. Automatic retries are exhausted: once the member has updated their card, use Run Payments on the Payment Plans report to charge it again.`
+
+    const admins = await getOptedInAdmins('paymentPlanFailures')
+    const delayMs = getEmailDelayMs()
+
+    for (let i = 0; i < admins.length; i++) {
+      const admin = admins[i]
+      await emailService.sendAdminPaymentPlanFailureNotification({
+        adminUserId: admin.id,
+        adminEmail: admin.email,
+        adminName: `${admin.first_name} ${admin.last_name}`,
+        playerName: `${player.first_name} ${player.last_name}`,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        installmentNumber: options.installmentNumber,
+        totalInstallments: options.totalInstallments,
+        installmentAmount: `$${(options.installmentAmountCents / 100).toFixed(2)}`,
+        failureReason: options.failureReason,
+        attemptSummary,
+        userUrl: `${siteUrl}/admin/reports/users/${options.playerUserId}`,
+      })
+      if (i < admins.length - 1) await delay(delayMs)
+    }
+  } catch (error) {
+    logger.logAdminAction(
+      'admin-payment-plan-failure-unexpected-error',
+      'stageAdminPaymentPlanFailureNotification: unexpected error',
+      { playerUserId: options.playerUserId, error: error instanceof Error ? error.message : String(error) },
       undefined,
       'error'
     )

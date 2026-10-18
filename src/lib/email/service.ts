@@ -37,6 +37,7 @@ export const EMAIL_EVENTS = {
   CAPTAIN_ROSTER_CHANGE: 'captain.roster_change',
   ADMIN_NEW_REGISTRATION: 'admin.new_registration',
   ADMIN_REFUND_NOTIFICATION: 'admin.refund_notification',
+  ADMIN_PAYMENT_PLAN_FAILURE: 'admin.payment_plan_failure',
   TEAM_MESSAGE: 'team.message',
 } as const
 
@@ -827,6 +828,46 @@ class EmailService {
         refundAmount: options.refundAmount,
         originalAmount: options.originalAmount,
         invoiceUrl: options.invoiceUrl,
+        dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
+      }
+    })
+  }
+
+  /**
+   * Send admin payment plan failure notification immediately (bypasses queue)
+   */
+  async sendAdminPaymentPlanFailureNotification(options: {
+    adminUserId: string
+    adminEmail: string
+    adminName: string
+    playerName: string
+    registrationName: string
+    seasonName: string
+    installmentNumber: number
+    totalInstallments: number
+    installmentAmount: string
+    failureReason: string
+    attemptSummary: string
+    userUrl: string
+  }) {
+    return this.sendEmailImmediately({
+      userId: options.adminUserId,
+      email: options.adminEmail,
+      eventType: EMAIL_EVENTS.ADMIN_PAYMENT_PLAN_FAILURE,
+      subject: `Payment Plan Failure: ${options.playerName} – ${options.registrationName}`,
+      triggeredBy: 'automated',
+      templateId: process.env.LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID,
+      data: {
+        adminName: options.adminName,
+        playerName: options.playerName,
+        registrationName: options.registrationName,
+        seasonName: options.seasonName,
+        installmentNumber: options.installmentNumber,
+        totalInstallments: options.totalInstallments,
+        installmentAmount: options.installmentAmount,
+        failureReason: options.failureReason,
+        attemptSummary: options.attemptSummary,
+        userUrl: options.userUrl,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })

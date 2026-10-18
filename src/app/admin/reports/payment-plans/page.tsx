@@ -4,6 +4,7 @@ import AdminHeader from '@/components/AdminHeader'
 import { formatAmount } from '@/lib/format-utils'
 import PaymentPlansTable from './PaymentPlansTable'
 import { PaymentPlanSummaryRow } from '@/lib/payment-plan-utils'
+import { logger } from '@/lib/logging/logger'
 
 export default async function PaymentPlansReportPage() {
   const supabase = await createClient()
@@ -36,19 +37,27 @@ export default async function PaymentPlansReportPage() {
     .is('deleted_at', null)
     .order('email')
 
-  // Get payment plans
-  const userIds = users?.map(u => u.id) || []
-  let plansData: PaymentPlanSummaryRow[] = []
+  // Get payment plans. Deliberately not filtered with .in('contact_id', userIds):
+  // PostgREST puts the list in the URL, and one UUID per user pushes the request
+  // past the URL length limit, which made this query fail and the report show no
+  // plans at all. Plans are few, so fetch them all and match to users below.
+  const { data: plans, error: plansError } = await adminSupabase
+    .from('payment_plan_summary')
+    .select('*')
+    .in('status', ['active', 'completed', 'failed'])
+    .overrideTypes<PaymentPlanSummaryRow[], { merge: false }>()
 
-  if (userIds.length > 0) {
-    const { data: plans } = await adminSupabase
-      .from('payment_plan_summary')
-      .select('*')
-      .in('contact_id', userIds)
-      .in('status', ['active', 'completed', 'failed'])
-
-    plansData = plans || []
+  if (plansError) {
+    logger.logAdminAction(
+      'payment-plans-report-plans-error',
+      'Error fetching payment plans for report',
+      { error: plansError.message },
+      undefined,
+      'error'
+    )
   }
+
+  const plansData: PaymentPlanSummaryRow[] = plans || []
 
   // Organize plans by user
   const plansByUser = new Map<string, PaymentPlanSummaryRow[]>()

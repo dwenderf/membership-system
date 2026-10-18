@@ -3,9 +3,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
-import { filterActivePlans } from '@/lib/payment-plan-utils'
+import {
+  filterActivePlans,
+  getInstallmentDisplayStatus,
+  planNeedsAttention,
+  type PaymentPlanInstallment
+} from '@/lib/payment-plan-utils'
+import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 import type { ProcessingResults } from '@/lib/services/payment-plan-processor'
 import UserLink from '@/components/UserLink'
+import InstallmentStatusBadge from '@/components/InstallmentStatusBadge'
 import { logger } from '@/lib/logging/logger'
 
 interface PaymentPlan {
@@ -21,6 +28,7 @@ interface PaymentPlan {
   nextPaymentDate: string | null
   status: string
   createdAt: string
+  installments: PaymentPlanInstallment[]
 }
 
 interface User {
@@ -31,6 +39,7 @@ interface User {
   memberId: string | null
   paymentPlanEnabled: boolean
   activePlansCount: number
+  needsAttention: boolean
   totalPlansCount: number
   totalAmount: number
   paidAmount: number
@@ -45,7 +54,7 @@ interface PaymentPlansTableProps {
 }
 
 export default function PaymentPlansTable({ initialData }: PaymentPlansTableProps) {
-  const [filter, setFilter] = useState<'all' | 'eligible' | 'active'>('all')
+  const [filter, setFilter] = useState<'open' | 'attention' | 'eligible'>('open')
   const [users, setUsers] = useState<User[]>(initialData)
   const [loading, setLoading] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -120,14 +129,24 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
             <span className="text-sm font-medium text-gray-700">Filter:</span>
             <div className="flex space-x-2">
               <button
-                onClick={() => setFilter('all')}
+                onClick={() => setFilter('open')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  filter === 'all'
+                  filter === 'open'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                All Users
+                Open Plans
+              </button>
+              <button
+                onClick={() => setFilter('attention')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  filter === 'attention'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Needs Attention
               </button>
               <button
                 onClick={() => setFilter('eligible')}
@@ -138,16 +157,6 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                 }`}
               >
                 Eligible Only
-              </button>
-              <button
-                onClick={() => setFilter('active')}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  filter === 'active'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                With Balance Due
               </button>
             </div>
           </div>
@@ -227,7 +236,9 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
         {loading ? (
           <div className="px-6 py-8 text-center text-gray-500">Loading...</div>
         ) : users.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500">No users found</div>
+          <div className="px-6 py-8 text-center text-gray-500">
+            {filter === 'attention' ? 'No failed payments' : filter === 'open' ? 'No open payment plans' : 'No users found'}
+          </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -283,6 +294,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.activePlansCount > 0 ? (
+                        <>
                         <button
                           onClick={() => toggleRow(user.userId)}
                           className="text-blue-600 hover:text-blue-900 font-medium"
@@ -290,6 +302,12 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                           {user.activePlansCount} {user.activePlansCount === 1 ? 'plan' : 'plans'}
                           <span className="ml-1">{expandedRows.has(user.userId) ? '▼' : '▶'}</span>
                         </button>
+                        {user.needsAttention && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                            Payment failing
+                          </span>
+                        )}
+                        </>
                       ) : (
                         <span className="text-gray-400">None</span>
                       )}
@@ -339,6 +357,9 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                                 Next Payment
                               </th>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                Installments
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -357,7 +378,7 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                                       Paid
                                     </span>
-                                  ) : plan.status === 'failed' ? (
+                                  ) : plan.status === 'failed' || planNeedsAttention(plan, MAX_PAYMENT_ATTEMPTS) ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                                       Failed
                                     </span>
@@ -384,6 +405,28 @@ export default function PaymentPlansTable({ initialData }: PaymentPlansTableProp
                                 </td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {plan.nextPaymentDate ? formatDateString(plan.nextPaymentDate) : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <ul className="space-y-1">
+                                    {(plan.installments ?? []).map((installment) => {
+                                      const status = getInstallmentDisplayStatus(installment, MAX_PAYMENT_ATTEMPTS)
+                                      return (
+                                        <li key={installment.id} className="flex flex-wrap items-center gap-x-2">
+                                          <span className="text-gray-700">
+                                            #{installment.installment_number} · {formatAmount(installment.amount)}
+                                            {installment.planned_payment_date && ` · ${formatDateString(installment.planned_payment_date)}`}
+                                          </span>
+                                          <InstallmentStatusBadge status={status} />
+                                          {(status === 'failing' || status === 'exhausted') && (
+                                            <span className="text-xs text-red-700">
+                                              attempt {installment.attempt_count}/{MAX_PAYMENT_ATTEMPTS}
+                                              {installment.failure_reason && ` – ${installment.failure_reason}`}
+                                            </span>
+                                          )}
+                                        </li>
+                                      )
+                                    })}
+                                  </ul>
                                 </td>
                               </tr>
                             ))}

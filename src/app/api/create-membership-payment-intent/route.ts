@@ -15,6 +15,7 @@ import { setPaymentContext, capturePaymentError, capturePaymentSuccess, PaymentC
 import { SupabaseClient, User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import Stripe from 'stripe'
+import { linkPaymentToStagingInvoice } from '@/lib/xero/link-payment'
 
 type MembershipRow = Database['public']['Tables']['memberships']['Row']
 type UserProfileRow = Database['public']['Tables']['users']['Row']
@@ -249,12 +250,12 @@ async function handleFreeMembership({
       'info'
     )
 
-    const { error: stagingUpdateError } = await adminSupabase
-      .from('xero_invoices')
-      .update({ payment_id: paymentRecord.id })
-      .eq('staging_metadata->>user_id', user.id)
-      .eq('sync_status', 'staged')
-      .is('payment_id', null)
+    // Only this checkout's own invoice: see linkPaymentToStagingInvoice
+    const { error: stagingUpdateError } = await linkPaymentToStagingInvoice(
+      adminSupabase,
+      freeStagingRecord.id,
+      paymentRecord.id
+    )
 
     if (stagingUpdateError) {
       logger.logPaymentProcessing(
@@ -885,12 +886,12 @@ export async function POST(request: NextRequest) {
         'info'
       )
 
-      const { error: stagingPaymentUpdateError } = await adminSupabase
-        .from('xero_invoices')
-        .update({ payment_id: paymentRecord.id })
-        .eq('staging_metadata->>user_id', user.id)
-        .eq('sync_status', 'staged')
-        .is('payment_id', null)
+      // Only this checkout's own invoice: see linkPaymentToStagingInvoice
+      const { error: stagingPaymentUpdateError } = await linkPaymentToStagingInvoice(
+        adminSupabase,
+        stagingRecord.id,
+        paymentRecord.id
+      )
 
       if (stagingPaymentUpdateError) {
         logger.logPaymentProcessing(

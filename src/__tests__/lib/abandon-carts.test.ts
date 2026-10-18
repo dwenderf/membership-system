@@ -44,9 +44,15 @@ const invoice = (id: string, payment_id: string, stagedHoursAgo = 48) => ({
 })
 
 describe('abandonCartsWithPayment', () => {
-  function run(candidates: unknown[], paymentStatuses: Record<string, string>) {
+  function run(candidates: unknown[], paymentStatuses: Record<string, string>, promotedPaymentIds: string[] = []) {
     return fakeClient(call => {
-      if (call.table === 'xero_invoices' && call.op === 'select') return { data: candidates }
+      if (call.table === 'xero_invoices' && call.op === 'select') {
+        // the promoted-sibling lookup filters by payment_id; the candidate select does not
+        if (call.filters.some(f => f[0] === 'in' && f[1] === 'payment_id')) {
+          return { data: idsOf(call).filter(id => promotedPaymentIds.includes(id)).map(payment_id => ({ payment_id })) }
+        }
+        return { data: candidates }
+      }
       if (call.table === 'payments') {
         const ids = idsOf(call)
         return { data: ids.filter(id => id in paymentStatuses).map(id => ({ id, status: paymentStatuses[id] })) }
@@ -71,8 +77,21 @@ describe('abandonCartsWithPayment', () => {
 
     const result = await abandonCartsWithPayment(client)
 
-    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1 })
+    expect(result).toMatchObject({ success: true, error: null, invoices: 2, needsReconciliation: 1, duplicatesOfPromotedInvoice: 0 })
     expect(updates(calls, 'xero_invoices').flatMap(idsOf).sort()).toEqual(['inv-cancelled', 'inv-failed'])
+  })
+
+  it('does not flag a stale duplicate cart whose payment is already carried by a promoted invoice', async () => {
+    const { client, calls } = run(
+      [invoice('inv-dup', 'p-synced'), invoice('inv-missing', 'p-unsynced')],
+      { 'p-synced': 'completed', 'p-unsynced': 'completed' },
+      ['p-synced']
+    )
+
+    const result = await abandonCartsWithPayment(client)
+
+    expect(result).toMatchObject({ invoices: 0, needsReconciliation: 1, duplicatesOfPromotedInvoice: 1 })
+    expect(calls.some(c => c.op === 'update')).toBe(false) // neither is abandoned
   })
 
   it('only selects DRAFT staged invoices that have a payment_id', async () => {

@@ -21,6 +21,9 @@ export const ABANDONED_CART_REASON =
 export const ABANDONED_CART_WITH_PAYMENT_REASON =
   'Automatically marked as abandoned - staged with a payment that never completed'
 
+/** Invoice states that mean checkout completed and the invoice entered (or finished) the Xero sync queue. */
+const PROMOTED_INVOICE_STATUSES = ['pending', 'processing', 'synced']
+
 /**
  * Payment statuses that mean the payment ended without success.
  *
@@ -50,8 +53,10 @@ export interface CartSweepResult extends StepResult {
 }
 
 export interface CartWithPaymentSweepResult extends CartSweepResult {
-  /** Staged invoices whose payment completed: unsynced revenue, never abandoned, needs a person. */
+  /** Staged invoices whose payment completed and has NO promoted invoice: unsynced revenue, needs a person. */
   needsReconciliation: number
+  /** Staged invoices whose completed payment is already carried by a promoted sibling invoice (stale duplicate carts). */
+  duplicatesOfPromotedInvoice: number
 }
 
 function chunk<T>(items: T[], size = CHUNK_SIZE): T[][] {
@@ -146,12 +151,16 @@ export async function abandonCartsBeforePayment(supabase: Supabase): Promise<Car
  *    stuck at 'staged' is not a cart and is left for manual review;
  *  - its payment is cancelled/failed (the invoice is also older than STALE_CART_AGE_MS).
  *
- * Staged invoices whose payment COMPLETED are the "completion processor failed to promote it"
- * case: collected money that never reached the Xero queue. They are never abandoned; they are
- * counted in `needsReconciliation` so the cron response and log make them visible.
+ * Staged invoices whose payment COMPLETED are never abandoned. Two kinds exist:
+ *  - the payment has no promoted invoice at all: the "completion processor failed to promote it"
+ *    case, collected money that never reached the Xero queue. Counted in `needsReconciliation`
+ *    so the cron response and log make them visible.
+ *  - another invoice carrying the same payment_id was promoted: a stale duplicate cart (the user
+ *    opened checkout several times and every cart was stamped with the shared PaymentIntent's
+ *    payment). The revenue is already in Xero; counted in `duplicatesOfPromotedInvoice` only.
  */
 export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartWithPaymentSweepResult> {
-  const empty = { invoices: 0, payments: 0, needsReconciliation: 0 }
+  const empty = { invoices: 0, payments: 0, needsReconciliation: 0, duplicatesOfPromotedInvoice: 0 }
   const cutoff = new Date(Date.now() - STALE_CART_AGE_MS).toISOString()
 
   const { data: candidates, error: selectError } = await supabase
@@ -191,13 +200,35 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
     }
   }
 
+  // Which completed payments are already carried by a promoted invoice?
+  const completedPaymentIds = [...new Set(
+    rows.filter(r => statusByPayment.get(r.payment_id) === 'completed').map(r => r.payment_id)
+  )]
+  const promotedPaymentIds = new Set<string>()
+  for (const ids of chunk(completedPaymentIds)) {
+    const { data: promoted, error: promotedError } = await supabase
+      .from('xero_invoices')
+      .select('payment_id')
+      .in('payment_id', ids)
+      .in('sync_status', PROMOTED_INVOICE_STATUSES)
+
+    if (promotedError) {
+      return { success: false, error: `promoted lookup: ${promotedError.message}`, ...empty }
+    }
+    for (const row of (promoted || []) as Array<{ payment_id: string }>) {
+      promotedPaymentIds.add(row.payment_id)
+    }
+  }
+
   const eligibleIds: string[] = []
   let needsReconciliation = 0
+  let duplicatesOfPromotedInvoice = 0
 
   for (const row of rows) {
     const status = statusByPayment.get(row.payment_id)
     if (status === 'completed') {
-      needsReconciliation++
+      if (promotedPaymentIds.has(row.payment_id)) duplicatesOfPromotedInvoice++
+      else needsReconciliation++
     } else if (status && ENDED_PAYMENT_STATUSES.includes(status)) {
       eligibleIds.push(row.id)
     }
@@ -205,9 +236,9 @@ export async function abandonCartsWithPayment(supabase: Supabase): Promise<CartW
   }
 
   if (eligibleIds.length === 0) {
-    return { success: true, error: null, ...empty, needsReconciliation }
+    return { success: true, error: null, ...empty, needsReconciliation, duplicatesOfPromotedInvoice }
   }
 
   const abandoned = await abandonInvoices(supabase, eligibleIds, ABANDONED_CART_WITH_PAYMENT_REASON)
-  return { ...abandoned, needsReconciliation }
+  return { ...abandoned, needsReconciliation, duplicatesOfPromotedInvoice }
 }

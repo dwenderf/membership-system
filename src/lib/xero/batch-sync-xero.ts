@@ -15,6 +15,7 @@ import { centsToCents, centsToDollars } from '../../types/currency'
 import { asHttpClientError, getXeroErrorStatus, getXeroValidationMessage, parseXeroBatchError } from './xero-errors'
 import { logger } from '@/lib/logging/logger'
 import { scheduleSentryFlush } from '@/lib/sentry-flush'
+import { UNPROMOTED_INVOICE_STATUSES_FILTER } from '@/lib/xero/invoice-status'
 
 // Constants for date calculations
 const DAYS_30_IN_MS = 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
@@ -686,6 +687,7 @@ export class XeroBatchSyncManager {
             .select('invoice_number')
             .eq('payment_id', creditNoteRecord.payment_id)
             .eq('invoice_type', 'ACCREC')
+            .not('sync_status', 'in', UNPROMOTED_INVOICE_STATUSES_FILTER) // never a stale cart sharing this payment_id
             .single()
 
           if (originalInvoice?.invoice_number) {

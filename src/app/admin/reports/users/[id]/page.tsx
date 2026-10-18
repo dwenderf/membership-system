@@ -215,8 +215,10 @@ export default async function UserDetailPage({ params, searchParams: searchParam
   const paymentPlanStatuses = new Map<string, { isPaymentPlan: boolean, isFullyPaid: boolean, amountPaid: number }>()
 
   for (const payment of userPayments || []) {
+    // Never a stale cart (staged/abandoned) that shares this payment_id
     const originalInvoice = payment.xero_invoices?.find((inv: UserInvoiceJoin) =>
-      inv.invoice_type === 'ACCREC' && inv.is_payment_plan
+      inv.invoice_type === 'ACCREC' && inv.is_payment_plan &&
+      inv.sync_status !== 'staged' && inv.sync_status !== 'abandoned'
     )
 
     if (originalInvoice) {

@@ -1065,12 +1065,12 @@ The Hockey Association Team
 
 #### Admin Payment Plan Failure Template (`LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID`)
 
-Sent to every admin (unless they opted out via `preferences.emailNotifications.paymentPlanFailures = false`) each time a payment plan installment fails to charge. Subject: `{testEmailPrefix}Payment Plan Failure: {playerName} – {registrationName}` (mark the prefix optional).
+Sent to every admin (unless they opted out via `preferences.emailNotifications.paymentPlanFailures = false`) each time a payment plan installment fails to charge. Subject: `{testEmailPrefix}Payment Plan Failure: {userName} – {registrationName}` (mark the prefix optional).
 
 **Data Variables:**
 
 - `adminName` - Admin's full name
-- `playerName` - Member whose installment failed
+- `userName` - Member whose installment failed
 - `registrationName` - Name of registration
 - `seasonName` - Season name ("N/A" if the registration has no season)
 - `installmentNumber` - Which installment failed (2, 3, or 4)
@@ -1079,6 +1079,9 @@ Sent to every admin (unless they opted out via `preferences.emailNotifications.p
 - `failureReason` - Stripe's decline reason
 - `attemptSummary` - e.g. "Attempt 2 of 3 failed. 1 automatic retry remaining." or, on the last attempt, a note that retries are exhausted and **Run Payments** must be used after the member updates their card
 - `userUrl` - Link to the member's admin page
+- `scheduledDate` - Original scheduled date of this installment (DATE column, formatted without timezone shift, e.g. "10/16/2026")
+- `amountPaid` - Total paid so far, e.g. "$162.50"
+- `remainingBalance` - Balance still owed, e.g. "$487.50"
 - `dashboardUrl` - Link to the dashboard footer button (`/user`)
 - `testEmailPrefix` - Added automatically on every send (`[TEST] ` outside production); use it in the Subject
 
@@ -1087,12 +1090,15 @@ Sent to every admin (unless they opted out via `preferences.emailNotifications.p
 ```text
 Hi [adminName],
 
-A payment plan installment failed for [playerName].
+A payment plan installment failed for [userName].
 
 - Registration: [registrationName] [seasonName]
 - Installment: [installmentNumber] of [totalInstallments]
 - Amount: [installmentAmount]
 - Reason: [failureReason]
+- Scheduled date: [scheduledDate]
+- Paid so far: [amountPaid]
+- Remaining balance: [remainingBalance]
 
 [attemptSummary]
 

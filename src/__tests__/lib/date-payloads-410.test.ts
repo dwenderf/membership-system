@@ -3,10 +3,10 @@
  * UTC hosts. Covers payment-plan-processor (processed + failed emails) and the
  * waitlist season label used by POST /api/join-waitlist.
  */
-const mockStageEmail = jest.fn(() => Promise.resolve(true))
-jest.mock('@/lib/email/staging', () => ({ emailStagingManager: { stageEmail: (...a: unknown[]) => mockStageEmail(...a) } }))
+const mockStageEmail = jest.fn<Promise<boolean>, [unknown]>(() => Promise.resolve(true))
+jest.mock('@/lib/email/staging', () => ({ emailStagingManager: { stageEmail: (arg: unknown) => mockStageEmail(arg) } }))
 jest.mock('@/lib/logging/logger', () => ({ logger: { logBatchProcessing: jest.fn(), logSystem: jest.fn() } }))
-const mockStageAdmin = jest.fn(() => Promise.resolve())
+const mockStageAdmin = jest.fn<Promise<void>, [unknown]>(() => Promise.resolve())
 jest.mock('@/lib/email/admin-notifications', () => ({ stageAdminPaymentPlanFailureNotification: (arg: unknown) => mockStageAdmin(arg) }))
 const mockProcessTxn = jest.fn()
 jest.mock('@/lib/services/payment-plan-service', () => ({

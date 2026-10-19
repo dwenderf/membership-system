@@ -840,7 +840,7 @@ class EmailService {
     adminUserId: string
     adminEmail: string
     adminName: string
-    playerName: string
+    userName: string
     registrationName: string
     seasonName: string
     installmentNumber: number
@@ -849,17 +849,20 @@ class EmailService {
     failureReason: string
     attemptSummary: string
     userUrl: string
+    scheduledDate: string
+    amountPaid: string
+    remainingBalance: string
   }) {
     return this.sendEmailImmediately({
       userId: options.adminUserId,
       email: options.adminEmail,
       eventType: EMAIL_EVENTS.ADMIN_PAYMENT_PLAN_FAILURE,
-      subject: `Payment Plan Failure: ${options.playerName} – ${options.registrationName}`,
+      subject: `Payment Plan Failure: ${options.userName} – ${options.registrationName}`,
       triggeredBy: 'automated',
       templateId: process.env.LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID,
       data: {
         adminName: options.adminName,
-        playerName: options.playerName,
+        userName: options.userName,
         registrationName: options.registrationName,
         seasonName: options.seasonName,
         installmentNumber: options.installmentNumber,
@@ -868,6 +871,9 @@ class EmailService {
         failureReason: options.failureReason,
         attemptSummary: options.attemptSummary,
         userUrl: options.userUrl,
+        scheduledDate: options.scheduledDate,
+        amountPaid: options.amountPaid,
+        remainingBalance: options.remainingBalance,
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       }
     })

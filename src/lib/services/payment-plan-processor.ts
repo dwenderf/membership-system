@@ -293,6 +293,13 @@ export async function processDuePayments(
     } else {
       results.paymentsFailed++
 
+      // Payment plan summary for balances (member failure email + admin alert)
+      const { data: planSummary } = await adminSupabase
+        .from('payment_plan_summary')
+        .select('*')
+        .eq('invoice_id', invoice.id)
+        .single()
+
       // Get user details for failure email
       const { data: user } = await adminSupabase
         .from('users')
@@ -304,13 +311,6 @@ export async function processDuePayments(
         const userName = `${user.first_name} ${user.last_name}`
         const registrationName = userReg.registration?.name || 'Registration'
         const remainingRetries = Math.max(0, MAX_PAYMENT_ATTEMPTS - (payment.attempt_count + 1))
-
-        // Get payment plan summary for balances
-        const { data: planSummary } = await adminSupabase
-          .from('payment_plan_summary')
-          .select('*')
-          .eq('invoice_id', invoice.id)
-          .single()
 
         // Stage failure email
         try {
@@ -373,6 +373,9 @@ export async function processDuePayments(
         'warn'
       )
 
+      const paidCents = planSummary?.paid_amount || 0
+      const remainingCents = planSummary ? (planSummary.total_amount - planSummary.paid_amount) : 0
+
       await stageAdminPaymentPlanFailureNotification({
         playerUserId: userReg.user_id,
         registrationName: userReg.registration?.name || 'Registration',
@@ -382,7 +385,11 @@ export async function processDuePayments(
         installmentAmountCents: payment.amount_paid,
         failureReason: result.error || 'Payment declined',
         attemptNumber,
-        maxAttempts: MAX_PAYMENT_ATTEMPTS
+        maxAttempts: MAX_PAYMENT_ATTEMPTS,
+        // Same source and formatting as the member failure email above
+        scheduledDate: formatDateString(payment.planned_payment_date),
+        amountPaidCents: paidCents,
+        remainingBalanceCents: remainingCents
       })
 
       results.errors.push(`Payment ${payment.id}: ${result.error}`)

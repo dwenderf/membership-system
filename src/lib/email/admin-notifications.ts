@@ -322,6 +322,9 @@ export async function stageAdminPaymentPlanFailureNotification(options: {
   failureReason: string
   attemptNumber: number
   maxAttempts: number
+  scheduledDate: string
+  amountPaidCents: number
+  remainingBalanceCents: number
 }): Promise<void> {
   if (!process.env.LOOPS_ADMIN_PAYMENT_PLAN_FAILURE_TEMPLATE_ID) {
     logger.logAdminAction(
@@ -371,7 +374,7 @@ export async function stageAdminPaymentPlanFailureNotification(options: {
         adminUserId: admin.id,
         adminEmail: admin.email,
         adminName: `${admin.first_name} ${admin.last_name}`,
-        playerName: `${player.first_name} ${player.last_name}`,
+        userName: `${player.first_name} ${player.last_name}`,
         registrationName: options.registrationName,
         // Loops rejects empty variables, so never send an empty season
         seasonName: options.seasonName || 'N/A',
@@ -381,6 +384,9 @@ export async function stageAdminPaymentPlanFailureNotification(options: {
         failureReason: options.failureReason,
         attemptSummary,
         userUrl: `${siteUrl}/admin/reports/users/${options.playerUserId}`,
+        scheduledDate: options.scheduledDate,
+        amountPaid: `$${(options.amountPaidCents / 100).toFixed(2)}`,
+        remainingBalance: `$${(options.remainingBalanceCents / 100).toFixed(2)}`,
       })
       if (i < admins.length - 1) await delay(delayMs)
     }

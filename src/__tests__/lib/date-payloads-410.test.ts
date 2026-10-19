@@ -3,10 +3,11 @@
  * UTC hosts. Covers payment-plan-processor (processed + failed emails) and the
  * waitlist season label used by POST /api/join-waitlist.
  */
-const mockStageEmail = jest.fn((..._args: unknown[]) => Promise.resolve(true))
+const mockStageEmail = jest.fn(() => Promise.resolve(true))
 jest.mock('@/lib/email/staging', () => ({ emailStagingManager: { stageEmail: (...a: unknown[]) => mockStageEmail(...a) } }))
 jest.mock('@/lib/logging/logger', () => ({ logger: { logBatchProcessing: jest.fn(), logSystem: jest.fn() } }))
-jest.mock('@/lib/email/admin-notifications', () => ({ stageAdminPaymentPlanFailureNotification: jest.fn() }))
+const mockStageAdmin = jest.fn(() => Promise.resolve())
+jest.mock('@/lib/email/admin-notifications', () => ({ stageAdminPaymentPlanFailureNotification: (arg: unknown) => mockStageAdmin(arg) }))
 const mockProcessTxn = jest.fn()
 jest.mock('@/lib/services/payment-plan-service', () => ({
   PaymentPlanService: { processPaymentPlanTransaction: (...a: unknown[]) => mockProcessTxn(...a) },
@@ -59,6 +60,17 @@ describe.each(ZONES)('DATE values in email payloads (host TZ=%s)', (zone) => {
     process.env.TZ = zone
     jest.clearAllMocks()
     seed()
+  })
+
+  it('admin failure alert: scheduledDate, amountPaid and remainingBalance match the member email', async () => {
+    mockProcessTxn.mockResolvedValueOnce({ success: false, error: 'card_declined' })
+    await processDuePayments('2026-11-11')
+    expect(mockStageAdmin).toHaveBeenCalledTimes(1)
+    expect(mockStageAdmin.mock.calls[0][0] as Record<string, unknown>).toMatchObject({
+      scheduledDate: '11/11/2026',
+      amountPaidCents: 10000,
+      remainingBalanceCents: 10000,
+    })
   })
 
   it('payment processed email: next_payment_date is the calendar day', async () => {

@@ -739,7 +739,7 @@ export async function POST(request: NextRequest) {
       amount: centsToCents(amountToCharge), // Ensure integer cents for Stripe
       currency: 'usd',
       receipt_email: userProfile.email,
-      payment_method_types: ['card'],
+      allowed_payment_method_types: ['card'],
       ...(savePaymentMethod && { setup_future_usage: 'off_session' }),
       metadata: {
         userId: user.id,

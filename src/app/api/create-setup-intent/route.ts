@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Create Setup Intent (only 'card' payment method type - no Link)
     const setupIntent = await getStripe().setupIntents.create({
       customer: customerId,
-      payment_method_types: ['card'],
+      allowed_payment_method_types: ['card'],
       usage: 'off_session', // For future payments
       metadata: {
         supabase_user_id: user.id,

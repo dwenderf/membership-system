@@ -118,7 +118,7 @@ SUPABASE_MAX_ROWS=1000
 STRIPE_SECRET_KEY=rk_test_your_stripe_restricted_key  # restricted key, see "Stripe restricted API key"
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
-STRIPE_API_VERSION=2025-07-30.basil
+STRIPE_API_VERSION=2026-09-30.endive
 
 # Email Integration
 LOOPS_API_KEY=your_loops_api_key
@@ -1854,7 +1854,7 @@ Google OAuth is configured in the Supabase Dashboard (Authentication → Provide
 STRIPE_SECRET_KEY=rk_live_your_stripe_restricted_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_live_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_production_webhook_secret
-STRIPE_API_VERSION=2025-07-30.basil
+STRIPE_API_VERSION=2026-09-30.endive
 ```
 
 #### Stripe restricted API key (`STRIPE_SECRET_KEY`)

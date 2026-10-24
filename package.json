@@ -37,7 +37,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
-    "stripe": "^18.2.1",
+    "stripe": "^23.0.1",
     "supabase": "^2.108.0",
     "timezones-ical-library": "^1.11.1",
     "xero-node": "^13.0.0",

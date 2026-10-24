@@ -7,7 +7,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
 process.env.STRIPE_SECRET_KEY = 'sk_test_123'
 process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_123'
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_123'
-process.env.STRIPE_API_VERSION = '2023-10-16'
+process.env.STRIPE_API_VERSION = '2026-09-30.endive'
 
 // Mock console methods to reduce noise during tests
 global.console = {

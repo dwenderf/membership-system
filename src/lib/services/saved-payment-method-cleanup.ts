@@ -75,7 +75,7 @@ export async function clearSavedPaymentMethod(
 
   if (process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID) {
     const { emailStagingManager } = await import('@/lib/email/staging')
-    await emailStagingManager.stageEmail({
+    const staged = await emailStagingManager.stageEmail({
       user_id: user.id,
       email_address: user.email,
       event_type: 'payment_method.removed',
@@ -87,6 +87,10 @@ export async function clearSavedPaymentMethod(
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`,
       },
     })
+    if (!staged) {
+      // The DB is already cleared, so neither a retry nor the webhook will re-send it
+      logger.logPaymentProcessing('payment-method-removed-email-staging-failed', 'Failed to stage Payment Method Removed email after clearing card', { userId: user.id, paymentMethodId, source }, 'warn')
+    }
   }
 
   logger.logPaymentProcessing('payment-method-detached-cleaned-up', 'Cleared saved payment method', {

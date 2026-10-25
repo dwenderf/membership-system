@@ -53,7 +53,7 @@ export async function DELETE() {
 
     // Detach payment method from Stripe
     const paymentMethodId = userProfile.stripe_payment_method_id
-    const detached = await getStripe().paymentMethods.detach(paymentMethodId)
+    const detached = await detachOrConfirmAlreadyDetached(paymentMethodId, user.id)
 
     logger.logPaymentProcessing(
       'payment-method-removed',
@@ -86,4 +86,49 @@ export async function DELETE() {
     )
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+/**
+ * Detach the card. If Stripe rejects the detach because the card is no longer attached
+ * (e.g. an earlier attempt detached it but the DB clear failed), confirm that by
+ * retrieving it (customer: null, or resource_missing) and treat it as success so the
+ * DB clear can run on retry. Any other error is rethrown and the DB is left unchanged.
+ */
+async function detachOrConfirmAlreadyDetached(
+  paymentMethodId: string,
+  userId: string
+): Promise<{ card?: { last4?: string | null } | null }> {
+  const stripe = getStripe()
+  try {
+    return await stripe.paymentMethods.detach(paymentMethodId)
+  } catch (detachError) {
+    if (!isStripeInvalidRequest(detachError)) throw detachError
+
+    let alreadyDetached = false
+    let card: { last4?: string | null } | null = null
+    try {
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId)
+      alreadyDetached = pm.customer == null
+      card = pm.card ?? null
+    } catch (retrieveError) {
+      alreadyDetached = stripeErrorCode(retrieveError) === 'resource_missing'
+    }
+    if (!alreadyDetached) throw detachError
+
+    logger.logPaymentProcessing(
+      'payment-method-already-detached',
+      'Payment method was already detached in Stripe; clearing DB',
+      { userId, code: stripeErrorCode(detachError) },
+      'warn'
+    )
+    return { card }
+  }
+}
+
+function stripeErrorCode(error: unknown): string | undefined {
+  return (error as { code?: string } | null)?.code
+}
+
+function isStripeInvalidRequest(error: unknown): boolean {
+  const e = error as { type?: string; code?: string } | null
+  return e?.type === 'StripeInvalidRequestError' || e?.code === 'resource_missing'
 }

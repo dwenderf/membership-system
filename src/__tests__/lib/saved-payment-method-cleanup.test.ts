@@ -1,4 +1,5 @@
-jest.mock('@/lib/logging/logger', () => ({ logger: { logPaymentProcessing: jest.fn(), logSystem: jest.fn() } }))
+const logPaymentProcessing = jest.fn()
+jest.mock('@/lib/logging/logger', () => ({ logger: { logPaymentProcessing: (...a: unknown[]) => logPaymentProcessing(...a), logSystem: jest.fn() } }))
 const stageEmail = jest.fn().mockResolvedValue(true)
 jest.mock('@/lib/email/staging', () => ({ emailStagingManager: { stageEmail: (...a: unknown[]) => stageEmail(...a) } }))
 
@@ -27,5 +28,25 @@ describe('clearSavedPaymentMethod', () => {
     expect(r.cleared).toBe(false)
     expect(state.user.stripe_payment_method_id).toBe('pm_current')
     expect(stageEmail).not.toHaveBeenCalled()
+  })
+
+  // Models the conditional UPDATE as atomic (as Postgres row locking makes it)
+  it('route and webhook racing concurrently stage exactly one email', async () => {
+    const { state, supabase } = makeFakeDb('pm_1')
+    const results = await Promise.all([
+      clearSavedPaymentMethod({ supabase, paymentMethodId: 'pm_1', userId: 'user-1', source: 'remove-route' }),
+      clearSavedPaymentMethod({ supabase, paymentMethodId: 'pm_1', source: 'webhook' }),
+    ])
+    expect(results.filter(r => r.cleared)).toHaveLength(1)
+    expect(state.updates).toBe(1)
+    expect(stageEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('logs a warning when email staging fails after the clear', async () => {
+    stageEmail.mockResolvedValueOnce(false)
+    const { supabase } = makeFakeDb('pm_1')
+    const r = await clearSavedPaymentMethod({ supabase, paymentMethodId: 'pm_1', userId: 'user-1', source: 'remove-route' })
+    expect(r.cleared).toBe(true)
+    expect(logPaymentProcessing).toHaveBeenCalledWith('payment-method-removed-email-staging-failed', expect.any(String), expect.any(Object), 'warn')
   })
 })

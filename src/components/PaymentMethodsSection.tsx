@@ -123,6 +123,8 @@ export default function PaymentMethodsSection() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       showError('Removal Failed', message)
+      // Show what's actually true (e.g. detached in Stripe but the DB clear failed)
+      await loadPaymentMethod()
     } finally {
       setRemoving(false)
     }

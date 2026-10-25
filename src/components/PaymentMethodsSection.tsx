@@ -1,5 +1,6 @@
 'use client'
 
+import { fetchSavedPaymentMethod, removeSavedPaymentMethodAndRefetch } from '@/lib/payment-methods/remove-saved-payment-method-client'
 import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
@@ -37,22 +38,16 @@ export default function PaymentMethodsSection() {
   const [alternateRegs, setAlternateRegs] = useState<AlternateRegistration[]>([])
   const { showSuccess, showError } = useToast()
 
+  // Only replace the card when the server actually answered; on a failed request keep
+  // what's shown (so a failed reload after a removal error can't hide a real card).
   const loadPaymentMethod = async (): Promise<PaymentMethod | null> => {
-    try {
-      const response = await fetch('/api/user-payment-method')
-      if (response.ok) {
-        const data = await response.json()
-        setPaymentMethod(data.paymentMethod)
-        return data.paymentMethod
-      } else {
-        setPaymentMethod(null)
-        return null
-      }
-    } catch (error) {
-      logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
-      setPaymentMethod(null)
-      return null
+    const result = await fetchSavedPaymentMethod<PaymentMethod>()
+    if (result.ok) {
+      setPaymentMethod(result.paymentMethod)
+      return result.paymentMethod
     }
+    logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: result.error }, 'error')
+    return null
   }
 
   const loadAlternateRegistrations = async () => {
@@ -108,29 +103,22 @@ export default function PaymentMethodsSection() {
 
     setRemoving(true)
     try {
-      const response = await fetch('/api/remove-payment-method', {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to remove payment method')
-      }
+      const { paymentMethod: refreshed } = await removeSavedPaymentMethodAndRefetch<PaymentMethod>()
 
       showSuccess('Payment Method Removed', activeAlternateCount > 0
         ? 'Your payment method was removed and you were removed from your active alternate registrations.'
         : 'Your payment method was removed successfully.'
       )
 
-      // Optimistically update UI; webhook will sync DB
-      setPaymentMethod(null)
-      setAlternateRegs([])
+      // The DELETE cleared the DB synchronously; the immediate refetch is authoritative
+      setPaymentMethod(refreshed)
       setShowConfirmDialog(false)
-      // Optionally refresh once after webhook has time to process
-      setTimeout(() => { void loadPaymentMethod(); void loadAlternateRegistrations() }, 1000)
+      await loadAlternateRegistrations()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       showError('Removal Failed', message)
+      // Show what's actually true (e.g. detached in Stripe but the DB clear failed)
+      await loadPaymentMethod()
     } finally {
       setRemoving(false)
     }

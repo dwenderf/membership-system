@@ -25,3 +25,25 @@ export async function removeSavedPaymentMethodAndRefetch<T = unknown>(
     return { paymentMethod: null }
   }
 }
+
+export type FetchSavedPaymentMethodResult<T> =
+  | { ok: true; paymentMethod: T | null }
+  | { ok: false; error: string }
+
+/**
+ * Load the saved card from the server. Only a 2xx with a parsed body counts as an
+ * answer (including `paymentMethod: null`, meaning "no card"). A network error or
+ * non-OK response returns `ok: false`, so callers keep the card they already show.
+ */
+export async function fetchSavedPaymentMethod<T = unknown>(
+  fetchImpl: typeof fetch = fetch
+): Promise<FetchSavedPaymentMethodResult<T>> {
+  try {
+    const response = await fetchImpl('/api/user-payment-method')
+    if (!response.ok) return { ok: false, error: `HTTP ${response.status}` }
+    const data = await response.json()
+    return { ok: true, paymentMethod: (data?.paymentMethod as T) ?? null }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}

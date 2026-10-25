@@ -1,6 +1,6 @@
 'use client'
 
-import { removeSavedPaymentMethodAndRefetch } from '@/lib/payment-methods/remove-saved-payment-method-client'
+import { fetchSavedPaymentMethod, removeSavedPaymentMethodAndRefetch } from '@/lib/payment-methods/remove-saved-payment-method-client'
 import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
@@ -38,22 +38,16 @@ export default function PaymentMethodsSection() {
   const [alternateRegs, setAlternateRegs] = useState<AlternateRegistration[]>([])
   const { showSuccess, showError } = useToast()
 
+  // Only replace the card when the server actually answered; on a failed request keep
+  // what's shown (so a failed reload after a removal error can't hide a real card).
   const loadPaymentMethod = async (): Promise<PaymentMethod | null> => {
-    try {
-      const response = await fetch('/api/user-payment-method')
-      if (response.ok) {
-        const data = await response.json()
-        setPaymentMethod(data.paymentMethod)
-        return data.paymentMethod
-      } else {
-        setPaymentMethod(null)
-        return null
-      }
-    } catch (error) {
-      logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: error instanceof Error ? error.message : String(error) }, 'error')
-      setPaymentMethod(null)
-      return null
+    const result = await fetchSavedPaymentMethod<PaymentMethod>()
+    if (result.ok) {
+      setPaymentMethod(result.paymentMethod)
+      return result.paymentMethod
     }
+    logger.logPaymentProcessing('load-payment-method-error', 'Error loading payment method', { error: result.error }, 'error')
+    return null
   }
 
   const loadAlternateRegistrations = async () => {

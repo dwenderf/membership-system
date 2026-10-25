@@ -58,17 +58,21 @@ export interface PaymentPlanSummary {
  * Stripe idempotency key for an early payoff charge (#452). Derived from the payoff state, not
  * from per-request ids, so two submits for the same state (double click, two tabs) send the same
  * key and Stripe refuses to create a second charge. Includes the card so a retry with a new card
- * after a decline is not answered with the cached decline. Ids are hashed to stay under Stripe's
+ * after a decline is not answered with the cached decline. `priorAttempts` (the number of rolled-back
+ * payoff attempts on the invoice) changes after every rollback, so retrying with the same card
+ * gets a fresh key: rollback restores the same planned rows, and reusing the old key with a new
+ * metadata.paymentId would make Stripe reject the retry. Ids are hashed to stay under Stripe's
  * 255-char limit.
  */
 export function earlyPayoffIdempotencyKey(
   xeroInvoiceId: string,
   paymentMethodId: string,
   amount: number,
-  plannedPaymentIds: string[]
+  plannedPaymentIds: string[],
+  priorAttempts: number
 ): string {
   const idsHash = createHash('sha256').update([...plannedPaymentIds].sort().join(',')).digest('hex').slice(0, 32)
-  return `early-payoff:${xeroInvoiceId}:${paymentMethodId}:${amount}:${idsHash}`
+  return `early-payoff:${xeroInvoiceId}:${paymentMethodId}:${amount}:${idsHash}:a${priorAttempts}`
 }
 
 function isStripeCardError(error: unknown): boolean {
@@ -545,6 +549,20 @@ export class PaymentPlanService {
        * Each step has defensive error handling with critical logging for admin recovery.
        */
 
+      // Rolled-back payoff attempts so far (staged rows set to 'cancelled' by rollbackEarlyPayoff);
+      // part of the idempotency key so a retry after a decline isn't rejected by Stripe.
+      const { data: priorAttemptRows, error: priorAttemptsError } = await adminSupabase
+        .from('xero_payments')
+        .select('id')
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('payment_type', 'full')
+        .eq('sync_status', 'cancelled')
+        .eq('staging_metadata->>early_payoff', 'true')
+      if (priorAttemptsError) {
+        return { success: false, error: 'Error checking previous payoff attempts' }
+      }
+      const priorAttempts = priorAttemptRows?.length ?? 0
+
       // Step 1: Cancel all planned payments (mark as superseded)
       const { error: cancelError } = await adminSupabase
         .from('xero_payments')
@@ -664,7 +682,8 @@ export class PaymentPlanService {
           xeroInvoiceId,
           user.stripe_payment_method_id,
           remainingBalance,
-          plannedPayments.map(p => p.id)
+          plannedPayments.map(p => p.id),
+          priorAttempts
         )
       })
 

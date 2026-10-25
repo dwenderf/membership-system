@@ -43,13 +43,14 @@ const full = () => fake.rows('xero_payments').filter(r => r.payment_type === 'fu
 
 describe('earlyPayoffIdempotencyKey', () => {
   it('is the same for the same payoff state regardless of row order', () => {
-    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['b', 'a', 'c'])).toBe(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['c', 'b', 'a']))
+    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['b', 'a', 'c'], 0)).toBe(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['c', 'b', 'a'], 0))
   })
-  it('changes with the card, the amount or the set of rows', () => {
-    const k = earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['a', 'b'])
-    expect(earlyPayoffIdempotencyKey(INV, 'pm_2', 9375, ['a', 'b'])).not.toBe(k)
-    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 6250, ['a', 'b'])).not.toBe(k)
-    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['a'])).not.toBe(k)
+  it('changes with the card, the amount, the set of rows or the attempt count', () => {
+    const k = earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['a', 'b'], 0)
+    expect(earlyPayoffIdempotencyKey(INV, 'pm_2', 9375, ['a', 'b'], 0)).not.toBe(k)
+    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 6250, ['a', 'b'], 0)).not.toBe(k)
+    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['a'], 0)).not.toBe(k)
+    expect(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['a', 'b'], 1)).not.toBe(k)
     expect(k.length).toBeLessThanOrEqual(255)
   })
 })
@@ -61,7 +62,7 @@ describe('processEarlyPayoff', () => {
     expect(result).toMatchObject({ success: true, totalPaid: 9375 })
     const [params, options] = createIntent.mock.calls[0]
     expect(params.amount).toBe(9375)
-    expect(options).toEqual({ idempotencyKey: earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['xp2', 'xp3', 'xp4']) })
+    expect(options).toEqual({ idempotencyKey: earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['xp2', 'xp3', 'xp4'], 0) })
     expect(planned()).toEqual([])
     expect(full()[0].sync_status).toBe('staged') // webhook completes it, unchanged
   })
@@ -82,6 +83,34 @@ describe('processEarlyPayoff', () => {
     expect(full()[0]).toMatchObject({ sync_status: 'cancelled' })
     expect(full()[0].failure_reason).toMatch(/declined/)
     expect(fake.rows('payments')[0].status).toBe('failed')
+  })
+
+  it('retrying with the same card after a decline uses a fresh key and succeeds (Vercel review)', async () => {
+    // Model Stripe: reusing a key with different params is rejected; a fresh key is honoured.
+    const seen = new Map<string, string>()
+    let declineNext = true
+    createIntent.mockImplementation(async (params: { metadata: { paymentId: string } }, { idempotencyKey }: { idempotencyKey: string }) => {
+      const prev = seen.get(idempotencyKey)
+      if (prev !== undefined && prev !== params.metadata.paymentId) {
+        throw Object.assign(new Error('Keys for idempotent requests can only be used with the same parameters'), { type: 'StripeIdempotencyError' })
+      }
+      seen.set(idempotencyKey, params.metadata.paymentId)
+      if (declineNext) {
+        declineNext = false
+        throw Object.assign(new Error('Your card was declined.'), { type: 'StripeCardError' })
+      }
+      return { id: 'pi_ok', status: 'succeeded' }
+    })
+
+    expect((await PaymentPlanService.processEarlyPayoff(INV, USER)).success).toBe(false)
+    expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
+
+    const retry = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(retry).toMatchObject({ success: true, totalPaid: 9375 })
+    const [k1, k2] = createIntent.mock.calls.map(c => c[1].idempotencyKey)
+    expect(k2).not.toBe(k1)
+    expect(k2).toBe(earlyPayoffIdempotencyKey(INV, 'pm_1', 9375, ['xp2', 'xp3', 'xp4'], 1))
+    expect(planned()).toEqual([])
   })
 
   it('cancels the intent and restores the installments on requires_action', async () => {

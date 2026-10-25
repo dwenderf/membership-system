@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatAmount } from '@/lib/format-utils'
 import { formatDateString } from '@/lib/date-utils'
@@ -10,6 +10,7 @@ import { logger } from '@/lib/logging/logger'
 import PrimaryCtaButton from './ui/PrimaryCtaButton'
 import { getInstallmentDisplayStatus, type PaymentPlanInstallment } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
+import { submitEarlyPayoff } from '@/lib/payment-plans/early-payoff-client'
 
 interface PaymentPlan {
   invoice_id: string
@@ -35,6 +36,8 @@ export default function UserPaymentPlansSection() {
   const [selectedPlan, setSelectedPlan] = useState<{ id: string; amount: number } | null>(null)
   const { showSuccess, showError } = useToast()
   const router = useRouter()
+  // Synchronous in-flight guard: state updates aren't visible to a second click in the same frame.
+  const payoffInFlight = useRef(false)
 
   useEffect(() => {
     fetchPaymentPlans()
@@ -64,33 +67,30 @@ export default function UserPaymentPlansSection() {
   }
 
   const handleConfirmPayment = async () => {
-    if (!selectedPlan) return
+    if (!selectedPlan || payoffInFlight.current) return
+    const plan = selectedPlan
 
-    setShowConfirmModal(false)
-    setPayingOff(selectedPlan.id)
+    // Keep the dialog open (with its buttons disabled via isLoading) until the request settles.
+    setPayingOff(plan.id)
 
-    try {
-      const response = await fetch('/api/user/payment-plans/early-payoff', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ planId: selectedPlan.id }),
-      })
+    const result = await submitEarlyPayoff({
+      planId: plan.id,
+      inFlight: payoffInFlight,
+      // Refetch this component's own state; router.refresh() alone doesn't rerun the effect.
+      refetch: fetchPaymentPlans
+    })
 
-      const data = await response.json()
+    if (result.status === 'success') {
+      showSuccess('Payment Successful', 'Your payment plan has been paid in full!')
+      // Other sections (server components) on the page
+      router.refresh()
+    } else if (result.status === 'error') {
+      logger.logPaymentProcessing('pay-off-plan-error', 'Error paying off plan', { planId: plan.id, error: result.message }, 'warn')
+      showError('Payment Failed', result.message)
+    }
 
-      if (response.ok && data.success) {
-        showSuccess('Payment Successful', 'Your payment plan has been paid in full!')
-        // Refresh the entire page to show updated status across all sections
-        router.refresh()
-      } else {
-        showError('Payment Failed', data.error || 'Failed to process early payoff')
-      }
-    } catch (error) {
-      logger.logPaymentProcessing('pay-off-plan-error', 'Error paying off plan', { planId: selectedPlan.id, error: error instanceof Error ? error.message : String(error) }, 'error')
-      showError('Payment Failed', 'An unexpected error occurred')
-    } finally {
+    if (result.status !== 'skipped') {
+      setShowConfirmModal(false)
       setPayingOff(null)
       setSelectedPlan(null)
     }
@@ -225,7 +225,7 @@ export default function UserPaymentPlansSection() {
                 {remainingBalance > 0 && (
                   <PrimaryCtaButton
                     onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
-                    disabled={payingOff === plan.invoice_id}
+                    disabled={payingOff !== null}
                   >
                     {payingOff === plan.invoice_id
                       ? 'Processing...'
@@ -272,7 +272,8 @@ export default function UserPaymentPlansSection() {
         confirmText="Pay Now"
         cancelText="Cancel"
         onConfirm={handleConfirmPayment}
-        onCancel={() => setShowConfirmModal(false)}
+        onCancel={() => { if (!payingOff) setShowConfirmModal(false) }}
+        isLoading={payingOff !== null}
         variant="info"
       />
     </div>

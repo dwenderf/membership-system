@@ -5,6 +5,33 @@ import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 import { toDateString } from '@/lib/date-utils'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { completeEarlyPayoff, hasEarlyPayoffInFlight } from './early-payoff-completion'
+
+export const EARLY_PAYOFF_SUPERSEDED_REASON = 'Superseded by early payoff payment'
+
+export type EarlyPayoffErrorCode = 'nothing_to_pay' | 'in_progress' | 'processing' | 'charge_failed'
+
+interface ClaimedInstallment {
+  id: string
+  amount_paid: number
+  tenant_id: string | null
+  installment_number: number | null
+  staging_metadata: { user_registration_id?: string } | null
+}
+
+/** Stripe idempotency key for an early payoff charge: one per claim (#452). */
+export function earlyPayoffIdempotencyKey(xeroInvoiceId: string, amountCents: number, stagedPaymentId: string): string {
+  return `early-payoff:${xeroInvoiceId}:${amountCents}:${stagedPaymentId}`
+}
+
+/** Stripe idempotency key for an installment charge: one per (installment, attempt) (#452). */
+export function installmentIdempotencyKey(xeroPaymentId: string, attempt: number): string {
+  return `installment:${xeroPaymentId}:attempt:${attempt}`
+}
+
+function isStripeCardError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { type?: string }).type === 'StripeCardError'
+}
 
 /** Shape of the `xero_invoice` relation as selected below — not the full DB row,
  * just the nested fields queried and read downstream. */
@@ -220,7 +247,8 @@ export class PaymentPlanService {
    */
   static async processPaymentPlanTransaction(
     xeroPaymentId: string
-  ): Promise<{ success: boolean; paymentId?: string; error?: string }> {
+  ): Promise<{ success: boolean; paymentId?: string; error?: string; skipped?: boolean }> {
+    let claimedForCharge = false
     try {
       const adminSupabase = createAdminClient()
 
@@ -262,15 +290,37 @@ export class PaymentPlanService {
         return { success: false, error: 'No saved payment method' }
       }
 
-      // Update status to processing
-      await adminSupabase
+      if (xeroPayment.sync_status !== 'planned') {
+        return { success: false, skipped: true, error: `Installment is '${xeroPayment.sync_status}', not planned` }
+      }
+
+      // Don't charge an installment while an early payoff for the same plan is in flight (#452).
+      if (await hasEarlyPayoffInFlight(adminSupabase, xeroPayment.xero_invoice_id)) {
+        return { success: false, skipped: true, error: 'Early payoff in progress for this plan' }
+      }
+
+      // Conditional claim (#452): planned -> processing only if still planned, so an early payoff
+      // (or another cron run) that got there first wins and this run charges nothing.
+      const attempt = xeroPayment.attempt_count + 1
+      const { data: claimedRow, error: claimError } = await adminSupabase
         .from('xero_payments')
         .update({
           sync_status: 'processing',
           last_attempt_at: new Date().toISOString(),
-          attempt_count: xeroPayment.attempt_count + 1
+          attempt_count: attempt
         })
         .eq('id', xeroPaymentId)
+        .eq('sync_status', 'planned')
+        .select('id')
+        .maybeSingle()
+
+      if (claimError) {
+        return { success: false, error: `Failed to claim installment: ${claimError.message}` }
+      }
+      if (!claimedRow) {
+        return { success: false, skipped: true, error: 'Installment is no longer planned' }
+      }
+      claimedForCharge = true
 
       logger.logPaymentProcessing(
         'payment-plan-installment-processing',
@@ -305,7 +355,7 @@ export class PaymentPlanService {
           purpose: 'payment_plan_installment'
         },
         description: `Payment Plan Installment ${xeroPayment.installment_number}/4 - ${registrationName} ${seasonName}`
-      })
+      }, { idempotencyKey: installmentIdempotencyKey(xeroPaymentId, attempt) })
 
       // Update with payment intent ID
       await adminSupabase
@@ -387,6 +437,7 @@ export class PaymentPlanService {
             failure_reason: failureReason
           })
           .eq('id', xeroPaymentId)
+          .eq('sync_status', 'processing')
 
         logger.logPaymentProcessing(
           'payment-plan-installment-failed',
@@ -408,13 +459,17 @@ export class PaymentPlanService {
       // Mark as planned for retry
       const failureReason = error instanceof Error ? error.message : 'Unknown error'
 
-      await adminSupabase
-        .from('xero_payments')
-        .update({
-          sync_status: 'planned',
-          failure_reason: failureReason
-        })
-        .eq('id', xeroPaymentId)
+      // Only undo our own claim: never resurrect a row that an early payoff cancelled (#452).
+      if (claimedForCharge) {
+        await adminSupabase
+          .from('xero_payments')
+          .update({
+            sync_status: 'planned',
+            failure_reason: failureReason
+          })
+          .eq('id', xeroPaymentId)
+          .eq('sync_status', 'processing')
+      }
 
       logger.logPaymentProcessing(
         'payment-plan-installment-exception',
@@ -431,35 +486,40 @@ export class PaymentPlanService {
   }
 
   /**
-   * Process early payoff for a payment plan
-   * Charges remaining balance and marks all planned installments as completed
+   * Process early payoff for a payment plan (#452).
+   *
+   * 1. Atomically claim the planned installments (planned -> cancelled, conditional UPDATE that
+   *    returns the rows it changed). Only one concurrent request can claim a given row, and the
+   *    amount charged is computed from the rows this request claimed.
+   * 2. Stage one 'full' xero_payments row (early_payoff) - a unique partial index allows only one
+   *    live early payoff per invoice - and a pending payments row.
+   * 3. Charge Stripe with an idempotency key tied to this claim.
+   * 4. On success, mark paid synchronously via completeEarlyPayoff (the webhook repeats it as a
+   *    backstop). On a definite failure (declined, requires_action, ...) roll back: restore the
+   *    claimed rows to planned, cancel the staged row, fail the payment.
    */
   static async processEarlyPayoff(
     xeroInvoiceId: string,
     userId: string
-  ): Promise<{ success: boolean; paymentId?: string; totalPaid?: number; error?: string }> {
+  ): Promise<{ success: boolean; paymentId?: string; totalPaid?: number; error?: string; code?: EarlyPayoffErrorCode }> {
+    const adminSupabase = createAdminClient()
+    let claimed: ClaimedInstallment[] = []
+    let stagedPaymentId: string | null = null
+    let paymentRecordId: string | null = null
+    let chargeAttempted = false
+
+    const rollback = async (reason: string) => {
+      await PaymentPlanService.rollbackEarlyPayoff(adminSupabase, {
+        xeroInvoiceId,
+        claimedIds: claimed.map(c => c.id),
+        stagedPaymentId,
+        paymentRecordId,
+        reason
+      })
+    }
+
     try {
-      const adminSupabase = createAdminClient()
-
-      // Get all planned payments for this invoice
-      const { data: plannedPayments, error: paymentsError } = await adminSupabase
-        .from('xero_payments')
-        .select('*')
-        .eq('xero_invoice_id', xeroInvoiceId)
-        .eq('sync_status', 'planned')
-        .order('installment_number')
-
-      if (paymentsError) {
-        return { success: false, error: 'Error fetching planned payments' }
-      }
-
-      if (!plannedPayments || plannedPayments.length === 0) {
-        return { success: false, error: 'No planned payments found' }
-      }
-
-      const remainingBalance = plannedPayments.reduce((sum, p) => sum + p.amount_paid, 0)
-
-      // Get user info
+      // Cheap pre-checks first, so a member without a card doesn't claim anything.
       const { data: user, error: userError } = await adminSupabase
         .from('users')
         .select('stripe_payment_method_id, stripe_customer_id, email, first_name, last_name')
@@ -472,6 +532,10 @@ export class PaymentPlanService {
 
       if (!user.stripe_payment_method_id || !user.stripe_customer_id) {
         return { success: false, error: 'No saved payment method' }
+      }
+
+      if (await hasEarlyPayoffInFlight(adminSupabase, xeroInvoiceId)) {
+        return { success: false, code: 'in_progress', error: 'A payoff for this payment plan is already in progress' }
       }
 
       // Get registration name for description
@@ -491,197 +555,261 @@ export class PaymentPlanService {
       const season = Array.isArray(registration?.season) ? registration?.season[0] : registration?.season
       const seasonName = season?.name || ''
 
-      logger.logPaymentProcessing(
-        'payment-plan-early-payoff-start',
-        'Processing early payoff for payment plan',
-        {
-          xeroInvoiceId,
-          remainingBalance,
-          plannedPaymentsCount: plannedPayments.length
-        },
-        'info'
-      )
-
-      /**
-       * Early Payoff Flow (Multi-Step Process)
-       *
-       * Note: We don't use a database transaction here because:
-       * 1. Supabase client doesn't natively support transactions across multiple operations
-       * 2. Database operations are extremely reliable - failures are rare
-       * 3. If failures occur, they indicate system-wide issues requiring admin intervention anyway
-       * 4. Critical error logs provide clear recovery instructions for admins
-       *
-       * Steps:
-       * 1. Cancel planned payments (set sync_status='cancelled')
-       * 2. Create staged payment for full balance
-       * 3. Create payment record
-       * 4. Charge Stripe (webhook completes the flow)
-       *
-       * Each step has defensive error handling with critical logging for admin recovery.
-       */
-
-      // Step 1: Cancel all planned payments (mark as superseded)
-      const { error: cancelError } = await adminSupabase
+      // Step 1: atomic claim. Postgres row locks make concurrent claims serialize; the loser
+      // re-evaluates sync_status='planned' and gets zero rows back.
+      const { data: claimedRows, error: claimError } = await adminSupabase
         .from('xero_payments')
         .update({
           sync_status: 'cancelled',
-          failure_reason: 'Superseded by early payoff payment'
+          failure_reason: EARLY_PAYOFF_SUPERSEDED_REASON
         })
         .eq('xero_invoice_id', xeroInvoiceId)
         .eq('sync_status', 'planned')
+        .select('id, amount_paid, tenant_id, installment_number, staging_metadata')
 
-      if (cancelError) {
+      if (claimError) {
         logger.logPaymentProcessing(
-          'payment-plan-early-payoff-cancel-error',
-          'Failed to cancel planned payments',
-          { xeroInvoiceId, error: cancelError.message },
+          'payment-plan-early-payoff-claim-error',
+          'Failed to claim planned payments for early payoff',
+          { xeroInvoiceId, error: claimError.message },
           'error'
         )
-        return { success: false, error: 'Failed to cancel planned payments' }
+        return { success: false, error: 'Failed to claim planned payments' }
       }
 
-      // Step 2: Create staged xero_payment for the payoff amount
-      const { data: stagedPayment, error: stagedPaymentError } = await adminSupabase
-        .from('xero_payments')
-        .insert({
-          xero_invoice_id: xeroInvoiceId,
-          tenant_id: plannedPayments[0].tenant_id,
-          xero_payment_id: null, // Will be populated when synced to Xero
-          payment_method: 'stripe',
-          amount_paid: remainingBalance,
-          sync_status: 'staged',
-          payment_type: 'full', // Single payment for remaining balance
-          staged_at: new Date().toISOString(),
-          staging_metadata: {
-            user_id: userId,
-            user_registration_id: plannedPayments[0].staging_metadata?.user_registration_id || '',
-            early_payoff: true,
-            original_plan_amount: remainingBalance,
-            cancelled_payments_count: plannedPayments.length
-          }
-        })
-        .select()
-        .single()
+      claimed = ((claimedRows || []) as ClaimedInstallment[])
+        .slice()
+        .sort((a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0))
 
-      if (stagedPaymentError || !stagedPayment) {
-        logger.logPaymentProcessing(
-          'payment-plan-early-payoff-staged-error',
-          'CRITICAL: Planned payments cancelled but replacement payment failed to create - ADMIN INTERVENTION REQUIRED',
-          {
-            xeroInvoiceId,
-            userId,
-            remainingBalance,
-            cancelledPaymentsCount: plannedPayments.length,
-            error: stagedPaymentError?.message,
-            recovery: 'Admin must manually restore cancelled payments to planned status or create replacement payment'
-          },
-          'error'
-        )
-        return { success: false, error: 'Failed to create staged payment record' }
+      if (claimed.length === 0) {
+        return {
+          success: false,
+          code: 'nothing_to_pay',
+          error: 'Payment plan is already completed or a payoff is already in progress'
+        }
       }
 
-      // Step 3: Create payment record BEFORE charging (webhook will update to completed)
+      const remainingBalance = claimed.reduce((sum, p) => sum + p.amount_paid, 0)
+      const userRegistrationId = claimed[0].staging_metadata?.user_registration_id || ''
+
+      logger.logPaymentProcessing(
+        'payment-plan-early-payoff-start',
+        'Processing early payoff for payment plan',
+        { xeroInvoiceId, remainingBalance, claimedCount: claimed.length },
+        'info'
+      )
+
+      // Step 2: payment record first, so the staged row can point at it.
       const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
         .from('payments')
         .insert({
           user_id: userId,
           total_amount: centsToCents(remainingBalance),
           final_amount: centsToCents(remainingBalance),
-          status: 'pending', // Webhook will update to completed
+          status: 'pending',
           payment_method: 'stripe'
         })
         .select()
         .single()
 
       if (paymentRecordError || !paymentRecord) {
-        logger.logPaymentProcessing(
-          'payment-plan-early-payoff-payment-error',
-          'CRITICAL: Staged payment created but payment record failed - ADMIN INTERVENTION REQUIRED',
-          {
-            xeroInvoiceId,
-            userId,
-            stagedPaymentId: stagedPayment.id,
-            remainingBalance,
-            error: paymentRecordError?.message,
-            recovery: 'Admin must manually create payment record or delete staged payment and restore cancelled payments'
-          },
-          'error'
-        )
+        await rollback('Failed to create payment record')
         return { success: false, error: 'Failed to create payment record' }
       }
+      paymentRecordId = paymentRecord.id
 
-      // Step 4: Charge Stripe (webhook will handle completion)
-      const paymentIntent = await getStripe().paymentIntents.create({
-        amount: centsToCents(remainingBalance),
-        currency: 'usd',
-        payment_method: user.stripe_payment_method_id,
-        customer: user.stripe_customer_id,
-        confirm: true,
-        off_session: true,
-        receipt_email: user.email,
-        metadata: {
-          userId: userId,
-          xeroStagingRecordId: xeroInvoiceId, // Webhook uses this to find staged payment
-          userRegistrationId: plannedPayments[0].staging_metadata?.user_registration_id || '',
-          purpose: 'payment_plan_early_payoff',
-          paymentId: paymentRecord.id,
-          registrationName: registrationName,
-          seasonName: seasonName
+      // Step 3: the staged early-payoff row. The unique partial index
+      // (xero_payments_one_live_early_payoff) rejects a second live one for this invoice.
+      const { data: stagedPayment, error: stagedPaymentError } = await adminSupabase
+        .from('xero_payments')
+        .insert({
+          xero_invoice_id: xeroInvoiceId,
+          tenant_id: claimed[0].tenant_id,
+          xero_payment_id: null,
+          payment_method: 'stripe',
+          amount_paid: remainingBalance,
+          sync_status: 'staged',
+          payment_type: 'full',
+          staged_at: new Date().toISOString(),
+          staging_metadata: {
+            user_id: userId,
+            user_registration_id: userRegistrationId,
+            early_payoff: true,
+            original_plan_amount: remainingBalance,
+            cancelled_payments_count: claimed.length,
+            cancelled_payment_ids: claimed.map(c => c.id),
+            payment_id: paymentRecord.id
+          }
+        })
+        .select()
+        .single()
+
+      if (stagedPaymentError || !stagedPayment) {
+        const duplicate = stagedPaymentError?.code === '23505'
+        await rollback(duplicate ? 'Another early payoff is already live' : 'Failed to create staged payment')
+        return duplicate
+          ? { success: false, code: 'in_progress', error: 'A payoff for this payment plan is already in progress' }
+          : { success: false, error: 'Failed to create staged payment record' }
+      }
+      stagedPaymentId = stagedPayment.id
+
+      // Step 4: charge. The key is unique to this claim (invoice + amount + the staged row that
+      // owns the claimed installments), so a retried create can't charge twice, while a fresh
+      // attempt after a rollback (e.g. with a new card) gets a fresh key.
+      chargeAttempted = true
+      const idempotencyKey = earlyPayoffIdempotencyKey(xeroInvoiceId, remainingBalance, stagedPayment.id)
+      const paymentIntent = await getStripe().paymentIntents.create(
+        {
+          amount: centsToCents(remainingBalance),
+          currency: 'usd',
+          payment_method: user.stripe_payment_method_id,
+          customer: user.stripe_customer_id,
+          confirm: true,
+          off_session: true,
+          receipt_email: user.email,
+          metadata: {
+            userId: userId,
+            xeroStagingRecordId: xeroInvoiceId, // Webhook uses this to find staged payment
+            userRegistrationId,
+            purpose: 'payment_plan_early_payoff',
+            paymentId: paymentRecord.id,
+            xeroPaymentId: stagedPayment.id,
+            registrationName: registrationName,
+            seasonName: seasonName
+          },
+          description: `Early Payoff - ${registrationName} ${seasonName}`
         },
-        description: `Early Payoff - ${registrationName} ${seasonName}`
-      })
+        { idempotencyKey }
+      )
 
-      // Update payment record with stripe_payment_intent_id
+      // Record the intent on both rows so the webhook can find them by stripe_payment_intent_id.
       await adminSupabase
         .from('payments')
         .update({ stripe_payment_intent_id: paymentIntent.id })
         .eq('id', paymentRecord.id)
+      await adminSupabase
+        .from('xero_payments')
+        .update({
+          staging_metadata: { ...(stagedPayment.staging_metadata || {}), stripe_payment_intent_id: paymentIntent.id }
+        })
+        .eq('id', stagedPayment.id)
+        .eq('sync_status', 'staged')
 
-      if (paymentIntent.status !== 'succeeded') {
+      if (paymentIntent.status === 'succeeded') {
+        await completeEarlyPayoff(adminSupabase, paymentIntent)
+
         logger.logPaymentProcessing(
-          'payment-plan-early-payoff-charge-failed',
-          'Stripe charge failed for early payoff',
-          { xeroInvoiceId, paymentIntentId: paymentIntent.id, status: paymentIntent.status },
-          'error'
+          'payment-plan-early-payoff-success',
+          'Successfully charged and completed early payoff',
+          { xeroInvoiceId, paymentId: paymentRecord.id, paymentIntentId: paymentIntent.id, amountPaid: remainingBalance },
+          'info'
         )
-        return {
-          success: false,
-          error: `Payment failed: ${paymentIntent.status}`
+        return { success: true, paymentId: paymentRecord.id, totalPaid: remainingBalance }
+      }
+
+      if (paymentIntent.status === 'processing') {
+        // Not failed - the webhook completes it. Leave the claim in place (it blocks new payoffs).
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-processing',
+          'Early payoff charge is processing; webhook will complete it',
+          { xeroInvoiceId, paymentIntentId: paymentIntent.id },
+          'warn'
+        )
+        return { success: false, code: 'processing', error: 'Your payment is processing. Please check back shortly.' }
+      }
+
+      // requires_action / requires_payment_method / canceled: nothing was captured.
+      if (paymentIntent.status !== 'canceled') {
+        try {
+          await getStripe().paymentIntents.cancel(paymentIntent.id)
+        } catch (cancelErr) {
+          logger.logPaymentProcessing(
+            'payment-plan-early-payoff-cancel-intent-failed',
+            'Failed to cancel unconfirmed early payoff PaymentIntent',
+            { paymentIntentId: paymentIntent.id, error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr) },
+            'warn'
+          )
         }
       }
-
-      // Webhook will handle the rest: update payment to completed, xero_payment to pending
+      await rollback(`Payment status: ${paymentIntent.status}`)
       logger.logPaymentProcessing(
-        'payment-plan-early-payoff-success',
-        'Successfully charged early payoff, webhook will complete processing',
-        {
-          xeroInvoiceId,
-          paymentId: paymentRecord.id,
-          paymentIntentId: paymentIntent.id,
-          amountPaid: remainingBalance
-        },
-        'info'
+        'payment-plan-early-payoff-charge-failed',
+        'Stripe charge failed for early payoff; claim rolled back',
+        { xeroInvoiceId, paymentIntentId: paymentIntent.id, status: paymentIntent.status },
+        'error'
       )
-
-      return {
-        success: true,
-        paymentId: paymentRecord.id,
-        totalPaid: remainingBalance
-      }
+      return { success: false, code: 'charge_failed', error: `Payment failed: ${paymentIntent.status}` }
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      // Only roll back when we know no money moved: before the charge, or a card error from Stripe
+      // (declines are thrown for off-session confirms). An unknown error during/after the charge
+      // (network, or completion failing after success) keeps the claim so nothing can charge again;
+      // the webhook backstop completes it if the charge went through.
+      const definitelyNotCharged = !chargeAttempted || isStripeCardError(error)
+      if (definitelyNotCharged && claimed.length > 0) {
+        try {
+          await rollback(message)
+        } catch (rollbackError) {
+          logger.logPaymentProcessing(
+            'payment-plan-early-payoff-rollback-failed',
+            'CRITICAL: early payoff rollback failed - ADMIN INTERVENTION REQUIRED',
+            { xeroInvoiceId, claimedIds: claimed.map(c => c.id), stagedPaymentId, paymentRecordId, error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError) },
+            'error'
+          )
+        }
+      } else if (claimed.length > 0) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-outcome-unknown',
+          'Early payoff outcome unknown; claim kept, webhook will complete if charged - check Stripe',
+          { xeroInvoiceId, stagedPaymentId, paymentRecordId, error: message },
+          'error'
+        )
+      }
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-exception',
         'Exception processing early payoff',
-        {
-          xeroInvoiceId,
-          error: error instanceof Error ? error.message : String(error)
-        },
+        { xeroInvoiceId, error: message },
         'error'
       )
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        code: isStripeCardError(error) ? 'charge_failed' : undefined,
+        error: message
       }
+    }
+  }
+
+  /**
+   * Undo an early-payoff claim that didn't charge: claimed installments cancelled -> planned
+   * (only the ones this attempt claimed, and only if still cancelled by it), the staged payoff
+   * row -> cancelled (keeps the plan from showing 'failed'), the payment -> failed.
+   */
+  static async rollbackEarlyPayoff(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    adminSupabase: { from: (table: string) => any },
+    args: { xeroInvoiceId: string; claimedIds: string[]; stagedPaymentId: string | null; paymentRecordId: string | null; reason: string }
+  ): Promise<void> {
+    if (args.stagedPaymentId) {
+      await adminSupabase
+        .from('xero_payments')
+        .update({ sync_status: 'cancelled', failure_reason: `Early payoff failed: ${args.reason}` })
+        .eq('id', args.stagedPaymentId)
+        .eq('sync_status', 'staged')
+    }
+    if (args.claimedIds.length > 0) {
+      await adminSupabase
+        .from('xero_payments')
+        .update({ sync_status: 'planned', failure_reason: null })
+        .in('id', args.claimedIds)
+        .eq('sync_status', 'cancelled')
+        .eq('failure_reason', EARLY_PAYOFF_SUPERSEDED_REASON)
+    }
+    if (args.paymentRecordId) {
+      await adminSupabase
+        .from('payments')
+        .update({ status: 'failed' })
+        .eq('id', args.paymentRecordId)
+        .eq('status', 'pending')
     }
   }
 

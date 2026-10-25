@@ -290,6 +290,14 @@ export async function processDuePayments(
           paymentId: result.paymentId
         }
       )
+    } else if (result.skipped) {
+      // Not a failure: the row stopped being chargeable (early payoff claimed it, another run
+      // claimed it, or a payoff is in flight). No member/admin failure notifications (#452).
+      logger.logBatchProcessing(
+        'payment-processor-payment-skipped',
+        'Skipped installment that is no longer chargeable',
+        { xeroPaymentId: payment.id, reason: result.error }
+      )
     } else {
       results.paymentsFailed++
 

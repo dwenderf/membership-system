@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { handleEarlyPayoffRequest } from '@/lib/payment-plans/early-payoff-request'
+import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { logger } from '@/lib/logging/logger'
 
 export async function POST(request: Request) {
@@ -27,7 +27,61 @@ export async function POST(request: Request) {
       )
     }
 
-    return await handleEarlyPayoffRequest(supabase, authUser.id, planId)
+    // Verify the payment plan belongs to the user
+    // planId is now the xero_invoice_id
+    // Note: contact_id is stored in staging_metadata->>'user_id', not as a column
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('xero_invoices')
+      .select('id, is_payment_plan, staging_metadata')
+      .eq('id', planId)
+      .eq('is_payment_plan', true)
+      .single()
+
+    if (invoiceError || !invoice) {
+      return NextResponse.json(
+        { error: 'Payment plan not found or does not belong to you' },
+        { status: 404 }
+      )
+    }
+
+    // Verify invoice belongs to authenticated user
+    const invoiceUserId = invoice.staging_metadata?.user_id
+    if (invoiceUserId !== authUser.id) {
+      return NextResponse.json(
+        { error: 'Payment plan not found or does not belong to you' },
+        { status: 404 }
+      )
+    }
+
+    // Check if there are any planned payments left
+    const { data: plannedPayments } = await supabase
+      .from('xero_payments')
+      .select('id')
+      .eq('xero_invoice_id', planId)
+      .eq('sync_status', 'planned')
+      .limit(1)
+
+    if (!plannedPayments || plannedPayments.length === 0) {
+      return NextResponse.json(
+        { error: 'Payment plan is already completed' },
+        { status: 400 }
+      )
+    }
+
+    // Process early payoff
+    const result = await PaymentPlanService.processEarlyPayoff(planId, authUser.id)
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || 'Failed to process early payoff' },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Payment plan paid in full successfully'
+    })
   } catch (error) {
     logger.logPaymentProcessing('early-payoff-unexpected-error', 'Unexpected error processing early payoff', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json(

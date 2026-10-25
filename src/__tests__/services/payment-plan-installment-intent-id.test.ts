@@ -27,15 +27,11 @@ jest.mock('@/lib/supabase/server', () => ({
         return chain
       }
       chain.eq = () => chain
-      chain.in = () => chain
-      chain.limit = () => chain
-      chain.maybeSingle = () => Promise.resolve({ data: { id: 'xp2' }, error: null })
       chain.single = () => {
         if (table === 'xero_payments') {
           return Promise.resolve({
             data: {
               id: 'xp2',
-              sync_status: 'planned',
               xero_invoice_id: 'inv1',
               installment_number: 2,
               amount_paid: 2500,

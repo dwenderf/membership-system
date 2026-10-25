@@ -1,17 +1,13 @@
 /**
  * Minimal in-memory stand-in for the supabase-js query builder, for tests that need real
  * row state across several queries (#452). Each query runs atomically when awaited, after a
- * macrotask hop, so concurrent callers interleave between queries the way they would against
- * Postgres - and a conditional UPDATE behaves like one under row locks (the second one sees the
- * first one's result).
+ * macrotask hop.
  *
  * Supports: select / insert / update, eq, in, order, limit, single, maybeSingle, and
- * `col->>key` JSON paths in filters. Emulates the xero_payments_one_live_early_payoff index.
+ * `col->>key` JSON paths in filters.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
-
-const LIVE = ['staged', 'pending', 'processing', 'synced']
 
 let idCounter = 0
 const nextId = (table: string) => `${table}-${++idCounter}`
@@ -30,14 +26,6 @@ export function createFakeSupabase(seed: Record<string, Row[]> = {}) {
   for (const [t, rows] of Object.entries(seed)) tables[t] = rows.map(r => ({ ...r }))
   const table = (name: string) => (tables[name] ||= [])
 
-  function violatesUnique(name: string, candidate: Row, ignoreId?: string): boolean {
-    if (name !== 'xero_payments') return false
-    const isLivePayoff = (r: Row) =>
-      r.payment_type === 'full' && String(r.staging_metadata?.early_payoff) === 'true' && LIVE.includes(r.sync_status)
-    if (!isLivePayoff(candidate)) return false
-    return table(name).some(r => r.id !== ignoreId && r.xero_invoice_id === candidate.xero_invoice_id && isLivePayoff(r))
-  }
-
   function builder(name: string) {
     let op: 'select' | 'insert' | 'update' = 'select'
     let payload: Row | Row[] | null = null
@@ -54,9 +42,6 @@ export function createFakeSupabase(seed: Record<string, Row[]> = {}) {
         const inserted: Row[] = []
         for (const p of list) {
           const row = { id: nextId(name), ...p }
-          if (violatesUnique(name, row)) {
-            return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "xero_payments_one_live_early_payoff"' } }
-          }
           rows.push(row)
           inserted.push({ ...row })
         }
@@ -64,12 +49,6 @@ export function createFakeSupabase(seed: Record<string, Row[]> = {}) {
       }
       let matched = rows.filter(r => filters.every(f => f(r)))
       if (op === 'update') {
-        for (const r of matched) {
-          const next = { ...r, ...(payload as Row) }
-          if (violatesUnique(name, next, r.id)) {
-            return { data: null, error: { code: '23505', message: 'duplicate key' } }
-          }
-        }
         matched.forEach(r => Object.assign(r, payload))
         return returning ? shape(matched.map(r => ({ ...r }))) : { data: null, error: null }
       }

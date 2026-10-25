@@ -1018,15 +1018,53 @@ export async function POST(request: NextRequest) {
             // Get actual Stripe fees and charge ID from the charge
             const { fee: stripeFeeAmount, chargeId } = await getStripeFeeAmountAndChargeId(paymentIntent)
 
-            // Shared idempotent completion (#452): the payoff route usually did this already,
-            // synchronously; here it's a backstop and records the fee data. Looks the staged row up
-            // by stripe_payment_intent_id / payment_id, never by a .single() over the invoice.
-            const { completeEarlyPayoff } = await import('@/lib/services/early-payoff-completion')
-            const completion = await completeEarlyPayoff(supabase, paymentIntent, {
-              stripeFeeAmount,
-              stripeChargeId: chargeId
-            })
-            logger.logPaymentProcessing('early-payoff-payment-record-updated', `Early payoff completion via webhook (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount, transitioned: completion.transitioned }, 'info')
+            // Update payment record to completed
+            const { data: updatedPayment, error: paymentUpdateError } = await supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                stripe_fee_amount: stripeFeeAmount,
+                stripe_charge_id: chargeId
+              })
+              .eq('id', paymentIntent.metadata.paymentId)
+              .select()
+              .single()
+
+            if (paymentUpdateError || !updatedPayment) {
+              logger.logPaymentProcessing('early-payoff-payment-record-update-failed', 'Failed to update early payoff payment record', { paymentIntentId: paymentIntent.id, error: paymentUpdateError?.message }, 'error', paymentUpdateError)
+              throw paymentUpdateError || new Error('No payment record found')
+            }
+            logger.logPaymentProcessing('early-payoff-payment-record-updated', `Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
+
+            // Find the staged xero_payment for this invoice
+            const { data: stagedPayment, error: stagedPaymentError } = await supabase
+              .from('xero_payments')
+              .select('*')
+              .eq('xero_invoice_id', paymentIntent.metadata.xeroStagingRecordId)
+              .eq('sync_status', 'staged')
+              .eq('payment_type', 'full')
+              .single()
+
+            if (stagedPaymentError || !stagedPayment) {
+              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error', stagedPaymentError)
+              throw stagedPaymentError || new Error('No staged payment found')
+            }
+
+            // Update staged xero_payment to pending (ready for sync)
+            await supabase
+              .from('xero_payments')
+              .update({
+                sync_status: 'pending',
+                staging_metadata: {
+                  ...(stagedPayment.staging_metadata || {}),
+                  payment_id: updatedPayment.id,
+                  stripe_payment_intent_id: paymentIntent.id,
+                  stripe_charge_id: chargeId,
+                  processed_at: new Date().toISOString()
+                }
+              })
+              .eq('id', stagedPayment.id)
 
             logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id }, 'info')
           } catch (error) {

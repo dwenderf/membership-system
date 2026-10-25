@@ -1,5 +1,6 @@
 'use client'
 
+import { removeSavedPaymentMethodAndRefetch } from '@/lib/payment-methods/remove-saved-payment-method-client'
 import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import PaymentMethodSetup from './PaymentMethodSetup'
@@ -108,26 +109,17 @@ export default function PaymentMethodsSection() {
 
     setRemoving(true)
     try {
-      const response = await fetch('/api/remove-payment-method', {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to remove payment method')
-      }
+      const { paymentMethod: refreshed } = await removeSavedPaymentMethodAndRefetch<PaymentMethod>()
 
       showSuccess('Payment Method Removed', activeAlternateCount > 0
         ? 'Your payment method was removed and you were removed from your active alternate registrations.'
         : 'Your payment method was removed successfully.'
       )
 
-      // Optimistically update UI; webhook will sync DB
-      setPaymentMethod(null)
-      setAlternateRegs([])
+      // The DELETE cleared the DB synchronously; the immediate refetch is authoritative
+      setPaymentMethod(refreshed)
       setShowConfirmDialog(false)
-      // Optionally refresh once after webhook has time to process
-      setTimeout(() => { void loadPaymentMethod(); void loadAlternateRegistrations() }, 1000)
+      await loadAlternateRegistrations()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       showError('Removal Failed', message)

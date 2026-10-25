@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { PaymentPlanService } from '@/lib/services/payment-plan-service'
 import { logger } from '@/lib/logging/logger'
+import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 
 export async function DELETE() {
   try {
@@ -51,7 +52,8 @@ export async function DELETE() {
     }
 
     // Detach payment method from Stripe
-    await getStripe().paymentMethods.detach(userProfile.stripe_payment_method_id)
+    const paymentMethodId = userProfile.stripe_payment_method_id
+    const detached = await getStripe().paymentMethods.detach(paymentMethodId)
 
     logger.logPaymentProcessing(
       'payment-method-removed',
@@ -60,8 +62,18 @@ export async function DELETE() {
       'info'
     )
 
-    // Rely on webhook 'payment_method.detached' to clear DB fields and remove alternates
-    return NextResponse.json({ success: true })
+    // Clear DB fields, remove alternates and stage the removal email now, so the
+    // client's refetch sees the removal. The payment_method.detached webhook is an
+    // idempotent backstop (it won't re-send the email once this has cleared the row).
+    await clearSavedPaymentMethod({
+      supabase: adminSupabase,
+      paymentMethodId,
+      userId: user.id,
+      last4: detached.card?.last4,
+      source: 'remove-route',
+    })
+
+    return NextResponse.json({ success: true, paymentMethod: null })
 
   } catch (error) {
     logger.logPaymentProcessing(

@@ -25,6 +25,21 @@ export async function GET() {
     // Get payment method details from Stripe
     const paymentMethod = await getStripe().paymentMethods.retrieve(paymentMethodId)
 
+    // A detached PaymentMethod is still retrievable (customer: null). Treat it, or one
+    // attached to a different customer, as no saved card.
+    const pmCustomerId = typeof paymentMethod.customer === 'string'
+      ? paymentMethod.customer
+      : paymentMethod.customer?.id ?? null
+    const { data: profile } = await supabase
+      .from('users')
+      .select('stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+    const expectedCustomerId = profile?.stripe_customer_id ?? null
+    if (!pmCustomerId || (expectedCustomerId && pmCustomerId !== expectedCustomerId)) {
+      return NextResponse.json({ paymentMethod: null })
+    }
+
     return NextResponse.json({
       paymentMethod: {
         id: paymentMethod.id,

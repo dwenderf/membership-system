@@ -7,6 +7,7 @@ import { calculateMembershipStartDate, calculateMembershipEndDate } from '@/lib/
 import { deleteXeroDraftInvoice } from '@/lib/xero/invoices'
 import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
+import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
@@ -838,68 +839,15 @@ export async function POST(request: NextRequest) {
         const paymentMethod = event.data.object as Stripe.PaymentMethod
 
         try {
-          // Find user with this payment method and clean up
-          const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('id, first_name, last_name, email')
-            .eq('stripe_payment_method_id', paymentMethod.id)
-            .single()
-
-          if (userError || !user) {
-            break
-          }
-
-          // Get payment method details for email
-          const lastFourDigits = paymentMethod.card?.last4 || '****'
-
-          // Update user record
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({
-              stripe_payment_method_id: null,
-              stripe_setup_intent_id: null,
-              setup_intent_status: null,
-              payment_method_updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id)
-
-          if (updateError) {
-            throw updateError
-          }
-
-          // Remove user from all alternate registrations
-          const { error: alternateRemovalError } = await supabase
-            .from('user_alternate_registrations')
-            .delete()
-            .eq('user_id', user.id)
-
-          if (alternateRemovalError) {
-            logger.logPaymentProcessing('payment-method-detached-alternate-removal-failed', 'Failed to remove user from alternate registrations', { userId: user.id, error: alternateRemovalError.message }, 'warn')
-            // Don't throw - this is not critical
-          }
-
-          // Stage email notification for payment method removal
-          const { emailStagingManager } = await import('@/lib/email/staging')
-          
-          if (process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID) {
-            await emailStagingManager.stageEmail({
-              user_id: user.id,
-              email_address: user.email,
-              event_type: 'payment_method.removed',
-              subject: 'Payment Method Removed',
-              template_id: process.env.LOOPS_PAYMENT_METHOD_REMOVED_TEMPLATE_ID,
-              email_data: {
-                userName: `${user.first_name} ${user.last_name}`,
-                paymentMethod: `****${lastFourDigits}`,
-                dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user`
-              }
-            })
-          }
-
-          logger.logPaymentProcessing('payment-method-detached-cleaned-up', 'Successfully cleaned up user data after payment method detachment', {
-            userId: user.id,
-            paymentMethodId: paymentMethod.id
-          }, 'info')
+          // Backstop for /api/remove-payment-method (which already clears the DB) and the
+          // path for removals made outside the app. Idempotent: if the DB was already
+          // cleared, this is a no-op and no duplicate email is staged.
+          await clearSavedPaymentMethod({
+            supabase,
+            paymentMethodId: paymentMethod.id,
+            last4: paymentMethod.card?.last4,
+            source: 'webhook',
+          })
         } catch (error) {
           logger.logPaymentProcessing('payment-method-detached-error', 'Error processing payment_method.detached', { paymentMethodId: paymentMethod.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
           throw error

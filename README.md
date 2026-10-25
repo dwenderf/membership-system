@@ -115,10 +115,10 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 SUPABASE_MAX_ROWS=1000
 
 # Payments
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_SECRET_KEY=rk_test_your_stripe_restricted_key  # restricted key, see "Stripe restricted API key"
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
-STRIPE_API_VERSION=2025-07-30.basil
+STRIPE_API_VERSION=2026-09-30.endive
 
 # Email Integration
 LOOPS_API_KEY=your_loops_api_key
@@ -1851,11 +1851,39 @@ Google OAuth is configured in the Supabase Dashboard (Authentication → Provide
 **Payment Processing:**
 
 ```bash
-STRIPE_SECRET_KEY=sk_live_your_stripe_live_secret_key
+STRIPE_SECRET_KEY=rk_live_your_stripe_restricted_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_live_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_production_webhook_secret
-STRIPE_API_VERSION=2025-07-30.basil
+STRIPE_API_VERSION=2026-09-30.endive
 ```
+
+#### Stripe restricted API key (`STRIPE_SECRET_KEY`)
+
+`STRIPE_SECRET_KEY` is a **restricted key** (`rk_test_...` / `rk_live_...`), not a standard `sk_...` secret key. Create it in Stripe Dashboard → Developers → API keys → **Create restricted key**, start from the **One-time payments** template, and make sure it has at least the permissions below. Use one key per Stripe mode and per Vercel environment. The app reads it only server-side, in `src/lib/stripe/server-client.ts`. `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_...`) stays a normal publishable key. Elements uses it in the browser through `src/lib/stripe-client.ts`.
+
+| Resource | Permission | Why the app needs it |
+| --- | --- | --- |
+| PaymentIntents | Write | Create membership and registration payments, plus off-session charges for payment plans, waitlist and alternates. Retrieve intents in confirm routes, Xero invoice creation and the webhook. |
+| SetupIntents | Write | Save a card for later (`/api/create-setup-intent`, `/api/confirm-setup-intent`) |
+| Customers | Write | Create the Stripe customer when a card is saved. Delete it on account deletion. |
+| PaymentMethods | Write | Retrieve card details. Attach saved cards. Detach on card removal or account deletion. List cards on account deletion. |
+| Refunds | Write | Admin refunds (`/api/admin/refunds`, `/api/admin/refunds/process`) |
+| Charges | Read | The webhook retrieves charges, including expanded `latest_charge` and `refunds`. |
+| Balance transactions | Read | The webhook reads Stripe fees for the Xero fee sync (`balanceTransactions.retrieve`, `expand: balance_transaction`). |
+
+**Not needed:** Subscriptions, Invoices, Prices, Products, Checkout Sessions, Events, Webhook Endpoints, Payouts, Disputes and Connect. Leave them as None unless a template sets them. Webhook signature verification (`webhooks.constructEvent`) uses `STRIPE_WEBHOOK_SECRET`, not an API permission. Xero sync and `scripts/` make no Stripe API calls of their own. `stripe listen` (local testing) uses your Stripe CLI login, not this key.
+
+**Rotating or replacing the key:**
+
+1. In Stripe, roll the old standard key with a short expiry (for example, 1 hour) so it stays valid until the deploy finishes.
+2. Create the restricted key (see the table above) in test mode for Development/Preview and in live mode for Production.
+3. In Vercel → Project → Settings → Environment Variables, set `STRIPE_SECRET_KEY` separately for each environment. Never commit or paste key values.
+4. Redeploy each environment. Env changes only apply to new deployments.
+5. On Preview, test checkout (new card), saving a card, a payment-plan charge (off-session), an admin refund, and a webhook delivery that records the Stripe fee and syncs to Xero.
+6. Watch Vercel logs and Sentry for Stripe permission errors, for example `The provided key 'rk_...' does not have the required permissions for this endpoint`. If one appears, add the named permission to the key (Dashboard → key → Edit). There's no need to create a new key.
+7. Let the old key expire, or revoke it once everything is confirmed.
+
+**Webhook signing secret (`STRIPE_WEBHOOK_SECRET`):** each webhook endpoint has its own signing secret (`whsec_...`), so each environment and endpoint needs its own value. To roll it: open Stripe Dashboard → Webhooks → endpoint → **Roll secret**, choose an expiry for the old secret, set the new value in that Vercel environment, redeploy, and confirm a test event returns 200.
 
 **Email & Monitoring:**
 

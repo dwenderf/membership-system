@@ -4,7 +4,7 @@
 
 // Set mock env vars before imports
 process.env.STRIPE_SECRET_KEY = 'sk_test_mock_123'
-process.env.STRIPE_API_VERSION = '2023-10-16'
+process.env.STRIPE_API_VERSION = '2026-09-30.endive'
 
 // Mock dependencies BEFORE imports
 jest.mock('stripe', () => {

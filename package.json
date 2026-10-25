@@ -24,7 +24,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@hookform/resolvers": "^5.1.1",
-    "@sentry/nextjs": "^10.70.0",
+    "@sentry/nextjs": "^10.75.2",
     "@stripe/react-stripe-js": "^3.7.0",
     "@stripe/stripe-js": "^7.3.1",
     "@supabase/ssr": "^0.6.1",
@@ -33,7 +33,7 @@
     "flatpickr": "^4.6.13",
     "loops": "^5.0.1",
     "lucide-react": "^0.515.0",
-    "next": "^16.4.0",
+    "next": "^16.4.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
@@ -41,7 +41,7 @@
     "supabase": "^2.108.0",
     "timezones-ical-library": "^1.11.1",
     "xero-node": "^13.0.0",
-    "zod": "^3.25.64"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

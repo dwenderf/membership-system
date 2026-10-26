@@ -532,6 +532,187 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
   }
 }
 
+/**
+ * #456: a Stripe refund that ends failed or canceled must release what it reserved. Mark our
+ * refunds row failed/cancelled (this frees its discount code for reuse) and stop its credit note
+ * from going to Xero if it hasn't synced yet. Idempotent.
+ */
+class RefundReleaseError extends Error {}
+
+async function handleRefundFailedOrCanceled(supabase: SupabaseClient, stripeRefund: Stripe.Refund) {
+  const newStatus = stripeRefund.status === 'canceled' ? 'cancelled' : 'failed'
+  // Every DB error here throws RefundReleaseError so the webhook returns 5xx and Stripe retries.
+  // Every write is conditional, so a retry after a partial failure converges without repeats.
+  const fail = (event: string, message: string, context: Record<string, unknown>): never => {
+    logger.logPaymentProcessing(event, message, { stripeRefundId: stripeRefund.id, ...context }, 'error')
+    throw new RefundReleaseError(message)
+  }
+
+  type RefundRow = { id: string; status: string; payment_id: string }
+  const { data: byStripeId, error: byStripeIdError } = await supabase
+    .from('refunds')
+    .select('id, status, payment_id')
+    .eq('stripe_refund_id', stripeRefund.id)
+    .maybeSingle()
+  if (byStripeIdError) fail('refund-failed-lookup-error', 'Failed to look up refund by stripe_refund_id', { error: byStripeIdError.message })
+  let refund = byStripeId as RefundRow | null
+  const metadataRefundId = stripeRefund.metadata?.refund_id
+  if (!refund && metadataRefundId) {
+    const { data: byId, error: byIdError } = await supabase
+      .from('refunds')
+      .select('id, status, payment_id')
+      .eq('id', metadataRefundId)
+      .maybeSingle()
+    if (byIdError) fail('refund-failed-lookup-error', 'Failed to look up refund by metadata.refund_id', { error: byIdError.message })
+    refund = byId as RefundRow | null
+  }
+
+  if (!refund) {
+    logger.logPaymentProcessing('refund-failed-record-not-found', 'No refund record for failed/canceled Stripe refund', { stripeRefundId: stripeRefund.id, status: stripeRefund.status }, 'warn')
+    return
+  }
+
+  // 1. Release the refund (frees its discount code). Skipped on retry once it's done.
+  if (refund.status !== 'failed' && refund.status !== 'cancelled') {
+    const { error: updateError } = await supabase
+      .from('refunds')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', refund.id)
+      .in('status', ['pending', 'completed'])
+    if (updateError) fail('refund-failed-update-error', 'Failed to mark refund failed/cancelled', { refundId: refund.id, error: updateError.message })
+  }
+
+  // 2. Restore the payment's refundable state if this refund had made it fully refunded.
+  await restorePaymentAfterReleasedRefund(supabase, refund, fail)
+
+  // 3. Keep the credit note out of Xero.
+  const stagingId = stripeRefund.metadata?.staging_id
+  if (stagingId) {
+    // Not yet in Xero: don't send a credit note for money that was never refunded.
+    // 'failed' too, so /api/xero/retry-failed can't post it later.
+    const unsynced = ['staged', 'pending', 'failed']
+    const { error: noteIgnoreError } = await supabase
+      .from('xero_invoices')
+      .update({ sync_status: 'ignore', updated_at: new Date().toISOString() })
+      .eq('id', stagingId)
+      .in('sync_status', unsynced)
+    if (noteIgnoreError) fail('refund-failed-credit-note-ignore-error', 'Failed to ignore credit note for failed/canceled refund', { refundId: refund.id, stagingId, error: noteIgnoreError.message })
+    const { error: paymentIgnoreError } = await supabase
+      .from('xero_payments')
+      .update({ sync_status: 'ignore', updated_at: new Date().toISOString() })
+      .eq('xero_invoice_id', stagingId)
+      .in('sync_status', unsynced)
+    if (paymentIgnoreError) fail('refund-failed-payment-ignore-error', 'Failed to ignore Xero payment for failed/canceled refund', { refundId: refund.id, stagingId, error: paymentIgnoreError.message })
+
+    const { data: note, error: noteError } = await supabase
+      .from('xero_invoices')
+      .select('sync_status')
+      .eq('id', stagingId)
+      .maybeSingle()
+    if (noteError) fail('refund-failed-credit-note-lookup-error', 'Failed to read credit note for failed/canceled refund', { refundId: refund.id, stagingId, error: noteError.message })
+    if (note?.sync_status === 'synced') {
+      // The code is freed, but this credit note still exists in Xero (and in discount_usage_computed) until voided.
+      logger.logSystem('refund-failed-credit-note-synced', 'Refund failed/canceled after its credit note synced to Xero; void it manually', { refundId: refund.id, stagingId, stripeRefundId: stripeRefund.id }, 'error')
+    }
+  }
+
+  logger.logPaymentProcessing('refund-failed-or-canceled', `Refund ${refund.id} released as ${newStatus}`, { refundId: refund.id, stripeRefundId: stripeRefund.id, stripeStatus: stripeRefund.status }, 'info')
+}
+
+/**
+ * #457: a full refund marks payments.status 'refunded' (and proportional refunds mark the
+ * payment's registrations 'refunded'). If that refund then fails or is cancelled, put them back
+ * so the refund can be retried. There is no partially-refunded payment status: a partly refunded
+ * payment stays 'completed'. So the payment goes back to 'completed' unless the remaining
+ * completed refunds still cover the full amount. All writes are conditional on the 'refunded'
+ * state, so they never clobber a newer state and happen once.
+ */
+async function restorePaymentAfterReleasedRefund(
+  supabase: SupabaseClient,
+  refund: { id: string; payment_id: string },
+  fail: (event: string, message: string, context: Record<string, unknown>) => never
+) {
+  if (!refund.payment_id) return
+  const { data: payment, error: paymentError } = await supabase
+    .from('payments')
+    .select('id, status, final_amount')
+    .eq('id', refund.payment_id)
+    .maybeSingle()
+  if (paymentError) fail('refund-failed-payment-lookup-error', 'Failed to read payment for released refund', { refundId: refund.id, error: paymentError.message })
+  if (!payment) return
+
+  const { data: others, error: othersError } = await supabase
+    .from('refunds')
+    .select('id, amount, status')
+    .eq('payment_id', payment.id)
+    .in('status', ['pending', 'completed'])
+  if (othersError) fail('refund-failed-other-refunds-error', 'Failed to read remaining refunds for payment', { refundId: refund.id, error: othersError.message })
+  const remaining = ((others || []) as { id: string; amount: number; status: string }[]).filter(r => r.id !== refund.id)
+  const completedTotal = remaining.filter(r => r.status === 'completed').reduce((sum, r) => sum + (r.amount || 0), 0)
+
+  if (payment.status === 'refunded' && completedTotal < payment.final_amount) {
+    const { error: restoreError } = await supabase
+      .from('payments')
+      .update({ status: 'completed', refund_reason: null, refunded_by: null, updated_at: new Date().toISOString() })
+      .eq('id', payment.id)
+      .eq('status', 'refunded')
+    if (restoreError) fail('refund-failed-payment-restore-error', 'Failed to restore payment after released refund', { refundId: refund.id, paymentId: payment.id, error: restoreError.message })
+    logger.logPaymentProcessing('refund-failed-payment-restored', `Payment ${payment.id} restored to completed after refund ${refund.id} was released`, { paymentId: payment.id, refundId: refund.id, remainingCompletedRefunds: completedTotal }, 'info')
+  }
+
+  // Registrations: only put back when no other live refund that cancels registrations remains.
+  // Discount-code refunds never mark registrations refunded, so they don't block the restore.
+  // A remaining refund whose type we can't confirm blocks it (conservative).
+  let blocking = remaining
+  if (remaining.length > 0) {
+    const { data: notes, error: notesError } = await supabase
+      .from('xero_invoices')
+      .select('staging_metadata')
+      .in('staging_metadata->>refund_id', remaining.map(r => r.id))
+    if (notesError) fail('refund-failed-remaining-type-error', 'Failed to read refund types for remaining refunds', { refundId: refund.id, error: notesError.message })
+    const discountOnly = new Set(
+      ((notes || []) as { staging_metadata: { refund_id?: string; refund_type?: string } | null }[])
+        .filter(n => n.staging_metadata?.refund_type === 'discount_code' && n.staging_metadata?.refund_id)
+        .map(n => n.staging_metadata!.refund_id as string)
+    )
+    blocking = remaining.filter(r => !discountOnly.has(r.id))
+  }
+  if (blocking.length > 0) return
+
+  const { data: regs, error: regsError } = await supabase
+    .from('user_registrations')
+    .select('id, user_id, registration_id')
+    .eq('payment_id', payment.id)
+    .eq('payment_status', 'refunded')
+  if (regsError) fail('refund-failed-registration-lookup-error', 'Failed to read registrations for released refund', { refundId: refund.id, paymentId: payment.id, error: regsError.message })
+
+  for (const reg of (regs || []) as { id: string; user_id: string; registration_id: string }[]) {
+    const skip = (reason: string) => logger.logPaymentProcessing('refund-failed-registration-restore-skipped',
+      `Registration ${reg.id} not restored to paid: member has a newer active registration`,
+      { refundId: refund.id, paymentId: payment.id, userRegistrationId: reg.id, userId: reg.user_id, registrationId: reg.registration_id, reason }, 'warn')
+
+    // Guard user_registrations_active_unique (user_id, registration_id) WHERE payment_status = 'paid'.
+    const { data: conflict, error: conflictError } = await supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('user_id', reg.user_id)
+      .eq('registration_id', reg.registration_id)
+      .eq('payment_status', 'paid')
+      .maybeSingle()
+    if (conflictError) fail('refund-failed-registration-conflict-error', 'Failed to check for an active registration', { refundId: refund.id, userRegistrationId: reg.id, error: conflictError.message })
+    if (conflict) { skip('active registration exists'); continue }
+
+    const { error: regError } = await supabase
+      .from('user_registrations')
+      .update({ payment_status: 'paid', refunded_at: null })
+      .eq('id', reg.id)
+      .eq('payment_status', 'refunded')
+    // Backstop for a race between the check and the update: never retry forever on the index.
+    if ((regError as { code?: string } | null)?.code === '23505') { skip('unique violation (23505)'); continue }
+    if (regError) fail('refund-failed-registration-restore-error', 'Failed to restore registrations after released refund', { refundId: refund.id, paymentId: payment.id, error: regError.message })
+  }
+}
+
 // Handle charge refunded events
 async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
@@ -557,6 +738,12 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
     // Process each refund in the charge
     if (charge.refunds && charge.refunds.data) {
       for (const stripeRefund of charge.refunds.data) {
+        // #456: never mark a failed/canceled refund completed; release it instead.
+        if (stripeRefund.status === 'failed' || stripeRefund.status === 'canceled') {
+          await handleRefundFailedOrCanceled(supabase, stripeRefund)
+          continue
+        }
+
         // Check if we already have this refund in our database
         const { data: existingRefund } = await supabase
           .from('refunds')
@@ -567,9 +754,17 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
         if (existingRefund) {
           logger.logPaymentProcessing('refund-already-exists', `Refund ${stripeRefund.id} already exists in database`, { stripeRefundId: stripeRefund.id, refundId: existingRefund.id }, 'debug')
 
-          // Update status if needed
+          // #457: a late/out-of-order charge.refunded must not revive a refund already
+          // released by refund.failed/canceled, nor email the member about it.
+          if (existingRefund.status === 'failed' || existingRefund.status === 'cancelled') {
+            logger.logPaymentProcessing('refund-already-released', `Ignoring charge.refunded for ${existingRefund.status} refund`, { refundId: existingRefund.id, stripeRefundId: stripeRefund.id, stripeStatus: stripeRefund.status }, 'warn')
+            continue
+          }
+
+          // Update status if needed. Conditional, so a failure recorded between the read above
+          // and this write still wins.
           if (existingRefund.status !== 'completed') {
-            await supabase
+            const { data: completedRows, error: completeError } = await supabase
               .from('refunds')
               .update({
                 status: 'completed',
@@ -579,6 +774,14 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingRefund.id)
+              .not('status', 'in', '(failed,cancelled)')
+              .select('id')
+            if (completeError) {
+              logger.logPaymentProcessing('refund-complete-update-error', 'Failed to mark refund completed', { refundId: existingRefund.id, error: completeError.message }, 'error')
+            } else if (!completedRows || completedRows.length === 0) {
+              logger.logPaymentProcessing('refund-already-released', 'Refund was released before it could be completed; skipping', { refundId: existingRefund.id, stripeRefundId: stripeRefund.id }, 'warn')
+              continue
+            }
           }
 
           // NEW ARCHITECTURE: Check for staging_id in Stripe metadata
@@ -690,6 +893,8 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
     }
 
   } catch (error) {
+    // Release failures must reach Stripe as 5xx so it retries (the release path is idempotent).
+    if (error instanceof RefundReleaseError) throw error
     logger.logPaymentProcessing('charge-refunded-error', 'Error processing charge refunded event', { chargeId: charge.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
   }
 }
@@ -751,6 +956,16 @@ export async function POST(request: NextRequest) {
         })
 
         await handleChargeRefunded(supabase, charge)
+        break
+      }
+
+      case 'refund.failed':
+      case 'refund.updated':
+      case 'charge.refund.updated': {
+        const stripeRefund = event.data.object as Stripe.Refund
+        if (stripeRefund.status === 'failed' || stripeRefund.status === 'canceled') {
+          await handleRefundFailedOrCanceled(supabase, stripeRefund)
+        }
         break
       }
 

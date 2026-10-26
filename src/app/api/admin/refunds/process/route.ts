@@ -360,14 +360,18 @@ export async function POST(request: NextRequest) {
 
     } catch (stripeError) {
       // Update refund record to failed status
-      await supabase
+      // refunds has no failure_reason column; sending one made this update fail and left the
+      // refund 'pending', which would keep its discount code blocked (#456). The reason is logged below.
+      const { error: failUpdateError } = await supabase
         .from('refunds')
         .update({
           status: 'failed',
-          failure_reason: stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error',
           updated_at: new Date().toISOString()
         })
         .eq('id', refund.id)
+      if (failUpdateError) {
+        logger.logSystem('refund-mark-failed-error', 'Could not mark refund failed after Stripe error', { refundId: refund.id, error: failUpdateError.message })
+      }
 
       // Mark staging records as failed
       await supabase

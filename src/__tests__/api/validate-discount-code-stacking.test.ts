@@ -134,7 +134,7 @@ describe('#454 refund discount stacking', () => {
   })
 
   describe('reuse and lookup errors fail closed', () => {
-    function queueWith(lines: Result, refundLines?: Result) {
+    function queueWith(lines: Result, refundLines?: Result, refunds?: Result) {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin' } }, error: null })
       const q = [
         chain({ data: { season_id: 's1' }, error: null }),
@@ -142,6 +142,7 @@ describe('#454 refund discount stacking', () => {
         chain({ data: [{ id: 'inv-1' }], error: null }),
         chain(lines),
         ...(refundLines ? [chain(refundLines)] : []),
+        ...(refunds ? [chain(refunds)] : []),
         chain({ data: [], error: null }),
       ]
       mockSupabase.from.mockImplementation(() => q.shift())
@@ -163,12 +164,42 @@ describe('#454 refund discount stacking', () => {
     })
 
     it('rejects a code already applied in an earlier refund on the same payment', async () => {
-      queueWith({ data: [], error: null }, { data: [{ id: 'cn-line-1' }], error: null })
+      queueWith({ data: [], error: null }, { data: [creditNoteLine('synced', null)], error: null })
       const data = await call('NEWCODE', 10000, 7500)
       expect(data.isValid).toBe(false)
       expect(data.alreadyApplied).toBe(true)
       expect(data.error).toContain('earlier refund')
     })
+
+  // #456 review: a code is used once a refund is initiated, whatever the credit note's sync
+  // state, and freed only when the refund is failed/cancelled.
+  describe('earlier refund status decides reuse (#456)', () => {
+    const cases: [string, string, string, boolean][] = [
+      ['staged refund (credit note staged)', 'staged', 'pending', false],
+      ['pending refund', 'pending', 'pending', false],
+      ['credit note not yet synced (failed sync, refund completed)', 'failed', 'completed', false],
+      ['failed refund', 'ignore', 'failed', true],
+      ['canceled refund', 'ignore', 'cancelled', true],
+    ]
+    it.each(cases)('%s', async (_n, syncStatus, refundStatus, freed) => {
+      queueWith({ data: [], error: null }, { data: [creditNoteLine(syncStatus, 'r1')], error: null }, { data: [{ id: 'r1', status: refundStatus }], error: null })
+      const data = await call('NEWCODE', 10000, 7500)
+      expect(data.isValid).toBe(freed)
+      if (!freed) expect(data.error).toContain('earlier refund')
+    })
+
+    it('ignores an unconfirmed preview credit note (no refund initiated)', async () => {
+      queueWith({ data: [], error: null }, { data: [creditNoteLine('staged', null)], error: null })
+      const data = await call('NEWCODE', 10000, 7500)
+      expect(data.isValid).toBe(true)
+    })
+
+    it('fails closed when the referenced refund row is missing', async () => {
+      queueWith({ data: [], error: null }, { data: [creditNoteLine('staged', 'r1')], error: null }, { data: [], error: null })
+      const data = await call('NEWCODE', 10000, 7500)
+      expect(data.isValid).toBe(false)
+    })
+  })
   })
 
   describe('odd-cent rounding', () => {
@@ -193,3 +224,7 @@ describe('#454 refund discount stacking', () => {
     expect(capRefundDiscount(-1, 100)).toBe(0)
   })
 })
+
+function creditNoteLine(sync_status: string, refund_id: string | null) {
+  return { id: 'cn-line', xero_invoices: { payment_id: 'pay', invoice_type: 'ACCRECCREDIT', sync_status, staging_metadata: { refund_id } } }
+}

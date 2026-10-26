@@ -41,6 +41,7 @@ import { POST } from '@/app/api/stripe-webhook/route'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe/server-client'
 import { NextRequest } from 'next/server'
+import { logger } from '@/lib/logging/logger'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 
 /**
@@ -53,16 +54,23 @@ type Filter = [string, string, unknown]
 
 function makeDb(tables: Tables) {
   const writes: { table: string; values: Row; hit: number }[] = []
-  let failOn: ((table: string, op: string) => boolean) | null = null
-  const matches = (row: Row, filters: Filter[]) => filters.every(([op, c, v]) =>
-    op === 'eq' ? row[c] === v : op === 'in' ? (v as unknown[]).includes(row[c]) : !String(v).replace(/[()]/g, '').split(',').includes(String(row[c])))
+  let failOn: ((table: string, op: string, values: Row) => boolean | { message: string; code?: string }) | null = null
+  const get = (row: Row, c: string) => {
+    const [col, key] = c.split('->>')
+    return key ? (row[col] as Row | null)?.[key] : row[col]
+  }
+  const matches = (row: Row, filters: Filter[]) => filters.every(([op, c, raw]) => {
+    const rc = get(row, c)
+    return op === 'eq' ? rc === raw : op === 'in' ? (raw as unknown[]).includes(rc) : !String(raw).replace(/[()]/g, '').split(',').includes(String(rc))
+  })
   const supabase = {
     from: (table: string) => {
       let op = 'select'
       let values: Row = {}
       const filters: Filter[] = []
       const run = () => {
-        if (failOn?.(table, op)) return { data: null, error: { message: `boom on ${table} ${op}` } }
+        const f = failOn?.(table, op, values)
+        if (f) return { data: null, error: f === true ? { message: `boom on ${table} ${op}` } : f }
         const rows = (tables[table] || []).filter(r => matches(r, filters))
         if (op === 'update') { rows.forEach(r => Object.assign(r, values)); writes.push({ table, values, hit: rows.length }) }
         if (op === 'insert') return { data: values, error: null }
@@ -95,7 +103,7 @@ function send(type: string, object: Row, charge?: Row) {
 
 const failedRefund = { id: 're_1', status: 'failed', metadata: { refund_id: 'r1', staging_id: 'stg' } }
 
-function world(extraRefunds: Row[] = [], refundStatus = 'completed') {
+function world(extraRefunds: Row[] = [], refundStatus = 'completed'): Record<'payments' | 'refunds' | 'user_registrations' | 'xero_invoices' | 'xero_payments', Row[]> {
   return {
     payments: [{ id: 'pay', stripe_payment_intent_id: 'pi_1', user_id: 'u1', status: 'refunded', final_amount: 10000, refund_reason: 'Fully refunded', refunded_by: 'admin' }],
     refunds: [{ id: 'r1', payment_id: 'pay', amount: 10000, status: refundStatus, stripe_refund_id: 're_1' }, ...extraRefunds],
@@ -190,5 +198,53 @@ describe('refund release restores the payment (#457)', () => {
     expect((await send('refund.failed', failedRefund)).status).toBe(200)
     expect(db.writes.slice(before3).filter(w => w.hit > 0)).toHaveLength(0)
     expect(stageRefundNotificationEmail).not.toHaveBeenCalled()
+  })
+
+  it('a remaining discount-code refund does not block restoring registrations (#458)', async () => {
+    const t = world([{ id: 'r0', payment_id: 'pay', amount: 2000, status: 'completed' }])
+    t.refunds[0].amount = 8000
+    t.xero_invoices.push({ id: 'stg0', sync_status: 'synced', staging_metadata: { refund_id: 'r0', refund_type: 'discount_code' } })
+    ;(createAdminClient as jest.Mock).mockReturnValue(makeDb(t).supabase)
+    expect((await send('refund.failed', failedRefund)).status).toBe(200)
+    expect(t.payments[0].status).toBe('completed')
+    expect(t.user_registrations[0]).toMatchObject({ payment_status: 'paid', refunded_at: null })
+  })
+
+  it('a remaining proportional refund still blocks restoring registrations', async () => {
+    const t = world([{ id: 'r0', payment_id: 'pay', amount: 2000, status: 'completed' }])
+    t.xero_invoices.push({ id: 'stg0', sync_status: 'synced', staging_metadata: { refund_id: 'r0', refund_type: 'refund' } })
+    ;(createAdminClient as jest.Mock).mockReturnValue(makeDb(t).supabase)
+    await send('refund.failed', failedRefund)
+    expect(t.user_registrations[0].payment_status).toBe('refunded')
+  })
+
+  it('skips and logs a registration whose member has a newer active registration, still releases, 200 (#458)', async () => {
+    const t = world()
+    Object.assign(t.user_registrations[0], { user_id: 'u1', registration_id: 'reg1' })
+    t.user_registrations.push({ id: 'ur2', payment_id: 'pay2', user_id: 'u1', registration_id: 'reg1', payment_status: 'paid' })
+    ;(createAdminClient as jest.Mock).mockReturnValue(makeDb(t).supabase)
+    const res = await send('refund.failed', failedRefund)
+    expect(res.status).toBe(200)
+    expect(t.user_registrations[0].payment_status).toBe('refunded')
+    expect(t.xero_invoices[0].sync_status).toBe('ignore')
+    expect(t.xero_payments[0].sync_status).toBe('ignore')
+    expect(JSON.stringify((logger.logPaymentProcessing as jest.Mock).mock.calls)).toContain('refund-failed-registration-restore-skipped')
+  })
+
+  it('treats a 23505 on the registration restore as a skip, not a 500', async () => {
+    const t = world()
+    const db = makeDb(t)
+    db.setFail((table, op) => table === 'user_registrations' && op === 'update' ? { message: 'duplicate key value violates unique constraint "user_registrations_active_unique"', code: '23505' } : false)
+    ;(createAdminClient as jest.Mock).mockReturnValue(db.supabase)
+    expect((await send('refund.failed', failedRefund)).status).toBe(200)
+    expect(t.xero_invoices[0].sync_status).toBe('ignore')
+  })
+
+  it('other registration restore errors still return 5xx', async () => {
+    const t = world()
+    const db = makeDb(t)
+    db.setFail((table, op) => table === 'user_registrations' && op === 'update')
+    ;(createAdminClient as jest.Mock).mockReturnValue(db.supabase)
+    expect((await send('refund.failed', failedRefund)).status).toBeGreaterThanOrEqual(500)
   })
 })

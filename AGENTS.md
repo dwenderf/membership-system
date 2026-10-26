@@ -150,6 +150,17 @@ Both `development` and `main` are protected — neither accepts a direct push, s
 
 Don't try to push a feature branch, or `development` itself, straight to `main`, and don't push directly to `development` expecting it to land — the branch ruleset rejects it and a PR is required either way.
 
+### Before opening a PR: check the docs
+
+Docs in this repo go stale quietly. The README said "Node.js 18+" long after Next 16 required 20.9, and a never-run Cloud Run workflow sat in `.github/workflows/` for over a year implying the app deployed somewhere it didn't. So before opening any feature PR, search the docs for whatever the change touches and update them in the same PR:
+
+- **What to search for:** every name the diff adds, renames or removes — env vars, routes, scripts/`npm run` commands, file and directory paths, table/column names, workflow names, versions (Node, Next, Stripe API), and external services.
+- **Where:** `README.md`, `AGENTS.md`, `docs/`, `.env.example` (see [Environment variables](#environment-variables)), `supabase/auth-templates/`, and comments in `.github/workflows/`. For example, `git grep -n -i '<name>' -- '*.md' docs .env.example .github`.
+- **Removals count too.** Deleting a feature, script or integration means deleting or rewriting the docs that describe it, not just the code.
+- **Say what you checked.** In the PR description, list the docs you updated, or write one line saying you searched and none needed changes. Don't skip it silently, so a reviewer can tell "checked, nothing to change" from "didn't look".
+
+Promotion PRs (`development` → `main`) don't need this. The docs were checked in the feature PRs they carry.
+
 ### Promoting `development` into `main`
 
 `main` is the repository's default branch, and **GitHub only auto-closes an issue when the closing keyword appears in a PR whose base is the default branch** (or in a commit message pushed to it). A `Closes #NNN` written in the feature PR — the one merged into `development` — does nothing by itself: the issue stays open through the whole `development` cycle and only closes if the promotion PR body repeats the keyword. A bare `#NNN` (no `closes`/`fixes` before it) creates a cross-reference but is **not** a closing keyword and won't close anything.

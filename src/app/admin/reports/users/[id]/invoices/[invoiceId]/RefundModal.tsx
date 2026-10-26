@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation, canSubmitDiscountRefund } from './refund-discount-utils'
 import { formatAmount } from '@/lib/format-utils'
 import { logger } from '@/lib/logging/logger'
 
@@ -23,6 +24,20 @@ interface DiscountValidation {
   isPartialDiscount?: boolean
   partialDiscountMessage?: string
   error?: string
+  alreadyApplied?: boolean
+  missingOriginalInvoice?: boolean
+  reuseCheckFailed?: boolean
+}
+
+interface AppliedDiscountCode {
+  id: string
+  code: string
+}
+
+interface PaymentRegistrationContext {
+  /** Registration used for season context when validating a refund discount code. */
+  discountContextRegistrationId: string | null
+  appliedDiscountCodes: AppliedDiscountCode[]
 }
 
 interface RefundModalProps {
@@ -92,29 +107,57 @@ export default function RefundModal({
   const [stagingData, setStagingData] = useState<RefundStagingData | null>(null)
   const [isStaging, setIsStaging] = useState(false)
   const [isRegistrationPayment, setIsRegistrationPayment] = useState<boolean | null>(null)
-  const discountCodeInputRef = useRef<HTMLInputElement>(null)
+  const [paymentContext, setPaymentContext] = useState<PaymentRegistrationContext | null>(null)
+  // Monotonic id of the latest discount validation request; older responses are ignored.
+  const validationSeqRef = useRef(0)
+  // Uppercasing changes the controlled value, which makes React put the caret at the end.
+  // Remember the caret from the keystroke and put it back after that render.
+  const discountInputRef = useRef<HTMLInputElement>(null)
+  const pendingCaretRef = useRef<{ start: number | null; end: number | null } | null>(null)
+  useLayoutEffect(() => {
+    const caret = pendingCaretRef.current
+    const input = discountInputRef.current
+    pendingCaretRef.current = null
+    if (caret && input && document.activeElement === input && caret.start !== null && caret.end !== null) {
+      input.setSelectionRange(caret.start, caret.end)
+    }
+  }, [discountCode])
+
+  // Discount-code refunds need a registration for season context. Regular/waitlist payments have a
+  // user_registrations row; alternate selections are linked via alternate_selections (#454).
+  const canUseDiscountCode = !!paymentContext?.discountContextRegistrationId
 
   const checkIfRegistrationPayment = async () => {
     try {
       const response = await fetch(`/api/admin/payments/${paymentId}/registrations`)
       if (response.ok) {
         const data = await response.json()
-        setIsRegistrationPayment(data.registrations && data.registrations.length > 0)
+        // isRegistrationPayment drives the "mark registration refunded" warning and zero-dollar
+        // rules, which only apply to user_registrations rows.
+        setIsRegistrationPayment(!!(data.registrations && data.registrations.length > 0))
+        setPaymentContext({
+          discountContextRegistrationId: data.discountContextRegistrationId
+            ?? data.registrations?.[0]?.registration_id
+            ?? null,
+          appliedDiscountCodes: Array.isArray(data.appliedDiscountCodes) ? data.appliedDiscountCodes : []
+        })
       } else {
         setIsRegistrationPayment(false)
+        setPaymentContext({ discountContextRegistrationId: null, appliedDiscountCodes: [] })
       }
     } catch (error) {
       logger.logAdminAction('check-registration-payment-type', 'Error checking payment type', { paymentId, error: error instanceof Error ? error.message : String(error) }, undefined, 'error')
       setIsRegistrationPayment(false)
+      setPaymentContext({ discountContextRegistrationId: null, appliedDiscountCodes: [] })
     }
   }
 
-  // Reset to proportional if user was on discount_code but payment is not a registration
+  // Reset to proportional if user was on discount_code but payment can't take a discount code
   useEffect(() => {
-    if (isRegistrationPayment === false && refundType === 'discount_code') {
+    if (paymentContext && !paymentContext.discountContextRegistrationId && refundType === 'discount_code') {
       setRefundType('proportional')
     }
-  }, [isRegistrationPayment, refundType])
+  }, [paymentContext, refundType])
 
   const openModal = () => {
     setIsOpen(true)
@@ -125,6 +168,7 @@ export default function RefundModal({
     setReason('')
     setError('')
     setSuccess('')
+    setPaymentContext(null)
     checkIfRegistrationPayment() // Check payment type when modal opens
   }
 
@@ -160,84 +204,68 @@ export default function RefundModal({
     setIsStaging(false)
   }
 
-  const validateDiscountCode = useCallback(async (code: string) => {
-    if (!code.trim()) {
-      setDiscountValidation(null)
+  const validateDiscountCode = useCallback(async (code: string, seq: number) => {
+    const trimmed = code.trim()
+    const registrationId = paymentContext?.discountContextRegistrationId
+    if (!trimmed || !registrationId) {
       return
     }
 
-    // Store current cursor position before validation
-    const currentPosition = discountCodeInputRef.current?.selectionStart || 0
+    const reused = findAppliedCode(trimmed, paymentContext?.appliedDiscountCodes)
+    if (reused) {
+      if (seq === validationSeqRef.current) {
+        setDiscountValidation(reusedCodeValidation(reused.code))
+        setIsValidatingDiscount(false)
+      }
+      return
+    }
 
     setIsValidatingDiscount(true)
     setError('')
 
+    let result: DiscountValidation
     try {
-      // First, get the registration associated with this payment
-      // Since a payment can have multiple registrations, we'll use the first one for season context
-      const registrationResponse = await fetch(`/api/admin/payments/${paymentId}/registrations`)
-      
-      if (!registrationResponse.ok) {
-        throw new Error('Failed to fetch registration information')
-      }
-      
-      const registrationData = await registrationResponse.json()
-      
-      if (!registrationData.registrations || registrationData.registrations.length === 0) {
-        throw new Error('No registration found for this payment')
-      }
-
-      // Use the first registration for season context
-      const registrationId = registrationData.registrations[0].registration_id
-
-      // Use existing discount validation endpoint
       const response = await fetch('/api/validate-discount-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          code: code.trim(),
-          registrationId: registrationId,
+          code: trimmed,
+          registrationId,
           paymentId: paymentId,
           amount: paymentAmount, // Original payment amount
+          availableAmount, // Remaining refundable (paid minus prior refunds); caps the discount
           isRefund: true // Flag to indicate this is a refund validation
         })
       })
-
-      const result = await response.json()
-      setDiscountValidation(result)
-      
-      // Don't set main error for validation - let inline validation handle it
+      result = await response.json()
     } catch {
-      setDiscountValidation({
-        isValid: false,
-        error: 'Failed to validate discount code'
-      })
-      // Don't set main error for validation - let inline validation handle it
-    } finally {
-      setIsValidatingDiscount(false)
-      // Restore focus and cursor position after validation
-      setTimeout(() => {
-        if (discountCodeInputRef.current) {
-          discountCodeInputRef.current.focus()
-          // Restore cursor position
-          discountCodeInputRef.current.setSelectionRange(currentPosition, currentPosition)
-        }
-      }, 50) // Slightly longer timeout to ensure DOM has settled
+      result = { isValid: false, error: 'Failed to validate discount code' }
     }
-  }, [paymentId, paymentAmount])
 
-  // Debounced discount code validation using useEffect
+    // Ignore stale responses: the admin kept typing after this request was sent.
+    // Never touch the input's value, focus or caret here (#454).
+    if (seq !== validationSeqRef.current) return
+    setDiscountValidation(result)
+    setIsValidatingDiscount(false)
+  }, [paymentId, paymentAmount, availableAmount, paymentContext])
+
+  // Debounced discount code validation
   useEffect(() => {
-    if (discountCode && refundType === 'discount_code') {
+    const seq = ++validationSeqRef.current
+    setDiscountValidation(null)
+    // A newer keystroke supersedes any request in flight, whose response will be dropped, so
+    // never leave the spinner stuck from it.
+    setIsValidatingDiscount(false)
+    if (discountCode.trim() && refundType === 'discount_code') {
       const timeoutId = setTimeout(() => {
-        validateDiscountCode(discountCode)
+        validateDiscountCode(discountCode, seq)
       }, 500) // Debounce validation by 500ms
 
       return () => clearTimeout(timeoutId)
     } else {
-      setDiscountValidation(null)
+      setIsValidatingDiscount(false)
     }
   }, [discountCode, refundType, validateDiscountCode])
 
@@ -270,11 +298,11 @@ export default function RefundModal({
 
         requestData.amount = amount
       } else if (refundType === 'discount_code') {
-        if (!discountValidation?.isValid) {
+        if (!canSubmitDiscountRefund({ validation: discountValidation, isValidating: isValidatingDiscount, code: discountCode, hasValidReason: true })) {
           setError('Please validate the discount code first')
           return
         }
-        requestData.discountValidation = discountValidation
+        requestData.discountValidation = discountValidation ?? undefined
       }
 
       // Create staging records
@@ -392,7 +420,7 @@ export default function RefundModal({
     if (refundType === 'proportional') {
       return isValidAmount() && hasValidReason
     } else {
-      return discountValidation?.isValid && hasValidReason
+      return canSubmitDiscountRefund({ validation: discountValidation, isValidating: isValidatingDiscount, code: discountCode, hasValidReason })
     }
   }
 
@@ -473,7 +501,7 @@ export default function RefundModal({
                     <span className="ml-2 text-sm text-gray-700">Proportional Refund</span>
                   </label>
                   {/* Only show discount code option for registration payments */}
-                  {isRegistrationPayment && (
+                  {canUseDiscountCode && (
                     <label className="inline-flex items-center">
                       <input
                         type="radio"
@@ -550,12 +578,19 @@ export default function RefundModal({
                     <label htmlFor="discountCode" className="block text-sm font-medium text-gray-700 mb-1">
                       Discount Code
                     </label>
+                    {appliedCodesWarning(paymentContext?.appliedDiscountCodes)}
                     <input
-                      ref={discountCodeInputRef}
                       type="text"
                       id="discountCode"
+                      ref={discountInputRef}
                       value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value.toUpperCase().trim())}
+                      // Keep exactly what was typed, uppercased; trimming happens at validation time.
+                      // The caret is restored after render (see pendingCaretRef).
+                      onChange={(e) => {
+                        pendingCaretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
+                        setDiscountCode(e.target.value.toUpperCase())
+                      }}
+                      autoComplete="off"
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter discount code (e.g., PRIDE100)"
                       disabled={isProcessing}
@@ -600,7 +635,13 @@ export default function RefundModal({
                       </div>
                     )}
                     
-                    {discountValidation?.isValid === false && discountCode && (
+                    {discountValidation?.missingOriginalInvoice && discountCode && (
+                      <div role="alert" className="mt-2 p-3 text-sm bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-md">
+                        <strong>Warning:</strong> {discountValidation.error}
+                      </div>
+                    )}
+
+                    {discountValidation?.isValid === false && !discountValidation.missingOriginalInvoice && discountCode && (
                       <div className="mt-2 text-sm text-red-700 flex items-center">
                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -762,5 +803,14 @@ export default function RefundModal({
         </div>
       </div>
     </>
+  )
+}
+function appliedCodesWarning(codes: AppliedDiscountCode[] | undefined) {
+  const text = appliedCodesWarningText(codes)
+  if (!text) return null
+  return (
+    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800" role="alert">
+      {text}
+    </div>
   )
 }

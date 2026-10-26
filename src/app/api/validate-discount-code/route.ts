@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory, DiscountCategoryInfo } from '@/lib/services/discount-limit-service'
 import { logger } from '@/lib/logging/logger'
+import { findOriginalInvoice, checkDiscountCodeReuse, reusedCodeError, reuseLookupFailedError, MISSING_ORIGINAL_INVOICE_ERROR } from '@/lib/refunds/discount-refund-guards'
 
 /** Row shape of `discount_codes`, joined with its `discount_categories`, as selected below. */
 interface DiscountCodeQueryResult {
@@ -33,7 +34,12 @@ export interface DiscountValidationResult {
   isPartialDiscount?: boolean // True when discount was capped by season limit
   partialDiscountMessage?: string // Explanation of partial discount
   error?: string
+  alreadyApplied?: boolean // True when the code was already used on this payment (original invoice or an earlier refund)
+  missingOriginalInvoice?: boolean // True when the original ACCREC invoice can't be found (#454 (b))
+  reuseCheckFailed?: boolean // True when the reuse lookup errored; fails closed
 }
+
+export { MISSING_ORIGINAL_INVOICE_ERROR }
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, registrationId, paymentId, amount, isRefund = false } = body
+    const { code, registrationId, paymentId, amount, availableAmount, isRefund = false } = body
     
     if (!code || !registrationId || !amount) {
       return NextResponse.json({ 
@@ -152,54 +158,58 @@ export async function POST(request: NextRequest) {
     let effectivePct: number | null = discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null
 
     if (isRefund) {
-      let originalDiscountAmount: number | null = null
+      // #454 stacking rules: a different code may be stacked on prior discounts. Its percentage is
+      // computed on the top-line (pre-discount) price, and the combined discount is capped at 100%,
+      // i.e. the refund never exceeds what was paid minus prior refunds.
+      let priorDiscountTotal = 0
 
-      if (paymentId) {
-        // Query xero_invoices filtering strictly by payment_id, invoice_type = 'ACCREC', and sync_status IN ('synced', 'pending')
-        const { data: originalInvoices, error: invoiceError } = await supabase
-          .from('xero_invoices')
-          .select('id')
-          .eq('payment_id', paymentId)
-          .eq('invoice_type', 'ACCREC')
-          .in('sync_status', ['synced', 'pending'])
+      // #454 decision (b): the top-line price comes from the original invoice. Without it the refund
+      // can't be calculated, so reject rather than falling back to the amount paid.
+      const missingInvoice = () => NextResponse.json({
+        isValid: false,
+        missingOriginalInvoice: true,
+        error: MISSING_ORIGINAL_INVOICE_ERROR
+      })
 
-        if (invoiceError) {
-          logger.logPaymentProcessing('discount-refund-original-invoice-query-error', 'Error querying original invoice for discount refund', { paymentId, error: invoiceError.message }, 'error')
-        }
+      const invoiceCheck = await findOriginalInvoice(supabase, paymentId)
+      if (invoiceCheck.status === 'multiple') {
+        logger.logPaymentProcessing('discount-refund-multiple-invoices', 'Multiple synced/pending ACCREC invoices found for payment', { paymentId }, 'error')
+        return NextResponse.json({ isValid: false, error: 'Multiple original invoices found for payment' })
+      }
+      if (invoiceCheck.status === 'missing') {
+        logger.logPaymentProcessing('discount-refund-original-invoice-missing', 'Original invoice not found for discount refund', { paymentId, code: discountCode.code }, 'warn')
+        return missingInvoice()
+      }
+      const xeroInvoiceId = invoiceCheck.invoiceId
 
-        if (originalInvoices && originalInvoices.length > 1) {
-          logger.logPaymentProcessing('discount-refund-multiple-invoices', 'Multiple synced/pending ACCREC invoices found for payment', { paymentId }, 'error')
-          return NextResponse.json({ isValid: false, error: 'Multiple original invoices found for payment' })
-        }
-
-        if (originalInvoices && originalInvoices.length === 1) {
-          const xeroInvoiceId = originalInvoices[0].id
-          const { data: lineItems, error: lineError } = await supabase
-            .from('xero_invoice_line_items')
-            .select('id, line_amount')
-            .eq('xero_invoice_id', xeroInvoiceId)
-            .eq('discount_code_id', discountCode.id)
-            .eq('line_item_type', 'discount')
-
-          if (lineError) {
-            logger.logPaymentProcessing('discount-refund-line-item-query-error', 'Error querying discount line item for refund', { xeroInvoiceId, error: lineError.message }, 'error')
-          }
-
-          if (lineItems && lineItems.length > 1) {
-            logger.logPaymentProcessing('discount-refund-multiple-line-items', 'Multiple discount line items found on original invoice', { xeroInvoiceId }, 'error')
-            return NextResponse.json({ isValid: false, error: 'Multiple discount line items found on original invoice' })
-          }
-
-          if (lineItems && lineItems.length === 1) {
-            originalDiscountAmount = Math.abs(lineItems[0].line_amount)
-          }
-        }
+      // #454: reject a code already used on this payment, at checkout or in an earlier refund.
+      // A lookup error fails closed.
+      const reuse = await checkDiscountCodeReuse(supabase, paymentId, xeroInvoiceId, discountCode.id)
+      if (reuse.status === 'error') {
+        logger.logPaymentProcessing('discount-refund-reuse-check-error', 'Could not check discount code reuse for refund', { paymentId, code: discountCode.code }, 'error')
+        return NextResponse.json({ isValid: false, reuseCheckFailed: true, error: reuseLookupFailedError(discountCode.code) })
+      }
+      if (reuse.status === 'multiple') {
+        logger.logPaymentProcessing('discount-refund-multiple-line-items', 'Multiple discount line items found on original invoice', { xeroInvoiceId }, 'error')
+        return NextResponse.json({ isValid: false, error: 'Multiple discount line items found on original invoice' })
+      }
+      if (reuse.status === 'reused') {
+        // e.g. a 50% code on a $280 registration paid at $140 would otherwise "refund" $140 (100%).
+        logger.logPaymentProcessing('discount-refund-code-already-applied', 'Refund requested with a discount code already used on this payment', { code: discountCode.code, paymentId, source: reuse.source }, 'warn')
+        return NextResponse.json({ isValid: false, alreadyApplied: true, error: reusedCodeError(discountCode.code, reuse.source) })
       }
 
-      if (originalDiscountAmount !== null) {
-        discountAmount = originalDiscountAmount
-      } else {
-        // Split fallback strategy for 0 invoices / 0 line items found
+      // A different code: total any discounts already on the invoice so the new percentage is
+      // computed on the top-line price.
+      const prior = await sumPriorDiscounts(supabase, xeroInvoiceId)
+      if (prior === null) {
+        logger.logPaymentProcessing('discount-refund-prior-discounts-unreadable', 'Could not read original invoice discount lines for refund', { xeroInvoiceId }, 'error')
+        return missingInvoice()
+      }
+      priorDiscountTotal = prior
+
+      {
+        // The code is not on the original invoice: apply it retroactively.
         if (discountCode.uses_user_allowance) {
           // The customer never actually applied this gated code at checkout (e.g. they forgot to
           // enter it). An admin can retroactively apply it during a refund, but only if the
@@ -244,7 +254,7 @@ export async function POST(request: NextRequest) {
           }
 
           effectivePct = pct
-          const requestedDiscountAmount = Math.round((amount * pct) / 100)
+          const requestedDiscountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * pct) / 100), amount, availableAmount)
 
           const limitResult = await checkSeasonalDiscountLimit(
             supabase,
@@ -280,7 +290,7 @@ export async function POST(request: NextRequest) {
         } else {
           logger.logPaymentProcessing('discount-refund-line-item-not-found-fallback', 'Original discount line item not found for refund of fixed-percentage code; using percentage fallback', { code: discountCode.code, paymentId }, 'warn')
           const fallbackPct = parseFloat(String(discountCode.percentage)) || 0
-          discountAmount = Math.round((amount * fallbackPct) / 100)
+          discountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * fallbackPct) / 100), amount, availableAmount)
         }
       }
     } else {
@@ -369,5 +379,29 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.logPaymentProcessing('discount-code-validation-unexpected-error', 'Error validating discount code', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+/**
+ * Caps a refund discount so the combined discount never exceeds 100% of the top-line price:
+ * at most the amount actually paid, and at most what is still refundable (paid minus prior refunds).
+ */
+export function capRefundDiscount(requested: number, paidAmount: number, availableAmount?: number | null): number {
+  let cap = paidAmount
+  if (typeof availableAmount === 'number' && availableAmount >= 0) cap = Math.min(cap, availableAmount)
+  return Math.max(0, Math.min(requested, cap))
+}
+
+/** Sum (in cents, positive) of every discount line on the original invoice; null if it can't be read. */
+async function sumPriorDiscounts(supabase: Awaited<ReturnType<typeof createClient>>, xeroInvoiceId: string): Promise<number | null> {
+  try {
+    const { data, error } = await supabase
+      .from('xero_invoice_line_items')
+      .select('line_amount')
+      .eq('xero_invoice_id', xeroInvoiceId)
+      .eq('line_item_type', 'discount')
+    if (error || !Array.isArray(data)) return null
+    return data.reduce((sum: number, row: { line_amount: number | null }) => sum + Math.abs(row.line_amount || 0), 0)
+  } catch {
+    return null
   }
 }

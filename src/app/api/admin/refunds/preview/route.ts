@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { xeroStagingManager } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { logger } from '@/lib/logging/logger'
+import { findOriginalInvoice, checkDiscountCodeReuse, reusedCodeError, reuseLookupFailedError, MISSING_ORIGINAL_INVOICE_ERROR } from '@/lib/refunds/discount-refund-guards'
 
 // POST /api/admin/refunds/preview - Preview refund line items and amounts
 export async function POST(request: NextRequest) {
@@ -103,6 +104,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           error: 'Valid discount code validation required'
         }, { status: 400 })
+      }
+
+      const discountCodeId = discountValidation.discountCode?.id
+      const discountCodeLabel = discountValidation.discountCode?.code || 'This discount code'
+      if (!discountCodeId) {
+        return NextResponse.json({ error: 'Valid discount code validation required' }, { status: 400 })
+      }
+
+      // #454: re-check on the server before anything is staged. The client-sent amount is still
+      // trusted (decision (c)); these checks only stop a missing invoice or a reused code.
+      const invoiceCheck = await findOriginalInvoice(supabase, paymentId)
+      if (invoiceCheck.status !== 'ok') {
+        logger.logPaymentProcessing('refund-preview-original-invoice-missing', 'Original invoice missing or ambiguous for discount refund preview', { paymentId, status: invoiceCheck.status }, 'warn')
+        return NextResponse.json({
+          error: invoiceCheck.status === 'multiple' ? 'Multiple original invoices found for payment' : MISSING_ORIGINAL_INVOICE_ERROR,
+          missingOriginalInvoice: invoiceCheck.status === 'missing'
+        }, { status: 400 })
+      }
+
+      const reuse = await checkDiscountCodeReuse(supabase, paymentId, invoiceCheck.invoiceId, discountCodeId)
+      if (reuse.status !== 'unused') {
+        logger.logPaymentProcessing('refund-preview-discount-code-rejected', 'Discount code rejected in refund preview', { paymentId, discountCodeId, status: reuse.status }, 'warn')
+        const error = reuse.status === 'reused'
+          ? reusedCodeError(discountCodeLabel, reuse.source)
+          : reuse.status === 'multiple'
+            ? 'Multiple discount line items found on original invoice'
+            : reuseLookupFailedError(discountCodeLabel)
+        return NextResponse.json({
+          error,
+          alreadyApplied: reuse.status === 'reused',
+          reuseCheckFailed: reuse.status === 'error'
+        }, { status: reuse.status === 'error' ? 503 : 400 })
       }
 
       const discountAmount = discountValidation.discountAmount || 0

@@ -66,4 +66,7 @@ BEGIN
 END $$;
 SQL
 
+echo "==> Payment plan payoff DB checks (#452)"
+psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/payment-plan-payoff-db-test.sql"
+
 echo "==> schema.sql applies cleanly"

@@ -33,6 +33,7 @@ export interface DiscountValidationResult {
   isPartialDiscount?: boolean // True when discount was capped by season limit
   partialDiscountMessage?: string // Explanation of partial discount
   error?: string
+  alreadyApplied?: boolean // True when the code was already applied to the original payment
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { code, registrationId, paymentId, amount, isRefund = false } = body
+    const { code, registrationId, paymentId, amount, availableAmount, isRefund = false } = body
     
     if (!code || !registrationId || !amount) {
       return NextResponse.json({ 
@@ -152,7 +153,10 @@ export async function POST(request: NextRequest) {
     let effectivePct: number | null = discountCode.percentage != null ? parseFloat(String(discountCode.percentage)) : null
 
     if (isRefund) {
-      let originalDiscountAmount: number | null = null
+      // #454 stacking rules: a different code may be stacked on prior discounts. Its percentage is
+      // computed on the top-line (pre-discount) price, and the combined discount is capped at 100%,
+      // i.e. the refund never exceeds what was paid minus prior refunds.
+      let priorDiscountTotal = 0
 
       if (paymentId) {
         // Query xero_invoices filtering strictly by payment_id, invoice_type = 'ACCREC', and sync_status IN ('synced', 'pending')
@@ -191,15 +195,25 @@ export async function POST(request: NextRequest) {
           }
 
           if (lineItems && lineItems.length === 1) {
-            originalDiscountAmount = Math.abs(lineItems[0].line_amount)
+            // #454: this exact code was already applied when the payment was made, so the
+            // customer already received this discount. Refunding it again would double-count it
+            // (e.g. a 50% code on a $280 registration paid at $140 would "refund" $140, i.e. 100%).
+            logger.logPaymentProcessing('discount-refund-code-already-applied', 'Refund requested with a discount code already applied to the original invoice', { code: discountCode.code, paymentId }, 'warn')
+            return NextResponse.json({
+              isValid: false,
+              alreadyApplied: true,
+              error: `${discountCode.code} was already applied to this payment, so it can't be applied again as a refund.`
+            })
           }
+
+          // A different code: total any discounts already on the invoice so the new percentage is
+          // computed on the top-line price.
+          priorDiscountTotal = await sumPriorDiscounts(supabase, xeroInvoiceId)
         }
       }
 
-      if (originalDiscountAmount !== null) {
-        discountAmount = originalDiscountAmount
-      } else {
-        // Split fallback strategy for 0 invoices / 0 line items found
+      {
+        // The code is not on the original invoice: apply it retroactively.
         if (discountCode.uses_user_allowance) {
           // The customer never actually applied this gated code at checkout (e.g. they forgot to
           // enter it). An admin can retroactively apply it during a refund, but only if the
@@ -244,7 +258,7 @@ export async function POST(request: NextRequest) {
           }
 
           effectivePct = pct
-          const requestedDiscountAmount = Math.round((amount * pct) / 100)
+          const requestedDiscountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * pct) / 100), amount, availableAmount)
 
           const limitResult = await checkSeasonalDiscountLimit(
             supabase,
@@ -280,7 +294,7 @@ export async function POST(request: NextRequest) {
         } else {
           logger.logPaymentProcessing('discount-refund-line-item-not-found-fallback', 'Original discount line item not found for refund of fixed-percentage code; using percentage fallback', { code: discountCode.code, paymentId }, 'warn')
           const fallbackPct = parseFloat(String(discountCode.percentage)) || 0
-          discountAmount = Math.round((amount * fallbackPct) / 100)
+          discountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * fallbackPct) / 100), amount, availableAmount)
         }
       }
     } else {
@@ -369,5 +383,29 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     logger.logPaymentProcessing('discount-code-validation-unexpected-error', 'Error validating discount code', { error: error instanceof Error ? error.message : String(error) }, 'error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+/**
+ * Caps a refund discount so the combined discount never exceeds 100% of the top-line price:
+ * at most the amount actually paid, and at most what is still refundable (paid minus prior refunds).
+ */
+export function capRefundDiscount(requested: number, paidAmount: number, availableAmount?: number | null): number {
+  let cap = paidAmount
+  if (typeof availableAmount === 'number' && availableAmount >= 0) cap = Math.min(cap, availableAmount)
+  return Math.max(0, Math.min(requested, cap))
+}
+
+/** Sum (in cents, positive) of every discount line on the original invoice; 0 if it can't be read. */
+async function sumPriorDiscounts(supabase: Awaited<ReturnType<typeof createClient>>, xeroInvoiceId: string): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('xero_invoice_line_items')
+      .select('line_amount')
+      .eq('xero_invoice_id', xeroInvoiceId)
+      .eq('line_item_type', 'discount')
+    if (error || !Array.isArray(data)) return 0
+    return data.reduce((sum: number, row: { line_amount: number | null }) => sum + Math.abs(row.line_amount || 0), 0)
+  } catch {
+    return 0
   }
 }

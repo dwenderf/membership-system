@@ -186,7 +186,7 @@ describe('/api/validate-discount-code POST', () => {
     expect(data.error).toBe('You have already reached your $50.00 season limit for Summer Discounts. No additional discount can be applied.')
   })
 
-  it('should pass isRefund: true to service and return full discount when isRefund is true', async () => {
+  it('should reject a refund code that was already applied to the original invoice (#454)', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
     mockSupabase.from.mockReturnValueOnce({
@@ -259,8 +259,10 @@ describe('/api/validate-discount-code POST', () => {
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.isValid).toBe(true)
-    expect(data.discountAmount).toBe(2000)
+    expect(data.isValid).toBe(false)
+    expect(data.alreadyApplied).toBe(true)
+    expect(data.error).toContain('SUMMER20 was already applied')
+    expect(data.discountAmount).toBeUndefined()
   })
 
   it('should return neutral error message when user is ineligible (limitResult.isEligible === false)', async () => {
@@ -323,7 +325,7 @@ describe('/api/validate-discount-code POST', () => {
     expect(data.error).toBe("This code isn't available to your account.")
   })
 
-  it('should resolve original ACCREC invoice line item for refund and ignore ACCRECCREDIT credit notes', async () => {
+  it('should resolve original ACCREC invoice line item for refund (ignoring ACCRECCREDIT) and reject reuse of that code', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
     // Registration query
@@ -399,11 +401,13 @@ describe('/api/validate-discount-code POST', () => {
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.isValid).toBe(true)
-    expect(data.discountAmount).toBe(4000)
+    expect(data.isValid).toBe(false)
+    expect(data.alreadyApplied).toBe(true)
+    expect(data.error).toContain('SUMMER20 was already applied')
+    expect(data.discountAmount).toBeUndefined()
   })
 
-  it('should ignore abandoned staged ACCREC invoices and resolve synced ACCREC invoice for refund', async () => {
+  it('should ignore abandoned staged ACCREC invoices and reject reuse of a code on the synced ACCREC invoice', async () => {
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
     mockSupabase.from.mockReturnValueOnce({
@@ -476,8 +480,10 @@ describe('/api/validate-discount-code POST', () => {
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.isValid).toBe(true)
-    expect(data.discountAmount).toBe(3500)
+    expect(data.isValid).toBe(false)
+    expect(data.alreadyApplied).toBe(true)
+    expect(data.error).toContain('SUMMER20 was already applied')
+    expect(data.discountAmount).toBeUndefined()
   })
 
   it('should deny retroactive refund application for allowance-driven code when customer has no allowance', async () => {

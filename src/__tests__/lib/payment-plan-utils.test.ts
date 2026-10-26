@@ -85,7 +85,11 @@ describe('shared checkout/waitlist plan helpers (#442)', () => {
   })
 
   it('next installment is 30 days after the first', () => {
-    const next = calculateNextInstallmentDate(new Date('2026-10-26T12:00:00Z'))
-    expect(next.toISOString()).toBe('2026-11-25T12:00:00.000Z')
+    // Compare calendar dates in local time: across a DST change (Nov 1) 30 local days is not
+    // exactly 30*24h, which is what CI's America/New_York run would otherwise trip on.
+    const first = new Date(2026, 9, 26, 12, 0, 0) // Oct 26, local
+    const next = calculateNextInstallmentDate(first)
+    expect([next.getFullYear(), next.getMonth(), next.getDate()]).toEqual([2026, 10, 25]) // Nov 25
+    expect(next.getHours()).toBe(12)
   })
 })

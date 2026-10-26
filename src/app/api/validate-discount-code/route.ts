@@ -288,9 +288,60 @@ export async function POST(request: NextRequest) {
 
           logger.logPaymentProcessing('discount-refund-allowance-code-retroactive', 'Retroactively applying allowance-driven code during refund (no original line item found)', { code: discountCode.code, paymentId, registrationId, discountAmount }, 'warn')
         } else {
-          logger.logPaymentProcessing('discount-refund-line-item-not-found-fallback', 'Original discount line item not found for refund of fixed-percentage code; using percentage fallback', { code: discountCode.code, paymentId }, 'warn')
+          // A fixed-percentage code that wasn't used at checkout or in an earlier refund on this
+          // payment. Normal path, not an error. The seasonal limit is checked like checkout does:
+          // cap to the remaining room, reject when already at the limit.
+          if (!paymentId) {
+            logger.logPaymentProcessing('discount-refund-missing-payment-id', 'Missing paymentId for retroactive refund discount', { code: discountCode.code }, 'error')
+            return NextResponse.json({ isValid: false, error: 'Payment is required to apply a discount code as a refund' })
+          }
+          const { data: payment, error: paymentError } = await supabase
+            .from('payments')
+            .select('user_id')
+            .eq('id', paymentId)
+            .single()
+          if (paymentError || !payment) {
+            logger.logPaymentProcessing('discount-refund-payment-not-found', 'Payment not found for retroactive refund discount', { code: discountCode.code, paymentId, error: paymentError?.message }, 'error')
+            return NextResponse.json({ isValid: false, error: 'Payment not found for this refund' })
+          }
+
           const fallbackPct = parseFloat(String(discountCode.percentage)) || 0
-          discountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * fallbackPct) / 100), amount, availableAmount)
+          const requestedDiscountAmount = capRefundDiscount(Math.round(((amount + priorDiscountTotal) * fallbackPct) / 100), amount, availableAmount)
+
+          // Usage already includes this invoice's checkout discounts and earlier refund credit notes
+          // (discount_usage_computed); the request is only this code's new amount, so nothing is
+          // counted twice.
+          const limitResult = await checkSeasonalDiscountLimit(
+            supabase,
+            payment.user_id,
+            discountCode.id,
+            registration.season_id,
+            requestedDiscountAmount,
+            { discountCode: codeWithCategory }
+          )
+
+          if (limitResult.isEligible === false) {
+            return NextResponse.json({ isValid: false, error: "This code isn't available to this customer's account." })
+          }
+
+          const maxAllowed = limitResult.seasonalUsage?.maxAllowed ?? category?.max_discount_per_user_per_season ?? 0
+
+          if (limitResult.isAtLimit) {
+            return NextResponse.json({
+              isValid: false,
+              error: `This customer has already reached their $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}. No additional discount can be applied.`
+            })
+          }
+
+          if (limitResult.isPartialDiscount) {
+            discountAmount = limitResult.finalAmount
+            isPartialDiscount = true
+            partialDiscountMessage = `Applied $${(discountAmount / 100).toFixed(2)} discount (${discountCode.code}). Customer has already used part of their $${(maxAllowed / 100).toFixed(2)} season limit for ${category?.name || ''}.`
+          } else {
+            discountAmount = requestedDiscountAmount
+          }
+
+          logger.logPaymentProcessing('discount-refund-retroactive-fixed-pct', 'Applying a fixed-percentage code retroactively as a refund (not used at checkout or in an earlier refund)', { code: discountCode.code, paymentId, registrationId, percentage: fallbackPct, priorDiscountTotal, discountAmount, isPartialDiscount }, 'info')
         }
       }
     } else {

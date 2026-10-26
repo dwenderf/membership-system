@@ -8,8 +8,18 @@ import { POST, capRefundDiscount } from '@/app/api/validate-discount-code/route'
 import { NextRequest } from 'next/server'
 
 jest.mock('@/lib/supabase/server')
+jest.mock('@/lib/services/discount-limit-service', () => ({
+  ...jest.requireActual('@/lib/services/discount-limit-service'),
+  checkSeasonalDiscountLimit: jest.fn(),
+}))
+import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+const limitMock = checkSeasonalDiscountLimit as jest.Mock
+/** No seasonal cap unless a test sets one (the payments lookup comes after the queued queries). */
+const passThrough = (_s: unknown, _u: string, _c: string, _season: string, requested: number) =>
+  Promise.resolve({ originalAmount: requested, finalAmount: requested, isPartialDiscount: false, isAtLimit: false })
 
 type Result = { data: unknown; error: unknown }
+const paymentChain = () => chain({ data: { user_id: 'cust' }, error: null })
 function chain(result: Result) {
   const c: Record<string, unknown> = {}
   ;['select', 'eq', 'in'].forEach(m => { c[m] = jest.fn(() => c) })
@@ -40,7 +50,7 @@ function setup(newCode: ReturnType<typeof code>, priorLines: { line_amount: numb
     chain({ data: refundLines, error: null }),
     chain({ data: priorLines, error: null }),
   ]
-  mockSupabase.from.mockImplementation(() => queue.shift())
+  mockSupabase.from.mockImplementation(() => queue.shift() ?? paymentChain())
 }
 
 async function call(c: string, amount: number, availableAmount?: number) {
@@ -52,7 +62,7 @@ async function call(c: string, amount: number, availableAmount?: number) {
 }
 
 describe('#454 refund discount stacking', () => {
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => { jest.clearAllMocks(); limitMock.mockImplementation(passThrough) })
 
   it('rejects reusing the code already applied (the $140 on INV-8494 case)', async () => {
     // $280 top-line, 50% code applied at checkout, paid $140
@@ -99,7 +109,7 @@ describe('#454 refund discount stacking', () => {
         chain(invoiceResult),
         ...extra.map(chain),
       ]
-      mockSupabase.from.mockImplementation(() => q.shift())
+      mockSupabase.from.mockImplementation(() => q.shift() ?? paymentChain())
     }
     const expectMissing = (data: Record<string, unknown>) => {
       expect(data.isValid).toBe(false)
@@ -145,7 +155,7 @@ describe('#454 refund discount stacking', () => {
         ...(refunds ? [chain(refunds)] : []),
         chain({ data: [], error: null }),
       ]
-      mockSupabase.from.mockImplementation(() => q.shift())
+      mockSupabase.from.mockImplementation(() => q.shift() ?? paymentChain())
     }
 
     it('rejects when the original-invoice reuse lookup errors', async () => {
@@ -228,3 +238,81 @@ describe('#454 refund discount stacking', () => {
 function creditNoteLine(sync_status: string, refund_id: string | null) {
   return { id: 'cn-line', xero_invoices: { payment_id: 'pay', invoice_type: 'ACCRECCREDIT', sync_status, staging_metadata: { refund_id } } }
 }
+
+/** David: the seasonal limit applies to fixed-percentage codes applied as refunds, like checkout. */
+describe('seasonal limit on retroactive fixed-percentage refunds', () => {
+  beforeEach(() => { jest.clearAllMocks(); limitMock.mockImplementation(passThrough) })
+  const limited = (cat: Record<string, unknown> = {}) => {
+    const c = code('BOARD50', 50)
+    Object.assign(c.discount_categories, { max_discount_per_user_per_season: 5000 }, cat)
+    return c
+  }
+  const result = (r: Record<string, unknown>) => limitMock.mockResolvedValueOnce({ isPartialDiscount: false, isAtLimit: false, ...r })
+
+  it('under the limit: full amount, checked for the paying customer and the season', async () => {
+    setup(limited(), [], [])
+    result({ originalAmount: 2500, finalAmount: 2500, seasonalUsage: { totalUsed: 1000, remaining: 4000, maxAllowed: 5000 } })
+    const data = await call('BOARD50', 5000, 5000)
+    expect(data.isValid).toBe(true)
+    expect(data.discountAmount).toBe(2500)
+    expect(data.isPartialDiscount).toBe(false)
+    expect(limitMock).toHaveBeenCalledWith(expect.anything(), 'cust', 'id-BOARD50', 's1', 2500, expect.objectContaining({ discountCode: expect.objectContaining({ id: 'id-BOARD50' }) }))
+    expect(limitMock.mock.calls[0][5].isRefund).toBeUndefined()
+  })
+
+  it('over the limit: capped to the remaining seasonal room, like checkout', async () => {
+    setup(limited(), [], [])
+    result({ originalAmount: 2500, finalAmount: 1500, isPartialDiscount: true, seasonalUsage: { totalUsed: 3500, remaining: 1500, maxAllowed: 5000 } })
+    const data = await call('BOARD50', 5000, 5000)
+    expect(data.isValid).toBe(true)
+    expect(data.discountAmount).toBe(1500)
+    expect(data.isPartialDiscount).toBe(true)
+    expect(data.partialDiscountMessage).toContain('$50.00 season limit')
+  })
+
+  it('at the limit: rejected, like checkout', async () => {
+    setup(limited(), [], [])
+    result({ originalAmount: 2500, finalAmount: 0, isAtLimit: true, seasonalUsage: { totalUsed: 5000, remaining: 0, maxAllowed: 5000 } })
+    const data = await call('BOARD50', 5000, 5000)
+    expect(data.isValid).toBe(false)
+    expect(data.discountAmount).toBeUndefined()
+    expect(data.error).toContain('already reached their $50.00 season limit')
+  })
+
+  it('stacking: asks only for the new code\'s amount (prior invoice discounts are already in usage)', async () => {
+    // $280 top-line, $140 already discounted at checkout, new 25% => request $70, not $70 + $140
+    limitMock.mockImplementationOnce((_s: unknown, _u: string, _c: string, _season: string, requested: number) =>
+      Promise.resolve({ originalAmount: requested, finalAmount: 6000, isPartialDiscount: true, isAtLimit: false, seasonalUsage: { totalUsed: 14000, remaining: 6000, maxAllowed: 20000 } }))
+    const c = limited({ max_discount_per_user_per_season: 20000 }); c.code = 'EXTRA25'; c.id = 'id-EXTRA25'; c.percentage = 25
+    setup(c, [{ line_amount: -14000 }], [])
+    const data = await call('EXTRA25', 14000, 14000)
+    expect(limitMock.mock.calls[0][4]).toBe(7000)
+    expect(data.discountAmount).toBe(6000)
+  })
+
+  it('checks the amount after the 100%/refundable cap, not the raw percentage', async () => {
+    setup(limited(), [], [])
+    await call('BOARD50', 5000, 1000)
+    expect(limitMock.mock.calls[0][4]).toBe(1000)
+  })
+
+  it('rejects a code the customer is not eligible for', async () => {
+    setup(limited(), [], [])
+    result({ originalAmount: 2500, finalAmount: 0, isEligible: false })
+    const data = await call('BOARD50', 5000, 5000)
+    expect(data.isValid).toBe(false)
+    expect(data.error).toContain("isn't available")
+  })
+
+  it('logs the retroactive application at info level under the new event name', async () => {
+    const { logger } = jest.requireActual('@/lib/logging/logger')
+    const spy = jest.spyOn(logger, 'logPaymentProcessing')
+    setup(limited(), [], [])
+    await call('BOARD50', 5000, 5000)
+    const events = spy.mock.calls.map(c => [c[0], c[3]])
+    expect(events).toContainEqual(['discount-refund-retroactive-fixed-pct', 'info'])
+    expect(events.map(e => e[0])).not.toContain('discount-refund-line-item-not-found-fallback')
+    spy.mockRestore()
+  })
+})
+

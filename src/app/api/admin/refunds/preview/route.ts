@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { xeroStagingManager } from '@/lib/xero/staging'
 import { centsToCents } from '@/types/currency'
 import { logger } from '@/lib/logging/logger'
-import { findOriginalInvoice, checkDiscountCodeReuse, reusedCodeError, reuseLookupFailedError, MISSING_ORIGINAL_INVOICE_ERROR } from '@/lib/refunds/discount-refund-guards'
+import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+import { findOriginalInvoice, resolvePaymentSeasonId, checkDiscountCodeReuse, reusedCodeError, reuseLookupFailedError, MISSING_ORIGINAL_INVOICE_ERROR } from '@/lib/refunds/discount-refund-guards'
 
 // POST /api/admin/refunds/preview - Preview refund line items and amounts
 export async function POST(request: NextRequest) {
@@ -139,6 +140,39 @@ export async function POST(request: NextRequest) {
       }
 
       const discountAmount = discountValidation.discountAmount || 0
+
+      // Re-check the customer's seasonal limit on the server so the client can't bypass it. Usage
+      // already counts this invoice's discounts and earlier refund credit notes.
+      if (discountAmount > 0) {
+        const season = await resolvePaymentSeasonId(supabase, paymentId)
+        if (season.status !== 'ok') {
+          logger.logPaymentProcessing('refund-preview-season-unresolved', 'Could not determine the season for a discount refund preview', { paymentId, status: season.status }, season.status === 'error' ? 'error' : 'warn')
+          return NextResponse.json({
+            error: season.status === 'error'
+              ? "Couldn't check the customer's seasonal discount limit. Try again."
+              : "Couldn't determine the season for this payment, so the seasonal discount limit can't be checked."
+          }, { status: season.status === 'error' ? 503 : 400 })
+        }
+        let limit
+        try {
+          limit = await checkSeasonalDiscountLimit(supabase, payment.user_id, discountCodeId, season.seasonId, discountAmount)
+        } catch (limitError) {
+          logger.logPaymentProcessing('refund-preview-season-limit-error', 'Seasonal discount limit check failed for refund preview', { paymentId, discountCodeId, error: limitError instanceof Error ? limitError.message : String(limitError) }, 'error')
+          return NextResponse.json({ error: "Couldn't check the customer's seasonal discount limit. Try again." }, { status: 503 })
+        }
+        if (limit.isEligible === false || limit.isAtLimit || limit.finalAmount < discountAmount) {
+          logger.logPaymentProcessing('refund-preview-season-limit-exceeded', 'Discount refund exceeds the customer\'s seasonal limit', { paymentId, discountCodeId, discountAmount, allowed: limit.finalAmount, isAtLimit: limit.isAtLimit, isEligible: limit.isEligible }, 'warn')
+          const max = limit.seasonalUsage?.maxAllowed
+          return NextResponse.json({
+            error: limit.isEligible === false
+              ? `${discountCodeLabel} isn't available to this customer's account.`
+              : limit.isAtLimit
+                ? `This customer has already reached their${max ? ` $${(max / 100).toFixed(2)}` : ''} season limit for this discount category.`
+                : `Discount amount $${(discountAmount / 100).toFixed(2)} exceeds the customer's remaining seasonal discount of $${(limit.finalAmount / 100).toFixed(2)}. Re-validate the code.`,
+            seasonalLimitExceeded: true
+          }, { status: 400 })
+        }
+      }
 
       if (discountAmount > availableForRefund) {
         return NextResponse.json({

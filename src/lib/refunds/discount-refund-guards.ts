@@ -127,3 +127,37 @@ export function reusedCodeError(code: string, source: 'invoice' | 'refund'): str
 export function reuseLookupFailedError(code: string): string {
   return `Couldn't check whether ${code} was already used on this payment, so it can't be applied right now. Please try again.`
 }
+
+/**
+ * Season of the registration a payment is for: via user_registrations, or via
+ * alternate_selections for alternate payments (the same two paths discount_usage_computed uses).
+ */
+export async function resolvePaymentSeasonId(supabase: Supabase, paymentId: string): Promise<{ status: 'ok'; seasonId: string } | { status: 'missing' | 'error' }> {
+  type SeasonRow = { season_id: string | null } | { season_id: string | null }[] | null
+  const one = (r: SeasonRow) => (Array.isArray(r) ? r[0] : r)?.season_id || null
+  try {
+    const { data: regs, error: regError } = await supabase
+      .from('user_registrations')
+      .select('registrations(season_id)')
+      .eq('payment_id', paymentId)
+    if (regError) return { status: 'error' }
+    for (const r of (regs || []) as { registrations: SeasonRow }[]) {
+      const seasonId = one(r.registrations)
+      if (seasonId) return { status: 'ok', seasonId }
+    }
+    const { data: alts, error: altError } = await supabase
+      .from('alternate_selections')
+      .select('alternate_registrations(registrations(season_id))')
+      .eq('payment_id', paymentId)
+    if (altError) return { status: 'error' }
+    type AltReg = { registrations: SeasonRow }
+    for (const a of (alts || []) as { alternate_registrations: AltReg | AltReg[] | null }[]) {
+      const ar = Array.isArray(a.alternate_registrations) ? a.alternate_registrations[0] : a.alternate_registrations
+      const seasonId = ar ? one(ar.registrations) : null
+      if (seasonId) return { status: 'ok', seasonId }
+    }
+    return { status: 'missing' }
+  } catch {
+    return { status: 'error' }
+  }
+}

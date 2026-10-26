@@ -88,7 +88,7 @@ Based on these line item types, the financial reports are organized as:
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 24.x and npm. The version is pinned in [`.nvmrc`](.nvmrc), and `package.json` `engines` and CI use the same version. With [nvm](https://github.com/nvm-sh/nvm), run `nvm install` once, then `nvm use` in the repo.
 - Supabase account and project
 - Stripe account (test mode for development)
 - Loops.so account for email integration
@@ -100,6 +100,7 @@ Based on these line item types, the financial reports are organized as:
 ```bash
 git clone <repository-url>
 cd membership-system
+nvm use
 npm install
 ```
 

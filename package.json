@@ -2,6 +2,9 @@
   "name": "membership-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -47,7 +50,7 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/jest": "^29.5.14",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -67,5 +70,10 @@
   "overrides": {
     "js-yaml": "^5.4.2"
   },
-  "//overrides": "Temporary overrides to force patched versions of transitive deps with security vulnerabilities. Remove each entry once the upstream package has updated. See dependency-overrides.md for details."
+  "//overrides": "Temporary overrides to force patched versions of transitive deps with security vulnerabilities. Remove each entry once the upstream package has updated. See dependency-overrides.md for details.",
+  "allowScripts": {
+    "@sentry/cli": true,
+    "@tailwindcss/oxide": true,
+    "unrs-resolver": true
+  }
 }

@@ -1112,6 +1112,44 @@ export async function POST(request: NextRequest) {
               logger.logPaymentProcessing('waitlist-registration-not-found', 'Waitlist registration record not found - may have been created after webhook', { paymentIntentId: paymentIntent.id }, 'warn')
             }
 
+            // Waitlist payment plan (#442): this charge is installment 1. Staging already created
+            // every installment row; promote #1 to pending and the rest to planned. The select
+            // route links user_registrations.xero_invoice_id itself, so nothing here depends on
+            // the registration row existing yet. Idempotent on webhook retry.
+            const isWaitlistPaymentPlan = paymentIntent.metadata?.isPaymentPlan === 'true'
+            const waitlistPlanInvoiceId = paymentIntent.metadata?.xeroStagingRecordId
+            if (isWaitlistPaymentPlan && waitlistPlanInvoiceId) {
+              const { data: firstInstallment } = await supabase
+                .from('xero_payments')
+                .select('id, staging_metadata')
+                .eq('xero_invoice_id', waitlistPlanInvoiceId)
+                .eq('payment_type', 'installment')
+                .eq('installment_number', 1)
+                .single()
+
+              if (firstInstallment) {
+                const { error: metadataUpdateError } = await supabase
+                  .from('xero_payments')
+                  .update({
+                    staging_metadata: {
+                      ...(firstInstallment.staging_metadata as Record<string, unknown> | null),
+                      payment_id: updatedPayment.id,
+                      stripe_payment_intent_id: paymentIntent.id,
+                      stripe_charge_id: chargeId,
+                      updated_at: new Date().toISOString()
+                    },
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', firstInstallment.id)
+
+                if (metadataUpdateError) {
+                  logger.logPaymentProcessing('waitlist-payment-plan-metadata-update-failed', 'Failed to update waitlist payment plan installment #1 metadata', { paymentIntentId: paymentIntent.id, error: metadataUpdateError.message }, 'warn')
+                }
+              }
+
+              await updatePaymentPlanStatuses(supabase, waitlistPlanInvoiceId)
+            }
+
             // Process through payment completion processor for Xero updates and emails
             try {
               const completionEvent = {
@@ -1125,7 +1163,12 @@ export async function POST(request: NextRequest) {
                 metadata: {
                   payment_intent_id: paymentIntent.id,
                   charge_id: chargeId || undefined,
-                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined
+                  xero_staging_record_id: paymentIntent.metadata?.xeroStagingRecordId || undefined,
+                  // Stops the processor marking every installment row pending (paid)
+                  ...(isWaitlistPaymentPlan && waitlistPlanInvoiceId && {
+                    is_payment_plan: true,
+                    payment_plan_id: waitlistPlanInvoiceId
+                  })
                 }
               }
 

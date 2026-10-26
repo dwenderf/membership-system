@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { isUserPaymentPlanEligible } from '@/lib/payment-plan-utils'
 import { logger } from '@/lib/logging/logger'
 
 export interface WaitlistReportEntry {
@@ -21,6 +22,10 @@ export interface WaitlistReportEntry {
   base_price: number
   discount_amount: number
   final_amount: number
+  /** Member chose a payment plan when joining (#442). */
+  use_payment_plan: boolean
+  /** Member is payment-plan eligible right now; if not, a plan choice is charged in full. */
+  payment_plan_eligible: boolean
 }
 
 /**
@@ -55,7 +60,8 @@ export async function fetchWaitlistReportData(
         is_lgbtq,
         is_goalie,
         stripe_payment_method_id,
-        setup_intent_status
+        setup_intent_status,
+        payment_plan_enabled
       ),
       registration_categories (
         id,
@@ -164,7 +170,9 @@ export async function fetchWaitlistReportData(
       discount_percentage: discountCode?.percentage || null,
       base_price: basePrice,
       discount_amount: discountAmount,
-      final_amount: finalAmount
+      final_amount: finalAmount,
+      use_payment_plan: item.use_payment_plan === true,
+      payment_plan_eligible: isUserPaymentPlanEligible(user)
     }
   }) || []
 }

@@ -5,6 +5,7 @@ import { centsToCents } from '@/types/currency'
 import { PaymentCompletionProcessor } from '@/lib/payment-completion-processor'
 import { checkSeasonalDiscountLimit, resolveEffectiveDiscountLimits, resolveDiscountPercentage, DiscountCodeWithCategory } from '@/lib/services/discount-limit-service'
 import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { isUserPaymentPlanEligible, calculateFirstInstallmentAmount, buildPaymentPlanIntentMetadata } from '@/lib/payment-plan-utils'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getStripe } from '@/lib/stripe/server-client'
 import { Database } from '@/types/database'
@@ -13,9 +14,23 @@ type XeroInvoiceRow = Database['public']['Tables']['xero_invoices']['Row']
 
 export interface WaitlistChargeResult {
   paymentId: string
+  /** Amount charged now: the first installment for a payment plan, otherwise the full amount. */
   amountCharged: number
   success: boolean
   paymentIntentId?: string
+  /** True when this charge is installment 1 of a payment plan. */
+  isPaymentPlan: boolean
+  /** Full registration amount after discounts (the plan total when isPaymentPlan). */
+  totalAmount: number
+  /** Member chose a payment plan but was no longer eligible, so they were charged in full. */
+  paymentPlanFallback: boolean
+  /** xero_invoices staging row for this charge. */
+  xeroInvoiceId?: string
+}
+
+export interface WaitlistChargeOptions {
+  /** The member's waitlist payment-plan choice (waitlists.use_payment_plan). */
+  usePaymentPlan?: boolean
 }
 
 export class WaitlistPaymentService {
@@ -28,7 +43,8 @@ export class WaitlistPaymentService {
     categoryId: string,
     categoryName: string,
     discountCodeId?: string,
-    overridePrice?: number
+    overridePrice?: number,
+    options: WaitlistChargeOptions = {}
   ): Promise<WaitlistChargeResult> {
     try {
       const supabase = await createClient()
@@ -37,7 +53,7 @@ export class WaitlistPaymentService {
       // Get user details
       const { data: user, error: userError } = await supabase
         .from('users')
-        .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name, stripe_customer_id')
+        .select('stripe_payment_method_id, setup_intent_status, email, first_name, last_name, stripe_customer_id, payment_plan_enabled')
         .eq('id', userId)
         .single()
 
@@ -122,6 +138,22 @@ export class WaitlistPaymentService {
         discountCode = calculated.discountCode
       }
 
+      // Payment plan (#442): honour the member's choice only if they are still eligible now.
+      // If they've lost eligibility (flag turned off, card removed) charge in full instead.
+      const planRequested = options.usePaymentPlan === true && finalAmount > 0
+      const isPaymentPlan = planRequested && isUserPaymentPlanEligible(user)
+      const paymentPlanFallback = planRequested && !isPaymentPlan
+      const chargeAmount = isPaymentPlan ? calculateFirstInstallmentAmount(finalAmount) : finalAmount
+
+      if (paymentPlanFallback) {
+        logger.logPaymentProcessing(
+          'waitlist-payment-plan-fallback',
+          'Member chose a payment plan but is no longer eligible; charging in full',
+          { userId, registrationId, categoryId, finalAmount },
+          'info'
+        )
+      }
+
       // Create staging record for Xero
       const stagingData: StagingPaymentData = {
         user_id: userId,
@@ -188,7 +220,9 @@ export class WaitlistPaymentService {
         })
       }
 
-      const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: finalAmount === 0 })
+      // A payment plan stages all installment rows up front (as checkout does); the webhook
+      // promotes #1 to pending and the rest to planned once the first charge succeeds.
+      const stagingRecord = await xeroStagingManager.createImmediateStaging(stagingData, { isFree: finalAmount === 0, isPaymentPlan })
 
       if (!stagingRecord) {
         throw new Error('Failed to create Xero staging record')
@@ -231,7 +265,7 @@ export class WaitlistPaymentService {
 
       // Create Payment Intent for the charge
       const paymentIntent = await getStripe().paymentIntents.create({
-        amount: centsToCents(finalAmount),
+        amount: centsToCents(chargeAmount),
         currency: 'usd',
         payment_method: user.stripe_payment_method_id,
         customer: user.stripe_customer_id,
@@ -246,9 +280,12 @@ export class WaitlistPaymentService {
           userName: `${user.first_name} ${user.last_name}`,
           purpose: 'waitlist_selection',
           xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
-          ...(discountCodeId && { discountCodeId })
+          ...(discountCodeId && { discountCodeId }),
+          ...(isPaymentPlan && buildPaymentPlanIntentMetadata(finalAmount))
         },
-        description: `Waitlist Selection: ${registration.name} - ${categoryName}`
+        description: isPaymentPlan
+          ? `Payment Plan (1/4) - Waitlist Selection: ${registration.name} - ${categoryName}`
+          : `Waitlist Selection: ${registration.name} - ${categoryName}`
       })
 
       // Update staging record with payment intent ID
@@ -269,7 +306,7 @@ export class WaitlistPaymentService {
         .insert({
           user_id: userId,
           total_amount: centsToCents(finalAmount),
-          final_amount: centsToCents(finalAmount),
+          final_amount: centsToCents(chargeAmount), // For payment plans, just the first installment (as checkout)
           stripe_payment_intent_id: paymentIntent.id,
           status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
           payment_method: 'stripe',
@@ -300,7 +337,10 @@ export class WaitlistPaymentService {
           categoryId,
           categoryName,
           paymentIntentId: paymentIntent.id,
-          amountCharged: finalAmount,
+          amountCharged: chargeAmount,
+          totalAmount: finalAmount,
+          isPaymentPlan,
+          paymentPlanFallback,
           discountAmount
         },
         'info'
@@ -308,9 +348,13 @@ export class WaitlistPaymentService {
 
       return {
         paymentId: paymentRecord.id,
-        amountCharged: finalAmount,
+        amountCharged: chargeAmount,
         success: paymentIntent.status === 'succeeded',
-        paymentIntentId: paymentIntent.id
+        paymentIntentId: paymentIntent.id,
+        isPaymentPlan,
+        totalAmount: finalAmount,
+        paymentPlanFallback,
+        xeroInvoiceId: stagingRecord.id
       }
     } catch (error) {
       logger.logPaymentProcessing(
@@ -556,7 +600,11 @@ export class WaitlistPaymentService {
         paymentId: paymentRecord.id,
         amountCharged: 0,
         success: true,
-        paymentIntentId: undefined // No Stripe payment for free charges
+        paymentIntentId: undefined, // No Stripe payment for free charges
+        isPaymentPlan: false,
+        totalAmount: 0,
+        paymentPlanFallback: false,
+        xeroInvoiceId: stagingRecord.id
       }
     } catch (error) {
       logger.logPaymentProcessing(

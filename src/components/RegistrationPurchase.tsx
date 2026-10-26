@@ -542,6 +542,7 @@ export default function RegistrationPurchase({
             registrationId: registration.id,
             categoryId: selectedCategoryId,
             discountCodeId: discountValidation?.discountCodeId || null,
+            usePaymentPlan: paymentPlanEligible && finalAmount > 0 && usePaymentPlan,
             policiesAccepted,
           }),
         })
@@ -573,7 +574,9 @@ export default function RegistrationPurchase({
         // Show success message
         showSuccess(
           'Waitlist Joined!',
-          `You've been added to the waitlist. If you're selected, you'll be charged at that time.`
+          result.usePaymentPlan
+            ? `You've been added to the waitlist. If you're selected, the first payment-plan installment will be charged at that time.`
+            : `You've been added to the waitlist. If you're selected, you'll be charged at that time.`
         )
 
       } catch (err) {
@@ -1391,8 +1394,9 @@ export default function RegistrationPurchase({
         </div>
       )}
 
-      {/* Payment Plan Option - Only show for eligible users with saved payment method */}
-      {selectedCategory && !isAlternateSelected && finalAmount > 0 && isTimingAvailable && !isCategoryAtCapacity && paymentPlanEligible && (
+      {/* Payment Plan Option - Only show for eligible users with saved payment method.
+          Also offered when joining a waitlist (#442): the choice is stored and applied at selection. */}
+      {selectedCategory && !isAlternateSelected && finalAmount > 0 && isTimingAvailable && !(isCategoryAtCapacity && isUserOnWaitlist) && paymentPlanEligible && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex items-start mb-3">
             <svg className="h-5 w-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -1419,7 +1423,7 @@ export default function RegistrationPurchase({
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-900">Pay in Full</div>
                     <div className="text-sm text-gray-600">
-                      Pay ${(finalAmount / 100).toFixed(2)} today
+                      Pay ${(finalAmount / 100).toFixed(2)} {isCategoryAtCapacity ? 'if selected' : 'today'}
                     </div>
                   </div>
                 </label>
@@ -1447,19 +1451,19 @@ export default function RegistrationPurchase({
                       <div className="mt-2 p-2 bg-gray-50 rounded text-xs space-y-1">
                         <div className="font-medium text-gray-700 mb-1">Payment Schedule:</div>
                         <div className="flex justify-between text-gray-600">
-                          <span>Today (Payment 1 of 4):</span>
+                          <span>{isCategoryAtCapacity ? 'When selected' : 'Today'} (Payment 1 of 4):</span>
                           <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-gray-600">
-                          <span>In 30 days (Payment 2 of 4):</span>
+                          <span>{isCategoryAtCapacity ? '30 days later' : 'In 30 days'} (Payment 2 of 4):</span>
                           <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-gray-600">
-                          <span>In 60 days (Payment 3 of 4):</span>
+                          <span>{isCategoryAtCapacity ? '60 days later' : 'In 60 days'} (Payment 3 of 4):</span>
                           <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-gray-600">
-                          <span>In 90 days (Payment 4 of 4):</span>
+                          <span>{isCategoryAtCapacity ? '90 days later' : 'In 90 days'} (Payment 4 of 4):</span>
                           <span className="font-medium text-gray-900">${(Math.round(finalAmount / 4) / 100).toFixed(2)}</span>
                         </div>
                         <div className="border-t border-gray-200 mt-2 pt-1 flex justify-between font-medium">

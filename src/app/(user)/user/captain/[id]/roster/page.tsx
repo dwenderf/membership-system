@@ -10,6 +10,7 @@ import { formatDate as formatDateUtil, formatTime as formatTimeUtil } from '@/li
 import FinancialSummary from '@/components/FinancialSummary'
 import EmailComposerModal from '@/components/EmailComposerModal'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import WaitlistPaymentPlanBadge from '@/components/WaitlistPaymentPlanBadge'
 import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 
 interface FinancialSummaryData {
@@ -66,6 +67,8 @@ interface WaitlistData {
   base_price: number
   discount_amount: number
   final_amount: number
+  use_payment_plan: boolean
+  payment_plan_eligible: boolean
 }
 
 interface AlternateData {
@@ -759,6 +762,10 @@ export default function CaptainRosterPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <div className="flex items-center gap-2">
+                            <WaitlistPaymentPlanBadge
+                              usePaymentPlan={waitlist.use_payment_plan}
+                              eligible={waitlist.payment_plan_eligible}
+                            />
                             <button
                               onClick={() => {
                                 setSelectedWaitlistEntry(waitlist)

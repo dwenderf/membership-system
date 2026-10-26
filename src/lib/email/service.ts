@@ -484,6 +484,8 @@ class EmailService {
     amountCharged: number
     paymentIntentId?: string
     discountApplied?: string
+    /** Payment-plan description (plan started, or chosen but unavailable); otherwise blank (#442). */
+    paymentPlanInfo?: string
   }) {
     return this.sendEmailImmediately({
       userId: options.userId,
@@ -501,6 +503,8 @@ class EmailService {
         purchaseDate: formatDate(new Date()), // Loops expects 'purchaseDate' not 'paymentDate'
         paymentIntentId: options.paymentIntentId || 'N/A',
         discountApplied: options.discountApplied || '',
+        // `amount` above is what was charged today (installment 1 on a payment plan)
+        paymentPlanInfo: options.paymentPlanInfo || '',
         dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/user/registrations`
       }
     })

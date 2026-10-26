@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation } from './refund-discount-utils'
+import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation, canSubmitDiscountRefund } from './refund-discount-utils'
 import { formatAmount } from '@/lib/format-utils'
 import { logger } from '@/lib/logging/logger'
 
@@ -278,11 +278,11 @@ export default function RefundModal({
 
         requestData.amount = amount
       } else if (refundType === 'discount_code') {
-        if (!discountValidation?.isValid) {
+        if (!canSubmitDiscountRefund({ validation: discountValidation, isValidating: isValidatingDiscount, code: discountCode, hasValidReason: true })) {
           setError('Please validate the discount code first')
           return
         }
-        requestData.discountValidation = discountValidation
+        requestData.discountValidation = discountValidation ?? undefined
       }
 
       // Create staging records
@@ -400,7 +400,7 @@ export default function RefundModal({
     if (refundType === 'proportional') {
       return isValidAmount() && hasValidReason
     } else {
-      return discountValidation?.isValid && hasValidReason
+      return canSubmitDiscountRefund({ validation: discountValidation, isValidating: isValidatingDiscount, code: discountCode, hasValidReason })
     }
   }
 

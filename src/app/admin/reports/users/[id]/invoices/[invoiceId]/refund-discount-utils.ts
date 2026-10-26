@@ -21,3 +21,19 @@ export function reusedCodeValidation(code: string) {
     error: `${code} was already applied to this payment, so it can't be applied again as a refund.`
   }
 }
+
+/**
+ * Whether Preview Refund may be submitted for a discount-code refund (#454). Disabled while the
+ * code is empty, pending (debounce or request in flight), invalid, or already applied.
+ */
+export function canSubmitDiscountRefund(args: {
+  validation: { isValid: boolean; alreadyApplied?: boolean } | null | undefined
+  isValidating: boolean
+  code: string
+  hasValidReason: boolean
+}): boolean {
+  const { validation, isValidating, code, hasValidReason } = args
+  if (!hasValidReason || isValidating || !code.trim() || !validation) return false
+  if (validation.alreadyApplied) return false
+  return validation.isValid === true
+}

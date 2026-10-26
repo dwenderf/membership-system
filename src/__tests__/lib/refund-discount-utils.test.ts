@@ -1,4 +1,4 @@
-import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation } from '@/app/admin/reports/users/[id]/invoices/[invoiceId]/refund-discount-utils'
+import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation, canSubmitDiscountRefund } from '@/app/admin/reports/users/[id]/invoices/[invoiceId]/refund-discount-utils'
 
 describe('refund discount utils (#454)', () => {
   it('returns no warning when no code was used', () => {
@@ -21,5 +21,25 @@ describe('refund discount utils (#454)', () => {
     const r = reusedCodeValidation('729BOARD50OFF')
     expect(r.isValid).toBe(false)
     expect(r.error).toMatch(/already applied to this payment/)
+  })
+
+  describe('canSubmitDiscountRefund (Preview Refund button)', () => {
+    const base = { isValidating: false, code: 'EXTRA25', hasValidReason: true }
+    it('is disabled while the already-applied rejection is showing', () => {
+      expect(canSubmitDiscountRefund({ ...base, validation: reusedCodeValidation('729BOARD50OFF') })).toBe(false)
+      expect(canSubmitDiscountRefund({ ...base, validation: { isValid: true, alreadyApplied: true } })).toBe(false)
+    })
+    it('is disabled for invalid or pending codes', () => {
+      expect(canSubmitDiscountRefund({ ...base, validation: { isValid: false } })).toBe(false)
+      expect(canSubmitDiscountRefund({ ...base, validation: null })).toBe(false)
+      expect(canSubmitDiscountRefund({ ...base, isValidating: true, validation: { isValid: true } })).toBe(false)
+      expect(canSubmitDiscountRefund({ ...base, code: '  ', validation: { isValid: true } })).toBe(false)
+    })
+    it('is disabled without a reason', () => {
+      expect(canSubmitDiscountRefund({ ...base, hasValidReason: false, validation: { isValid: true } })).toBe(false)
+    })
+    it('is enabled for a valid, settled code with a reason', () => {
+      expect(canSubmitDiscountRefund({ ...base, validation: { isValid: true } })).toBe(true)
+    })
   })
 })

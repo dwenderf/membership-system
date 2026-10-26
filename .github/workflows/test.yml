@@ -66,7 +66,6 @@ jobs:
         XERO_CLIENT_SECRET: placeholder_xero_client_secret
         XERO_REDIRECT_URI: https://placeholder.example.com/xero/callback
         XERO_SCOPES: placeholder_scopes
-        ADMIN_SECRET: placeholder_admin_secret
         CRON_SECRET: placeholder_cron_secret
         NEXT_PUBLIC_SITE_URL: https://placeholder.example.com
         NEXT_PUBLIC_APP_TIMEZONE: America/New_York

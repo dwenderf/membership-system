@@ -163,8 +163,7 @@ XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
 XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
 
-# Admin / Cron
-ADMIN_SECRET=your_random_admin_secret
+# Cron
 CRON_SECRET=your_random_cron_secret_for_cron_jobs
 
 # Application Configuration
@@ -1833,7 +1832,6 @@ Replace your-domain with:
 
 ```bash
 NEXT_PUBLIC_SITE_URL=https://your-domain.vercel.app
-ADMIN_SECRET=your_random_admin_secret
 CRON_SECRET=your_random_cron_secret_for_cron_jobs
 ```
 

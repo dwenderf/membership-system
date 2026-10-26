@@ -53,4 +53,10 @@ describe('refund discount utils (#454)', () => {
       isValidating: false, code: 'NEWCODE', hasValidReason: true
     })).toBe(false)
   })
+  it('#454: keeps Preview Refund disabled when the reuse lookup failed', () => {
+    expect(canSubmitDiscountRefund({
+      validation: { isValid: false },
+      isValidating: false, code: 'NEWCODE', hasValidReason: true
+    })).toBe(false)
+  })
 })

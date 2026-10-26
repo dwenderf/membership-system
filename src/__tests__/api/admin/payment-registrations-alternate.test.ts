@@ -51,4 +51,27 @@ describe('GET /api/admin/payments/[paymentId]/registrations (#454)', () => {
     expect(data.discountContextRegistrationId).toBe('reg-1')
     expect(data.appliedDiscountCodes).toEqual([{ id: 'c1', code: '729BOARD50OFF' }])
   })
+
+  it('reports an alternate selection code that is not on the original invoice', async () => {
+    const data = await run({
+      user_registrations: [{ data: [], error: null }],
+      alternate_selections: [{ data: [{ id: 'as1', discount_code_id: 'c-alt', alternate_registrations: { registration_id: 'reg-alt' } }], error: null }],
+      xero_invoices: [{ data: [{ id: 'inv' }], error: null }],
+      xero_invoice_line_items: [{ data: [], error: null }],
+      discount_codes: [{ data: [{ id: 'c-alt', code: 'ALT25' }], error: null }],
+    })
+    expect(data.discountContextRegistrationId).toBe('reg-alt')
+    expect(data.appliedDiscountCodes).toEqual([{ id: 'c-alt', code: 'ALT25' }])
+  })
+
+  it('reports codes used in an earlier refund (credit note) as well as the invoice', async () => {
+    const data = await run({
+      user_registrations: [{ data: [{ registration_id: 'reg-1' }], error: null }],
+      alternate_selections: [{ data: [], error: null }],
+      xero_invoices: [{ data: [{ id: 'inv' }, { id: 'cn-1' }], error: null }],
+      xero_invoice_line_items: [{ data: [{ discount_code_id: 'c1' }, { discount_code_id: 'c2' }], error: null }],
+      discount_codes: [{ data: [{ id: 'c1', code: 'CHECKOUT10' }, { id: 'c2', code: 'REFUND20' }], error: null }],
+    })
+    expect(data.appliedDiscountCodes.map((c: { code: string }) => c.code)).toEqual(['CHECKOUT10', 'REFUND20'])
+  })
 })

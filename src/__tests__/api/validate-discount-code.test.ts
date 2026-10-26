@@ -928,6 +928,20 @@ function mockOriginalInvoiceWithoutThisCode(mockSupabase: { from: jest.Mock }) {
       })
     })
   })
+  // earlier refund credit notes: none used this code
+  mockSupabase.from.mockReturnValueOnce({
+    select: jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockReturnValue({
+            eq: jest.fn().mockReturnValue({
+              in: jest.fn().mockResolvedValue({ data: [], error: null })
+            })
+          })
+        })
+      })
+    })
+  })
   mockSupabase.from.mockReturnValueOnce({
     select: jest.fn().mockReturnValue({
       eq: jest.fn().mockReturnValue({

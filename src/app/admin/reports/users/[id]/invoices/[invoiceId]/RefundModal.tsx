@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { appliedCodesWarningText, findAppliedCode, reusedCodeValidation, canSubmitDiscountRefund } from './refund-discount-utils'
 import { formatAmount } from '@/lib/format-utils'
 import { logger } from '@/lib/logging/logger'
@@ -26,6 +26,7 @@ interface DiscountValidation {
   error?: string
   alreadyApplied?: boolean
   missingOriginalInvoice?: boolean
+  reuseCheckFailed?: boolean
 }
 
 interface AppliedDiscountCode {
@@ -109,6 +110,18 @@ export default function RefundModal({
   const [paymentContext, setPaymentContext] = useState<PaymentRegistrationContext | null>(null)
   // Monotonic id of the latest discount validation request; older responses are ignored.
   const validationSeqRef = useRef(0)
+  // Uppercasing changes the controlled value, which makes React put the caret at the end.
+  // Remember the caret from the keystroke and put it back after that render.
+  const discountInputRef = useRef<HTMLInputElement>(null)
+  const pendingCaretRef = useRef<{ start: number | null; end: number | null } | null>(null)
+  useLayoutEffect(() => {
+    const caret = pendingCaretRef.current
+    const input = discountInputRef.current
+    pendingCaretRef.current = null
+    if (caret && input && document.activeElement === input && caret.start !== null && caret.end !== null) {
+      input.setSelectionRange(caret.start, caret.end)
+    }
+  }, [discountCode])
 
   // Discount-code refunds need a registration for season context. Regular/waitlist payments have a
   // user_registrations row; alternate selections are linked via alternate_selections (#454).
@@ -200,7 +213,10 @@ export default function RefundModal({
 
     const reused = findAppliedCode(trimmed, paymentContext?.appliedDiscountCodes)
     if (reused) {
-      if (seq === validationSeqRef.current) setDiscountValidation(reusedCodeValidation(reused.code))
+      if (seq === validationSeqRef.current) {
+        setDiscountValidation(reusedCodeValidation(reused.code))
+        setIsValidatingDiscount(false)
+      }
       return
     }
 
@@ -239,6 +255,9 @@ export default function RefundModal({
   useEffect(() => {
     const seq = ++validationSeqRef.current
     setDiscountValidation(null)
+    // A newer keystroke supersedes any request in flight, whose response will be dropped, so
+    // never leave the spinner stuck from it.
+    setIsValidatingDiscount(false)
     if (discountCode.trim() && refundType === 'discount_code') {
       const timeoutId = setTimeout(() => {
         validateDiscountCode(discountCode, seq)
@@ -563,10 +582,14 @@ export default function RefundModal({
                     <input
                       type="text"
                       id="discountCode"
+                      ref={discountInputRef}
                       value={discountCode}
-                      // Keep exactly what was typed (uppercased, same length so the caret stays put);
-                      // trimming happens at validation time.
-                      onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                      // Keep exactly what was typed, uppercased; trimming happens at validation time.
+                      // The caret is restored after render (see pendingCaretRef).
+                      onChange={(e) => {
+                        pendingCaretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
+                        setDiscountCode(e.target.value.toUpperCase())
+                      }}
                       autoComplete="off"
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter discount code (e.g., PRIDE100)"

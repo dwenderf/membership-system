@@ -28,15 +28,16 @@ const code = (c: string, pct: number) => ({
 
 /**
  * Queue: registration, discount code, original invoice, lines for this specific code,
- * then all discount lines (prior total).
+ * this code on earlier refund credit notes, then all discount lines (prior total).
  */
-function setup(newCode: ReturnType<typeof code>, priorLines: { line_amount: number }[], sameCodeLines: { id: string; line_amount: number }[]) {
+function setup(newCode: ReturnType<typeof code>, priorLines: { line_amount: number }[], sameCodeLines: { id: string; line_amount: number }[], refundLines: { id: string }[] = []) {
   mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin' } }, error: null })
   const queue = [
     chain({ data: { season_id: 's1' }, error: null }),
     chain({ data: newCode, error: null }),
     chain({ data: [{ id: 'inv-1' }], error: null }),
     chain({ data: sameCodeLines, error: null }),
+    chain({ data: refundLines, error: null }),
     chain({ data: priorLines, error: null }),
   ]
   mockSupabase.from.mockImplementation(() => queue.shift())
@@ -118,7 +119,7 @@ describe('#454 refund discount stacking', () => {
     })
 
     it('rejects when the original invoice discount lines cannot be read', async () => {
-      queue({ data: [{ id: 'inv-1' }], error: null }, [{ data: [], error: null }, { data: null, error: { message: 'boom' } }])
+      queue({ data: [{ id: 'inv-1' }], error: null }, [{ data: [], error: null }, { data: [], error: null }, { data: null, error: { message: 'boom' } }])
       expectMissing(await call('NEWCODE', 10000, 10000))
     })
 
@@ -129,6 +130,59 @@ describe('#454 refund discount stacking', () => {
         body: JSON.stringify({ code: 'NEWCODE', registrationId: 'reg', amount: 10000, isRefund: true })
       }))
       expectMissing(await res.json())
+    })
+  })
+
+  describe('reuse and lookup errors fail closed', () => {
+    function queueWith(lines: Result, refundLines?: Result) {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin' } }, error: null })
+      const q = [
+        chain({ data: { season_id: 's1' }, error: null }),
+        chain({ data: code('NEWCODE', 25), error: null }),
+        chain({ data: [{ id: 'inv-1' }], error: null }),
+        chain(lines),
+        ...(refundLines ? [chain(refundLines)] : []),
+        chain({ data: [], error: null }),
+      ]
+      mockSupabase.from.mockImplementation(() => q.shift())
+    }
+
+    it('rejects when the original-invoice reuse lookup errors', async () => {
+      queueWith({ data: null, error: { message: 'boom' } })
+      const data = await call('NEWCODE', 10000, 10000)
+      expect(data.isValid).toBe(false)
+      expect(data.reuseCheckFailed).toBe(true)
+      expect(data.discountAmount).toBeUndefined()
+    })
+
+    it('rejects when the earlier-refund reuse lookup errors', async () => {
+      queueWith({ data: [], error: null }, { data: null, error: { message: 'boom' } })
+      const data = await call('NEWCODE', 10000, 10000)
+      expect(data.isValid).toBe(false)
+      expect(data.reuseCheckFailed).toBe(true)
+    })
+
+    it('rejects a code already applied in an earlier refund on the same payment', async () => {
+      queueWith({ data: [], error: null }, { data: [{ id: 'cn-line-1' }], error: null })
+      const data = await call('NEWCODE', 10000, 7500)
+      expect(data.isValid).toBe(false)
+      expect(data.alreadyApplied).toBe(true)
+      expect(data.error).toContain('earlier refund')
+    })
+  })
+
+  describe('odd-cent rounding', () => {
+    it('rounds a percentage of an odd amount to the nearest cent', async () => {
+      setup(code('PCT15', 15), [], [])
+      const data = await call('PCT15', 9999, 9999) // 1499.85 -> 1500
+      expect(data.isValid).toBe(true)
+      expect(data.discountAmount).toBe(1500)
+    })
+
+    it('rounds half a cent up when stacking on an odd top-line price', async () => {
+      setup(code('HALF', 50), [{ line_amount: -1 }], []) // top-line 10001, 50% = 5000.5 -> 5001
+      const data = await call('HALF', 10000, 10000)
+      expect(data.discountAmount).toBe(5001)
     })
   })
 

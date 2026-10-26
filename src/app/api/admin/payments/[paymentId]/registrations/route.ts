@@ -28,7 +28,8 @@ async function getAppliedDiscountCodes(
     .from('xero_invoices')
     .select('id')
     .eq('payment_id', paymentId)
-    .eq('invoice_type', 'ACCREC')
+    // Original invoice plus earlier refund credit notes, so codes used in a prior refund are shown too.
+    .in('invoice_type', ['ACCREC', 'ACCRECCREDIT'])
     .in('sync_status', ['synced', 'pending'])
 
   const invoiceIds = (invoices || []).map((i: { id: string }) => i.id)

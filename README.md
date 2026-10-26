@@ -2458,25 +2458,47 @@ https://membership-system-git-[branch-name]-nycpha.vercel.app/api/stripe-webhook
 ```
 
 **Events to Send:**
-Select these specific events for each webhook:
+Subscribe each endpoint to these ten events. All are handled in `src/app/api/stripe-webhook/route.ts` except where noted.
 
-- `payment_intent.succeeded` - When payment completes successfully
-- `payment_intent.payment_failed` - When payment fails  
-- `payment_intent.canceled` - When payment is canceled (timeout/user abandonment)
-- `setup_intent.succeeded` - When a payment method setup completes successfully
-- `setup_intent.setup_failed` - When a payment method setup fails
-- `payment_method.detached` - When a payment method removed (user revokes payment setup)
-- `charge.refunded` - When a refund is processed (for refund system)
-- `charge.updated` - When balance transaction becomes available (for accurate fee tracking)
+| Event | What it drives in the code |
+| --- | --- |
+| `charge.refunded` | Re-fetches the charge with its refunds. For each refund: if it's failed/canceled, releases it (see `refund.failed`). If our `refunds` row is already `failed`/`cancelled`, it is left alone and no email is sent (out-of-order delivery). Otherwise it marks the row `completed` (conditional update), moves its Xero credit note and payment from `staged` to `pending` for batch sync, and stages the refund notification email. A refund made directly in Stripe gets a new `refunds` row and an error log asking for a manual Xero credit note. |
+| `charge.updated` | Once the balance transaction exists, records the Stripe fee on `payments.stripe_fee_amount` and the matching full-payment `xero_payments` staging row. |
+| `payment_intent.canceled` | **No handler.** Not in the event switch, so it's acknowledged with 200 and ignored. Keep it subscribed only if you want it in the Stripe event log. |
+| `payment_intent.payment_failed` | Marks the payment failed, for alternate selections and for general payments (user registrations/memberships `payment_status: 'failed'`), and runs the payment completion processor with `trigger_source: 'stripe_webhook_payment_failed'` (failure email, cleanup). |
+| `payment_intent.succeeded` | Marks the payment completed with its Stripe fee and charge ID, then branches on `metadata.purpose`: `waitlist_selection`, `alternate_selection`, `payment_plan_installment`, `payment_plan_early_payoff`, or a normal membership/registration purchase (marks it paid and runs the payment completion processor for Xero staging and emails). |
+| `payment_method.detached` | Clears the saved card from the user (`clearSavedPaymentMethod`), removes their alternate selections, and stages the "payment method removed" email. A no-op if `/api/remove-payment-method` already cleared it. |
+| `setup_intent.setup_failed` | Sets `users.setup_intent_status = 'failed'`. |
+| `setup_intent.succeeded` | Saves the card on the user (`stripe_payment_method_id`, `stripe_setup_intent_id`, `setup_intent_status = 'succeeded'`, and `stripe_customer_id` when present). |
+| `refund.failed` | Releases the refund: sets our `refunds` row to `failed`, which frees its discount code for reuse, and sets its unsynced (`staged`/`pending`/`failed`) credit note and Xero payment to `ignore`. If the payment had been marked `refunded`, it is restored to `completed` (so the refund can be retried) unless the remaining completed refunds still cover the full amount. Its `refunded` registrations go back to `paid` when no other live refund remains. If the credit note is already synced to Xero, it logs an error asking for a manual void. Any DB error returns 500 so Stripe retries. Every write is conditional, so retries converge without repeating anything. |
+| `refund.updated` | Same release as `refund.failed` when the refund's status is `failed` (sets `failed`) or `canceled` (sets `cancelled`). Other statuses are ignored. |
+
+**Also handled, but not in the list above:** `charge.refund.updated` uses the same handler as `refund.updated`. You don't need to subscribe to it: `refund.updated` already covers the same changes, and subscribing to both just delivers each change twice (harmless, since the handler is idempotent).
+
+**Setup: sandbox (test mode) first**
+
+1. Stripe Dashboard, in **test mode** → Developers → Webhooks → **Add endpoint**.
+2. Endpoint URL: `https://membership-system-nycpha-preview.vercel.app/api/stripe-webhook` (or a feature-branch preview URL, see above).
+3. Select the ten events in the table above.
+4. After saving, reveal the endpoint's **Signing secret** and set it as `STRIPE_WEBHOOK_SECRET` in Vercel → Project → Settings → Environment Variables for **Preview/Development**. Redeploy so it takes effect. Never commit or paste the value.
+5. Verify:
+   - Use **Send test event** on the endpoint (for example `refund.updated`). The delivery should show HTTP 200. A 400 means the signing secret doesn't match.
+   - Or run `stripe listen --forward-to localhost:3000/api/stripe-webhook` locally and `stripe trigger charge.refunded`. Use the `whsec_...` secret that `stripe listen` prints as your local `STRIPE_WEBHOOK_SECRET`.
+   - End to end: make a test payment, refund it from the admin UI, and check that the refund becomes `completed` and its credit note moves to `pending`.
+
+**Setup: production (live mode)**
+
+1. Switch the Dashboard to **live mode** → Developers → Webhooks → **Add endpoint** (or edit the existing one).
+2. Endpoint URL: `https://my.nycpha.org/api/stripe-webhook`.
+3. Select the same ten events.
+4. Set that endpoint's signing secret as `STRIPE_WEBHOOK_SECRET` for the **Production** environment in Vercel, then redeploy.
+5. Verify: the endpoint page in Stripe should show recent deliveries returning 200 with no failures. Check the Vercel function logs for `/api/stripe-webhook` after the first real payment or refund.
 
 **Important:**
 
 - Each webhook endpoint gets its own signing secret (`STRIPE_WEBHOOK_SECRET`)
 - Use production webhook only with live Stripe keys
 - Use development webhook with test Stripe keys
-- Select the events listed above (payment_intent.*, setup_intent.*, charge.refunded, charge.updated) for each webhook
-
-**Note:** The `payment_intent.canceled` event helps track abandoned payments for analytics and cleanup, though the webhook handler will need to be updated to process this event.
 
 ##### **Xero OAuth Configuration**
 

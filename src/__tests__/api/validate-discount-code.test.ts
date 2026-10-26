@@ -934,9 +934,7 @@ function mockOriginalInvoiceWithoutThisCode(mockSupabase: { from: jest.Mock }) {
       eq: jest.fn().mockReturnValue({
         eq: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              in: jest.fn().mockResolvedValue({ data: [], error: null })
-            })
+            eq: jest.fn().mockResolvedValue({ data: [], error: null })
           })
         })
       })

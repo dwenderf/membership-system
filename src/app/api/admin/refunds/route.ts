@@ -193,12 +193,12 @@ export async function POST(request: NextRequest) {
       })
 
     } catch (stripeError) {
-      // Update refund record to failed status
+      // Update refund record to failed status (no failure_reason column; the reason is logged below)
       await supabase
         .from('refunds')
         .update({
           status: 'failed',
-          failure_reason: stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error',
+          updated_at: new Date().toISOString(),
         })
         .eq('id', refundRecord.id)
 

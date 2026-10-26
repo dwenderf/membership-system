@@ -72,11 +72,32 @@ describe('refund preview discount guards (#454)', () => {
   })
 
   it('rejects a code used in an earlier refund on the payment', async () => {
-    setup([ok([{ id: 'inv' }]), ok([]), ok([{ id: 'cn-line' }])])
+    setup([ok([{ id: 'inv' }]), ok([]), ok([line('synced', null)])])
     const { status, body } = await preview()
     expect(status).toBe(400)
     expect(body.error).toContain('earlier refund')
     expect(staging).not.toHaveBeenCalled()
+  })
+
+  // #456 review: used once a refund is initiated, freed only when it failed/was cancelled.
+  it.each([
+    ['staged refund', 'staged', 'pending', false],
+    ['pending refund', 'pending', 'pending', false],
+    ['credit note not yet synced', 'failed', 'completed', false],
+    ['failed refund', 'ignore', 'failed', true],
+    ['canceled refund', 'ignore', 'cancelled', true],
+  ])('earlier %s', async (_n, sync, refundStatus, freed) => {
+    staging.mockResolvedValue('stg')
+    setup([ok([{ id: 'inv' }]), ok([]), ok([line(sync as string, 'r1')]), ok([{ id: 'r1', status: refundStatus }]), ok({ id: 'stg', total_amount: 3500, xero_invoice_line_items: [] })])
+    const { status, body } = await preview()
+    if (freed) {
+      expect(status).toBe(200)
+      expect(staging).toHaveBeenCalledTimes(1)
+    } else {
+      expect(status).toBe(400)
+      expect(body.error).toContain('earlier refund')
+      expect(staging).not.toHaveBeenCalled()
+    }
   })
 
   it('fails closed when the reuse lookup errors', async () => {
@@ -96,3 +117,7 @@ describe('refund preview discount guards (#454)', () => {
     expect(staging).toHaveBeenCalledTimes(1)
   })
 })
+
+function line(sync_status: string, refund_id: string | null) {
+  return { id: 'cn-line', xero_invoices: { payment_id: 'pay', invoice_type: 'ACCRECCREDIT', sync_status, staging_metadata: { refund_id } } }
+}

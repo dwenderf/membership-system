@@ -526,19 +526,9 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // 3. xero_invoices returns no invoice
-    mockSupabase.from.mockReturnValueOnce({
-      select: jest.fn().mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            in: jest.fn().mockResolvedValue({
-              data: [],
-              error: null
-            })
-          })
-        })
-      })
-    })
+    // 3. xero_invoices returns the original invoice; the code was never applied at checkout
+    //    (#454 (b): a missing original invoice now rejects the refund)
+    mockOriginalInvoiceWithoutThisCode(mockSupabase)
 
     // 4. payments query resolves the paying customer
     mockSupabase.from.mockReturnValueOnce({
@@ -605,19 +595,9 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // 3. xero_invoices returns no invoice (code was never applied at checkout)
-    mockSupabase.from.mockReturnValueOnce({
-      select: jest.fn().mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            in: jest.fn().mockResolvedValue({
-              data: [],
-              error: null
-            })
-          })
-        })
-      })
-    })
+    // 3. xero_invoices returns the original invoice; the code was never applied at checkout
+    //    (#454 (b): a missing original invoice now rejects the refund)
+    mockOriginalInvoiceWithoutThisCode(mockSupabase)
 
     // 4. payments query resolves the paying customer
     mockSupabase.from.mockReturnValueOnce({
@@ -711,19 +691,9 @@ describe('/api/validate-discount-code POST', () => {
       })
     })
 
-    // 3. xero_invoices returns no invoice (code was never applied at checkout)
-    mockSupabase.from.mockReturnValueOnce({
-      select: jest.fn().mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            in: jest.fn().mockResolvedValue({
-              data: [],
-              error: null
-            })
-          })
-        })
-      })
-    })
+    // 3. xero_invoices returns the original invoice; the code was never applied at checkout
+    //    (#454 (b): a missing original invoice now rejects the refund)
+    mockOriginalInvoiceWithoutThisCode(mockSupabase)
 
     // 4. payments query resolves the paying customer
     mockSupabase.from.mockReturnValueOnce({
@@ -937,3 +907,32 @@ describe('/api/validate-discount-code POST', () => {
     )
   })
 })
+
+// #454 (b): original invoice exists, no line for this code, no prior discounts.
+function mockOriginalInvoiceWithoutThisCode(mockSupabase: { from: jest.Mock }) {
+  mockSupabase.from.mockReturnValueOnce({
+    select: jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue({ data: [{ id: 'inv-orig' }], error: null })
+        })
+      })
+    })
+  })
+  mockSupabase.from.mockReturnValueOnce({
+    select: jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          eq: jest.fn().mockResolvedValue({ data: [], error: null })
+        })
+      })
+    })
+  })
+  mockSupabase.from.mockReturnValueOnce({
+    select: jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        eq: jest.fn().mockResolvedValue({ data: [], error: null })
+      })
+    })
+  })
+}

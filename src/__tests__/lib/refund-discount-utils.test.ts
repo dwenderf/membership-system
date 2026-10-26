@@ -42,4 +42,15 @@ describe('refund discount utils (#454)', () => {
       expect(canSubmitDiscountRefund({ ...base, validation: { isValid: true } })).toBe(true)
     })
   })
+  it('#454 (b): keeps Preview Refund disabled when the original invoice is missing', () => {
+    expect(canSubmitDiscountRefund({
+      validation: { isValid: false, missingOriginalInvoice: true },
+      isValidating: false, code: 'NEWCODE', hasValidReason: true
+    })).toBe(false)
+    // defensive: even if a response were marked valid, a missing invoice still blocks
+    expect(canSubmitDiscountRefund({
+      validation: { isValid: true, missingOriginalInvoice: true },
+      isValidating: false, code: 'NEWCODE', hasValidReason: true
+    })).toBe(false)
+  })
 })

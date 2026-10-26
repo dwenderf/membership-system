@@ -25,6 +25,7 @@ interface DiscountValidation {
   partialDiscountMessage?: string
   error?: string
   alreadyApplied?: boolean
+  missingOriginalInvoice?: boolean
 }
 
 interface AppliedDiscountCode {
@@ -611,7 +612,13 @@ export default function RefundModal({
                       </div>
                     )}
                     
-                    {discountValidation?.isValid === false && discountCode && (
+                    {discountValidation?.missingOriginalInvoice && discountCode && (
+                      <div role="alert" className="mt-2 p-3 text-sm bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-md">
+                        <strong>Warning:</strong> {discountValidation.error}
+                      </div>
+                    )}
+
+                    {discountValidation?.isValid === false && !discountValidation.missingOriginalInvoice && discountCode && (
                       <div className="mt-2 text-sm text-red-700 flex items-center">
                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />

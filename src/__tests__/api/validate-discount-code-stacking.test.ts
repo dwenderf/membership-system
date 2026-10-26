@@ -89,6 +89,49 @@ describe('#454 refund discount stacking', () => {
     expect(data.discountAmount).toBe(2500)
   })
 
+  describe('#454 (b): original invoice missing => no paid-amount fallback', () => {
+    function queue(invoiceResult: Result, extra: Result[] = []) {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'admin' } }, error: null })
+      const q = [
+        chain({ data: { season_id: 's1' }, error: null }),
+        chain({ data: code('NEWCODE', 25), error: null }),
+        chain(invoiceResult),
+        ...extra.map(chain),
+      ]
+      mockSupabase.from.mockImplementation(() => q.shift())
+    }
+    const expectMissing = (data: Record<string, unknown>) => {
+      expect(data.isValid).toBe(false)
+      expect(data.missingOriginalInvoice).toBe(true)
+      expect(data.discountAmount).toBeUndefined()
+      expect(data.error).toContain('original invoice')
+    }
+
+    it('rejects when no original invoice is found', async () => {
+      queue({ data: [], error: null })
+      expectMissing(await call('NEWCODE', 10000, 10000))
+    })
+
+    it('rejects when the invoice query errors', async () => {
+      queue({ data: null, error: { message: 'boom' } })
+      expectMissing(await call('NEWCODE', 10000, 10000))
+    })
+
+    it('rejects when the original invoice discount lines cannot be read', async () => {
+      queue({ data: [{ id: 'inv-1' }], error: null }, [{ data: [], error: null }, { data: null, error: { message: 'boom' } }])
+      expectMissing(await call('NEWCODE', 10000, 10000))
+    })
+
+    it('rejects when no paymentId is sent', async () => {
+      queue({ data: [], error: null })
+      const res = await POST(new NextRequest('http://localhost/api/validate-discount-code', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'NEWCODE', registrationId: 'reg', amount: 10000, isRefund: true })
+      }))
+      expectMissing(await res.json())
+    })
+  })
+
   it('capRefundDiscount', () => {
     expect(capRefundDiscount(21000, 14000)).toBe(14000)
     expect(capRefundDiscount(21000, 14000, 3000)).toBe(3000)

@@ -24,16 +24,17 @@ export function reusedCodeValidation(code: string) {
 
 /**
  * Whether Preview Refund may be submitted for a discount-code refund (#454). Disabled while the
- * code is empty, pending (debounce or request in flight), invalid, or already applied.
+ * code is empty, pending (debounce or request in flight), invalid, already applied, or the
+ * original invoice is missing.
  */
 export function canSubmitDiscountRefund(args: {
-  validation: { isValid: boolean; alreadyApplied?: boolean } | null | undefined
+  validation: { isValid: boolean; alreadyApplied?: boolean; missingOriginalInvoice?: boolean } | null | undefined
   isValidating: boolean
   code: string
   hasValidReason: boolean
 }): boolean {
   const { validation, isValidating, code, hasValidReason } = args
   if (!hasValidReason || isValidating || !code.trim() || !validation) return false
-  if (validation.alreadyApplied) return false
+  if (validation.alreadyApplied || validation.missingOriginalInvoice) return false
   return validation.isValid === true
 }

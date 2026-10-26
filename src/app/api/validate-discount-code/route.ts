@@ -33,8 +33,12 @@ export interface DiscountValidationResult {
   isPartialDiscount?: boolean // True when discount was capped by season limit
   partialDiscountMessage?: string // Explanation of partial discount
   error?: string
-  alreadyApplied?: boolean // True when the code was already applied to the original payment
+  alreadyApplied?: boolean
+  missingOriginalInvoice?: boolean // True when the original ACCREC invoice can't be found (#454 (b)) // True when the code was already applied to the original payment
 }
+
+export const MISSING_ORIGINAL_INVOICE_ERROR =
+  "This refund can't be processed: the original invoice for this payment is missing, so the full price can't be determined."
 
 export async function POST(request: NextRequest) {
   try {
@@ -158,7 +162,20 @@ export async function POST(request: NextRequest) {
       // i.e. the refund never exceeds what was paid minus prior refunds.
       let priorDiscountTotal = 0
 
-      if (paymentId) {
+      // #454 decision (b): the top-line price comes from the original invoice. Without it the refund
+      // can't be calculated, so reject rather than falling back to the amount paid.
+      const missingInvoice = () => NextResponse.json({
+        isValid: false,
+        missingOriginalInvoice: true,
+        error: MISSING_ORIGINAL_INVOICE_ERROR
+      })
+
+      if (!paymentId) {
+        logger.logPaymentProcessing('discount-refund-missing-payment-id', 'Missing paymentId for discount refund', { code: discountCode.code }, 'error')
+        return missingInvoice()
+      }
+
+      {
         // Query xero_invoices filtering strictly by payment_id, invoice_type = 'ACCREC', and sync_status IN ('synced', 'pending')
         const { data: originalInvoices, error: invoiceError } = await supabase
           .from('xero_invoices')
@@ -174,6 +191,11 @@ export async function POST(request: NextRequest) {
         if (originalInvoices && originalInvoices.length > 1) {
           logger.logPaymentProcessing('discount-refund-multiple-invoices', 'Multiple synced/pending ACCREC invoices found for payment', { paymentId }, 'error')
           return NextResponse.json({ isValid: false, error: 'Multiple original invoices found for payment' })
+        }
+
+        if (invoiceError || !originalInvoices || originalInvoices.length === 0) {
+          logger.logPaymentProcessing('discount-refund-original-invoice-missing', 'Original invoice not found for discount refund', { paymentId, code: discountCode.code }, 'warn')
+          return missingInvoice()
         }
 
         if (originalInvoices && originalInvoices.length === 1) {
@@ -208,7 +230,12 @@ export async function POST(request: NextRequest) {
 
           // A different code: total any discounts already on the invoice so the new percentage is
           // computed on the top-line price.
-          priorDiscountTotal = await sumPriorDiscounts(supabase, xeroInvoiceId)
+          const prior = await sumPriorDiscounts(supabase, xeroInvoiceId)
+          if (prior === null) {
+            logger.logPaymentProcessing('discount-refund-prior-discounts-unreadable', 'Could not read original invoice discount lines for refund', { xeroInvoiceId }, 'error')
+            return missingInvoice()
+          }
+          priorDiscountTotal = prior
         }
       }
 
@@ -395,17 +422,17 @@ export function capRefundDiscount(requested: number, paidAmount: number, availab
   return Math.max(0, Math.min(requested, cap))
 }
 
-/** Sum (in cents, positive) of every discount line on the original invoice; 0 if it can't be read. */
-async function sumPriorDiscounts(supabase: Awaited<ReturnType<typeof createClient>>, xeroInvoiceId: string): Promise<number> {
+/** Sum (in cents, positive) of every discount line on the original invoice; null if it can't be read. */
+async function sumPriorDiscounts(supabase: Awaited<ReturnType<typeof createClient>>, xeroInvoiceId: string): Promise<number | null> {
   try {
     const { data, error } = await supabase
       .from('xero_invoice_line_items')
       .select('line_amount')
       .eq('xero_invoice_id', xeroInvoiceId)
       .eq('line_item_type', 'discount')
-    if (error || !Array.isArray(data)) return 0
+    if (error || !Array.isArray(data)) return null
     return data.reduce((sum: number, row: { line_amount: number | null }) => sum + Math.abs(row.line_amount || 0), 0)
   } catch {
-    return 0
+    return null
   }
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
@@ -51,6 +52,31 @@ export interface PaymentPlanSummary {
   nextPaymentDate: string | null
   status: string
   createdAt: string | null // From xero_invoices.created_at (should always exist, but nullable for safety)
+}
+
+/**
+ * Stripe idempotency key for an early payoff charge (#452). Derived from the payoff state, not
+ * from per-request ids, so two submits for the same state (double click, two tabs) send the same
+ * key and Stripe refuses to create a second charge. Includes the card so a retry with a new card
+ * after a decline is not answered with the cached decline. `priorAttempts` (the number of rolled-back
+ * payoff attempts on the invoice) changes after every rollback, so retrying with the same card
+ * gets a fresh key: rollback restores the same planned rows, and reusing the old key with a new
+ * metadata.paymentId would make Stripe reject the retry. Ids are hashed to stay under Stripe's
+ * 255-char limit.
+ */
+export function earlyPayoffIdempotencyKey(
+  xeroInvoiceId: string,
+  paymentMethodId: string,
+  amount: number,
+  plannedPaymentIds: string[],
+  priorAttempts: number
+): string {
+  const idsHash = createHash('sha256').update([...plannedPaymentIds].sort().join(',')).digest('hex').slice(0, 32)
+  return `early-payoff:${xeroInvoiceId}:${paymentMethodId}:${amount}:${idsHash}:a${priorAttempts}`
+}
+
+function isStripeCardError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { type?: string }).type === 'StripeCardError'
 }
 
 export class PaymentPlanService {
@@ -438,6 +464,9 @@ export class PaymentPlanService {
     xeroInvoiceId: string,
     userId: string
   ): Promise<{ success: boolean; paymentId?: string; totalPaid?: number; error?: string }> {
+    // Set once this attempt has cancelled installments / created records, so a declined charge
+    // can put them back (#452).
+    let rollbackState: { cancelledIds: string[]; stagedPaymentId?: string; paymentId?: string } | null = null
     try {
       const adminSupabase = createAdminClient()
 
@@ -520,6 +549,20 @@ export class PaymentPlanService {
        * Each step has defensive error handling with critical logging for admin recovery.
        */
 
+      // Rolled-back payoff attempts so far (staged rows set to 'cancelled' by rollbackEarlyPayoff);
+      // part of the idempotency key so a retry after a decline isn't rejected by Stripe.
+      const { data: priorAttemptRows, error: priorAttemptsError } = await adminSupabase
+        .from('xero_payments')
+        .select('id')
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('payment_type', 'full')
+        .eq('sync_status', 'cancelled')
+        .eq('staging_metadata->>early_payoff', 'true')
+      if (priorAttemptsError) {
+        return { success: false, error: 'Error checking previous payoff attempts' }
+      }
+      const priorAttempts = priorAttemptRows?.length ?? 0
+
       // Step 1: Cancel all planned payments (mark as superseded)
       const { error: cancelError } = await adminSupabase
         .from('xero_payments')
@@ -539,6 +582,7 @@ export class PaymentPlanService {
         )
         return { success: false, error: 'Failed to cancel planned payments' }
       }
+      rollbackState = { cancelledIds: plannedPayments.map(p => p.id) }
 
       // Step 2: Create staged xero_payment for the payoff amount
       const { data: stagedPayment, error: stagedPaymentError } = await adminSupabase
@@ -579,6 +623,7 @@ export class PaymentPlanService {
         )
         return { success: false, error: 'Failed to create staged payment record' }
       }
+      rollbackState.stagedPaymentId = stagedPayment.id
 
       // Step 3: Create payment record BEFORE charging (webhook will update to completed)
       const { data: paymentRecord, error: paymentRecordError } = await adminSupabase
@@ -609,6 +654,7 @@ export class PaymentPlanService {
         )
         return { success: false, error: 'Failed to create payment record' }
       }
+      rollbackState.paymentId = paymentRecord.id
 
       // Step 4: Charge Stripe (webhook will handle completion)
       const paymentIntent = await getStripe().paymentIntents.create({
@@ -629,6 +675,16 @@ export class PaymentPlanService {
           seasonName: seasonName
         },
         description: `Early Payoff - ${registrationName} ${seasonName}`
+      }, {
+        // Same payoff state (invoice, card, amount, set of planned rows) -> same key, so a
+        // double-submit is deduplicated by Stripe instead of charging twice (#452).
+        idempotencyKey: earlyPayoffIdempotencyKey(
+          xeroInvoiceId,
+          user.stripe_payment_method_id,
+          remainingBalance,
+          plannedPayments.map(p => p.id),
+          priorAttempts
+        )
       })
 
       // Update payment record with stripe_payment_intent_id
@@ -644,6 +700,17 @@ export class PaymentPlanService {
           { xeroInvoiceId, paymentIntentId: paymentIntent.id, status: paymentIntent.status },
           'error'
         )
+        // requires_action / requires_payment_method etc.: the customer can't complete 3DS
+        // off-session, so cancel the intent and restore the plan. 'processing' may still succeed
+        // (the webhook completes it), so leave that one alone.
+        if (paymentIntent.status !== 'processing') {
+          try {
+            await getStripe().paymentIntents.cancel(paymentIntent.id)
+          } catch {
+            // best effort; an uncancelled requires_action intent never captures funds
+          }
+          await PaymentPlanService.rollbackEarlyPayoff(adminSupabase, rollbackState, `Early payoff failed: ${paymentIntent.status}`)
+        }
         return {
           success: false,
           error: `Payment failed: ${paymentIntent.status}`
@@ -669,6 +736,25 @@ export class PaymentPlanService {
         totalPaid: remainingBalance
       }
     } catch (error) {
+      // A declined card (StripeCardError) means no charge happened: restore the plan. Any other
+      // error after the charge started (network, idempotency conflict from a concurrent
+      // double-submit) has an unknown or someone-else's outcome, so leave the records alone.
+      if (rollbackState && isStripeCardError(error)) {
+        try {
+          await PaymentPlanService.rollbackEarlyPayoff(
+            createAdminClient(),
+            rollbackState,
+            `Early payoff declined: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } catch (rollbackError) {
+          logger.logPaymentProcessing(
+            'payment-plan-early-payoff-rollback-error',
+            'CRITICAL: early payoff declined but rollback failed - ADMIN INTERVENTION REQUIRED',
+            { xeroInvoiceId, rollbackState, error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError) },
+            'error'
+          )
+        }
+      }
       logger.logPaymentProcessing(
         'payment-plan-early-payoff-exception',
         'Exception processing early payoff',
@@ -683,6 +769,50 @@ export class PaymentPlanService {
         error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
+  }
+
+  /**
+   * Undo an early payoff attempt whose charge did not happen (#452): installments this attempt
+   * cancelled go back to 'planned', the staged 'full' row is cancelled (not 'failed', which would
+   * flip payment_plan_summary.status to failed) with the reason recorded, and the payment record
+   * is marked failed.
+   */
+  static async rollbackEarlyPayoff(
+    adminSupabase: ReturnType<typeof createAdminClient>,
+    state: { cancelledIds: string[]; stagedPaymentId?: string; paymentId?: string },
+    reason: string
+  ): Promise<void> {
+    if (state.cancelledIds.length > 0) {
+      const { error } = await adminSupabase
+        .from('xero_payments')
+        .update({ sync_status: 'planned', failure_reason: null })
+        .in('id', state.cancelledIds)
+        .eq('sync_status', 'cancelled')
+        .eq('failure_reason', 'Superseded by early payoff payment')
+      if (error) throw new Error(`Failed to restore installments: ${error.message}`)
+    }
+    if (state.stagedPaymentId) {
+      const { error } = await adminSupabase
+        .from('xero_payments')
+        .update({ sync_status: 'cancelled', failure_reason: reason })
+        .eq('id', state.stagedPaymentId)
+        .eq('sync_status', 'staged')
+      if (error) throw new Error(`Failed to cancel staged payoff: ${error.message}`)
+    }
+    if (state.paymentId) {
+      const { error } = await adminSupabase
+        .from('payments')
+        .update({ status: 'failed' })
+        .eq('id', state.paymentId)
+        .eq('status', 'pending')
+      if (error) throw new Error(`Failed to mark payment failed: ${error.message}`)
+    }
+    logger.logPaymentProcessing(
+      'payment-plan-early-payoff-rolled-back',
+      'Early payoff charge did not go through; installments restored',
+      { ...state, reason },
+      'warn'
+    )
   }
 
   /**

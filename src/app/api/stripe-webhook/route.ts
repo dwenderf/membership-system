@@ -660,14 +660,55 @@ async function restorePaymentAfterReleasedRefund(
     logger.logPaymentProcessing('refund-failed-payment-restored', `Payment ${payment.id} restored to completed after refund ${refund.id} was released`, { paymentId: payment.id, refundId: refund.id, remainingCompletedRefunds: completedTotal }, 'info')
   }
 
-  // Registrations: only put back when no other live refund on this payment (which may itself
-  // have marked them refunded) remains.
-  if (remaining.length === 0) {
+  // Registrations: only put back when no other live refund that cancels registrations remains.
+  // Discount-code refunds never mark registrations refunded, so they don't block the restore.
+  // A remaining refund whose type we can't confirm blocks it (conservative).
+  let blocking = remaining
+  if (remaining.length > 0) {
+    const { data: notes, error: notesError } = await supabase
+      .from('xero_invoices')
+      .select('staging_metadata')
+      .in('staging_metadata->>refund_id', remaining.map(r => r.id))
+    if (notesError) fail('refund-failed-remaining-type-error', 'Failed to read refund types for remaining refunds', { refundId: refund.id, error: notesError.message })
+    const discountOnly = new Set(
+      ((notes || []) as { staging_metadata: { refund_id?: string; refund_type?: string } | null }[])
+        .filter(n => n.staging_metadata?.refund_type === 'discount_code' && n.staging_metadata?.refund_id)
+        .map(n => n.staging_metadata!.refund_id as string)
+    )
+    blocking = remaining.filter(r => !discountOnly.has(r.id))
+  }
+  if (blocking.length > 0) return
+
+  const { data: regs, error: regsError } = await supabase
+    .from('user_registrations')
+    .select('id, user_id, registration_id')
+    .eq('payment_id', payment.id)
+    .eq('payment_status', 'refunded')
+  if (regsError) fail('refund-failed-registration-lookup-error', 'Failed to read registrations for released refund', { refundId: refund.id, paymentId: payment.id, error: regsError.message })
+
+  for (const reg of (regs || []) as { id: string; user_id: string; registration_id: string }[]) {
+    const skip = (reason: string) => logger.logPaymentProcessing('refund-failed-registration-restore-skipped',
+      `Registration ${reg.id} not restored to paid: member has a newer active registration`,
+      { refundId: refund.id, paymentId: payment.id, userRegistrationId: reg.id, userId: reg.user_id, registrationId: reg.registration_id, reason }, 'warn')
+
+    // Guard user_registrations_active_unique (user_id, registration_id) WHERE payment_status = 'paid'.
+    const { data: conflict, error: conflictError } = await supabase
+      .from('user_registrations')
+      .select('id')
+      .eq('user_id', reg.user_id)
+      .eq('registration_id', reg.registration_id)
+      .eq('payment_status', 'paid')
+      .maybeSingle()
+    if (conflictError) fail('refund-failed-registration-conflict-error', 'Failed to check for an active registration', { refundId: refund.id, userRegistrationId: reg.id, error: conflictError.message })
+    if (conflict) { skip('active registration exists'); continue }
+
     const { error: regError } = await supabase
       .from('user_registrations')
       .update({ payment_status: 'paid', refunded_at: null })
-      .eq('payment_id', payment.id)
+      .eq('id', reg.id)
       .eq('payment_status', 'refunded')
+    // Backstop for a race between the check and the update: never retry forever on the index.
+    if ((regError as { code?: string } | null)?.code === '23505') { skip('unique violation (23505)'); continue }
     if (regError) fail('refund-failed-registration-restore-error', 'Failed to restore registrations after released refund', { refundId: refund.id, paymentId: payment.id, error: regError.message })
   }
 }

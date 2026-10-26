@@ -6,6 +6,18 @@ jest.mock('@/lib/supabase/server', () => ({ createClient: jest.fn() }))
 jest.mock('@/lib/logging/logger', () => ({ logger: { logPaymentProcessing: jest.fn() } }))
 jest.mock('@/lib/xero/staging', () => ({ xeroStagingManager: { createRefundStaging: jest.fn() } }))
 
+jest.mock('@/lib/refunds/discount-refund-guards', () => ({
+  ...jest.requireActual('@/lib/refunds/discount-refund-guards'),
+  resolvePaymentSeasonId: jest.fn(),
+}))
+jest.mock('@/lib/services/discount-limit-service', () => ({
+  ...jest.requireActual('@/lib/services/discount-limit-service'),
+  checkSeasonalDiscountLimit: jest.fn(),
+}))
+import { resolvePaymentSeasonId } from '@/lib/refunds/discount-refund-guards'
+import { checkSeasonalDiscountLimit } from '@/lib/services/discount-limit-service'
+const seasonMock = resolvePaymentSeasonId as jest.Mock
+const limitMock = checkSeasonalDiscountLimit as jest.Mock
 import { POST } from '@/app/api/admin/refunds/preview/route'
 import { createClient } from '@/lib/supabase/server'
 import { xeroStagingManager } from '@/lib/xero/staging'
@@ -26,7 +38,7 @@ const staging = xeroStagingManager.createRefundStaging as jest.Mock
 function setup(rest: Result[]) {
   const q = [
     ok({ is_admin: true }),                         // users
-    ok({ id: 'pay', status: 'completed', final_amount: 14000 }), // payments
+    ok({ id: 'pay', user_id: 'cust', status: 'completed', final_amount: 14000 }), // payments
     ok([{ id: 'ur' }]),                             // user_registrations
     ok([]),                                         // refunds
     ...rest,
@@ -52,7 +64,12 @@ async function preview() {
 }
 
 describe('refund preview discount guards (#454)', () => {
-  beforeEach(() => staging.mockReset())
+  beforeEach(() => {
+    staging.mockReset()
+    seasonMock.mockReset().mockResolvedValue({ status: 'ok', seasonId: 's1' })
+    limitMock.mockReset().mockImplementation((_s: unknown, _u: string, _c: string, _season: string, requested: number) =>
+      Promise.resolve({ originalAmount: requested, finalAmount: requested, isPartialDiscount: false, isAtLimit: false }))
+  })
 
   it('rejects when the original invoice is missing, before staging', async () => {
     setup([ok([])])
@@ -115,6 +132,61 @@ describe('refund preview discount guards (#454)', () => {
     expect(status).toBe(200)
     expect(body.success).toBe(true)
     expect(staging).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('refund preview seasonal limit (server re-check)', () => {
+  beforeEach(() => {
+    staging.mockReset().mockResolvedValue('stg')
+    seasonMock.mockReset().mockResolvedValue({ status: 'ok', seasonId: 's1' })
+    limitMock.mockReset()
+  })
+  const unusedCode = () => setup([ok([{ id: 'inv' }]), ok([]), ok([]), ok({ id: 'stg', total_amount: 3500, xero_invoice_line_items: [] })])
+
+  it('stages when the amount is within the remaining seasonal room', async () => {
+    unusedCode()
+    limitMock.mockResolvedValue({ originalAmount: 3500, finalAmount: 3500, isPartialDiscount: false, isAtLimit: false })
+    const { status } = await preview()
+    expect(status).toBe(200)
+    expect(limitMock).toHaveBeenCalledWith(expect.anything(), 'cust', 'c1', 's1', 3500)
+    expect(staging).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a client amount above the remaining seasonal room (bypass)', async () => {
+    unusedCode()
+    limitMock.mockResolvedValue({ originalAmount: 3500, finalAmount: 1000, isPartialDiscount: true, isAtLimit: false })
+    const { status, body } = await preview()
+    expect(status).toBe(400)
+    expect(body.seasonalLimitExceeded).toBe(true)
+    expect(body.error).toContain('remaining seasonal discount of $10.00')
+    expect(staging).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the customer is already at the limit', async () => {
+    unusedCode()
+    limitMock.mockResolvedValue({ originalAmount: 3500, finalAmount: 0, isPartialDiscount: false, isAtLimit: true, seasonalUsage: { totalUsed: 5000, remaining: 0, maxAllowed: 5000 } })
+    const { status, body } = await preview()
+    expect(status).toBe(400)
+    expect(body.error).toContain('$50.00 season limit')
+    expect(staging).not.toHaveBeenCalled()
+  })
+
+  it('fails closed (503) when the limit check errors', async () => {
+    unusedCode()
+    limitMock.mockRejectedValue(new Error('usage query failed'))
+    const { status } = await preview()
+    expect(status).toBe(503)
+    expect(staging).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the season cannot be determined; 503 on a lookup error', async () => {
+    unusedCode()
+    seasonMock.mockResolvedValue({ status: 'missing' })
+    expect((await preview()).status).toBe(400)
+    unusedCode()
+    seasonMock.mockResolvedValue({ status: 'error' })
+    expect((await preview()).status).toBe(503)
+    expect(staging).not.toHaveBeenCalled()
   })
 })
 

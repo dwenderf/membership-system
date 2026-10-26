@@ -10,6 +10,8 @@ import RegistrationTypeBadge from '@/components/RegistrationTypeBadge'
 import RoleBadge from '@/components/RoleBadge'
 import EventCalendarButton from '@/components/EventCalendarButton'
 import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
+import { isUserPaymentPlanEligible, calculateFirstInstallmentAmount } from '@/lib/payment-plan-utils'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '@/lib/services/payment-plan-config'
 import { formatEventDateTime } from '@/lib/date-utils'
 import { Database } from '@/types/database'
 import { logger } from '@/lib/logging/logger'
@@ -66,6 +68,8 @@ export default async function UserDashboardPage() {
     .select('*')
     .eq('id', user.id)
     .single()
+
+  const paymentPlanEligible = isUserPaymentPlanEligible(userProfile)
 
   // Get user's current memberships
   const { data: userMemberships } = await supabase
@@ -376,6 +380,7 @@ export default async function UserDashboardPage() {
                 // slightly higher if this code is near that user's per-season limit.
                 const discountAmount = discountCode ? Math.round((basePrice * discountCode.percentage) / 100) : 0
                 const finalAmount = Math.max(0, basePrice - discountAmount)
+                const usesPaymentPlan = waitlistEntry.use_payment_plan === true
 
                 return (
                   <div key={`dashboard-waitlist-${waitlistEntry.id}`} className={`py-3 flex items-start justify-between gap-4 ${index === 0 ? 'pt-0' : ''}`}>
@@ -410,6 +415,20 @@ export default async function UserDashboardPage() {
                             <span className="text-green-700">
                               {' '}(includes {discountCode.code} {discountCode.percentage}% discount subject to season cap)
                             </span>
+                          )}
+                        </p>
+                      )}
+                      {/* Payment-plan choice (#442) — only shown to members who can use plans */}
+                      {paymentPlanEligible && finalAmount > 0 && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {usesPaymentPlan ? (
+                            <>
+                              Payment plan: {PAYMENT_PLAN_INSTALLMENTS} installments of about{' '}
+                              <span className="font-semibold">${(calculateFirstInstallmentAmount(finalAmount) / 100).toFixed(2)}</span>,
+                              the first when you&apos;re selected, then every {INSTALLMENT_INTERVAL_DAYS} days.
+                            </>
+                          ) : (
+                            <>You chose to pay in full if selected (no payment plan).</>
                           )}
                         </p>
                       )}

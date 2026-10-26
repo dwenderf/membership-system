@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useToast } from '@/contexts/ToastContext'
 import { dollarsToCents } from '@/types/currency'
 import { logger } from '@/lib/logging/logger'
+import { calculateFirstInstallmentAmount } from '@/lib/payment-plan-utils'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '@/lib/services/payment-plan-config'
 
 interface WaitlistEntry {
   id: string
@@ -17,6 +19,10 @@ interface WaitlistEntry {
   final_amount: number
   discount_code: string | null
   discount_percentage: number | null
+  /** Member chose a payment plan when joining (#442). */
+  use_payment_plan?: boolean
+  /** Member is payment-plan eligible now; if not, a plan choice is charged in full. */
+  payment_plan_eligible?: boolean
 }
 
 interface WaitlistSelectionModalProps {
@@ -96,6 +102,14 @@ export default function WaitlistSelectionModal({
 
   const displayPricing = getDisplayPricing()
 
+  // Mirrors WaitlistPaymentService: the plan applies only if still eligible and there's
+  // something to charge. Override price and discounts apply to the total before splitting.
+  const chosePaymentPlan = waitlistEntry.use_payment_plan === true
+  const willUsePaymentPlan = chosePaymentPlan && waitlistEntry.payment_plan_eligible === true && displayPricing.finalAmount > 0
+  const planFallsBackToFull = chosePaymentPlan && !willUsePaymentPlan && displayPricing.finalAmount > 0
+  const installmentAmount = calculateFirstInstallmentAmount(displayPricing.finalAmount)
+  const chargeToday = willUsePaymentPlan ? installmentAmount : displayPricing.finalAmount
+
   const handleConfirmSelection = async () => {
     // Validate custom price if override is enabled
     if (overridePrice) {
@@ -129,7 +143,9 @@ export default function WaitlistSelectionModal({
 
       showSuccess(
         'User Selected',
-        `${waitlistEntry.first_name} ${waitlistEntry.last_name} has been successfully registered and charged.`
+        data.userRegistration?.isPaymentPlan
+          ? `${waitlistEntry.first_name} ${waitlistEntry.last_name} has been registered and charged the first payment-plan installment.`
+          : `${waitlistEntry.first_name} ${waitlistEntry.last_name} has been successfully registered and charged.`
       )
 
       onSuccess()
@@ -194,11 +210,39 @@ export default function WaitlistSelectionModal({
                 </div>
               )}
 
-              <div className="border-t pt-2 flex justify-between text-base font-bold">
-                <span>Total to Charge:</span>
-                <span className="text-green-600">${(displayPricing.finalAmount / 100).toFixed(2)}</span>
-              </div>
+              {willUsePaymentPlan ? (
+                <>
+                  <div className="border-t pt-2 flex justify-between text-sm">
+                    <span>Total:</span>
+                    <span className="font-medium">${(displayPricing.finalAmount / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-bold">
+                    <span>Charge Today (1 of {PAYMENT_PLAN_INSTALLMENTS}):</span>
+                    <span className="text-green-600">${(chargeToday / 100).toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="border-t pt-2 flex justify-between text-base font-bold">
+                  <span>Total to Charge:</span>
+                  <span className="text-green-600">${(displayPricing.finalAmount / 100).toFixed(2)}</span>
+                </div>
+              )}
             </div>
+
+            {willUsePaymentPlan && (
+              <div className="mt-2 rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                Member chose a payment plan. They&apos;ll be charged ${(chargeToday / 100).toFixed(2)} now, then{' '}
+                {PAYMENT_PLAN_INSTALLMENTS - 1} more installments of about ${(installmentAmount / 100).toFixed(2)} every{' '}
+                {INSTALLMENT_INTERVAL_DAYS} days.
+              </div>
+            )}
+
+            {planFallsBackToFull && (
+              <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                Member chose a payment plan but is no longer eligible (plan access turned off or no saved card).
+                They&apos;ll be charged the full amount.
+              </div>
+            )}
 
             {/* Price Override Option */}
             <div className="mt-3 space-y-2">
@@ -250,7 +294,7 @@ export default function WaitlistSelectionModal({
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  This user&apos;s saved payment method will be charged immediately. A confirmation email will be sent to the user.
+                  This user&apos;s saved payment method will be charged {willUsePaymentPlan ? 'the first installment immediately, and the rest automatically on schedule' : 'immediately'}. A confirmation email will be sent to the user.
                 </p>
               </div>
             </div>

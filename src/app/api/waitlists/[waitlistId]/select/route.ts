@@ -207,7 +207,9 @@ export async function POST(
           registration_id: waitlistEntry.registration_id,
           registration_category_id: waitlistEntry.registration_category_id,
           registration_fee: overridePrice !== undefined ? overridePrice : category.price,
-          amount_paid: chargeResult.amountCharged,
+          // Net amount owed after discounts, as checkout stores it — for a payment plan that's the
+          // plan total, not installment 1. Roster summaries compute discounts as fee - amount_paid.
+          amount_paid: chargeResult.isPaymentPlan ? chargeResult.totalAmount : chargeResult.amountCharged,
           payment_status: 'paid',
           payment_id: chargeResult.paymentId,
           registered_at: new Date().toISOString(),

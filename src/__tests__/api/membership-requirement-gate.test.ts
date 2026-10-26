@@ -455,5 +455,42 @@ describe('membership requirement gate - route enforcement', () => {
         { usePaymentPlan: false }
       )
     })
+
+    it('records the plan total, not installment 1, as amount_paid for a payment-plan selection (#442)', async () => {
+      const supabaseFrom = jest.fn()
+        .mockReturnValueOnce(buildUsersIsAdminLookup())
+        .mockReturnValueOnce(buildCanUserRegisterLookup())
+
+      const registrationInsert = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          single: jest.fn().mockResolvedValue({ data: { id: 'ur-1' }, error: null })
+        })
+      })
+      const adminFrom = jest.fn()
+        .mockReturnValueOnce(buildWaitlistEntryLookup()) // waitlist entry
+        .mockReturnValueOnce(qualifyingMembership()) // user_memberships
+        .mockReturnValueOnce({ insert: registrationInsert }) // user_registrations
+        .mockReturnValueOnce({ update: jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({ error: null }) }) }) // waitlists
+
+      ;(WaitlistPaymentService.chargeWaitlistUser as jest.Mock).mockResolvedValue({
+        success: true,
+        paymentId: 'pay-1',
+        paymentIntentId: 'pi_1',
+        amountCharged: 2500,
+        totalAmount: 10000,
+        isPaymentPlan: true,
+        paymentPlanFallback: false,
+        xeroInvoiceId: 'inv-1'
+      })
+
+      const response = await callWaitlistSelect(supabaseFrom, adminFrom)
+
+      expect(response.status).toBe(200)
+      expect(registrationInsert).toHaveBeenCalledWith(expect.objectContaining({
+        amount_paid: 10000,
+        xero_invoice_id: 'inv-1',
+        payment_status: 'paid'
+      }))
+    })
   })
 })

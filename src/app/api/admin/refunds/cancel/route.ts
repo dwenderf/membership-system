@@ -38,11 +38,12 @@ export async function POST(request: NextRequest) {
     // Only cancel refund record if it exists (during confirmation phase)
     // During preview phase, refundId will be null and no refund record exists
     if (refundId) {
+      // refunds has no failure_reason column (writing one failed the update and left the refund
+      // pending, keeping its discount code blocked; #457). The reason is logged instead.
       const { error: refundError } = await supabase
         .from('refunds')
         .update({
           status: 'cancelled',
-          failure_reason: 'Cancelled by admin before Stripe submission',
           updated_at: new Date().toISOString()
         })
         .eq('id', refundId)
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
 
     logger.logSystem('refund-cancelled', 'Refund staging cancelled by admin', {
       refundId: refundId || 'none (preview only)',
+      reason: refundId ? 'Cancelled by admin before Stripe submission' : 'Preview discarded',
       stagingId,
       cancelledBy: authUser.id
     })

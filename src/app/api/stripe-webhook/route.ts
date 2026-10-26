@@ -532,7 +532,6 @@ async function handleChargeUpdated(supabase: SupabaseClient, charge: Stripe.Char
   }
 }
 
-// Handle charge refunded events
 /**
  * #456: a Stripe refund that ends failed or canceled must release what it reserved. Mark our
  * refunds row failed/cancelled (this frees its discount code for reuse) and stop its credit note
@@ -577,16 +576,24 @@ async function handleRefundFailedOrCanceled(supabase: SupabaseClient, stripeRefu
   const stagingId = stripeRefund.metadata?.staging_id
   if (stagingId) {
     // Not yet in Xero: don't send a credit note for money that was never refunded.
-    await supabase
+    // 'failed' too, so /api/xero/retry-failed can't post it later.
+    const unsynced = ['staged', 'pending', 'failed']
+    const { error: noteIgnoreError } = await supabase
       .from('xero_invoices')
       .update({ sync_status: 'ignore', updated_at: new Date().toISOString() })
       .eq('id', stagingId)
-      .in('sync_status', ['staged', 'pending'])
-    await supabase
+      .in('sync_status', unsynced)
+    if (noteIgnoreError) {
+      logger.logPaymentProcessing('refund-failed-credit-note-ignore-error', 'Failed to ignore credit note for failed/canceled refund', { refundId: refund.id, stagingId, error: noteIgnoreError.message }, 'error')
+    }
+    const { error: paymentIgnoreError } = await supabase
       .from('xero_payments')
       .update({ sync_status: 'ignore', updated_at: new Date().toISOString() })
       .eq('xero_invoice_id', stagingId)
-      .in('sync_status', ['staged', 'pending'])
+      .in('sync_status', unsynced)
+    if (paymentIgnoreError) {
+      logger.logPaymentProcessing('refund-failed-payment-ignore-error', 'Failed to ignore Xero payment for failed/canceled refund', { refundId: refund.id, stagingId, error: paymentIgnoreError.message }, 'error')
+    }
 
     const { data: note } = await supabase
       .from('xero_invoices')
@@ -594,6 +601,7 @@ async function handleRefundFailedOrCanceled(supabase: SupabaseClient, stripeRefu
       .eq('id', stagingId)
       .maybeSingle()
     if (note?.sync_status === 'synced') {
+      // The code is freed, but this credit note still exists in Xero (and in discount_usage_computed) until voided.
       logger.logSystem('refund-failed-credit-note-synced', 'Refund failed/canceled after its credit note synced to Xero; void it manually', { refundId: refund.id, stagingId, stripeRefundId: stripeRefund.id }, 'error')
     }
   }
@@ -601,6 +609,7 @@ async function handleRefundFailedOrCanceled(supabase: SupabaseClient, stripeRefu
   logger.logPaymentProcessing('refund-failed-or-canceled', `Refund ${refund.id} marked ${newStatus}`, { refundId: refund.id, stripeRefundId: stripeRefund.id, stripeStatus: stripeRefund.status }, 'info')
 }
 
+// Handle charge refunded events
 async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Charge) {
   try {
     // Get the payment record by payment intent ID
@@ -641,9 +650,17 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
         if (existingRefund) {
           logger.logPaymentProcessing('refund-already-exists', `Refund ${stripeRefund.id} already exists in database`, { stripeRefundId: stripeRefund.id, refundId: existingRefund.id }, 'debug')
 
-          // Update status if needed
+          // #457: a late/out-of-order charge.refunded must not revive a refund already
+          // released by refund.failed/canceled, nor email the member about it.
+          if (existingRefund.status === 'failed' || existingRefund.status === 'cancelled') {
+            logger.logPaymentProcessing('refund-already-released', `Ignoring charge.refunded for ${existingRefund.status} refund`, { refundId: existingRefund.id, stripeRefundId: stripeRefund.id, stripeStatus: stripeRefund.status }, 'warn')
+            continue
+          }
+
+          // Update status if needed. Conditional, so a failure recorded between the read above
+          // and this write still wins.
           if (existingRefund.status !== 'completed') {
-            await supabase
+            const { data: completedRows, error: completeError } = await supabase
               .from('refunds')
               .update({
                 status: 'completed',
@@ -653,6 +670,14 @@ async function handleChargeRefunded(supabase: SupabaseClient, charge: Stripe.Cha
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingRefund.id)
+              .not('status', 'in', '(failed,cancelled)')
+              .select('id')
+            if (completeError) {
+              logger.logPaymentProcessing('refund-complete-update-error', 'Failed to mark refund completed', { refundId: existingRefund.id, error: completeError.message }, 'error')
+            } else if (!completedRows || completedRows.length === 0) {
+              logger.logPaymentProcessing('refund-already-released', 'Refund was released before it could be completed; skipping', { refundId: existingRefund.id, stripeRefundId: stripeRefund.id }, 'warn')
+              continue
+            }
           }
 
           // NEW ARCHITECTURE: Check for staging_id in Stripe metadata

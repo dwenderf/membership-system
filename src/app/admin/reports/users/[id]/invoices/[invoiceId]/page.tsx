@@ -435,13 +435,6 @@ export default async function AdminUserInvoiceDetailPage({ params, searchParams:
                         </div>
                       )}
                       
-                      {refund.failure_reason && (
-                        <div className="mb-4">
-                          <dt className="text-sm font-medium text-gray-500">Failure Reason</dt>
-                          <dd className="mt-1 text-sm text-red-600">{refund.failure_reason}</dd>
-                        </div>
-                      )}
-
                       {/* Credit Note Line Items */}
                       {refund.credit_note?.xero_invoice_line_items && refund.credit_note.xero_invoice_line_items.length > 0 && (
                         <div className="mt-4">

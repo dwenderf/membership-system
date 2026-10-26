@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getLgbtqStatusLabel, getLgbtqStatusStyles, getGoalieStatusLabel, getGoalieStatusStyles } from '@/lib/user-attributes'
 import { getCategoryColors } from '@/lib/badge-colors'
 import WaitlistSelectionModal from '@/components/WaitlistSelectionModal'
+import WaitlistPaymentPlanBadge from '@/components/WaitlistPaymentPlanBadge'
 import WaitlistRemoveButton from '@/components/WaitlistRemoveButton'
 import EmailComposerModal from '@/components/EmailComposerModal'
 import UserLink from '@/components/UserLink'
@@ -69,6 +70,8 @@ interface WaitlistData {
   base_price: number
   discount_amount: number
   final_amount: number
+  use_payment_plan: boolean
+  payment_plan_eligible: boolean
 }
 
 interface AlternateData {
@@ -851,15 +854,21 @@ export default function RegistrationDetailPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {waitlist.hasValidPaymentMethod ? (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              Ready
-                            </span>
-                          ) : (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              Setup Required
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {waitlist.hasValidPaymentMethod ? (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                Ready
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                Setup Required
+                              </span>
+                            )}
+                            <WaitlistPaymentPlanBadge
+                              usePaymentPlan={waitlist.use_payment_plan}
+                              eligible={waitlist.payment_plan_eligible}
+                            />
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {waitlist.discount_code ? (

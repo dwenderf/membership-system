@@ -8,6 +8,50 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email/service'
 import { logger } from '@/lib/logging/logger'
+import { calculateNextInstallmentDate } from '@/lib/payment-plan-utils'
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '@/lib/services/payment-plan-config'
+import { formatDate } from '@/lib/date-utils'
+
+export interface WaitlistSelectedPaymentPlanDetails {
+  /** amountCharged is installment 1 of a payment plan. */
+  isPaymentPlan: boolean
+  /** Full amount after discounts (the plan total when isPaymentPlan). */
+  totalAmount: number
+  /** Member chose a plan but was no longer eligible, so they were charged in full. */
+  paymentPlanFallback: boolean
+}
+
+const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`
+
+/**
+ * One- or two-sentence `paymentPlanInfo` for the waitlist-selected email (#442), so the template can
+ * show it as-is with a single conditional. Describes the plan when this charge started one, explains
+ * the full charge when the member chose a plan but was no longer eligible, and is blank otherwise.
+ * Quotes the remaining balance rather than a per-installment amount, since the last installment
+ * absorbs any rounding.
+ */
+export function buildWaitlistPaymentPlanInfo(
+  amountCharged: number,
+  paymentPlan: WaitlistSelectedPaymentPlanDetails | undefined,
+  chargedAt: Date = new Date()
+): string {
+  if (paymentPlan?.paymentPlanFallback) {
+    return (
+      `You chose a payment plan when you joined the waitlist, but your account is no longer set up ` +
+      `for payment plans, so the full ${dollars(amountCharged)} was charged today. ` +
+      `If you have questions, please contact us.`
+    )
+  }
+  if (!paymentPlan?.isPaymentPlan) return ''
+  const remainingInstallments = PAYMENT_PLAN_INSTALLMENTS - 1
+  const remainingBalance = paymentPlan.totalAmount - amountCharged
+  return (
+    `You're on a payment plan for ${dollars(paymentPlan.totalAmount)}: today's charge of ${dollars(amountCharged)} ` +
+    `is payment 1 of ${PAYMENT_PLAN_INSTALLMENTS}. The remaining ${dollars(remainingBalance)} will be charged to your ` +
+    `saved card in ${remainingInstallments} payments, every ${INSTALLMENT_INTERVAL_DAYS} days starting ` +
+    `${formatDate(calculateNextInstallmentDate(chargedAt))}.`
+  )
+}
 
 /**
  * Send a `waitlist.selected` confirmation email to the member who was selected.
@@ -16,14 +60,16 @@ import { logger } from '@/lib/logging/logger'
  * @param userId                 - The user being selected off the waitlist
  * @param paymentId              - Payment ID (null for free/fully-discounted charges)
  * @param registrationCategoryId - The category they were waitlisted under
- * @param amountCharged          - Amount charged in cents
+ * @param amountCharged          - Amount charged in cents (installment 1 for a payment plan)
+ * @param paymentPlan            - Payment-plan details for the template's plan/fallback copy (#442)
  */
 export async function stageWaitlistSelectedEmail(
   registrationId: string,
   userId: string,
   paymentId: string | null,
   registrationCategoryId: string,
-  amountCharged: number
+  amountCharged: number,
+  paymentPlan?: WaitlistSelectedPaymentPlanDetails
 ): Promise<void> {
   if (!process.env.LOOPS_WAITLIST_SELECTED_TEMPLATE_ID) {
     logger.logSystem(
@@ -107,6 +153,7 @@ export async function stageWaitlistSelectedEmail(
       seasonName,
       amountCharged,
       paymentIntentId,
+      paymentPlanInfo: buildWaitlistPaymentPlanInfo(amountCharged, paymentPlan),
     })
 
   } catch (error) {

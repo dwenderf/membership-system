@@ -5,7 +5,7 @@ import { logger } from '@/lib/logging/logger'
 import { centsToCents } from '@/types/currency'
 import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from './payment-plan-config'
 import { toDateString } from '@/lib/date-utils'
-import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+import { isUserPaymentPlanEligible } from '@/lib/payment-plan-utils'
 
 /** Shape of the `xero_invoice` relation as selected below — not the full DB row,
  * just the nested fields queried and read downstream. */
@@ -99,10 +99,7 @@ export class PaymentPlanService {
       }
 
       // User must be admin-approved AND have a valid saved payment method
-      return (
-        user.payment_plan_enabled === true &&
-        userHasValidPaymentMethod(user)
-      )
+      return isUserPaymentPlanEligible(user)
     } catch (error) {
       logger.logPaymentProcessing(
         'payment-plan-eligibility-check-error',

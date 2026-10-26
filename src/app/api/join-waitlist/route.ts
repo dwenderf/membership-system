@@ -8,6 +8,7 @@ import { RegistrationValidationService } from '@/lib/services/registration-valid
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logging/logger'
 import { logPolicyAcceptance } from '@/lib/policy-acceptance'
+import { isUserPaymentPlanEligible } from '@/lib/payment-plan-utils'
 
 
 // Force import server config
@@ -23,6 +24,7 @@ interface WaitlistRow {
   registration_category_id: string
   position: number
   discount_code_id: string | null
+  use_payment_plan: boolean
   removed_at: string | null
   joined_at: string
 }
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { registrationId, categoryId, discountCodeId, policiesAccepted } = body
+    const usePaymentPlan = body.usePaymentPlan === true
 
     // Validate required fields
     if (!registrationId || !categoryId) {
@@ -80,6 +83,22 @@ export async function POST(request: NextRequest) {
         error: 'You need to set up a payment method before joining the waitlist',
         requiresSetupIntent: true
       }, { status: 400 })
+    }
+
+    // A payment-plan choice is only accepted from an eligible member. It is re-checked at
+    // selection time; if they've lost eligibility by then they're charged in full.
+    if (usePaymentPlan) {
+      const { data: planUser } = await adminSupabase
+        .from('users')
+        .select('payment_plan_enabled, stripe_payment_method_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!isUserPaymentPlanEligible(planUser)) {
+        return NextResponse.json({
+          error: 'You are not eligible for payment plans or do not have a saved payment method'
+        }, { status: 400 })
+      }
     }
 
     // Validate discount code if provided
@@ -263,6 +282,7 @@ export async function POST(request: NextRequest) {
           removed_at: null,
           position: nextPosition,
           discount_code_id: validatedDiscountCodeId,
+          use_payment_plan: usePaymentPlan,
           joined_at: new Date().toISOString()
         })
         .eq('id', existingWaitlist.id)
@@ -285,7 +305,8 @@ export async function POST(request: NextRequest) {
         registration_id: registrationId,
         registration_category_id: categoryId,
         position: nextPosition,
-        discount_code_id: validatedDiscountCodeId
+        discount_code_id: validatedDiscountCodeId,
+        use_payment_plan: usePaymentPlan
       }
 
       logger.logPaymentProcessing('waitlist-insert-attempt', 'Attempting to insert waitlist entry', { waitlistData }, 'debug')
@@ -404,6 +425,7 @@ export async function POST(request: NextRequest) {
       success: true,
       position: nextPosition,
       waitlistId: waitlistEntry!.id,
+      usePaymentPlan,
       message: `You've been added to the waitlist. You're #${nextPosition} in line.`
     })
     

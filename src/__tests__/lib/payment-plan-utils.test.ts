@@ -1,4 +1,11 @@
-import { getInstallmentDisplayStatus, planNeedsAttention } from '@/lib/payment-plan-utils'
+import {
+  getInstallmentDisplayStatus,
+  planNeedsAttention,
+  isUserPaymentPlanEligible,
+  calculateFirstInstallmentAmount,
+  buildPaymentPlanIntentMetadata,
+  calculateNextInstallmentDate
+} from '@/lib/payment-plan-utils'
 
 const inst = (over: Partial<{ sync_status: string; attempt_count: number; failure_reason: string | null }> = {}) => ({
   id: 'i1',
@@ -56,5 +63,29 @@ describe('planNeedsAttention', () => {
 
   it('tolerates a missing installments array', () => {
     expect(planNeedsAttention({}, 3)).toBe(false)
+  })
+})
+
+describe('shared checkout/waitlist plan helpers (#442)', () => {
+  it('isUserPaymentPlanEligible needs both the admin flag and a saved card', () => {
+    expect(isUserPaymentPlanEligible({ payment_plan_enabled: true, stripe_payment_method_id: 'pm_1' })).toBe(true)
+    expect(isUserPaymentPlanEligible({ payment_plan_enabled: false, stripe_payment_method_id: 'pm_1' })).toBe(false)
+    expect(isUserPaymentPlanEligible({ payment_plan_enabled: true, stripe_payment_method_id: null })).toBe(false)
+    expect(isUserPaymentPlanEligible(null)).toBe(false)
+  })
+
+  it('first installment is a rounded quarter; metadata matches what the webhook reads', () => {
+    expect(calculateFirstInstallmentAmount(10000)).toBe(2500)
+    expect(calculateFirstInstallmentAmount(10050)).toBe(2513)
+    expect(buildPaymentPlanIntentMetadata(10050)).toEqual({
+      isPaymentPlan: 'true',
+      paymentPlanTotalAmount: '10050',
+      paymentPlanInstallmentAmount: '2513'
+    })
+  })
+
+  it('next installment is 30 days after the first', () => {
+    const next = calculateNextInstallmentDate(new Date('2026-10-26T12:00:00Z'))
+    expect(next.toISOString()).toBe('2026-11-25T12:00:00.000Z')
   })
 })

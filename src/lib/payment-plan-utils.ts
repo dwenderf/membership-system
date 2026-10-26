@@ -4,6 +4,9 @@
  * Shared constants and helper functions for payment plan status handling
  */
 
+import { PAYMENT_PLAN_INSTALLMENTS, INSTALLMENT_INTERVAL_DAYS } from '@/lib/services/payment-plan-config'
+import { userHasValidPaymentMethod } from '@/lib/payment-method-utils'
+
 /** A single installment entry within the `installments` json_agg column of `payment_plan_summary`. */
 export interface PaymentPlanInstallment {
   id: string
@@ -110,4 +113,44 @@ export function planNeedsAttention(
     const status = getInstallmentDisplayStatus(i, maxAttempts)
     return status === 'failing' || status === 'exhausted'
   })
+}
+
+// ---------------------------------------------------------------------------
+// Eligibility, first-installment math and Stripe metadata — shared by normal checkout and
+// waitlist selection (#442) so the two can't drift. Pure functions, safe for client components.
+// ---------------------------------------------------------------------------
+
+/** Admin-approved for payment plans AND has a saved card. */
+export function isUserPaymentPlanEligible(
+  user: { payment_plan_enabled?: boolean | null; stripe_payment_method_id?: string | null } | null | undefined
+): boolean {
+  return user?.payment_plan_enabled === true && userHasValidPaymentMethod(user)
+}
+
+/**
+ * First installment charged up front. Matches the staging/plan creation math: installments 1..N-1
+ * are Math.round(total / N) and the last absorbs the rounding remainder.
+ */
+export function calculateFirstInstallmentAmount(totalAmount: number): number {
+  return Math.round(totalAmount / PAYMENT_PLAN_INSTALLMENTS)
+}
+
+/** Stripe PaymentIntent metadata the webhook reads to recognise a payment-plan first payment. */
+export function buildPaymentPlanIntentMetadata(totalAmount: number): {
+  isPaymentPlan: 'true'
+  paymentPlanTotalAmount: string
+  paymentPlanInstallmentAmount: string
+} {
+  return {
+    isPaymentPlan: 'true',
+    paymentPlanTotalAmount: totalAmount.toString(),
+    paymentPlanInstallmentAmount: calculateFirstInstallmentAmount(totalAmount).toString(),
+  }
+}
+
+/** Date the second installment is due, given when the first one was charged. */
+export function calculateNextInstallmentDate(firstPaymentDate: Date = new Date()): Date {
+  const next = new Date(firstPaymentDate)
+  next.setDate(next.getDate() + INSTALLMENT_INTERVAL_DAYS)
+  return next
 }

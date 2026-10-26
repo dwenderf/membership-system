@@ -18,6 +18,7 @@
 --   20260915195345_add_policy_acceptance_tracking.sql
 --   20261018203000_payment_plan_summary_exclude_abandoned_checkouts.sql
 --   20261025193500_payment_plan_summary_exclude_cancelled.sql
+--   20261026150000_add_waitlist_use_payment_plan.sql
 -- =============================================================================
 
 -- >>> 20260907000000_baseline_schema.sql >>>
@@ -2765,3 +2766,22 @@ CREATE OR REPLACE VIEW public.payment_plan_summary WITH (security_invoker=true, 
 COMMENT ON VIEW public.payment_plan_summary IS 'Aggregated view of payment plan status and installments from xero_payments. Includes registration data via user_registrations link, with fallback to invoice line item description for orphaned invoices. Uses COALESCE to handle NULL paid_amount when no payments are synced yet. Excludes abandoned checkouts (invoice_status DRAFT: checkout never completed). total_amount excludes cancelled rows (installments superseded by an early payoff, and rolled-back payoff attempts), so an early payoff no longer double-counts the balance (#452).';
 
 -- <<< 20261025193500_payment_plan_summary_exclude_cancelled.sql <<<
+
+-- >>> 20261026150000_add_waitlist_use_payment_plan.sql >>>
+
+-- waitlists.use_payment_plan: the member's payment-plan choice when joining a waitlist (#442).
+--
+-- When true and the member is still payment-plan eligible at selection time, selection charges
+-- the first of the standard 4 installments instead of the full amount. If they are no longer
+-- eligible, selection charges in full (the choice is a preference, not a guarantee).
+--
+-- Additive only: NOT NULL with a default, so existing rows read as false and no backfill is
+-- needed. Nothing is dropped or renamed. Rollback: ALTER TABLE public.waitlists DROP COLUMN
+-- use_payment_plan (once no deployed code reads it).
+ALTER TABLE public.waitlists
+  ADD COLUMN IF NOT EXISTS use_payment_plan boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN public.waitlists.use_payment_plan IS
+  'Member opted into a payment plan when joining the waitlist. Honoured at selection only if the member is still payment-plan eligible; otherwise charged in full.';
+
+-- <<< 20261026150000_add_waitlist_use_payment_plan.sql <<<

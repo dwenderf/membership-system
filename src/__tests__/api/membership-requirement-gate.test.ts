@@ -451,7 +451,8 @@ describe('membership requirement gate - route enforcement', () => {
         'cat-skater',
         'Skater',
         undefined,
-        undefined
+        undefined,
+        { usePaymentPlan: false }
       )
     })
   })

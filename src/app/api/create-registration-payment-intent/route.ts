@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { calculateFirstInstallmentAmount, buildPaymentPlanIntentMetadata } from '@/lib/payment-plan-utils'
 import { getStripe } from '@/lib/stripe/server-client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getSingleCategoryRegistrationCount } from '@/lib/registration-counts'
@@ -1338,7 +1339,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Calculate payment amounts for payment plan if applicable
-    const firstInstallmentAmount = isPaymentPlan ? Math.round(finalAmount / 4) : finalAmount // 25% for payment plan
+    const firstInstallmentAmount = isPaymentPlan ? calculateFirstInstallmentAmount(finalAmount) : finalAmount // 25% for payment plan
     const chargeAmount = firstInstallmentAmount // Amount to charge now
 
     // Create payment intent
@@ -1366,9 +1367,9 @@ export async function POST(request: NextRequest) {
         accountingCode: validatedDiscountCode?.category?.accounting_code || '',
         xeroStagingRecordId: stagingRecord.id, // Direct link to xero_invoices staging table
         // Payment plan metadata
-        isPaymentPlan: isPaymentPlan ? 'true' : 'false',
-        paymentPlanTotalAmount: isPaymentPlan ? finalAmount.toString() : '',
-        paymentPlanInstallmentAmount: isPaymentPlan ? firstInstallmentAmount.toString() : '',
+        ...(isPaymentPlan
+          ? buildPaymentPlanIntentMetadata(finalAmount)
+          : { isPaymentPlan: 'false', paymentPlanTotalAmount: '', paymentPlanInstallmentAmount: '' }),
       },
       description: isPaymentPlan
         ? `Payment Plan (1/4) - ${getDescription()}`

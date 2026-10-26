@@ -52,6 +52,7 @@ export async function POST(
         registration_id,
         registration_category_id,
         discount_code_id,
+        use_payment_plan,
         removed_at,
         users!waitlists_user_id_fkey (
           id,
@@ -182,7 +183,8 @@ export async function POST(
         waitlistEntry.registration_category_id,
         categoryName,
         waitlistEntry.discount_code_id || undefined,
-        overridePrice
+        overridePrice,
+        { usePaymentPlan: waitlistEntry.use_payment_plan === true }
       )
 
       if (!chargeResult.success) {
@@ -195,7 +197,8 @@ export async function POST(
         userId: waitlistEntry.user_id,
         registrationId: waitlistEntry.registration_id,
         categoryId: waitlistEntry.registration_category_id,
-        paymentStatus: 'paid'
+        paymentStatus: 'paid',
+        isPaymentPlan: chargeResult.isPaymentPlan
       }, 'debug')
       const { data: userRegistration, error: registrationError } = await adminSupabase
         .from('user_registrations')
@@ -209,6 +212,9 @@ export async function POST(
           payment_id: chargeResult.paymentId,
           registered_at: new Date().toISOString(),
           stripe_payment_intent_id: chargeResult.paymentIntentId,
+          // Payment plans are found through this link (payment_plan_summary, outstanding balance).
+          // Set here rather than in the webhook so it can't race the registration insert.
+          ...(chargeResult.isPaymentPlan && { xero_invoice_id: chargeResult.xeroInvoiceId }),
         })
         .select()
         .single()
@@ -250,6 +256,11 @@ export async function POST(
       const paymentId = chargeResult.paymentId ?? null
       const categoryId = waitlistEntry.registration_category_id
       const amountCharged = chargeResult.amountCharged
+      const paymentPlanDetails = {
+        isPaymentPlan: chargeResult.isPaymentPlan,
+        totalAmount: chargeResult.totalAmount,
+        paymentPlanFallback: chargeResult.paymentPlanFallback,
+      }
       runAfterResponse(
         'waitlist-selection-notifications',
         async () => {
@@ -276,7 +287,8 @@ export async function POST(
               selectedUserId,
               paymentId,
               categoryId,
-              amountCharged
+              amountCharged,
+              paymentPlanDetails
             ).catch((err) => logger.logSystem('waitlist-selection-member-notify', 'Member notification failed (non-fatal)', { error: err instanceof Error ? err.message : String(err) }, 'warn')),
           ])
         },
@@ -288,6 +300,8 @@ export async function POST(
         registrationId: waitlistEntry.registration_id,
         categoryId: waitlistEntry.registration_category_id,
         amountCharged: chargeResult.amountCharged,
+        isPaymentPlan: chargeResult.isPaymentPlan,
+        paymentPlanFallback: chargeResult.paymentPlanFallback,
         selectedBy: authUser.id
       })
 
@@ -299,6 +313,9 @@ export async function POST(
           userId: waitlistEntry.user_id,
           userName: `${user.first_name} ${user.last_name}`,
           amountCharged: chargeResult.amountCharged,
+          totalAmount: chargeResult.totalAmount,
+          isPaymentPlan: chargeResult.isPaymentPlan,
+          paymentPlanFallback: chargeResult.paymentPlanFallback,
           registrationName: registration.name,
           categoryName: categoryName
         }

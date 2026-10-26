@@ -80,7 +80,7 @@ function makeDb(refund: Row | null, note: Row) {
             const allowed = filters.find(f => f[0] === 'in')
             const excluded = filters.find(f => f[0] === 'not')
             const blocked = excluded && target && String(excluded[2]).includes(String(target.status))
-            if (target && !blocked && (!allowed || (allowed[2] as unknown[]).includes(target.sync_status))) {
+            if (target && !blocked && (!allowed || (allowed[2] as unknown[]).includes(target[allowed[1]]))) {
               Object.assign(target, values)
               return Promise.resolve({ data: [{ id: target.id }], error: null }).then(res)
             }

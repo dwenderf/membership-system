@@ -340,10 +340,10 @@ export default function RegistrationReportsPage() {
                                     <span className="text-gray-700 truncate flex-1">{category.name}</span>
                                     <span className="font-medium text-gray-900 ml-2">
                                       {category.count}
-                                      {category.max_capacity && ` / ${category.max_capacity}`}
+                                      {!!category.max_capacity && ` / ${category.max_capacity}`}
                                     </span>
                                   </div>
-                                  {category.max_capacity && (
+                                  {!!category.max_capacity && (
                                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                                       <div
                                         className="bg-indigo-500 h-1.5 rounded-full"

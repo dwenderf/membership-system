@@ -276,11 +276,11 @@ export default function CaptainDashboardPage() {
                           <span className="text-gray-600 truncate flex-1">{category.name}</span>
                           <span className="font-medium text-gray-900 ml-2">
                             {category.count}
-                            {category.max_capacity && ` / ${category.max_capacity}`}
+                            {!!category.max_capacity && ` / ${category.max_capacity}`}
                           </span>
                         </div>
                         {/* Only show progress bar for capacity-limited categories */}
-                        {category.max_capacity && (
+                        {!!category.max_capacity && (
                           <div className="w-full bg-gray-200 rounded-full h-1">
                             <div
                               className="bg-indigo-600 h-1 rounded-full"
@@ -383,11 +383,11 @@ export default function CaptainDashboardPage() {
                           <span className="text-gray-500 truncate flex-1">{category.name}</span>
                           <span className="font-medium text-gray-700 ml-2">
                             {category.count}
-                            {category.max_capacity && ` / ${category.max_capacity}`}
+                            {!!category.max_capacity && ` / ${category.max_capacity}`}
                           </span>
                         </div>
                         {/* Only show progress bar for capacity-limited categories */}
-                        {category.max_capacity && (
+                        {!!category.max_capacity && (
                           <div className="w-full bg-gray-300 rounded-full h-1">
                             <div
                               className="bg-gray-600 h-1 rounded-full"

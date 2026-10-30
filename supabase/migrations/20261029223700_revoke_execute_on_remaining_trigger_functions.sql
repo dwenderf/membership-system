@@ -1,0 +1,48 @@
+-- =============================================================================
+-- Revoke EXECUTE on the last two public-callable trigger functions
+-- (InfoSec hardening)
+-- =============================================================================
+--
+-- InfoSec's grant comparison of dev and prod found two functions in `public`
+-- that anon, authenticated and PUBLIC can still EXECUTE (everything else the
+-- 20260907000002 / 20260908154524 migrations meant to lock down already is):
+--
+--   public.set_registration_published_at()
+--   public.update_user_discount_allowances_updated_at()
+--
+-- Both are SECURITY INVOKER trigger functions (RETURNS trigger, plpgsql, fixed
+-- search_path). Neither is callable over /rest/v1/rpc/ in any useful way -- a
+-- trigger function raises "trigger functions can only be called as triggers"
+-- -- but the grant is pointless and keeps showing up in grant audits.
+--
+-- 20260907000002 left them alone out of caution that PostgreSQL might re-check
+-- EXECUTE when the trigger fires. 20260908154524 then verified on dev that it
+-- does not (EXECUTE on a trigger function is checked at CREATE TRIGGER time
+-- only, not when the trigger fires) and revoked the same grants on
+-- update_updated_at_column() and set_member_id_on_insert(). This migration
+-- finishes the job for the two it skipped.
+--
+-- Checked before writing this:
+--   * No application code references either function. There is no .rpc() call
+--     for them (the only .rpc() callers are get_auth_audit_logs,
+--     get_oauth_email_mismatches and the two get_pending_xero_*_with_lock
+--     functions, all via createAdminClient / service_role).
+--   * Each function is used by exactly one trigger and by nothing else (no
+--     other function, view, policy or default expression calls them):
+--       set_registrations_published_at            ON public.registrations
+--       trg_user_discount_allowances_updated_at   ON public.user_discount_allowances
+--   * service_role holds an explicit EXECUTE grant on both in dev and prod (the
+--     other already-revoked functions keep theirs the same way), so revoking
+--     from PUBLIC does not remove it.
+--
+-- Nothing is kept: no grant on these two functions is needed by any role.
+--
+-- Re-runnable: REVOKE on a privilege that is not held is a no-op.
+-- Safe to apply early: no object is created, dropped or altered, and existing
+-- triggers keep firing for every role that can write to the two tables.
+--
+-- Verification SQL with expected results: docs/testing/trigger-function-execute-revoke.md
+-- =============================================================================
+
+REVOKE EXECUTE ON FUNCTION public.set_registration_published_at() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.update_user_discount_allowances_updated_at() FROM PUBLIC, anon, authenticated;

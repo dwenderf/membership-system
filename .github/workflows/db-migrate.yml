@@ -138,7 +138,7 @@ jobs:
     - name: Install Supabase CLI
       uses: supabase/setup-cli@v2
       with:
-        version: latest
+        version: 3.0.0
 
     - name: Verify the connection string is configured
       env:
@@ -173,18 +173,18 @@ jobs:
     - name: Show migration status
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      run: supabase migration list --db-url "$SUPABASE_DB_URL"
+      run: supabase migration list --remote="$SUPABASE_DB_URL"
 
     - name: Apply pending migrations
       # A push carries no inputs, so dry_run is empty: apply. A manual run
       # applies only when the box was unchecked.
       if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
       env:
-        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      run: supabase db push --db-url "$SUPABASE_DB_URL"
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}ß
+      run: supabase db push --yes --remote="$SUPABASE_DB_URL"
 
     - name: Show migration status after applying
       if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      run: supabase migration list --db-url "$SUPABASE_DB_URL"
+      run: supabase migration list --remote="$SUPABASE_DB_URL"

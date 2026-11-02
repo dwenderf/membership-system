@@ -68,6 +68,8 @@ Name it the way the CLI expects: `YYYYMMDDHHMMSS_descriptive_name.sql`, timestam
 - Code that reads a new column deploys *after* the migration that adds it, never in the same breath.
 - Anything destructive is conditional, and called out at the top of the file so a reviewer sees it without reading the SQL.
 
+**Grant what you create.** Since 2026-10-30 Supabase no longer grants `anon`, `authenticated` or `service_role` anything on new tables, views or sequences in `public` ([announcement](https://github.com/orgs/supabase/discussions/45329)). Without an explicit `GRANT` the first query answers `42501 permission denied` — before RLS is consulted — in production and on every rebuild from migrations. Every migration that creates one of them includes the `GRANT`, next to `ENABLE ROW LEVEL SECURITY` and the policies. See [Grants on new tables, views and sequences](#grants-on-new-tables-views-and-sequences). `npm run migrations:lint` fails the build when a `CREATE TABLE`/`VIEW`/`SEQUENCE` in `public` has no matching `GRANT`.
+
 **Watch for statements that parse but fail on execution.** A syntax check will not catch these:
 
 - `COMMENT ON VIEW` for views — `COMMENT ON TABLE` against a view raises `42809`.
@@ -104,10 +106,36 @@ Then:
 
 ## Views and functions are public API
 
-Supabase publishes everything in the `public` schema through PostgREST, so a new view or function is reachable from the internet with the (public) anon key the moment it exists. Two rules, both enforced by `npm run migrations:lint` (a blocking CI step):
+Supabase publishes everything in the `public` schema through PostgREST, so a view or function is reachable from the internet with the (public) anon key as soon as it is granted to `anon` — which, for views and tables, used to happen automatically. Three rules, all enforced by `npm run migrations:lint` (a blocking CI step) — the third is the next section:
 
-- **Every view must be created `WITH (security_invoker=true)`.** Without it a view runs as its owner and ignores RLS on the tables underneath, while Supabase's default privileges hand `anon` SELECT on it automatically. All nine existing views set this.
+- **Every view must be created `WITH (security_invoker=true)`.** Without it a view runs as its owner and ignores RLS on the tables underneath, and any role that is granted SELECT on it reads the underlying tables unfiltered. All nine existing views set this.
 - **Never `GRANT EXECUTE ... TO anon`/`authenticated`/`PUBLIC` without a stated reason.** As of `20260907000002_revoke_public_function_access.sql`, new functions in `public` are no longer granted to those roles by default, so a function is unreachable over `/rest/v1/rpc/` unless a migration grants it explicitly. If a function is only called server-side (every `.rpc()` call in this repo uses `createAdminClient`), it needs no grant at all — `service_role` is unaffected.
+
+### Grants on new tables, views and sequences
+
+Table privileges and RLS are two separate gates, and a request has to pass both. Supabase used to open the privilege gate for you on everything created in `public`; since 2026-10-30 it does not, so a new object is closed to every API role until a migration opens it. Existing objects were not touched, and `20261102170500_explicit_public_grants.sql` writes their current privileges down so a rebuild (a scratch database, a new dev project) matches production.
+
+**Rule: every migration that creates a table, view or sequence in `public` includes an explicit, least-privilege `GRANT` alongside `ENABLE ROW LEVEL SECURITY` and the policies.** For example:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.widgets ( ... );
+ALTER TABLE public.widgets ENABLE ROW LEVEL SECURITY;
+-- policies ...
+
+-- Only server code (createAdminClient) touches this table: service_role is enough.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.widgets TO service_role;
+-- Read by the signed-in browser client (RLS decides which rows):
+GRANT SELECT ON public.widgets TO authenticated;
+```
+
+- **Least privilege means the narrowest verbs, to the narrowest roles, that the access path needs.** Find the access path first: a table that is only reached through `createAdminClient()` needs `service_role` alone. `authenticated` gets only the verbs the signed-in browser client uses, and `anon` only if a logged-out visitor must read it (almost nothing qualifies). Do not copy the catch-up migration's `SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER` to all three roles — that is the old default, kept only because it describes production today. RLS gates the four DML verbs but not `TRUNCATE`, `REFERENCES` or `TRIGGER`.
+- **A `GRANT` without a policy is not access, and a policy without a `GRANT` is not either.** Add both, and keep `ENABLE ROW LEVEL SECURITY` — `npm run schema:verify` fails a table without it.
+- **Views:** `CREATE VIEW ... WITH (security_invoker=true)` and grant `SELECT` only; a reporting view read by a server route needs `service_role` and nothing else. The caller also needs privileges on the tables underneath, since the view runs with the caller's rights.
+- **Sequences:** a column default that calls `nextval()` (a `serial` column, or a hand-made sequence like `member_id_seq`) runs as the inserting role, so that role needs `USAGE` on the sequence. `GENERATED ... AS IDENTITY` columns need no sequence grant; `INSERT` on the table is enough.
+- **Functions are separate:** see the EXECUTE rule above. New functions are already closed to `anon`/`authenticated` by default.
+- **`CREATE OR REPLACE VIEW` keeps its privileges**; `DROP` + `CREATE` does not, so re-grant after a drop.
+- **Verify before reporting done:** `npm run migrations:lint` (flags a missing `GRANT`; `-- lint-ok: <reason>` on the line above allows an object no API role may reach) and `npm run schema:verify` (applies the schema to a server with no default privileges, which is the post-2026-10-30 situation).
+- **Reading live grants:** `select relname, relacl from pg_class where relnamespace = 'public'::regnamespace and relkind in ('r','v','S')`. Compare dev and production before assuming they match.
 
 `SECURITY DEFINER` deserves particular care: such a function ignores RLS entirely, so combining it with a public grant exposes whatever it selects. Three ad-hoc export functions reached production that way and returned every member's name, email and member_id to unauthenticated callers.
 

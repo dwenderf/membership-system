@@ -144,6 +144,15 @@ COMMIT;
 - Update TypeScript types if schema changes affect them
 - Coordinate with team before applying breaking migrations
 
+### Grants for new tables, views and sequences
+
+Supabase no longer grants `anon` / `authenticated` / `service_role` anything on
+new objects in `public` (since 2026-10-30). Every migration that creates a table,
+view or sequence must include an explicit, least-privilege `GRANT` next to
+`ENABLE ROW LEVEL SECURITY` and the policies, or the first query fails with
+`42501` before RLS runs. `npm run migrations:lint` enforces it. Details and an
+example: AGENTS.md, "Grants on new tables, views and sequences".
+
 ### RLS (Row Level Security) Migrations
 When creating or modifying RLS policies:
 

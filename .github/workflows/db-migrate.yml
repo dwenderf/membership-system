@@ -180,7 +180,7 @@ jobs:
       # applies only when the box was unchecked.
       if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
       env:
-        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}ß
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: supabase db push --yes --remote="$SUPABASE_DB_URL"
 
     - name: Show migration status after applying

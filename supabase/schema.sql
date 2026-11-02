@@ -2993,8 +2993,9 @@ GRANT EXECUTE ON FUNCTION public.get_pending_xero_payments_with_lock(integer) TO
 --   * REFERENCES lets the holder create a foreign key pointing at the table.
 --   * TRIGGER    lets the holder create a trigger on the table.
 --   * MAINTAIN   lets the holder VACUUM, ANALYZE, REINDEX, CLUSTER and LOCK the
---                table. Production holds it for anon and authenticated through
---                the same default ACL; development does not.
+--                table. Both projects run PostgreSQL 17, but only production
+--                holds it for anon and authenticated (through the same default
+--                ACL; read from pg_class.relacl on 2026-11-02).
 -- None of the three is reachable through PostgREST (it only issues
 -- SELECT / INSERT / UPDATE / DELETE), but they are held by the two roles that
 -- the public anon key and every signed-in browser session map to, for no
@@ -3045,8 +3046,8 @@ GRANT EXECUTE ON FUNCTION public.get_pending_xero_payments_with_lock(integer) TO
 --     from pg_class.relacl on 2026-11-02), so nothing is revoked from PUBLIC.
 --
 -- Against production and development this removes TRUNCATE, REFERENCES and
--- TRIGGER (plus MAINTAIN on production, which is PostgreSQL 17) from anon and
--- authenticated on each of 39 tables and 8 views, and the same privileges from
+-- TRIGGER (plus MAINTAIN, which only production holds; both projects are
+-- PostgreSQL 17) from anon and authenticated on each of 39 tables and 8 views, and the same privileges from
 -- the postgres default ACL for them. It is re-runnable: revoking a privilege
 -- that is not held is a no-op. Rollback, if ever wanted (it should not be):
 --   GRANT TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public

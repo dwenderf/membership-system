@@ -265,7 +265,7 @@ describe('lint-migrations: the repository', () => {
     expect(lintMigrations(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
   })
 
-  it('grants every service_role_only_function in schema-verify-expectations.txt', () => {
+  it('leaves every service_role_only_function in schema-verify-expectations.txt granted to service_role by the latest migration that touches it', () => {
     const expectations = fs.readFileSync(
       path.join(__dirname, '../../../scripts/ci/schema-verify-expectations.txt'),
       'utf8'
@@ -276,12 +276,23 @@ describe('lint-migrations: the repository', () => {
       .filter((l) => l.startsWith('service_role_only_function '))
       .map((l) => l.slice('service_role_only_function '.length).trim())
     expect(functions.length).toBeGreaterThan(0)
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../../../supabase/migrations', LEGACY_GRANT_MIGRATION),
-      'utf8'
-    )
+    // A grant may live in any migration (a function added after the catch-up
+    // migration carries its own). The latest GRANT or REVOKE EXECUTE for
+    // service_role on each signature wins, in migration order.
+    const dir = path.join(__dirname, '../../../supabase/migrations')
+    const statements: { sig: string; granted: boolean }[] = []
+    const stmtRe = /\b(GRANT|REVOKE)\s+EXECUTE\s+ON\s+FUNCTION\s+([^;]*?)\s+(TO|FROM)\s+([^;]*);/gi
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8').replace(/--[^\n]*/g, '')
+      let m: RegExpExecArray | null
+      while ((m = stmtRe.exec(sql)) !== null) {
+        if (!/(?:^|[\s,])"?service_role"?(?=$|[\s,])/i.test(m[4])) continue
+        statements.push({ sig: m[2].replace(/\s+/g, ' ').trim(), granted: m[1].toUpperCase() === 'GRANT' })
+      }
+    }
     for (const sig of functions) {
-      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${sig} TO service_role;`)
+      const last = statements.filter((st) => st.sig === sig).pop()
+      expect({ sig, granted: last?.granted }).toEqual({ sig, granted: true })
     }
   })
 })

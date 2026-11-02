@@ -100,6 +100,7 @@ SELECT set_config('verify.service_only_relations', :'service_only_relations', fa
 DO $$
 DECLARE
     missing text;
+    priv_list text;
     service_only_rels text[] := array_remove(string_to_array(current_setting('verify.service_only_relations'), E'\n'), '');
     service_only_fns  text[] := array_remove(string_to_array(current_setting('verify.service_only_functions'), E'\n'), '');
 BEGIN
@@ -145,45 +146,43 @@ BEGIN
         RAISE EXCEPTION 'authenticated cannot use public.member_id_seq';
     END IF;
 
-    -- 20261102180000 narrows anon / authenticated: TRUNCATE, REFERENCES and
-    -- TRIGGER are not gated by RLS and nothing needs them. The four DML verbs
-    -- and everything service_role holds must be unchanged.
+    -- 20261102180000 revoked TRUNCATE, REFERENCES and TRIGGER (and, on
+    -- PostgreSQL 17+, MAINTAIN) from anon and authenticated. RLS does not gate
+    -- them and PostgREST never uses them, so no relation in public may hand them
+    -- to either role again. Deliberately the only privilege-preservation check:
+    -- how much DML a table grants (and to whom) is up to each table's
+    -- least-privilege GRANT, so none is required here. MAINTAIN is an unknown
+    -- privilege type before PostgreSQL 17 (has_table_privilege would error), so
+    -- it is only asked about there; CI's server is 16.
+    priv_list := 'TRUNCATE, REFERENCES, TRIGGER';
+    IF current_setting('server_version_num')::int >= 170000 THEN
+        priv_list := priv_list || ', MAINTAIN';
+    END IF;
+
     SELECT string_agg(c.relname || ' (' || r.role_name || ')', ', ' ORDER BY c.relname, r.role_name) INTO missing
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
      CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-       AND (has_table_privilege(r.role_name, c.oid, 'TRUNCATE')
-         OR has_table_privilege(r.role_name, c.oid, 'REFERENCES')
-         OR has_table_privilege(r.role_name, c.oid, 'TRIGGER'));
+       AND has_table_privilege(r.role_name, c.oid, priv_list);
     IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'anon/authenticated still hold TRUNCATE, REFERENCES or TRIGGER on: %', missing;
+        RAISE EXCEPTION 'anon/authenticated hold one of % on: % (grant only the DML verbs the access path needs)', priv_list, missing;
     END IF;
 
-    SELECT string_agg(c.relname || ' (' || r.role_name || ')', ', ' ORDER BY c.relname, r.role_name) INTO missing
-      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
-     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
-       AND NOT (c.relname = ANY (service_only_rels))
-       AND NOT (has_table_privilege(r.role_name, c.oid, 'SELECT')
-            AND has_table_privilege(r.role_name, c.oid, 'INSERT')
-            AND has_table_privilege(r.role_name, c.oid, 'UPDATE')
-            AND has_table_privilege(r.role_name, c.oid, 'DELETE'));
+    -- The postgres role's default ACL for tables in public must not hand those
+    -- privileges to anon/authenticated either, or every table created later would
+    -- get them back. Empty on a bare scratch server (nothing to check); the
+    -- "old defaults" rebuild below seeds Supabase's former default ACL to prove
+    -- the migration removes it.
+    SELECT string_agg(g.role_name || ':' || x.privilege_type, ', ' ORDER BY g.role_name, x.privilege_type) INTO missing
+      FROM pg_default_acl d
+      JOIN pg_namespace n ON n.oid = d.defaclnamespace
+      JOIN pg_roles o ON o.oid = d.defaclrole
+     CROSS JOIN LATERAL aclexplode(d.defaclacl) AS x
+      JOIN (VALUES ('anon'), ('authenticated')) AS g(role_name) ON g.role_name = (SELECT rolname FROM pg_roles WHERE oid = x.grantee)
+     WHERE n.nspname = 'public' AND o.rolname = 'postgres' AND d.defaclobjtype = 'r'
+       AND x.privilege_type = ANY (string_to_array(replace(priv_list, ' ', ''), ','));
     IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'anon/authenticated lost SELECT/INSERT/UPDATE/DELETE (they must be untouched): %', missing;
-    END IF;
-
-    SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing
-      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
-       AND NOT (has_table_privilege('service_role', c.oid, 'SELECT')
-            AND has_table_privilege('service_role', c.oid, 'INSERT')
-            AND has_table_privilege('service_role', c.oid, 'UPDATE')
-            AND has_table_privilege('service_role', c.oid, 'DELETE')
-            AND has_table_privilege('service_role', c.oid, 'TRUNCATE')
-            AND has_table_privilege('service_role', c.oid, 'REFERENCES')
-            AND has_table_privilege('service_role', c.oid, 'TRIGGER'));
-    IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'service_role must keep all seven table privileges (untouched), missing on: %', missing;
+        RAISE EXCEPTION 'default privileges for postgres in public still grant (grantee:privilege): %', missing;
     END IF;
 
     -- Functions the app calls through .rpc() with the service-role client. A
@@ -206,10 +205,85 @@ BEGIN
         RAISE EXCEPTION 'anon/authenticated can EXECUTE service-only functions: %', missing;
     END IF;
 
-    RAISE NOTICE 'OK: every public table and view is granted to service_role; anon/authenticated hold no TRUNCATE/REFERENCES/TRIGGER; % relation(s) and % function(s) are service_role-only as listed in schema-verify-expectations.txt',
+    RAISE NOTICE 'OK: every public table and view is granted to service_role; anon/authenticated hold no TRUNCATE/REFERENCES/TRIGGER%; postgres default ACLs grant none of them; % relation(s) and % function(s) are service_role-only as listed in schema-verify-expectations.txt',
+        CASE WHEN priv_list LIKE '%MAINTAIN%' THEN '/MAINTAIN' ELSE '' END,
         cardinality(service_only_rels), cardinality(service_only_fns);
 END $$;
 SQL
+
+echo "==> Rebuild under Supabase's old default privileges (must still end up without TRUNCATE/REFERENCES/TRIGGER/MAINTAIN for anon/authenticated)"
+# Supabase's default ACL for objects created by postgres in public used to hand
+# anon, authenticated and service_role every table privilege. Production and
+# development still have it. Seed it, apply schema.sql (twice), and check that
+# the revoke migration leaves neither the tables nor the default ACL holding the
+# privileges, and that a table created afterwards does not get them back.
+# Needs the connecting role to be `postgres` (CI's service container is): the
+# default ACL is per creating role, and the migration targets postgres.
+OLD_DB="${DB}_olddefaults"
+if [ "$(psql -d postgres -tAc 'SELECT current_user')" = "postgres" ]; then
+    cleanup_old() { psql -q -d postgres -c "DROP DATABASE IF EXISTS $OLD_DB;" >/dev/null 2>&1 || true; cleanup; }
+    trap cleanup_old EXIT
+    psql -q -d postgres -c "CREATE DATABASE $OLD_DB;"
+    psql -q -d postgres -c "ALTER DATABASE $OLD_DB SET search_path = \"\$user\", public, extensions;"
+    psql -q -d "$OLD_DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/ci/supabase-stub.sql"
+    psql -q -d "$OLD_DB" -v ON_ERROR_STOP=1 <<'SQL'
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+SQL
+    psql -q -d "$OLD_DB" -v ON_ERROR_STOP=1 --single-transaction -f "$REPO_ROOT/supabase/schema.sql"
+    psql -q -d "$OLD_DB" -v ON_ERROR_STOP=1 --single-transaction -f "$REPO_ROOT/supabase/schema.sql"
+    psql -d "$OLD_DB" -v ON_ERROR_STOP=1 -tA <<'SQL'
+DO $$
+DECLARE
+    priv_list text := 'TRUNCATE, REFERENCES, TRIGGER';
+    missing text;
+BEGIN
+    IF current_setting('server_version_num')::int >= 170000 THEN
+        priv_list := priv_list || ', MAINTAIN';
+    END IF;
+
+    -- The seed must have been in effect, or this proves nothing: service_role
+    -- keeps the privileges the default ACL gave it.
+    IF NOT EXISTS (SELECT 1 FROM pg_default_acl d WHERE d.defaclobjtype = 'r' AND d.defaclnamespace = 'public'::regnamespace) THEN
+        RAISE EXCEPTION 'old-defaults seed is missing';
+    END IF;
+
+    SELECT string_agg(g.role_name || ':' || x.privilege_type, ', ' ORDER BY g.role_name, x.privilege_type) INTO missing
+      FROM pg_default_acl d
+      JOIN pg_roles o ON o.oid = d.defaclrole
+     CROSS JOIN LATERAL aclexplode(d.defaclacl) AS x
+      JOIN (VALUES ('anon'), ('authenticated')) AS g(role_name) ON g.role_name = (SELECT rolname FROM pg_roles WHERE oid = x.grantee)
+     WHERE d.defaclnamespace = 'public'::regnamespace AND o.rolname = 'postgres' AND d.defaclobjtype = 'r'
+       AND x.privilege_type = ANY (string_to_array(replace(priv_list, ' ', ''), ','));
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'old defaults: default ACL still grants %', missing;
+    END IF;
+
+    SELECT string_agg(c.relname || ' (' || r.role_name || ')', ', ' ORDER BY c.relname, r.role_name) INTO missing
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
+     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+       AND has_table_privilege(r.role_name, c.oid, priv_list);
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'old defaults: anon/authenticated hold one of % on: %', priv_list, missing;
+    END IF;
+
+    -- DML stays in the default ACL: only the four privileges were taken out.
+    CREATE TABLE public.verify_new_table (id int);
+    IF has_table_privilege('anon', 'public.verify_new_table', priv_list)
+       OR has_table_privilege('authenticated', 'public.verify_new_table', priv_list) THEN
+        RAISE EXCEPTION 'old defaults: a table created afterwards still gets one of % for anon/authenticated', priv_list;
+    END IF;
+    IF NOT has_table_privilege('service_role', 'public.verify_new_table', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE') THEN
+        RAISE EXCEPTION 'old defaults: service_role lost its default table privileges';
+    END IF;
+    DROP TABLE public.verify_new_table;
+
+    RAISE NOTICE 'OK: under the old default privileges anon/authenticated end up with none of %, on existing and on future tables', priv_list;
+END $$;
+SQL
+else
+    echo "    skipped: connected as $(psql -d postgres -tAc 'SELECT current_user'), not postgres (CI connects as postgres)"
+fi
 
 echo "==> Payment plan payoff DB checks (#452)"
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/payment-plan-payoff-db-test.sql"

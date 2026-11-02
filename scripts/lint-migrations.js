@@ -19,11 +19,12 @@
  *      minimum the object's access path needs (see AGENTS.md).
  *
  * One more check is a WARNING, not a failure (exit code unchanged):
- *   4. A GRANT of TRUNCATE, REFERENCES, TRIGGER (or ALL) on a table or view to
- *      anon / authenticated / PUBLIC, in a migration newer than
+ *   4. A GRANT of TRUNCATE, REFERENCES, TRIGGER, MAINTAIN (or ALL) on a table or
+ *      view to anon / authenticated / PUBLIC, in a migration newer than
  *      20261102180000_revoke_truncate_references_trigger_from_api_roles.sql.
- *      RLS does not gate those three privileges and PostgREST never uses them,
- *      so the API roles do not need them. (service_role is not checked.)
+ *      This includes ALTER DEFAULT PRIVILEGES ... GRANT ... ON TABLES. RLS does
+ *      not gate those privileges and PostgREST never uses them, so the API
+ *      roles do not need them. (service_role is not checked.)
  *
  * Add `-- lint-ok: <reason>` on the line before a statement to allow it.
  *
@@ -42,9 +43,10 @@ const path = require('path');
 const LEGACY_GRANT_MIGRATION = '20261102170500_explicit_public_grants.sql';
 
 /**
- * 20261102180000 revoked TRUNCATE / REFERENCES / TRIGGER from anon and
- * authenticated. Migrations newer than it get a warning if they grant any of
- * the three (or ALL) on a table or view to those roles again.
+ * 20261102180000 revoked TRUNCATE / REFERENCES / TRIGGER / MAINTAIN from anon
+ * and authenticated, and from the postgres default ACL for tables. Migrations
+ * newer than it get a warning if they grant any of them (or ALL) on a table or
+ * view, or by default privileges on tables, to those roles again.
  */
 const NARROWING_MIGRATION = '20261102180000_revoke_truncate_references_trigger_from_api_roles.sql';
 
@@ -211,8 +213,8 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
 }
 
 /**
- * Warnings (non-fatal): GRANT TRUNCATE / REFERENCES / TRIGGER / ALL on a table
- * or view to anon, authenticated or PUBLIC, in a migration newer than the one
+ * Warnings (non-fatal): GRANT TRUNCATE / REFERENCES / TRIGGER / MAINTAIN / ALL
+ * on a table or view (or ALTER DEFAULT PRIVILEGES ... GRANT ... ON TABLES) to anon, authenticated or PUBLIC, in a migration newer than the one
  * that revoked them. Sequences, functions, schemas and databases are skipped
  * (ALL PRIVILEGES there does not include the three), as is a REVOKE.
  */
@@ -229,17 +231,17 @@ function lintMigrationWarnings(migrationsDir, narrowingMigration = NARROWING_MIG
     grantRe.lastIndex = 0;
     while ((m = grantRe.exec(blanked)) !== null) {
       const [, privs, target, grantees] = m;
-      if (!/\b(?:TRUNCATE|REFERENCES|TRIGGER|ALL)\b/i.test(privs)) continue;
+      if (!/\b(?:TRUNCATE|REFERENCES|TRIGGER|MAINTAIN|ALL)\b/i.test(privs)) continue;
       if (/^\s*(?:(?:ALL\s+)?(?:SEQUENCES|FUNCTIONS|ROUTINES|PROCEDURES)\b|SEQUENCE\b|FUNCTION\b|ROUTINE\b|PROCEDURE\b|SCHEMA\b|DATABASE\b|DOMAIN\b|LANGUAGE\b|TYPE\b|TABLESPACE\b|LARGE\b|FOREIGN\b|PARAMETER\b)/i.test(target)) continue;
       const toList = grantees.replace(/\bWITH\s+GRANT\s+OPTION\b/gi, '');
       if (!/(?:^|[\s,])"?(?:anon|authenticated|PUBLIC)"?(?=$|[\s,])/i.test(toList)) continue;
       const line = lineOf(blanked, m.index);
       if (line > 1 && /--\s*lint-ok:/i.test(lines[line - 2])) continue;
       warnings.push(
-        `${name}:${line}  TRUNCATE/REFERENCES/TRIGGER (or ALL) granted to anon/authenticated/PUBLIC\n` +
+        `${name}:${line}  TRUNCATE/REFERENCES/TRIGGER/MAINTAIN (or ALL) granted to anon/authenticated/PUBLIC\n` +
         `    ${lines[line - 1].trim()}\n` +
         `    RLS does not gate these privileges and PostgREST never uses them; they were revoked\n` +
-        `    from the API roles by ${narrowingMigration}.\n` +
+        `    from the API roles (and from the default ACL) by ${narrowingMigration}.\n` +
         `    Grant only the DML verbs the access path needs (SELECT, INSERT, UPDATE, DELETE), or put\n` +
         `    "-- lint-ok: <reason>" on the line above.`
       );

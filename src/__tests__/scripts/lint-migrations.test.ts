@@ -198,9 +198,17 @@ describe('lint-migrations: warn on TRUNCATE / REFERENCES / TRIGGER for the API r
     expect(warnings({ [NEW]: 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon;' })).toHaveLength(1)
   })
 
+  it('warns on MAINTAIN, and on default privileges that grant any of them on tables', () => {
+    expect(warnings({ [NEW]: 'GRANT MAINTAIN ON public.t TO anon;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT TRUNCATE ON TABLES TO authenticated;' })).toHaveLength(1)
+  })
+
   it('does not warn on DML verbs, service_role, revokes, or other object kinds', () => {
     expect(warnings({ [NEW]: 'GRANT SELECT, INSERT, UPDATE, DELETE ON public.t TO authenticated, anon;' })).toEqual([])
     expect(warnings({ [NEW]: 'GRANT ALL ON public.t TO service_role;' })).toEqual([])
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE, MAINTAIN ON TABLES FROM anon;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO anon;' })).toEqual([])
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;' })).toEqual([])
     expect(warnings({ [NEW]: 'GRANT TRUNCATE, REFERENCES, TRIGGER ON public.t TO service_role, postgres;' })).toEqual([])
     expect(warnings({ [NEW]: 'REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;' })).toEqual([])
     expect(warnings({ [NEW]: 'GRANT ALL ON SEQUENCE public.s TO anon;\nGRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon;' })).toEqual([])
@@ -233,12 +241,23 @@ describe('lint-migrations: the repository', () => {
     expect(lintMigrationWarnings(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
   })
 
-  it('narrows anon and authenticated, and only those, with a single idempotent REVOKE', () => {
+  it('narrows anon and authenticated, and only those, idempotently, on existing and future tables', () => {
     const sql = fs.readFileSync(path.join(__dirname, '../../../supabase/migrations', NARROWING_MIGRATION), 'utf8')
-    const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
-    expect(code.replace(/\s+/g, ' ').trim()).toBe(
-      'REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;'
-    )
+    const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n').replace(/\s+/g, ' ')
+    // existing tables and views
+    expect(code).toContain('REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;')
+    expect(code).toContain("REVOKE MAINTAIN ON ALL TABLES IN SCHEMA public FROM anon, authenticated")
+    // future tables: the postgres default ACL
+    expect(code).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon, authenticated;')
+    expect(code).toContain("REVOKE MAINTAIN ON TABLES FROM anon, authenticated")
+    // MAINTAIN is a syntax error before PostgreSQL 17: only ever inside a string, behind the version guard
+    const maintain = code.match(/MAINTAIN/g) ?? []
+    const quoted = code.match(/'[^']*MAINTAIN[^']*'/g) ?? []
+    expect(maintain.length).toBeGreaterThan(0)
+    expect(quoted).toHaveLength(maintain.length)
+    expect(code).toContain("current_setting('server_version_num')::int >= 170000")
+    // it only revokes: no GRANT anywhere
+    expect(code).not.toMatch(/\bGRANT\b/i)
     expect(NARROWING_MIGRATION > LEGACY_GRANT_MIGRATION).toBe(true)
   })
 

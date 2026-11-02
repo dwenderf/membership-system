@@ -130,6 +130,29 @@ describe('lint-migrations: GRANT EXECUTE inspects only the grantee', () => {
     expect(lint({ [NEW]: 'REVOKE EXECUTE ON FUNCTION public.f() FROM anon;' })).toEqual([])
   })
 
+  it('flags GRANT ALL on functions, procedures and routines, since ALL includes EXECUTE', () => {
+    for (const grant of [
+      `GRANT ALL ON FUNCTION ${f} TO anon;`,
+      `GRANT ALL PRIVILEGES ON FUNCTION ${f} TO authenticated;`,
+      'GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon;',
+      'GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA public TO PUBLIC;',
+      'GRANT ALL ON PROCEDURE public.p() TO service_role, anon;',
+      'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon;',
+      `grant\n  all\n  on function ${f}\n  to\n  anon;`,
+    ]) {
+      expect(lint({ [NEW]: grant })).toHaveLength(1)
+    }
+  })
+
+  it('allows GRANT ALL on functions to service_role, with lint-ok, and ignores unrelated GRANT ALL / REVOKE ALL', () => {
+    expect(lint({ [NEW]: `GRANT ALL ON FUNCTION ${f} TO service_role;` })).toEqual([])
+    expect(lint({ [NEW]: `-- lint-ok: intended\nGRANT ALL ON FUNCTION ${f} TO anon;` })).toEqual([])
+    expect(lint({ [NEW]: `REVOKE ALL ON FUNCTION ${f} FROM anon;` })).toEqual([])
+    expect(lint({ [NEW]: "-- GRANT ALL ON FUNCTION public.f() TO anon;\nSELECT 'GRANT ALL ON FUNCTION public.f() TO anon;';" })).toEqual([])
+    // Tables / sequences are not functions: GRANT ALL there is not an EXECUTE grant.
+    expect(lint({ [NEW]: 'GRANT ALL ON TABLE public.t TO anon;\nGRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon;' })).toEqual([])
+  })
+
   it('catches every EXECUTE grant when several are in one file', () => {
     const sql = `GRANT EXECUTE ON FUNCTION public.a() TO service_role;\nGRANT EXECUTE ON FUNCTION public.b() TO anon;\nGRANT EXECUTE ON FUNCTION public.c() TO authenticated;`
     expect(lint({ [NEW]: sql })).toHaveLength(2)
@@ -158,18 +181,23 @@ describe('lint-migrations: the repository', () => {
     expect(lintMigrations(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
   })
 
-  it('grants the four service-role RPC functions with exact signatures', () => {
+  it('grants every service_role_only_function in schema-verify-expectations.txt', () => {
+    const expectations = fs.readFileSync(
+      path.join(__dirname, '../../../scripts/ci/schema-verify-expectations.txt'),
+      'utf8'
+    )
+    const functions = expectations
+      .split('\n')
+      .map((l) => l.replace(/#.*/, '').trim())
+      .filter((l) => l.startsWith('service_role_only_function '))
+      .map((l) => l.slice('service_role_only_function '.length).trim())
+    expect(functions.length).toBeGreaterThan(0)
     const sql = fs.readFileSync(
       path.join(__dirname, '../../../supabase/migrations', LEGACY_GRANT_MIGRATION),
       'utf8'
     )
-    for (const sig of [
-      'get_auth_audit_logs(uuid, integer, integer, timestamp with time zone, timestamp with time zone)',
-      'get_oauth_email_mismatches()',
-      'get_pending_xero_invoices_with_lock(integer)',
-      'get_pending_xero_payments_with_lock(integer)',
-    ]) {
-      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION public.${sig} TO service_role;`)
+    for (const sig of functions) {
+      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${sig} TO service_role;`)
     }
   })
 })

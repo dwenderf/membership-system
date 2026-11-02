@@ -7,7 +7,9 @@
  *   1. A view created without `security_invoker=true` runs as its owner and
  *      ignores the RLS on the tables underneath it, so it can be world-readable.
  *   2. Granting EXECUTE on a SECURITY DEFINER function to anon/authenticated
- *      publishes it at /rest/v1/rpc/<name>, RLS bypassed.
+ *      publishes it at /rest/v1/rpc/<name>, RLS bypassed. `GRANT ALL
+ *      [PRIVILEGES] ON FUNCTION(S) / ALL FUNCTIONS IN SCHEMA ...` includes
+ *      EXECUTE and is flagged the same way.
  *   3. A table, view or sequence created in `public` without a GRANT. Since
  *      2026-10-30 Supabase no longer grants anon / authenticated / service_role
  *      anything on new objects, so such an object answers 42501 "permission
@@ -127,11 +129,12 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
       }
     });
 
-    // Rule 2: GRANT EXECUTE to anon / authenticated / PUBLIC. Only the grantee
+    // Rule 2: GRANT EXECUTE (or GRANT ALL on functions / procedures / routines,
+    // which includes EXECUTE) to anon / authenticated / PUBLIC. Only the grantee
     // list (the text after the last TO of the statement) is inspected, so a
     // `public.` schema qualifier, or a function named after one of the roles,
     // elsewhere in the statement does not trip it. Works across lines.
-    const execRe = /\bGRANT\s+EXECUTE\b[^;]*/gi;
+    const execRe = /\bGRANT\s+(?:EXECUTE\b|ALL(?:\s+PRIVILEGES)?\s+ON\s+(?:ALL\s+)?(?:FUNCTIONS?|PROCEDURES?|ROUTINES?)\b)[^;]*/gi;
     let e;
     while ((e = execRe.exec(blanked)) !== null) {
       const afterTo = e[0].split(/\bTO\b/i);

@@ -1,0 +1,26 @@
+# Access expectations that `npm run schema:verify` (scripts/verify-schema-applies.sh)
+# checks against a database rebuilt from supabase/schema.sql. They exist here, not
+# in the script, so adding a service-role-only object is a one-line change.
+#
+# Format: one entry per line, "<kind> <name>"; blank lines and # comments are ignored.
+#
+#   service_role_only_relation <table or view in public>
+#       Readable by service_role only. anon / authenticated must have no SELECT.
+#       EVERY OTHER table and view in public must be readable by anon and
+#       authenticated (RLS decides which rows), so a new relation that is not
+#       listed here and is not granted to them fails the check. An entry that does
+#       not match an existing relation also fails (a stale entry).
+#
+#   service_role_only_function <regprocedure, e.g. public.f(uuid, integer)>
+#       Called over .rpc() with the service-role client. service_role must have
+#       EXECUTE; anon and authenticated must not. Must match a real function.
+#
+# Keep this file in step with the migrations: when you grant a relation or
+# function to service_role only, list it here.
+
+service_role_only_relation payment_plan_summary
+
+service_role_only_function public.get_auth_audit_logs(uuid, integer, integer, timestamp with time zone, timestamp with time zone)
+service_role_only_function public.get_oauth_email_mismatches()
+service_role_only_function public.get_pending_xero_invoices_with_lock(integer)
+service_role_only_function public.get_pending_xero_payments_with_lock(integer)

@@ -70,11 +70,49 @@ echo "==> Checking explicit grants (Supabase no longer grants new public objects
 # The stand-in roles have no default privileges, so anything schema.sql does not
 # GRANT itself is unreachable here -- the situation a rebuild is in since
 # Supabase's 2026-10-30 change.
-psql -d "$DB" -v ON_ERROR_STOP=1 -tA <<'SQL'
+#
+# Which relations / functions are service_role-only comes from
+# scripts/ci/schema-verify-expectations.txt, not from this script.
+EXPECTATIONS="$REPO_ROOT/scripts/ci/schema-verify-expectations.txt"
+SERVICE_ONLY_RELATIONS=""
+SERVICE_ONLY_FUNCTIONS=""
+while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -z "$line" ] && continue
+    kind="${line%%[[:space:]]*}"
+    name="$(printf '%s' "${line#"$kind"}" | sed -e 's/^[[:space:]]*//')"
+    case "$kind" in
+        service_role_only_relation) SERVICE_ONLY_RELATIONS+="${name}"$'\n' ;;
+        service_role_only_function) SERVICE_ONLY_FUNCTIONS+="${name}"$'\n' ;;
+        *) echo "Unknown entry '$kind' in $EXPECTATIONS" >&2; exit 1 ;;
+    esac
+done < "$EXPECTATIONS"
+
+psql -d "$DB" -v ON_ERROR_STOP=1 -tA \
+    -v "service_only_relations=$SERVICE_ONLY_RELATIONS" \
+    -v "service_only_functions=$SERVICE_ONLY_FUNCTIONS" <<'SQL'
+-- psql does not substitute :variables inside a DO body, so hand the lists over
+-- as settings (newline-separated).
+SELECT set_config('verify.service_only_relations', :'service_only_relations', false) AS _a,
+       set_config('verify.service_only_functions', :'service_only_functions', false) AS _b \gset
+
 DO $$
 DECLARE
     missing text;
+    service_only_rels text[] := array_remove(string_to_array(current_setting('verify.service_only_relations'), E'\n'), '');
+    service_only_fns  text[] := array_remove(string_to_array(current_setting('verify.service_only_functions'), E'\n'), '');
 BEGIN
+    -- A listed relation that does not exist is a stale entry.
+    SELECT string_agg(r, ', ' ORDER BY r) INTO missing
+      FROM unnest(service_only_rels) AS r
+     WHERE NOT EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') AND c.relname = r);
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'schema-verify-expectations.txt lists relation(s) that do not exist in public: %', missing;
+    END IF;
+
     SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
@@ -83,19 +121,24 @@ BEGIN
         RAISE EXCEPTION 'service_role cannot SELECT from: %', missing;
     END IF;
 
+    -- Everything not on the service-role-only list is read by the browser client.
     SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
-       AND c.relname <> 'payment_plan_summary'
+       AND NOT (c.relname = ANY (service_only_rels))
        AND NOT (has_table_privilege('anon', c.oid, 'SELECT') AND has_table_privilege('authenticated', c.oid, 'SELECT'));
     IF missing IS NOT NULL THEN
-        RAISE EXCEPTION 'anon/authenticated cannot SELECT from (expected, matching production): %', missing;
+        RAISE EXCEPTION 'anon/authenticated cannot SELECT from (expected, matching production; if it is meant to be service_role-only, add it to scripts/ci/schema-verify-expectations.txt): %', missing;
     END IF;
 
-    -- payment_plan_summary is service_role-only in production.
-    IF has_table_privilege('anon', 'public.payment_plan_summary', 'SELECT')
-       OR has_table_privilege('authenticated', 'public.payment_plan_summary', 'SELECT') THEN
-        RAISE EXCEPTION 'payment_plan_summary must be service_role-only';
+    -- The listed relations must be service_role-only.
+    SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
+       AND c.relname = ANY (service_only_rels)
+       AND (has_table_privilege('anon', c.oid, 'SELECT') OR has_table_privilege('authenticated', c.oid, 'SELECT'));
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'listed as service_role-only but anon/authenticated can SELECT: %', missing;
     END IF;
 
     IF NOT has_sequence_privilege('authenticated', 'public.member_id_seq', 'USAGE') THEN
@@ -105,33 +148,25 @@ BEGIN
     -- Functions the app calls through .rpc() with the service-role client. A
     -- rebuild no longer gets EXECUTE for service_role by default, and PUBLIC's
     -- EXECUTE was revoked by 20260907000002, so each needs an explicit grant.
-    -- anon / authenticated must not be able to call them.
+    -- anon / authenticated must not be able to call them. (regprocedure casts
+    -- fail if a listed signature does not exist.)
     SELECT string_agg(f.proc::text, ', ' ORDER BY f.proc::text) INTO missing
-      FROM unnest(ARRAY[
-             'public.get_auth_audit_logs(uuid,integer,integer,timestamp with time zone,timestamp with time zone)',
-             'public.get_oauth_email_mismatches()',
-             'public.get_pending_xero_invoices_with_lock(integer)',
-             'public.get_pending_xero_payments_with_lock(integer)'
-           ]::regprocedure[]) AS f(proc)
+      FROM unnest(service_only_fns::regprocedure[]) AS f(proc)
      WHERE NOT has_function_privilege('service_role', f.proc, 'EXECUTE');
     IF missing IS NOT NULL THEN
         RAISE EXCEPTION 'service_role cannot EXECUTE (called over .rpc() by the app): %', missing;
     END IF;
 
     SELECT string_agg(f.proc::text, ', ' ORDER BY f.proc::text) INTO missing
-      FROM unnest(ARRAY[
-             'public.get_auth_audit_logs(uuid,integer,integer,timestamp with time zone,timestamp with time zone)',
-             'public.get_oauth_email_mismatches()',
-             'public.get_pending_xero_invoices_with_lock(integer)',
-             'public.get_pending_xero_payments_with_lock(integer)'
-           ]::regprocedure[]) AS f(proc)
+      FROM unnest(service_only_fns::regprocedure[]) AS f(proc)
      WHERE has_function_privilege('anon', f.proc, 'EXECUTE')
         OR has_function_privilege('authenticated', f.proc, 'EXECUTE');
     IF missing IS NOT NULL THEN
         RAISE EXCEPTION 'anon/authenticated can EXECUTE service-only functions: %', missing;
     END IF;
 
-    RAISE NOTICE 'OK: every public table and view is granted to service_role; payment_plan_summary is service_role-only; the four service-role RPC functions are executable by service_role only';
+    RAISE NOTICE 'OK: every public table and view is granted to service_role; % relation(s) and % function(s) are service_role-only as listed in schema-verify-expectations.txt',
+        cardinality(service_only_rels), cardinality(service_only_fns);
 END $$;
 SQL
 

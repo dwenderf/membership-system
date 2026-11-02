@@ -266,7 +266,7 @@ Migrations are applied deliberately, not as a side effect of merging. Two suppor
 **By hand, in the SQL editor — only as a fallback, and never on its own.** The editor runs the SQL but writes no tracking row, so the CLI still believes the migration is pending: the next `db push` tries to re-apply it and the preflight check reports the target as behind even though the change is live. If you do apply by hand, immediately record it:
 
 ```bash
-supabase migration repair --status applied <version> --db-url "postgresql://..."
+supabase migration repair --status applied <version> --remote="postgresql://..."
 ```
 
 This is not theoretical — it's why the pre-2026-09-07 history was invisible to the CLI, and why seeding was needed before any of this could work.

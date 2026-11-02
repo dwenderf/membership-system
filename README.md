@@ -422,7 +422,7 @@ Someone will eventually want member data in a spreadsheet, a dashboard, or anoth
 
 Supabase publishes everything in the `public` schema through PostgREST. The moment a view or function exists there, it has a public URL — `/rest/v1/<view>` or `/rest/v1/rpc/<function>` — and the anon key that unlocks it is not a secret: it ships in the browser bundle of every page on the site. Two specific traps:
 
-- A **view without `security_invoker=true`** runs as its owner and ignores the RLS on the tables underneath it, while Supabase's default privileges hand `anon` SELECT on it automatically.
+- A **view without `security_invoker=true`** runs as its owner and ignores the RLS on the tables underneath it, and anyone granted SELECT on it reads the underlying tables unfiltered. (Before 2026-10-30 Supabase's default privileges handed `anon` SELECT on every new view automatically; they no longer do, so a new table or view needs an explicit `GRANT` — see AGENTS.md, "Grants on new tables, views and sequences".)
 - A **`SECURITY DEFINER` function** ignores RLS entirely, and (before `20260907000002_revoke_public_function_access.sql`) new functions were granted to `anon` and `authenticated` by default.
 
 This is not hypothetical. Three export helpers — `get_users_data()`, `get_full_data()` and `get_current_data()` — were created directly in the SQL editor to feed a Google Sheet, and explicitly granted to `anon`. For about eleven weeks, anyone on the internet could `POST /rest/v1/rpc/get_users_data` and receive every member's first name, last name, email address and member ID. They were dropped in that migration and replaced by the route described below.

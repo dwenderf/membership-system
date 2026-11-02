@@ -6,7 +6,13 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { lintMigrations, grantedRelations, LEGACY_GRANT_MIGRATION } from '../../../scripts/lint-migrations.js'
+import {
+  lintMigrations,
+  lintMigrationWarnings,
+  grantedRelations,
+  LEGACY_GRANT_MIGRATION,
+  NARROWING_MIGRATION,
+} from '../../../scripts/lint-migrations.js'
 
 const LEGACY = '20261102170500_grants.sql'
 
@@ -170,6 +176,60 @@ describe('lint-migrations: grantee of a table grant', () => {
   })
 })
 
+const NARROW = '20261102180000_narrow.sql'
+
+function warnings(files: Record<string, string>, narrowing: string = NARROW): string[] {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lint-migrations-warn-'))
+  try {
+    for (const [name, sql] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), sql)
+    return lintMigrationWarnings(dir, narrowing)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+describe('lint-migrations: warn on TRUNCATE / REFERENCES / TRIGGER for the API roles', () => {
+  it('warns when a newer migration grants one of the three to anon, authenticated or PUBLIC', () => {
+    expect(warnings({ [NEW]: 'GRANT SELECT, TRUNCATE ON public.t TO authenticated;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'GRANT REFERENCES ON TABLE public.t TO anon;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'grant trigger\n  on public.t\n  to service_role, anon;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'GRANT TRUNCATE ON public.t TO PUBLIC;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'GRANT ALL ON public.t TO authenticated;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon;' })).toHaveLength(1)
+  })
+
+  it('warns on MAINTAIN, and on default privileges that grant any of them on tables', () => {
+    expect(warnings({ [NEW]: 'GRANT MAINTAIN ON public.t TO anon;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;' })).toHaveLength(1)
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT TRUNCATE ON TABLES TO authenticated;' })).toHaveLength(1)
+  })
+
+  it('does not warn on DML verbs, service_role, revokes, or other object kinds', () => {
+    expect(warnings({ [NEW]: 'GRANT SELECT, INSERT, UPDATE, DELETE ON public.t TO authenticated, anon;' })).toEqual([])
+    expect(warnings({ [NEW]: 'GRANT ALL ON public.t TO service_role;' })).toEqual([])
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE, MAINTAIN ON TABLES FROM anon;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO anon;' })).toEqual([])
+    expect(warnings({ [NEW]: 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;' })).toEqual([])
+    expect(warnings({ [NEW]: 'GRANT TRUNCATE, REFERENCES, TRIGGER ON public.t TO service_role, postgres;' })).toEqual([])
+    expect(warnings({ [NEW]: 'REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;' })).toEqual([])
+    expect(warnings({ [NEW]: 'GRANT ALL ON SEQUENCE public.s TO anon;\nGRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon;' })).toEqual([])
+    expect(warnings({ [NEW]: 'GRANT ALL ON FUNCTION public.f() TO anon;\nGRANT ALL ON SCHEMA public TO anon;' })).toEqual([])
+    expect(warnings({ [NEW]: "-- GRANT TRUNCATE ON public.t TO anon;\nSELECT 'GRANT TRUNCATE ON public.t TO anon;';" })).toEqual([])
+  })
+
+  it('leaves the narrowing migration itself and older migrations alone', () => {
+    const sql = 'GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.t TO anon, authenticated;'
+    expect(warnings({ [NARROW]: sql, '20261102170500_grants.sql': sql })).toEqual([])
+  })
+
+  it('honours -- lint-ok: on the line above', () => {
+    expect(warnings({ [NEW]: '-- lint-ok: reporting job truncates this staging table\nGRANT TRUNCATE ON public.t TO authenticated;' })).toEqual([])
+  })
+
+  it('is advisory: it does not appear among the blocking problems', () => {
+    expect(lint({ [NEW]: 'CREATE TABLE public.t (id int);\nGRANT SELECT, TRUNCATE ON public.t TO authenticated, service_role;' })).toEqual([])
+  })
+})
+
 describe('lint-migrations: strings and comments for the view rule', () => {
   it('ignores CREATE VIEW inside a string literal or comment', () => {
     expect(lint({ [NEW]: "SELECT 'create view public.v as select 1';\n-- CREATE VIEW public.w AS SELECT 1;" })).toEqual([])
@@ -177,11 +237,35 @@ describe('lint-migrations: strings and comments for the view rule', () => {
 })
 
 describe('lint-migrations: the repository', () => {
+  it('has no warnings on supabase/migrations', () => {
+    expect(lintMigrationWarnings(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
+  })
+
+  it('narrows anon and authenticated, and only those, idempotently, on existing and future tables', () => {
+    const sql = fs.readFileSync(path.join(__dirname, '../../../supabase/migrations', NARROWING_MIGRATION), 'utf8')
+    const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n').replace(/\s+/g, ' ')
+    // existing tables and views
+    expect(code).toContain('REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;')
+    expect(code).toContain("REVOKE MAINTAIN ON ALL TABLES IN SCHEMA public FROM anon, authenticated")
+    // future tables: the postgres default ACL
+    expect(code).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon, authenticated;')
+    expect(code).toContain("REVOKE MAINTAIN ON TABLES FROM anon, authenticated")
+    // MAINTAIN is a syntax error before PostgreSQL 17: only ever inside a string, behind the version guard
+    const maintain = code.match(/MAINTAIN/g) ?? []
+    const quoted = code.match(/'[^']*MAINTAIN[^']*'/g) ?? []
+    expect(maintain.length).toBeGreaterThan(0)
+    expect(quoted).toHaveLength(maintain.length)
+    expect(code).toContain("current_setting('server_version_num')::int >= 170000")
+    // it only revokes: no GRANT anywhere
+    expect(code).not.toMatch(/\bGRANT\b/i)
+    expect(NARROWING_MIGRATION > LEGACY_GRANT_MIGRATION).toBe(true)
+  })
+
   it('passes on supabase/migrations', () => {
     expect(lintMigrations(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
   })
 
-  it('grants every service_role_only_function in schema-verify-expectations.txt', () => {
+  it('leaves every service_role_only_function in schema-verify-expectations.txt granted to service_role by the latest migration that touches it', () => {
     const expectations = fs.readFileSync(
       path.join(__dirname, '../../../scripts/ci/schema-verify-expectations.txt'),
       'utf8'
@@ -192,12 +276,23 @@ describe('lint-migrations: the repository', () => {
       .filter((l) => l.startsWith('service_role_only_function '))
       .map((l) => l.slice('service_role_only_function '.length).trim())
     expect(functions.length).toBeGreaterThan(0)
-    const sql = fs.readFileSync(
-      path.join(__dirname, '../../../supabase/migrations', LEGACY_GRANT_MIGRATION),
-      'utf8'
-    )
+    // A grant may live in any migration (a function added after the catch-up
+    // migration carries its own). The latest GRANT or REVOKE EXECUTE for
+    // service_role on each signature wins, in migration order.
+    const dir = path.join(__dirname, '../../../supabase/migrations')
+    const statements: { sig: string; granted: boolean }[] = []
+    const stmtRe = /\b(GRANT|REVOKE)\s+EXECUTE\s+ON\s+FUNCTION\s+([^;]*?)\s+(TO|FROM)\s+([^;]*);/gi
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8').replace(/--[^\n]*/g, '')
+      let m: RegExpExecArray | null
+      while ((m = stmtRe.exec(sql)) !== null) {
+        if (!/(?:^|[\s,])"?service_role"?(?=$|[\s,])/i.test(m[4])) continue
+        statements.push({ sig: m[2].replace(/\s+/g, ' ').trim(), granted: m[1].toUpperCase() === 'GRANT' })
+      }
+    }
     for (const sig of functions) {
-      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${sig} TO service_role;`)
+      const last = statements.filter((st) => st.sig === sig).pop()
+      expect({ sig, granted: last?.granted }).toEqual({ sig, granted: true })
     }
   })
 })

@@ -153,7 +153,11 @@ view or sequence must include an explicit, least-privilege `GRANT` next to
 `42501` before RLS runs. New functions need an explicit
 `GRANT EXECUTE ... TO service_role` and a `REVOKE EXECUTE ... FROM PUBLIC` (PostgreSQL
 grants PUBLIC EXECUTE by default, so `anon` can call a new function until it is
-revoked). `npm run migrations:lint` enforces the table/view/sequence grants. Details and an
+revoked). `npm run migrations:lint` enforces the table/view/sequence grants, and warns if
+`TRUNCATE`, `REFERENCES`, `TRIGGER` or `MAINTAIN` is granted to `anon`/`authenticated` again
+(they were revoked, on existing tables and in the `postgres` default privileges, by
+`20261102180000_...`; RLS does not gate them). `npm run schema:verify` fails if a rebuild
+leaves any of them on a table, view or default ACL. Details and an
 example: AGENTS.md, "Grants on new tables, views and sequences".
 
 ### RLS (Row Level Security) Migrations

@@ -18,6 +18,13 @@
  *      to ENABLE ROW LEVEL SECURITY and the policies, and should be the
  *      minimum the object's access path needs (see AGENTS.md).
  *
+ * One more check is a WARNING, not a failure (exit code unchanged):
+ *   4. A GRANT of TRUNCATE, REFERENCES, TRIGGER (or ALL) on a table or view to
+ *      anon / authenticated / PUBLIC, in a migration newer than
+ *      20261102180000_revoke_truncate_references_trigger_from_api_roles.sql.
+ *      RLS does not gate those three privileges and PostgREST never uses them,
+ *      so the API roles do not need them. (service_role is not checked.)
+ *
  * Add `-- lint-ok: <reason>` on the line before a statement to allow it.
  *
  *   npm run migrations:lint
@@ -33,6 +40,13 @@ const path = require('path');
  * Every newer migration must carry its own GRANTs.
  */
 const LEGACY_GRANT_MIGRATION = '20261102170500_explicit_public_grants.sql';
+
+/**
+ * 20261102180000 revoked TRUNCATE / REFERENCES / TRIGGER from anon and
+ * authenticated. Migrations newer than it get a warning if they grant any of
+ * the three (or ALL) on a table or view to those roles again.
+ */
+const NARROWING_MIGRATION = '20261102180000_revoke_truncate_references_trigger_from_api_roles.sql';
 
 const IDENT = '(?:"[^"]+"|[A-Za-z_][\\w$]*)';
 const QUALIFIED = `(?:${IDENT}\\.)?${IDENT}`;
@@ -196,10 +210,63 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
   return problems;
 }
 
-module.exports = { lintMigrations, grantedRelations, LEGACY_GRANT_MIGRATION };
+/**
+ * Warnings (non-fatal): GRANT TRUNCATE / REFERENCES / TRIGGER / ALL on a table
+ * or view to anon, authenticated or PUBLIC, in a migration newer than the one
+ * that revoked them. Sequences, functions, schemas and databases are skipped
+ * (ALL PRIVILEGES there does not include the three), as is a REVOKE.
+ */
+function lintMigrationWarnings(migrationsDir, narrowingMigration = NARROWING_MIGRATION) {
+  const warnings = [];
+  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  const grantRe = /\bGRANT\b([^;]*?)\bON\b([^;]*?)\bTO\b([^;]*)/gi;
+  for (const name of files) {
+    if (!(name > narrowingMigration)) continue;
+    const text = fs.readFileSync(path.join(migrationsDir, name), 'utf8');
+    const lines = text.split('\n');
+    const blanked = blank(text);
+    let m;
+    grantRe.lastIndex = 0;
+    while ((m = grantRe.exec(blanked)) !== null) {
+      const [, privs, target, grantees] = m;
+      if (!/\b(?:TRUNCATE|REFERENCES|TRIGGER|ALL)\b/i.test(privs)) continue;
+      if (/^\s*(?:(?:ALL\s+)?(?:SEQUENCES|FUNCTIONS|ROUTINES|PROCEDURES)\b|SEQUENCE\b|FUNCTION\b|ROUTINE\b|PROCEDURE\b|SCHEMA\b|DATABASE\b|DOMAIN\b|LANGUAGE\b|TYPE\b|TABLESPACE\b|LARGE\b|FOREIGN\b|PARAMETER\b)/i.test(target)) continue;
+      const toList = grantees.replace(/\bWITH\s+GRANT\s+OPTION\b/gi, '');
+      if (!/(?:^|[\s,])"?(?:anon|authenticated|PUBLIC)"?(?=$|[\s,])/i.test(toList)) continue;
+      const line = lineOf(blanked, m.index);
+      if (line > 1 && /--\s*lint-ok:/i.test(lines[line - 2])) continue;
+      warnings.push(
+        `${name}:${line}  TRUNCATE/REFERENCES/TRIGGER (or ALL) granted to anon/authenticated/PUBLIC\n` +
+        `    ${lines[line - 1].trim()}\n` +
+        `    RLS does not gate these privileges and PostgREST never uses them; they were revoked\n` +
+        `    from the API roles by ${narrowingMigration}.\n` +
+        `    Grant only the DML verbs the access path needs (SELECT, INSERT, UPDATE, DELETE), or put\n` +
+        `    "-- lint-ok: <reason>" on the line above.`
+      );
+    }
+  }
+  return warnings;
+}
+
+module.exports = { lintMigrations, lintMigrationWarnings, grantedRelations, LEGACY_GRANT_MIGRATION, NARROWING_MIGRATION };
 
 if (require.main === module) {
-  const problems = lintMigrations(path.join(__dirname, '../supabase/migrations'));
+  const migrationsDir = path.join(__dirname, '../supabase/migrations');
+  const problems = lintMigrations(migrationsDir);
+  const warnings = lintMigrationWarnings(migrationsDir);
+
+  if (warnings.length > 0) {
+    console.warn(`⚠️  ${warnings.length} warning(s) in supabase/migrations (not blocking):\n`);
+    warnings.forEach((w) => console.warn(`  ${w}\n`));
+    if (process.env.GITHUB_ACTIONS) {
+      warnings.forEach((w) => {
+        const [head] = w.split('\n');
+        const [loc, ...rest] = head.split(/\s{2,}/);
+        const [file, ln] = loc.split(':');
+        console.log(`::warning file=supabase/migrations/${file},line=${ln}::${rest.join(' ')}`);
+      });
+    }
+  }
 
   if (problems.length > 0) {
     console.error(`❌ ${problems.length} problem(s) in supabase/migrations:\n`);

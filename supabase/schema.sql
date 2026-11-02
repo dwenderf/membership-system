@@ -21,6 +21,7 @@
 --   20261026150000_add_waitlist_use_payment_plan.sql
 --   20261029223700_revoke_execute_on_remaining_trigger_functions.sql
 --   20261102170500_explicit_public_grants.sql
+--   20261102180000_revoke_truncate_references_trigger_from_api_roles.sql
 -- =============================================================================
 
 -- >>> 20260907000000_baseline_schema.sql >>>
@@ -2976,3 +2977,58 @@ GRANT EXECUTE ON FUNCTION public.get_pending_xero_invoices_with_lock(integer) TO
 GRANT EXECUTE ON FUNCTION public.get_pending_xero_payments_with_lock(integer) TO service_role;
 
 -- <<< 20261102170500_explicit_public_grants.sql <<<
+
+-- >>> 20261102180000_revoke_truncate_references_trigger_from_api_roles.sql >>>
+
+-- Narrow anon and authenticated: revoke TRUNCATE, REFERENCES and TRIGGER on
+-- every table and view in `public`.
+--
+-- WHY: 20261102170500_explicit_public_grants.sql wrote down the privileges
+-- Supabase's old default privileges had handed out: SELECT, INSERT, UPDATE,
+-- DELETE, TRUNCATE, REFERENCES and TRIGGER, to anon, authenticated and
+-- service_role. Row level security gates the first four. It does NOT gate the
+-- last three:
+--   * TRUNCATE   empties a table with no row filter at all, RLS never runs.
+--   * REFERENCES lets the holder create a foreign key pointing at the table.
+--   * TRIGGER    lets the holder create a trigger on the table.
+-- None of the three is reachable through PostgREST (it only issues
+-- SELECT / INSERT / UPDATE / DELETE), but they are held by the two roles that
+-- the public anon key and every signed-in browser session map to, for no
+-- benefit. This file takes them away.
+--
+-- AUDIT (2026-11-02, summarised in the PR): nothing in the app or the
+-- migrations needs these privileges for anon or authenticated.
+--   * no TRUNCATE statement exists in the application code or any migration;
+--   * every migration runs as postgres (`supabase db push`), the owner of every
+--     table, which needs no grant to add a foreign key or a trigger;
+--   * an existing trigger fires whatever privileges the invoking role holds
+--     (the TRIGGER privilege is only checked by CREATE TRIGGER);
+--   * the app never opens a SQL connection as anon or authenticated: browser
+--     and server code speak PostgREST (supabase-js), which cannot TRUNCATE.
+--
+-- SCOPE:
+--   * anon, authenticated only. service_role is left as it is.
+--   * SELECT, INSERT, UPDATE, DELETE are left as they are (RLS decides them).
+--   * ON ALL TABLES IN SCHEMA public covers every table and view that exists
+--     when this runs (39 tables and 9 views on production and development; the
+--     one view anon and authenticated never held, payment_plan_summary, is
+--     simply a no-op). It does not touch objects created later: those get their
+--     own least-privilege GRANT in the migration that creates them (AGENTS.md).
+--   * Sequences: TRUNCATE, REFERENCES and TRIGGER are not valid privileges on a
+--     sequence (only USAGE, SELECT and UPDATE are), so member_id_seq has
+--     nothing to revoke and is not touched.
+--   * PUBLIC holds none of the three on any relation in either project (read
+--     from pg_class.relacl on 2026-11-02), so nothing is revoked from PUBLIC.
+--
+-- Against production and development this removes 3 privileges x 2 roles from
+-- each of 39 tables and 8 views. It is re-runnable: revoking a privilege that
+-- is not held is a no-op. Rollback, if ever wanted (it should not be):
+--   GRANT TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public
+--     TO anon, authenticated;
+-- followed by REVOKE ALL ON public.payment_plan_summary FROM anon, authenticated;
+
+REVOKE TRUNCATE, REFERENCES, TRIGGER
+ON ALL TABLES IN SCHEMA public
+FROM anon, authenticated;
+
+-- <<< 20261102180000_revoke_truncate_references_trigger_from_api_roles.sql <<<

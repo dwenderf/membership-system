@@ -145,6 +145,47 @@ BEGIN
         RAISE EXCEPTION 'authenticated cannot use public.member_id_seq';
     END IF;
 
+    -- 20261102180000 narrows anon / authenticated: TRUNCATE, REFERENCES and
+    -- TRIGGER are not gated by RLS and nothing needs them. The four DML verbs
+    -- and everything service_role holds must be unchanged.
+    SELECT string_agg(c.relname || ' (' || r.role_name || ')', ', ' ORDER BY c.relname, r.role_name) INTO missing
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
+     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+       AND (has_table_privilege(r.role_name, c.oid, 'TRUNCATE')
+         OR has_table_privilege(r.role_name, c.oid, 'REFERENCES')
+         OR has_table_privilege(r.role_name, c.oid, 'TRIGGER'));
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'anon/authenticated still hold TRUNCATE, REFERENCES or TRIGGER on: %', missing;
+    END IF;
+
+    SELECT string_agg(c.relname || ' (' || r.role_name || ')', ', ' ORDER BY c.relname, r.role_name) INTO missing
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role_name)
+     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
+       AND NOT (c.relname = ANY (service_only_rels))
+       AND NOT (has_table_privilege(r.role_name, c.oid, 'SELECT')
+            AND has_table_privilege(r.role_name, c.oid, 'INSERT')
+            AND has_table_privilege(r.role_name, c.oid, 'UPDATE')
+            AND has_table_privilege(r.role_name, c.oid, 'DELETE'));
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'anon/authenticated lost SELECT/INSERT/UPDATE/DELETE (they must be untouched): %', missing;
+    END IF;
+
+    SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v')
+       AND NOT (has_table_privilege('service_role', c.oid, 'SELECT')
+            AND has_table_privilege('service_role', c.oid, 'INSERT')
+            AND has_table_privilege('service_role', c.oid, 'UPDATE')
+            AND has_table_privilege('service_role', c.oid, 'DELETE')
+            AND has_table_privilege('service_role', c.oid, 'TRUNCATE')
+            AND has_table_privilege('service_role', c.oid, 'REFERENCES')
+            AND has_table_privilege('service_role', c.oid, 'TRIGGER'));
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'service_role must keep all seven table privileges (untouched), missing on: %', missing;
+    END IF;
+
     -- Functions the app calls through .rpc() with the service-role client. A
     -- rebuild no longer gets EXECUTE for service_role by default, and PUBLIC's
     -- EXECUTE was revoked by 20260907000002, so each needs an explicit grant.
@@ -165,7 +206,7 @@ BEGIN
         RAISE EXCEPTION 'anon/authenticated can EXECUTE service-only functions: %', missing;
     END IF;
 
-    RAISE NOTICE 'OK: every public table and view is granted to service_role; % relation(s) and % function(s) are service_role-only as listed in schema-verify-expectations.txt',
+    RAISE NOTICE 'OK: every public table and view is granted to service_role; anon/authenticated hold no TRUNCATE/REFERENCES/TRIGGER; % relation(s) and % function(s) are service_role-only as listed in schema-verify-expectations.txt',
         cardinality(service_only_rels), cardinality(service_only_fns);
 END $$;
 SQL

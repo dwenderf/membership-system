@@ -51,16 +51,24 @@ function blank(sql) {
     .replace(/'(?:[^']|'')*'/g, keep);
 }
 
-/** Relation names named by GRANT ... ON [TABLE|SEQUENCE] a, b TO ... statements. */
+/** Roles whose access a new object has to be opened to; a grant to anyone else does not count. */
+const API_ROLE = /(?:^|[\s,])"?(?:anon|authenticated|service_role)"?(?=$|[\s,])/i;
+
+/**
+ * Relation names named by GRANT ... ON [TABLE|SEQUENCE] a, b TO <roles> statements,
+ * where <roles> includes at least one of anon / authenticated / service_role
+ * (a grant to postgres or PUBLIC alone does not open an object to the API).
+ */
 function grantedRelations(sql) {
   const granted = new Set();
   const re = new RegExp(
-    `\\bGRANT\\b[^;]*?\\bON\\s+(?:TABLE\\s+|SEQUENCE\\s+)?(${QUALIFIED}(?:\\s*,\\s*${QUALIFIED})*)\\s+TO\\b`,
+    `\\bGRANT\\b[^;]*?\\bON\\s+(?:TABLE\\s+|SEQUENCE\\s+)?(${QUALIFIED}(?:\\s*,\\s*${QUALIFIED})*)\\s+TO\\b([^;]*)`,
     'gi'
   );
   let m;
   while ((m = re.exec(sql)) !== null) {
     if (/^\s*(?:ALL|FUNCTION|SCHEMA|DATABASE|ROUTINE|PROCEDURE)\b/i.test(m[1])) continue;
+    if (!API_ROLE.test(m[2].replace(/\bWITH\s+GRANT\s+OPTION\b/gi, ''))) continue;
     for (const name of m[1].split(',')) {
       const n = publicName(name.trim());
       if (n) granted.add(n);
@@ -95,6 +103,7 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
   for (const name of files) {
     const lines = raw[name].split('\n');
     const blanked = blank(raw[name]);
+    const blankedLines = blanked.split('\n');
     let d;
     while ((d = dropRe.exec(blanked)) !== null) {
       for (const n of d[1].split(',')) {
@@ -104,7 +113,7 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
     }
 
     lines.forEach((line, i) => {
-      const stripped = line.replace(/--.*$/, '');
+      const stripped = blankedLines[i];
       const allowed = i > 0 && /--\s*lint-ok:/i.test(lines[i - 1]);
       if (allowed) return;
 
@@ -116,16 +125,28 @@ function lintMigrations(migrationsDir, legacyGrantMigration = LEGACY_GRANT_MIGRA
           `    Add WITH (security_invoker=true) so the view respects the caller's RLS.`
         );
       }
-
-      if (/\bGRANT\s+EXECUTE\b/i.test(stripped) && /\b(anon|authenticated|PUBLIC)\b/i.test(stripped)) {
-        problems.push(
-          `${name}:${i + 1}  EXECUTE granted to a public role\n` +
-          `    ${line.trim()}\n` +
-          `    Publishes the function at /rest/v1/rpc/. If that is intended, put\n` +
-          `    "-- lint-ok: <reason>" on the line above and confirm it is not SECURITY DEFINER.`
-        );
-      }
     });
+
+    // Rule 2: GRANT EXECUTE to anon / authenticated / PUBLIC. Only the grantee
+    // list (the text after the last TO of the statement) is inspected, so a
+    // `public.` schema qualifier, or a function named after one of the roles,
+    // elsewhere in the statement does not trip it. Works across lines.
+    const execRe = /\bGRANT\s+EXECUTE\b[^;]*/gi;
+    let e;
+    while ((e = execRe.exec(blanked)) !== null) {
+      const afterTo = e[0].split(/\bTO\b/i);
+      if (afterTo.length < 2) continue;
+      const grantees = afterTo[afterTo.length - 1].replace(/\bWITH\s+GRANT\s+OPTION\b/gi, '');
+      if (!/(?:^|[\s,])"?(?:anon|authenticated|PUBLIC)"?(?=$|[\s,])/i.test(grantees)) continue;
+      const line = lineOf(blanked, e.index);
+      if (line > 1 && /--\s*lint-ok:/i.test(lines[line - 2])) continue;
+      problems.push(
+        `${name}:${line}  EXECUTE granted to a public role\n` +
+        `    ${lines[line - 1].trim()}\n` +
+        `    Publishes the function at /rest/v1/rpc/. If that is intended, put\n` +
+        `    "-- lint-ok: <reason>" on the line above and confirm it is not SECURITY DEFINER.`
+      );
+    }
 
     // Rule 3: every CREATE TABLE / VIEW / SEQUENCE in public needs a GRANT.
     // Matching view creation is done on the blanked text so a CREATE VIEW in a

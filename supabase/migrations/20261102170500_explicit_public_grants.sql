@@ -1,4 +1,4 @@
--- Explicit table, view and sequence grants for the `public` schema.
+-- Explicit table, view, sequence and function grants for the `public` schema.
 --
 -- WHY: from 2026-10-30 Supabase no longer grants anon / authenticated /
 -- service_role anything on new objects in `public` (default privileges are not
@@ -18,6 +18,21 @@
 --   * 1 view      -> payment_plan_summary: service_role only (anon and
 --                    authenticated hold nothing on it, in either project)
 --   * 1 sequence  -> member_id_seq: USAGE, SELECT, UPDATE for the three roles
+--   * 4 functions -> service_role: EXECUTE on the four SECURITY DEFINER
+--                    functions the app calls through .rpc() with
+--                    createAdminClient (see FUNCTIONS below)
+--
+-- FUNCTIONS: the same change drops the default grants on functions. Since
+-- 20260907000002 revoked EXECUTE from PUBLIC, service_role only holds EXECUTE on
+-- these four through the old default grant (service_role=X on both live
+-- projects), which a rebuild no longer gets: the Xero batch sync
+-- (src/lib/xero/batch-sync-xero.ts) and the two admin security routes
+-- (auth-logs, oauth-mismatches) would answer 42501. Only service_role is
+-- granted; anon and authenticated stay without EXECUTE. The other functions in
+-- public (generate_member_id, set_member_id_on_insert, update_updated_at_column,
+-- set_registration_published_at, update_user_discount_allowances_updated_at)
+-- are trigger/internal functions the app never calls over RPC, so they are
+-- left alone; is_admin_user() keeps its existing PUBLIC EXECUTE.
 --
 -- Against production and development this migration changes nothing: every
 -- statement re-states a privilege that is already held, and the one REVOKE
@@ -29,7 +44,7 @@
 -- deliberate change (it needs an audit of which tables the browser client
 -- touches as `authenticated`, and nothing here pre-empts it). New objects must
 -- NOT copy this list; they get the minimum their access path needs (AGENTS.md,
--- "Grants on new tables and views").
+-- "Grants on new tables, views and sequences").
 --
 -- MAINTAIN (Postgres 17) is deliberately left out: production holds it through
 -- its default ACL, development does not, nothing in the app uses it, and
@@ -108,3 +123,9 @@ TO service_role;
 
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.member_id_seq
 TO anon, authenticated, service_role;
+
+-- FUNCTIONS (exact signatures, as in pg_proc on production and development).
+GRANT EXECUTE ON FUNCTION public.get_auth_audit_logs(uuid, integer, integer, timestamp with time zone, timestamp with time zone) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_oauth_email_mismatches() TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_pending_xero_invoices_with_lock(integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_pending_xero_payments_with_lock(integer) TO service_role;

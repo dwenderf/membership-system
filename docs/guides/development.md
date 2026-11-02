@@ -150,7 +150,10 @@ Supabase no longer grants `anon` / `authenticated` / `service_role` anything on
 new objects in `public` (since 2026-10-30). Every migration that creates a table,
 view or sequence must include an explicit, least-privilege `GRANT` next to
 `ENABLE ROW LEVEL SECURITY` and the policies, or the first query fails with
-`42501` before RLS runs. `npm run migrations:lint` enforces it. Details and an
+`42501` before RLS runs. New functions need an explicit
+`GRANT EXECUTE ... TO service_role` and a `REVOKE EXECUTE ... FROM PUBLIC` (PostgreSQL
+grants PUBLIC EXECUTE by default, so `anon` can call a new function until it is
+revoked). `npm run migrations:lint` enforces the table/view/sequence grants. Details and an
 example: AGENTS.md, "Grants on new tables, views and sequences".
 
 ### RLS (Row Level Security) Migrations

@@ -102,7 +102,36 @@ BEGIN
         RAISE EXCEPTION 'authenticated cannot use public.member_id_seq';
     END IF;
 
-    RAISE NOTICE 'OK: every public table and view is granted to service_role; payment_plan_summary is service_role-only';
+    -- Functions the app calls through .rpc() with the service-role client. A
+    -- rebuild no longer gets EXECUTE for service_role by default, and PUBLIC's
+    -- EXECUTE was revoked by 20260907000002, so each needs an explicit grant.
+    -- anon / authenticated must not be able to call them.
+    SELECT string_agg(f.proc::text, ', ' ORDER BY f.proc::text) INTO missing
+      FROM unnest(ARRAY[
+             'public.get_auth_audit_logs(uuid,integer,integer,timestamp with time zone,timestamp with time zone)',
+             'public.get_oauth_email_mismatches()',
+             'public.get_pending_xero_invoices_with_lock(integer)',
+             'public.get_pending_xero_payments_with_lock(integer)'
+           ]::regprocedure[]) AS f(proc)
+     WHERE NOT has_function_privilege('service_role', f.proc, 'EXECUTE');
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'service_role cannot EXECUTE (called over .rpc() by the app): %', missing;
+    END IF;
+
+    SELECT string_agg(f.proc::text, ', ' ORDER BY f.proc::text) INTO missing
+      FROM unnest(ARRAY[
+             'public.get_auth_audit_logs(uuid,integer,integer,timestamp with time zone,timestamp with time zone)',
+             'public.get_oauth_email_mismatches()',
+             'public.get_pending_xero_invoices_with_lock(integer)',
+             'public.get_pending_xero_payments_with_lock(integer)'
+           ]::regprocedure[]) AS f(proc)
+     WHERE has_function_privilege('anon', f.proc, 'EXECUTE')
+        OR has_function_privilege('authenticated', f.proc, 'EXECUTE');
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'anon/authenticated can EXECUTE service-only functions: %', missing;
+    END IF;
+
+    RAISE NOTICE 'OK: every public table and view is granted to service_role; payment_plan_summary is service_role-only; the four service-role RPC functions are executable by service_role only';
 END $$;
 SQL
 

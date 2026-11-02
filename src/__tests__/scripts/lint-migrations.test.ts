@@ -6,7 +6,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { lintMigrations, grantedRelations } from '../../../scripts/lint-migrations.js'
+import { lintMigrations, grantedRelations, LEGACY_GRANT_MIGRATION } from '../../../scripts/lint-migrations.js'
 
 const LEGACY = '20261102170500_grants.sql'
 
@@ -100,8 +100,76 @@ describe('lint-migrations: existing rules still apply', () => {
   })
 })
 
+describe('lint-migrations: GRANT EXECUTE inspects only the grantee', () => {
+  const f = 'public.f(uuid, timestamp with time zone)'
+
+  it('does not trip on the public schema qualifier, or on role-like names in the signature', () => {
+    expect(lint({ [NEW]: `GRANT EXECUTE ON FUNCTION ${f} TO service_role;` })).toEqual([])
+    expect(lint({ [NEW]: 'GRANT EXECUTE ON FUNCTION public.anon_report() TO service_role;' })).toEqual([])
+    expect(lint({ [NEW]: 'GRANT EXECUTE ON FUNCTION public.authenticated_users(public.thing) TO postgres, service_role;' })).toEqual([])
+  })
+
+  it('flags every public-facing grantee, in any case and position', () => {
+    for (const grantees of ['anon', 'authenticated', 'PUBLIC', 'public', 'service_role, anon', 'ANON, service_role', '"anon"', 'authenticated WITH GRANT OPTION']) {
+      expect(lint({ [NEW]: `GRANT EXECUTE ON FUNCTION ${f} TO ${grantees};` })).toHaveLength(1)
+    }
+  })
+
+  it('catches a grant split over several lines, reporting the GRANT line', () => {
+    const problems = lint({ [NEW]: `SELECT 1;\nGRANT EXECUTE\n  ON FUNCTION ${f}\n  TO service_role,\n     anon;` })
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(/^20261201000000_new\.sql:2 /)
+  })
+
+  it('allows a multi-line grant with lint-ok above the GRANT line', () => {
+    expect(lint({ [NEW]: `-- lint-ok: intended\nGRANT EXECUTE\n  ON FUNCTION ${f}\n  TO anon;` })).toEqual([])
+  })
+
+  it('ignores grants in comments and string literals, and does not confuse REVOKE', () => {
+    expect(lint({ [NEW]: "-- GRANT EXECUTE ON FUNCTION public.f() TO anon;\nSELECT 'GRANT EXECUTE ON FUNCTION public.f() TO anon;';" })).toEqual([])
+    expect(lint({ [NEW]: 'REVOKE EXECUTE ON FUNCTION public.f() FROM anon;' })).toEqual([])
+  })
+
+  it('catches every EXECUTE grant when several are in one file', () => {
+    const sql = `GRANT EXECUTE ON FUNCTION public.a() TO service_role;\nGRANT EXECUTE ON FUNCTION public.b() TO anon;\nGRANT EXECUTE ON FUNCTION public.c() TO authenticated;`
+    expect(lint({ [NEW]: sql })).toHaveLength(2)
+  })
+})
+
+describe('lint-migrations: grantee of a table grant', () => {
+  const create = 'CREATE TABLE public.t (id int);'
+
+  it('only counts a grant that reaches an API role', () => {
+    expect(lint({ [NEW]: `${create}\nGRANT SELECT ON public.t TO postgres;` })).toHaveLength(1)
+    expect(lint({ [NEW]: `${create}\nGRANT SELECT ON public.t TO PUBLIC;` })).toHaveLength(1)
+    expect(lint({ [NEW]: `${create}\nGRANT SELECT ON public.t TO service_role;` })).toEqual([])
+    expect(lint({ [NEW]: `${create}\nGRANT SELECT ON public.t TO postgres, authenticated;` })).toEqual([])
+  })
+})
+
+describe('lint-migrations: strings and comments for the view rule', () => {
+  it('ignores CREATE VIEW inside a string literal or comment', () => {
+    expect(lint({ [NEW]: "SELECT 'create view public.v as select 1';\n-- CREATE VIEW public.w AS SELECT 1;" })).toEqual([])
+  })
+})
+
 describe('lint-migrations: the repository', () => {
   it('passes on supabase/migrations', () => {
     expect(lintMigrations(path.join(__dirname, '../../../supabase/migrations'))).toEqual([])
+  })
+
+  it('grants the four service-role RPC functions with exact signatures', () => {
+    const sql = fs.readFileSync(
+      path.join(__dirname, '../../../supabase/migrations', LEGACY_GRANT_MIGRATION),
+      'utf8'
+    )
+    for (const sig of [
+      'get_auth_audit_logs(uuid, integer, integer, timestamp with time zone, timestamp with time zone)',
+      'get_oauth_email_mismatches()',
+      'get_pending_xero_invoices_with_lock(integer)',
+      'get_pending_xero_payments_with_lock(integer)',
+    ]) {
+      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION public.${sig} TO service_role;`)
+    }
   })
 })

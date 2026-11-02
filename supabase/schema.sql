@@ -20,6 +20,8 @@
 --   20261025193500_payment_plan_summary_exclude_cancelled.sql
 --   20261026150000_add_waitlist_use_payment_plan.sql
 --   20261029223700_revoke_execute_on_remaining_trigger_functions.sql
+--   20261102170500_explicit_public_grants.sql
+--   20261102180000_revoke_truncate_references_trigger_from_api_roles.sql
 -- =============================================================================
 
 -- >>> 20260907000000_baseline_schema.sql >>>
@@ -2839,3 +2841,250 @@ REVOKE EXECUTE ON FUNCTION public.set_registration_published_at() FROM PUBLIC, a
 REVOKE EXECUTE ON FUNCTION public.update_user_discount_allowances_updated_at() FROM PUBLIC, anon, authenticated;
 
 -- <<< 20261029223700_revoke_execute_on_remaining_trigger_functions.sql <<<
+
+-- >>> 20261102170500_explicit_public_grants.sql >>>
+
+-- Explicit table, view, sequence and function grants for the `public` schema.
+--
+-- WHY: from 2026-10-30 Supabase no longer grants anon / authenticated /
+-- service_role anything on new objects in `public` (default privileges are not
+-- applied any more; https://github.com/orgs/supabase/discussions/45329). A
+-- table without an explicit GRANT answers 42501 "permission denied" before RLS
+-- is even consulted. Every object below predates that change, so the baseline
+-- (20260907000000) and the later table/view migrations carry no GRANTs: they
+-- relied on the default privileges, which a rebuild from migrations -- a
+-- scratch database, a new dev project, `supabase db reset` -- no longer gets.
+--
+-- WHAT: this file writes down the privileges production and development have
+-- TODAY. Both were read read-only on 2026-11-02 (pg_class.relacl via
+-- aclexplode) and were identical apart from MAINTAIN, see below:
+--   * 39 tables   -> anon, authenticated, service_role:
+--                    SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+--   * 8 views     -> the same privileges for the same three roles
+--   * 1 view      -> payment_plan_summary: service_role only (anon and
+--                    authenticated hold nothing on it, in either project)
+--   * 1 sequence  -> member_id_seq: USAGE, SELECT, UPDATE for the three roles
+--   * 4 functions -> service_role: EXECUTE on the four SECURITY DEFINER
+--                    functions the app calls through .rpc() with
+--                    createAdminClient (see FUNCTIONS below)
+--
+-- FUNCTIONS: the same change drops the default grants on functions. Since
+-- 20260907000002 revoked EXECUTE from PUBLIC, service_role only holds EXECUTE on
+-- these four through the old default grant (service_role=X on both live
+-- projects), which a rebuild no longer gets: the Xero batch sync
+-- (src/lib/xero/batch-sync-xero.ts) and the two admin security routes
+-- (auth-logs, oauth-mismatches) would answer 42501. Only service_role is
+-- granted; anon and authenticated stay without EXECUTE. The other functions in
+-- public (generate_member_id, set_member_id_on_insert, update_updated_at_column,
+-- set_registration_published_at, update_user_discount_allowances_updated_at)
+-- are trigger/internal functions the app never calls over RPC, so they are
+-- left alone; is_admin_user() keeps its existing PUBLIC EXECUTE.
+--
+-- Against production and development this migration changes nothing: every
+-- statement re-states a privilege that is already held, and the one REVOKE
+-- removes a privilege that is not held.
+--
+-- NOT LEAST PRIVILEGE. These are Supabase's old defaults, i.e. wider than the
+-- app needs: RLS gates SELECT / INSERT / UPDATE / DELETE, but TRUNCATE,
+-- REFERENCES and TRIGGER are not subject to it. Narrowing them is a separate,
+-- deliberate change (it needs an audit of which tables the browser client
+-- touches as `authenticated`, and nothing here pre-empts it). New objects must
+-- NOT copy this list; they get the minimum their access path needs (AGENTS.md,
+-- "Grants on new tables, views and sequences").
+--
+-- MAINTAIN (Postgres 17) is deliberately left out: production holds it through
+-- its default ACL, development does not, nothing in the app uses it, and
+-- leaving it out lets this file say the same thing on both.
+--
+-- The REVOKE on payment_plan_summary is the only revoke in the file. It is a
+-- no-op on the live projects; it exists so a rebuild on a server that still
+-- applies the old default privileges ends up service_role-only like live,
+-- instead of handing anon and authenticated an aggregate over xero_payments.
+-- (The view is security_invoker, so RLS on xero_payments would also hold, but
+-- the grant is the first line.)
+--
+-- Re-runnable: GRANT and REVOKE are idempotent. Rollback: not needed; revoking
+-- these would break the app.
+
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE
+    public.access_code_usage,
+    public.access_codes,
+    public.alternate_registrations,
+    public.alternate_selections,
+    public.categories,
+    public.discount_categories,
+    public.discount_codes,
+    public.discount_usage,
+    public.email_change_logs,
+    public.email_logs,
+    public.login_attempts,
+    public.magic_link_tokens,
+    public.memberships,
+    public.payment_configurations,
+    public.payments,
+    public.policy_acceptance_logs,
+    public.refunds,
+    public.registration_captains,
+    public.registration_categories,
+    public.registration_pricing_tiers,
+    public.registrations,
+    public.seasons,
+    public.system_accounting_codes,
+    public.system_events,
+    public.user_alternate_registrations,
+    public.user_discount_allowances,
+    public.user_memberships,
+    public.user_registrations,
+    public.user_survey_responses,
+    public.users,
+    public.waitlists,
+    public.xero_accounts,
+    public.xero_contacts,
+    public.xero_invoice_line_items,
+    public.xero_invoices,
+    public.xero_oauth_tokens,
+    public.xero_payments,
+    public.xero_sync_logs,
+    public.xero_webhooks
+TO anon, authenticated, service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE
+    public.discount_usage_computed,
+    public.membership_analytics_data,
+    public.membership_reports_data,
+    public.recent_transactions,
+    public.registration_reports_data,
+    public.reports_active_memberships,
+    public.reports_financial_data,
+    public.user_memberships_consolidated
+TO anon, authenticated, service_role;
+
+-- Service-role only, as in production and development.
+REVOKE ALL ON TABLE public.payment_plan_summary FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+ON TABLE public.payment_plan_summary
+TO service_role;
+
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.member_id_seq
+TO anon, authenticated, service_role;
+
+-- FUNCTIONS (exact signatures, as in pg_proc on production and development).
+GRANT EXECUTE ON FUNCTION public.get_auth_audit_logs(uuid, integer, integer, timestamp with time zone, timestamp with time zone) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_oauth_email_mismatches() TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_pending_xero_invoices_with_lock(integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_pending_xero_payments_with_lock(integer) TO service_role;
+
+-- <<< 20261102170500_explicit_public_grants.sql <<<
+
+-- >>> 20261102180000_revoke_truncate_references_trigger_from_api_roles.sql >>>
+
+-- Narrow anon and authenticated: revoke TRUNCATE, REFERENCES, TRIGGER (and, on
+-- PostgreSQL 17+, MAINTAIN) on every table and view in `public`, and stop
+-- postgres-created tables from getting them back by default.
+--
+-- WHY: 20261102170500_explicit_public_grants.sql wrote down the privileges
+-- Supabase's old default privileges had handed out: SELECT, INSERT, UPDATE,
+-- DELETE, TRUNCATE, REFERENCES and TRIGGER, to anon, authenticated and
+-- service_role. Row level security gates the first four. It does NOT gate the
+-- last three, nor MAINTAIN (PostgreSQL 17+):
+--   * TRUNCATE   empties a table with no row filter at all, RLS never runs.
+--   * REFERENCES lets the holder create a foreign key pointing at the table.
+--   * TRIGGER    lets the holder create a trigger on the table.
+--   * MAINTAIN   lets the holder VACUUM, ANALYZE, REINDEX, CLUSTER and LOCK the
+--                table. Both projects run PostgreSQL 17, but only production
+--                holds it for anon and authenticated (through the same default
+--                ACL; read from pg_class.relacl on 2026-11-02).
+-- None of the three is reachable through PostgREST (it only issues
+-- SELECT / INSERT / UPDATE / DELETE), but they are held by the two roles that
+-- the public anon key and every signed-in browser session map to, for no
+-- benefit. This file takes them away.
+--
+-- AUDIT (2026-11-02, summarised in the PR): nothing in the app or the
+-- migrations needs these privileges for anon or authenticated.
+--   * no TRUNCATE statement exists in the application code or any migration;
+--   * every migration runs as postgres (`supabase db push`), the owner of every
+--     table, which needs no grant to add a foreign key or a trigger;
+--   * an existing trigger fires whatever privileges the invoking role holds
+--     (the TRIGGER privilege is only checked by CREATE TRIGGER);
+--   * the app never opens a SQL connection as anon or authenticated: browser
+--     and server code speak PostgREST (supabase-js), which cannot TRUNCATE.
+--
+-- SCOPE:
+--   * anon, authenticated only. service_role is left as it is.
+--   * MAINTAIN does not exist before PostgreSQL 17 (the keyword is a syntax
+--     error there), so it is revoked, and removed from the default privileges,
+--     inside DO blocks that build the statement dynamically and only run it when
+--     server_version_num >= 170000. CI's scratch server is PostgreSQL 16.
+--   * DEFAULT PRIVILEGES: Supabase's default ACL for objects created by the
+--     postgres role in public (which is every table a migration creates) still
+--     hands anon, authenticated and service_role all table privileges. A table
+--     created from now on would therefore regain TRUNCATE, REFERENCES, TRIGGER
+--     (and MAINTAIN) for anon and authenticated whatever its GRANTs say. The
+--     ALTER DEFAULT PRIVILEGES below removes exactly those from that default ACL
+--     for anon and authenticated. It adds nothing: SELECT / INSERT / UPDATE /
+--     DELETE stay in the default ACL, service_role's default is untouched, and
+--     so are the defaults of other grantor roles (supabase_admin, which the app
+--     never creates objects as) and for functions and sequences. New tables
+--     still get their explicit least-privilege GRANT (AGENTS.md); an explicit
+--     GRANT of any of the four to anon/authenticated keeps working but is
+--     flagged by the lint. Where the postgres role does not exist (a bare
+--     scratch server) the default-privileges step is skipped with a NOTICE;
+--     there is nothing to revoke there.
+--   * SELECT, INSERT, UPDATE, DELETE are left as they are (RLS decides them).
+--   * ON ALL TABLES IN SCHEMA public covers every table and view that exists
+--     when this runs. The privileges are removed from 39 tables and 8 views on
+--     production and development; the ninth view, payment_plan_summary, never
+--     gave anon or authenticated anything, so it is a no-op. It does not touch
+--     objects created later: those get their own least-privilege GRANT in the
+--     migration that creates them (AGENTS.md).
+--   * Sequences: TRUNCATE, REFERENCES and TRIGGER are not valid privileges on a
+--     sequence (only USAGE, SELECT and UPDATE are), so member_id_seq has
+--     nothing to revoke and is not touched.
+--   * PUBLIC holds none of the three on any relation in either project (read
+--     from pg_class.relacl on 2026-11-02), so nothing is revoked from PUBLIC.
+--
+-- Against production and development this removes TRUNCATE, REFERENCES and
+-- TRIGGER (plus MAINTAIN, which only production holds; both projects are
+-- PostgreSQL 17) from anon and authenticated on each of 39 tables and 8 views, and the same privileges from
+-- the postgres default ACL for them. It is re-runnable: revoking a privilege
+-- that is not held is a no-op. Rollback, if ever wanted (it should not be):
+--   GRANT TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public
+--     TO anon, authenticated;
+--   ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+--     GRANT TRUNCATE, REFERENCES, TRIGGER ON TABLES TO anon, authenticated;
+-- (add MAINTAIN on PostgreSQL 17), followed by
+--   REVOKE ALL ON public.payment_plan_summary FROM anon, authenticated;
+
+REVOKE TRUNCATE, REFERENCES, TRIGGER
+ON ALL TABLES IN SCHEMA public
+FROM anon, authenticated;
+
+DO $$
+BEGIN
+    -- MAINTAIN exists from PostgreSQL 17; building the statement as a string
+    -- keeps this file parseable on 16.
+    IF current_setting('server_version_num')::int >= 170000 THEN
+        EXECUTE 'REVOKE MAINTAIN ON ALL TABLES IN SCHEMA public FROM anon, authenticated';
+    END IF;
+END $$;
+
+-- Future tables: stop the postgres default ACL from granting these back.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+        RAISE NOTICE 'role postgres does not exist; skipping ALTER DEFAULT PRIVILEGES';
+        RETURN;
+    END IF;
+
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+        REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon, authenticated;
+
+    IF current_setting('server_version_num')::int >= 170000 THEN
+        EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public '
+             || 'REVOKE MAINTAIN ON TABLES FROM anon, authenticated';
+    END IF;
+END $$;
+
+-- <<< 20261102180000_revoke_truncate_references_trigger_from_api_roles.sql <<<

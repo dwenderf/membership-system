@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       const reservationId = paymentIntent.metadata.reservationId
       if (reservationId) {
         try {
-          const { error: cleanupError } = await supabase
+          const { error: cleanupError } = await adminSupabase
             .from('user_registrations')
             .delete()
             .eq('id', reservationId)
@@ -119,6 +119,12 @@ export async function POST(request: NextRequest) {
     const registrationId = paymentIntent.metadata.registrationId
     const reservationId = paymentIntent.metadata.reservationId
 
+    // The category must be the one this PaymentIntent was created (and priced) for.
+    if (paymentIntent.metadata.categoryId && paymentIntent.metadata.categoryId !== categoryId) {
+      capturePaymentError(new Error('Category does not match payment intent'), paymentContext, 'warning')
+      return NextResponse.json({ error: 'Category does not match payment' }, { status: 400 })
+    }
+
     // Get user's active membership for eligibility (if any)
     const { data: activeMembership } = await supabase
       .from('user_memberships')
@@ -149,37 +155,34 @@ export async function POST(request: NextRequest) {
         userRegistration = existingRecord
         registrationError = null
         // Skip the API call since webhook already handled it
-              } else {
-          // Update existing reservation to paid status via standardized API
-          try {
-            const { getBaseUrl } = await import('@/lib/url-utils')
-            const statusResponse = await fetch(`${getBaseUrl()}/api/update-registration-status`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cookie': request.headers.get('cookie') || '',
-              },
-              body: JSON.stringify({
-                registrationId: registrationId,
-                categoryId: categoryId,
-                status: 'paid',
-                userMembershipId: activeMembership?.id || null
-              }),
+      } else {
+          // Update the existing reservation to paid. The PaymentIntent was retrieved
+          // from Stripe above, has succeeded and belongs to this user.
+          const { data: updatedRows, error: updateReservationError } = await adminSupabase
+            .from('user_registrations')
+            .update({
+              payment_status: 'paid',
+              reservation_expires_at: null,
+              registered_at: new Date().toISOString(),
+              user_membership_id: activeMembership?.id || null,
             })
+            .eq('id', reservationId)
+            .eq('user_id', user.id)
+            .eq('registration_id', registrationId)
+            .eq('registration_category_id', categoryId)
+            .in('payment_status', ['awaiting_payment', 'processing', 'failed', 'expired'])
+            .select()
 
-            if (statusResponse.ok) {
-              const statusData = await statusResponse.json()
-              userRegistration = statusData.registration
-              registrationError = null
-              logger.logPaymentProcessing('reservation-updated-via-api', 'Updated registration to paid via update-registration-status API', { reservationId, registrationId }, 'info')
-            } else {
-              const statusError = await statusResponse.json()
-              registrationError = new Error(statusError.error || 'Failed to update status')
-              logger.logPaymentProcessing('reservation-status-update-failed', 'Failed to update registration status via API', { reservationId, registrationId, statusCode: statusResponse.status, error: statusError }, 'warn')
-            }
-          } catch (apiError) {
-            registrationError = apiError as Error
-            logger.logPaymentProcessing('reservation-status-update-api-error', 'Error calling update-registration-status API', { reservationId, registrationId, error: apiError instanceof Error ? apiError.message : String(apiError) }, 'warn')
+          if (updateReservationError) {
+            registrationError = updateReservationError
+            logger.logPaymentProcessing('reservation-status-update-failed', 'Failed to update reservation to paid', { reservationId, registrationId, error: updateReservationError.message }, 'warn')
+          } else if (!updatedRows || updatedRows.length === 0) {
+            registrationError = new Error('No registration found to update')
+            logger.logPaymentProcessing('reservation-status-update-failed', 'Reservation not found or no longer updatable', { reservationId, registrationId }, 'warn')
+          } else {
+            userRegistration = updatedRows[0]
+            registrationError = null
+            logger.logPaymentProcessing('reservation-updated-to-paid', 'Updated reservation to paid', { reservationId, registrationId }, 'info')
           }
         }
 
@@ -275,7 +278,7 @@ export async function POST(request: NextRequest) {
     await savePaymentMethodFromIntent(paymentIntent, user.id, supabase)
 
     // Update payment record status
-    const { data: updatedPayment, error: updateError } = await supabase
+    const { data: updatedPayment, error: updateError } = await adminSupabase
       .from('payments')
       .update({
         status: 'completed',
@@ -283,6 +286,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('stripe_payment_intent_id', paymentIntentId)
+      .eq('user_id', user.id)
       .select()
 
     if (updateError) {
@@ -295,10 +299,11 @@ export async function POST(request: NextRequest) {
       logger.logPaymentProcessing('payment-record-updated', `Updated payment record to completed status: ${updatedPayment[0].id}`, { paymentIntentId, paymentId: updatedPayment[0].id }, 'info')
 
       // Update user_registrations record with payment_id
-      const { error: registrationUpdateError } = await supabase
+      const { error: registrationUpdateError } = await adminSupabase
         .from('user_registrations')
         .update({ payment_id: updatedPayment[0].id })
         .eq('id', userRegistration.id)
+        .eq('user_id', user.id)
 
       if (registrationUpdateError) {
         logger.logPaymentProcessing('registration-payment-id-link-failed', 'Error updating registration record with payment_id', { paymentIntentId, paymentId: updatedPayment[0].id, registrationId: userRegistration.id, error: registrationUpdateError.message }, 'warn')

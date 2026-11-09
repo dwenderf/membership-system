@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the alternate registration
-    const { data: alternateRegistration, error: insertError } = await supabase
+    const { data: alternateRegistration, error: insertError } = await adminSupabase
       .from('user_alternate_registrations')
       .insert({
         user_id: user.id,

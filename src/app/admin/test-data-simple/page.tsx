@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState, useEffect } from 'react'
 import { User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
-import { logger } from '@/lib/logging/logger'
+import { addSimpleTestMembership } from './actions'
 
 type UserMembershipWithName = Database['public']['Tables']['user_memberships']['Row'] & {
   membership: Pick<Database['public']['Tables']['memberships']['Row'], 'name'> | null
@@ -69,45 +69,14 @@ export default function SimpleTestDataPage() {
     }
 
     try {
-      const validFrom = new Date(startDate)
-      const validUntil = new Date(validFrom)
-      validUntil.setMonth(validUntil.getMonth() + months)
+      const result = await addSimpleTestMembership({
+        membershipId,
+        months,
+        startDate
+      })
 
-      // Get membership details for pricing
-      const { data: membership, error: membershipError } = await supabase
-        .from('memberships')
-        .select('*')
-        .eq('id', membershipId)
-        .single()
-
-      if (membershipError) {
-        logger.logAdminAction('add-test-membership', 'Error fetching membership', { membershipId, error: membershipError.message }, user.id, 'error')
-        setMessage(`Error fetching membership: ${membershipError.message}`)
-        setLoading(false)
-        return
-      }
-
-      const amountPaid = months === 12 ? membership.price_annual : membership.price_monthly * months
-
-      const insertData = {
-        user_id: user.id,
-        membership_id: membershipId,
-        valid_from: validFrom.toISOString().split('T')[0],
-        valid_until: validUntil.toISOString().split('T')[0],
-        months_purchased: months,
-        payment_status: 'paid',
-        amount_paid: amountPaid,
-        purchased_at: new Date().toISOString()
-      }
-
-      const { error } = await supabase
-        .from('user_memberships')
-        .insert(insertData)
-        .select()
-
-      if (error) {
-        logger.logAdminAction('add-test-membership', 'Error inserting test membership', { membershipId, error: error.message }, user.id, 'error')
-        setMessage(`Error: ${error.message}`)
+      if (!result.ok) {
+        setMessage(`Error: ${result.error}`)
       } else {
         setMessage('Successfully added test membership!')
         loadData() // Refresh the data
@@ -115,7 +84,6 @@ export default function SimpleTestDataPage() {
         ;(e.target as HTMLFormElement).reset()
       }
     } catch (err) {
-      logger.logAdminAction('add-test-membership', 'Unexpected error adding test membership', { membershipId, error: err instanceof Error ? err.message : String(err) }, user.id, 'error')
       setMessage(`Unexpected error: ${err}`)
     }
 

@@ -220,7 +220,7 @@ async function handleFreeMembership({
 
     // Create payment record with $0 amount and completed status
     const now = new Date().toISOString()
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,
@@ -302,7 +302,7 @@ async function handleFreeMembership({
       endDate = calculateMembershipEndDate(startDate, durationMonths)
     }
 
-    const { data: membershipRecord, error: membershipError } = await supabase
+    const { data: membershipRecord, error: membershipError } = await adminSupabase
       .from('user_memberships')
       .insert({
         user_id: user.id,
@@ -847,7 +847,7 @@ export async function POST(request: NextRequest) {
     const totalAmount = centsToCents(amountToCharge) // Ensure integer cents
 
     // Create payment record in database
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,

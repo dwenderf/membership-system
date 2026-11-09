@@ -3,6 +3,17 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { logger } from '@/lib/logging/logger'
 
+/**
+ * Browser-facing payment status updates.
+ *
+ * The browser may only close out its own pending payment as 'failed' (card
+ * declined) or 'cancelled' (form closed, timer expired). 'completed' is set
+ * server-side only: by the Stripe webhook, by the confirm-*-payment routes
+ * after they retrieve a succeeded PaymentIntent from Stripe, or by the
+ * zero-cost flows.
+ */
+const CLIENT_PAYMENT_STATUSES = ['failed', 'cancelled']
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -23,11 +34,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Validate status
-    const validStatuses = ['pending', 'completed', 'failed', 'cancelled']
-    if (!validStatuses.includes(status)) {
-      return NextResponse.json({ 
-        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+    if (!CLIENT_PAYMENT_STATUSES.includes(status)) {
+      return NextResponse.json({
+        error: `Invalid status. Must be one of: ${CLIENT_PAYMENT_STATUSES.join(', ')}`
       }, { status: 400 })
     }
 
@@ -37,10 +46,8 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString()
     }
 
-    // Set completed_at for final states (transaction is finished, successfully or not)
-    if (['completed', 'failed', 'cancelled'].includes(status)) {
-      updateData.completed_at = new Date().toISOString()
-    }
+    // Both allowed states are final (the transaction is finished, unsuccessfully).
+    updateData.completed_at = new Date().toISOString()
 
     // Update the payment status
     const { data, error } = await adminSupabase
@@ -48,6 +55,7 @@ export async function POST(request: NextRequest) {
       .update(updateData)
       .eq('stripe_payment_intent_id', stripePaymentIntentId)
       .eq('user_id', user.id) // Ensure user can only update their own payments
+      .eq('status', 'pending') // Never rewrite a payment that has already settled
       .select()
 
     if (error) {

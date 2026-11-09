@@ -1,7 +1,7 @@
 import { Invoice, LineItem, CurrencyCode } from 'xero-node'
 import { getAuthenticatedXeroClient, logXeroSync, getActiveTenant } from './client'
 import { getOrCreateXeroContact } from './contacts'
-import { createClient } from '../supabase/server'
+import { createClient, createAdminClient } from '../supabase/server'
 import * as Sentry from '@sentry/nextjs'
 import { getXeroValidationMessage, XeroApiError } from './xero-errors'
 import { logger } from '@/lib/logging/logger'
@@ -617,8 +617,8 @@ export async function createXeroInvoiceForPayment(
     logger.logXeroSync('invoice-create-error', 'Error creating Xero invoice', { paymentId, tenantId, error: errorMessage }, 'error')
 
     // Update sync status
-    const supabase = await createClient()
-    await supabase
+    const adminSupabase = createAdminClient()
+    await adminSupabase
       .from('payments')
       .update({
         xero_synced: false,

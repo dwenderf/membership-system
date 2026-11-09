@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logging/logger'
@@ -95,6 +95,7 @@ async function syncToXero(
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
 
     // Get authenticated user
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update email in users table
-    const { error: dbUpdateError } = await supabase
+    const { error: dbUpdateError } = await adminSupabase
       .from('users')
       .update({
         email: newEmail,

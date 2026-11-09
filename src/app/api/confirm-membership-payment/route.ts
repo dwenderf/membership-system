@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     // Create user membership record - THIS IS THE CRITICAL OPERATION (handle duplicate gracefully)
     let userMembership: Database['public']['Tables']['user_memberships']['Row']
     try {
-      const { data: newMembership, error: membershipError } = await supabase
+      const { data: newMembership, error: membershipError } = await adminSupabase
         .from('user_memberships')
         .insert({
           user_id: user.id,
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
     await savePaymentMethodFromIntent(paymentIntent, user.id, supabase)
 
     // Update payment record status
-    const { data: updatedPayment, error: updateError } = await supabase
+    const { data: updatedPayment, error: updateError } = await adminSupabase
       .from('payments')
       .update({
         status: 'completed',
@@ -176,6 +176,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('stripe_payment_intent_id', paymentIntentId)
+      .eq('user_id', user.id)
       .select()
 
     if (updateError) {

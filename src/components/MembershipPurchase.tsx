@@ -20,6 +20,7 @@ import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 
 // Force import client config
 import '../../instrumentation-client'
+import { ACCEPT_POLICIES_BUTTON_LABEL, policiesRequiredMessage } from '@/lib/policies'
 
 interface Membership {
   id: string
@@ -174,7 +175,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
     }
 
     if (!policiesAccepted) {
-      setError('Please agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy before purchasing')
+      setError(policiesRequiredMessage('purchasing'))
       return
     }
 
@@ -752,7 +753,7 @@ export default function MembershipPurchase({ membership, userEmail, userMembersh
             : !paymentOption
               ? 'Select Payment Option to Continue'
               : !policiesAccepted
-                ? 'Accept Policies to Continue'
+                ? ACCEPT_POLICIES_BUTTON_LABEL
                 : getAssistanceValidationError()
                   ? 'Enter a Valid Amount to Continue'
                   : `Purchase Membership - $${(finalAmount / 100).toFixed(2)}`

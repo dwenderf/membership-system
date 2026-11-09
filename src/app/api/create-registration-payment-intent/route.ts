@@ -20,6 +20,7 @@ import { SupabaseClient, User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import Stripe from 'stripe'
 import { linkPaymentToStagingInvoice } from '@/lib/xero/link-payment'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 type RegistrationRow = Database['public']['Tables']['registrations']['Row']
 type SeasonRow = Database['public']['Tables']['seasons']['Row']
@@ -592,7 +593,7 @@ export async function POST(request: NextRequest) {
       const error = new Error('Policies not accepted')
       capturePaymentError(error, paymentContext, 'warning')
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }

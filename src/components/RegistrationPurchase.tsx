@@ -24,6 +24,7 @@ import PolicyAcceptanceCheckbox from './PolicyAcceptanceCheckbox'
 
 // Force import client config
 import '../../instrumentation-client'
+import { ACCEPT_POLICIES_BUTTON_LABEL, policiesRequiredMessage } from '@/lib/policies'
 
 
 interface RegistrationCategory {
@@ -450,7 +451,7 @@ export default function RegistrationPurchase({
     }
 
     if (!policiesAccepted) {
-      setError('Please agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy before continuing')
+      setError(policiesRequiredMessage('continuing'))
       return
     }
 
@@ -1525,7 +1526,7 @@ export default function RegistrationPurchase({
          !selectedCategoryId ? 'Select Category to Continue' :
          (selectedCategory && selectedCategory.id !== 'alternate' && isAlreadyRegistered) ? 'Registered' :
          (selectedCategory && selectedCategory.id === 'alternate' && isUserAlreadyAlternate) ? 'Registered' :
-         !policiesAccepted ? 'Accept Policies to Continue' :
+         !policiesAccepted ? ACCEPT_POLICIES_BUTTON_LABEL :
          !isCategoryEligible ? (isGoalieOnlySelectedCategory && !isGoalieEligibleForSelected ? 'Goalies Only' : 'Membership Required') :
          !hasSeasonCoverage ? 'Membership Extension Required' :
          !isTimingAvailable ? (isPresale ? 'Pre-Sale Code Required' : 'Registration Not Available') :

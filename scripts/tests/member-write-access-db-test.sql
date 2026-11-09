@@ -7,11 +7,13 @@
 --     their own users row (column grants, and the guard trigger behind them);
 --   * a signed-in member cannot insert their own users row, or write their own
 --     payments, memberships, registrations, waitlist or alternate rows
---     (table grants revoked: INSERT/UPDATE raise 42501);
+--     (table grants revoked: INSERT/UPDATE raise 42501; DELETE raises
+--     42501 on payments/memberships/registrations/waitlists);
 --   * a signed-in member UPDATE that sets payment/registration status to
 --     paid/completed on their own existing rows raises 42501;
---   * an admin signed in as authenticated also cannot INSERT/UPDATE those
---     tables without the table grant (use createAdminClient / service_role);
+--   * an admin signed in as authenticated also cannot INSERT/UPDATE/DELETE
+--     those tables without the table grant (use createAdminClient / service_role);
+--     user_alternate_registrations DELETE for authenticated is kept;
 --   * service_role writes are unaffected.
 BEGIN;
 
@@ -99,6 +101,12 @@ BEGIN
   PERFORM pg_temp.expect_denied('user_registrations update to paid', $s$UPDATE public.user_registrations SET payment_status = 'paid' WHERE id = '00000000-0000-4000-8000-000000000023' AND user_id = auth.uid()$s$);
   PERFORM pg_temp.expect_denied('waitlists update', $s$UPDATE public.waitlists SET position = 99 WHERE id = '00000000-0000-4000-8000-000000000024' AND user_id = auth.uid()$s$);
   PERFORM pg_temp.expect_denied('user_alternate_registrations update', $s$UPDATE public.user_alternate_registrations SET updated_at = now() WHERE id = '00000000-0000-4000-8000-000000000025' AND user_id = auth.uid()$s$);
+
+  -- DELETE grants revoked on four tables (alternate own-row DELETE stays).
+  PERFORM pg_temp.expect_denied('payments delete', $s$DELETE FROM public.payments WHERE id = '00000000-0000-4000-8000-000000000021' AND user_id = auth.uid()$s$);
+  PERFORM pg_temp.expect_denied('user_memberships delete', $s$DELETE FROM public.user_memberships WHERE id = '00000000-0000-4000-8000-000000000022' AND user_id = auth.uid()$s$);
+  PERFORM pg_temp.expect_denied('user_registrations delete', $s$DELETE FROM public.user_registrations WHERE id = '00000000-0000-4000-8000-000000000023' AND user_id = auth.uid()$s$);
+  PERFORM pg_temp.expect_denied('waitlists delete', $s$DELETE FROM public.waitlists WHERE id = '00000000-0000-4000-8000-000000000024' AND user_id = auth.uid()$s$);
 END $$;
 
 RESET ROLE;
@@ -120,7 +128,8 @@ BEGIN
   END IF;
 END $$;
 
--- authenticated must not hold table-level INSERT/UPDATE on these five tables.
+-- authenticated must not hold table-level INSERT/UPDATE on these five tables,
+-- nor DELETE on the four (alternate DELETE is intentionally kept).
 DO $$
 DECLARE bad text;
 BEGIN
@@ -128,10 +137,19 @@ BEGIN
     FROM information_schema.role_table_grants
    WHERE grantee = 'authenticated'
      AND table_schema = 'public'
-     AND table_name IN ('payments', 'user_memberships', 'user_registrations', 'waitlists', 'user_alternate_registrations')
-     AND privilege_type IN ('INSERT', 'UPDATE');
+     AND (
+       (table_name IN ('payments', 'user_memberships', 'user_registrations', 'waitlists', 'user_alternate_registrations')
+        AND privilege_type IN ('INSERT', 'UPDATE'))
+       OR
+       (table_name IN ('payments', 'user_memberships', 'user_registrations', 'waitlists')
+        AND privilege_type = 'DELETE')
+     );
   IF bad IS NOT NULL THEN
-    RAISE EXCEPTION 'authenticated still has INSERT/UPDATE: %', bad;
+    RAISE EXCEPTION 'authenticated still has INSERT/UPDATE/DELETE: %', bad;
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.user_alternate_registrations', 'DELETE') THEN
+    RAISE EXCEPTION 'authenticated should keep DELETE on user_alternate_registrations';
   END IF;
 END $$;
 
@@ -155,6 +173,8 @@ BEGIN
   PERFORM pg_temp.expect_denied('admin authenticated payments insert', $s$INSERT INTO public.payments (user_id, total_amount, final_amount, status) VALUES ('00000000-0000-4000-8000-000000000001', 0, 0, 'pending')$s$);
   PERFORM pg_temp.expect_denied('admin authenticated payments update', $s$UPDATE public.payments SET status = 'cancelled' WHERE id = '00000000-0000-4000-8000-000000000021'$s$);
   PERFORM pg_temp.expect_denied('admin authenticated user_memberships insert', $s$INSERT INTO public.user_memberships (user_id, membership_id, valid_from, valid_until, payment_status) VALUES ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000011', current_date, current_date + 30, 'paid')$s$);
+  PERFORM pg_temp.expect_denied('admin authenticated payments delete', $s$DELETE FROM public.payments WHERE id = '00000000-0000-4000-8000-000000000021'$s$);
+  PERFORM pg_temp.expect_denied('admin authenticated waitlists delete', $s$DELETE FROM public.waitlists WHERE id = '00000000-0000-4000-8000-000000000024'$s$);
 END $$;
 RESET ROLE;
 

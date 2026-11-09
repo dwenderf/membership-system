@@ -15,6 +15,7 @@ import { isUserPaymentPlanEligible } from '@/lib/payment-plan-utils'
 
 import * as Sentry from '@sentry/nextjs'
 import { scheduleSentryFlush } from '@/lib/sentry-flush'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 /** Row shape of `waitlists`, as inserted/updated below (not in generated Supabase types). */
 interface WaitlistRow {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (policiesAccepted !== true) {
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }

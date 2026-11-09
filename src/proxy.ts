@@ -137,6 +137,31 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Protect admin API routes. Each route also checks admin itself (see
+  // src/lib/auth/require-admin.ts); this is the backstop. JSON errors rather
+  // than redirects, since callers are fetch() requests. /api/admin/exports/*
+  // authenticates with its own bearer secret (external consumers have no
+  // session) and is left to the route.
+  const pathname = request.nextUrl.pathname
+  if (
+    (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) &&
+    !pathname.startsWith('/api/admin/exports/')
+  ) {
+    if (!user) {
+      return clearGuardCookie(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+    }
+
+    const { data: adminProfile } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+
+    if (!adminProfile?.is_admin) {
+      return clearGuardCookie(NextResponse.json({ error: 'Admin access required' }, { status: 403 }))
+    }
+  }
+
   // Protect dashboard routes
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     if (!user) {

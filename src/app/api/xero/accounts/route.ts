@@ -4,6 +4,7 @@ import { getActiveTenant } from '@/lib/xero/client'
 import { getFrequentlyUsedAccountingCodes } from '@/lib/accounting-codes'
 import { getLastSyncInfo } from '@/lib/xero/accounts-sync'
 import { logger } from '@/lib/logging/logger'
+import { requireAdmin } from '@/lib/auth/require-admin'
 
 /**
  * Fetch Xero Accounts
@@ -15,6 +16,9 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const inUse = searchParams.get('inUse') === 'true'

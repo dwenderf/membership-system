@@ -285,6 +285,9 @@ else
     echo "    skipped: connected as $(psql -d postgres -tAc 'SELECT current_user'), not postgres (CI connects as postgres)"
 fi
 
+echo "==> email_logs write access DB checks"
+psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/email-logs-write-access-db-test.sql"
+
 echo "==> Payment plan payoff DB checks (#452)"
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/payment-plan-payoff-db-test.sql"
 

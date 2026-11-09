@@ -1,11 +1,20 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedXeroClient } from '@/lib/xero/client'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { authorizeCronRequest } from '@/lib/cron/auth'
 
-export async function POST() {
+/**
+ * Xero token keep-alive. Requires `Authorization: Bearer $CRON_SECRET` (the
+ * same guard as /api/cron/*). Not scheduled in vercel.json; call it from a
+ * scheduler that sends the cron secret.
+ */
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const denied = authorizeCronRequest(request, 'xero-keep-alive')
+    if (denied) return denied
+
+    const supabase = createAdminClient()
 
     // Get all active tenants
     const { data: activeTokens, error } = await supabase
@@ -101,7 +110,7 @@ export async function POST() {
   }
 }
 
-// Also allow GET for manual testing
-export async function GET() {
-  return POST()
+// Vercel Cron and most schedulers send GET; same auth applies.
+export async function GET(request: NextRequest) {
+  return POST(request)
 }

@@ -332,10 +332,10 @@ One-time, per project:
    Migrations applied by hand are invisible to the CLI: it tracks what it has run in `supabase_migrations.schema_migrations`, and a manual run leaves no row there. Without seeding it, the first `db push` tries to re-apply everything to a database that already has it:
 
    ```bash
-   supabase migration repair --status applied 20260907000000 20260907000001 20260907000002
+   supabase migration repair --status applied 20260907000000 20260907000001 20260907000002 --remote
    ```
 
-   Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list`.
+   Run it against each project, naming whichever migrations that database has already received. Verify with `supabase migration list --remote`.
 
 2. **Create GitHub Environments** named `supabase-development` and `supabase-production` (Settings → Environments). Neither has a required reviewer.
 

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
     if (!currentUser?.is_admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+
+    // Payment-row writes need the service role: authenticated has no UPDATE on
+    // payments after the server-side-writes migration.
+    const adminSupabase = createAdminClient()
 
     // Parse request body
     const body = await request.json()
@@ -155,7 +159,7 @@ export async function POST(request: NextRequest) {
 
       // Update payment status if fully refunded
       if (amount === availableForRefund && totalExistingRefunds === 0) {
-        await supabase
+        await adminSupabase
           .from('payments')
           .update({
             status: 'refunded',

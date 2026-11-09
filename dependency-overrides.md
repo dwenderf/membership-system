@@ -35,6 +35,46 @@ npm view @eslint/eslintrc@latest dependencies.js-yaml
 
 ---
 
+### `glob` / `minimatch` — Dependabot alerts #186, #188
+
+**Packages:** `glob` (alert #186), `minimatch` (alert #188)
+**Affected versions (as flagged):** `glob@13.0.6` (patched in `>=14.0.2`); `minimatch@10.2.5` (patched in `>=11.0.1`)
+**Introduced via:** `@sentry/nextjs` → `@sentry/bundler-plugin-core@5.3.0` → `glob@^13.0.6` → `minimatch@10.x`
+
+**Why an override (not a parent bump):** `@sentry/bundler-plugin-core@5.3.0` is the latest of that package and still depends on `glob@^13.0.6`. Clearing these via a parent bump would require moving `@sentry/nextjs` from 10.x to 11.x (which replaces the bundler plugin package and depends on `glob@^14.0.3`). That is a major SDK upgrade and is out of scope for this lockfile fix. A narrowly scoped override under `@sentry/bundler-plugin-core` is used instead.
+
+**Override added:**
+```json
+"@sentry/bundler-plugin-core": {
+  "glob": ">=14.0.2"
+}
+```
+
+`glob@>=14.0.2` pulls `minimatch@^11`, which is above the patched floor (`11.0.1`). Resolved after `npm install`: `glob@14.0.4`, `minimatch@11.0.5` under that glob.
+
+**Compatibility note:**
+- Node engines for `glob@14` / `minimatch@11` are `18 || 20 || >=22`; this app requires `node@24.x`.
+- Both packages ship CJS + ESM dual exports (`type: module` with a `require` condition). `@sentry/bundler-plugin-core` calls `glob.glob(patterns, { absolute, nodir, ... })` from both its CJS and ESM builds — the same API surface as glob 13.
+- Override is scoped to `@sentry/bundler-plugin-core` only so Jest keeps `glob@7` and ESLint keeps `minimatch@3` (global overrides of those majors would break those consumers).
+
+**Not covered here:**
+- `minimatch@9.0.9` under `@typescript-eslint/typescript-estree` (dev/lint tooling) remains in the advisory range for minimatch; it is not the copy Dependabot alert #188 flagged (that was the runtime `10.2.5` under Sentry's glob). Left alone in this change.
+- Dependabot alert #184 (`deepmerge`, development-only, no patched release) is left as-is.
+
+#### How to check if it can be removed
+```bash
+npm view @sentry/bundler-plugin-core@latest dependencies.glob
+# or, after a @sentry/nextjs 11.x upgrade:
+npm ls glob minimatch
+```
+
+#### Acceptance criteria
+- [ ] `@sentry/bundler-plugin-core` depends on `glob@>=14.0.2`, **or** `@sentry/nextjs` no longer pulls `@sentry/bundler-plugin-core` and its replacement depends on patched `glob`
+- [ ] Remove the `@sentry/bundler-plugin-core` entry from `overrides` in package.json
+- [ ] Run `npm install` and verify `npm audit --omit=dev` still shows 0 findings for `glob` / `minimatch`
+
+---
+
 ### `qs` — Dependabot alert #? ✅ RESOLVED
 
 **Vulnerability:** prototype pollution / query string parsing issue

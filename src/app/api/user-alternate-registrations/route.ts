@@ -7,6 +7,7 @@ import { stageAlternateRegistrationConfirmationEmail } from '@/lib/email/alterna
 import { logger } from '@/lib/logging/logger'
 import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 import { runAfterResponse } from '@/lib/run-after-response'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     if (policiesAccepted !== true) {
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the alternate registration
-    const { data: alternateRegistration, error: insertError } = await supabase
+    const { data: alternateRegistration, error: insertError } = await adminSupabase
       .from('user_alternate_registrations')
       .insert({
         user_id: user.id,

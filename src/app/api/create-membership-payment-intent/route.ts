@@ -16,6 +16,7 @@ import { SupabaseClient, User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import Stripe from 'stripe'
 import { linkPaymentToStagingInvoice } from '@/lib/xero/link-payment'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 type MembershipRow = Database['public']['Tables']['memberships']['Row']
 type UserProfileRow = Database['public']['Tables']['users']['Row']
@@ -219,7 +220,7 @@ async function handleFreeMembership({
 
     // Create payment record with $0 amount and completed status
     const now = new Date().toISOString()
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,
@@ -301,7 +302,7 @@ async function handleFreeMembership({
       endDate = calculateMembershipEndDate(startDate, durationMonths)
     }
 
-    const { data: membershipRecord, error: membershipError } = await supabase
+    const { data: membershipRecord, error: membershipError } = await adminSupabase
       .from('user_memberships')
       .insert({
         user_id: user.id,
@@ -458,7 +459,7 @@ export async function POST(request: NextRequest) {
       const error = new Error('Policies not accepted')
       capturePaymentError(error, paymentContext, 'warning')
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }
@@ -846,7 +847,7 @@ export async function POST(request: NextRequest) {
     const totalAmount = centsToCents(amountToCharge) // Ensure integer cents
 
     // Create payment record in database
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,

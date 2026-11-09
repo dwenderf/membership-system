@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
 
 /**
@@ -11,6 +11,7 @@ import { logger } from '@/lib/logging/logger'
 export async function PUT(request: Request) {
   try {
     const supabase = await createClient()
+    const adminSupabase = createAdminClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -33,7 +34,7 @@ export async function PUT(request: Request) {
 
     const merged = { ...(existingUser?.preferences ?? {}), ...body }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminSupabase
       .from('users')
       .update({ preferences: merged })
       .eq('id', user.id)

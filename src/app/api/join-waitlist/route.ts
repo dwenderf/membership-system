@@ -15,6 +15,7 @@ import { isUserPaymentPlanEligible } from '@/lib/payment-plan-utils'
 
 import * as Sentry from '@sentry/nextjs'
 import { scheduleSentryFlush } from '@/lib/sentry-flush'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 /** Row shape of `waitlists`, as inserted/updated below (not in generated Supabase types). */
 interface WaitlistRow {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (policiesAccepted !== true) {
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
       // Previously removed from waitlist - update the existing record instead of inserting
       nextPosition = await getNextPosition(supabase, registrationId, categoryId)
 
-      const { data: reactivatedEntry, error: reactivateError } = await supabase
+      const { data: reactivatedEntry, error: reactivateError } = await adminSupabase
         .from('waitlists')
         .update({
           removed_at: null,
@@ -311,7 +312,7 @@ export async function POST(request: NextRequest) {
 
       logger.logPaymentProcessing('waitlist-insert-attempt', 'Attempting to insert waitlist entry', { waitlistData }, 'debug')
 
-      const { data: newEntry, error: waitlistError } = await supabase
+      const { data: newEntry, error: waitlistError } = await adminSupabase
         .from('waitlists')
         .insert(waitlistData)
         .select()

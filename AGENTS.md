@@ -141,6 +141,15 @@ GRANT SELECT ON public.widgets TO authenticated;
 
 When an external consumer (a spreadsheet, a dashboard) needs data, the answer is an authenticated API route, never a view or function — see [README § Exposing Data to External Consumers](README.md#exposing-data-to-external-consumers) and `src/app/api/admin/exports/members/route.ts` for the reference implementation.
 
+### Member writes go through the server
+
+The signed-in browser client (`authenticated`) reads its own rows under RLS but does not write payment, registration or account state. `20261109213000_server_side_writes_for_member_and_payment_tables.sql` sets this up, and a database rebuilt from the migrations gets the same result:
+
+- **`users`:** `authenticated` may `UPDATE` only `first_name`, `last_name`, `is_goalie`, `is_lgbtq` and `updated_at` on its own row (what the account edit page writes), and may not `INSERT`. The `guard_users_protected_columns` trigger also rejects changes to role, billing and account columns (`is_admin`, `email`, `member_id`, `deleted_at`, `payment_plan_enabled`, `tags`, the Stripe columns) when the statement runs as `anon` or `authenticated`. Onboarding, preferences, email sync, payment-method and admin changes write with `createAdminClient()` after checking the session (and, for admin routes, `is_admin`).
+- **`payments`, `user_memberships`, `user_registrations`, `waitlists`, `user_alternate_registrations`:** there is no own-row `INSERT` or `UPDATE` policy, and `authenticated` has no table-level `INSERT`/`UPDATE` either. `DELETE` is also revoked from `authenticated` on `payments`, `user_memberships`, `user_registrations` and `waitlists` (`SELECT` stays; `DELETE` stays only on `user_alternate_registrations` for the own-row delete). Server routes write them with `createAdminClient()`, always filtering by the signed-in user's id. Admin `FOR ALL` policies remain, but without the table grant an admin signed-in client cannot write — admin tools that insert, update or delete these tables must use `createAdminClient()` after the admin check.
+- **Paid state is set server-side only:** by the Stripe webhook, by `/api/confirm-*-payment` after it retrieves a succeeded PaymentIntent that belongs to the caller, or by the zero-cost flows. `/api/update-registration-status` accepts only `processing` (with a PaymentIntent whose metadata matches the caller, registration and category) and `failed`; `/api/update-payment-status` accepts only `failed` and `cancelled` on a `pending` payment.
+- **When you add a column or a write path:** a new user-editable profile column needs its own column `GRANT UPDATE (...) ON public.users TO authenticated` in the migration; anything else is written server-side. Do not add an own-row `INSERT`/`UPDATE` policy on these tables, and do not re-grant `INSERT`/`UPDATE`/`DELETE` on them to `authenticated` (except `DELETE` on `user_alternate_registrations`). `npm run schema:verify` runs `scripts/tests/member-write-access-db-test.sql`, which fails if a member write policy or the `authenticated` INSERT/UPDATE/DELETE grants come back, and asserts that a member `UPDATE` to paid/completed raises `42501`.
+
 ## Supabase relation queries
 
 The Supabase clients in `src/lib/supabase/` (`createServerClient`/`createBrowserClient`/`createClient`) don't pass the generated `Database` type as a generic, so it defaults to `any` — `.select()` results, including embedded relations (joins), are not compiler-checked by default. When postgrest-js can't resolve real foreign-key cardinality from schema metadata, it silently infers **every** embedded relation as an array, even a true one-to-one "belongs-to" join. Don't trust the inferred type's array-ness as a signal of real cardinality, and don't blindly add `[0]` indexing or `Array.isArray()` handling to silence a type error without checking first.
@@ -153,7 +162,22 @@ Before writing access code for a joined relation, check the actual foreign key i
 
 When adding a new admin page, add it to navigation and verify it's reachable by clicking, not by URL.
 
+## Admin API routes
+
+Every admin-only API route starts with the shared guard and returns its response unchanged:
+
+```ts
+import { requireAdmin } from '@/lib/auth/require-admin'
+
+const auth = await requireAdmin()
+if (!auth.ok) return auth.response // 401 with no session, 403 for a non-admin
+```
+
+Put admin routes under `/api/admin/`. `src/proxy.ts` applies the same check to `/api/admin/*` as a backstop (JSON 401/403, not a redirect). The only exception is `/api/admin/exports/members`, which authenticates with its own bearer secret. An admin route outside `/api/admin/` (for example `/api/xero/accounts`, `/api/xero/get-active-tenant`, or `/api/test-email`) is protected only by its own `requireAdmin()` call. Scheduled jobs use `authorizeCronRequest` from `src/lib/cron/auth.ts` (`Authorization: Bearer $CRON_SECRET`) instead, as `/api/cron/*` do. Don't add debug or test routes without one of these guards; remove them once they've served their purpose. `src/__tests__/api/admin-route-guards.test.ts` covers the guarded routes. Add a new admin route outside `/api/admin/` to it.
+
 ## Loops email templates
+
+`email_logs` is written only by server code with the service-role client (`src/lib/email/*`, the admin sync route, the housekeeping cron). Rows are sent by the email cron, so only server code may create or change them: `anon` and `authenticated` hold `SELECT` only and there is no `INSERT`/`UPDATE` policy (`20261109214500_email_logs_server_writes_only.sql`). The admin RLS policy is `FOR SELECT` only ("Admins can view all email logs"); admin UI reads go through `createAdminClient()` as well. Keep it that way when you add an email path: insert through `createAdminClient()`. `npm run schema:verify` runs `scripts/tests/email-logs-write-access-db-test.sql`, which fails if the API roles can write the table again or if the admin policy is not SELECT-only.
 
 When adding a new Loops transactional email template, prepend `{testEmailPrefix}` to the Subject field in the Loops dashboard (mark it optional as a safety net) — see [README.md § Email Integration Setup (Loops.so)](README.md#email-integration-setup-loopsso). The app already sends `testEmailPrefix` in `dataVariables` on every send (`[TEST] ` on preview/local, `''` in production — see [src/lib/email/environment.ts](src/lib/email/environment.ts)); no code changes are needed for a new template beyond the dashboard edit.
 

@@ -9,6 +9,7 @@ import { getOrganizationName } from '@/lib/organization'
 import { completeOnboarding } from './actions'
 import { logger } from '@/lib/logging/logger'
 import PolicyAcceptanceCheckbox from '@/components/PolicyAcceptanceCheckbox'
+import { ONBOARDING_POLICIES_REQUIRED_MESSAGE } from '@/lib/policies'
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -87,7 +88,7 @@ export default function OnboardingPage() {
     }
     
     if (!formData.termsAccepted) {
-      newErrors.termsAccepted = 'You must accept the terms and conditions to continue'
+      newErrors.termsAccepted = ONBOARDING_POLICIES_REQUIRED_MESSAGE
     }
     
     setErrors(newErrors)

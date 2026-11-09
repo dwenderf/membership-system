@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenant } from '@/lib/xero/client'
 import { logger } from '@/lib/logging/logger'
+import { requireAdmin } from '@/lib/auth/require-admin'
 
 /**
  * Validate Accounting Code
@@ -12,6 +13,9 @@ import { logger } from '@/lib/logging/logger'
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const searchParams = request.nextUrl.searchParams
     const code = searchParams.get('code')
 

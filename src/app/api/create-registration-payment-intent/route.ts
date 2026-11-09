@@ -20,6 +20,7 @@ import { SupabaseClient, User } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 import Stripe from 'stripe'
 import { linkPaymentToStagingInvoice } from '@/lib/xero/link-payment'
+import { POLICIES_REQUIRED_API_ERROR } from '@/lib/policies'
 
 type RegistrationRow = Database['public']['Tables']['registrations']['Row']
 type SeasonRow = Database['public']['Tables']['seasons']['Row']
@@ -398,7 +399,7 @@ async function handleFreeRegistration({
 
     // Create payment record with $0 amount and completed status
     const now = new Date().toISOString()
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,
@@ -592,7 +593,7 @@ export async function POST(request: NextRequest) {
       const error = new Error('Policies not accepted')
       capturePaymentError(error, paymentContext, 'warning')
       return NextResponse.json(
-        { error: 'You must agree to the Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy' },
+        { error: POLICIES_REQUIRED_API_ERROR },
         { status: 400 }
       )
     }
@@ -832,18 +833,20 @@ export async function POST(request: NextRequest) {
                 },
                 'info'
               )
-              await fetch(`${getBaseUrl()}/api/update-registration-status`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cookie': request.headers.get('cookie') || '',
-                },
-                body: JSON.stringify({
-                  registrationId: registrationId,
-                  categoryId: selectedCategory.id,
-                  status: 'paid'
-                }),
-              })
+              // The intent was just retrieved from Stripe and has succeeded; only
+              // trust it for this user's own record.
+              if (paymentIntent.metadata?.userId === user.id && paymentIntent.metadata?.registrationId === registrationId) {
+                await adminSupabase
+                  .from('user_registrations')
+                  .update({
+                    payment_status: 'paid',
+                    reservation_expires_at: null,
+                    registered_at: new Date().toISOString(),
+                  })
+                  .eq('id', processingRecord.id)
+                  .eq('user_id', user.id)
+                  .eq('payment_status', 'processing')
+              }
               
               return NextResponse.json({ 
                 error: 'Your payment has already been completed successfully. Please check your registrations.'
@@ -1080,7 +1083,7 @@ export async function POST(request: NextRequest) {
       // Create processing reservation (5 minute expiration)
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes from now
 
-      const { data: reservation, error: reservationError } = await supabase
+      const { data: reservation, error: reservationError } = await adminSupabase
         .from('user_registrations')
         .insert({
           user_id: user.id,
@@ -1463,7 +1466,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create payment record in database
-    const { data: paymentRecord, error: paymentError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await adminSupabase
       .from('payments')
       .insert({
         user_id: user.id,

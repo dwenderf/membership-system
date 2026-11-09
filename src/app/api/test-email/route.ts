@@ -1,23 +1,21 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/require-admin'
 import { emailService } from '@/lib/email'
 import { logger } from '@/lib/logging/logger'
 
 export async function POST() {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const supabase = await createClient()
-    
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Get user profile
     const { data: userProfile, error: profileError } = await supabase
       .from('users')
       .select('first_name, last_name, email')
-      .eq('id', user.id)
+      .eq('id', auth.user.id)
       .single()
 
     if (profileError || !userProfile) {
@@ -26,7 +24,7 @@ export async function POST() {
 
     // Send test email
     const result = await emailService.sendWelcomeEmail({
-      userId: user.id,
+      userId: auth.user.id,
       email: userProfile.email,
       userName: `${userProfile.first_name} ${userProfile.last_name}`
     })

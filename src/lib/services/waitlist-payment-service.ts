@@ -301,7 +301,7 @@ export class WaitlistPaymentService {
         .eq('id', stagingRecord.id)
 
       // Create payment record
-      const { data: paymentRecord, error: paymentError } = await supabase
+      const { data: paymentRecord, error: paymentError } = await adminSupabase
         .from('payments')
         .insert({
           user_id: userId,
@@ -522,11 +522,10 @@ export class WaitlistPaymentService {
     stagingRecord: XeroInvoiceRow
   ): Promise<WaitlistChargeResult> {
     try {
-      const supabase = await createClient()
       const adminSupabase = createAdminClient()
 
       // Create payment record with $0 amount
-      const { data: paymentRecord, error: paymentError } = await supabase
+      const { data: paymentRecord, error: paymentError } = await adminSupabase
         .from('payments')
         .insert({
           user_id: userId,

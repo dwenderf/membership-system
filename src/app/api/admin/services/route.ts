@@ -10,7 +10,6 @@
  * - Xero sync: Every 2 minutes (Pro plan)
  * - Email retry: Every 2 hours
  * - Cleanup: Daily at 2 AM
- * - Xero keep-alive: Every 6 hours
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -48,8 +47,7 @@ export async function GET() {
       cronJobs: {
         xeroSync: 'Every 2 minutes (Pro plan)',
         emailRetry: 'Every 2 hours',
-        cleanup: 'Daily at 2 AM',
-        xeroKeepAlive: 'Every 6 hours'
+        cleanup: 'Daily at 2 AM'
       },
       timestamp: new Date().toISOString()
     })

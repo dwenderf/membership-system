@@ -164,7 +164,7 @@ const auth = await requireAdmin()
 if (!auth.ok) return auth.response // 401 with no session, 403 for a non-admin
 ```
 
-Put admin routes under `/api/admin/`. `src/proxy.ts` applies the same check to `/api/admin/*` as a backstop (JSON 401/403, not a redirect). The exception is `/api/admin/exports/*`, which authenticates with its own bearer secret. An admin route outside `/api/admin/` (for example `/api/xero/accounts`) is protected only by its own `requireAdmin()` call. Scheduled jobs use `authorizeCronRequest` from `src/lib/cron/auth.ts` (`Authorization: Bearer $CRON_SECRET`) instead, as `/api/cron/*` and `/api/xero/keep-alive` do. Don't add debug or test routes without one of these guards; remove them once they've served their purpose. `src/__tests__/api/admin-route-guards.test.ts` covers the guarded routes. Add a new admin route outside `/api/admin/` to it.
+Put admin routes under `/api/admin/`. `src/proxy.ts` applies the same check to `/api/admin/*` as a backstop (JSON 401/403, not a redirect). The exception is `/api/admin/exports/*`, which authenticates with its own bearer secret. An admin route outside `/api/admin/` (for example `/api/xero/accounts` or `/api/test-email`) is protected only by its own `requireAdmin()` call. Scheduled jobs use `authorizeCronRequest` from `src/lib/cron/auth.ts` (`Authorization: Bearer $CRON_SECRET`) instead, as `/api/cron/*` do. Don't add debug or test routes without one of these guards; remove them once they've served their purpose. `src/__tests__/api/admin-route-guards.test.ts` covers the guarded routes. Add a new admin route outside `/api/admin/` to it.
 
 ## Loops email templates
 

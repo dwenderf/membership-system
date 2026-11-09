@@ -10,6 +10,8 @@ import { logPolicyAcceptance } from '@/lib/policy-acceptance'
 export async function completeOnboarding(formData: FormData) {
   try {
     const supabase = await createClient()
+    // users rows are written with the service role, scoped to the signed-in user below.
+    const adminSupabase = createAdminClient()
     
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -51,7 +53,7 @@ export async function completeOnboarding(formData: FormData) {
 
     if (existingUser) {
       // Update existing user
-      const { error } = await supabase
+      const { error } = await adminSupabase
         .from('users')
         .update({
           first_name: userData.first_name,
@@ -65,7 +67,7 @@ export async function completeOnboarding(formData: FormData) {
       if (error) throw error
     } else {
       // Create new user
-      const { error } = await supabase
+      const { error } = await adminSupabase
         .from('users')
         .insert([userData])
 

@@ -84,8 +84,10 @@ function setup(planUser: { payment_plan_enabled: boolean; stripe_payment_method_
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
     from
   })
+  // Waitlist rows are written with the service-role client; reads of other
+  // tables on it return the member's plan eligibility or nothing.
   ;(createAdminClient as jest.Mock).mockReturnValue({
-    from: jest.fn((table: string) => chain(() => (table === 'users' ? { data: planUser } : { data: null })))
+    from: jest.fn((table: string) => (table === 'waitlists' ? from(table) : chain(() => (table === 'users' ? { data: planUser } : { data: null }))))
   })
   ;(getUserSavedPaymentMethodId as jest.Mock).mockResolvedValue('pm_1')
 }

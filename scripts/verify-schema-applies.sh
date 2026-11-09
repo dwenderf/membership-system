@@ -288,4 +288,7 @@ fi
 echo "==> Payment plan payoff DB checks (#452)"
 psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/payment-plan-payoff-db-test.sql"
 
+echo "==> Member write access DB checks"
+psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$REPO_ROOT/scripts/tests/member-write-access-db-test.sql"
+
 echo "==> schema.sql applies cleanly"

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Logger } from '@/lib/logging/logger'
 
@@ -48,10 +48,12 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot modify your own admin status' }, { status: 400 })
     }
 
-    // Toggle admin status
+    // Toggle admin status. The caller's admin check is above; the write uses the
+    // service role because privileged users columns are not writable by API roles.
     const newAdminStatus = !targetUser.is_admin
+    const adminSupabase = createAdminClient()
     
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminSupabase
       .from('users')
       .update({ is_admin: newAdminStatus })
       .eq('id', id)

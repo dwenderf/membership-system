@@ -5,6 +5,7 @@
 --   * anon and authenticated cannot insert email_logs rows (so cannot add rows
 --     for the email cron to pick up), nor update or delete them;
 --   * a member can still read their own rows;
+--   * an admin session can read all rows but cannot insert, update or delete;
 --   * service_role writes are unaffected.
 BEGIN;
 
@@ -14,8 +15,12 @@ GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 
 INSERT INTO public.users (id, email, first_name, last_name)
 VALUES ('00000000-0000-4000-8000-000000000011', 'member@example.test', 'Pat', 'Member');
+INSERT INTO public.users (id, email, first_name, last_name, is_admin)
+VALUES ('00000000-0000-4000-8000-000000000012', 'admin@example.test', 'Ada', 'Admin', true);
 INSERT INTO public.email_logs (id, user_id, email_address, event_type, subject, status)
 VALUES ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-000000000011', 'member@example.test', 'test', 'Existing', 'sent');
+INSERT INTO public.email_logs (id, user_id, email_address, event_type, subject, status)
+VALUES ('00000000-0000-4000-8000-0000000000e2', '00000000-0000-4000-8000-000000000012', 'admin@example.test', 'test', 'AdminOwn', 'sent');
 
 CREATE FUNCTION pg_temp.expect_denied(label text, stmt text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -54,17 +59,44 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- authenticated (signed-in admin): SELECT ok, writes denied --------------------------
+DO $$ BEGIN PERFORM set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000012', true); END $$;
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.email_logs;
+  IF n < 2 THEN
+    RAISE EXCEPTION 'admin cannot read email_logs rows (saw %)', n;
+  END IF;
+  PERFORM pg_temp.expect_denied('admin insert', $s$INSERT INTO public.email_logs (user_id, email_address, event_type, subject, status) VALUES (auth.uid(), 'a@example.test', 'test', 'Nope', 'pending')$s$);
+  PERFORM pg_temp.expect_denied('admin update', $s$UPDATE public.email_logs SET status = 'pending' WHERE user_id = auth.uid()$s$);
+  PERFORM pg_temp.expect_denied('admin delete', $s$DELETE FROM public.email_logs WHERE user_id = auth.uid()$s$);
+END $$;
+RESET ROLE;
+
 -- No permissive write policy may remain on email_logs.
+-- The admin policy must be SELECT-only (not FOR ALL / INSERT / UPDATE / DELETE).
 DO $$
 DECLARE bad text;
+DECLARE admin_cmd text;
 BEGIN
   SELECT string_agg(policyname, '; ') INTO bad
     FROM pg_policies
    WHERE schemaname = 'public' AND tablename = 'email_logs'
-     AND cmd IN ('INSERT', 'UPDATE')
-     AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true');
+     AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+     AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true'
+          OR policyname = 'Admins can view all email logs');
   IF bad IS NOT NULL THEN
-    RAISE EXCEPTION 'permissive email_logs write policies remain: %', bad;
+    RAISE EXCEPTION 'permissive or non-SELECT email_logs write policies remain: %', bad;
+  END IF;
+
+  SELECT cmd INTO admin_cmd
+    FROM pg_policies
+   WHERE schemaname = 'public' AND tablename = 'email_logs'
+     AND policyname = 'Admins can view all email logs';
+  IF admin_cmd IS DISTINCT FROM 'SELECT' THEN
+    RAISE EXCEPTION 'Admins can view all email logs must be SELECT (saw %)', admin_cmd;
   END IF;
 END $$;
 

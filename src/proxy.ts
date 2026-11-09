@@ -139,13 +139,13 @@ export async function proxy(request: NextRequest) {
 
   // Protect admin API routes. Each route also checks admin itself (see
   // src/lib/auth/require-admin.ts); this is the backstop. JSON errors rather
-  // than redirects, since callers are fetch() requests. /api/admin/exports/*
-  // authenticates with its own bearer secret (external consumers have no
-  // session) and is left to the route.
+  // than redirects, since callers are fetch() requests. Only
+  // /api/admin/exports/members authenticates with its own bearer secret
+  // (external consumers have no session) and is left to the route.
   const pathname = request.nextUrl.pathname
   if (
     (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) &&
-    !pathname.startsWith('/api/admin/exports/')
+    pathname !== '/api/admin/exports/members'
   ) {
     if (!user) {
       return clearGuardCookie(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))

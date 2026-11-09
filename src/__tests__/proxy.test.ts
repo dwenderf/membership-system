@@ -118,12 +118,29 @@ describe('proxy - admin API routes', () => {
     expect(response.headers.get('location')).toBeNull()
   })
 
-  it('leaves the bearer-authenticated exports route to the route itself', async () => {
+  it('leaves the bearer-authenticated exports/members route to the route itself', async () => {
     mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
 
     const response = await proxy(new NextRequest('http://localhost/api/admin/exports/members'))
 
     expect(response.status).toBe(200)
+  })
+
+  it('guards other /api/admin/exports paths (401 with no session)', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/other'))
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('guards other /api/admin/exports paths (403 for a non-admin)', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase({ id: 'user-1' }, { ...onboarded, is_admin: false }))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/other'))
+
+    expect(response.status).toBe(403)
   })
 
   it('does not apply to non-admin API routes', async () => {

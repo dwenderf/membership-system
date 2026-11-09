@@ -6,6 +6,7 @@ import path from 'path'
 import { NextRequest } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { emailService } from '@/lib/email'
+import { getActiveTenant } from '@/lib/xero/client'
 
 jest.mock('@/lib/supabase/server')
 jest.mock('@/lib/logging/logger')
@@ -22,6 +23,7 @@ jest.mock('@/lib/email', () => ({
 const mockCreateClient = createClient as jest.Mock
 const mockCreateAdminClient = createAdminClient as jest.Mock
 const mockSendWelcomeEmail = emailService.sendWelcomeEmail as jest.Mock
+const mockGetActiveTenant = getActiveTenant as jest.Mock
 
 // Session client: getUser() returns `user`; users lookup returns `profile`.
 function sessionAs(
@@ -55,12 +57,14 @@ const routes: Array<[string, () => Promise<Response>]> = [
   ['GET /api/xero/accounts', async () => (await import('@/app/api/xero/accounts/route')).GET(new NextRequest('http://localhost/api/xero/accounts'))],
   ['GET /api/xero/validate-account-code', async () => (await import('@/app/api/xero/validate-account-code/route')).GET(new NextRequest('http://localhost/api/xero/validate-account-code?code=200'))],
   ['POST /api/test-email', async () => (await import('@/app/api/test-email/route')).POST()],
+  ['GET /api/xero/get-active-tenant', async () => (await import('@/app/api/xero/get-active-tenant/route')).GET()],
 ]
 
 describe('admin API route guards', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockCreateAdminClient.mockReturnValue(anyChain())
+    mockGetActiveTenant.mockResolvedValue({ tenant_id: 'tenant-1' })
   })
 
   it.each(routes)('%s rejects a caller with no session (401)', async (_name, call) => {
@@ -69,6 +73,7 @@ describe('admin API route guards', () => {
     expect(response.status).toBe(401)
     expect(mockCreateAdminClient).not.toHaveBeenCalled()
     expect(mockSendWelcomeEmail).not.toHaveBeenCalled()
+    expect(mockGetActiveTenant).not.toHaveBeenCalled()
   })
 
   it.each(routes)('%s rejects a signed-in non-admin (403)', async (_name, call) => {
@@ -77,6 +82,7 @@ describe('admin API route guards', () => {
     expect(response.status).toBe(403)
     expect(mockCreateAdminClient).not.toHaveBeenCalled()
     expect(mockSendWelcomeEmail).not.toHaveBeenCalled()
+    expect(mockGetActiveTenant).not.toHaveBeenCalled()
   })
 
   it('POST /api/test-email lets an admin through', async () => {
@@ -87,6 +93,13 @@ describe('admin API route guards', () => {
     const response = await (await import('@/app/api/test-email/route')).POST()
     expect(response.status).toBe(200)
     expect(mockSendWelcomeEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('GET /api/xero/get-active-tenant lets an admin through', async () => {
+    sessionAs({ id: 'admin-1', email: 'admin@example.test' }, { is_admin: true })
+    const response = await (await import('@/app/api/xero/get-active-tenant/route')).GET()
+    expect(response.status).toBe(200)
+    expect(mockGetActiveTenant).toHaveBeenCalledTimes(1)
   })
 })
 

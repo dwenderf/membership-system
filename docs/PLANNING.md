@@ -21,7 +21,7 @@ A comprehensive membership and registration system for an adult hockey associati
   - Fixed email confirmation errors with Loops.so API integration
   - Enhanced payment status updates with centralized API endpoint
 
-- ✅ **Xero Token Keep-Alive System** - **COMPLETED**
+- ✅ **Xero Token Keep-Alive System** - **COMPLETED** (route later removed; OAuth refresh covers token renewal)
   - Automated token refresh system to prevent Xero authentication failures
   - Vercel Cron job running every 12 hours for production environments
   - Startup connection testing for development and deployment scenarios
@@ -619,7 +619,7 @@ type RefundType = 'proportional' | 'discount_code'
 - [x] Automated invoice creation for all purchases
 - [x] Intelligent contact management with duplicate resolution
 - [x] Stripe fee tracking and payment reconciliation
-- [x] Token keep-alive system for production reliability
+- [x] Token keep-alive system for production reliability (keep-alive route removed; OAuth refresh covers token renewal)
 
 ### 🚀 **FUTURE ENHANCEMENTS**
 - [ ] Renewal notifications and automated renewal flow

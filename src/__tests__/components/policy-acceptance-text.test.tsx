@@ -2,6 +2,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { parse } from 'node-html-parser'
 import PolicyAcceptanceCheckbox from '@/components/PolicyAcceptanceCheckbox'
 import {
   ACCEPT_POLICIES_BUTTON_LABEL,
@@ -14,12 +15,9 @@ import {
 
 const POLICY_LIST = 'Terms and Conditions, Code of Conduct, Concussion Policy, and Privacy Policy'
 
-function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
+/** Visible text from static markup via DOM textContent (no regex tag-stripping). */
+function visibleText(html: string): string {
+  return parse(html).textContent
 }
 
 function readSource(relativePath: string): string {
@@ -40,18 +38,19 @@ describe('shared policy acceptance text', () => {
     const html = renderToStaticMarkup(
       createElement(PolicyAcceptanceCheckbox, { checked: false, onChange: () => {} })
     )
-    const label = html.match(/<label[^>]*>([\s\S]*?)<\/label>/)
+    const root = parse(html)
+    const label = root.querySelector('label')
     expect(label).not.toBeNull()
-    expect(stripTags(label![1])).toBe(POLICY_CHECKBOX_TEXT)
+    expect(label!.textContent).toBe(POLICY_CHECKBOX_TEXT)
 
-    const hrefs = Array.from(label![1].matchAll(/<a [^>]*href="([^"]+)"/g)).map((m) => m[1])
+    const hrefs = label!.querySelectorAll('a').map((a) => a.getAttribute('href'))
     expect(hrefs).toEqual([
       POLICY_LINKS.terms,
       POLICY_LINKS.codeOfConduct,
       POLICY_LINKS.concussionPolicy,
       POLICY_LINKS.privacyPolicy,
     ])
-    expect(label![1].match(/target="_blank"/g)).toHaveLength(4)
+    expect(label!.querySelectorAll('a[target="_blank"]')).toHaveLength(4)
   })
 
   it('renders the error passed to the checkbox', () => {
@@ -59,7 +58,7 @@ describe('shared policy acceptance text', () => {
     const html = renderToStaticMarkup(
       createElement(PolicyAcceptanceCheckbox, { checked: false, onChange: () => {}, error: message })
     )
-    expect(stripTags(html)).toContain(message)
+    expect(visibleText(html)).toContain(message)
   })
 
   it.each([

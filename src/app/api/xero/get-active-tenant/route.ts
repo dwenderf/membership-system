@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getActiveTenant } from '@/lib/xero/client'
-import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/require-admin'
 import { logger } from '@/lib/logging/logger'
 
 export async function GET() {
   try {
-    // Verify user is authenticated
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
-      }, { status: 401 })
-    }
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
 
     const activeTenant = await getActiveTenant()
     
@@ -40,4 +32,4 @@ export async function GET() {
       error: 'Internal server error' 
     }, { status: 500 })
   }
-} 
+}

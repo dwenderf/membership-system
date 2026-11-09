@@ -84,3 +84,70 @@ describe('proxy - deleted account enforcement', () => {
     expect(response.headers.get('location')).toBeNull()
   })
 })
+
+describe('proxy - admin API routes', () => {
+  const onboarded = { onboarding_completed_at: '2024-01-01T00:00:00Z', deleted_at: null }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('returns 401 JSON for /api/admin without a session', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/system-events'))
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('returns 403 JSON for a signed-in non-admin', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase({ id: 'user-1' }, { ...onboarded, is_admin: false }))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/sync-emails', { method: 'POST' }))
+
+    expect(response.status).toBe(403)
+  })
+
+  it('lets an admin through', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase({ id: 'user-1' }, { ...onboarded, is_admin: true }))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/system-events'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('leaves the bearer-authenticated exports/members route to the route itself', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/members'))
+
+    expect(response.status).toBe(200)
+  })
+
+  it('guards other /api/admin/exports paths (401 with no session)', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/other'))
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('guards other /api/admin/exports paths (403 for a non-admin)', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase({ id: 'user-1' }, { ...onboarded, is_admin: false }))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/other'))
+
+    expect(response.status).toBe(403)
+  })
+
+  it('does not apply to non-admin API routes', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/registration-counts'))
+
+    expect(response.status).toBe(200)
+  })
+})

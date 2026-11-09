@@ -162,7 +162,22 @@ Before writing access code for a joined relation, check the actual foreign key i
 
 When adding a new admin page, add it to navigation and verify it's reachable by clicking, not by URL.
 
+## Admin API routes
+
+Every admin-only API route starts with the shared guard and returns its response unchanged:
+
+```ts
+import { requireAdmin } from '@/lib/auth/require-admin'
+
+const auth = await requireAdmin()
+if (!auth.ok) return auth.response // 401 with no session, 403 for a non-admin
+```
+
+Put admin routes under `/api/admin/`. `src/proxy.ts` applies the same check to `/api/admin/*` as a backstop (JSON 401/403, not a redirect). The only exception is `/api/admin/exports/members`, which authenticates with its own bearer secret. An admin route outside `/api/admin/` (for example `/api/xero/accounts`, `/api/xero/get-active-tenant`, or `/api/test-email`) is protected only by its own `requireAdmin()` call. Scheduled jobs use `authorizeCronRequest` from `src/lib/cron/auth.ts` (`Authorization: Bearer $CRON_SECRET`) instead, as `/api/cron/*` do. Don't add debug or test routes without one of these guards; remove them once they've served their purpose. `src/__tests__/api/admin-route-guards.test.ts` covers the guarded routes. Add a new admin route outside `/api/admin/` to it.
+
 ## Loops email templates
+
+`email_logs` is written only by server code with the service-role client (`src/lib/email/*`, the admin sync route, the housekeeping cron). Rows are sent by the email cron, so only server code may create or change them: `anon` and `authenticated` hold `SELECT` only and there is no `INSERT`/`UPDATE` policy (`20261109214500_email_logs_server_writes_only.sql`). The admin RLS policy is `FOR SELECT` only ("Admins can view all email logs"); admin UI reads go through `createAdminClient()` as well. Keep it that way when you add an email path: insert through `createAdminClient()`. `npm run schema:verify` runs `scripts/tests/email-logs-write-access-db-test.sql`, which fails if the API roles can write the table again or if the admin policy is not SELECT-only.
 
 When adding a new Loops transactional email template, prepend `{testEmailPrefix}` to the Subject field in the Loops dashboard (mark it optional as a safety net) — see [README.md § Email Integration Setup (Loops.so)](README.md#email-integration-setup-loopsso). The app already sends `testEmailPrefix` in `dataVariables` on every send (`[TEST] ` on preview/local, `''` in production — see [src/lib/email/environment.ts](src/lib/email/environment.ts)); no code changes are needed for a new template beyond the dashboard edit.
 

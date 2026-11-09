@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { requireAdmin } from '@/lib/auth/require-admin'
 
 export async function POST() {
   try {
-    // Verify admin access (you might want to add more robust auth here)
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const supabase = createAdminClient()
-    
-    // Get user info for initiator
-    const { data: { user } } = await supabase.auth.getUser()
-    const initiator = user ? `manual (${user.email})` : 'manual (unknown)'
+    const initiator = `manual (${auth.user.email ?? auth.user.id})`
     
     // Get pending email count
     const { count: pendingEmails } = await supabase
@@ -80,6 +80,9 @@ export async function POST() {
 
 export async function GET() {
   try {
+    const auth = await requireAdmin()
+    if (!auth.ok) return auth.response
+
     const supabase = createAdminClient()
     
     // Get pending email count

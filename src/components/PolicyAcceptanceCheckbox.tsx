@@ -1,7 +1,13 @@
 'use client'
 
+import { Fragment } from 'react'
 import Link from 'next/link'
-import { POLICY_LINKS } from '@/lib/policies'
+import {
+  POLICY_CHECKBOX_PREFIX,
+  POLICY_CHECKBOX_SUFFIX,
+  POLICY_DOCUMENTS,
+  policyListSeparator,
+} from '@/lib/policies'
 
 interface PolicyAcceptanceCheckboxProps {
   id?: string
@@ -29,23 +35,16 @@ export default function PolicyAcceptanceCheckbox({
           }`}
         />
         <label htmlFor={id} className="ml-3 text-sm text-gray-700">
-          I agree to the{' '}
-          <Link href={POLICY_LINKS.terms} target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-            Terms and Conditions
-          </Link>
-          ,{' '}
-          <Link href={POLICY_LINKS.codeOfConduct} target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-            Code of Conduct
-          </Link>
-          ,{' '}
-          <Link href={POLICY_LINKS.concussionPolicy} target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-            Concussion Policy
-          </Link>
-          , and{' '}
-          <Link href={POLICY_LINKS.privacyPolicy} target="_blank" className="text-blue-600 hover:text-blue-800 underline">
-            Privacy Policy
-          </Link>
-          {' *'}
+          {POLICY_CHECKBOX_PREFIX}
+          {POLICY_DOCUMENTS.map((doc, i) => (
+            <Fragment key={doc.key}>
+              {policyListSeparator(i)}
+              <Link href={doc.href} target="_blank" className="text-blue-600 hover:text-blue-800 underline">
+                {doc.label}
+              </Link>
+            </Fragment>
+          ))}
+          {POLICY_CHECKBOX_SUFFIX}
         </label>
       </div>
       {error && (

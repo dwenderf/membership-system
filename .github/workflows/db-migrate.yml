@@ -138,7 +138,7 @@ jobs:
     - name: Install Supabase CLI
       uses: supabase/setup-cli@v2
       with:
-        version: 3.0.0
+        version: 3.1.0
 
     - name: Verify the connection string is configured
       env:

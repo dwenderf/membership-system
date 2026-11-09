@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { logger } from '@/lib/logging/logger'
 
@@ -48,6 +48,16 @@ export default async function TestDataPage() {
       return
     }
 
+    const { data: actor } = await supabase
+      .from('users')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    if (!actor?.is_admin) {
+      logger.logAdminAction('add-test-membership', 'Non-admin caller', undefined, user.id, 'error')
+      return
+    }
+
     const membershipId = formData.get('membership_id') as string
     const months = parseInt(formData.get('months') as string)
     const startDate = formData.get('start_date') as string
@@ -86,7 +96,9 @@ export default async function TestDataPage() {
       purchased_at: new Date().toISOString()
     }
     
-    const { error } = await supabase
+    // authenticated has no INSERT on user_memberships; write with service role.
+    const adminSupabase = createAdminClient()
+    const { error } = await adminSupabase
       .from('user_memberships')
       .insert(insertData)
       .select()

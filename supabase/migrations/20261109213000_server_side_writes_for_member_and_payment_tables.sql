@@ -25,13 +25,19 @@
 --     only by server code: the Stripe webhook, the confirm-*-payment routes
 --     (after they retrieve a succeeded PaymentIntent from Stripe), the zero-cost
 --     flows and admin tools.
---   * Own-row SELECT policies and the admin policies are unchanged.
+--   * authenticated also loses table-level INSERT and UPDATE (SELECT stays).
+--     Admin UI that still wrote through the signed-in client must use
+--     createAdminClient() after its admin check.
+--   * Own-row SELECT policies and the admin policies are unchanged (admin
+--     policies alone are not enough without the table grant).
 --
 -- public.waitlists, public.user_alternate_registrations
 --   * The own-row INSERT / UPDATE policies are dropped; /api/join-waitlist and
 --     /api/user-alternate-registrations insert and update with the service role
 --     after validating the request. Own-row SELECT, own-row DELETE on
 --     user_alternate_registrations, and the admin / captain policies stay.
+--   * authenticated also loses table-level INSERT and UPDATE on both; DELETE
+--     on user_alternate_registrations is kept for the own-row delete path.
 --
 -- anon
 --   * Loses INSERT, UPDATE and DELETE on all six tables. No anon code path
@@ -43,6 +49,9 @@
 --
 -- Rollback (restores the previous access; only if a write path was missed):
 --   GRANT INSERT, UPDATE ON public.users TO anon, authenticated;
+--   GRANT INSERT, UPDATE ON public.user_memberships, public.user_registrations,
+--     public.payments, public.waitlists, public.user_alternate_registrations
+--     TO authenticated;
 --   GRANT INSERT, UPDATE, DELETE ON public.users, public.user_memberships,
 --     public.user_registrations, public.payments, public.waitlists,
 --     public.user_alternate_registrations TO anon;
@@ -150,3 +159,15 @@ REVOKE INSERT, UPDATE, DELETE ON
     public.waitlists,
     public.user_alternate_registrations
 FROM anon;
+
+-- authenticated: table-level INSERT/UPDATE gone on payment/registration
+-- tables. SELECT stays (RLS decides rows). DELETE stays on
+-- user_alternate_registrations for the own-row delete path. Writes go through
+-- createAdminClient() after a session check.
+REVOKE INSERT, UPDATE ON
+    public.user_memberships,
+    public.user_registrations,
+    public.payments,
+    public.waitlists,
+    public.user_alternate_registrations
+FROM authenticated;

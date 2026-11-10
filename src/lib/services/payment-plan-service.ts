@@ -269,6 +269,8 @@ export class PaymentPlanService {
     const adminSupabase = createAdminClient()
     // The row's values before the claim, to put back if this attempt ends without charging.
     let claimedFrom: { attempt_count: number; last_attempt_at: string | null } | null = null
+    // The attempt number this call claimed; updates below only touch the row while it is still on it.
+    let claimedAttempt: number | null = null
     let chargeStarted = false
 
     const release = async (failureReason: string | null, restoreAttempt = false) => {
@@ -283,6 +285,8 @@ export class PaymentPlanService {
         .update(update)
         .eq('id', xeroPaymentId)
         .eq('sync_status', 'processing')
+        // A slow decline must not release a newer attempt claimed after a webhook released this one.
+        .eq('attempt_count', claimedAttempt)
       if (error) {
         logger.logPaymentProcessing(
           'payment-plan-installment-release-error',
@@ -356,6 +360,7 @@ export class PaymentPlanService {
         return { success: false, skipped: 'not_planned', error: 'Installment was no longer planned' }
       }
       claimedFrom = { attempt_count: xeroPayment.attempt_count ?? 0, last_attempt_at: xeroPayment.last_attempt_at ?? null }
+      claimedAttempt = attempt
 
       // Skip an invoice that an early payoff is paying off. The payoff stages its own row first,
       // cancels the rows it read, then stops if any installment is still planned or processing.
@@ -435,6 +440,7 @@ export class PaymentPlanService {
         })
         .eq('id', xeroPaymentId)
         .eq('sync_status', 'processing')
+        .eq('attempt_count', attempt)
 
       if (paymentIntent.status === 'succeeded') {
         // Shared with the webhook: whichever gets there first records the payment, once (#461).

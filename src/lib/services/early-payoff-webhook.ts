@@ -109,7 +109,7 @@ export type EarlyPayoffFailureOutcome =
   | { status: 'rolled_back'; xeroPaymentId: string; restoredInstallments: number }
   | { status: 'already_rolled_back'; xeroPaymentId: string; restoredInstallments: number }
   | { status: 'already_handled' }
-  | { status: 'not_found' }
+  | { status: 'not_found'; restoredInstallments: number }
   | { status: 'ambiguous'; candidateIds: string[] }
   | { status: 'needs_review'; xeroPaymentId: string; syncStatus: string }
 
@@ -166,9 +166,11 @@ export async function rollbackFailedEarlyPayoff(
   }
 
   if (!row || row.payment_type !== 'full' || row.staging_metadata?.early_payoff !== true) {
-    // Nothing to roll back; still record the payment as failed.
+    // No staged row to cancel. For an older intent this can be a retry after an earlier delivery
+    // cancelled the row and then failed, so still put back any installments no payoff covers.
+    const restoredInstallments = !stagedId && invoiceId ? await restoreUncoveredInstallments(supabase, invoiceId) : 0
     await markPayoffPaymentFailed(supabase, paymentIntent)
-    return { status: 'not_found' }
+    return { status: 'not_found', restoredInstallments }
   }
 
   let claimed = false
@@ -196,35 +198,40 @@ export async function rollbackFailedEarlyPayoff(
     return { status: 'needs_review', xeroPaymentId: row.id, syncStatus }
   }
 
-  // Put the superseded installments back, unless another payoff on this invoice is live now.
-  const { data: livePayoffs, error: liveError } = await supabase
-    .from('xero_payments')
-    .select('id')
-    .eq('xero_invoice_id', row.xero_invoice_id)
-    .eq('payment_type', 'full')
-    .eq('staging_metadata->>early_payoff', 'true')
-    .in('sync_status', LIVE_PAYOFF_STATUSES)
-  if (liveError) throw liveError
-
-  let restoredInstallments = 0
-  if (!livePayoffs || livePayoffs.length === 0) {
-    const { data: restored, error: restoreError } = await supabase
-      .from('xero_payments')
-      .update({ sync_status: 'planned', failure_reason: null })
-      .eq('xero_invoice_id', row.xero_invoice_id)
-      .eq('payment_type', 'installment')
-      .eq('sync_status', 'cancelled')
-      .eq('failure_reason', SUPERSEDED_REASON)
-      .select('id')
-    if (restoreError) throw restoreError
-    restoredInstallments = restored?.length ?? 0
-  }
+  const restoredInstallments = await restoreUncoveredInstallments(supabase, row.xero_invoice_id)
 
   await markPayoffPaymentFailed(supabase, paymentIntent)
 
   return claimed
     ? { status: 'rolled_back', xeroPaymentId: row.id, restoredInstallments }
     : { status: 'already_rolled_back', xeroPaymentId: row.id, restoredInstallments }
+}
+
+/**
+ * Put the superseded installments on an invoice back to planned, unless a payoff on it is live now
+ * (staged, paying or paid): with no live payoff, nothing covers them. Returns how many came back.
+ */
+async function restoreUncoveredInstallments(supabase: SupabaseLike, xeroInvoiceId: string): Promise<number> {
+  const { data: livePayoffs, error: liveError } = await supabase
+    .from('xero_payments')
+    .select('id')
+    .eq('xero_invoice_id', xeroInvoiceId)
+    .eq('payment_type', 'full')
+    .eq('staging_metadata->>early_payoff', 'true')
+    .in('sync_status', LIVE_PAYOFF_STATUSES)
+  if (liveError) throw liveError
+  if (livePayoffs && livePayoffs.length > 0) return 0
+
+  const { data: restored, error: restoreError } = await supabase
+    .from('xero_payments')
+    .update({ sync_status: 'planned', failure_reason: null })
+    .eq('xero_invoice_id', xeroInvoiceId)
+    .eq('payment_type', 'installment')
+    .eq('sync_status', 'cancelled')
+    .eq('failure_reason', SUPERSEDED_REASON)
+    .select('id')
+  if (restoreError) throw restoreError
+  return restored?.length ?? 0
 }
 
 async function payoffPaymentStatus(

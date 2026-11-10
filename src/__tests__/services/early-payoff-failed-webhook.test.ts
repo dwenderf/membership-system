@@ -124,9 +124,17 @@ describe('rollbackFailedEarlyPayoff', () => {
     expect(row(two, 'xero_payments', 'i2').sync_status).toBe('cancelled')
   })
 
+  it('finishes an older intent rollback that a failed earlier delivery left half done', async () => {
+    // No xeroStagedPaymentId; the staged row was cancelled but the restore errored, so Stripe retried.
+    const fake = plan('cancelled')
+    expect(await rollbackFailedEarlyPayoff(fake, failedIntent())).toEqual({ status: 'not_found', restoredInstallments: 2 })
+    expect(row(fake, 'xero_payments', 'i2').sync_status).toBe('planned')
+    expect(row(fake, 'payments', 'pay-1').status).toBe('failed')
+  })
+
   it('still marks the payment failed when no payoff row matches', async () => {
     const fake = createFakeSupabase({ xero_payments: [], payments: [{ id: 'pay-1', status: 'pending' }] })
-    expect(await rollbackFailedEarlyPayoff(fake, failedIntent('missing'))).toEqual({ status: 'not_found' })
+    expect(await rollbackFailedEarlyPayoff(fake, failedIntent('missing'))).toEqual({ status: 'not_found', restoredInstallments: 0 })
     expect(row(fake, 'payments', 'pay-1').status).toBe('failed')
   })
 

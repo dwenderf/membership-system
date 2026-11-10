@@ -274,15 +274,6 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', stagingId)
 
-      // Update refund status to processing (for non-zero refunds only)
-      await supabase
-        .from('refunds')
-        .update({
-          status: 'processing',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refund.id)
-
       // Submit to Stripe with staging ID in metadata for webhook matching
       const stripeRefund = await getStripe().refunds.create({
         payment_intent: payment.stripe_payment_intent_id,

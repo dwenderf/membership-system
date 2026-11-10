@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       .from('refunds')
       .select('amount')
       .eq('payment_id', paymentId)
-      .in('status', ['completed', 'processing', 'pending'])
+      .in('status', ['completed', 'pending'])
 
   const totalExistingRefunds = existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0
   const availableForRefund = payment.final_amount - totalExistingRefunds

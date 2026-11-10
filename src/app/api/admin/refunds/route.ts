@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       .from('refunds')
       .select('amount')
       .eq('payment_id', paymentId)
-      .in('status', ['completed', 'processing', 'pending'])
+      .in('status', ['completed', 'pending'])
 
     if (refundsError) {
       logger.logSystem('refund-error', 'Failed to check existing refunds', {
@@ -122,12 +122,6 @@ export async function POST(request: NextRequest) {
 
     // Process Stripe refund
     try {
-      // Update refund status to processing
-      await supabase
-        .from('refunds')
-        .update({ status: 'processing' })
-        .eq('id', refundRecord.id)
-
       const stripeRefund = await getStripe().refunds.create({
         payment_intent: payment.stripe_payment_intent_id,
         amount: amount,

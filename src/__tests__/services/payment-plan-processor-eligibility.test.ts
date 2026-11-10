@@ -82,3 +82,29 @@ describe('processDuePayments retry eligibility', () => {
     expect(attempted()).toEqual(['exhausted', 'recent'])
   })
 })
+
+describe('processDuePayments skipped and in-flight installments (#461)', () => {
+  beforeEach(() => {
+    mockDuePayments.length = 0
+    mockProcess.mockReset()
+  })
+
+  it('counts them separately and sends no failure email or admin alert', async () => {
+    const { emailStagingManager } = jest.requireMock('@/lib/email/staging')
+    const { stageAdminPaymentPlanFailureNotification } = jest.requireMock('@/lib/email/admin-notifications')
+    emailStagingManager.stageEmail.mockClear()
+    stageAdminPaymentPlanFailureNotification.mockClear()
+    mockDuePayments.push(payment('paid-off', 0, null), payment('settling', 0, null))
+    mockProcess.mockImplementation(async (id: string) =>
+      id === 'paid-off'
+        ? { success: false, skipped: 'payoff_in_progress', error: 'An early payoff is in progress for this plan' }
+        : { success: false, inFlight: true, error: 'Payment is processing' }
+    )
+
+    const results = await processDuePayments('2026-10-18')
+
+    expect(results).toMatchObject({ paymentsSkipped: 1, paymentsInFlight: 1, paymentsFailed: 0, errors: [] })
+    expect(emailStagingManager.stageEmail).not.toHaveBeenCalled()
+    expect(stageAdminPaymentPlanFailureNotification).not.toHaveBeenCalled()
+  })
+})

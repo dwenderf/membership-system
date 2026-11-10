@@ -161,7 +161,7 @@ SENTRY_AUTH_TOKEN=your_sentry_auth_token_here
 XERO_CLIENT_ID=your_xero_client_id_here
 XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
-XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+XERO_SCOPES=accounting.invoices accounting.payments accounting.contacts accounting.settings offline_access
 
 # Cron
 CRON_SECRET=your_random_cron_secret_for_cron_jobs
@@ -1936,7 +1936,7 @@ SENTRY_AUTH_TOKEN=your_sentry_auth_token_here
 XERO_CLIENT_ID=your_production_xero_client_id_here
 XERO_CLIENT_SECRET=your_production_xero_client_secret_here
 XERO_REDIRECT_URI=https://your-domain.com/api/xero/callback
-XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+XERO_SCOPES=accounting.invoices accounting.payments accounting.contacts accounting.settings offline_access
 ```
 
 #### Preview auth bypass for automated testing
@@ -2309,10 +2309,13 @@ The system includes automatic Xero integration for seamless accounting and bookk
      - Development: `http://localhost:3000/api/xero/callback`
      - Production: `https://yourdomain.com/api/xero/callback`
    - **Scopes**:
-     - `accounting.transactions` - Create and manage invoices
+     - `accounting.invoices` - Create and read invoices and credit notes (refunds)
+     - `accounting.payments` - Record payments against invoices
      - `accounting.contacts` - Create and manage contacts
-     - `accounting.settings` - Read chart of accounts
+     - `accounting.settings` - Read chart of accounts and organisation details
      - `offline_access` - Refresh tokens
+
+   Don't request the broad `accounting.transactions` scope: Xero retires it on 13 September 2027 ([granular scopes FAQ](https://developer.xero.com/faq/granular-scopes)). The defaults in `src/lib/xero/scopes.ts` apply when `XERO_SCOPES` isn't set. A scope change only takes effect at the next consent, so after changing scopes disconnect and reconnect Xero in the admin UI.
 
 #### 2. Configure Environment Variables
 
@@ -2322,7 +2325,7 @@ Add these to your `.env.local`:
 XERO_CLIENT_ID=your_xero_client_id_here
 XERO_CLIENT_SECRET=your_xero_client_secret_here
 XERO_REDIRECT_URI=http://localhost:3000/api/xero/callback
-XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offline_access
+XERO_SCOPES=accounting.invoices accounting.payments accounting.contacts accounting.settings offline_access
 ```
 
 #### 3. Connect to Xero

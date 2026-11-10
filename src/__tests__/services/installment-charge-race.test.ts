@@ -154,8 +154,29 @@ describe('processPaymentPlanTransaction (#461)', () => {
     expect(row('xp2')).toMatchObject({ sync_status: 'processing', attempt_count: 2 })
   })
 
-  it('leaves the row processing when the Stripe call fails with an unknown outcome', async () => {
-    createIntent.mockRejectedValue(Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' }))
+  it.each([
+    'StripeInvalidRequestError',
+    'StripeAuthenticationError',
+    'StripePermissionError',
+    'StripeRateLimitError'
+  ])('puts a %s installment back to planned for retry', async (type) => {
+    createIntent.mockRejectedValue(Object.assign(new Error('stripe request rejected'), { type }))
+    const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')
+    expect(result).toMatchObject({ success: false, error: 'stripe request rejected' })
+    expect(result.inFlight).toBeUndefined()
+    expect(row('xp2')).toMatchObject({
+      sync_status: 'planned',
+      failure_reason: 'stripe request rejected',
+      attempt_count: 1
+    })
+  })
+
+  it.each([
+    'StripeConnectionError',
+    'StripeAPIError',
+    'StripeIdempotencyError'
+  ])('leaves the row processing when the Stripe call fails with %s', async (type) => {
+    createIntent.mockRejectedValue(Object.assign(new Error('stripe outcome unknown'), { type }))
     const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')
     expect(result).toMatchObject({ success: false, inFlight: true })
     expect(row('xp2').sync_status).toBe('processing')

@@ -143,6 +143,17 @@ describe('processPaymentPlanTransaction (#461)', () => {
     expect(row('xp2')).toMatchObject({ sync_status: 'planned', failure_reason: 'Your card was declined.', attempt_count: 1 })
   })
 
+  it('a slow decline leaves a newer attempt alone', async () => {
+    createIntent.mockImplementation(async () => {
+      // While the decline is in transit, a webhook releases attempt 1 and a retry claims attempt 2.
+      Object.assign(row('xp2'), { sync_status: 'processing', attempt_count: 2 })
+      throw Object.assign(new Error('Your card was declined.'), { type: 'StripeCardError' })
+    })
+    const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')
+    expect(result).toMatchObject({ success: false })
+    expect(row('xp2')).toMatchObject({ sync_status: 'processing', attempt_count: 2 })
+  })
+
   it('leaves the row processing when the Stripe call fails with an unknown outcome', async () => {
     createIntent.mockRejectedValue(Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' }))
     const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')

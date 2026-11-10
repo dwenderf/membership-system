@@ -538,8 +538,8 @@ export class PaymentPlanService {
        * 4. Critical error logs provide clear recovery instructions for admins
        *
        * Steps:
-       * 1. Cancel planned payments (set sync_status='cancelled')
-       * 2. Create staged payment for full balance
+       * 1. Create staged payment for full balance (the unique index makes this the claim)
+       * 2. Cancel planned payments (set sync_status='cancelled')
        * 3. Create payment record
        * 4. Charge Stripe (webhook completes the flow)
        *
@@ -560,28 +560,9 @@ export class PaymentPlanService {
       }
       const priorAttempts = priorAttemptRows?.length ?? 0
 
-      // Step 1: Cancel all planned payments (mark as superseded)
-      const { error: cancelError } = await adminSupabase
-        .from('xero_payments')
-        .update({
-          sync_status: 'cancelled',
-          failure_reason: 'Superseded by early payoff payment'
-        })
-        .eq('xero_invoice_id', xeroInvoiceId)
-        .eq('sync_status', 'planned')
-
-      if (cancelError) {
-        logger.logPaymentProcessing(
-          'payment-plan-early-payoff-cancel-error',
-          'Failed to cancel planned payments',
-          { xeroInvoiceId, error: cancelError.message },
-          'error'
-        )
-        return { success: false, error: 'Failed to cancel planned payments' }
-      }
-      rollbackState = { cancelledIds: plannedPayments.map(p => p.id) }
-
-      // Step 2: Create staged xero_payment for the payoff amount
+      // Step 1: Create staged xero_payment for the payoff amount. This comes first because the
+      // unique index (one live early payoff per invoice, #466) makes the insert the claim: a
+      // request that loses it stops here with the plan's installments untouched.
       const { data: stagedPayment, error: stagedPaymentError } = await adminSupabase
         .from('xero_payments')
         .insert({
@@ -605,11 +586,9 @@ export class PaymentPlanService {
         .single()
 
       if (stagedPaymentError?.code === '23505') {
-        // One live early payoff per invoice (unique index, #466/#460): another request already
-        // staged a payoff for this invoice, so this one stops here without charging.
         logger.logPaymentProcessing(
           'payment-plan-early-payoff-already-in-progress',
-          'Early payoff already in progress for this invoice',
+          'Early payoff already in progress for this invoice (a live payoff row exists)',
           { xeroInvoiceId, userId },
           'warn'
         )
@@ -619,20 +598,36 @@ export class PaymentPlanService {
       if (stagedPaymentError || !stagedPayment) {
         logger.logPaymentProcessing(
           'payment-plan-early-payoff-staged-error',
-          'CRITICAL: Planned payments cancelled but replacement payment failed to create - ADMIN INTERVENTION REQUIRED',
-          {
-            xeroInvoiceId,
-            userId,
-            remainingBalance,
-            cancelledPaymentsCount: plannedPayments.length,
-            error: stagedPaymentError?.message,
-            recovery: 'Admin must manually restore cancelled payments to planned status or create replacement payment'
-          },
+          'Failed to create staged early payoff payment',
+          { xeroInvoiceId, userId, remainingBalance, error: stagedPaymentError?.message },
           'error'
         )
         return { success: false, error: 'Failed to create staged payment record' }
       }
-      rollbackState.stagedPaymentId = stagedPayment.id
+      rollbackState = { cancelledIds: [], stagedPaymentId: stagedPayment.id }
+
+      // Step 2: Cancel all planned payments (mark as superseded)
+      const { error: cancelError } = await adminSupabase
+        .from('xero_payments')
+        .update({
+          sync_status: 'cancelled',
+          failure_reason: 'Superseded by early payoff payment'
+        })
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('sync_status', 'planned')
+
+      if (cancelError) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-cancel-error',
+          'Failed to cancel planned payments',
+          { xeroInvoiceId, error: cancelError.message },
+          'error'
+        )
+        // Nothing was charged: release the claim so a retry can stage a new payoff.
+        await PaymentPlanService.rollbackEarlyPayoff(adminSupabase, rollbackState, `Early payoff aborted: ${cancelError.message}`)
+        return { success: false, error: 'Failed to cancel planned payments' }
+      }
+      rollbackState.cancelledIds = plannedPayments.map(p => p.id)
 
       // Step 3: Create payment record BEFORE charging (webhook will update to completed)
       const { data: paymentRecord, error: paymentRecordError } = await adminSupabase

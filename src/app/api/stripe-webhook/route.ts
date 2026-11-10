@@ -1310,7 +1310,15 @@ export async function POST(request: NextRequest) {
               logger.logXeroSync(
                 'early-payoff-staged-payment-unresolved',
                 'CRITICAL: early payoff charged but its staged xero_payment could not be marked pending - ADMIN INTERVENTION REQUIRED',
-                { paymentIntentId: paymentIntent.id, xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId, paymentId: updatedPayment.id, outcome },
+                {
+                  paymentIntentId: paymentIntent.id,
+                  xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId,
+                  paymentId: updatedPayment.id,
+                  outcome,
+                  recovery: outcome.status === 'needs_review'
+                    ? 'The payoff row was rolled back although the charge succeeded, so the installments are probably back to planned. Check the plan before the next installment run, then restore the payoff row and cancel the installments.'
+                    : 'Find the staged early payoff row for this invoice and set it to pending with this payment intent in staging_metadata.'
+                },
                 'error'
               )
             }

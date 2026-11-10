@@ -67,6 +67,13 @@ describe('completeEarlyPayoffStagedPayment', () => {
     expect(outcome).toEqual({ status: 'not_found' })
   })
 
+  it('throws on a database error so Stripe retries', async () => {
+    const failing = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) }) }) }) }
+    await expect(
+      completeEarlyPayoffStagedPayment(failing, { id: 'pi_1', metadata: { xeroStagedPaymentId: 'xp-a' } }, details)
+    ).rejects.toEqual({ message: 'connection reset' })
+  })
+
   describe('older intents without xeroStagedPaymentId', () => {
     it('marks the single staged payoff row on the invoice', async () => {
       const fake = createFakeSupabase({ xero_payments: [payoffRow('xp-old', 'cancelled'), payoffRow('xp-a', 'staged')] })

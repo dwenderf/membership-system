@@ -155,5 +155,6 @@ describe('processEarlyPayoff', () => {
     const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
     expect(result).toEqual({ success: false, error: 'An early payoff is already in progress for this plan' })
     expect(createIntent).not.toHaveBeenCalled()
+    expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
   })
 })

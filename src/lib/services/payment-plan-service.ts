@@ -95,6 +95,13 @@ function isStripeCardError(error: unknown): boolean {
 }
 
 /**
+ * Plan rows the member still owes: not charged yet ('planned', 'staged'), or charged with the
+ * outcome not yet confirmed ('processing'). A row stuck in 'processing' after an unknown Stripe
+ * outcome may never have been paid, so it must keep the balance guards closed.
+ */
+export const OUTSTANDING_PLAN_PAYMENT_STATUSES = ['planned', 'staged', 'processing']
+
+/**
  * Stripe errors that mean no charge can have happened. Rate-limit errors are left out: the SDK
  * retries a dropped request with the same key, and a 429 on that retry can hide a first try that
  * did charge, so a rate-limited charge stays processing like any other unknown outcome.
@@ -1127,7 +1134,7 @@ export class PaymentPlanService {
         .from('xero_payments')
         .select('id')
         .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
+        .in('sync_status', OUTSTANDING_PLAN_PAYMENT_STATUSES)
         .limit(1)
 
       if (paymentsError) {
@@ -1180,12 +1187,12 @@ export class PaymentPlanService {
 
       const invoiceIds = userInvoices.map(inv => inv.id)
 
-      // Sum up all planned payments
+      // Sum up everything still owed, including charges whose outcome isn't confirmed
       const { data: payments, error } = await supabase
         .from('xero_payments')
         .select('amount_paid')
         .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
+        .in('sync_status', OUTSTANDING_PLAN_PAYMENT_STATUSES)
 
       if (error || !payments) {
         return 0

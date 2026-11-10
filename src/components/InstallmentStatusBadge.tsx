@@ -2,6 +2,7 @@ import type { InstallmentDisplayStatus } from '@/lib/payment-plan-utils'
 
 const BADGES: Record<InstallmentDisplayStatus, { label: string; className: string }> = {
   paid: { label: 'Paid', className: 'bg-green-100 text-green-800' },
+  charging: { label: 'Charging – awaiting confirmation', className: 'bg-blue-100 text-blue-800' },
   scheduled: { label: 'Scheduled', className: 'bg-gray-100 text-gray-700' },
   failing: { label: 'Failing – will retry', className: 'bg-orange-100 text-orange-800' },
   exhausted: { label: 'Failed – retries used up', className: 'bg-red-100 text-red-800' },

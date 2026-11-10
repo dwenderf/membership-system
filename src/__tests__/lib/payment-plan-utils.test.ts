@@ -19,10 +19,14 @@ const inst = (over: Partial<{ sync_status: string; attempt_count: number; failur
 })
 
 describe('getInstallmentDisplayStatus', () => {
-  it('treats synced/pending/processing as paid', () => {
-    for (const sync_status of ['synced', 'pending', 'processing']) {
+  it('treats synced/pending as paid', () => {
+    for (const sync_status of ['synced', 'pending']) {
       expect(getInstallmentDisplayStatus(inst({ sync_status }), 3)).toBe('paid')
     }
+  })
+
+  it('treats processing as charging, not paid: the charge outcome is not confirmed yet', () => {
+    expect(getInstallmentDisplayStatus(inst({ sync_status: 'processing', attempt_count: 1 }), 3)).toBe('charging')
   })
 
   it('treats an untouched planned installment as scheduled', () => {

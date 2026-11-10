@@ -180,6 +180,20 @@ describe('early payoff vs an installment charge (#461)', () => {
     const full = fake.rows('xero_payments').filter(r => r.payment_type === 'full')
     expect(full.map(r => r.sync_status)).toEqual(['cancelled'])
   })
+
+  it('stops the payoff while an installment it did not read is being charged', async () => {
+    // The cron claimed xp2 before the payoff read the plan, so the payoff's balance leaves it out.
+    row('xp2').sync_status = 'processing'
+    row('xp2').attempt_count = 1
+    const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(result).toMatchObject({ success: false, error: expect.stringContaining('being processed') })
+    expect(createIntent).not.toHaveBeenCalled()
+    expect(row('xp2').sync_status).toBe('processing')
+    expect(row('xp3').sync_status).toBe('planned')
+    expect(row('xp4').sync_status).toBe('planned')
+    const full = fake.rows('xero_payments').filter(r => r.payment_type === 'full')
+    expect(full.map(r => r.sync_status)).toEqual(['cancelled'])
+  })
 })
 
 describe('completeInstallmentCharge (webhook backstop, #461)', () => {
@@ -234,6 +248,26 @@ describe('releaseFailedInstallmentCharge (#461)', () => {
     row('xp2').staging_metadata = { stripe_payment_intent_id: 'pi_2' }
     expect(await releaseFailedInstallmentCharge(fake, 'xp2', failed('pi_1', '1'))).toEqual({ status: 'ignored', reason: 'other_attempt' })
     expect(row('xp2').sync_status).toBe('processing')
+  })
+
+  it('leaves a newer attempt alone when it is claimed between the read and the update', async () => {
+    row('xp2').sync_status = 'processing'
+    row('xp2').attempt_count = 1
+    const realFrom = fake.from
+    const racing = {
+      from: (name: string) => {
+        const q = realFrom(name)
+        const realUpdate = q.update
+        q.update = (v: Record<string, unknown>) => {
+          // another delivery released attempt 1 and the cron claimed attempt 2 meanwhile
+          row('xp2').attempt_count = 2
+          return realUpdate(v)
+        }
+        return q
+      }
+    }
+    expect(await releaseFailedInstallmentCharge(racing, 'xp2', failed('pi_1', '1'))).toEqual({ status: 'ignored', reason: 'no_longer_processing' })
+    expect(row('xp2')).toMatchObject({ sync_status: 'processing', attempt_count: 2 })
   })
 
   it('ignores a row the charge path already put back', async () => {

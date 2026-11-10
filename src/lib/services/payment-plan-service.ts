@@ -357,9 +357,10 @@ export class PaymentPlanService {
       }
       claimedFrom = { attempt_count: xeroPayment.attempt_count ?? 0, last_attempt_at: xeroPayment.last_attempt_at ?? null }
 
-      // Skip an invoice that an early payoff is paying off. The payoff cancels the planned rows
-      // after staging its own row, and stops if it couldn't cancel all of them, so between this
-      // check and the payoff's own check at most one of the two charges.
+      // Skip an invoice that an early payoff is paying off. The payoff stages its own row first,
+      // then stops if any installment is 'processing' or if it couldn't cancel every row it read.
+      // Each side writes its claim before checking for the other's, so at least one of the two
+      // sees the other and at most one charges.
       const { data: payoffRows, error: payoffError } = await adminSupabase
         .from('xero_payments')
         .select('id')
@@ -683,6 +684,32 @@ export class PaymentPlanService {
         return { success: false, error: 'Failed to create staged payment record' }
       }
       rollbackState = { cancelledIds: [], stagedPaymentId: stagedPayment.id }
+
+      // An installment that a charge has already claimed isn't in the balance read above, and once
+      // this payoff is live the charge path would skip it for good. So stop while one is in flight
+      // (#461). This runs after the staged insert, so a charge that claims a row later sees the
+      // payoff instead.
+      const { data: inFlightRows, error: inFlightError } = await adminSupabase
+        .from('xero_payments')
+        .select('id')
+        .eq('xero_invoice_id', xeroInvoiceId)
+        .eq('payment_type', 'installment')
+        .eq('sync_status', 'processing')
+      if (inFlightError || (inFlightRows && inFlightRows.length > 0)) {
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-installment-in-flight',
+          'Early payoff stopped: an installment charge is in progress',
+          { xeroInvoiceId, inFlightIds: (inFlightRows || []).map((r: { id: string }) => r.id), error: inFlightError?.message },
+          'warn'
+        )
+        await PaymentPlanService.rollbackEarlyPayoff(adminSupabase, rollbackState, 'Early payoff aborted: an installment was being charged')
+        return {
+          success: false,
+          error: inFlightError
+            ? 'Error checking installment status'
+            : 'An installment payment is being processed right now. Please try again in a few minutes.'
+        }
+      }
 
       // Step 2: Cancel the planned payments this payoff covers (mark as superseded). Only rows
       // still planned are cancelled; the count is checked below (#461).

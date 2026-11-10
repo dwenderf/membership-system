@@ -61,8 +61,8 @@ Identifies and diagnoses payment plan invoices that have no linked user_registra
 # Using psql
 psql $DATABASE_URL -f scripts/check-orphaned-payment-plans.sql
 
-# Using Supabase CLI
-npx supabase db execute --db-url "$DATABASE_URL" < scripts/check-orphaned-payment-plans.sql
+# Using Supabase CLI (add --yes if running non-interactively against a hosted database)
+npx supabase db query --remote="$DATABASE_URL" -f scripts/check-orphaned-payment-plans.sql
 ```
 
 **Output includes:**

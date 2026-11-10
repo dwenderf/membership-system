@@ -26,7 +26,7 @@ name: Apply database migrations
 # SETUP — see README "Database Migrations" before the first run:
 #   1. Seed the CLI's migration history on both projects, once. The baseline was
 #      applied by hand, and the CLI does not know that yet:
-#        supabase migration repair --status applied 20260907000000 20260907000001
+#      supabase migration repair --status applied 20260907000000 20260907000001 --remote="$SUPABASE_DB_URL"
 #   2. Create GitHub Environments named `supabase-development` and
 #      `supabase-production` (Settings → Environments). Neither has a required
 #      reviewer -- see "Why not a required reviewer" below for why, and what
@@ -138,7 +138,7 @@ jobs:
     - name: Install Supabase CLI
       uses: supabase/setup-cli@v2
       with:
-        version: 3.0.0
+        version: 3.1.0
 
     - name: Verify the connection string is configured
       env:

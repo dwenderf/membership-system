@@ -894,20 +894,21 @@ export class PaymentPlanService {
         totalPaid: remainingBalance
       }
     } catch (error) {
-      // A declined card (StripeCardError) means no charge happened: restore the plan. Any other
-      // error after the charge started (network, idempotency conflict from a concurrent
+      // A card decline, or a Stripe 4xx that rejected the request (invalid request, authentication,
+      // permission), means no charge happened and no failure event will follow: restore the plan.
+      // Any other error (network, API, rate limit, idempotency conflict from a concurrent
       // double-submit) has an unknown or someone-else's outcome, so leave the records alone.
-      if (rollbackState && isStripeCardError(error)) {
+      if (rollbackState && isStripeErrorWithNoCharge(error)) {
         try {
           await PaymentPlanService.rollbackEarlyPayoff(
             createAdminClient(),
             rollbackState,
-            `Early payoff declined: ${error instanceof Error ? error.message : String(error)}`
+            `Early payoff ${isStripeCardError(error) ? 'declined' : 'rejected by Stripe'}: ${error instanceof Error ? error.message : String(error)}`
           )
         } catch (rollbackError) {
           logger.logPaymentProcessing(
             'payment-plan-early-payoff-rollback-error',
-            'CRITICAL: early payoff declined but rollback failed - ADMIN INTERVENTION REQUIRED',
+            'CRITICAL: early payoff charge did not go through but rollback failed - ADMIN INTERVENTION REQUIRED',
             { xeroInvoiceId, rollbackState, error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError) },
             'error'
           )

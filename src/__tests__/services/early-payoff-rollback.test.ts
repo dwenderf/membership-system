@@ -123,12 +123,29 @@ describe('processEarlyPayoff', () => {
     expect(fake.rows('payments')[0].status).toBe('failed')
   })
 
-  it('leaves records alone when the outcome is unknown (non-card error) or still processing', async () => {
-    createIntent.mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' }))
-    await PaymentPlanService.processEarlyPayoff(INV, USER)
-    expect(planned()).toEqual([])
-    expect(full()[0].sync_status).toBe('staged')
-  })
+  it.each(['StripeInvalidRequestError', 'StripeAuthenticationError', 'StripePermissionError'])(
+    'restores the installments when Stripe rejects the request with %s',
+    async (type) => {
+      createIntent.mockRejectedValue(Object.assign(new Error('stripe request rejected'), { type }))
+      const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+      expect(result.success).toBe(false)
+      expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
+      expect(full()[0]).toMatchObject({ sync_status: 'cancelled' })
+      expect(full()[0].failure_reason).toMatch(/rejected by Stripe/)
+      expect(fake.rows('payments')[0].status).toBe('failed')
+    }
+  )
+
+  it.each(['StripeConnectionError', 'StripeAPIError', 'StripeRateLimitError', 'StripeIdempotencyError'])(
+    'leaves records alone when the outcome is unknown (%s)',
+    async (type) => {
+      createIntent.mockRejectedValueOnce(Object.assign(new Error('stripe outcome unknown'), { type }))
+      await PaymentPlanService.processEarlyPayoff(INV, USER)
+      expect(planned()).toEqual([])
+      expect(full()[0].sync_status).toBe('staged')
+      expect(fake.rows('payments')[0].status).toBe('pending')
+    }
+  )
 
   it('names the staged payoff row in the intent metadata so the webhook can find it exactly (#466)', async () => {
     createIntent.mockResolvedValue({ id: 'pi_1', status: 'succeeded' })

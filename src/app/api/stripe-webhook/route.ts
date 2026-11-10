@@ -9,6 +9,8 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
+import { completeEarlyPayoffStagedPayment, rollbackFailedEarlyPayoff } from '@/lib/services/early-payoff-webhook'
+import { completeInstallmentCharge, releaseFailedInstallmentCharge } from '@/lib/services/installment-charge'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 
@@ -1265,8 +1267,31 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a payment plan installment payment
         if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
-          // Update payment record status - already handled by PaymentPlanService
-          // This webhook primarily serves as confirmation
+          // The cron's charge path usually settles a succeeded installment itself. This is the
+          // backstop for an intent that returned 'processing' or whose outcome the charge path
+          // never saw (#461); completeInstallmentCharge is a no-op if it's already settled.
+          const xeroPaymentId = paymentIntent.metadata?.xeroPaymentId
+          if (!xeroPaymentId) {
+            logger.logPaymentProcessing('installment-webhook-missing-id', 'Installment intent has no xeroPaymentId in metadata', { paymentIntentId: paymentIntent.id }, 'warn')
+            break
+          }
+          // A database error throws, so Stripe retries
+          const completion = await completeInstallmentCharge(supabase, xeroPaymentId, paymentIntent, paymentIntent.metadata?.userId || '')
+          if (completion.status === 'not_found' || completion.status === 'not_processing') {
+            logger.logPaymentProcessing(
+              'installment-webhook-unsettled',
+              'CRITICAL: installment charge succeeded but its row is not waiting for this charge - ADMIN REVIEW REQUIRED',
+              {
+                paymentIntentId: paymentIntent.id,
+                xeroPaymentId,
+                completion,
+                recovery: 'Check whether this installment was charged twice (another intent for the same xeroPaymentId) and refund the extra charge, or set the row to pending with this intent if it is the only charge.'
+              },
+              'error'
+            )
+          } else {
+            logger.logPaymentProcessing('installment-webhook-settled', 'Installment charge settled via webhook', { paymentIntentId: paymentIntent.id, xeroPaymentId, completion: completion.status }, 'info')
+          }
           break
         }
 
@@ -1295,36 +1320,32 @@ export async function POST(request: NextRequest) {
             }
             logger.logPaymentProcessing('early-payoff-payment-record-updated', `Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
-            // Find the staged xero_payment for this invoice
-            const { data: stagedPayment, error: stagedPaymentError } = await supabase
-              .from('xero_payments')
-              .select('*')
-              .eq('xero_invoice_id', paymentIntent.metadata.xeroStagingRecordId)
-              .eq('sync_status', 'staged')
-              .eq('payment_type', 'full')
-              .single()
+            // Move the staged xero_payment to pending (ready for sync), looked up by its exact id (#466)
+            const outcome = await completeEarlyPayoffStagedPayment(supabase, paymentIntent, {
+              paymentId: updatedPayment.id,
+              chargeId
+            })
 
-            if (stagedPaymentError || !stagedPayment) {
-              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error', stagedPaymentError)
-              throw stagedPaymentError || new Error('No staged payment found')
+            if (outcome.status === 'marked_pending' || outcome.status === 'already_done') {
+              logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id, xeroPaymentId: outcome.xeroPaymentId, outcome: outcome.status }, 'info')
+            } else {
+              // The charge succeeded but the matching payoff row can't be settled automatically.
+              // A Stripe retry won't change that, so acknowledge the event and flag it for an admin.
+              logger.logXeroSync(
+                'early-payoff-staged-payment-unresolved',
+                'CRITICAL: early payoff charged but its staged xero_payment could not be marked pending - ADMIN INTERVENTION REQUIRED',
+                {
+                  paymentIntentId: paymentIntent.id,
+                  xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId,
+                  paymentId: updatedPayment.id,
+                  outcome,
+                  recovery: outcome.status === 'needs_review'
+                    ? 'The payoff row was rolled back although the charge succeeded, so the installments are probably back to planned. Check the plan before the next installment run, then restore the payoff row and cancel the installments.'
+                    : 'Find the staged early payoff row for this invoice and set it to pending with this payment intent in staging_metadata.'
+                },
+                'error'
+              )
             }
-
-            // Update staged xero_payment to pending (ready for sync)
-            await supabase
-              .from('xero_payments')
-              .update({
-                sync_status: 'pending',
-                staging_metadata: {
-                  ...(stagedPayment.staging_metadata || {}),
-                  payment_id: updatedPayment.id,
-                  stripe_payment_intent_id: paymentIntent.id,
-                  stripe_charge_id: chargeId,
-                  processed_at: new Date().toISOString()
-                }
-              })
-              .eq('id', stagedPayment.id)
-
-            logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id }, 'info')
           } catch (error) {
             logger.logPaymentProcessing('early-payoff-webhook-error', 'Error processing early payoff webhook', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error // Throw to retry webhook
@@ -1619,6 +1640,42 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
+          }
+          break
+        }
+
+        if (paymentIntent.metadata?.purpose === 'payment_plan_early_payoff') {
+          // A payoff intent that returned 'processing' and then failed: put the plan back (#462).
+          // Declines the charge path saw itself are already rolled back, so this is a no-op for them.
+          // A database error throws, so Stripe retries the event.
+          const outcome = await rollbackFailedEarlyPayoff(supabase, paymentIntent)
+          if (outcome.status === 'rolled_back' || outcome.status === 'already_rolled_back' || outcome.status === 'already_handled' || outcome.status === 'not_found') {
+            logger.logPaymentProcessing('early-payoff-failed-webhook', 'Early payoff payment failed webhook handled', { paymentIntentId: paymentIntent.id, xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId, outcome }, outcome.status === 'rolled_back' ? 'warn' : 'info')
+          } else {
+            // A retry won't change these, so acknowledge the event and flag it for an admin.
+            logger.logPaymentProcessing(
+              'early-payoff-failed-unresolved',
+              'CRITICAL: early payoff payment failed but the plan could not be rolled back automatically - ADMIN INTERVENTION REQUIRED',
+              {
+                paymentIntentId: paymentIntent.id,
+                xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId,
+                outcome,
+                recovery: 'Check the plan: cancel the staged early payoff row for this intent, set its superseded installments back to planned, and mark its payment failed.'
+              },
+              'error'
+            )
+          }
+          break
+        }
+
+        if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
+          // An installment intent that returned 'processing' and then failed goes back to planned
+          // for the next retry (#461). Declines the charge path saw itself are already planned,
+          // so this is a no-op for them.
+          const xeroPaymentId = paymentIntent.metadata?.xeroPaymentId
+          if (xeroPaymentId) {
+            const release = await releaseFailedInstallmentCharge(supabase, xeroPaymentId, paymentIntent)
+            logger.logPaymentProcessing('installment-webhook-failed', 'Installment payment failed webhook handled', { paymentIntentId: paymentIntent.id, xeroPaymentId, release }, 'info')
           }
           break
         }

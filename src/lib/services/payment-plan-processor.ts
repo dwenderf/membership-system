@@ -32,6 +32,10 @@ interface DuePaymentInvoiceJoin {
 export interface ProcessingResults {
   paymentsProcessed: number
   paymentsFailed: number
+  /** Not charged and not a failure: no longer planned, or an early payoff covers the invoice (#461) */
+  paymentsSkipped: number
+  /** Charge still settling (or outcome unknown); the webhook settles it (#461) */
+  paymentsInFlight: number
   retriesAttempted: number
   paymentsFound: number
   completionEmailsSent: number
@@ -66,6 +70,8 @@ export async function processDuePayments(
   const results: ProcessingResults = {
     paymentsProcessed: 0,
     paymentsFailed: 0,
+    paymentsSkipped: 0,
+    paymentsInFlight: 0,
     retriesAttempted: 0,
     paymentsFound: 0,
     completionEmailsSent: 0,
@@ -188,6 +194,18 @@ export async function processDuePayments(
     )
 
     const result = await PaymentPlanService.processPaymentPlanTransaction(payment.id)
+
+    if (!result.success && (result.skipped || result.inFlight)) {
+      // Not a decline, so no failure email or admin alert (#461)
+      if (result.skipped) results.paymentsSkipped++
+      else results.paymentsInFlight++
+      logger.logBatchProcessing(
+        result.skipped ? 'payment-processor-payment-skipped' : 'payment-processor-payment-in-flight',
+        result.skipped ? 'Installment skipped' : 'Installment charge still settling',
+        { xeroPaymentId: payment.id, installmentNumber: payment.installment_number, skipped: result.skipped, error: result.error }
+      )
+      continue
+    }
 
     if (result.success) {
       results.paymentsProcessed++

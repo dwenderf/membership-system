@@ -420,7 +420,7 @@ export type Database = {
           reason: string | null
           stripe_refund_id: string | null
           xero_credit_note_id: string | null
-          status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          status: 'pending' | 'completed' | 'failed' | 'cancelled'
           processed_by: string
           stripe_fee_refunded: number
           xero_synced: boolean
@@ -440,7 +440,7 @@ export type Database = {
           reason?: string | null
           stripe_refund_id?: string | null
           xero_credit_note_id?: string | null
-          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          status?: 'pending' | 'completed' | 'failed' | 'cancelled'
           processed_by: string
           stripe_fee_refunded?: number
           xero_synced?: boolean
@@ -460,7 +460,7 @@ export type Database = {
           reason?: string | null
           stripe_refund_id?: string | null
           xero_credit_note_id?: string | null
-          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+          status?: 'pending' | 'completed' | 'failed' | 'cancelled'
           processed_by?: string
           stripe_fee_refunded?: number
           xero_synced?: boolean

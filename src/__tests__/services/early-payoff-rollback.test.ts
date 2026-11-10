@@ -129,4 +129,57 @@ describe('processEarlyPayoff', () => {
     expect(planned()).toEqual([])
     expect(full()[0].sync_status).toBe('staged')
   })
+
+  it('names the staged payoff row in the intent metadata so the webhook can find it exactly (#466)', async () => {
+    createIntent.mockResolvedValue({ id: 'pi_1', status: 'succeeded' })
+    await PaymentPlanService.processEarlyPayoff(INV, USER)
+    const [params] = createIntent.mock.calls[0]
+    expect(params.metadata.xeroStagedPaymentId).toBe(full()[0].id)
+    expect(params.metadata.xeroStagingRecordId).toBe(INV)
+  })
+
+  it('stops without charging when another payoff is already staged for the invoice (unique index, #466)', async () => {
+    const realFrom = fake.from
+    fake.from = (name: string) => {
+      const q = realFrom(name)
+      if (name !== 'xero_payments') return q
+      const realInsert = q.insert
+      q.insert = (v: unknown) => {
+        realInsert(v)
+        q.then = (resolve: (r: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } }).then(resolve)
+        return q
+      }
+      return q
+    }
+    const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(result).toEqual({ success: false, error: 'An early payoff is already in progress for this plan' })
+    expect(createIntent).not.toHaveBeenCalled()
+    expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
+  })
+
+  it('releases the staged row and leaves the installments planned when cancelling them fails (#466 review)', async () => {
+    const realFrom = fake.from
+    fake.from = (name: string) => {
+      const q = realFrom(name)
+      if (name !== 'xero_payments') return q
+      const realUpdate = q.update
+      q.update = (v: Record<string, unknown>) => {
+        realUpdate(v)
+        if (v.failure_reason === 'Superseded by early payoff payment') {
+          q.then = (resolve: (r: unknown) => unknown) =>
+            Promise.resolve({ data: null, error: { message: 'connection reset' } }).then(resolve)
+        }
+        return q
+      }
+      return q
+    }
+    const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(result).toEqual({ success: false, error: 'Failed to cancel planned payments' })
+    expect(createIntent).not.toHaveBeenCalled()
+    expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
+    expect(full()).toHaveLength(1)
+    expect(full()[0].sync_status).toBe('cancelled')
+    expect(fake.rows('payments')).toEqual([])
+  })
 })

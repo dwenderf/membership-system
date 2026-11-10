@@ -194,6 +194,28 @@ describe('early payoff vs an installment charge (#461)', () => {
     const full = fake.rows('xero_payments').filter(r => r.payment_type === 'full')
     expect(full.map(r => r.sync_status)).toEqual(['cancelled'])
   })
+
+  it('stops the payoff when an installment it did not read was put back to planned meanwhile', async () => {
+    // The cron claimed xp2 before the payoff read the plan, then saw the payoff and released xp2.
+    row('xp2').sync_status = 'processing'
+    const realFrom = fake.from
+    fake.from = (name: string) => {
+      const q = realFrom(name)
+      if (name !== 'xero_payments') return q
+      const realUpdate = q.update
+      q.update = (v: Record<string, unknown>) => {
+        if (v.failure_reason === 'Superseded by early payoff payment') row('xp2').sync_status = 'planned'
+        return realUpdate(v)
+      }
+      return q
+    }
+    const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(result).toMatchObject({ success: false, error: expect.stringContaining('being processed') })
+    expect(createIntent).not.toHaveBeenCalled()
+    expect(['xp2', 'xp3', 'xp4'].map(id => row(id).sync_status)).toEqual(['planned', 'planned', 'planned'])
+    const full = fake.rows('xero_payments').filter(r => r.payment_type === 'full')
+    expect(full.map(r => r.sync_status)).toEqual(['cancelled'])
+  })
 })
 
 describe('completeInstallmentCharge (webhook backstop, #461)', () => {

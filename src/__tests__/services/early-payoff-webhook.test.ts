@@ -67,6 +67,30 @@ describe('completeEarlyPayoffStagedPayment', () => {
     expect(outcome).toEqual({ status: 'not_found' })
   })
 
+  it('flags the row when a rollback cancels it between the lookup and the update', async () => {
+    const fake = createFakeSupabase({ xero_payments: [payoffRow('xp-a', 'staged')] })
+    const realFrom = fake.from
+    const racing = {
+      from: (name: string) => {
+        const q = realFrom(name)
+        const realUpdate = q.update
+        q.update = (v: Record<string, unknown>) => {
+          // a concurrent rollback lands just before this update runs
+          fake.rows('xero_payments').find(r => r.id === 'xp-a')!.sync_status = 'cancelled'
+          return realUpdate(v)
+        }
+        return q
+      }
+    }
+    const outcome = await completeEarlyPayoffStagedPayment(
+      racing,
+      { id: 'pi_1', metadata: { xeroStagingRecordId: INV, xeroStagedPaymentId: 'xp-a' } },
+      details
+    )
+    expect(outcome).toEqual({ status: 'needs_review', xeroPaymentId: 'xp-a', syncStatus: 'cancelled' })
+    expect(statusOf(fake, 'xp-a')).toBe('cancelled')
+  })
+
   it('throws on a database error so Stripe retries', async () => {
     const failing = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) }) }) }) }
     await expect(

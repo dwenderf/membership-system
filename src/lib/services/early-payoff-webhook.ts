@@ -86,9 +86,16 @@ export async function completeEarlyPayoffStagedPayment(
   if (updateError) throw updateError
 
   if (!updated || updated.length === 0) {
-    // Another delivery of this event got there first.
-    logger.logXeroSync('early-payoff-already-marked', 'Early payoff row was no longer staged; treating as already handled', { paymentIntentId: paymentIntent.id, xeroPaymentId: row.id }, 'info')
-    return { status: 'already_done', xeroPaymentId: row.id }
+    // The row left 'staged' between the read and the update: re-read it to see whether another
+    // delivery handled it or something else (e.g. a rollback) moved it.
+    const { data: current, error: rereadError } = await supabase.from('xero_payments').select('*').eq('id', row.id).maybeSingle()
+    if (rereadError) throw rereadError
+    if (current && HANDLED_STATUSES.includes(current.sync_status)) {
+      logger.logXeroSync('early-payoff-already-marked', 'Early payoff row was no longer staged; treating as already handled', { paymentIntentId: paymentIntent.id, xeroPaymentId: row.id }, 'info')
+      return { status: 'already_done', xeroPaymentId: row.id }
+    }
+    if (!current) return { status: 'not_found' }
+    return { status: 'needs_review', xeroPaymentId: row.id, syncStatus: current.sync_status }
   }
 
   return { status: 'marked_pending', xeroPaymentId: row.id }

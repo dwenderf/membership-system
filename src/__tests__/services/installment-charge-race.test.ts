@@ -157,8 +157,7 @@ describe('processPaymentPlanTransaction (#461)', () => {
   it.each([
     'StripeInvalidRequestError',
     'StripeAuthenticationError',
-    'StripePermissionError',
-    'StripeRateLimitError'
+    'StripePermissionError'
   ])('puts a %s installment back to planned for retry', async (type) => {
     createIntent.mockRejectedValue(Object.assign(new Error('stripe request rejected'), { type }))
     const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')
@@ -174,7 +173,8 @@ describe('processPaymentPlanTransaction (#461)', () => {
   it.each([
     'StripeConnectionError',
     'StripeAPIError',
-    'StripeIdempotencyError'
+    'StripeIdempotencyError',
+    'StripeRateLimitError'
   ])('leaves the row processing when the Stripe call fails with %s', async (type) => {
     createIntent.mockRejectedValue(Object.assign(new Error('stripe outcome unknown'), { type }))
     const result = await PaymentPlanService.processPaymentPlanTransaction('xp2')

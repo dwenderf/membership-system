@@ -94,13 +94,16 @@ function isStripeCardError(error: unknown): boolean {
   return stripeErrorType(error) === 'StripeCardError'
 }
 
-/** Stripe errors that mean no PaymentIntent was created and no charge can have happened. */
+/**
+ * Stripe errors that mean no charge can have happened. Rate-limit errors are left out: the SDK
+ * retries a dropped request with the same key, and a 429 on that retry can hide a first try that
+ * did charge, so a rate-limited charge stays processing like any other unknown outcome.
+ */
 const STRIPE_ERRORS_WITH_NO_CHARGE = new Set([
   'StripeCardError',
   'StripeInvalidRequestError',
   'StripeAuthenticationError',
-  'StripePermissionError',
-  'StripeRateLimitError'
+  'StripePermissionError'
 ])
 
 function stripeErrorType(error: unknown): string | undefined {
@@ -524,9 +527,9 @@ export class PaymentPlanService {
       const failureReason = error instanceof Error ? error.message : 'Unknown error'
 
       if (claimedFrom && chargeStarted && !isStripeErrorWithNoCharge(error)) {
-        // Connection, API, and idempotency errors may or may not have charged (or a DB error
-        // after the charge). Leave the row processing so nothing charges it again; the webhook
-        // settles it if Stripe has the intent.
+        // Connection, API, idempotency and rate-limit errors may or may not have charged (or a DB
+        // error after the charge). Leave the row processing so nothing charges it again; the
+        // webhook settles it if Stripe has the intent.
         logger.logPaymentProcessing(
           'payment-plan-installment-outcome-unknown',
           'CRITICAL: installment charge outcome unknown; left in processing - ADMIN REVIEW REQUIRED',

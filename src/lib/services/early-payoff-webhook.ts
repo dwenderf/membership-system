@@ -108,6 +108,7 @@ const SUPERSEDED_REASON = 'Superseded by early payoff payment'
 export type EarlyPayoffFailureOutcome =
   | { status: 'rolled_back'; xeroPaymentId: string; restoredInstallments: number }
   | { status: 'already_rolled_back'; xeroPaymentId: string; restoredInstallments: number }
+  | { status: 'already_handled' }
   | { status: 'not_found' }
   | { status: 'ambiguous'; candidateIds: string[] }
   | { status: 'needs_review'; xeroPaymentId: string; syncStatus: string }
@@ -124,8 +125,13 @@ export type EarlyPayoffFailureOutcome =
  *   exists on the invoice: a late event for an old attempt must not undo a newer payoff.
  * - The payment record goes pending -> failed.
  *
- * Every step is conditional, so a repeat delivery, or a delivery for a decline the charge path
- * already rolled back, is a no-op. Database errors throw so Stripe retries the event.
+ * Marking the payment failed is the last step here and in the charge path's own rollback, so a
+ * payment that already reads failed means the rollback finished: a repeat delivery then touches
+ * nothing. Without that, a repeat could pick a newer payoff's staged row (older intents, found by
+ * invoice) or put back installments a newer payoff has just cancelled.
+ *
+ * Every step is conditional, so a delivery after a half-finished one completes it. Database errors
+ * throw so Stripe retries the event.
  */
 export async function rollbackFailedEarlyPayoff(
   supabase: SupabaseLike,
@@ -134,6 +140,10 @@ export async function rollbackFailedEarlyPayoff(
   const stagedId = paymentIntent.metadata?.xeroStagedPaymentId
   const invoiceId = paymentIntent.metadata?.xeroStagingRecordId
   const reason = `Early payoff failed: ${paymentIntent.last_payment_error?.message || 'payment failed after processing'}`
+
+  if ((await payoffPaymentStatus(supabase, paymentIntent)) === 'failed') {
+    return { status: 'already_handled' }
+  }
 
   let row: any = null
   if (stagedId) {
@@ -215,6 +225,18 @@ export async function rollbackFailedEarlyPayoff(
   return claimed
     ? { status: 'rolled_back', xeroPaymentId: row.id, restoredInstallments }
     : { status: 'already_rolled_back', xeroPaymentId: row.id, restoredInstallments }
+}
+
+async function payoffPaymentStatus(
+  supabase: SupabaseLike,
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'metadata'>
+): Promise<string | null> {
+  const paymentId = paymentIntent.metadata?.paymentId
+  const query = supabase.from('payments').select('status')
+  const { data, error } = await (paymentId ? query.eq('id', paymentId) : query.eq('stripe_payment_intent_id', paymentIntent.id))
+  if (error) throw error
+  const rows: any[] = Array.isArray(data) ? data : data ? [data] : []
+  return rows.length === 1 ? rows[0].status : null
 }
 
 async function markPayoffPaymentFailed(

@@ -1649,7 +1649,7 @@ export async function POST(request: NextRequest) {
           // Declines the charge path saw itself are already rolled back, so this is a no-op for them.
           // A database error throws, so Stripe retries the event.
           const outcome = await rollbackFailedEarlyPayoff(supabase, paymentIntent)
-          if (outcome.status === 'rolled_back' || outcome.status === 'already_rolled_back' || outcome.status === 'not_found') {
+          if (outcome.status === 'rolled_back' || outcome.status === 'already_rolled_back' || outcome.status === 'already_handled' || outcome.status === 'not_found') {
             logger.logPaymentProcessing('early-payoff-failed-webhook', 'Early payoff payment failed webhook handled', { paymentIntentId: paymentIntent.id, xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId, outcome }, outcome.status === 'rolled_back' ? 'warn' : 'info')
           } else {
             // A retry won't change these, so acknowledge the event and flag it for an admin.

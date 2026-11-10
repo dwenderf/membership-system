@@ -65,8 +65,29 @@ describe('rollbackFailedEarlyPayoff', () => {
     const fake = plan()
     await rollbackFailedEarlyPayoff(fake, failedIntent('xp-a'))
     const again = await rollbackFailedEarlyPayoff(fake, failedIntent('xp-a'))
-    expect(again).toEqual({ status: 'already_rolled_back', xeroPaymentId: 'xp-a', restoredInstallments: 0 })
+    expect(again).toEqual({ status: 'already_handled' })
     expect(row(fake, 'xero_payments', 'i2').sync_status).toBe('planned')
+  })
+
+  it('a repeat delivery leaves alone installments that a newer payoff has cancelled since', async () => {
+    const fake = plan()
+    await rollbackFailedEarlyPayoff(fake, failedIntent('xp-a'))
+    // A newer payoff starts: its staged row, and the restored installments superseded again.
+    fake.rows('xero_payments').push(payoffRow('xp-b', 'staged'))
+    for (const id of ['i2', 'i3']) Object.assign(row(fake, 'xero_payments', id), { sync_status: 'cancelled', failure_reason: SUPERSEDED })
+
+    expect(await rollbackFailedEarlyPayoff(fake, failedIntent('xp-a'))).toEqual({ status: 'already_handled' })
+    expect(row(fake, 'xero_payments', 'i2').sync_status).toBe('cancelled')
+    expect(row(fake, 'xero_payments', 'xp-b').sync_status).toBe('staged')
+  })
+
+  it('a repeat delivery for an older intent does not cancel a newer payoff', async () => {
+    const fake = plan()
+    await rollbackFailedEarlyPayoff(fake, failedIntent())
+    fake.rows('xero_payments').push(payoffRow('xp-b', 'staged'))
+
+    expect(await rollbackFailedEarlyPayoff(fake, failedIntent())).toEqual({ status: 'already_handled' })
+    expect(row(fake, 'xero_payments', 'xp-b').sync_status).toBe('staged')
   })
 
   it('finishes a rollback that a failed earlier delivery left half done', async () => {
@@ -113,7 +134,7 @@ describe('rollbackFailedEarlyPayoff', () => {
     const fake = plan()
     const broken = {
       from: (table: string) => (table === 'payments'
-        ? { update: () => ({ eq: () => ({ eq: async () => ({ error: { message: 'db down' } }) }) }) }
+        ? { select: (cols: string) => fake.from(table).select(cols), update: () => ({ eq: () => ({ eq: async () => ({ error: { message: 'db down' } }) }) }) }
         : fake.from(table))
     }
     await expect(rollbackFailedEarlyPayoff(broken, failedIntent('xp-a'))).rejects.toEqual({ message: 'db down' })

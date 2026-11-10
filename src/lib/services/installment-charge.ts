@@ -80,10 +80,11 @@ export async function completeInstallmentCharge(
     })
     .eq('id', xeroPaymentId)
     .eq('sync_status', 'processing')
+    .eq('attempt_count', row.attempt_count)
     .select('id, staging_metadata')
   if (claimError) throw claimError
   if (!claimed || claimed.length === 0) {
-    // The other path (sync or webhook) settled it between the read and the update.
+    // The other path (sync or webhook) settled it, or a newer attempt claimed it, since the read.
     return { status: 'already_done' }
   }
 
@@ -155,6 +156,8 @@ export async function releaseFailedInstallmentCharge(
     .update({ sync_status: 'planned', failure_reason: reason })
     .eq('id', xeroPaymentId)
     .eq('sync_status', 'processing')
+    // Still the attempt checked above: a newer attempt claimed since the read stays in flight.
+    .eq('attempt_count', row.attempt_count)
     .select('id')
   if (releaseError) throw releaseError
   if (!released || released.length === 0) return { status: 'ignored', reason: 'no_longer_processing' }

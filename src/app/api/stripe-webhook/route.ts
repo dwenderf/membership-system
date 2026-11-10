@@ -9,6 +9,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
+import { completeEarlyPayoffStagedPayment } from '@/lib/services/early-payoff-webhook'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 
@@ -1295,36 +1296,24 @@ export async function POST(request: NextRequest) {
             }
             logger.logPaymentProcessing('early-payoff-payment-record-updated', `Successfully updated early payoff payment record (Stripe fee: $${(stripeFeeAmount / 100).toFixed(2)})`, { paymentIntentId: paymentIntent.id, stripeFeeAmount }, 'info')
 
-            // Find the staged xero_payment for this invoice
-            const { data: stagedPayment, error: stagedPaymentError } = await supabase
-              .from('xero_payments')
-              .select('*')
-              .eq('xero_invoice_id', paymentIntent.metadata.xeroStagingRecordId)
-              .eq('sync_status', 'staged')
-              .eq('payment_type', 'full')
-              .single()
+            // Move the staged xero_payment to pending (ready for sync), looked up by its exact id (#466)
+            const outcome = await completeEarlyPayoffStagedPayment(supabase, paymentIntent, {
+              paymentId: updatedPayment.id,
+              chargeId
+            })
 
-            if (stagedPaymentError || !stagedPayment) {
-              logger.logXeroSync('early-payoff-staged-payment-not-found', 'Failed to find staged early payoff xero_payment', { paymentIntentId: paymentIntent.id, error: stagedPaymentError?.message }, 'error', stagedPaymentError)
-              throw stagedPaymentError || new Error('No staged payment found')
+            if (outcome.status === 'marked_pending' || outcome.status === 'already_done') {
+              logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id, xeroPaymentId: outcome.xeroPaymentId, outcome: outcome.status }, 'info')
+            } else {
+              // The charge succeeded but the matching payoff row can't be settled automatically.
+              // A Stripe retry won't change that, so acknowledge the event and flag it for an admin.
+              logger.logXeroSync(
+                'early-payoff-staged-payment-unresolved',
+                'CRITICAL: early payoff charged but its staged xero_payment could not be marked pending - ADMIN INTERVENTION REQUIRED',
+                { paymentIntentId: paymentIntent.id, xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId, paymentId: updatedPayment.id, outcome },
+                'error'
+              )
             }
-
-            // Update staged xero_payment to pending (ready for sync)
-            await supabase
-              .from('xero_payments')
-              .update({
-                sync_status: 'pending',
-                staging_metadata: {
-                  ...(stagedPayment.staging_metadata || {}),
-                  payment_id: updatedPayment.id,
-                  stripe_payment_intent_id: paymentIntent.id,
-                  stripe_charge_id: chargeId,
-                  processed_at: new Date().toISOString()
-                }
-              })
-              .eq('id', stagedPayment.id)
-
-            logger.logPaymentProcessing('early-payoff-processed', 'Early payoff payment processed successfully via webhook', { paymentIntentId: paymentIntent.id }, 'info')
           } catch (error) {
             logger.logPaymentProcessing('early-payoff-webhook-error', 'Error processing early payoff webhook', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error // Throw to retry webhook

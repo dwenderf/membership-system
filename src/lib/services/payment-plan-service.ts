@@ -604,6 +604,18 @@ export class PaymentPlanService {
         .select()
         .single()
 
+      if (stagedPaymentError?.code === '23505') {
+        // One live early payoff per invoice (unique index, #466/#460): another request already
+        // staged a payoff for this invoice, so this one stops here without charging.
+        logger.logPaymentProcessing(
+          'payment-plan-early-payoff-already-in-progress',
+          'Early payoff already in progress for this invoice',
+          { xeroInvoiceId, userId },
+          'warn'
+        )
+        return { success: false, error: 'An early payoff is already in progress for this plan' }
+      }
+
       if (stagedPaymentError || !stagedPayment) {
         logger.logPaymentProcessing(
           'payment-plan-early-payoff-staged-error',
@@ -664,7 +676,8 @@ export class PaymentPlanService {
         receipt_email: user.email,
         metadata: {
           userId: userId,
-          xeroStagingRecordId: xeroInvoiceId, // Webhook uses this to find staged payment
+          xeroStagingRecordId: xeroInvoiceId,
+          xeroStagedPaymentId: stagedPayment.id, // Webhook finds the staged payoff row by this exact id (#466)
           userRegistrationId: plannedPayments[0].staging_metadata?.user_registration_id || '',
           purpose: 'payment_plan_early_payoff',
           paymentId: paymentRecord.id,

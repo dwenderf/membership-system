@@ -91,7 +91,27 @@ export interface InstallmentChargeResult {
 }
 
 function isStripeCardError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { type?: string }).type === 'StripeCardError'
+  return stripeErrorType(error) === 'StripeCardError'
+}
+
+/** Stripe errors that mean no PaymentIntent was created and no charge can have happened. */
+const STRIPE_ERRORS_WITH_NO_CHARGE = new Set([
+  'StripeCardError',
+  'StripeInvalidRequestError',
+  'StripeAuthenticationError',
+  'StripePermissionError',
+  'StripeRateLimitError'
+])
+
+function stripeErrorType(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  const type = (error as { type?: unknown }).type
+  return typeof type === 'string' ? type : undefined
+}
+
+function isStripeErrorWithNoCharge(error: unknown): boolean {
+  const type = stripeErrorType(error)
+  return type !== undefined && STRIPE_ERRORS_WITH_NO_CHARGE.has(type)
 }
 
 export class PaymentPlanService {
@@ -503,10 +523,10 @@ export class PaymentPlanService {
     } catch (error) {
       const failureReason = error instanceof Error ? error.message : 'Unknown error'
 
-      if (claimedFrom && chargeStarted && !isStripeCardError(error)) {
-        // The Stripe call may or may not have charged (network error, timeout, a DB error after
-        // the charge). Leave the row processing so nothing charges it again; the webhook settles
-        // it if Stripe has the intent.
+      if (claimedFrom && chargeStarted && !isStripeErrorWithNoCharge(error)) {
+        // Connection, API, and idempotency errors may or may not have charged (or a DB error
+        // after the charge). Leave the row processing so nothing charges it again; the webhook
+        // settles it if Stripe has the intent.
         logger.logPaymentProcessing(
           'payment-plan-installment-outcome-unknown',
           'CRITICAL: installment charge outcome unknown; left in processing - ADMIN REVIEW REQUIRED',
@@ -521,7 +541,8 @@ export class PaymentPlanService {
         return { success: false, inFlight: true, error: failureReason }
       }
 
-      // No charge can have happened (failed before the Stripe call, or the card was declined)
+      // No charge can have happened (failed before the Stripe call, card decline, or a Stripe 4xx
+      // that means the request was rejected before a charge)
       if (claimedFrom) await release(failureReason)
 
       logger.logPaymentProcessing(

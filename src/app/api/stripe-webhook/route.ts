@@ -10,6 +10,7 @@ import { logger } from '@/lib/logging/logger'
 import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
 import { completeEarlyPayoffStagedPayment } from '@/lib/services/early-payoff-webhook'
+import { completeInstallmentCharge, releaseFailedInstallmentCharge } from '@/lib/services/installment-charge'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
 
@@ -1266,8 +1267,31 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a payment plan installment payment
         if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
-          // Update payment record status - already handled by PaymentPlanService
-          // This webhook primarily serves as confirmation
+          // The cron's charge path usually settles a succeeded installment itself. This is the
+          // backstop for an intent that returned 'processing' or whose outcome the charge path
+          // never saw (#461); completeInstallmentCharge is a no-op if it's already settled.
+          const xeroPaymentId = paymentIntent.metadata?.xeroPaymentId
+          if (!xeroPaymentId) {
+            logger.logPaymentProcessing('installment-webhook-missing-id', 'Installment intent has no xeroPaymentId in metadata', { paymentIntentId: paymentIntent.id }, 'warn')
+            break
+          }
+          // A database error throws, so Stripe retries
+          const completion = await completeInstallmentCharge(supabase, xeroPaymentId, paymentIntent, paymentIntent.metadata?.userId || '')
+          if (completion.status === 'not_found' || completion.status === 'not_processing') {
+            logger.logPaymentProcessing(
+              'installment-webhook-unsettled',
+              'CRITICAL: installment charge succeeded but its row is not waiting for this charge - ADMIN REVIEW REQUIRED',
+              {
+                paymentIntentId: paymentIntent.id,
+                xeroPaymentId,
+                completion,
+                recovery: 'Check whether this installment was charged twice (another intent for the same xeroPaymentId) and refund the extra charge, or set the row to pending with this intent if it is the only charge.'
+              },
+              'error'
+            )
+          } else {
+            logger.logPaymentProcessing('installment-webhook-settled', 'Installment charge settled via webhook', { paymentIntentId: paymentIntent.id, xeroPaymentId, completion: completion.status }, 'info')
+          }
           break
         }
 
@@ -1616,6 +1640,18 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
+          }
+          break
+        }
+
+        if (paymentIntent.metadata?.purpose === 'payment_plan_installment') {
+          // An installment intent that returned 'processing' and then failed goes back to planned
+          // for the next retry (#461). Declines the charge path saw itself are already planned,
+          // so this is a no-op for them.
+          const xeroPaymentId = paymentIntent.metadata?.xeroPaymentId
+          if (xeroPaymentId) {
+            const release = await releaseFailedInstallmentCharge(supabase, xeroPaymentId, paymentIntent)
+            logger.logPaymentProcessing('installment-webhook-failed', 'Installment payment failed webhook handled', { paymentIntentId: paymentIntent.id, xeroPaymentId, release }, 'info')
           }
           break
         }

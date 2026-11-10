@@ -14,6 +14,7 @@
  */
 import type Stripe from 'stripe'
 import { logger } from '@/lib/logging/logger'
+import { LIVE_PAYOFF_STATUSES } from './installment-charge'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SupabaseLike = { from: (table: string) => any }
@@ -99,4 +100,130 @@ export async function completeEarlyPayoffStagedPayment(
   }
 
   return { status: 'marked_pending', xeroPaymentId: row.id }
+}
+
+/** Reason the installment rows carry while an early payoff covers them (set by processEarlyPayoff). */
+const SUPERSEDED_REASON = 'Superseded by early payoff payment'
+
+export type EarlyPayoffFailureOutcome =
+  | { status: 'rolled_back'; xeroPaymentId: string; restoredInstallments: number }
+  | { status: 'already_rolled_back'; xeroPaymentId: string; restoredInstallments: number }
+  | { status: 'not_found' }
+  | { status: 'ambiguous'; candidateIds: string[] }
+  | { status: 'needs_review'; xeroPaymentId: string; syncStatus: string }
+
+/**
+ * Webhook rollback for an early payoff whose PaymentIntent failed after returning 'processing'
+ * (#462). processEarlyPayoff leaves that case to the webhook, so without this the installments
+ * stay cancelled and the plan looks paid off with no money collected.
+ *
+ * - The staged payoff row goes staged -> cancelled (conditional, so this is the claim). It is
+ *   cancelled rather than failed so payment_plan_summary doesn't show the plan as failed, and so
+ *   the next payoff attempt gets a fresh Stripe idempotency key.
+ * - The installments the payoff superseded go back to planned, but only while no other live payoff
+ *   exists on the invoice: a late event for an old attempt must not undo a newer payoff.
+ * - The payment record goes pending -> failed.
+ *
+ * Every step is conditional, so a repeat delivery, or a delivery for a decline the charge path
+ * already rolled back, is a no-op. Database errors throw so Stripe retries the event.
+ */
+export async function rollbackFailedEarlyPayoff(
+  supabase: SupabaseLike,
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'metadata' | 'last_payment_error'>
+): Promise<EarlyPayoffFailureOutcome> {
+  const stagedId = paymentIntent.metadata?.xeroStagedPaymentId
+  const invoiceId = paymentIntent.metadata?.xeroStagingRecordId
+  const reason = `Early payoff failed: ${paymentIntent.last_payment_error?.message || 'payment failed after processing'}`
+
+  let row: any = null
+  if (stagedId) {
+    const { data, error } = await supabase.from('xero_payments').select('*').eq('id', stagedId).maybeSingle()
+    if (error) throw error
+    row = data
+  } else if (invoiceId) {
+    // Legacy intents (created before xeroStagedPaymentId): only act when exactly one staged payoff row exists.
+    const { data, error } = await supabase
+      .from('xero_payments')
+      .select('*')
+      .eq('xero_invoice_id', invoiceId)
+      .eq('payment_type', 'full')
+      .eq('staging_metadata->>early_payoff', 'true')
+      .eq('sync_status', 'staged')
+    if (error) throw error
+    const staged: any[] = data || []
+    if (staged.length > 1) return { status: 'ambiguous', candidateIds: staged.map(r => r.id) }
+    row = staged[0] ?? null
+  }
+
+  if (!row || row.payment_type !== 'full' || row.staging_metadata?.early_payoff !== true) {
+    // Nothing to roll back; still record the payment as failed.
+    await markPayoffPaymentFailed(supabase, paymentIntent)
+    return { status: 'not_found' }
+  }
+
+  let claimed = false
+  let syncStatus: string = row.sync_status
+  if (syncStatus === 'staged') {
+    const { data: updated, error } = await supabase
+      .from('xero_payments')
+      .update({ sync_status: 'cancelled', failure_reason: reason })
+      .eq('id', row.id)
+      .eq('sync_status', 'staged')
+      .select('id')
+    if (error) throw error
+    if (updated && updated.length > 0) {
+      claimed = true
+      syncStatus = 'cancelled'
+    } else {
+      const { data: current, error: rereadError } = await supabase.from('xero_payments').select('sync_status').eq('id', row.id).maybeSingle()
+      if (rereadError) throw rereadError
+      syncStatus = current?.sync_status ?? 'missing'
+    }
+  }
+
+  if (syncStatus !== 'cancelled') {
+    // e.g. pending or synced: the payoff was recorded as paid, so don't touch the plan.
+    return { status: 'needs_review', xeroPaymentId: row.id, syncStatus }
+  }
+
+  // Put the superseded installments back, unless another payoff on this invoice is live now.
+  const { data: livePayoffs, error: liveError } = await supabase
+    .from('xero_payments')
+    .select('id')
+    .eq('xero_invoice_id', row.xero_invoice_id)
+    .eq('payment_type', 'full')
+    .eq('staging_metadata->>early_payoff', 'true')
+    .in('sync_status', LIVE_PAYOFF_STATUSES)
+  if (liveError) throw liveError
+
+  let restoredInstallments = 0
+  if (!livePayoffs || livePayoffs.length === 0) {
+    const { data: restored, error: restoreError } = await supabase
+      .from('xero_payments')
+      .update({ sync_status: 'planned', failure_reason: null })
+      .eq('xero_invoice_id', row.xero_invoice_id)
+      .eq('payment_type', 'installment')
+      .eq('sync_status', 'cancelled')
+      .eq('failure_reason', SUPERSEDED_REASON)
+      .select('id')
+    if (restoreError) throw restoreError
+    restoredInstallments = restored?.length ?? 0
+  }
+
+  await markPayoffPaymentFailed(supabase, paymentIntent)
+
+  return claimed
+    ? { status: 'rolled_back', xeroPaymentId: row.id, restoredInstallments }
+    : { status: 'already_rolled_back', xeroPaymentId: row.id, restoredInstallments }
+}
+
+async function markPayoffPaymentFailed(
+  supabase: SupabaseLike,
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'metadata'>
+): Promise<void> {
+  const paymentId = paymentIntent.metadata?.paymentId
+  const query = supabase.from('payments').update({ status: 'failed', updated_at: new Date().toISOString() })
+  const { error } = await (paymentId ? query.eq('id', paymentId) : query.eq('stripe_payment_intent_id', paymentIntent.id))
+    .eq('status', 'pending')
+  if (error) throw error
 }

@@ -9,7 +9,7 @@ import { paymentProcessor } from '@/lib/payment-completion-processor'
 import { logger } from '@/lib/logging/logger'
 import { clearSavedPaymentMethod } from '@/lib/services/saved-payment-method-cleanup'
 import { stageRefundNotificationEmail } from '@/lib/email/refund-notification'
-import { completeEarlyPayoffStagedPayment } from '@/lib/services/early-payoff-webhook'
+import { completeEarlyPayoffStagedPayment, rollbackFailedEarlyPayoff } from '@/lib/services/early-payoff-webhook'
 import { completeInstallmentCharge, releaseFailedInstallmentCharge } from '@/lib/services/installment-charge'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
@@ -1640,6 +1640,30 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             logger.logPaymentProcessing('alternate-payment-failed-error', 'Error processing failed alternate payment', { paymentIntentId: paymentIntent.id, error: error instanceof Error ? error.message : String(error) }, 'error', error)
             throw error
+          }
+          break
+        }
+
+        if (paymentIntent.metadata?.purpose === 'payment_plan_early_payoff') {
+          // A payoff intent that returned 'processing' and then failed: put the plan back (#462).
+          // Declines the charge path saw itself are already rolled back, so this is a no-op for them.
+          // A database error throws, so Stripe retries the event.
+          const outcome = await rollbackFailedEarlyPayoff(supabase, paymentIntent)
+          if (outcome.status === 'rolled_back' || outcome.status === 'already_rolled_back' || outcome.status === 'not_found') {
+            logger.logPaymentProcessing('early-payoff-failed-webhook', 'Early payoff payment failed webhook handled', { paymentIntentId: paymentIntent.id, xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId, outcome }, outcome.status === 'rolled_back' ? 'warn' : 'info')
+          } else {
+            // A retry won't change these, so acknowledge the event and flag it for an admin.
+            logger.logPaymentProcessing(
+              'early-payoff-failed-unresolved',
+              'CRITICAL: early payoff payment failed but the plan could not be rolled back automatically - ADMIN INTERVENTION REQUIRED',
+              {
+                paymentIntentId: paymentIntent.id,
+                xeroInvoiceId: paymentIntent.metadata?.xeroStagingRecordId,
+                outcome,
+                recovery: 'Check the plan: cancel the staged early payoff row for this intent, set its superseded installments back to planned, and mark its payment failed.'
+              },
+              'error'
+            )
           }
           break
         }

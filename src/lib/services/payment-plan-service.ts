@@ -801,7 +801,7 @@ export class PaymentPlanService {
         )
         // requires_action / requires_payment_method etc.: the customer can't complete 3DS
         // off-session, so cancel the intent and restore the plan. 'processing' may still succeed
-        // (the webhook completes it), so leave that one alone.
+        // or fail later; the webhook completes it or rolls it back (#462), so leave that one alone.
         if (paymentIntent.status !== 'processing') {
           try {
             await getStripe().paymentIntents.cancel(paymentIntent.id)

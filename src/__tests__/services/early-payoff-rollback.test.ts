@@ -157,4 +157,29 @@ describe('processEarlyPayoff', () => {
     expect(createIntent).not.toHaveBeenCalled()
     expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
   })
+
+  it('releases the staged row and leaves the installments planned when cancelling them fails (#466 review)', async () => {
+    const realFrom = fake.from
+    fake.from = (name: string) => {
+      const q = realFrom(name)
+      if (name !== 'xero_payments') return q
+      const realUpdate = q.update
+      q.update = (v: Record<string, unknown>) => {
+        realUpdate(v)
+        if (v.failure_reason === 'Superseded by early payoff payment') {
+          q.then = (resolve: (r: unknown) => unknown) =>
+            Promise.resolve({ data: null, error: { message: 'connection reset' } }).then(resolve)
+        }
+        return q
+      }
+      return q
+    }
+    const result = await PaymentPlanService.processEarlyPayoff(INV, USER)
+    expect(result).toEqual({ success: false, error: 'Failed to cancel planned payments' })
+    expect(createIntent).not.toHaveBeenCalled()
+    expect(planned()).toEqual(['xp2', 'xp3', 'xp4'])
+    expect(full()).toHaveLength(1)
+    expect(full()[0].sync_status).toBe('cancelled')
+    expect(fake.rows('payments')).toEqual([])
+  })
 })

@@ -118,6 +118,14 @@ export function planNeedsAttention(
   })
 }
 
+/**
+ * True while one of the plan's installment charges has been sent and its outcome isn't confirmed.
+ * An early payoff can't run then (the server refuses it), so the member UI hides that option.
+ */
+export function planHasChargeInFlight(plan: { installments?: PaymentPlanInstallment[] | null }): boolean {
+  return (plan.installments ?? []).some(i => i.sync_status === 'processing')
+}
+
 // ---------------------------------------------------------------------------
 // Eligibility, first-installment math and Stripe metadata — shared by normal checkout and
 // waitlist selection (#442) so the two can't drift. Pure functions, safe for client components.

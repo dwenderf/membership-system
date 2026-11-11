@@ -1,6 +1,7 @@
 import {
   getInstallmentDisplayStatus,
   planNeedsAttention,
+  planHasChargeInFlight,
   isUserPaymentPlanEligible,
   calculateFirstInstallmentAmount,
   buildPaymentPlanIntentMetadata,
@@ -95,5 +96,11 @@ describe('shared checkout/waitlist plan helpers (#442)', () => {
     const next = calculateNextInstallmentDate(first)
     expect([next.getFullYear(), next.getMonth(), next.getDate()]).toEqual([2026, 10, 25]) // Nov 25
     expect(next.getHours()).toBe(12)
+  })
+
+  it('flags a plan whose installment charge is still processing', () => {
+    expect(planHasChargeInFlight({ installments: [inst({ sync_status: 'synced' }), inst({ sync_status: 'processing' })] })).toBe(true)
+    expect(planHasChargeInFlight({ installments: [inst({ sync_status: 'synced' }), inst()] })).toBe(false)
+    expect(planHasChargeInFlight({ installments: null })).toBe(false)
   })
 })

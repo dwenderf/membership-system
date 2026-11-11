@@ -99,4 +99,28 @@ describe('payment plan balance guards', () => {
     await expect(PaymentPlanService.hasOutstandingBalance(USER)).resolves.toBe(false)
     await expect(PaymentPlanService.getTotalOutstandingBalance(USER)).resolves.toBe(0)
   })
+
+  it('ignores an abandoned checkout: a DRAFT invoice with only staged rows', async () => {
+    plan([
+      { sync_status: 'staged', amount_paid: 2500 },
+      { sync_status: 'staged', amount_paid: 2500 }
+    ])
+    ;(tables.xero_invoices[0] as Row).invoice_status = 'DRAFT'
+
+    await expect(PaymentPlanService.hasOutstandingBalance(USER)).resolves.toBe(false)
+    await expect(PaymentPlanService.getTotalOutstandingBalance(USER)).resolves.toBe(0)
+  })
+
+  it('counts a DRAFT invoice whose plan started: later rows planned or processing', async () => {
+    plan([
+      { sync_status: 'pending', amount_paid: 2500 },
+      { sync_status: 'processing', amount_paid: 2500 },
+      { sync_status: 'planned', amount_paid: 2500 },
+      { sync_status: 'staged', amount_paid: 2500 }
+    ])
+    ;(tables.xero_invoices[0] as Row).invoice_status = 'DRAFT'
+
+    await expect(PaymentPlanService.hasOutstandingBalance(USER)).resolves.toBe(true)
+    await expect(PaymentPlanService.getTotalOutstandingBalance(USER)).resolves.toBe(5000)
+  })
 })

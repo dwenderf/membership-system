@@ -1104,7 +1104,9 @@ export class PaymentPlanService {
    */
   static async hasOutstandingBalance(userId: string): Promise<boolean> {
     try {
-      const supabase = await createClient()
+      // Admin client: xero_payments is admin-only under RLS, so the member's own session would
+      // read no rows and these guards would always pass. Results are filtered to userId below.
+      const supabase = createAdminClient()
 
       // Get user's payment plan invoices
       // Note: contact_id doesn't exist as column, it's in staging_metadata
@@ -1161,7 +1163,9 @@ export class PaymentPlanService {
    */
   static async getTotalOutstandingBalance(userId: string): Promise<number> {
     try {
-      const supabase = await createClient()
+      // Admin client: xero_payments is admin-only under RLS, so the member's own session would
+      // read no rows and these guards would always pass. Results are filtered to userId below.
+      const supabase = createAdminClient()
 
       // Get user's payment plan invoices
       // Note: contact_id doesn't exist as column, it's in staging_metadata

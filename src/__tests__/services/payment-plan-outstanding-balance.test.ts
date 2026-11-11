@@ -1,6 +1,7 @@
 /**
  * An installment left in 'processing' (charge sent, outcome not confirmed) is still owed, so the
- * balance guards behind account deletion and card removal must count it.
+ * balance guards behind account deletion and card removal must count it. The guards read through
+ * the admin client, because a member's own session can't see xero_payments.
  */
 
 type Row = Record<string, unknown>
@@ -22,8 +23,11 @@ function query(table: string) {
 
 const fakeClient = { from: (table: string) => query(table) }
 
+// A member's own session can't read xero_payments (admin-only RLS), so it sees no rows at all.
+const memberSessionClient = { from: () => query('__no_access__') }
+
 jest.mock('@/lib/supabase/server', () => ({
-  createClient: async () => fakeClient,
+  createClient: async () => memberSessionClient,
   createAdminClient: () => fakeClient
 }))
 jest.mock('@/lib/stripe/server-client', () => ({ getStripe: () => ({}) }))
@@ -80,5 +84,15 @@ describe('payment plan balance guards', () => {
     ])
 
     await expect(PaymentPlanService.getTotalOutstandingBalance(USER)).resolves.toBe(5000)
+  })
+
+  it("ignores another member's plan", async () => {
+    tables = {
+      xero_invoices: [{ id: 'inv-2', is_payment_plan: true, invoice_status: 'AUTHORISED', staging_metadata: { user_id: 'someone-else' } }],
+      xero_payments: [{ id: 'xp-1', xero_invoice_id: 'inv-2', sync_status: 'planned', amount_paid: 2500 }]
+    }
+
+    await expect(PaymentPlanService.hasOutstandingBalance(USER)).resolves.toBe(false)
+    await expect(PaymentPlanService.getTotalOutstandingBalance(USER)).resolves.toBe(0)
   })
 })

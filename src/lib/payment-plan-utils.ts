@@ -119,11 +119,20 @@ export function planNeedsAttention(
 }
 
 /**
- * True while one of the plan's installment charges has been sent and its outcome isn't confirmed.
- * An early payoff can't run then (the server refuses it), so the member UI hides that option.
+ * True while a charge on the plan has been sent and its outcome isn't confirmed: an installment in
+ * 'processing', or a 'staged' row (the first payment before its webhook, or an early payoff's
+ * 'full' row until its webhook settles it).
  */
 export function planHasChargeInFlight(plan: { installments?: PaymentPlanInstallment[] | null }): boolean {
-  return (plan.installments ?? []).some(i => i.sync_status === 'processing')
+  return (plan.installments ?? []).some(i => i.sync_status === 'processing' || i.sync_status === 'staged')
+}
+
+/**
+ * Mirrors the early-payoff route: a payoff needs at least one 'planned' installment and no charge
+ * in flight. The member UI offers Pay Remaining Balance only then, so the button never fails.
+ */
+export function planCanBePaidOff(plan: { installments?: PaymentPlanInstallment[] | null }): boolean {
+  return !planHasChargeInFlight(plan) && (plan.installments ?? []).some(i => i.sync_status === 'planned')
 }
 
 // ---------------------------------------------------------------------------

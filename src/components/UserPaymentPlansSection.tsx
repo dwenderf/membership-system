@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import ConfirmationDialog from './ConfirmationDialog'
 import { logger } from '@/lib/logging/logger'
 import PrimaryCtaButton from './ui/PrimaryCtaButton'
-import { getInstallmentDisplayStatus, planHasChargeInFlight, type PaymentPlanInstallment } from '@/lib/payment-plan-utils'
+import { getInstallmentDisplayStatus, planHasChargeInFlight, planCanBePaidOff, type PaymentPlanInstallment } from '@/lib/payment-plan-utils'
 import { MAX_PAYMENT_ATTEMPTS } from '@/lib/services/payment-plan-config'
 import { submitEarlyPayoff } from '@/lib/payment-plans/early-payoff-client'
 
@@ -131,8 +131,9 @@ export default function UserPaymentPlansSection() {
               ['failing', 'exhausted'].includes(getInstallmentDisplayStatus(i, MAX_PAYMENT_ATTEMPTS))
             )
             const hasFailedPayment = failedInstallments.length > 0
-            // A payoff is refused while an installment charge is unconfirmed, so don't offer one.
+            // Offer a payoff only when the server would accept one; say so while a charge is unconfirmed.
             const chargeInFlight = planHasChargeInFlight(plan)
+            const canPayOff = planCanBePaidOff(plan)
 
             return (
               <div key={plan.invoice_id} className="border border-gray-200 rounded-lg p-4">
@@ -229,7 +230,7 @@ export default function UserPaymentPlansSection() {
                     A payment is being processed. You can pay the remaining balance once it&apos;s confirmed.
                   </p>
                 )}
-                {remainingBalance > 0 && !chargeInFlight && (
+                {remainingBalance > 0 && canPayOff && (
                   <PrimaryCtaButton
                     onClick={() => handlePayRemainingClick(plan.invoice_id, remainingBalance)}
                     disabled={payingOff !== null}

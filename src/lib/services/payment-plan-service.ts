@@ -1114,6 +1114,9 @@ export class PaymentPlanService {
         .from('xero_invoices')
         .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // Filter in the query, not only below: the admin client sees every member's invoices,
+        // and an unfiltered list could pass the API row cap and drop this member's plan
+        .eq('staging_metadata->>user_id', userId)
         // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
         .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 
@@ -1173,6 +1176,9 @@ export class PaymentPlanService {
         .from('xero_invoices')
         .select('id, staging_metadata, invoice_status')
         .eq('is_payment_plan', true)
+        // Filter in the query, not only below: the admin client sees every member's invoices,
+        // and an unfiltered list could pass the API row cap and drop this member's plan
+        .eq('staging_metadata->>user_id', userId)
         // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
         .or('invoice_status.is.null,invoice_status.neq.DRAFT')
 

@@ -12,7 +12,11 @@ function query(table: string) {
   let rows = [...(tables[table] ?? [])]
   const q = {
     select: () => q,
-    eq: (col: string, val: unknown) => { rows = rows.filter(r => r[col] === val); return q },
+    eq: (col: string, val: unknown) => {
+      const [field, key] = col.split('->>')
+      rows = rows.filter(r => (key ? (r[field] as Row | undefined)?.[key] : r[col]) === val)
+      return q
+    },
     or: () => q,
     in: (col: string, vals: unknown[]) => { rows = rows.filter(r => vals.includes(r[col])); return q },
     limit: (n: number) => { rows = rows.slice(0, n); return q },

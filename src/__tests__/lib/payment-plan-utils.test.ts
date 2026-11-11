@@ -1,6 +1,8 @@
 import {
   getInstallmentDisplayStatus,
   planNeedsAttention,
+  planHasChargeInFlight,
+  planCanBePaidOff,
   isUserPaymentPlanEligible,
   calculateFirstInstallmentAmount,
   buildPaymentPlanIntentMetadata,
@@ -19,10 +21,14 @@ const inst = (over: Partial<{ sync_status: string; attempt_count: number; failur
 })
 
 describe('getInstallmentDisplayStatus', () => {
-  it('treats synced/pending/processing as paid', () => {
-    for (const sync_status of ['synced', 'pending', 'processing']) {
+  it('treats synced/pending as paid', () => {
+    for (const sync_status of ['synced', 'pending']) {
       expect(getInstallmentDisplayStatus(inst({ sync_status }), 3)).toBe('paid')
     }
+  })
+
+  it('treats processing as charging, not paid: the charge outcome is not confirmed yet', () => {
+    expect(getInstallmentDisplayStatus(inst({ sync_status: 'processing', attempt_count: 1 }), 3)).toBe('charging')
   })
 
   it('treats an untouched planned installment as scheduled', () => {
@@ -91,5 +97,28 @@ describe('shared checkout/waitlist plan helpers (#442)', () => {
     const next = calculateNextInstallmentDate(first)
     expect([next.getFullYear(), next.getMonth(), next.getDate()]).toEqual([2026, 10, 25]) // Nov 25
     expect(next.getHours()).toBe(12)
+  })
+
+  it('flags a plan whose installment charge is still processing', () => {
+    expect(planHasChargeInFlight({ installments: [inst({ sync_status: 'synced' }), inst({ sync_status: 'processing' })] })).toBe(true)
+    expect(planHasChargeInFlight({ installments: [inst({ sync_status: 'synced' }), inst()] })).toBe(false)
+    expect(planHasChargeInFlight({ installments: null })).toBe(false)
+  })
+
+  it('flags an unconfirmed early payoff (its full row stays staged until the webhook)', () => {
+    const installments = [
+      inst({ sync_status: 'synced' }),
+      inst({ sync_status: 'cancelled' }),
+      inst({ sync_status: 'staged' })
+    ]
+    expect(planHasChargeInFlight({ installments })).toBe(true)
+    expect(planCanBePaidOff({ installments })).toBe(false)
+  })
+
+  it('offers a payoff only when an installment is planned and nothing is in flight', () => {
+    expect(planCanBePaidOff({ installments: [inst({ sync_status: 'synced' }), inst(), inst()] })).toBe(true)
+    expect(planCanBePaidOff({ installments: [inst({ sync_status: 'processing' }), inst()] })).toBe(false)
+    expect(planCanBePaidOff({ installments: [inst({ sync_status: 'synced' }), inst({ sync_status: 'failed' })] })).toBe(false)
+    expect(planCanBePaidOff({ installments: null })).toBe(false)
   })
 })

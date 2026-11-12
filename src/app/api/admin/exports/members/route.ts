@@ -20,11 +20,16 @@ import { logger } from '@/lib/logging/logger'
  *   Authorization: Bearer $EXPORT_API_SECRET
  *
  * Query parameters:
- *   dataset          'members' (default) — one row per member
+ *   dataset          'members' (default) — one row per member who holds a
+ *                                          current membership (valid_until on
+ *                                          or after today, in APP_TIMEZONE);
+ *                                          members whose memberships have all
+ *                                          expired are excluded
  *                    'memberships'       — one row per member per membership
  *                                          type, with the latest expiry
  *   membership_id    uuid; restrict 'memberships' to a single membership type
- *   paid_only        'true' to count only paid memberships (default: all)
+ *   paid_only        'true' to count only paid memberships (default: all);
+ *                    applies to both datasets
  *   include_deleted  'true' to include soft-deleted members (default: exclude)
  *   format           'json' (default) or 'csv'
  */
@@ -51,6 +56,22 @@ interface MembershipRow extends MemberRow {
  * response. Lengths are compared first because timingSafeEqual throws on a
  * length mismatch — that leak is acceptable, the secret's contents are not.
  */
+/**
+ * Today's calendar date (YYYY-MM-DD) in the organization's timezone.
+ * valid_until is a DATE, so comparing it to the UTC date would drop memberships
+ * that expire today for the last few hours of the local day.
+ */
+function todayInAppTimezone(now: Date = new Date()): string {
+  const timeZone = process.env.NEXT_PUBLIC_APP_TIMEZONE || 'America/New_York'
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
 function secretMatches(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
   const b = Buffer.from(expected)
@@ -154,7 +175,7 @@ export async function GET(request: NextRequest) {
   try {
     const rows =
       dataset === 'members'
-        ? await fetchMembers(supabase, includeDeleted)
+        ? await fetchMembers(supabase, { paidOnly, includeDeleted })
         : await fetchMemberships(supabase, { membershipId, paidOnly, includeDeleted })
 
     logger.logAdminAction(
@@ -196,9 +217,19 @@ type AdminClient = ReturnType<typeof createAdminClient>
 
 async function fetchMembers(
   supabase: AdminClient,
-  includeDeleted: boolean
+  options: { paidOnly: boolean; includeDeleted: boolean }
 ): Promise<MemberRow[]> {
   const rows: MemberRow[] = []
+  const today = todayInAppTimezone()
+
+  // Only members with a current membership: the !inner embed turns the
+  // user_memberships filter into a filter on users (an EXISTS, not a join that
+  // repeats the user per membership), so each member still appears once and
+  // the OFFSET/LIMIT paging below stays over users. user_id is the only FK from
+  // user_memberships to users, so the embed is unambiguous.
+  interface Joined extends MemberRow {
+    user_memberships: { valid_until: string }[]
+  }
 
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
     // Order must be total, not just useful: .range() is OFFSET/LIMIT, and
@@ -207,18 +238,28 @@ async function fetchMembers(
     // leaves ties among NULLs -- id (the primary key) breaks them.
     let query = supabase
       .from('users')
-      .select('first_name, last_name, email, member_id')
+      .select('first_name, last_name, email, member_id, user_memberships!inner(valid_until)')
+      .gte('user_memberships.valid_until', today)
       .order('member_id', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
-    if (!includeDeleted) query = query.is('deleted_at', null)
+    if (options.paidOnly) query = query.eq('user_memberships.payment_status', 'paid')
+    if (!options.includeDeleted) query = query.is('deleted_at', null)
 
-    const { data, error } = await query.overrideTypes<MemberRow[], { merge: false }>()
+    const { data, error } = await query.overrideTypes<Joined[], { merge: false }>()
     if (error) throw new Error(error.message)
     if (!data || data.length === 0) break
 
-    rows.push(...data)
+    // Drop the embed: it exists only to filter, and the output shape is unchanged.
+    rows.push(
+      ...data.map(({ first_name, last_name, email, member_id }) => ({
+        first_name,
+        last_name,
+        email,
+        member_id,
+      }))
+    )
     if (data.length < PAGE_SIZE) break
   }
 

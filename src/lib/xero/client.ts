@@ -1,6 +1,7 @@
 import { XeroClient } from 'xero-node'
 import { Logger } from '@/lib/logging/logger'
 import { asHttpClientError } from './xero-errors'
+import { getXeroScopes } from './scopes'
 import { Json } from '../../types/database'
 
 const logger = Logger.getInstance()
@@ -34,12 +35,7 @@ function getXeroClient(): XeroClient {
       clientId: process.env.XERO_CLIENT_ID,
       clientSecret: process.env.XERO_CLIENT_SECRET,
       redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
-      scopes: process.env.XERO_SCOPES?.split(' ') || [
-        'accounting.transactions',
-        'accounting.contacts',
-        'accounting.settings',
-        'offline_access'
-      ]
+      scopes: getXeroScopes()
     })
   }
   return xeroInstance
@@ -54,12 +50,7 @@ export function createXeroOAuthClient(state?: string): XeroClient {
     clientId: process.env.XERO_CLIENT_ID!,
     clientSecret: process.env.XERO_CLIENT_SECRET!,
     redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
-    scopes: process.env.XERO_SCOPES?.split(' ') || [
-      'accounting.transactions',
-      'accounting.contacts',
-      'accounting.settings',
-      'offline_access'
-    ],
+    scopes: getXeroScopes(),
     state
   })
 }
@@ -441,12 +432,7 @@ export async function revokeXeroTokens(): Promise<boolean> {
           clientId: process.env.XERO_CLIENT_ID!,
           clientSecret: process.env.XERO_CLIENT_SECRET!,
           redirectUris: [process.env.XERO_REDIRECT_URI || 'http://localhost:3000/api/xero/callback'],
-          scopes: process.env.XERO_SCOPES?.split(' ') || [
-            'accounting.transactions',
-            'accounting.contacts',
-            'accounting.settings',
-            'offline_access'
-          ]
+          scopes: getXeroScopes()
         })
 
         // Set the token on the client

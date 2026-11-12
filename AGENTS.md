@@ -97,7 +97,16 @@ ALTER DATABASE postgres REFRESH COLLATION VERSION;
 ALTER DATABASE template1 REFRESH COLLATION VERSION;
 ```
 
-The `template1` statement is expected to fail with `must be owner of database template1` — it's owned by an internal Supabase role, not the `postgres` role you connect as, and can't be fixed from the SQL editor or the Supabase MCP. That's fine: `template1` sees far fewer connections than `postgres` does, so it's a small fraction of the warning volume, and nothing in this app ever connects to it. Leave it rather than filing a support ticket.
+The `template1` statement is expected to fail with `must be owner of database template1`: the database is owned by `supabase_admin`, the `postgres` role you connect as is not a member of it, and neither the SQL editor nor the Supabase MCP can fix it. Then check whether `template1` is actually stale:
+
+```sql
+select datname, datlocprovider, datcollversion, pg_database_collation_actual_version(oid) as actual
+from pg_database where datname in ('postgres', 'template1');
+```
+
+If `template1`'s `datcollversion` differs from `actual`, open a Supabase support ticket asking them to run `ALTER DATABASE template1 REFRESH COLLATION VERSION;` on that project (give the project ref). Don't leave it on the grounds that it is low volume. The autovacuum launcher still connects to `template1` once a minute and logs one WARNING each time, about 1,440 a day. On `membership-system-dev` that was 99% of all Postgres log lines from the September 2026 upgrade until November, about 2.5× production's entire daily log volume. Nothing in this app connects to `template1` and it holds no data or indexes, so the mismatch can't corrupt anything. The cost is cluttered logs and pointless disk I/O.
+
+Whether an upgrade causes a mismatch at all depends on the collation provider (`datlocprovider`). The two projects differ: `membership-system-prod` uses ICU (`i`, versions like `153.121`), and `membership-system-dev` uses the OS's glibc (`c`, versions like `2.40`). An upgrade that ships a new glibc but the same ICU leaves prod clean and dev stale, so check both projects rather than assuming one stands in for the other.
 
 Then:
 

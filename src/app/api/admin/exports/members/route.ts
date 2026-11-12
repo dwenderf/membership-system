@@ -52,11 +52,6 @@ interface MembershipRow extends MemberRow {
 }
 
 /**
- * Constant-time comparison so the secret can't be recovered by timing the
- * response. Lengths are compared first because timingSafeEqual throws on a
- * length mismatch — that leak is acceptable, the secret's contents are not.
- */
-/**
  * Today's calendar date (YYYY-MM-DD) in the organization's timezone.
  * valid_until is a DATE, so comparing it to the UTC date would drop memberships
  * that expire today for the last few hours of the local day.
@@ -72,6 +67,11 @@ function todayInAppTimezone(now: Date = new Date()): string {
   }).format(now)
 }
 
+/**
+ * Constant-time comparison so the secret can't be recovered by timing the
+ * response. Lengths are compared first because timingSafeEqual throws on a
+ * length mismatch — that leak is acceptable, the secret's contents are not.
+ */
 function secretMatches(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
   const b = Buffer.from(expected)

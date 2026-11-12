@@ -80,7 +80,7 @@ export function filterActivePlans<T extends { status: string }>(plans: T[]): T[]
  * and records failure_reason + attempt_count, so "failing" is not a sync_status of its own.
  * `payment_plan_summary.status` therefore stays 'active' while an installment is failing.
  */
-export type InstallmentDisplayStatus = 'paid' | 'scheduled' | 'failing' | 'exhausted' | 'sync_failed'
+export type InstallmentDisplayStatus = 'paid' | 'charging' | 'scheduled' | 'failing' | 'exhausted' | 'sync_failed'
 
 export function getInstallmentDisplayStatus(
   installment: Pick<PaymentPlanInstallment, 'sync_status' | 'attempt_count' | 'failure_reason'>,
@@ -89,8 +89,11 @@ export function getInstallmentDisplayStatus(
   switch (installment.sync_status) {
     case 'synced':
     case 'pending':
-    case 'processing':
       return 'paid'
+    case 'processing':
+      // Charge sent, outcome not confirmed yet (usually seconds; longer after an unknown Stripe
+      // outcome, until the webhook or an admin settles it). Not paid yet.
+      return 'charging'
     case 'failed':
       // sync_status 'failed' is NOT a failed charge: it is set when the Xero accounting sync
       // fails (the member may already have paid) or when a plan is cancelled. Never present
@@ -113,6 +116,23 @@ export function planNeedsAttention(
     const status = getInstallmentDisplayStatus(i, maxAttempts)
     return status === 'failing' || status === 'exhausted'
   })
+}
+
+/**
+ * True while a charge on the plan has been sent and its outcome isn't confirmed: an installment in
+ * 'processing', or a 'staged' row (the first payment before its webhook, or an early payoff's
+ * 'full' row until its webhook settles it).
+ */
+export function planHasChargeInFlight(plan: { installments?: PaymentPlanInstallment[] | null }): boolean {
+  return (plan.installments ?? []).some(i => i.sync_status === 'processing' || i.sync_status === 'staged')
+}
+
+/**
+ * Mirrors the early-payoff route: a payoff needs at least one 'planned' installment and no charge
+ * in flight. The member UI offers Pay Remaining Balance only then, so the button never fails.
+ */
+export function planCanBePaidOff(plan: { installments?: PaymentPlanInstallment[] | null }): boolean {
+  return !planHasChargeInFlight(plan) && (plan.installments ?? []).some(i => i.sync_status === 'planned')
 }
 
 // ---------------------------------------------------------------------------

@@ -615,19 +615,20 @@ xero_payments (
   -- NO UNIQUE(xero_invoice_id, tenant_id) constraint - allows multiple payments per invoice
 )
 
--- Aggregated view for payment plan queries
+-- Aggregated view for payment plan queries (simplified; supabase/migrations has the real definition)
 CREATE OR REPLACE VIEW payment_plan_summary AS
 SELECT
   xi.id as invoice_id,
   (xi.staging_metadata->>'user_id')::uuid as contact_id,
   COUNT(*) FILTER (WHERE xp.payment_type = 'installment') as total_installments,
-  SUM(xp.amount_paid) FILTER (WHERE xp.sync_status IN ('synced','pending','processing')) as paid_amount,
-  SUM(xp.amount_paid) as total_amount,
-  COUNT(*) FILTER (WHERE xp.sync_status IN ('synced','pending','processing') AND xp.payment_type = 'installment') as installments_paid,
+  SUM(xp.amount_paid) FILTER (WHERE xp.sync_status IN ('synced','pending')) as paid_amount,
+  SUM(xp.amount_paid) FILTER (WHERE xp.sync_status <> 'cancelled') as total_amount,
+  COUNT(*) FILTER (WHERE xp.sync_status IN ('synced','pending') AND xp.payment_type = 'installment') as installments_paid,
   CASE
-    WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'planned') = 0 THEN 'completed'
     WHEN COUNT(*) FILTER (WHERE xp.sync_status = 'failed') > 0 THEN 'failed'
-    ELSE 'active'
+    -- 'processing' = charge sent, outcome not confirmed yet: still owed
+    WHEN COUNT(*) FILTER (WHERE xp.sync_status IN ('planned','staged','processing')) > 0 THEN 'active'
+    ELSE 'completed'
   END as status
 FROM xero_invoices xi
 JOIN xero_payments xp ON xp.xero_invoice_id = xi.id

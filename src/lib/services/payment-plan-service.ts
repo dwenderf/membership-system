@@ -95,6 +95,16 @@ function isStripeCardError(error: unknown): boolean {
 }
 
 /**
+ * Plan rows the member still owes: not charged yet ('planned', 'staged'), or charged with the
+ * outcome not yet confirmed ('processing'). A row stuck in 'processing' after an unknown Stripe
+ * outcome may never have been paid, so it must keep the balance guards closed.
+ */
+export const OUTSTANDING_PLAN_PAYMENT_STATUSES = ['planned', 'staged', 'processing']
+
+/** On a plan invoice still in DRAFT, only these rows show the plan actually started. */
+const DRAFT_PLAN_OWED_STATUSES = ['planned', 'processing']
+
+/**
  * Stripe errors that mean no charge can have happened. Rate-limit errors are left out: the SDK
  * retries a dropped request with the same key, and a 429 on that retry can hide a first try that
  * did charge, so a rate-limited charge stays processing like any other unknown outcome.
@@ -1093,48 +1103,53 @@ export class PaymentPlanService {
   }
 
   /**
+   * The member's payment-plan installments that are still owed. Reads through the admin client:
+   * xero_payments is admin-only under RLS, so the member's own session would see no rows and the
+   * card-removal and account-deletion guards would always pass. Throws on a query error.
+   */
+  private static async getOutstandingPlanPayments(
+    userId: string
+  ): Promise<Array<{ amount_paid: number }>> {
+    const supabase = createAdminClient()
+
+    // Filter by member in the query: the admin client sees every member's invoices, and an
+    // unfiltered list could pass the API row cap and drop this member's plan
+    const { data: invoices, error: invoicesError } = await supabase
+      .from('xero_invoices')
+      .select('id, invoice_status')
+      .eq('is_payment_plan', true)
+      .eq('staging_metadata->>user_id', userId)
+
+    if (invoicesError) throw invoicesError
+    if (!invoices || invoices.length === 0) return []
+
+    const draftInvoiceIds = new Set(
+      invoices.filter(inv => inv.invoice_status === 'DRAFT').map(inv => inv.id)
+    )
+
+    const { data: payments, error: paymentsError } = await supabase
+      .from('xero_payments')
+      .select('xero_invoice_id, sync_status, amount_paid')
+      .in('xero_invoice_id', invoices.map(inv => inv.id))
+      .in('sync_status', OUTSTANDING_PLAN_PAYMENT_STATUSES)
+
+    if (paymentsError) throw paymentsError
+
+    // A DRAFT invoice with only staged rows is an abandoned checkout. One whose later rows are
+    // planned or processing had its first charge go through without the invoice leaving DRAFT,
+    // and the cron still charges those rows, so they are owed.
+    return (payments ?? []).filter(p =>
+      !draftInvoiceIds.has(p.xero_invoice_id) || DRAFT_PLAN_OWED_STATUSES.includes(p.sync_status)
+    )
+  }
+
+  /**
    * Check if user has outstanding payment plan balance
    */
   static async hasOutstandingBalance(userId: string): Promise<boolean> {
     try {
-      const supabase = await createClient()
-
-      // Get user's payment plan invoices
-      // Note: contact_id doesn't exist as column, it's in staging_metadata
-      const { data: allInvoices } = await supabase
-        .from('xero_invoices')
-        .select('id, staging_metadata, invoice_status')
-        .eq('is_payment_plan', true)
-        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
-        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
-
-      if (!allInvoices || allInvoices.length === 0) {
-        return false
-      }
-
-      // Filter to only this user's invoices
-      const userInvoices = allInvoices.filter(inv =>
-        inv.staging_metadata?.user_id === userId
-      )
-
-      if (userInvoices.length === 0) {
-        return false
-      }
-
-      const invoiceIds = userInvoices.map(inv => inv.id)
-
-      const { data: outstandingPayments, error: paymentsError } = await supabase
-        .from('xero_payments')
-        .select('id')
-        .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
-        .limit(1)
-
-      if (paymentsError) {
-        return false
-      }
-
-      return outstandingPayments && outstandingPayments.length > 0
+      const payments = await PaymentPlanService.getOutstandingPlanPayments(userId)
+      return payments.length > 0
     } catch (error) {
       logger.logPaymentProcessing(
         'check-outstanding-balance-exception',
@@ -1150,47 +1165,11 @@ export class PaymentPlanService {
   }
 
   /**
-   * Get total outstanding balance for a user
+   * Get total outstanding balance for a user, including charges whose outcome isn't confirmed
    */
   static async getTotalOutstandingBalance(userId: string): Promise<number> {
     try {
-      const supabase = await createClient()
-
-      // Get user's payment plan invoices
-      // Note: contact_id doesn't exist as column, it's in staging_metadata
-      const { data: allInvoices } = await supabase
-        .from('xero_invoices')
-        .select('id, staging_metadata, invoice_status')
-        .eq('is_payment_plan', true)
-        // A DRAFT invoice is an abandoned checkout, not a plan the member owes on
-        .or('invoice_status.is.null,invoice_status.neq.DRAFT')
-
-      if (!allInvoices || allInvoices.length === 0) {
-        return 0
-      }
-
-      // Filter to only this user's invoices
-      const userInvoices = allInvoices.filter(inv =>
-        inv.staging_metadata?.user_id === userId
-      )
-
-      if (userInvoices.length === 0) {
-        return 0
-      }
-
-      const invoiceIds = userInvoices.map(inv => inv.id)
-
-      // Sum up all planned payments
-      const { data: payments, error } = await supabase
-        .from('xero_payments')
-        .select('amount_paid')
-        .in('xero_invoice_id', invoiceIds)
-        .in('sync_status', ['planned', 'staged'])
-
-      if (error || !payments) {
-        return 0
-      }
-
+      const payments = await PaymentPlanService.getOutstandingPlanPayments(userId)
       return payments.reduce((total, payment) => total + payment.amount_paid, 0)
     } catch (error) {
       logger.logPaymentProcessing(

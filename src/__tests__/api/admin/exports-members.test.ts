@@ -124,35 +124,51 @@ describe('/api/admin/exports/members', () => {
     })
   })
 
-  describe('active members only', () => {
+  describe('members dataset', () => {
+    it('returns every user, without filtering on memberships', async () => {
+      await GET(request('http://localhost/api/admin/exports/members?dataset=members', SECRET))
+
+      const [query] = queries
+      expect(query.select.mock.calls[0][0]).not.toContain('user_memberships')
+      expect(query.gte).not.toHaveBeenCalled()
+      expect(query.eq).not.toHaveBeenCalled()
+    })
+
+    it('ignores the membership-only filters', async () => {
+      await GET(
+        request(
+          'http://localhost/api/admin/exports/members?dataset=members&paid_only=true&include_expired=true',
+          SECRET
+        )
+      )
+
+      expect(queries[0].select.mock.calls[0][0]).not.toContain('user_memberships')
+      expect(queries[0].eq).not.toHaveBeenCalled()
+    })
+
+    it('excludes soft-deleted users by default', async () => {
+      await GET(request('http://localhost/api/admin/exports/members', SECRET))
+
+      expect(queries[0].is).toHaveBeenCalledWith('deleted_at', null)
+    })
+
+    it('includes soft-deleted users with include_deleted=true', async () => {
+      await GET(
+        request('http://localhost/api/admin/exports/members?include_deleted=true', SECRET)
+      )
+
+      expect(queries[0].is).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('memberships dataset filters', () => {
     afterEach(() => {
       jest.useRealTimers()
     })
 
-    it('restricts the members dataset to memberships valid today or later', async () => {
+    it('restricts the memberships dataset to memberships valid today or later', async () => {
       // 2026-03-15 01:00 UTC is still 2026-03-14 in New York: a membership that
       // expires on the 14th is current for the rest of that local day.
-      jest.useFakeTimers({ now: new Date('2026-03-15T01:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] })
-
-      await GET(request('http://localhost/api/admin/exports/members?dataset=members', SECRET))
-
-      const [query] = queries
-      // !inner makes the embed filter the users, not just the embedded rows.
-      expect(query.select.mock.calls[0][0]).toContain('user_memberships!inner(valid_until)')
-      expect(query.gte).toHaveBeenCalledWith('user_memberships.valid_until', '2026-03-14')
-    })
-
-    it('drops the date filter on the members dataset with include_expired=true', async () => {
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=members&include_expired=true', SECRET)
-      )
-
-      // Still restricted to members holding a membership, just not a current one.
-      expect(queries[0].select.mock.calls[0][0]).toContain('user_memberships!inner(valid_until)')
-      expect(queries[0].gte).not.toHaveBeenCalled()
-    })
-
-    it('restricts the memberships dataset to memberships valid today or later', async () => {
       jest.useFakeTimers({ now: new Date('2026-03-15T01:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] })
 
       await GET(
@@ -170,43 +186,12 @@ describe('/api/admin/exports/members', () => {
       expect(queries[0].gte).not.toHaveBeenCalled()
     })
 
-    it('applies paid_only to the members dataset', async () => {
+    it('applies paid_only to the memberships dataset', async () => {
       await GET(
-        request('http://localhost/api/admin/exports/members?dataset=members&paid_only=true', SECRET)
+        request('http://localhost/api/admin/exports/members?dataset=memberships&paid_only=true', SECRET)
       )
 
-      expect(queries[0].eq).toHaveBeenCalledWith('user_memberships.payment_status', 'paid')
-    })
-
-    it('does not filter on payment status unless paid_only is set', async () => {
-      await GET(request('http://localhost/api/admin/exports/members', SECRET))
-
-      expect(queries[0].eq).not.toHaveBeenCalled()
-    })
-
-    it('does not include the filtering embed in the output', async () => {
-      queryResult = {
-        data: [
-          {
-            first_name: 'Ada',
-            last_name: 'Lovelace',
-            email: 'ada@example.com',
-            member_id: 1000,
-            user_memberships: [{ valid_until: '2027-08-31' }],
-          },
-        ],
-        error: null,
-      }
-
-      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
-      const body = await response.json()
-
-      expect(body.rows[0]).toEqual({
-        first_name: 'Ada',
-        last_name: 'Lovelace',
-        email: 'ada@example.com',
-        member_id: 1000,
-      })
+      expect(queries[0].eq).toHaveBeenCalledWith('payment_status', 'paid')
     })
   })
 

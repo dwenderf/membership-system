@@ -142,6 +142,34 @@ describe('/api/admin/exports/members', () => {
       expect(query.gte).toHaveBeenCalledWith('user_memberships.valid_until', '2026-03-14')
     })
 
+    it('drops the date filter on the members dataset with include_expired=true', async () => {
+      await GET(
+        request('http://localhost/api/admin/exports/members?dataset=members&include_expired=true', SECRET)
+      )
+
+      // Still restricted to members holding a membership, just not a current one.
+      expect(queries[0].select.mock.calls[0][0]).toContain('user_memberships!inner(valid_until)')
+      expect(queries[0].gte).not.toHaveBeenCalled()
+    })
+
+    it('restricts the memberships dataset to memberships valid today or later', async () => {
+      jest.useFakeTimers({ now: new Date('2026-03-15T01:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] })
+
+      await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      )
+
+      expect(queries[0].gte).toHaveBeenCalledWith('valid_until', '2026-03-14')
+    })
+
+    it('drops the date filter on the memberships dataset with include_expired=true', async () => {
+      await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships&include_expired=true', SECRET)
+      )
+
+      expect(queries[0].gte).not.toHaveBeenCalled()
+    })
+
     it('applies paid_only to the members dataset', async () => {
       await GET(
         request('http://localhost/api/admin/exports/members?dataset=members&paid_only=true', SECRET)
@@ -179,6 +207,60 @@ describe('/api/admin/exports/members', () => {
         email: 'ada@example.com',
         member_id: 1000,
       })
+    })
+  })
+
+  describe('memberships dataset output', () => {
+    const membershipRow = (userId: string, validUntil: string, memberId: number) => ({
+      user_id: userId,
+      valid_until: validUntil,
+      users: {
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+        email: `${userId}@example.com`,
+        member_id: memberId,
+        deleted_at: null,
+      },
+    })
+
+    it('does not return membership_id or membership_name', async () => {
+      queryResult = { data: [membershipRow('u1', '2027-08-31', 1000)], error: null }
+
+      const response = await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      )
+      const body = await response.json()
+
+      expect(queries[0].select.mock.calls[0][0]).not.toContain('memberships(')
+      expect(body.rows[0]).toEqual({
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+        email: 'u1@example.com',
+        member_id: 1000,
+        valid_until: '2027-08-31',
+      })
+    })
+
+    it('returns one row per member with the latest valid_until', async () => {
+      queryResult = {
+        data: [
+          membershipRow('u1', '2027-02-28', 1000),
+          membershipRow('u2', '2027-01-31', 999),
+          membershipRow('u1', '2027-08-31', 1000),
+        ],
+        error: null,
+      }
+
+      const response = await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      )
+      const body = await response.json()
+
+      expect(body.count).toBe(2)
+      expect(body.rows.map((r: { email: string; valid_until: string }) => [r.email, r.valid_until])).toEqual([
+        ['u2@example.com', '2027-01-31'],
+        ['u1@example.com', '2027-08-31'],
+      ])
     })
   })
 

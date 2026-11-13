@@ -20,13 +20,15 @@ import { logger } from '@/lib/logging/logger'
  *   Authorization: Bearer $EXPORT_API_SECRET
  *
  * Query parameters:
- *   dataset          'members' (default) — one row per member who holds a
- *                                          current membership (valid_until on
- *                                          or after today, in APP_TIMEZONE);
- *                                          members whose memberships have all
- *                                          expired are excluded
- *                    'memberships'       — one row per member per membership
- *                                          type, with the latest expiry
+ *   dataset          'members' (default) — one row per member
+ *                    'memberships'       — one row per member, with the
+ *                                          latest valid_until of the
+ *                                          memberships counted
+ *   include_expired  'true' to also count memberships whose valid_until is
+ *                    before today (default: only memberships valid today or
+ *                    later, in NEXT_PUBLIC_APP_TIMEZONE); applies to both
+ *                    datasets. Either way, a member appears only if they hold
+ *                    at least one membership that is counted.
  *   membership_id    uuid; restrict 'memberships' to a single membership type
  *   paid_only        'true' to count only paid memberships (default: all);
  *                    applies to both datasets
@@ -46,8 +48,6 @@ interface MemberRow {
 }
 
 interface MembershipRow extends MemberRow {
-  membership_id: string
-  membership_name: string
   valid_until: string
 }
 
@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
   const membershipId = searchParams.get('membership_id')
   const paidOnly = searchParams.get('paid_only') === 'true'
   const includeDeleted = searchParams.get('include_deleted') === 'true'
+  const includeExpired = searchParams.get('include_expired') === 'true'
   const format = searchParams.get('format') ?? 'json'
 
   if (dataset !== 'members' && dataset !== 'memberships') {
@@ -175,13 +176,18 @@ export async function GET(request: NextRequest) {
   try {
     const rows =
       dataset === 'members'
-        ? await fetchMembers(supabase, { paidOnly, includeDeleted })
-        : await fetchMemberships(supabase, { membershipId, paidOnly, includeDeleted })
+        ? await fetchMembers(supabase, { paidOnly, includeDeleted, includeExpired })
+        : await fetchMemberships(supabase, {
+            membershipId,
+            paidOnly,
+            includeDeleted,
+            includeExpired,
+          })
 
     logger.logAdminAction(
       'export-members',
       `Served ${rows.length} row(s) from the member export`,
-      { dataset, membershipId, paidOnly, includeDeleted, format },
+      { dataset, membershipId, paidOnly, includeDeleted, includeExpired, format },
       undefined,
       'info'
     )
@@ -217,12 +223,12 @@ type AdminClient = ReturnType<typeof createAdminClient>
 
 async function fetchMembers(
   supabase: AdminClient,
-  options: { paidOnly: boolean; includeDeleted: boolean }
+  options: { paidOnly: boolean; includeDeleted: boolean; includeExpired: boolean }
 ): Promise<MemberRow[]> {
   const rows: MemberRow[] = []
   const today = todayInAppTimezone()
 
-  // Only members with a current membership: the !inner embed turns the
+  // Only members holding a counted membership: the !inner embed turns the
   // user_memberships filter into a filter on users (an EXISTS, not a join that
   // repeats the user per membership), so each member still appears once and
   // the OFFSET/LIMIT paging below stays over users. user_id is the only FK from
@@ -239,11 +245,11 @@ async function fetchMembers(
     let query = supabase
       .from('users')
       .select('first_name, last_name, email, member_id, user_memberships!inner(valid_until)')
-      .gte('user_memberships.valid_until', today)
       .order('member_id', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
+    if (!options.includeExpired) query = query.gte('user_memberships.valid_until', today)
     if (options.paidOnly) query = query.eq('user_memberships.payment_status', 'paid')
     if (!options.includeDeleted) query = query.is('deleted_at', null)
 
@@ -268,10 +274,17 @@ async function fetchMembers(
 
 async function fetchMemberships(
   supabase: AdminClient,
-  options: { membershipId: string | null; paidOnly: boolean; includeDeleted: boolean }
+  options: {
+    membershipId: string | null
+    paidOnly: boolean
+    includeDeleted: boolean
+    includeExpired: boolean
+  }
 ): Promise<MembershipRow[]> {
+  const today = todayInAppTimezone()
+
   interface Joined {
-    membership_id: string
+    user_id: string
     valid_until: string
     users: {
       first_name: string
@@ -280,24 +293,22 @@ async function fetchMemberships(
       member_id: number | null
       deleted_at: string | null
     } | null
-    memberships: { name: string } | null
   }
 
   const joined: Joined[] = []
 
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
-    // user_id and membership_id are NOT NULL FKs declared on user_memberships,
-    // so both embeds are single objects rather than arrays (see AGENTS.md).
-    // Ordered by primary key so the paged reads are stable; the output order
-    // is imposed after grouping, below.
+    // user_id is a NOT NULL FK declared on user_memberships, so the users embed
+    // is a single object rather than an array (see AGENTS.md). Ordered by
+    // primary key so the paged reads are stable; the output order is imposed
+    // after grouping, below.
     let query = supabase
       .from('user_memberships')
-      .select(
-        'membership_id, valid_until, users(first_name, last_name, email, member_id, deleted_at), memberships(name)'
-      )
+      .select('user_id, valid_until, users(first_name, last_name, email, member_id, deleted_at)')
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
+    if (!options.includeExpired) query = query.gte('valid_until', today)
     if (options.membershipId) query = query.eq('membership_id', options.membershipId)
     if (options.paidOnly) query = query.eq('payment_status', 'paid')
 
@@ -309,8 +320,10 @@ async function fetchMemberships(
     if (data.length < PAGE_SIZE) break
   }
 
-  // One row per member per membership type, carrying the latest expiry —
-  // this is the max(valid_until) ... GROUP BY the replaced functions did.
+  // One row per member, carrying the latest expiry among the memberships
+  // counted. The output has no membership columns, so grouping per membership
+  // type would emit indistinguishable duplicate rows for a member holding
+  // several types.
   const latest = new Map<string, MembershipRow>()
 
   for (const row of joined) {
@@ -318,17 +331,14 @@ async function fetchMemberships(
     if (!user) continue
     if (!options.includeDeleted && user.deleted_at) continue
 
-    const key = `${user.email}|${row.membership_id}`
-    const existing = latest.get(key)
+    const existing = latest.get(row.user_id)
 
     if (!existing || row.valid_until > existing.valid_until) {
-      latest.set(key, {
+      latest.set(row.user_id, {
         first_name: user.first_name,
         last_name: user.last_name,
         email: user.email,
         member_id: user.member_id,
-        membership_id: row.membership_id,
-        membership_name: row.memberships?.name ?? '',
         valid_until: row.valid_until,
       })
     }

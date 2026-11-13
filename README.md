@@ -545,8 +545,9 @@ Then Triggers → Add Trigger → `refreshMembers`, time-driven, daily.
 
 | Parameter | Values | Meaning |
 |---|---|---|
-| `dataset` | `members` (default) | One row per active member (a membership with `valid_until` on or after today, in `NEXT_PUBLIC_APP_TIMEZONE`): name, email, member ID. Members whose memberships have all expired are excluded |
-| | `memberships` | One row per member per membership type, with the latest expiry |
+| `dataset` | `members` (default) | One row per member: name, email, member ID |
+| | `memberships` | One row per member: name, email, member ID, and the latest `valid_until` among the memberships counted |
+| `include_expired` | `true` | Also count memberships whose `valid_until` is before today, in either dataset (default: only memberships valid today or later, in `NEXT_PUBLIC_APP_TIMEZONE`). Either way, a member is listed only if they hold at least one counted membership |
 | `membership_id` | uuid | Restrict `memberships` to one membership type |
 | `paid_only` | `true` | Count only paid memberships, in either dataset (default: all, including pending and refunded) |
 | `include_deleted` | `true` | Include soft-deleted members (default: excluded) |

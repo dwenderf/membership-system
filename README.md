@@ -547,11 +547,13 @@ Then Triggers → Add Trigger → `refreshMembers`, time-driven, daily.
 |---|---|---|
 | `dataset` | `members` (default) | One row per user account, whether or not they hold a membership: name, email, member ID |
 | | `memberships` | One row per member holding at least one counted membership: name, email, member ID, and the latest `valid_until` among the memberships counted |
-| `include_expired` | `true` | `memberships` only: also count memberships whose `valid_until` is before today (default: only memberships valid today or later, in `NEXT_PUBLIC_APP_TIMEZONE`) |
+| `include_expired` | `true` | `memberships` only (a 400 with `members`): also count memberships whose `valid_until` is before today (default: only memberships valid today or later, in `NEXT_PUBLIC_APP_TIMEZONE`) |
 | `membership_id` | uuid | Restrict `memberships` to one membership type |
-| `paid_only` | `true` | `memberships` only: count only paid memberships (default: all, including pending and refunded) |
+| `paid_only` | `true` | `memberships` only (a 400 with `members`): count only paid memberships (default: all, including pending and refunded) |
 | `include_deleted` | `true` | Include soft-deleted users, in either dataset (default: excluded) |
 | `format` | `json` (default), `csv` | Response format |
+
+An export larger than 50,000 rows fails with a 500 rather than returning a partial list.
 
 ### Before you add another endpoint
 

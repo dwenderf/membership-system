@@ -134,16 +134,18 @@ describe('/api/admin/exports/members', () => {
       expect(query.eq).not.toHaveBeenCalled()
     })
 
-    it('ignores the membership-only filters', async () => {
-      await GET(
-        request(
-          'http://localhost/api/admin/exports/members?dataset=members&paid_only=true&include_expired=true',
-          SECRET
-        )
+    it.each([
+      'paid_only=true',
+      'include_expired=true',
+      'dataset=members&paid_only=true',
+      'dataset=members&include_expired=false',
+    ])('rejects membership-only filters (%s) rather than widening the export', async (qs) => {
+      const response = await GET(
+        request(`http://localhost/api/admin/exports/members?${qs}`, SECRET)
       )
 
-      expect(queries[0].select.mock.calls[0][0]).not.toContain('user_memberships')
-      expect(queries[0].eq).not.toHaveBeenCalled()
+      expect(response.status).toBe(400)
+      expect(mockSupabase.from).not.toHaveBeenCalled()
     })
 
     it('excludes soft-deleted users by default', async () => {
@@ -274,6 +276,33 @@ describe('/api/admin/exports/members', () => {
 
       expect(queries[0].order).toHaveBeenCalled()
       expect(queries[0].range).toHaveBeenCalledWith(0, 999)
+    })
+  })
+
+  describe('row cap', () => {
+    const fullPage = (row: object) => ({ data: Array.from({ length: 1000 }, () => row), error: null })
+
+    it('fails rather than returning a members list cut at MAX_ROWS', async () => {
+      queryResult = fullPage({ first_name: 'A', last_name: 'B', email: 'a@example.com', member_id: 1 })
+
+      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
+
+      expect(response.status).toBe(500)
+      expect(queries).toHaveLength(50)
+    })
+
+    it('fails rather than returning a memberships list cut at MAX_ROWS', async () => {
+      queryResult = fullPage({
+        user_id: 'u1',
+        valid_until: '2027-08-31',
+        users: { first_name: 'A', last_name: 'B', email: 'a@example.com', member_id: 1, deleted_at: null },
+      })
+
+      const response = await GET(
+        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      )
+
+      expect(response.status).toBe(500)
     })
   })
 

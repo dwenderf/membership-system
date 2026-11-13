@@ -20,20 +20,26 @@ import { logger } from '@/lib/logging/logger'
  *   Authorization: Bearer $EXPORT_API_SECRET
  *
  * Query parameters:
- *   dataset          'members' (default) — one row per member
- *                    'memberships'       — one row per member, with the
+ *   dataset          'members' (default) — one row per user account,
+ *                                          whether or not they hold a
+ *                                          membership
+ *                    'memberships'       — one row per member holding a
+ *                                          counted membership, with the
  *                                          latest valid_until of the
  *                                          memberships counted
- *   include_expired  'true' to also count memberships whose valid_until is
- *                    before today (default: only memberships valid today or
- *                    later, in NEXT_PUBLIC_APP_TIMEZONE); applies to both
- *                    datasets. Either way, a member appears only if they hold
- *                    at least one membership that is counted.
+ *   include_expired  'memberships' only: 'true' to also count memberships
+ *                    whose valid_until is before today (default: only
+ *                    memberships valid today or later, in
+ *                    NEXT_PUBLIC_APP_TIMEZONE)
  *   membership_id    uuid; restrict 'memberships' to a single membership type
- *   paid_only        'true' to count only paid memberships (default: all);
+ *   paid_only        'memberships' only: 'true' to count only paid
+ *                    memberships (default: all)
+ *   include_deleted  'true' to include soft-deleted users (default: exclude);
  *                    applies to both datasets
- *   include_deleted  'true' to include soft-deleted members (default: exclude)
  *   format           'json' (default) or 'csv'
+ *
+ * paid_only or include_expired with dataset=members is a 400, not ignored.
+ * An export larger than MAX_ROWS fails (500) rather than returning a partial list.
  */
 
 // PostgREST caps a single response; page through rather than silently truncating.
@@ -159,6 +165,18 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     )
   }
+  // These narrowed the members dataset before it became every user account.
+  // Reject them there rather than ignore them, so a stale caller fails loudly
+  // instead of silently receiving a much wider set of personal data.
+  if (dataset === 'members' && (searchParams.has('paid_only') || searchParams.has('include_expired'))) {
+    return NextResponse.json(
+      {
+        error:
+          "paid_only and include_expired apply only to dataset=memberships; dataset=members returns every user",
+      },
+      { status: 400 }
+    )
+  }
   if (
     membershipId &&
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(membershipId)
@@ -176,7 +194,7 @@ export async function GET(request: NextRequest) {
   try {
     const rows =
       dataset === 'members'
-        ? await fetchMembers(supabase, { paidOnly, includeDeleted, includeExpired })
+        ? await fetchMembers(supabase, { includeDeleted })
         : await fetchMemberships(supabase, {
             membershipId,
             paidOnly,
@@ -223,19 +241,11 @@ type AdminClient = ReturnType<typeof createAdminClient>
 
 async function fetchMembers(
   supabase: AdminClient,
-  options: { paidOnly: boolean; includeDeleted: boolean; includeExpired: boolean }
+  options: { includeDeleted: boolean }
 ): Promise<MemberRow[]> {
+  // Every user account, membership or not. Membership filtering belongs to the
+  // 'memberships' dataset.
   const rows: MemberRow[] = []
-  const today = todayInAppTimezone()
-
-  // Only members holding a counted membership: the !inner embed turns the
-  // user_memberships filter into a filter on users (an EXISTS, not a join that
-  // repeats the user per membership), so each member still appears once and
-  // the OFFSET/LIMIT paging below stays over users. user_id is the only FK from
-  // user_memberships to users, so the embed is unambiguous.
-  interface Joined extends MemberRow {
-    user_memberships: { valid_until: string }[]
-  }
 
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
     // Order must be total, not just useful: .range() is OFFSET/LIMIT, and
@@ -244,32 +254,23 @@ async function fetchMembers(
     // leaves ties among NULLs -- id (the primary key) breaks them.
     let query = supabase
       .from('users')
-      .select('first_name, last_name, email, member_id, user_memberships!inner(valid_until)')
+      .select('first_name, last_name, email, member_id')
       .order('member_id', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
 
-    if (!options.includeExpired) query = query.gte('user_memberships.valid_until', today)
-    if (options.paidOnly) query = query.eq('user_memberships.payment_status', 'paid')
     if (!options.includeDeleted) query = query.is('deleted_at', null)
 
-    const { data, error } = await query.overrideTypes<Joined[], { merge: false }>()
+    const { data, error } = await query.overrideTypes<MemberRow[], { merge: false }>()
     if (error) throw new Error(error.message)
-    if (!data || data.length === 0) break
+    if (!data || data.length === 0) return rows
 
-    // Drop the embed: it exists only to filter, and the output shape is unchanged.
-    rows.push(
-      ...data.map(({ first_name, last_name, email, member_id }) => ({
-        first_name,
-        last_name,
-        email,
-        member_id,
-      }))
-    )
-    if (data.length < PAGE_SIZE) break
+    rows.push(...data)
+    if (data.length < PAGE_SIZE) return rows
   }
 
-  return rows
+  // Fell out of the loop with every page full: the result is cut at MAX_ROWS.
+  throw new Error(`members export exceeds ${MAX_ROWS} rows`)
 }
 
 async function fetchMemberships(
@@ -296,6 +297,7 @@ async function fetchMemberships(
   }
 
   const joined: Joined[] = []
+  let complete = false
 
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
     // user_id is a NOT NULL FK declared on user_memberships, so the users embed
@@ -314,11 +316,20 @@ async function fetchMemberships(
 
     const { data, error } = await query.overrideTypes<Joined[], { merge: false }>()
     if (error) throw new Error(error.message)
-    if (!data || data.length === 0) break
+    if (!data || data.length === 0) {
+      complete = true
+      break
+    }
 
     joined.push(...data)
-    if (data.length < PAGE_SIZE) break
+    if (data.length < PAGE_SIZE) {
+      complete = true
+      break
+    }
   }
+
+  // Fell out of the loop with every page full: the result is cut at MAX_ROWS.
+  if (!complete) throw new Error(`memberships export exceeds ${MAX_ROWS} rows`)
 
   // One row per member, carrying the latest expiry among the memberships
   // counted. The output has no membership columns, so grouping per membership

@@ -64,9 +64,14 @@ const user = (id: string, memberId: number, overrides: Record<string, unknown> =
   ...overrides,
 })
 
-const membership = (userId: string, validUntil: string) => ({
+const membership = (
+  userId: string,
+  validUntil: string,
+  payments: { status: string } | null = { status: 'completed' }
+) => ({
   user_id: userId,
   valid_until: validUntil,
+  payments,
 })
 
 describe('/api/admin/exports/members', () => {
@@ -187,6 +192,14 @@ describe('/api/admin/exports/members', () => {
       expect(queries.user_memberships[0].eq).toHaveBeenCalledWith('membership_id', id)
     })
 
+    it('reads each membership\'s payment status so refunds can be excluded', async () => {
+      await get()
+
+      expect(queries.user_memberships[0].select).toHaveBeenCalledWith(
+        expect.stringContaining('payments(status)')
+      )
+    })
+
     it('counts only paid memberships, whatever the other parameters', async () => {
       for (const query of ['', '?membership_status=current,expired,never', '?membership_id=123e4567-e89b-12d3-a456-426614174000']) {
         for (const key of Object.keys(queries)) delete queries[key]
@@ -250,6 +263,42 @@ describe('/api/admin/exports/members', () => {
         ['cur', 'current'],
         ['exp', 'expired'],
       ])
+    })
+
+    it('does not count a membership whose payment was refunded', async () => {
+      results.users = { data: [user('ref', 1001), user('ok', 1002)], error: null }
+      results.user_memberships = {
+        data: [
+          membership('ref', '2999-08-31', { status: 'refunded' }),
+          membership('ok', '2999-08-31'),
+        ],
+        error: null,
+      }
+
+      expect(await statuses('?membership_status=current,expired,never')).toEqual([
+        ['ref', 'never'],
+        ['ok', 'current'],
+      ])
+    })
+
+    it('falls back to an earlier membership when the latest one was refunded', async () => {
+      results.users = { data: [user('u1', 1001)], error: null }
+      results.user_memberships = {
+        data: [
+          membership('u1', '2026-01-31'),
+          membership('u1', '2999-08-31', { status: 'refunded' }),
+        ],
+        error: null,
+      }
+
+      expect(await statuses('?membership_status=expired')).toEqual([['u1', 'expired']])
+    })
+
+    it('still counts a membership with no linked payment', async () => {
+      results.users = { data: [user('u1', 1001)], error: null }
+      results.user_memberships = { data: [membership('u1', '2999-08-31', null)], error: null }
+
+      expect(await statuses()).toEqual([['u1', 'current']])
     })
 
     it('returns only never-members with membership_status=never', async () => {

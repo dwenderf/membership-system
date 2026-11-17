@@ -38,9 +38,12 @@ import { logger } from '@/lib/logging/logger'
  *   format             'json' (default) or 'csv'
  *
  * valid_until is the latest valid_until among the memberships considered,
- * expired or not, and null when there are none. Only memberships with
- * payment_status = 'paid' are ever considered: a pending or refunded membership
- * does not make a user a member (the app's own membership views agree).
+ * expired or not, and null when there are none. Only paid memberships are ever
+ * considered: user_memberships.payment_status must be 'paid' (a pending
+ * membership does not make a user a member; the app's own membership views
+ * agree), and the linked payment must not be refunded. The second check reads
+ * payments.status, because a refund marks the payment 'refunded' and never
+ * touches user_memberships.payment_status.
  */
 
 // PostgREST caps a single response; page through rather than silently truncating.
@@ -303,24 +306,36 @@ async function fetchUsers(
     MAX_ROWS
   )
 
-  // Latest valid_until per user, over every paid membership considered (expired
+  // Latest valid_until per user, over every paid, unrefunded membership (expired
   // or not): that is what separates 'expired' from 'never'. Ordered by primary
   // key so the paged reads are stable. Deliberately not capped: this reads the
   // whole membership history, which only grows (every renewal adds a row), and
   // a cap here would make the export fail for everyone once the history passed
   // it, however few users were being returned.
   const latest = new Map<string, string>()
-  const memberships = await fetchAllPages<{ user_id: string; valid_until: string }>((from, to) => {
+  // payment_id is a nullable FK declared on user_memberships (and the only FK
+  // between the two tables), so the payments embed is a single object or null
+  // (see AGENTS.md). A membership with no linked payment still counts.
+  interface MembershipRecord {
+    user_id: string
+    valid_until: string
+    payments: { status: string } | null
+  }
+  const memberships = await fetchAllPages<MembershipRecord>((from, to) => {
     let query = supabase
       .from('user_memberships')
-      .select('user_id, valid_until')
+      .select('user_id, valid_until, payments(status)')
       .eq('payment_status', 'paid')
       .order('id', { ascending: true })
       .range(from, to)
     if (options.membershipId) query = query.eq('membership_id', options.membershipId)
-    return query.overrideTypes<{ user_id: string; valid_until: string }[], { merge: false }>()
+    return query.overrideTypes<MembershipRecord[], { merge: false }>()
   })
-  for (const { user_id, valid_until } of memberships) {
+  for (const { user_id, valid_until, payments } of memberships) {
+    // A fully refunded membership is not a membership. A refund that later
+    // fails or is cancelled puts the payment back to 'completed', so reading the
+    // live status here follows it.
+    if (payments?.status === 'refunded') continue
     const existing = latest.get(user_id)
     if (!existing || valid_until > existing) latest.set(user_id, valid_until)
   }

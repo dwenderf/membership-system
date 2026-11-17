@@ -38,7 +38,12 @@ import { logger } from '@/lib/logging/logger'
  *   format             'json' (default) or 'csv'
  *
  * valid_until is the latest valid_until among the memberships considered,
- * expired or not, and null when there are none.
+ * expired or not, and null when there are none. Only paid memberships are ever
+ * considered: user_memberships.payment_status must be 'paid' (a pending
+ * membership does not make a user a member; the app's own membership views
+ * agree), and the linked payment must not be refunded. The second check reads
+ * payments.status, because a refund marks the payment 'refunded' and never
+ * touches user_memberships.payment_status.
  */
 
 // PostgREST caps a single response; page through rather than silently truncating.
@@ -248,21 +253,23 @@ interface PageResult<T> {
 }
 
 /**
- * Reads every page of a query. Throws instead of returning a list silently cut
- * at MAX_ROWS: a truncated export looks complete to the spreadsheet reading it.
+ * Reads every page of a query. With maxRows, throws instead of returning a list
+ * silently cut there: a truncated export looks complete to the spreadsheet
+ * reading it. Without it, reads until the rows run out.
  */
 async function fetchAllPages<T>(
-  page: (from: number, to: number) => PromiseLike<PageResult<T>>
+  page: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  maxRows = Infinity
 ): Promise<T[]> {
   const rows: T[] = []
-  for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
+  for (let from = 0; from < maxRows; from += PAGE_SIZE) {
     const { data, error } = await page(from, from + PAGE_SIZE - 1)
     if (error) throw new Error(error.message)
     if (!data || data.length === 0) return rows
     rows.push(...data)
     if (data.length < PAGE_SIZE) return rows
   }
-  throw new Error(`Export exceeds ${MAX_ROWS} rows; refusing to return a truncated list`)
+  throw new Error(`Export exceeds ${maxRows} rows; refusing to return a truncated list`)
 }
 
 async function fetchUsers(
@@ -294,23 +301,41 @@ async function fetchUsers(
       .order('member_id', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, to)
-      .overrideTypes<UserRecord[], { merge: false }>()
+      .overrideTypes<UserRecord[], { merge: false }>(),
+    // The cap is on rows returned. It applies to users, one row each.
+    MAX_ROWS
   )
 
-  // Latest valid_until per user, over every membership considered (expired or
-  // not): that is what separates 'expired' from 'never'. Ordered by primary key
-  // so the paged reads are stable.
+  // Latest valid_until per user, over every paid, unrefunded membership (expired
+  // or not): that is what separates 'expired' from 'never'. Ordered by primary
+  // key so the paged reads are stable. Deliberately not capped: this reads the
+  // whole membership history, which only grows (every renewal adds a row), and
+  // a cap here would make the export fail for everyone once the history passed
+  // it, however few users were being returned.
   const latest = new Map<string, string>()
-  const memberships = await fetchAllPages<{ user_id: string; valid_until: string }>((from, to) => {
+  // payment_id is a nullable FK declared on user_memberships (and the only FK
+  // between the two tables), so the payments embed is a single object or null
+  // (see AGENTS.md). A membership with no linked payment still counts.
+  interface MembershipRecord {
+    user_id: string
+    valid_until: string
+    payments: { status: string } | null
+  }
+  const memberships = await fetchAllPages<MembershipRecord>((from, to) => {
     let query = supabase
       .from('user_memberships')
-      .select('user_id, valid_until')
+      .select('user_id, valid_until, payments(status)')
+      .eq('payment_status', 'paid')
       .order('id', { ascending: true })
       .range(from, to)
     if (options.membershipId) query = query.eq('membership_id', options.membershipId)
-    return query.overrideTypes<{ user_id: string; valid_until: string }[], { merge: false }>()
+    return query.overrideTypes<MembershipRecord[], { merge: false }>()
   })
-  for (const { user_id, valid_until } of memberships) {
+  for (const { user_id, valid_until, payments } of memberships) {
+    // A fully refunded membership is not a membership. A refund that later
+    // fails or is cancelled puts the payment back to 'completed', so reading the
+    // live status here follows it.
+    if (payments?.status === 'refunded') continue
     const existing = latest.get(user_id)
     if (!existing || valid_until > existing) latest.set(user_id, valid_until)
   }

@@ -543,7 +543,7 @@ Then Triggers → Add Trigger → `refreshUsers`, time-driven, daily.
 
 `GET /api/admin/exports/members` serves one dataset, `users`: one row per user who has finished onboarding (`onboarding_completed_at` is set) and is not soft-deleted. Soft-deleted users are never returned; their name and email are obfuscated, so a row would say nothing.
 
-Each row has `user_id`, `member_id`, `first_name`, `last_name`, `email`, `membership_status`, `valid_until` and `onboarding_completed_at`. `valid_until` is the latest `valid_until` among the user's memberships, expired or not, and `null` if they never held one. `membership_status` is derived from it:
+Each row has `user_id`, `member_id`, `first_name`, `last_name`, `email`, `membership_status`, `valid_until` and `onboarding_completed_at`. `valid_until` is the latest `valid_until` among the user's paid memberships, expired or not, and `null` if they never held one. Only paid memberships count: a membership must have `payment_status = 'paid'` and its payment must not be refunded, so a pending or refunded membership does not make someone a member. `membership_status` is derived from it:
 
 | `membership_status` | Meaning |
 |---|---|
@@ -558,7 +558,7 @@ Each row has `user_id`, `member_id`, `first_name`, `last_name`, `email`, `member
 | `membership_id` | uuid | Consider only memberships of this type. `valid_until` and `membership_status` are then relative to that type, so a user who holds only other types reads as `never` |
 | `format` | `json` (default), `csv` | Response format |
 
-The earlier `members` and `memberships` datasets, and their `include_expired`, `include_deleted` and `paid_only` parameters, were removed. Requests that still send them get a `400` rather than a silently different result. If the matching rows would exceed 50,000, the export fails with a `500` instead of returning a truncated list.
+The earlier `members` and `memberships` datasets, and their `include_expired`, `include_deleted` and `paid_only` parameters, were removed. Requests that still send them get a `400` rather than a silently different result. If more than 50,000 users would be returned, the export fails with a `500` instead of returning a truncated list. The membership history it reads to work out each user's status is not capped.
 
 ### Before you add another endpoint
 

@@ -15,43 +15,64 @@ interface QueryResult {
   error: { message: string } | null
 }
 
-let queryResult: QueryResult = { data: [], error: null }
+const empty = (): QueryResult => ({ data: [], error: null })
+
+// Result per table; a test sets the rows the route should see.
+let results: Record<string, QueryResult> = {}
 
 // Chainable stub matching the postgrest-js builder surface the route uses.
-// Queries are recorded so tests can assert on how they were built.
-const queries: Array<Record<string, jest.Mock>> = []
+// Queries are recorded per table so tests can assert on how they were built.
+const queries: Record<string, Array<Record<string, jest.Mock>>> = {}
 
-const makeQuery = () => {
+const makeQuery = (table: string) => {
   const query: Record<string, jest.Mock> = {}
-  for (const method of ['select', 'order', 'range', 'is', 'eq', 'gte']) {
+  for (const method of ['select', 'order', 'range', 'is', 'not', 'eq']) {
     query[method] = jest.fn(() => query)
   }
-  query.overrideTypes = jest.fn(() => Promise.resolve(queryResult))
-  queries.push(query)
+  query.overrideTypes = jest.fn(() => Promise.resolve(results[table] ?? empty()))
+  ;(queries[table] ??= []).push(query)
   return query
 }
 
 const orderedColumns = (query: Record<string, jest.Mock>) =>
   query.order.mock.calls.map((call) => call[0])
 
-const mockSupabase = { from: jest.fn(() => makeQuery()) }
+const mockSupabase = { from: jest.fn((table: string) => makeQuery(table)) }
 jest.requireMock('@/lib/supabase/admin').createAdminClient = jest.fn(() => mockSupabase)
 
 const SECRET = 'test-export-secret'
+const BASE = 'http://localhost/api/admin/exports/members'
 
 const request = (url: string, token?: string) =>
   new NextRequest(url, {
     headers: token ? { authorization: `Bearer ${token}` } : {},
   })
 
+const get = (query = '') => GET(request(`${BASE}${query}`, SECRET))
+
+const user = (id: string, memberId: number, overrides: Record<string, unknown> = {}) => ({
+  id,
+  member_id: memberId,
+  first_name: 'Ada',
+  last_name: 'Lovelace',
+  email: `${id}@example.com`,
+  onboarding_completed_at: '2026-01-02T03:04:05+00:00',
+  ...overrides,
+})
+
+const membership = (userId: string, validUntil: string) => ({
+  user_id: userId,
+  valid_until: validUntil,
+})
+
 describe('/api/admin/exports/members', () => {
   const originalSecret = process.env.EXPORT_API_SECRET
 
   beforeEach(() => {
     jest.clearAllMocks()
-    queries.length = 0
+    for (const key of Object.keys(queries)) delete queries[key]
     process.env.EXPORT_API_SECRET = SECRET
-    queryResult = { data: [], error: null }
+    results = {}
   })
 
   afterAll(() => {
@@ -107,160 +128,188 @@ describe('/api/admin/exports/members', () => {
   })
 
   describe('parameters', () => {
-    it('rejects an unknown dataset', async () => {
-      const response = await GET(
-        request('http://localhost/api/admin/exports/members?dataset=everything', SECRET)
-      )
+    it('rejects the retired members and memberships datasets', async () => {
+      for (const dataset of ['members', 'memberships', 'everything']) {
+        const response = await get(`?dataset=${dataset}`)
+        expect(response.status).toBe(400)
+      }
+    })
 
-      expect(response.status).toBe(400)
+    it('rejects parameters from the retired datasets instead of ignoring them', async () => {
+      for (const param of ['include_expired=true', 'include_deleted=true', 'paid_only=true']) {
+        const response = await get(`?${param}`)
+        expect(response.status).toBe(400)
+      }
+      expect(mockSupabase.from).not.toHaveBeenCalled()
+    })
+
+    it('rejects an unknown membership_status', async () => {
+      expect((await get('?membership_status=all')).status).toBe(400)
+      expect((await get('?membership_status=current,bogus')).status).toBe(400)
+      expect((await get('?membership_status=')).status).toBe(400)
     })
 
     it('rejects a membership_id that is not a uuid', async () => {
-      const response = await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships&membership_id=abc', SECRET)
-      )
+      expect((await get('?membership_id=abc')).status).toBe(400)
+    })
 
-      expect(response.status).toBe(400)
+    it('rejects an unknown format', async () => {
+      expect((await get('?format=xml')).status).toBe(400)
     })
   })
 
-  describe('active members only', () => {
+  describe('which users are read', () => {
+    it('reads only onboarded, non-deleted users', async () => {
+      await get()
+
+      const [query] = queries.users
+      expect(query.not).toHaveBeenCalledWith('onboarding_completed_at', 'is', null)
+      expect(query.is).toHaveBeenCalledWith('deleted_at', null)
+    })
+
+    it('does not filter memberships by type unless membership_id is given', async () => {
+      await get()
+
+      expect(queries.user_memberships[0].eq).not.toHaveBeenCalled()
+    })
+
+    it('restricts memberships to one type with membership_id', async () => {
+      const id = '123e4567-e89b-12d3-a456-426614174000'
+      await get(`?membership_id=${id}`)
+
+      expect(queries.user_memberships[0].eq).toHaveBeenCalledWith('membership_id', id)
+    })
+  })
+
+  describe('membership_status', () => {
     afterEach(() => {
       jest.useRealTimers()
     })
 
-    it('restricts the members dataset to memberships valid today or later', async () => {
-      // 2026-03-15 01:00 UTC is still 2026-03-14 in New York: a membership that
-      // expires on the 14th is current for the rest of that local day.
-      jest.useFakeTimers({ now: new Date('2026-03-15T01:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] })
-
-      await GET(request('http://localhost/api/admin/exports/members?dataset=members', SECRET))
-
-      const [query] = queries
-      // !inner makes the embed filter the users, not just the embedded rows.
-      expect(query.select.mock.calls[0][0]).toContain('user_memberships!inner(valid_until)')
-      expect(query.gte).toHaveBeenCalledWith('user_memberships.valid_until', '2026-03-14')
-    })
-
-    it('drops the date filter on the members dataset with include_expired=true', async () => {
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=members&include_expired=true', SECRET)
-      )
-
-      // Still restricted to members holding a membership, just not a current one.
-      expect(queries[0].select.mock.calls[0][0]).toContain('user_memberships!inner(valid_until)')
-      expect(queries[0].gte).not.toHaveBeenCalled()
-    })
-
-    it('restricts the memberships dataset to memberships valid today or later', async () => {
-      jest.useFakeTimers({ now: new Date('2026-03-15T01:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] })
-
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
-      )
-
-      expect(queries[0].gte).toHaveBeenCalledWith('valid_until', '2026-03-14')
-    })
-
-    it('drops the date filter on the memberships dataset with include_expired=true', async () => {
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships&include_expired=true', SECRET)
-      )
-
-      expect(queries[0].gte).not.toHaveBeenCalled()
-    })
-
-    it('applies paid_only to the members dataset', async () => {
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=members&paid_only=true', SECRET)
-      )
-
-      expect(queries[0].eq).toHaveBeenCalledWith('user_memberships.payment_status', 'paid')
-    })
-
-    it('does not filter on payment status unless paid_only is set', async () => {
-      await GET(request('http://localhost/api/admin/exports/members', SECRET))
-
-      expect(queries[0].eq).not.toHaveBeenCalled()
-    })
-
-    it('does not include the filtering embed in the output', async () => {
-      queryResult = {
+    const seed = () => {
+      results.users = {
+        data: [user('cur', 1001), user('exp', 1002), user('nev', 1003)],
+        error: null,
+      }
+      results.user_memberships = {
         data: [
-          {
-            first_name: 'Ada',
-            last_name: 'Lovelace',
-            email: 'ada@example.com',
-            member_id: 1000,
-            user_memberships: [{ valid_until: '2027-08-31' }],
-          },
+          membership('cur', '2027-08-31'),
+          membership('exp', '2026-01-31'),
+          // An older, lapsed membership must not hide the newer current one.
+          membership('cur', '2025-01-31'),
         ],
         error: null,
       }
+    }
 
-      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
-      const body = await response.json()
+    const statuses = async (query = '') => {
+      const body = await (await get(query)).json()
+      return body.rows.map((r: { user_id: string; membership_status: string }) => [
+        r.user_id,
+        r.membership_status,
+      ])
+    }
 
-      expect(body.rows[0]).toEqual({
-        first_name: 'Ada',
-        last_name: 'Lovelace',
-        email: 'ada@example.com',
-        member_id: 1000,
+    it('returns only current users by default', async () => {
+      seed()
+
+      expect(await statuses()).toEqual([['cur', 'current']])
+    })
+
+    it('classifies current, expired and never, and returns each when asked', async () => {
+      seed()
+
+      expect(await statuses('?membership_status=current,expired,never')).toEqual([
+        ['cur', 'current'],
+        ['exp', 'expired'],
+        ['nev', 'never'],
+      ])
+    })
+
+    it('returns people who ever held a membership with current,expired', async () => {
+      seed()
+
+      expect(await statuses('?membership_status=current,expired')).toEqual([
+        ['cur', 'current'],
+        ['exp', 'expired'],
+      ])
+    })
+
+    it('returns only never-members with membership_status=never', async () => {
+      seed()
+
+      expect(await statuses('?membership_status=never')).toEqual([['nev', 'never']])
+    })
+
+    it('treats a membership that expires today as current, in the app timezone', async () => {
+      // 2026-03-15 01:00 UTC is still 2026-03-14 in New York.
+      // Fake only Date: reading the response body needs the real timers.
+      jest.useFakeTimers({
+        now: new Date('2026-03-15T01:00:00Z'),
+        doNotFake: [
+          'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+          'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+          'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+        ],
       })
+      results.users = { data: [user('today', 1001), user('yday', 1002)], error: null }
+      results.user_memberships = {
+        data: [membership('today', '2026-03-14'), membership('yday', '2026-03-13')],
+        error: null,
+      }
+
+      expect(await statuses('?membership_status=current,expired')).toEqual([
+        ['today', 'current'],
+        ['yday', 'expired'],
+      ])
     })
   })
 
-  describe('memberships dataset output', () => {
-    const membershipRow = (userId: string, validUntil: string, memberId: number) => ({
-      user_id: userId,
-      valid_until: validUntil,
-      users: {
-        first_name: 'Ada',
-        last_name: 'Lovelace',
-        email: `${userId}@example.com`,
-        member_id: memberId,
-        deleted_at: null,
-      },
-    })
+  describe('row shape', () => {
+    it('returns identity, status, valid_until and onboarding_completed_at', async () => {
+      results.users = { data: [user('u1', 1000)], error: null }
+      results.user_memberships = { data: [membership('u1', '2999-08-31')], error: null }
 
-    it('does not return membership_id or membership_name', async () => {
-      queryResult = { data: [membershipRow('u1', '2027-08-31', 1000)], error: null }
+      const body = await (await get()).json()
 
-      const response = await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
-      )
-      const body = await response.json()
-
-      expect(queries[0].select.mock.calls[0][0]).not.toContain('memberships(')
       expect(body.rows[0]).toEqual({
+        user_id: 'u1',
+        member_id: 1000,
         first_name: 'Ada',
         last_name: 'Lovelace',
         email: 'u1@example.com',
-        member_id: 1000,
-        valid_until: '2027-08-31',
+        membership_status: 'current',
+        valid_until: '2999-08-31',
+        onboarding_completed_at: '2026-01-02T03:04:05+00:00',
       })
     })
 
-    it('returns one row per member with the latest valid_until', async () => {
-      queryResult = {
-        data: [
-          membershipRow('u1', '2027-02-28', 1000),
-          membershipRow('u2', '2027-01-31', 999),
-          membershipRow('u1', '2027-08-31', 1000),
-        ],
-        error: null,
-      }
+    it('has a null valid_until for a user who never held a membership', async () => {
+      results.users = { data: [user('u1', 1000)], error: null }
 
-      const response = await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
+      const body = await (await get('?membership_status=never')).json()
+
+      expect(body.rows[0].valid_until).toBeNull()
+    })
+
+    it('does not leak columns beyond the documented shape', async () => {
+      results.users = { data: [user('u1', 1000, { phone: '555', is_admin: true })], error: null }
+      results.user_memberships = { data: [membership('u1', '2999-08-31')], error: null }
+
+      const body = await (await get()).json()
+
+      expect(Object.keys(body.rows[0]).sort()).toEqual(
+        [
+          'email',
+          'first_name',
+          'last_name',
+          'member_id',
+          'membership_status',
+          'onboarding_completed_at',
+          'user_id',
+          'valid_until',
+        ].sort()
       )
-      const body = await response.json()
-
-      expect(body.count).toBe(2)
-      expect(body.rows.map((r: { email: string; valid_until: string }) => [r.email, r.valid_until])).toEqual([
-        ['u2@example.com', '2027-01-31'],
-        ['u1@example.com', '2027-08-31'],
-      ])
     })
   })
 
@@ -269,73 +318,75 @@ describe('/api/admin/exports/members', () => {
     // rows in a different order per page, so pages overlap or skip rows and the
     // export is silently short. Both queries must order by something unique and
     // non-null.
-    it('orders members by a unique, non-null key', async () => {
-      await GET(request('http://localhost/api/admin/exports/members', SECRET))
+    it('orders users by a unique, non-null key', async () => {
+      await get()
 
       // member_id is UNIQUE but nullable, so id must break ties among NULLs.
-      expect(orderedColumns(queries[0])).toEqual(['member_id', 'id'])
+      expect(orderedColumns(queries.users[0])).toEqual(['member_id', 'id'])
     })
 
     it('orders memberships by primary key', async () => {
-      await GET(
-        request('http://localhost/api/admin/exports/members?dataset=memberships', SECRET)
-      )
+      await get()
 
-      expect(orderedColumns(queries[0])).toContain('id')
+      expect(orderedColumns(queries.user_memberships[0])).toEqual(['id'])
     })
 
     it('orders before ranging, so every page is a slice of one ordering', async () => {
-      await GET(request('http://localhost/api/admin/exports/members', SECRET))
+      await get()
 
-      expect(queries[0].order).toHaveBeenCalled()
-      expect(queries[0].range).toHaveBeenCalledWith(0, 999)
+      expect(queries.users[0].range).toHaveBeenCalledWith(0, 999)
+      expect(queries.user_memberships[0].range).toHaveBeenCalledWith(0, 999)
+    })
+
+    it('fails with 500 rather than returning a list cut at the row cap', async () => {
+      const page = Array.from({ length: 1000 }, (_, i) => user(`u${i}`, i))
+      results.users = { data: page, error: null }
+
+      const response = await get()
+
+      expect(response.status).toBe(500)
     })
   })
 
   describe('output', () => {
-    it('returns member rows as JSON', async () => {
-      queryResult = {
-        data: [
-          { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com', member_id: 1000 },
-        ],
-        error: null,
-      }
+    it('returns rows as JSON with a count', async () => {
+      results.users = { data: [user('u1', 1000)], error: null }
+      results.user_memberships = { data: [membership('u1', '2999-08-31')], error: null }
 
-      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
+      const response = await get()
       const body = await response.json()
 
       expect(response.status).toBe(200)
+      expect(body.dataset).toBe('users')
       expect(body.count).toBe(1)
-      expect(body.rows[0].email).toBe('ada@example.com')
+      expect(body.rows[0].email).toBe('u1@example.com')
     })
 
-    it('quotes CSV values containing commas and quotes', async () => {
-      queryResult = {
-        data: [
-          { first_name: 'Grace, "Amazing"', last_name: 'Hopper', email: 'grace@example.com', member_id: 1001 },
-        ],
+    it('quotes CSV values containing commas and quotes, and leaves null valid_until empty', async () => {
+      results.users = {
+        data: [user('u1', 1001, { first_name: 'Grace, "Amazing"' })],
         error: null,
       }
 
-      const response = await GET(
-        request('http://localhost/api/admin/exports/members?format=csv', SECRET)
-      )
+      const response = await get('?format=csv&membership_status=never')
       const body = await response.text()
 
       expect(response.headers.get('content-type')).toContain('text/csv')
       expect(body).toContain('"Grace, ""Amazing"""')
+      expect(body.split('\n')[0]).toContain('membership_status,valid_until,onboarding_completed_at')
+      expect(body.split('\n')[1]).toContain(',never,,')
     })
 
     it('is never cached', async () => {
-      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
+      const response = await get()
 
       expect(response.headers.get('cache-control')).toBe('no-store')
     })
 
     it('returns 500 without leaking the database error', async () => {
-      queryResult = { data: null, error: { message: 'relation "users" does not exist' } }
+      results.users = { data: null, error: { message: 'relation "users" does not exist' } }
 
-      const response = await GET(request('http://localhost/api/admin/exports/members', SECRET))
+      const response = await get()
       const body = await response.json()
 
       expect(response.status).toBe(500)

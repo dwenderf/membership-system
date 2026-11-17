@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logging/logger'
+import { getXeroScopes, getRetiringXeroScopes } from '@/lib/xero/scopes'
 
 export async function GET() {
   try {
@@ -23,6 +24,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
+    const scopes = getXeroScopes()
+
     // Return sanitized config info (never expose full secrets)
     return NextResponse.json({
       hasClientId: !!process.env.XERO_CLIENT_ID,
@@ -30,7 +33,10 @@ export async function GET() {
       hasClientSecret: !!process.env.XERO_CLIENT_SECRET,
       clientSecretPrefix: process.env.XERO_CLIENT_SECRET?.substring(0, 3) + '...',
       redirectUri: process.env.XERO_REDIRECT_URI,
-      scopes: process.env.XERO_SCOPES?.split(' ') || ['accounting.transactions', 'accounting.contacts', 'accounting.settings', 'offline_access'],
+      scopes,
+      scopesFromEnv: !!process.env.XERO_SCOPES?.trim(),
+      // Non-empty means XERO_SCOPES still asks for a scope Xero retires on 13 Sep 2027 (#333)
+      retiringScopes: getRetiringXeroScopes(scopes),
       environment: process.env.NODE_ENV,
       vercelEnv: process.env.VERCEL_ENV,
       vercelUrl: process.env.VERCEL_URL

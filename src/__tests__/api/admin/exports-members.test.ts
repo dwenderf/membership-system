@@ -18,7 +18,8 @@ interface QueryResult {
 const empty = (): QueryResult => ({ data: [], error: null })
 
 // Result per table; a test sets the rows the route should see.
-let results: Record<string, QueryResult> = {}
+// A function is called once per read, for tests that page through many rows.
+let results: Record<string, QueryResult | (() => QueryResult)> = {}
 
 // Chainable stub matching the postgrest-js builder surface the route uses.
 // Queries are recorded per table so tests can assert on how they were built.
@@ -29,7 +30,10 @@ const makeQuery = (table: string) => {
   for (const method of ['select', 'order', 'range', 'is', 'not', 'eq']) {
     query[method] = jest.fn(() => query)
   }
-  query.overrideTypes = jest.fn(() => Promise.resolve(results[table] ?? empty()))
+  query.overrideTypes = jest.fn(() => {
+    const result = results[table]
+    return Promise.resolve(typeof result === 'function' ? result() : (result ?? empty()))
+  })
   ;(queries[table] ??= []).push(query)
   return query
 }
@@ -60,9 +64,14 @@ const user = (id: string, memberId: number, overrides: Record<string, unknown> =
   ...overrides,
 })
 
-const membership = (userId: string, validUntil: string) => ({
+const membership = (
+  userId: string,
+  validUntil: string,
+  payments: { status: string } | null = { status: 'completed' }
+) => ({
   user_id: userId,
   valid_until: validUntil,
+  payments,
 })
 
 describe('/api/admin/exports/members', () => {
@@ -170,7 +179,10 @@ describe('/api/admin/exports/members', () => {
     it('does not filter memberships by type unless membership_id is given', async () => {
       await get()
 
-      expect(queries.user_memberships[0].eq).not.toHaveBeenCalled()
+      expect(queries.user_memberships[0].eq).not.toHaveBeenCalledWith(
+        'membership_id',
+        expect.anything()
+      )
     })
 
     it('restricts memberships to one type with membership_id', async () => {
@@ -178,6 +190,24 @@ describe('/api/admin/exports/members', () => {
       await get(`?membership_id=${id}`)
 
       expect(queries.user_memberships[0].eq).toHaveBeenCalledWith('membership_id', id)
+    })
+
+    it('reads each membership\'s payment status so refunds can be excluded', async () => {
+      await get()
+
+      expect(queries.user_memberships[0].select).toHaveBeenCalledWith(
+        expect.stringContaining('payments(status)')
+      )
+    })
+
+    it('counts only paid memberships, whatever the other parameters', async () => {
+      for (const query of ['', '?membership_status=current,expired,never', '?membership_id=123e4567-e89b-12d3-a456-426614174000']) {
+        for (const key of Object.keys(queries)) delete queries[key]
+
+        await get(query)
+
+        expect(queries.user_memberships[0].eq).toHaveBeenCalledWith('payment_status', 'paid')
+      }
     })
   })
 
@@ -233,6 +263,42 @@ describe('/api/admin/exports/members', () => {
         ['cur', 'current'],
         ['exp', 'expired'],
       ])
+    })
+
+    it('does not count a membership whose payment was refunded', async () => {
+      results.users = { data: [user('ref', 1001), user('ok', 1002)], error: null }
+      results.user_memberships = {
+        data: [
+          membership('ref', '2999-08-31', { status: 'refunded' }),
+          membership('ok', '2999-08-31'),
+        ],
+        error: null,
+      }
+
+      expect(await statuses('?membership_status=current,expired,never')).toEqual([
+        ['ref', 'never'],
+        ['ok', 'current'],
+      ])
+    })
+
+    it('falls back to an earlier membership when the latest one was refunded', async () => {
+      results.users = { data: [user('u1', 1001)], error: null }
+      results.user_memberships = {
+        data: [
+          membership('u1', '2026-01-31'),
+          membership('u1', '2999-08-31', { status: 'refunded' }),
+        ],
+        error: null,
+      }
+
+      expect(await statuses('?membership_status=expired')).toEqual([['u1', 'expired']])
+    })
+
+    it('still counts a membership with no linked payment', async () => {
+      results.users = { data: [user('u1', 1001)], error: null }
+      results.user_memberships = { data: [membership('u1', '2999-08-31', null)], error: null }
+
+      expect(await statuses()).toEqual([['u1', 'current']])
     })
 
     it('returns only never-members with membership_status=never', async () => {
@@ -338,13 +404,34 @@ describe('/api/admin/exports/members', () => {
       expect(queries.user_memberships[0].range).toHaveBeenCalledWith(0, 999)
     })
 
-    it('fails with 500 rather than returning a list cut at the row cap', async () => {
+    it('fails with 500 rather than returning a users list cut at the row cap', async () => {
       const page = Array.from({ length: 1000 }, (_, i) => user(`u${i}`, i))
       results.users = { data: page, error: null }
 
       const response = await get()
 
       expect(response.status).toBe(500)
+    })
+
+    it('does not cap the membership history, only the rows returned', async () => {
+      results.users = { data: [user('u1', 1000)], error: null }
+      // 60 full pages (60,000 rows, past the 50,000 cap), then the last one.
+      let calls = 0
+      results.user_memberships = () => {
+        calls += 1
+        const data =
+          calls <= 60
+            ? Array.from({ length: 1000 }, () => membership('u1', '2020-01-01'))
+            : [membership('u1', '2999-08-31')]
+        return { data, error: null }
+      }
+
+      const response = await get()
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(calls).toBe(61)
+      expect(body.rows[0].valid_until).toBe('2999-08-31')
     })
   })
 

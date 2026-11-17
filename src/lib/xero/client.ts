@@ -6,17 +6,10 @@ import { Json } from '../../types/database'
 
 const logger = Logger.getInstance()
 
-// Helper function to calculate refresh token expiration (60 days from last refresh)
-export function calculateRefreshTokenExpiration(updatedAt: string): Date {
-  return new Date(new Date(updatedAt).getTime() + (60 * 24 * 60 * 60 * 1000))
-}
-
-// Helper function to check if refresh token is expired
-export function isRefreshTokenExpired(updatedAt: string): boolean {
-  const refreshTokenExpiresAt = calculateRefreshTokenExpiration(updatedAt)
-  const now = new Date()
-  return now >= refreshTokenExpiresAt
-}
+// Refresh token expiry helpers live in ./refresh-token so client components can
+// import them without pulling in xero-node. Re-exported to keep existing imports.
+export { calculateRefreshTokenExpiration, isRefreshTokenExpired } from './refresh-token'
+import { calculateRefreshTokenExpiration } from './refresh-token'
 
 // Run startup connection test when this module is first imported
 // DISABLED: This was causing infinite loops and rate limiting when multiple

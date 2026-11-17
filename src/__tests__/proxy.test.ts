@@ -126,6 +126,14 @@ describe('proxy - admin API routes', () => {
     expect(response.status).toBe(200)
   })
 
+  it('leaves the bearer-authenticated exports/registrations route to the route itself', async () => {
+    mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
+
+    const response = await proxy(new NextRequest('http://localhost/api/admin/exports/registrations'))
+
+    expect(response.status).toBe(200)
+  })
+
   it('guards other /api/admin/exports paths (401 with no session)', async () => {
     mockCreateServerClient.mockReturnValue(makeSupabase(null, null))
 

@@ -558,6 +558,12 @@ Each row has `user_id`, `member_id`, `first_name`, `last_name`, `email`, `member
 | `membership_id` | uuid | Consider only memberships of this type. `valid_until` and `membership_status` are then relative to that type, so a user who holds only other types reads as `never` |
 | `format` | `json` (default), `csv` | Response format |
 
+`GET /api/admin/exports/registrations` ([`src/app/api/admin/exports/registrations/route.ts`](src/app/api/admin/exports/registrations/route.ts)) serves every row of the `registration_reports_data` view — registration financial data (invoice line items joined to registrations, categories and seasons) — in full, with no filtering. It follows the same bearer-secret pattern and shares `EXPORT_API_SECRET` with the members export. There is only one `format` parameter (`json` default, or `csv`).
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `format` | `json` (default), `csv` | Response format |
+
 The earlier `members` and `memberships` datasets, and their `include_expired`, `include_deleted` and `paid_only` parameters, were removed. Requests that still send them get a `400` rather than a silently different result. If more than 50,000 users would be returned, the export fails with a `500` instead of returning a truncated list. The membership history it reads to work out each user's status is not capped.
 
 ### Before you add another endpoint

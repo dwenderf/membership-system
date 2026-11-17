@@ -504,15 +504,15 @@ Test with `curl` first:
 
 ```bash
 curl -H "Authorization: Bearer $EXPORT_API_SECRET" \
-  "https://your-domain.com/api/admin/exports/members?dataset=members"
+  "https://your-domain.com/api/admin/exports/members?membership_status=current,expired"
 ```
 
 For a Google Sheet, use Apps Script (Extensions → Apps Script). Store the secret in Script Properties — Project Settings → Script properties — rather than pasting it into the code, so it isn't visible to anyone with view access to the script:
 
 ```javascript
-function refreshMembers() {
+function refreshUsers() {
   const secret = PropertiesService.getScriptProperties().getProperty('EXPORT_API_SECRET');
-  const url = 'https://your-domain.com/api/admin/exports/members?dataset=members';
+  const url = 'https://your-domain.com/api/admin/exports/members?membership_status=current,expired';
 
   const response = UrlFetchApp.fetch(url, {
     headers: { Authorization: 'Bearer ' + secret },
@@ -524,7 +524,7 @@ function refreshMembers() {
   }
 
   const rows = JSON.parse(response.getContentText()).rows;
-  const header = ['first_name', 'last_name', 'email', 'member_id'];
+  const header = ['member_id', 'first_name', 'last_name', 'email', 'membership_status', 'valid_until', 'onboarding_completed_at'];
   const values = [header].concat(rows.map(function (r) {
     return header.map(function (key) { return r[key]; });
   }));
@@ -535,23 +535,30 @@ function refreshMembers() {
 }
 ```
 
-Then Triggers → Add Trigger → `refreshMembers`, time-driven, daily.
+Then Triggers → Add Trigger → `refreshUsers`, time-driven, daily.
 
 `IMPORTDATA` and `IMPORTJSON` can't be used: neither can send an `Authorization` header, which is exactly why the previous approach reached for a public endpoint. That constraint is the point — if a formula can read it without credentials, so can the internet.
 
 ### Available datasets
 
-`GET /api/admin/exports/members`
+`GET /api/admin/exports/members` serves one dataset, `users`: one row per user who has finished onboarding (`onboarding_completed_at` is set) and is not soft-deleted. Soft-deleted users are never returned; their name and email are obfuscated, so a row would say nothing.
+
+Each row has `user_id`, `member_id`, `first_name`, `last_name`, `email`, `membership_status`, `valid_until` and `onboarding_completed_at`. `valid_until` is the latest `valid_until` among the user's paid memberships, expired or not, and `null` if they never held one. Only paid memberships count: a membership must have `payment_status = 'paid'` and its payment must not be refunded, so a pending or refunded membership does not make someone a member. `membership_status` is derived from it:
+
+| `membership_status` | Meaning |
+|---|---|
+| `current` | `valid_until` is today or later (in `NEXT_PUBLIC_APP_TIMEZONE`) |
+| `expired` | Has memberships, but every one has lapsed |
+| `never` | Has never held a membership (`valid_until` is `null`) |
 
 | Parameter | Values | Meaning |
 |---|---|---|
-| `dataset` | `members` (default) | One row per member: name, email, member ID |
-| | `memberships` | One row per member: name, email, member ID, and the latest `valid_until` among the memberships counted |
-| `include_expired` | `true` | Also count memberships whose `valid_until` is before today, in either dataset (default: only memberships valid today or later, in `NEXT_PUBLIC_APP_TIMEZONE`). Either way, a member is listed only if they hold at least one counted membership |
-| `membership_id` | uuid | Restrict `memberships` to one membership type |
-| `paid_only` | `true` | Count only paid memberships, in either dataset (default: all, including pending and refunded) |
-| `include_deleted` | `true` | Include soft-deleted members (default: excluded) |
+| `dataset` | `users` (default) | The only dataset |
+| `membership_status` | comma-separated `current`, `expired`, `never` | Which users to return (default: `current`). `current,expired` is everyone who has ever held a membership; `current,expired,never` is every onboarded user |
+| `membership_id` | uuid | Consider only memberships of this type. `valid_until` and `membership_status` are then relative to that type, so a user who holds only other types reads as `never` |
 | `format` | `json` (default), `csv` | Response format |
+
+The earlier `members` and `memberships` datasets, and their `include_expired`, `include_deleted` and `paid_only` parameters, were removed. Requests that still send them get a `400` rather than a silently different result. If more than 50,000 users would be returned, the export fails with a `500` instead of returning a truncated list. The membership history it reads to work out each user's status is not capped.
 
 ### Before you add another endpoint
 

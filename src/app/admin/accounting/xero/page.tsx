@@ -6,12 +6,14 @@ import Link from 'next/link'
 import { useToast } from '@/contexts/ToastContext'
 import { formatDate } from '@/lib/date-utils'
 import { logger } from '@/lib/logging/logger'
+import { calculateRefreshTokenExpiration, isRefreshTokenExpiringSoon } from '@/lib/xero/refresh-token'
 
 interface XeroToken {
   tenant_id: string
   tenant_name: string
   expires_at: string
   created_at: string
+  updated_at: string
   is_expired: boolean
   is_valid: boolean
   status: string
@@ -226,8 +228,8 @@ function XeroIntegrationContent() {
                           ) : 'Unknown'}
                         </p>
                         <p>
-                          <strong>Refresh Token:</strong> {currentToken?.created_at ? (
-                            `Valid until ${new Date(new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000)).toLocaleString()}`
+                          <strong>Refresh Token:</strong> {currentToken?.updated_at ? (
+                            `Valid until ${calculateRefreshTokenExpiration(currentToken.updated_at).toLocaleString()}`
                           ) : 'Unknown'}
                         </p>
                         <p className="text-blue-600 text-xs">
@@ -240,7 +242,7 @@ function XeroIntegrationContent() {
                 </div>
 
                 {/* Refresh Token Warning (Only if expiring within 7 days) */}
-                {currentToken?.created_at && new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000) < new Date().getTime() + (7 * 24 * 60 * 60 * 1000) && (
+                {currentToken?.updated_at && isRefreshTokenExpiringSoon(currentToken.updated_at) && (
                   <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-center">
                       <svg className="h-5 w-5 text-yellow-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -249,7 +251,7 @@ function XeroIntegrationContent() {
                       <div>
                         <h3 className="text-sm font-medium text-yellow-800">Refresh Token Expiring Soon</h3>
                         <p className="text-sm text-yellow-700">
-                          Your Xero refresh token expires on {new Date(new Date(currentToken.created_at).getTime() + (60 * 24 * 60 * 60 * 1000)).toLocaleString()}. 
+                          Your Xero refresh token expires on {calculateRefreshTokenExpiration(currentToken.updated_at).toLocaleString()}.
                           You&apos;ll need to reconnect to Xero before this date to maintain access.
                         </p>
                       </div>

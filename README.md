@@ -1993,9 +1993,9 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 
 **Google OAuth:**
 
-1. Go to Google Cloud Console → Credentials
-2. Update authorized redirect URIs to include:
-   - `https://your-domain.vercel.app/api/auth/callback/google`
+1. Google redirects to Supabase, not to your app, so a new app domain does not need a new Google redirect URI. Add the domain to **Authorized JavaScript origins** in Google Cloud Console → Google Auth Platform → Clients (see [URI Configuration for All Services](#5-uri-configuration-for-all-services)).
+2. Add the new domain to the Supabase **Site URL** / **Redirect URLs** (Authentication → URL Configuration).
+3. If you create a new Supabase project, add its `https://<project-ref>.supabase.co/auth/v1/callback` to the Google client's **Authorized redirect URIs**.
 
 **Xero OAuth:**
 
@@ -2034,7 +2034,7 @@ The app's login screen (magic link/OTP, Google OAuth, or passkey) can't be drive
 
 - [ ] All environment variables configured in Vercel dashboard
 - [ ] Stripe webhooks updated to production URL
-- [ ] Google OAuth redirect URIs updated
+- [ ] Google OAuth JavaScript origins updated, and Supabase redirect URLs updated
 - [ ] Xero OAuth redirect URI updated
 - [ ] Supabase RLS policies tested with production data
 - [ ] Email templates tested with production environment
@@ -2364,7 +2364,9 @@ XERO_SCOPES=accounting.transactions accounting.contacts accounting.settings offl
 
 ##### **Google OAuth Configuration**
 
-**Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID**
+Sign-in with Google runs through Supabase Auth, not the app: the browser goes to Google, Google redirects back to **Supabase's** callback, and Supabase then redirects to the app. So Google needs Supabase's callback URLs, not app URLs. The app has no `/api/auth/callback/google` route.
+
+**Where it lives:** the Google Cloud project `nycpha-membership-auth` (under the `nycgha.org` organization), in **Google Auth Platform → Clients**. Both Supabase projects (development and production) share this one client. If that project or client is deleted, Google sign-in fails with `Error 401: deleted_client` (this happened in November 2026). Keep at least two people as Owners of the GCP project so it doesn't depend on one person's cleanup.
 
 **Authorized JavaScript origins:**
 
@@ -2374,13 +2376,18 @@ https://membership-system-nycpha-preview.vercel.app
 https://my.nycpha.org
 ```
 
-**Authorized redirect URIs:**
+**Authorized redirect URIs** (one per Supabase project; copy the exact value from the "Callback URL (for OAuth)" field in each project's Google provider panel, which differs if a Supabase custom domain is configured):
 
 ```text
-http://localhost:3000/api/auth/callback/google
-https://membership-system-nycpha-preview.vercel.app/api/auth/callback/google
-https://my.nycpha.org/api/auth/callback/google
+https://fogsphzerhmyjckxhalj.supabase.co/auth/v1/callback   (production)
+https://qojixnzpfkpteakltdoa.supabase.co/auth/v1/callback   (development)
 ```
+
+**Consent screen (Google Auth Platform → Audience / Branding / Data Access):**
+
+- **User type: External**, **Publishing status: In production.** In "Testing" only listed test users (max 100) can sign in with Google and everyone else sees "Access blocked". Do not set it back to Testing.
+- Branding needs an app name, support and developer contact emails, and `nycpha.org` under Authorized domains before Google lets you publish.
+- Request only the default scopes (`openid`, `email`, `profile`) under Data Access. Those need no Google verification review; adding sensitive or restricted scopes would.
 
 ##### **Supabase Authentication Configuration**
 
@@ -2423,16 +2430,16 @@ https://my.nycpha.org/**
 
 **Where to get Google OAuth credentials:**
 
-1. **Go to** [Google Cloud Console](https://console.cloud.google.com/)
-2. **Navigate to** APIs & Services → Credentials
-3. **Find your OAuth 2.0 Client ID** (or create a new one)
+1. **Go to** [Google Cloud Console](https://console.cloud.google.com/) and select the `nycpha-membership-auth` project
+2. **Navigate to** Google Auth Platform → Clients
+3. **Open the Web application client** (or create one, with the origins and redirect URIs above)
 4. **Copy the Client ID**
 5. **For Client Secret:**
    - **If you have an existing secret:** You cannot view it again (security feature)
-   - **Create a new Client Secret:** Click "Reset Secret" or "Create New Secret"
-   - **Copy the new secret immediately** (it's only shown once)
+   - **Rotate it:** click "Add secret", put the new value in **both** Supabase projects, confirm sign-in works, then disable the old secret
+   - **Copy the new secret immediately** (it's only shown once), and never paste it into chats, issues or screenshots
 
-**Note:** You'll need to configure these settings for each Supabase project (development and production databases).
+**Note:** The same Client ID and Secret go into each Supabase project (development and production). Paste them into each project's Google provider panel; a rotation has to be repeated in both.
 
 **Security Settings:**
 

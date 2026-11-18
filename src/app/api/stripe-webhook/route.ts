@@ -75,6 +75,20 @@ type UserRegistrationRow = Database['public']['Tables']['user_registrations']['R
  */
 
 // Helper function to get actual Stripe fees and charge ID from charge
+/**
+ * True when `invoiceNumber` belongs to an invoice the app synced to Xero.
+ * Fails safe: a lookup error counts as "ours" so the caller keeps alerting.
+ */
+async function isAppCreatedXeroInvoice(supabase: SupabaseClient, invoiceNumber: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('xero_invoices')
+    .select('id')
+    .eq('invoice_number', invoiceNumber)
+    .limit(1)
+  if (error) return true
+  return !!data && data.length > 0
+}
+
 async function getStripeFeeAmountAndChargeId(paymentIntent: Stripe.PaymentIntent): Promise<{ fee: number; chargeId: string | null }> {
   try {
     // Retrieve the payment intent with expanded charge and balance transaction to get actual fees
@@ -1606,7 +1620,11 @@ export async function POST(request: NextRequest) {
         // External payment on a manually created Xero invoice (issue #521).
         // Xero's Stripe integration sets only `invoice` (and `EmailAddress`) in metadata;
         // Xero records the payment itself, so there is nothing for the app to do.
-        else if (!userId && !membershipId && !registrationId && paymentIntent.metadata?.invoice) {
+        // But Xero's Stripe checkout sends the same metadata for invoices the app synced
+        // itself (e.g. payment-plan invoices reached via "Pay Now"), and those must keep
+        // alerting, so only ignore when the invoice number isn't one of ours.
+        else if (!userId && !membershipId && !registrationId && paymentIntent.metadata?.invoice
+          && !(await isAppCreatedXeroInvoice(supabase, paymentIntent.metadata.invoice))) {
           logger.logPaymentProcessing('payment-intent-external-xero-invoice', 'Ignoring payment on externally created Xero invoice', {
             paymentIntentId: paymentIntent.id,
             invoiceNumber: paymentIntent.metadata.invoice

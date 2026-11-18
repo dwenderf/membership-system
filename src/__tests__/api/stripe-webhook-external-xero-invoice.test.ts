@@ -65,10 +65,20 @@ function mockPaymentIntentSucceeded(metadata: Record<string, string>) {
   })
 }
 
+// Mocks the xero_invoices lookup: `rows` are the app invoices matching the number.
+function mockXeroInvoiceLookup(result: { data: unknown[] | null; error: unknown }) {
+  const limit = jest.fn().mockResolvedValue(result)
+  const eq = jest.fn().mockReturnValue({ limit })
+  const select = jest.fn().mockReturnValue({ eq })
+  const from = jest.fn().mockReturnValue({ select })
+  ;(createAdminClient as jest.Mock).mockReturnValue({ from })
+  return { from, eq }
+}
+
 describe('POST /api/stripe-webhook - payment_intent.succeeded without app metadata', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    ;(createAdminClient as jest.Mock).mockReturnValue({ from: jest.fn() })
+    mockXeroInvoiceLookup({ data: [], error: null })
   })
 
   const logCalls = () => (logger.logPaymentProcessing as jest.Mock).mock.calls
@@ -87,6 +97,34 @@ describe('POST /api/stripe-webhook - payment_intent.succeeded without app metada
     )
     expect(logCalls().some(c => c[0] === 'payment-intent-missing-metadata')).toBe(false)
     expect(logCalls().some(c => c[3] === 'error')).toBe(false)
+  })
+
+  it('keeps logging an error when the invoice number is an app-synced invoice', async () => {
+    const { from, eq } = mockXeroInvoiceLookup({ data: [{ id: 'xi-1' }], error: null })
+    mockPaymentIntentSucceeded({ EmailAddress: 'a@example.com', invoice: 'INV-0042' })
+
+    const response = await POST(makeRequest())
+
+    expect(response.status).toBe(200)
+    expect(from).toHaveBeenCalledWith('xero_invoices')
+    expect(eq).toHaveBeenCalledWith('invoice_number', 'INV-0042')
+    expect(logger.logPaymentProcessing).toHaveBeenCalledWith(
+      'payment-intent-missing-metadata',
+      expect.any(String),
+      expect.objectContaining({ paymentIntentId: 'pi_test' }),
+      'error'
+    )
+    expect(logCalls().some(c => c[0] === 'payment-intent-external-xero-invoice')).toBe(false)
+  })
+
+  it('fails safe (error log) when the app-invoice lookup fails', async () => {
+    mockXeroInvoiceLookup({ data: null, error: { message: 'db down' } })
+    mockPaymentIntentSucceeded({ EmailAddress: 'a@example.com', invoice: 'INV-10030' })
+
+    await POST(makeRequest())
+
+    expect(logCalls().some(c => c[0] === 'payment-intent-missing-metadata' && c[3] === 'error')).toBe(true)
+    expect(logCalls().some(c => c[0] === 'payment-intent-external-xero-invoice')).toBe(false)
   })
 
   it('still logs an error when there is neither app metadata nor an invoice', async () => {

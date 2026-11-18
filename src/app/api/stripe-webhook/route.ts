@@ -1603,6 +1603,15 @@ export async function POST(request: NextRequest) {
         else if (registrationId && userId) {
           await handleRegistrationPayment(supabase, paymentIntent, userId, registrationId)
         }
+        // External payment on a manually created Xero invoice (issue #521).
+        // Xero's Stripe integration sets only `invoice` (and `EmailAddress`) in metadata;
+        // Xero records the payment itself, so there is nothing for the app to do.
+        else if (!userId && !membershipId && !registrationId && paymentIntent.metadata?.invoice) {
+          logger.logPaymentProcessing('payment-intent-external-xero-invoice', 'Ignoring payment on externally created Xero invoice', {
+            paymentIntentId: paymentIntent.id,
+            invoiceNumber: paymentIntent.metadata.invoice
+          }, 'info')
+        }
         else {
           logger.logPaymentProcessing('payment-intent-missing-metadata', 'Payment intent missing required metadata', {
             paymentIntentId: paymentIntent.id,

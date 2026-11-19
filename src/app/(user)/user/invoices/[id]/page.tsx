@@ -14,6 +14,9 @@ interface PageProps {
   }>
 }
 
+// Members should pay through the app, not Xero's hosted invoice page.
+const SHOW_XERO_PAY_NOW = false
+
 interface UserInvoice {
   id: string
   number: string
@@ -196,8 +199,11 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
 
         {/* Invoice Details */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6 relative">
-          {/* Pay button in top-right corner */}
-          {!isPaid && invoice.url && (
+          {/* Pay button in top-right corner. Disabled: paying through Xero's hosted
+              page bypasses the app (e.g. a payment-plan installment paid there is
+              never reconciled and could be charged again). Re-enable once members
+              can pay these invoices through the app instead (#521). */}
+          {SHOW_XERO_PAY_NOW && !isPaid && invoice.url && (
             <div className="absolute top-4 right-4">
               <a
                 href={invoice.url}
